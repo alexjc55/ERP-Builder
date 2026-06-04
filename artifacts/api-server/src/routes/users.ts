@@ -154,6 +154,23 @@ router.post("/users", requireAuth, requireAdmin("users"), async (req, res): Prom
   res.status(201).json(result);
 });
 
+router.get("/users/options", requireAuth, async (_req, res): Promise<void> => {
+  const rows = await db
+    .select({
+      id: usersTable.id,
+      firstName: usersTable.firstName,
+      lastName: usersTable.lastName,
+      email: usersTable.email,
+    })
+    .from(usersTable)
+    .orderBy(usersTable.firstName, usersTable.lastName);
+  const options = rows.map((u) => {
+    const name = [u.firstName, u.lastName].filter(Boolean).join(" ").trim();
+    return { id: u.id, name: name || u.email };
+  });
+  res.json(options);
+});
+
 router.get("/users/:id", requireAuth, requireAdmin("users"), async (req, res): Promise<void> => {
   const params = GetUserParams.safeParse(req.params);
   if (!params.success) {

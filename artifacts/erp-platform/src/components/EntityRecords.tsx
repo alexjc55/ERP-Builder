@@ -12,6 +12,7 @@ import {
   useListRecordLinks,
   useCreateRecordLink,
   useDeleteRecordLink,
+  useListUserOptions,
   type EntityRecord,
   type Field,
   type Status,
@@ -21,6 +22,7 @@ import {
   type RecordQuery,
   type LinkedRecord,
   type MultilingualText,
+  type UserOption,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -111,7 +113,7 @@ function formToValues(fields: Field[], form: FormState): Record<string, unknown>
   return out;
 }
 
-function renderCellValue(field: Field, value: unknown): React.ReactNode {
+function renderCellValue(field: Field, value: unknown, userNames?: Map<number, string>): React.ReactNode {
   if (value === undefined || value === null || value === "") return <span className="text-slate-300">—</span>;
   if (field.fieldType === "boolean") {
     return value ? (
@@ -119,6 +121,11 @@ function renderCellValue(field: Field, value: unknown): React.ReactNode {
     ) : (
       <Badge className="bg-slate-100 text-slate-500 border-0 font-normal">Нет</Badge>
     );
+  }
+  if (field.fieldType === "user") {
+    const id = typeof value === "number" ? value : Number(value);
+    const name = userNames?.get(id);
+    return <span className="text-slate-700">{name ?? `#${value}`}</span>;
   }
   if (field.fieldType === "url") {
     return (
@@ -133,7 +140,7 @@ function renderCellValue(field: Field, value: unknown): React.ReactNode {
 export function EntityRecords({ entityId }: { entityId: number }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { canRecord } = useAuth();
+  const { canRecord, fieldAccess } = useAuth();
 
   const canView = canRecord(entityId, "view");
   const canCreate = canRecord(entityId, "create");
@@ -143,10 +150,18 @@ export function EntityRecords({ entityId }: { entityId: number }) {
   const { data: allFields = [], isLoading: fieldsLoading } = useListEntityFields(entityId);
   const { data: statuses = [] } = useListEntityStatuses(entityId);
   const { data: views = [] } = useListEntityViews(entityId);
+  const { data: userOptions = [] } = useListUserOptions();
+
+  const userNames = useMemo(
+    () => new Map(userOptions.map((u: UserOption) => [u.id, u.name])),
+    [userOptions],
+  );
 
   const fields = [...allFields]
     .filter((f: Field) => f.isActive)
     .sort((a: Field, b: Field) => a.sortOrder - b.sortOrder);
+  // Fields the current user is allowed to see (not hidden by field-level perms).
+  const visibleFormFields = fields.filter((f: Field) => fieldAccess(f, entityId) !== "hidden");
   const statusById = new Map(statuses.map((s: Status) => [s.id, s]));
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -284,7 +299,8 @@ export function EntityRecords({ entityId }: { entityId: number }) {
   };
 
   const handleSubmit = () => {
-    const valuesJson = formToValues(fields, form);
+    // Only send fields the user can see; hidden/view-only are preserved server-side.
+    const valuesJson = formToValues(visibleFormFields, form);
     const statusValue = statusId === NO_STATUS ? null : Number(statusId);
     if (editing) {
       updateMutation.mutate({ id: editing.id, data: { valuesJson, statusId: statusValue } });
@@ -298,9 +314,9 @@ export function EntityRecords({ entityId }: { entityId: number }) {
   const displayFields =
     visibleFields && visibleFields.length > 0
       ? (visibleFields
-          .map((key) => fields.find((f: Field) => f.fieldKey === key))
+          .map((key) => visibleFormFields.find((f: Field) => f.fieldKey === key))
           .filter((f): f is Field => Boolean(f)))
-      : fields.slice(0, 5);
+      : visibleFormFields.slice(0, 5);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   if (!canView) {
@@ -422,7 +438,7 @@ export function EntityRecords({ entityId }: { entityId: number }) {
                       <tr key={record.id} className="border-b border-slate-100 hover:bg-slate-50">
                         {displayFields.map((f: Field) => (
                           <td key={f.id} className="px-4 py-3 max-w-[240px] truncate">
-                            {renderCellValue(f, values[f.fieldKey])}
+                            {renderCellValue(f, values[f.fieldKey], userNames)}
                           </td>
                         ))}
                         {statuses.length > 0 && (
@@ -507,22 +523,29 @@ export function EntityRecords({ entityId }: { entityId: number }) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            {fields.map((field: Field) => (
-              <div key={field.id} className="space-y-1.5">
-                <Label>
-                  {getML(field.nameJson)}
-                  {field.isRequired && <span className="text-red-500 ml-0.5">*</span>}
-                </Label>
-                <FieldInput
-                  field={field}
-                  value={form[field.fieldKey]}
-                  onChange={(v) => setForm((prev) => ({ ...prev, [field.fieldKey]: v }))}
-                />
-                {getML(field.descriptionJson) && (
-                  <p className="text-xs text-slate-400">{getML(field.descriptionJson)}</p>
-                )}
-              </div>
-            ))}
+            {visibleFormFields.map((field: Field) => {
+              const access = fieldAccess(field, entityId);
+              const readOnly = access === "view";
+              return (
+                <div key={field.id} className="space-y-1.5">
+                  <Label>
+                    {getML(field.nameJson)}
+                    {field.isRequired && <span className="text-red-500 ml-0.5">*</span>}
+                    {readOnly && <span className="ml-1.5 text-xs font-normal text-slate-400">(только чтение)</span>}
+                  </Label>
+                  <FieldInput
+                    field={field}
+                    value={form[field.fieldKey]}
+                    onChange={(v) => setForm((prev) => ({ ...prev, [field.fieldKey]: v }))}
+                    disabled={readOnly}
+                    userOptions={userOptions}
+                  />
+                  {getML(field.descriptionJson) && (
+                    <p className="text-xs text-slate-400">{getML(field.descriptionJson)}</p>
+                  )}
+                </div>
+              );
+            })}
 
             {statuses.length > 0 && (
               <div className="space-y-1.5">
@@ -581,18 +604,22 @@ function FieldInput({
   field,
   value,
   onChange,
+  disabled = false,
+  userOptions = [],
 }: {
   field: Field;
   value: string | number | boolean | undefined;
   onChange: (v: string | number | boolean) => void;
+  disabled?: boolean;
+  userOptions?: UserOption[];
 }) {
   switch (field.fieldType) {
     case "textarea":
-      return <Textarea value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
+      return <Textarea value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} disabled={disabled} />;
     case "boolean":
       return (
         <div className="flex items-center gap-2">
-          <Switch checked={Boolean(value)} onCheckedChange={onChange} />
+          <Switch checked={Boolean(value)} onCheckedChange={onChange} disabled={disabled} />
           <span className="text-sm text-slate-500">{value ? "Да" : "Нет"}</span>
         </div>
       );
@@ -602,22 +629,41 @@ function FieldInput({
           type="number"
           value={value === "" || value === undefined ? "" : String(value)}
           onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
         />
       );
     case "date":
-      return <Input type="date" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
+      return <Input type="date" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} disabled={disabled} />;
     case "datetime":
-      return <Input type="datetime-local" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
+      return <Input type="datetime-local" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} disabled={disabled} />;
     case "email":
-      return <Input type="email" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
+      return <Input type="email" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} disabled={disabled} />;
     case "url":
-      return <Input type="url" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} placeholder="https://" />;
+      return <Input type="url" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} placeholder="https://" disabled={disabled} />;
     case "phone":
-      return <Input type="tel" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
+      return <Input type="tel" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} disabled={disabled} />;
+    case "user": {
+      return (
+        <Select
+          value={value ? String(value) : ""}
+          onValueChange={(v) => onChange(Number(v))}
+          disabled={disabled}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Выберите пользователя" />
+          </SelectTrigger>
+          <SelectContent>
+            {userOptions.map((u) => (
+              <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      );
+    }
     case "select": {
       const options = Array.isArray(field.optionsJson) ? (field.optionsJson as string[]) : [];
       return (
-        <Select value={value ? String(value) : ""} onValueChange={onChange}>
+        <Select value={value ? String(value) : ""} onValueChange={onChange} disabled={disabled}>
           <SelectTrigger>
             <SelectValue placeholder="Выберите значение" />
           </SelectTrigger>
@@ -630,7 +676,7 @@ function FieldInput({
       );
     }
     default:
-      return <Input value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
+      return <Input value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} disabled={disabled} />;
   }
 }
 

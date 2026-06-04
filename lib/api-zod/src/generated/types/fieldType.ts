@@ -20,4 +20,5 @@ export const FieldType = {
   email: 'email',
   url: 'url',
   phone: 'phone',
+  user: 'user',
 } as const;

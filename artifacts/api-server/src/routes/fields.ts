@@ -248,6 +248,7 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   if (body.optionsJson != null) updateData.optionsJson = body.optionsJson;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
   if (body.isActive != null) updateData.isActive = body.isActive;
+  if (body.permissionsJson != null) updateData.permissionsJson = body.permissionsJson;
 
   if (Object.keys(updateData).length === 0) {
     res.status(400).json({ error: "No fields to update" });

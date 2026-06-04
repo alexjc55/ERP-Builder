@@ -6,9 +6,13 @@ import {
   useUpdateField,
   useDeleteField,
   useListEntities,
+  useListRoles,
   type Field,
   type Entity,
   type FieldType,
+  type FieldAccess,
+  type FieldPermissions,
+  type Role,
   type MultilingualText,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -62,6 +66,13 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "email", label: "Email" },
   { value: "url", label: "Ссылка (URL)" },
   { value: "phone", label: "Телефон" },
+  { value: "user", label: "Пользователь" },
+];
+
+const FIELD_ACCESS_OPTIONS: { value: FieldAccess; label: string }[] = [
+  { value: "edit", label: "Редактирование" },
+  { value: "view", label: "Просмотр" },
+  { value: "hidden", label: "Скрыто" },
 ];
 
 function typeLabel(t: string): string {
@@ -94,8 +105,10 @@ export default function EntityFieldsPage() {
   const [optionsText, setOptionsText] = useState("");
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
+  const [permissions, setPermissions] = useState<FieldPermissions>({});
 
   const { data: entities = [] } = useListEntities();
+  const { data: roles = [] } = useListRoles();
   const entity = entities.find((e: Entity) => e.id === entityId);
 
   const { data: fields = [], isLoading } = useListEntityFields(entityId);
@@ -135,6 +148,7 @@ export default function EntityFieldsPage() {
     setOptionsText("");
     setSortOrder(fields.length + 1);
     setIsActive(true);
+    setPermissions({});
     setDialogOpen(true);
   };
 
@@ -151,6 +165,7 @@ export default function EntityFieldsPage() {
     setOptionsText((field.optionsJson ?? []).join("\n"));
     setSortOrder(field.sortOrder);
     setIsActive(field.isActive);
+    setPermissions(field.permissionsJson ?? {});
     setDialogOpen(true);
   };
 
@@ -167,6 +182,7 @@ export default function EntityFieldsPage() {
       isRequired,
       defaultValue: defaultValue.trim() ? defaultValue.trim() : null,
       optionsJson: options,
+      permissionsJson: permissions,
       sortOrder,
       isActive,
     };
@@ -177,8 +193,21 @@ export default function EntityFieldsPage() {
     }
   };
 
+  const setRoleAccess = (roleId: number, access: FieldAccess | "inherit") => {
+    setPermissions((prev) => {
+      const next = { ...prev };
+      if (access === "inherit") {
+        delete next[String(roleId)];
+      } else {
+        next[String(roleId)] = access;
+      }
+      return next;
+    });
+  };
+
   const isPending = createMutation.isPending || updateMutation.isPending;
   const sorted = [...fields].sort((a: Field, b: Field) => a.sortOrder - b.sortOrder);
+  const assignableRoles = roles.filter((r: Role) => !r.permissionsJson?.superAdmin);
 
   return (
     <div className="p-6 space-y-6">
@@ -278,7 +307,7 @@ export default function EntityFieldsPage() {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[88vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingField ? "Редактировать поле" : "Новое поле"}</DialogTitle>
             <DialogDescription>
@@ -346,6 +375,36 @@ export default function EntityFieldsPage() {
                 <Switch checked={isActive} onCheckedChange={setIsActive} id="field-active" />
                 <Label htmlFor="field-active">Активно</Label>
               </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-4 space-y-2">
+              <Label>Доступ к полю по ролям</Label>
+              <p className="text-xs text-slate-400">
+                «По умолчанию» — поле наследует права роли на записи (изменение ⇒ редактирование, иначе просмотр). Суперадмины видят и редактируют всё.
+              </p>
+              {assignableRoles.length === 0 ? (
+                <p className="text-xs text-slate-400">Нет ролей для настройки.</p>
+              ) : (
+                <div className="space-y-2 pt-1">
+                  {assignableRoles.map((role: Role) => (
+                    <div key={role.id} className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-slate-700 truncate">{getML(role.nameJson)}</span>
+                      <Select
+                        value={permissions[String(role.id)] ?? "inherit"}
+                        onValueChange={(v) => setRoleAccess(role.id, v as FieldAccess | "inherit")}
+                      >
+                        <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="inherit">По умолчанию</SelectItem>
+                          {FIELD_ACCESS_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>

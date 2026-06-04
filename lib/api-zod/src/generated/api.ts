@@ -55,7 +55,9 @@ export const LoginResponse = zod.object({
   "view": zod.boolean(),
   "create": zod.boolean(),
   "update": zod.boolean(),
-  "delete": zod.boolean()
+  "delete": zod.boolean(),
+  "scope": zod.enum(['all', 'own']).optional(),
+  "scopeFieldKeys": zod.array(zod.string()).optional()
 }))
 }).optional()
 })
@@ -103,7 +105,9 @@ export const GetMeResponse = zod.object({
   "view": zod.boolean(),
   "create": zod.boolean(),
   "update": zod.boolean(),
-  "delete": zod.boolean()
+  "delete": zod.boolean(),
+  "scope": zod.enum(['all', 'own']).optional(),
+  "scopeFieldKeys": zod.array(zod.string()).optional()
 }))
 }).optional()
 })
@@ -182,6 +186,16 @@ export const CreateUserBody = zod.object({
   "direction": zod.enum(['ltr', 'rtl']).default(createUserBodyDirectionDefault),
   "startPageId": zod.number().nullish()
 })
+
+
+/**
+ * @summary List users as id+name options (auth-only; for user-type field pickers)
+ */
+export const ListUserOptionsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string()
+})
+export const ListUserOptionsResponse = zod.array(ListUserOptionsResponseItem)
 
 
 /**
@@ -382,7 +396,9 @@ export const ListRolesResponseItem = zod.object({
   "view": zod.boolean(),
   "create": zod.boolean(),
   "update": zod.boolean(),
-  "delete": zod.boolean()
+  "delete": zod.boolean(),
+  "scope": zod.enum(['all', 'own']).optional(),
+  "scopeFieldKeys": zod.array(zod.string()).optional()
 }))
 }),
   "userCount": zod.number().optional(),
@@ -420,7 +436,9 @@ export const CreateRoleBody = zod.object({
   "view": zod.boolean(),
   "create": zod.boolean(),
   "update": zod.boolean(),
-  "delete": zod.boolean()
+  "delete": zod.boolean(),
+  "scope": zod.enum(['all', 'own']).optional(),
+  "scopeFieldKeys": zod.array(zod.string()).optional()
 }))
 }).optional()
 })
@@ -459,7 +477,9 @@ export const GetRoleResponse = zod.object({
   "view": zod.boolean(),
   "create": zod.boolean(),
   "update": zod.boolean(),
-  "delete": zod.boolean()
+  "delete": zod.boolean(),
+  "scope": zod.enum(['all', 'own']).optional(),
+  "scopeFieldKeys": zod.array(zod.string()).optional()
 }))
 }),
   "userCount": zod.number().optional(),
@@ -500,7 +520,9 @@ export const UpdateRoleBody = zod.object({
   "view": zod.boolean(),
   "create": zod.boolean(),
   "update": zod.boolean(),
-  "delete": zod.boolean()
+  "delete": zod.boolean(),
+  "scope": zod.enum(['all', 'own']).optional(),
+  "scopeFieldKeys": zod.array(zod.string()).optional()
 }))
 }).optional()
 })
@@ -531,7 +553,9 @@ export const UpdateRoleResponse = zod.object({
   "view": zod.boolean(),
   "create": zod.boolean(),
   "update": zod.boolean(),
-  "delete": zod.boolean()
+  "delete": zod.boolean(),
+  "scope": zod.enum(['all', 'own']).optional(),
+  "scopeFieldKeys": zod.array(zod.string()).optional()
 }))
 }),
   "userCount": zod.number().optional(),
@@ -732,10 +756,11 @@ export const ListEntityFieldsResponseItem = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
+  "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -766,10 +791,11 @@ export const CreateEntityFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user']),
   "isRequired": zod.boolean().default(createEntityFieldBodyIsRequiredDefault),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()).optional(),
+  "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createEntityFieldBodyIsActiveDefault)
 })
@@ -796,10 +822,11 @@ export const GetFieldResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
+  "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -826,10 +853,11 @@ export const UpdateFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone']).optional(),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user']).optional(),
   "isRequired": zod.boolean().optional(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()).optional(),
+  "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
@@ -848,10 +876,11 @@ export const UpdateFieldResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
+  "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),

@@ -180,6 +180,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /users/options:
+    get:
+      operationId: listUserOptions
+      tags: [users]
+      summary: List users as id+name options (auth-only; for user-type field pickers)
+      responses:
+        "200":
+          description: List of user options
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserOption"
+
   /users/{id}:
     get:
       operationId: getUser
@@ -1437,6 +1452,15 @@ components:
         user:
           $ref: "#/components/schemas/UserProfile"
 
+    UserOption:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+
     UserProfile:
       type: object
       required: [id, email, firstName, lastName, roleId, language, direction, isActive]
@@ -1594,6 +1618,10 @@ components:
           format: date-time
 
     # ROLES
+    RecordScope:
+      type: string
+      enum: [all, own]
+
     RecordPermission:
       type: object
       required: [view, create, update, delete]
@@ -1606,6 +1634,12 @@ components:
           type: boolean
         delete:
           type: boolean
+        scope:
+          $ref: "#/components/schemas/RecordScope"
+        scopeFieldKeys:
+          type: array
+          items:
+            type: string
 
     RoleAdminCaps:
       type: object
@@ -1846,6 +1880,16 @@ components:
         - email
         - url
         - phone
+        - user
+
+    FieldAccess:
+      type: string
+      enum: [hidden, view, edit]
+
+    FieldPermissions:
+      type: object
+      additionalProperties:
+        $ref: "#/components/schemas/FieldAccess"
 
     Field:
       type: object
@@ -1871,6 +1915,8 @@ components:
           type: array
           items:
             type: string
+        permissionsJson:
+          $ref: "#/components/schemas/FieldPermissions"
         sortOrder:
           type: integer
         isActive:
@@ -1903,6 +1949,8 @@ components:
           type: array
           items:
             type: string
+        permissionsJson:
+          $ref: "#/components/schemas/FieldPermissions"
         sortOrder:
           type: integer
         isActive:
@@ -1945,6 +1993,8 @@ components:
           type: array
           items:
             type: string
+        permissionsJson:
+          $ref: "#/components/schemas/FieldPermissions"
         sortOrder:
           type: integer
         isActive:

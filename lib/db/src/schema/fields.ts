@@ -3,6 +3,12 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { entitiesTable } from "./entities";
 
+/** Per-field access level for a role. Unset role inherits the role's record perms. */
+export type FieldAccess = "hidden" | "view" | "edit";
+
+/** Field-level permission map: stringified roleId -> access level. */
+export type FieldPermissions = Record<string, FieldAccess>;
+
 export const entityFieldsTable = pgTable(
   "entity_fields",
   {
@@ -17,6 +23,7 @@ export const entityFieldsTable = pgTable(
     isRequired: boolean("is_required").notNull().default(false),
     defaultValue: text("default_value"),
     optionsJson: jsonb("options_json").notNull().default([]),
+    permissionsJson: jsonb("permissions_json").$type<FieldPermissions>().notNull().default({}),
     sortOrder: integer("sort_order").notNull().default(0),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

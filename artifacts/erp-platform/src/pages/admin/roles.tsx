@@ -6,18 +6,28 @@ import {
   useDeleteRole,
   useListPages,
   useListEntities,
+  useListEntityFields,
   type Role,
   type RolePermissions,
   type RoleAdminCaps,
   type RecordPermission,
+  type RecordScope,
   type Page,
   type Entity,
+  type Field,
   type MultilingualText,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -185,6 +195,24 @@ export default function RolesPage() {
 
   const getRecordPerm = (entityId: number): RecordPermission =>
     perms.records[String(entityId)] ?? { view: false, create: false, update: false, delete: false };
+
+  const setScope = (entityId: number, scope: RecordScope) =>
+    setPerms((prev) => {
+      const current: RecordPermission =
+        prev.records[String(entityId)] ?? { view: false, create: false, update: false, delete: false };
+      return { ...prev, records: { ...prev.records, [String(entityId)]: { ...current, scope } } };
+    });
+
+  const toggleScopeFieldKey = (entityId: number, key: string, checked: boolean) =>
+    setPerms((prev) => {
+      const current: RecordPermission =
+        prev.records[String(entityId)] ?? { view: false, create: false, update: false, delete: false };
+      const keys = current.scopeFieldKeys ?? [];
+      const next = checked ? [...keys, key] : keys.filter((k) => k !== key);
+      return { ...prev, records: { ...prev.records, [String(entityId)]: { ...current, scopeFieldKeys: next } } };
+    });
+
+  const scopedEntities = entities.filter((e: Entity) => getRecordPerm(e.id).view);
 
   return (
     <div className="p-6 space-y-6">
@@ -362,7 +390,7 @@ export default function RolesPage() {
                               {RECORD_ACTIONS.map((a) => (
                                 <td key={a.key} className="px-3 py-2 text-center">
                                   <Checkbox
-                                    checked={rp[a.key]}
+                                    checked={rp[a.key] === true}
                                     onCheckedChange={(v) => toggleRecord(entity.id, a.key, v === true)}
                                   />
                                 </td>
@@ -372,6 +400,32 @@ export default function RolesPage() {
                         })}
                       </tbody>
                     </table>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h4 className="text-sm font-semibold text-slate-700 mb-1">Область видимости записей</h4>
+                <p className="text-xs text-slate-400 mb-2">
+                  «Все» — роль видит все записи сущности. «Только свои» — видны только записи, где выбранное поле типа «Пользователь» равно текущему пользователю.
+                </p>
+                {scopedEntities.length === 0 ? (
+                  <p className="text-xs text-slate-400">Нет сущностей с правом просмотра.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {scopedEntities.map((entity: Entity) => {
+                      const rp = getRecordPerm(entity.id);
+                      return (
+                        <EntityScopeRow
+                          key={entity.id}
+                          entity={entity}
+                          scope={rp.scope ?? "all"}
+                          scopeFieldKeys={rp.scopeFieldKeys ?? []}
+                          onScopeChange={(s) => setScope(entity.id, s)}
+                          onToggleFieldKey={(k, c) => toggleScopeFieldKey(entity.id, k, c)}
+                        />
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -406,6 +460,62 @@ export default function RolesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+function EntityScopeRow({
+  entity,
+  scope,
+  scopeFieldKeys,
+  onScopeChange,
+  onToggleFieldKey,
+}: {
+  entity: Entity;
+  scope: RecordScope;
+  scopeFieldKeys: string[];
+  onScopeChange: (scope: RecordScope) => void;
+  onToggleFieldKey: (key: string, checked: boolean) => void;
+}) {
+  const { data: fields = [] } = useListEntityFields(entity.id);
+  const userFields = fields.filter((f: Field) => f.fieldType === "user");
+
+  return (
+    <div className="rounded-lg border border-slate-200 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm text-slate-700 truncate">{getML(entity.nameJson) || entity.entityKey}</span>
+        <Select value={scope} onValueChange={(v) => onScopeChange(v as RecordScope)}>
+          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Все</SelectItem>
+            <SelectItem value="own">Только свои</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {scope === "own" && (
+        <div className="pt-1">
+          {userFields.length === 0 ? (
+            <p className="text-xs text-amber-600">
+              Нет полей типа «Пользователь» — при выборе «Только свои» записи не будут видны. Добавьте такое поле в сущность.
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              <p className="text-xs text-slate-400">Поля-владельцы (совпадение по любому):</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {userFields.map((f: Field) => (
+                  <label key={f.id} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                    <Checkbox
+                      checked={scopeFieldKeys.includes(f.fieldKey)}
+                      onCheckedChange={(v) => onToggleFieldKey(f.fieldKey, v === true)}
+                    />
+                    <span className="truncate">{getML(f.nameJson) || f.fieldKey}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

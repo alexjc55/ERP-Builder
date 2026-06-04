@@ -2,12 +2,23 @@ import { pgTable, serial, jsonb, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
+/** Row-visibility scope for a role's records on an entity. */
+export type RecordScope = "all" | "own";
+
 /** Per-entity record CRUD rights (keyed by entityId in RolePermissions.records). */
 export interface RecordPermission {
   view: boolean;
   create: boolean;
   update: boolean;
   delete: boolean;
+  /**
+   * Row scope: "all" (default) sees every row; "own" restricts to rows the
+   * current user owns — i.e. where any of `scopeFieldKeys` (user-type fields)
+   * equals the requester's id. Missing = "all" for backward compatibility.
+   */
+  scope?: RecordScope;
+  /** User-type field keys that designate ownership when scope === "own". */
+  scopeFieldKeys?: string[];
 }
 
 /** Admin-builder capability areas. */

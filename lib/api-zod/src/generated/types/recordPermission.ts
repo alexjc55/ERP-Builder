@@ -5,10 +5,13 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { RecordScope } from './recordScope';
 
 export interface RecordPermission {
   view: boolean;
   create: boolean;
   update: boolean;
   delete: boolean;
+  scope?: RecordScope;
+  scopeFieldKeys?: string[];
 }

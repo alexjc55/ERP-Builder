@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { db, rolesTable, NO_ACCESS_PERMS, type RolePermissions, type RoleAdminCaps, type RecordPermission } from "@workspace/db";
+import { db, rolesTable, NO_ACCESS_PERMS, type RolePermissions, type RoleAdminCaps, type RecordPermission, type RecordScope, type EntityField, type FieldAccess, type FieldPermissions } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 declare global {
@@ -79,4 +79,34 @@ export async function assertRecord(req: Request, res: Response, entityId: number
   if (canRecord(perms, entityId, action)) return true;
   res.status(403).json({ error: "Forbidden" });
   return false;
+}
+
+/**
+ * Effective row scope for the requester on an entity. superAdmin and roles
+ * without an explicit "own" scope see all rows. "own" restricts visibility to
+ * rows owned via one of `scopeFieldKeys` (user-type fields).
+ */
+export function effectiveScope(perms: RolePermissions, entityId: number): { scope: RecordScope; scopeFieldKeys: string[] } {
+  if (perms.superAdmin) return { scope: "all", scopeFieldKeys: [] };
+  const rp = perms.records[String(entityId)];
+  return { scope: rp?.scope === "own" ? "own" : "all", scopeFieldKeys: rp?.scopeFieldKeys ?? [] };
+}
+
+/** True if the record (its values) is owned by `userId` via any scope field key. */
+export function recordOwnedBy(values: Record<string, unknown>, scopeFieldKeys: string[], userId: number): boolean {
+  return scopeFieldKeys.some((k) => Number(values[k]) === userId);
+}
+
+/**
+ * Resolve a field's access level for the requesting role.
+ * superAdmin always edits. An explicit per-field entry wins; otherwise the
+ * field inherits from the role's record perms (update => edit, else view) so
+ * existing fields without explicit perms behave exactly as before.
+ */
+export function resolveFieldAccess(field: EntityField, perms: RolePermissions, roleId: number, entityId: number): FieldAccess {
+  if (perms.superAdmin) return "edit";
+  const explicit = (field.permissionsJson as FieldPermissions | undefined)?.[String(roleId)];
+  if (explicit) return explicit;
+  const rp = perms.records[String(entityId)];
+  return rp?.update ? "edit" : "view";
 }

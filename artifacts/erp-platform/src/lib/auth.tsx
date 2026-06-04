@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useGetMe, getGetMeQueryKey, setAuthTokenGetter } from "@workspace/api-client-react";
-import type { UserProfile, RolePermissions, RoleAdminCaps, RecordPermission } from "@workspace/api-client-react";
+import type { UserProfile, RolePermissions, RoleAdminCaps, RecordPermission, FieldAccess, FieldPermissions } from "@workspace/api-client-react";
 
 type RecordAction = keyof RecordPermission;
 
@@ -14,6 +14,8 @@ interface AuthContextType {
   canAdmin: (area: keyof RoleAdminCaps) => boolean;
   canRecord: (entityId: number, action: RecordAction) => boolean;
   canPage: (pageId: number) => boolean;
+  /** Resolve the current user's access to a field; mirrors the server boundary. */
+  fieldAccess: (field: { permissionsJson?: FieldPermissions | null }, entityId: number) => FieldAccess;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -64,6 +66,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const canPage = (pageId: number): boolean =>
     isSuperAdmin || (permissions?.pageIds?.includes(pageId) ?? false);
 
+  const fieldAccess = (
+    field: { permissionsJson?: FieldPermissions | null },
+    entityId: number,
+  ): FieldAccess => {
+    if (isSuperAdmin) return "edit";
+    const roleId = user?.roleId;
+    const explicit = roleId != null ? field.permissionsJson?.[String(roleId)] : undefined;
+    if (explicit) return explicit;
+    const rp = permissions?.records?.[String(entityId)];
+    return rp?.update ? "edit" : "view";
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -76,6 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         canAdmin,
         canRecord,
         canPage,
+        fieldAccess,
       }}
     >
       {children}

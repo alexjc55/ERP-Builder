@@ -54,11 +54,21 @@ export interface RoleAdminCaps {
   translations: boolean;
 }
 
+export type RecordScope = typeof RecordScope[keyof typeof RecordScope];
+
+
+export const RecordScope = {
+  all: 'all',
+  own: 'own',
+} as const;
+
 export interface RecordPermission {
   view: boolean;
   create: boolean;
   update: boolean;
   delete: boolean;
+  scope?: RecordScope;
+  scopeFieldKeys?: string[];
 }
 
 export type RolePermissionsRecords = {[key: string]: RecordPermission};
@@ -88,6 +98,11 @@ export interface UserProfile {
 export interface AuthResult {
   token: string;
   user: UserProfile;
+}
+
+export interface UserOption {
+  id: number;
+  name: string;
 }
 
 export interface ChangePasswordInput {
@@ -327,7 +342,19 @@ export const FieldType = {
   email: 'email',
   url: 'url',
   phone: 'phone',
+  user: 'user',
 } as const;
+
+export type FieldAccess = typeof FieldAccess[keyof typeof FieldAccess];
+
+
+export const FieldAccess = {
+  hidden: 'hidden',
+  view: 'view',
+  edit: 'edit',
+} as const;
+
+export interface FieldPermissions {[key: string]: FieldAccess}
 
 export interface Field {
   id: number;
@@ -340,6 +367,7 @@ export interface Field {
   /** @nullable */
   defaultValue?: string | null;
   optionsJson: string[];
+  permissionsJson?: FieldPermissions;
   sortOrder: number;
   isActive: boolean;
   createdAt: string;
@@ -355,6 +383,7 @@ export interface FieldInput {
   /** @nullable */
   defaultValue?: string | null;
   optionsJson?: string[];
+  permissionsJson?: FieldPermissions;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -378,6 +407,7 @@ export interface FieldUpdate {
   /** @nullable */
   defaultValue?: string | null;
   optionsJson?: string[];
+  permissionsJson?: FieldPermissions;
   sortOrder?: number;
   isActive?: boolean;
 }

@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { FieldPermissions } from './fieldPermissions';
 import type { FieldType } from './fieldType';
 import type { MultilingualText } from './multilingualText';
 
@@ -19,6 +20,7 @@ export interface Field {
   /** @nullable */
   defaultValue?: string | null;
   optionsJson: string[];
+  permissionsJson?: FieldPermissions;
   sortOrder: number;
   isActive: boolean;
   createdAt: Date;
