@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable } from "@workspace/db";
-import { eq, asc, desc, and } from "drizzle-orm";
+import { eq, asc, desc, and, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import {
   ListEntityRecordsParams,
@@ -10,8 +10,11 @@ import {
   UpdateRecordParams,
   UpdateRecordBody,
   DeleteRecordParams,
+  QueryEntityRecordsParams,
+  QueryEntityRecordsBody,
 } from "@workspace/api-zod";
 import type { EntityField } from "@workspace/db";
+import { buildRecordQuery, type RecordQuerySpec } from "./record-query";
 
 const router: IRouter = Router();
 
@@ -168,6 +171,52 @@ router.get("/entities/:entityId/records", requireAuth, async (req, res): Promise
     .where(eq(entityRecordsTable.entityId, params.data.entityId))
     .orderBy(desc(entityRecordsTable.createdAt));
   res.json(records);
+});
+
+router.post("/entities/:entityId/records/query", requireAuth, async (req, res): Promise<void> => {
+  const params = QueryEntityRecordsParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const body = QueryEntityRecordsBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  const { entityId } = params.data;
+  if (!(await entityExists(entityId))) {
+    res.status(404).json({ error: "Entity not found" });
+    return;
+  }
+
+  const fields = await loadActiveFields(entityId);
+  const built = buildRecordQuery(fields, body.data as RecordQuerySpec);
+  if ("error" in built) {
+    res.status(400).json({ error: built.error });
+    return;
+  }
+
+  const entityWhere = eq(entityRecordsTable.entityId, entityId);
+  const where = built.where ? and(entityWhere, built.where) : entityWhere;
+
+  const { page, pageSize } = body.data;
+  const offset = (page - 1) * pageSize;
+
+  const [countRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(entityRecordsTable)
+    .where(where);
+
+  const data = await db
+    .select()
+    .from(entityRecordsTable)
+    .where(where)
+    .orderBy(...built.orderBy)
+    .limit(pageSize)
+    .offset(offset);
+
+  res.json({ data, total: countRow?.count ?? 0 });
 });
 
 router.post("/entities/:entityId/records", requireAuth, async (req, res): Promise<void> => {

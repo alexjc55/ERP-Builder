@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   useListEntityRecords,
   useCreateEntityRecord,
@@ -7,6 +7,8 @@ import {
   useListEntityFields,
   useListEntityStatuses,
   useListEntityRelations,
+  useListEntityViews,
+  useQueryEntityRecords,
   useListRecordLinks,
   useCreateRecordLink,
   useDeleteRecordLink,
@@ -14,6 +16,9 @@ import {
   type Field,
   type Status,
   type Relation,
+  type View,
+  type ViewConfig,
+  type RecordQuery,
   type LinkedRecord,
   type MultilingualText,
 } from "@workspace/api-client-react";
@@ -52,9 +57,11 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, Star } from "lucide-react";
 
 const NO_STATUS = "__none__";
+const NO_VIEW = "__all__";
+const PAGE_SIZE = 50;
 
 function getML(val: MultilingualText | string | undefined | null): string {
   if (!val) return "";
@@ -128,7 +135,7 @@ export function EntityRecords({ entityId }: { entityId: number }) {
 
   const { data: allFields = [], isLoading: fieldsLoading } = useListEntityFields(entityId);
   const { data: statuses = [] } = useListEntityStatuses(entityId);
-  const { data: records = [], isLoading: recordsLoading } = useListEntityRecords(entityId);
+  const { data: views = [] } = useListEntityViews(entityId);
 
   const fields = [...allFields]
     .filter((f: Field) => f.isActive)
@@ -141,8 +148,90 @@ export function EntityRecords({ entityId }: { entityId: number }) {
   const [form, setForm] = useState<FormState>({});
   const [statusId, setStatusId] = useState<string>(NO_STATUS);
 
-  const invalidate = () =>
+  // View / filter / search / pagination state for the server-side query endpoint.
+  const [selectedViewId, setSelectedViewId] = useState<string>(NO_VIEW);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [records, setRecords] = useState<EntityRecord[]>([]);
+  const [total, setTotal] = useState(0);
+  const [recordsLoading, setRecordsLoading] = useState(true);
+  const [refreshTick, setRefreshTick] = useState(0);
+
+  const selectedView: View | undefined =
+    selectedViewId === NO_VIEW ? undefined : views.find((v: View) => String(v.id) === selectedViewId);
+  const selectedConfig = (selectedView?.configJson ?? {}) as ViewConfig;
+
+  // Reset all view/query state when switching entities so prior state never leaks.
+  const [viewInitialized, setViewInitialized] = useState(false);
+  useEffect(() => {
+    setSelectedViewId(NO_VIEW);
+    setSearch("");
+    setPage(1);
+    setViewInitialized(false);
+  }, [entityId]);
+
+  // Auto-select the entity's default view once its views load (only on first arrival).
+  useEffect(() => {
+    if (viewInitialized || views.length === 0) return;
+    const def = views.find((v: View) => v.isDefault);
+    if (def) {
+      setSelectedViewId(String(def.id));
+      setSearch(((def.configJson ?? {}) as ViewConfig).search ?? "");
+    }
+    setViewInitialized(true);
+  }, [views, viewInitialized]);
+
+  const queryMutation = useQueryEntityRecords();
+  const runQuery = queryMutation.mutateAsync;
+
+  const recordQuery: RecordQuery = useMemo(
+    () => ({
+      filters: selectedConfig.filters ?? [],
+      filterConjunction: selectedConfig.filterConjunction ?? "and",
+      sorts: selectedConfig.sorts ?? [],
+      search: search.trim() || undefined,
+      page,
+      pageSize: PAGE_SIZE,
+    }),
+    [selectedConfig.filters, selectedConfig.filterConjunction, selectedConfig.sorts, search, page],
+  );
+
+  const queryKey = JSON.stringify(recordQuery);
+  useEffect(() => {
+    let cancelled = false;
+    setRecordsLoading(true);
+    runQuery({ entityId, data: recordQuery })
+      .then((res) => {
+        if (cancelled) return;
+        setRecords(res.data);
+        setTotal(res.total);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setRecords([]);
+        setTotal(0);
+        toast({ title: "Ошибка загрузки записей", description: extractError(err), variant: "destructive" });
+      })
+      .finally(() => {
+        if (!cancelled) setRecordsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entityId, queryKey, refreshTick]);
+
+  const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/records`] });
+    setRefreshTick((t) => t + 1);
+  };
+
+  const handleViewChange = (value: string) => {
+    setSelectedViewId(value);
+    setPage(1);
+    const cfg = value === NO_VIEW ? undefined : (views.find((v: View) => String(v.id) === value)?.configJson as ViewConfig | undefined);
+    setSearch(cfg?.search ?? "");
+  };
 
   const createMutation = useCreateEntityRecord({
     mutation: {
@@ -194,7 +283,14 @@ export function EntityRecords({ entityId }: { entityId: number }) {
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
-  const displayFields = fields.slice(0, 5);
+  const visibleFields = selectedConfig.visibleFields;
+  const displayFields =
+    visibleFields && visibleFields.length > 0
+      ? (visibleFields
+          .map((key) => fields.find((f: Field) => f.fieldKey === key))
+          .filter((f): f is Field => Boolean(f)))
+      : fields.slice(0, 5);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   if (fieldsLoading) {
     return (
@@ -222,7 +318,39 @@ export function EntityRecords({ entityId }: { entityId: number }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {views.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <LayoutList className="w-4 h-4 text-slate-400" />
+              <Select value={selectedViewId} onValueChange={handleViewChange}>
+                <SelectTrigger className="h-9 w-56 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_VIEW}>Все записи</SelectItem>
+                  {views.map((v: View) => (
+                    <SelectItem key={v.id} value={String(v.id)}>
+                      <span className="inline-flex items-center gap-1.5">
+                        {v.isDefault && <Star className="w-3 h-3 text-amber-500 fill-amber-400" />}
+                        {getML(v.nameJson)}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <Input
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Поиск…"
+              className="h-9 w-56 pl-8 text-sm"
+            />
+          </div>
+        </div>
         <Button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 gap-2">
           <Plus className="w-4 h-4" />
           Добавить запись
@@ -237,7 +365,9 @@ export function EntityRecords({ entityId }: { entityId: number }) {
             </div>
           ) : records.length === 0 ? (
             <div className="text-center py-16 text-slate-400">
-              Записей пока нет. Нажмите «Добавить запись», чтобы создать первую.
+              {total === 0 && (search.trim() || (selectedConfig.filters?.length ?? 0) > 0)
+                ? "Нет записей, удовлетворяющих условиям."
+                : "Записей пока нет. Нажмите «Добавить запись», чтобы создать первую."}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -300,6 +430,39 @@ export function EntityRecords({ entityId }: { entityId: number }) {
           )}
         </CardContent>
       </Card>
+
+      {total > 0 && (
+        <div className="flex items-center justify-between text-sm text-slate-500">
+          <span>
+            Показано {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} из {total}
+          </span>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1"
+                disabled={page <= 1 || recordsLoading}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                <ChevronLeft className="w-3.5 h-3.5" /> Назад
+              </Button>
+              <span className="text-xs text-slate-400">
+                Стр. {page} из {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1"
+                disabled={page >= totalPages || recordsLoading}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Вперёд <ChevronRight className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">

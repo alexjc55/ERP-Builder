@@ -1003,6 +1003,51 @@ export const DeleteRecordResponse = zod.object({
 
 
 /**
+ * @summary Query records for an entity with filters, sorting, search and pagination
+ */
+export const QueryEntityRecordsParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const queryEntityRecordsBodyFilterConjunctionDefault = `and`;
+export const queryEntityRecordsBodySortsItemDirectionDefault = `asc`;
+export const queryEntityRecordsBodyPageDefault = 1;
+
+export const queryEntityRecordsBodyPageSizeDefault = 50;
+export const queryEntityRecordsBodyPageSizeMax = 200;
+
+
+
+export const QueryEntityRecordsBody = zod.object({
+  "filters": zod.array(zod.object({
+  "field": zod.string(),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in']),
+  "value": zod.unknown().optional()
+})).optional(),
+  "filterConjunction": zod.enum(['and', 'or']).default(queryEntityRecordsBodyFilterConjunctionDefault),
+  "sorts": zod.array(zod.object({
+  "field": zod.string(),
+  "direction": zod.enum(['asc', 'desc']).default(queryEntityRecordsBodySortsItemDirectionDefault)
+})).optional(),
+  "search": zod.string().optional(),
+  "page": zod.number().min(1).default(queryEntityRecordsBodyPageDefault),
+  "pageSize": zod.number().min(1).max(queryEntityRecordsBodyPageSizeMax).default(queryEntityRecordsBodyPageSizeDefault)
+})
+
+export const QueryEntityRecordsResponse = zod.object({
+  "data": zod.array(zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "valuesJson": zod.record(zod.string(), zod.unknown()),
+  "statusId": zod.number().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
+
+
+/**
  * @summary List relations originating from an entity
  */
 export const ListEntityRelationsParams = zod.object({
@@ -1187,6 +1232,232 @@ export const DeleteRecordLinkParams = zod.object({
 })
 
 export const DeleteRecordLinkResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
+ * @summary List views for an entity
+ */
+export const ListEntityViewsParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const listEntityViewsResponseConfigJsonFilterConjunctionDefault = `and`;
+export const listEntityViewsResponseConfigJsonSortsItemDirectionDefault = `asc`;
+
+export const ListEntityViewsResponseItem = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "viewKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "configJson": zod.object({
+  "filters": zod.array(zod.object({
+  "field": zod.string(),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in']),
+  "value": zod.unknown().optional()
+})).optional(),
+  "filterConjunction": zod.enum(['and', 'or']).default(listEntityViewsResponseConfigJsonFilterConjunctionDefault),
+  "sorts": zod.array(zod.object({
+  "field": zod.string(),
+  "direction": zod.enum(['asc', 'desc']).default(listEntityViewsResponseConfigJsonSortsItemDirectionDefault)
+})).optional(),
+  "search": zod.string().optional(),
+  "visibleFields": zod.array(zod.string()).optional()
+}),
+  "isDefault": zod.boolean(),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListEntityViewsResponse = zod.array(ListEntityViewsResponseItem)
+
+
+/**
+ * @summary Create a view on an entity
+ */
+export const CreateEntityViewParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const createEntityViewBodyConfigJsonFilterConjunctionDefault = `and`;
+export const createEntityViewBodyConfigJsonSortsItemDirectionDefault = `asc`;
+export const createEntityViewBodyIsDefaultDefault = false;
+export const createEntityViewBodyIsActiveDefault = true;
+
+export const CreateEntityViewBody = zod.object({
+  "viewKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "configJson": zod.object({
+  "filters": zod.array(zod.object({
+  "field": zod.string(),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in']),
+  "value": zod.unknown().optional()
+})).optional(),
+  "filterConjunction": zod.enum(['and', 'or']).default(createEntityViewBodyConfigJsonFilterConjunctionDefault),
+  "sorts": zod.array(zod.object({
+  "field": zod.string(),
+  "direction": zod.enum(['asc', 'desc']).default(createEntityViewBodyConfigJsonSortsItemDirectionDefault)
+})).optional(),
+  "search": zod.string().optional(),
+  "visibleFields": zod.array(zod.string()).optional()
+}).optional(),
+  "isDefault": zod.boolean().default(createEntityViewBodyIsDefaultDefault),
+  "sortOrder": zod.number().optional(),
+  "isActive": zod.boolean().default(createEntityViewBodyIsActiveDefault)
+})
+
+
+/**
+ * @summary Get view by ID
+ */
+export const GetViewParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const getViewResponseConfigJsonFilterConjunctionDefault = `and`;
+export const getViewResponseConfigJsonSortsItemDirectionDefault = `asc`;
+
+export const GetViewResponse = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "viewKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "configJson": zod.object({
+  "filters": zod.array(zod.object({
+  "field": zod.string(),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in']),
+  "value": zod.unknown().optional()
+})).optional(),
+  "filterConjunction": zod.enum(['and', 'or']).default(getViewResponseConfigJsonFilterConjunctionDefault),
+  "sorts": zod.array(zod.object({
+  "field": zod.string(),
+  "direction": zod.enum(['asc', 'desc']).default(getViewResponseConfigJsonSortsItemDirectionDefault)
+})).optional(),
+  "search": zod.string().optional(),
+  "visibleFields": zod.array(zod.string()).optional()
+}),
+  "isDefault": zod.boolean(),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update view
+ */
+export const UpdateViewParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateViewBodyConfigJsonFilterConjunctionDefault = `and`;
+export const updateViewBodyConfigJsonSortsItemDirectionDefault = `asc`;
+
+export const UpdateViewBody = zod.object({
+  "viewKey": zod.string().optional(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "configJson": zod.object({
+  "filters": zod.array(zod.object({
+  "field": zod.string(),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in']),
+  "value": zod.unknown().optional()
+})).optional(),
+  "filterConjunction": zod.enum(['and', 'or']).default(updateViewBodyConfigJsonFilterConjunctionDefault),
+  "sorts": zod.array(zod.object({
+  "field": zod.string(),
+  "direction": zod.enum(['asc', 'desc']).default(updateViewBodyConfigJsonSortsItemDirectionDefault)
+})).optional(),
+  "search": zod.string().optional(),
+  "visibleFields": zod.array(zod.string()).optional()
+}).optional(),
+  "isDefault": zod.boolean().optional(),
+  "sortOrder": zod.number().optional(),
+  "isActive": zod.boolean().optional()
+})
+
+export const updateViewResponseConfigJsonFilterConjunctionDefault = `and`;
+export const updateViewResponseConfigJsonSortsItemDirectionDefault = `asc`;
+
+export const UpdateViewResponse = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "viewKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "configJson": zod.object({
+  "filters": zod.array(zod.object({
+  "field": zod.string(),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in']),
+  "value": zod.unknown().optional()
+})).optional(),
+  "filterConjunction": zod.enum(['and', 'or']).default(updateViewResponseConfigJsonFilterConjunctionDefault),
+  "sorts": zod.array(zod.object({
+  "field": zod.string(),
+  "direction": zod.enum(['asc', 'desc']).default(updateViewResponseConfigJsonSortsItemDirectionDefault)
+})).optional(),
+  "search": zod.string().optional(),
+  "visibleFields": zod.array(zod.string()).optional()
+}),
+  "isDefault": zod.boolean(),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete view
+ */
+export const DeleteViewParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteViewResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
+ * @summary Reorder views within an entity
+ */
+export const ReorderViewsParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const ReorderViewsBody = zod.object({
+  "entityId": zod.number(),
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "sortOrder": zod.number()
+}))
+})
+
+export const ReorderViewsResponse = zod.object({
   "success": zod.boolean(),
   "message": zod.string().optional()
 })

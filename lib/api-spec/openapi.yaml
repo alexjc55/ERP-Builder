@@ -894,6 +894,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  /entities/{entityId}/records/query:
+    post:
+      operationId: queryEntityRecords
+      tags: [records]
+      summary: Query records for an entity with filters, sorting, search and pagination
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordQuery"
+      responses:
+        "200":
+          description: Query result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordQueryResult"
+
   # RELATIONS
   /entities/{entityId}/relations:
     get:
@@ -1056,6 +1081,135 @@ paths:
       responses:
         "200":
           description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # VIEWS
+  /entities/{entityId}/views:
+    get:
+      operationId: listEntityViews
+      tags: [views]
+      summary: List views for an entity
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of views
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/View"
+    post:
+      operationId: createEntityView
+      tags: [views]
+      summary: Create a view on an entity
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViewInput"
+      responses:
+        "201":
+          description: View created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/View"
+
+  /views/{id}:
+    get:
+      operationId: getView
+      tags: [views]
+      summary: Get view by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: View found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/View"
+    put:
+      operationId: updateView
+      tags: [views]
+      summary: Update view
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViewUpdate"
+      responses:
+        "200":
+          description: View updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/View"
+    delete:
+      operationId: deleteView
+      tags: [views]
+      summary: Delete view
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /entities/{entityId}/views/reorder:
+    post:
+      operationId: reorderViews
+      tags: [views]
+      summary: Reorder views within an entity
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViewsReorderInput"
+      responses:
+        "200":
+          description: Reordered
           content:
             application/json:
               schema:
@@ -1868,6 +2022,184 @@ components:
           additionalProperties: true
         statusId:
           type: ["integer", "null"]
+
+    # VIEWS
+    FilterOperator:
+      type: string
+      enum:
+        - eq
+        - neq
+        - contains
+        - not_contains
+        - starts_with
+        - ends_with
+        - gt
+        - gte
+        - lt
+        - lte
+        - is_empty
+        - is_not_empty
+        - in
+
+    FilterCondition:
+      type: object
+      required: [field, operator]
+      properties:
+        field:
+          type: string
+        operator:
+          $ref: "#/components/schemas/FilterOperator"
+        value: {}
+
+    SortSpec:
+      type: object
+      required: [field]
+      properties:
+        field:
+          type: string
+        direction:
+          type: string
+          enum: [asc, desc]
+          default: asc
+
+    ViewConfig:
+      type: object
+      properties:
+        filters:
+          type: array
+          items:
+            $ref: "#/components/schemas/FilterCondition"
+        filterConjunction:
+          type: string
+          enum: [and, or]
+          default: and
+        sorts:
+          type: array
+          items:
+            $ref: "#/components/schemas/SortSpec"
+        search:
+          type: string
+        visibleFields:
+          type: array
+          items:
+            type: string
+
+    View:
+      type: object
+      required: [id, entityId, viewKey, nameJson, configJson, isDefault, sortOrder, isActive, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        entityId:
+          type: integer
+        viewKey:
+          type: string
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        configJson:
+          $ref: "#/components/schemas/ViewConfig"
+        isDefault:
+          type: boolean
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ViewInput:
+      type: object
+      required: [viewKey, nameJson]
+      properties:
+        viewKey:
+          type: string
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        configJson:
+          $ref: "#/components/schemas/ViewConfig"
+        isDefault:
+          type: boolean
+          default: false
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+          default: true
+
+    ViewUpdate:
+      type: object
+      properties:
+        viewKey:
+          type: string
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        configJson:
+          $ref: "#/components/schemas/ViewConfig"
+        isDefault:
+          type: boolean
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+
+    ViewsReorderInput:
+      type: object
+      required: [entityId, items]
+      properties:
+        entityId:
+          type: integer
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, sortOrder]
+            properties:
+              id:
+                type: integer
+              sortOrder:
+                type: integer
+
+    RecordQuery:
+      type: object
+      properties:
+        filters:
+          type: array
+          items:
+            $ref: "#/components/schemas/FilterCondition"
+        filterConjunction:
+          type: string
+          enum: [and, or]
+          default: and
+        sorts:
+          type: array
+          items:
+            $ref: "#/components/schemas/SortSpec"
+        search:
+          type: string
+        page:
+          type: integer
+          minimum: 1
+          default: 1
+        pageSize:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 50
+
+    RecordQueryResult:
+      type: object
+      required: [data, total]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/EntityRecord"
+        total:
+          type: integer
 
     # RELATIONS
     RelationType:

@@ -426,6 +426,128 @@ export interface RecordUpdate {
   statusId?: number | null;
 }
 
+export type FilterOperator = typeof FilterOperator[keyof typeof FilterOperator];
+
+
+export const FilterOperator = {
+  eq: 'eq',
+  neq: 'neq',
+  contains: 'contains',
+  not_contains: 'not_contains',
+  starts_with: 'starts_with',
+  ends_with: 'ends_with',
+  gt: 'gt',
+  gte: 'gte',
+  lt: 'lt',
+  lte: 'lte',
+  is_empty: 'is_empty',
+  is_not_empty: 'is_not_empty',
+  in: 'in',
+} as const;
+
+export interface FilterCondition {
+  field: string;
+  operator: FilterOperator;
+  value?: unknown;
+}
+
+export type SortSpecDirection = typeof SortSpecDirection[keyof typeof SortSpecDirection];
+
+
+export const SortSpecDirection = {
+  asc: 'asc',
+  desc: 'desc',
+} as const;
+
+export interface SortSpec {
+  field: string;
+  direction?: SortSpecDirection;
+}
+
+export type ViewConfigFilterConjunction = typeof ViewConfigFilterConjunction[keyof typeof ViewConfigFilterConjunction];
+
+
+export const ViewConfigFilterConjunction = {
+  and: 'and',
+  or: 'or',
+} as const;
+
+export interface ViewConfig {
+  filters?: FilterCondition[];
+  filterConjunction?: ViewConfigFilterConjunction;
+  sorts?: SortSpec[];
+  search?: string;
+  visibleFields?: string[];
+}
+
+export interface View {
+  id: number;
+  entityId: number;
+  viewKey: string;
+  nameJson: MultilingualText;
+  configJson: ViewConfig;
+  isDefault: boolean;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ViewInput {
+  viewKey: string;
+  nameJson: MultilingualText;
+  configJson?: ViewConfig;
+  isDefault?: boolean;
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
+export interface ViewUpdate {
+  viewKey?: string;
+  nameJson?: MultilingualText;
+  configJson?: ViewConfig;
+  isDefault?: boolean;
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
+export type ViewsReorderInputItemsItem = {
+  id: number;
+  sortOrder: number;
+};
+
+export interface ViewsReorderInput {
+  entityId: number;
+  items: ViewsReorderInputItemsItem[];
+}
+
+export type RecordQueryFilterConjunction = typeof RecordQueryFilterConjunction[keyof typeof RecordQueryFilterConjunction];
+
+
+export const RecordQueryFilterConjunction = {
+  and: 'and',
+  or: 'or',
+} as const;
+
+export interface RecordQuery {
+  filters?: FilterCondition[];
+  filterConjunction?: RecordQueryFilterConjunction;
+  sorts?: SortSpec[];
+  search?: string;
+  /** @minimum 1 */
+  page?: number;
+  /**
+     * @minimum 1
+     * @maximum 200
+     */
+  pageSize?: number;
+}
+
+export interface RecordQueryResult {
+  data: EntityRecord[];
+  total: number;
+}
+
 export type RelationType = typeof RelationType[keyof typeof RelationType];
 
 

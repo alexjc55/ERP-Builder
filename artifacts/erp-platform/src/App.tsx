@@ -13,6 +13,7 @@ import EntitiesPage from "@/pages/admin/entities";
 import EntityFieldsPage from "@/pages/admin/entity-fields";
 import EntityStatusesPage from "@/pages/admin/entity-statuses";
 import EntityRelationsPage from "@/pages/admin/entity-relations";
+import EntityViewsPage from "@/pages/admin/entity-views";
 import EntityRecordsPage from "@/pages/admin/entity-records";
 import TranslationsPage from "@/pages/admin/translations";
 import DynamicPage from "@/pages/dynamic";
@@ -108,6 +109,12 @@ function Router() {
       <Route path="/admin/entities/:entityId/relations">
         <ProtectedRoute>
           <EntityRelationsPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/entities/:entityId/views">
+        <ProtectedRoute>
+          <EntityViewsPage />
         </ProtectedRoute>
       </Route>
 

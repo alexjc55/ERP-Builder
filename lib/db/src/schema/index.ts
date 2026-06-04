@@ -11,3 +11,4 @@ export * from "./fields";
 export * from "./statuses";
 export * from "./records";
 export * from "./relations";
+export * from "./views";

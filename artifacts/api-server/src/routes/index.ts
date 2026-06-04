@@ -9,6 +9,7 @@ import fieldsRouter from "./fields";
 import statusesRouter from "./statuses";
 import recordsRouter from "./records";
 import relationsRouter from "./relations";
+import viewsRouter from "./views";
 import translationsRouter from "./translations";
 import dashboardRouter from "./dashboard";
 
@@ -24,6 +25,7 @@ router.use(fieldsRouter);
 router.use(statusesRouter);
 router.use(recordsRouter);
 router.use(relationsRouter);
+router.use(viewsRouter);
 router.use(translationsRouter);
 router.use(dashboardRouter);
 

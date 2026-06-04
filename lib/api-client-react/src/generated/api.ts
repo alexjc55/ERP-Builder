@@ -43,6 +43,8 @@ import type {
   PageUpdate,
   RecordInput,
   RecordLink,
+  RecordQuery,
+  RecordQueryResult,
   RecordUpdate,
   Relation,
   RelationInput,
@@ -64,7 +66,11 @@ import type {
   UserInput,
   UserListResult,
   UserProfile,
-  UserUpdate
+  UserUpdate,
+  View,
+  ViewInput,
+  ViewUpdate,
+  ViewsReorderInput
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -3159,6 +3165,78 @@ export const useDeleteRecord = <TError = ErrorType<unknown>,
       return useMutation(getDeleteRecordMutationOptions(options));
     }
 
+export const getQueryEntityRecordsUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/records/query`
+}
+
+/**
+ * @summary Query records for an entity with filters, sorting, search and pagination
+ */
+export const queryEntityRecords = async (entityId: number,
+    recordQuery: RecordQuery, options?: RequestInit): Promise<RecordQueryResult> => {
+
+  return customFetch<RecordQueryResult>(getQueryEntityRecordsUrl(entityId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      recordQuery,)
+  }
+);}
+
+
+
+
+export const getQueryEntityRecordsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof queryEntityRecords>>, TError,{entityId: number;data: BodyType<RecordQuery>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof queryEntityRecords>>, TError,{entityId: number;data: BodyType<RecordQuery>}, TContext> => {
+
+const mutationKey = ['queryEntityRecords'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof queryEntityRecords>>, {entityId: number;data: BodyType<RecordQuery>}> = (props) => {
+          const {entityId,data} = props ?? {};
+
+          return  queryEntityRecords(entityId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type QueryEntityRecordsMutationResult = NonNullable<Awaited<ReturnType<typeof queryEntityRecords>>>
+    export type QueryEntityRecordsMutationBody = BodyType<RecordQuery>
+    export type QueryEntityRecordsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Query records for an entity with filters, sorting, search and pagination
+ */
+export const useQueryEntityRecords = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof queryEntityRecords>>, TError,{entityId: number;data: BodyType<RecordQuery>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof queryEntityRecords>>,
+        TError,
+        {entityId: number;data: BodyType<RecordQuery>},
+        TContext
+      > => {
+      return useMutation(getQueryEntityRecordsMutationOptions(options));
+    }
+
 export const getListEntityRelationsUrl = (entityId: number,) => {
 
 
@@ -3744,6 +3822,446 @@ export const useDeleteRecordLink = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteRecordLinkMutationOptions(options));
+    }
+
+export const getListEntityViewsUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/views`
+}
+
+/**
+ * @summary List views for an entity
+ */
+export const listEntityViews = async (entityId: number, options?: RequestInit): Promise<View[]> => {
+
+  return customFetch<View[]>(getListEntityViewsUrl(entityId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListEntityViewsQueryKey = (entityId: number,) => {
+    return [
+    `/api/entities/${entityId}/views`
+    ] as const;
+    }
+
+
+export const getListEntityViewsQueryOptions = <TData = Awaited<ReturnType<typeof listEntityViews>>, TError = ErrorType<unknown>>(entityId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEntityViews>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListEntityViewsQueryKey(entityId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listEntityViews>>> = ({ signal }) => listEntityViews(entityId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(entityId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listEntityViews>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListEntityViewsQueryResult = NonNullable<Awaited<ReturnType<typeof listEntityViews>>>
+export type ListEntityViewsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List views for an entity
+ */
+
+export function useListEntityViews<TData = Awaited<ReturnType<typeof listEntityViews>>, TError = ErrorType<unknown>>(
+ entityId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEntityViews>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListEntityViewsQueryOptions(entityId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateEntityViewUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/views`
+}
+
+/**
+ * @summary Create a view on an entity
+ */
+export const createEntityView = async (entityId: number,
+    viewInput: ViewInput, options?: RequestInit): Promise<View> => {
+
+  return customFetch<View>(getCreateEntityViewUrl(entityId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      viewInput,)
+  }
+);}
+
+
+
+
+export const getCreateEntityViewMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEntityView>>, TError,{entityId: number;data: BodyType<ViewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createEntityView>>, TError,{entityId: number;data: BodyType<ViewInput>}, TContext> => {
+
+const mutationKey = ['createEntityView'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createEntityView>>, {entityId: number;data: BodyType<ViewInput>}> = (props) => {
+          const {entityId,data} = props ?? {};
+
+          return  createEntityView(entityId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateEntityViewMutationResult = NonNullable<Awaited<ReturnType<typeof createEntityView>>>
+    export type CreateEntityViewMutationBody = BodyType<ViewInput>
+    export type CreateEntityViewMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a view on an entity
+ */
+export const useCreateEntityView = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEntityView>>, TError,{entityId: number;data: BodyType<ViewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createEntityView>>,
+        TError,
+        {entityId: number;data: BodyType<ViewInput>},
+        TContext
+      > => {
+      return useMutation(getCreateEntityViewMutationOptions(options));
+    }
+
+export const getGetViewUrl = (id: number,) => {
+
+
+
+
+  return `/api/views/${id}`
+}
+
+/**
+ * @summary Get view by ID
+ */
+export const getView = async (id: number, options?: RequestInit): Promise<View> => {
+
+  return customFetch<View>(getGetViewUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetViewQueryKey = (id: number,) => {
+    return [
+    `/api/views/${id}`
+    ] as const;
+    }
+
+
+export const getGetViewQueryOptions = <TData = Awaited<ReturnType<typeof getView>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getView>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetViewQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getView>>> = ({ signal }) => getView(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getView>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetViewQueryResult = NonNullable<Awaited<ReturnType<typeof getView>>>
+export type GetViewQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get view by ID
+ */
+
+export function useGetView<TData = Awaited<ReturnType<typeof getView>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getView>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetViewQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateViewUrl = (id: number,) => {
+
+
+
+
+  return `/api/views/${id}`
+}
+
+/**
+ * @summary Update view
+ */
+export const updateView = async (id: number,
+    viewUpdate: ViewUpdate, options?: RequestInit): Promise<View> => {
+
+  return customFetch<View>(getUpdateViewUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      viewUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateViewMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateView>>, TError,{id: number;data: BodyType<ViewUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateView>>, TError,{id: number;data: BodyType<ViewUpdate>}, TContext> => {
+
+const mutationKey = ['updateView'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateView>>, {id: number;data: BodyType<ViewUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateView(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateViewMutationResult = NonNullable<Awaited<ReturnType<typeof updateView>>>
+    export type UpdateViewMutationBody = BodyType<ViewUpdate>
+    export type UpdateViewMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update view
+ */
+export const useUpdateView = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateView>>, TError,{id: number;data: BodyType<ViewUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateView>>,
+        TError,
+        {id: number;data: BodyType<ViewUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateViewMutationOptions(options));
+    }
+
+export const getDeleteViewUrl = (id: number,) => {
+
+
+
+
+  return `/api/views/${id}`
+}
+
+/**
+ * @summary Delete view
+ */
+export const deleteView = async (id: number, options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getDeleteViewUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteViewMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteView>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteView>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteView'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteView>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteView(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteViewMutationResult = NonNullable<Awaited<ReturnType<typeof deleteView>>>
+
+    export type DeleteViewMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete view
+ */
+export const useDeleteView = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteView>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteView>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteViewMutationOptions(options));
+    }
+
+export const getReorderViewsUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/views/reorder`
+}
+
+/**
+ * @summary Reorder views within an entity
+ */
+export const reorderViews = async (entityId: number,
+    viewsReorderInput: ViewsReorderInput, options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getReorderViewsUrl(entityId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      viewsReorderInput,)
+  }
+);}
+
+
+
+
+export const getReorderViewsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderViews>>, TError,{entityId: number;data: BodyType<ViewsReorderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reorderViews>>, TError,{entityId: number;data: BodyType<ViewsReorderInput>}, TContext> => {
+
+const mutationKey = ['reorderViews'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reorderViews>>, {entityId: number;data: BodyType<ViewsReorderInput>}> = (props) => {
+          const {entityId,data} = props ?? {};
+
+          return  reorderViews(entityId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReorderViewsMutationResult = NonNullable<Awaited<ReturnType<typeof reorderViews>>>
+    export type ReorderViewsMutationBody = BodyType<ViewsReorderInput>
+    export type ReorderViewsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Reorder views within an entity
+ */
+export const useReorderViews = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderViews>>, TError,{entityId: number;data: BodyType<ViewsReorderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reorderViews>>,
+        TError,
+        {entityId: number;data: BodyType<ViewsReorderInput>},
+        TContext
+      > => {
+      return useMutation(getReorderViewsMutationOptions(options));
     }
 
 export const getListEntitiesUrl = () => {
