@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, entityStatusesTable, entitiesTable } from "@workspace/db";
 import { eq, asc, and, ne, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
+import { requireAdmin } from "../middlewares/permissions";
 import {
   ListEntityStatusesParams,
   CreateEntityStatusParams,
@@ -73,7 +74,7 @@ router.get("/entities/:entityId/statuses", requireAuth, async (req, res): Promis
   res.json(statuses);
 });
 
-router.post("/entities/:entityId/statuses", requireAuth, async (req, res): Promise<void> => {
+router.post("/entities/:entityId/statuses", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
   const params = CreateEntityStatusParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -134,7 +135,7 @@ router.post("/entities/:entityId/statuses", requireAuth, async (req, res): Promi
   }
 });
 
-router.post("/statuses/reorder", requireAuth, async (req, res): Promise<void> => {
+router.post("/statuses/reorder", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
   const parsed = ReorderStatusesBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -202,7 +203,7 @@ router.get("/statuses/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(status);
 });
 
-router.put("/statuses/:id", requireAuth, async (req, res): Promise<void> => {
+router.put("/statuses/:id", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
   const params = UpdateStatusParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -285,7 +286,7 @@ router.put("/statuses/:id", requireAuth, async (req, res): Promise<void> => {
   }
 });
 
-router.delete("/statuses/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/statuses/:id", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
   const params = DeleteStatusParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

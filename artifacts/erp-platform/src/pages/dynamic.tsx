@@ -7,9 +7,10 @@ import {
   type MultilingualText,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Construction, Loader2 } from "lucide-react";
+import { Construction, Loader2, ShieldAlert } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import { EntityRecords } from "@/components/EntityRecords";
+import { useAuth } from "@/lib/auth";
 
 function getML(val: MultilingualText | string | undefined | null): string {
   if (!val) return "";
@@ -19,6 +20,7 @@ function getML(val: MultilingualText | string | undefined | null): string {
 
 export default function DynamicPage() {
   const [location] = useLocation();
+  const { canPage } = useAuth();
   const { data: pages = [], isLoading: pagesLoading } = useListPages();
   const { data: entities = [], isLoading: entitiesLoading } = useListEntities();
 
@@ -34,6 +36,22 @@ export default function DynamicPage() {
 
   if (!page) {
     return <NotFound />;
+  }
+
+  if (!canPage(page.id)) {
+    return (
+      <div className="p-6">
+        <div className="max-w-md mx-auto mt-16 text-center space-y-3">
+          <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mx-auto">
+            <ShieldAlert className="w-7 h-7 text-red-500" />
+          </div>
+          <h1 className="text-xl font-semibold text-slate-800">Доступ запрещён</h1>
+          <p className="text-sm text-slate-500">
+            У вас нет прав для просмотра этой страницы. Обратитесь к администратору.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   const entity = entities.find((e: Entity) => e.pageId === page.id && e.isActive);

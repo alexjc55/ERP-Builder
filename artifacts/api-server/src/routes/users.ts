@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { db, usersTable, rolesTable, loginHistoryTable } from "@workspace/db";
 import { eq, ilike, and, sql, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
+import { requireAdmin } from "../middlewares/permissions";
 import {
   CreateUserBody,
   UpdateUserBody,
@@ -52,7 +53,7 @@ async function getUserWithRole(id: number) {
   return { ...user, roleName: role?.nameJson ?? {} };
 }
 
-router.get("/users", requireAuth, async (req, res): Promise<void> => {
+router.get("/users", requireAuth, requireAdmin("users"), async (req, res): Promise<void> => {
   const parsed = ListUsersQueryParams.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -112,7 +113,7 @@ router.get("/users", requireAuth, async (req, res): Promise<void> => {
   res.json({ data, total: countResult[0]?.count ?? 0 });
 });
 
-router.post("/users", requireAuth, async (req, res): Promise<void> => {
+router.post("/users", requireAuth, requireAdmin("users"), async (req, res): Promise<void> => {
   const parsed = CreateUserBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -153,7 +154,7 @@ router.post("/users", requireAuth, async (req, res): Promise<void> => {
   res.status(201).json(result);
 });
 
-router.get("/users/:id", requireAuth, async (req, res): Promise<void> => {
+router.get("/users/:id", requireAuth, requireAdmin("users"), async (req, res): Promise<void> => {
   const params = GetUserParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -169,7 +170,7 @@ router.get("/users/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(user);
 });
 
-router.put("/users/:id", requireAuth, async (req, res): Promise<void> => {
+router.put("/users/:id", requireAuth, requireAdmin("users"), async (req, res): Promise<void> => {
   const params = UpdateUserParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -214,7 +215,7 @@ router.put("/users/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(user);
 });
 
-router.delete("/users/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/users/:id", requireAuth, requireAdmin("users"), async (req, res): Promise<void> => {
   const params = DeleteUserParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -234,7 +235,7 @@ router.delete("/users/:id", requireAuth, async (req, res): Promise<void> => {
   res.json({ success: true, message: "User deleted" });
 });
 
-router.post("/users/:id/block", requireAuth, async (req, res): Promise<void> => {
+router.post("/users/:id/block", requireAuth, requireAdmin("users"), async (req, res): Promise<void> => {
   const params = BlockUserParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -251,7 +252,7 @@ router.post("/users/:id/block", requireAuth, async (req, res): Promise<void> => 
   res.json(user);
 });
 
-router.post("/users/:id/unblock", requireAuth, async (req, res): Promise<void> => {
+router.post("/users/:id/unblock", requireAuth, requireAdmin("users"), async (req, res): Promise<void> => {
   const params = UnblockUserParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -268,7 +269,7 @@ router.post("/users/:id/unblock", requireAuth, async (req, res): Promise<void> =
   res.json(user);
 });
 
-router.post("/users/:id/reset-password", requireAuth, async (req, res): Promise<void> => {
+router.post("/users/:id/reset-password", requireAuth, requireAdmin("users"), async (req, res): Promise<void> => {
   const params = ResetUserPasswordParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -290,7 +291,7 @@ router.post("/users/:id/reset-password", requireAuth, async (req, res): Promise<
   res.json({ success: true, message: "Password reset" });
 });
 
-router.get("/users/:id/login-history", requireAuth, async (req, res): Promise<void> => {
+router.get("/users/:id/login-history", requireAuth, requireAdmin("users"), async (req, res): Promise<void> => {
   const params = ListUserLoginHistoryParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

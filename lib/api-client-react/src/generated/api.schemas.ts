@@ -46,6 +46,30 @@ export const UserProfileDirection = {
   rtl: 'rtl',
 } as const;
 
+export interface RoleAdminCaps {
+  pages: boolean;
+  entities: boolean;
+  roles: boolean;
+  users: boolean;
+  translations: boolean;
+}
+
+export interface RecordPermission {
+  view: boolean;
+  create: boolean;
+  update: boolean;
+  delete: boolean;
+}
+
+export type RolePermissionsRecords = {[key: string]: RecordPermission};
+
+export interface RolePermissions {
+  superAdmin: boolean;
+  admin: RoleAdminCaps;
+  pageIds: number[];
+  records: RolePermissionsRecords;
+}
+
 export interface UserProfile {
   id: number;
   email: string;
@@ -58,6 +82,7 @@ export interface UserProfile {
   /** @nullable */
   startPageId?: number | null;
   isActive: boolean;
+  permissions?: RolePermissions;
 }
 
 export interface AuthResult {
@@ -185,6 +210,7 @@ export interface Role {
   id: number;
   nameJson: MultilingualText;
   descriptionJson?: MultilingualText;
+  permissionsJson: RolePermissions;
   userCount?: number;
   createdAt: string;
   updatedAt: string;
@@ -193,11 +219,13 @@ export interface Role {
 export interface RoleInput {
   nameJson: MultilingualText;
   descriptionJson?: MultilingualText;
+  permissionsJson?: RolePermissions;
 }
 
 export interface RoleUpdate {
   nameJson?: MultilingualText;
   descriptionJson?: MultilingualText;
+  permissionsJson?: RolePermissions;
 }
 
 export interface Page {

@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, entityFieldsTable, entitiesTable } from "@workspace/db";
 import { eq, asc, and, ne, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
+import { requireAdmin } from "../middlewares/permissions";
 import {
   ListEntityFieldsParams,
   CreateEntityFieldParams,
@@ -70,7 +71,7 @@ router.get("/entities/:entityId/fields", requireAuth, async (req, res): Promise<
   res.json(fields);
 });
 
-router.post("/entities/:entityId/fields", requireAuth, async (req, res): Promise<void> => {
+router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
   const params = CreateEntityFieldParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -121,7 +122,7 @@ router.post("/entities/:entityId/fields", requireAuth, async (req, res): Promise
   }
 });
 
-router.post("/fields/reorder", requireAuth, async (req, res): Promise<void> => {
+router.post("/fields/reorder", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
   const parsed = ReorderFieldsBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -189,7 +190,7 @@ router.get("/fields/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(field);
 });
 
-router.put("/fields/:id", requireAuth, async (req, res): Promise<void> => {
+router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
   const params = UpdateFieldParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -269,7 +270,7 @@ router.put("/fields/:id", requireAuth, async (req, res): Promise<void> => {
   }
 });
 
-router.delete("/fields/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
   const params = DeleteFieldParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

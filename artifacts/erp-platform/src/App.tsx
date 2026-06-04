@@ -17,7 +17,8 @@ import EntityViewsPage from "@/pages/admin/entity-views";
 import EntityRecordsPage from "@/pages/admin/entity-records";
 import TranslationsPage from "@/pages/admin/translations";
 import DynamicPage from "@/pages/dynamic";
-import { Loader2 } from "lucide-react";
+import { Loader2, ShieldAlert } from "lucide-react";
+import type { RoleAdminCaps } from "@workspace/api-client-react";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,8 +26,30 @@ const queryClient = new QueryClient({
   },
 });
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, isLoading } = useAuth();
+function NoAccess() {
+  return (
+    <div className="p-6">
+      <div className="max-w-md mx-auto mt-16 text-center space-y-3">
+        <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mx-auto">
+          <ShieldAlert className="w-7 h-7 text-red-500" />
+        </div>
+        <h1 className="text-xl font-semibold text-slate-800">Доступ запрещён</h1>
+        <p className="text-sm text-slate-500">
+          У вас нет прав для просмотра этого раздела. Обратитесь к администратору.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ProtectedRoute({
+  children,
+  adminCap,
+}: {
+  children: React.ReactNode;
+  adminCap?: keyof RoleAdminCaps;
+}) {
+  const { user, isLoading, canAdmin } = useAuth();
 
   if (isLoading) {
     return (
@@ -38,6 +61,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!user) {
     return <Redirect to="/login" />;
+  }
+
+  if (adminCap && !canAdmin(adminCap)) {
+    return <Layout><NoAccess /></Layout>;
   }
 
   return <Layout>{children}</Layout>;
@@ -77,43 +104,43 @@ function Router() {
       </Route>
 
       <Route path="/admin/users">
-        <ProtectedRoute>
+        <ProtectedRoute adminCap="users">
           <UsersPage />
         </ProtectedRoute>
       </Route>
 
       <Route path="/admin/roles">
-        <ProtectedRoute>
+        <ProtectedRoute adminCap="roles">
           <RolesPage />
         </ProtectedRoute>
       </Route>
 
       <Route path="/admin/pages">
-        <ProtectedRoute>
+        <ProtectedRoute adminCap="pages">
           <PagesPage />
         </ProtectedRoute>
       </Route>
 
       <Route path="/admin/entities/:entityId/fields">
-        <ProtectedRoute>
+        <ProtectedRoute adminCap="entities">
           <EntityFieldsPage />
         </ProtectedRoute>
       </Route>
 
       <Route path="/admin/entities/:entityId/statuses">
-        <ProtectedRoute>
+        <ProtectedRoute adminCap="entities">
           <EntityStatusesPage />
         </ProtectedRoute>
       </Route>
 
       <Route path="/admin/entities/:entityId/relations">
-        <ProtectedRoute>
+        <ProtectedRoute adminCap="entities">
           <EntityRelationsPage />
         </ProtectedRoute>
       </Route>
 
       <Route path="/admin/entities/:entityId/views">
-        <ProtectedRoute>
+        <ProtectedRoute adminCap="entities">
           <EntityViewsPage />
         </ProtectedRoute>
       </Route>
@@ -125,13 +152,13 @@ function Router() {
       </Route>
 
       <Route path="/admin/entities">
-        <ProtectedRoute>
+        <ProtectedRoute adminCap="entities">
           <EntitiesPage />
         </ProtectedRoute>
       </Route>
 
       <Route path="/admin/translations">
-        <ProtectedRoute>
+        <ProtectedRoute adminCap="translations">
           <TranslationsPage />
         </ProtectedRoute>
       </Route>

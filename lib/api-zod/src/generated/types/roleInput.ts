@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MultilingualText } from './multilingualText';
+import type { RolePermissions } from './rolePermissions';
 
 export interface RoleInput {
   nameJson: MultilingualText;
   descriptionJson?: MultilingualText;
+  permissionsJson?: RolePermissions;
 }

@@ -56,8 +56,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, Star } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, Star, ShieldAlert } from "lucide-react";
 
 const NO_STATUS = "__none__";
 const NO_VIEW = "__all__";
@@ -132,6 +133,12 @@ function renderCellValue(field: Field, value: unknown): React.ReactNode {
 export function EntityRecords({ entityId }: { entityId: number }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { canRecord } = useAuth();
+
+  const canView = canRecord(entityId, "view");
+  const canCreate = canRecord(entityId, "create");
+  const canUpdate = canRecord(entityId, "update");
+  const canDelete = canRecord(entityId, "delete");
 
   const { data: allFields = [], isLoading: fieldsLoading } = useListEntityFields(entityId);
   const { data: statuses = [] } = useListEntityStatuses(entityId);
@@ -198,6 +205,10 @@ export function EntityRecords({ entityId }: { entityId: number }) {
 
   const queryKey = JSON.stringify(recordQuery);
   useEffect(() => {
+    if (!canView) {
+      setRecordsLoading(false);
+      return;
+    }
     let cancelled = false;
     setRecordsLoading(true);
     runQuery({ entityId, data: recordQuery })
@@ -292,6 +303,22 @@ export function EntityRecords({ entityId }: { entityId: number }) {
       : fields.slice(0, 5);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  if (!canView) {
+    return (
+      <Card className="border-slate-200 shadow-sm">
+        <CardContent className="flex flex-col items-center justify-center text-center py-16 gap-3">
+          <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
+            <ShieldAlert className="w-6 h-6 text-red-500" />
+          </div>
+          <p className="text-slate-700 font-medium">Нет доступа к записям</p>
+          <p className="text-sm text-slate-400 max-w-md">
+            У вашей роли нет прав на просмотр данных этой сущности.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (fieldsLoading) {
     return (
       <div className="space-y-2">
@@ -351,10 +378,12 @@ export function EntityRecords({ entityId }: { entityId: number }) {
             />
           </div>
         </div>
-        <Button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 gap-2">
-          <Plus className="w-4 h-4" />
-          Добавить запись
-        </Button>
+        {canCreate && (
+          <Button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 gap-2">
+            <Plus className="w-4 h-4" />
+            Добавить запись
+          </Button>
+        )}
       </div>
 
       <Card className="border-slate-200 shadow-sm">
@@ -413,12 +442,17 @@ export function EntityRecords({ entityId }: { entityId: number }) {
                         )}
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(record)}>
-                              <Pencil className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => setToDelete(record)}>
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
+                            {canUpdate && (
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(record)}>
+                                <Pencil className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                            {canDelete && (
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => setToDelete(record)}>
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                            {!canUpdate && !canDelete && <span className="text-slate-300 text-xs">—</span>}
                           </div>
                         </td>
                       </tr>

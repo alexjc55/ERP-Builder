@@ -1,3 +1,4 @@
 - [ERP Platform core setup](erp-platform-core.md) — auth, seed accounts, API shape, pages flat list
 - [Relations engine](relations-engine.md) — DB-enforced cardinality; denormalized type kept in lockstep via relation-row lock; Drizzle wraps pg errors on err.cause
 - [Record Views & query endpoint](record-views-query.md) — records query is POST (Orval→mutation, drive via useEffect+local state); reset per-entity bootstrap on entityId change
+- [RBAC permissions model](rbac-permissions.md) — per-role permissionsJson loaded fresh per request; backend is hard boundary, frontend cosmetic; guard content pages at route not just sidebar

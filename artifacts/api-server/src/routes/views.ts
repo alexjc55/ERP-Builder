@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, viewsTable, entitiesTable } from "@workspace/db";
 import { eq, asc, and, ne, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
+import { requireAdmin } from "../middlewares/permissions";
 import {
   ListEntityViewsParams,
   CreateEntityViewParams,
@@ -72,7 +73,7 @@ router.get("/entities/:entityId/views", requireAuth, async (req, res): Promise<v
   res.json(views);
 });
 
-router.post("/entities/:entityId/views", requireAuth, async (req, res): Promise<void> => {
+router.post("/entities/:entityId/views", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
   const params = CreateEntityViewParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -123,7 +124,7 @@ router.post("/entities/:entityId/views", requireAuth, async (req, res): Promise<
   }
 });
 
-router.post("/entities/:entityId/views/reorder", requireAuth, async (req, res): Promise<void> => {
+router.post("/entities/:entityId/views/reorder", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
   const params = ReorderViewsParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -192,7 +193,7 @@ router.get("/views/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(view);
 });
 
-router.put("/views/:id", requireAuth, async (req, res): Promise<void> => {
+router.put("/views/:id", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
   const params = UpdateViewParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -265,7 +266,7 @@ router.put("/views/:id", requireAuth, async (req, res): Promise<void> => {
   }
 });
 
-router.delete("/views/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/views/:id", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
   const params = DeleteViewParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

@@ -1,12 +1,19 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useGetMe, getGetMeQueryKey, setAuthTokenGetter } from "@workspace/api-client-react";
-import type { UserProfile } from "@workspace/api-client-react";
+import type { UserProfile, RolePermissions, RoleAdminCaps, RecordPermission } from "@workspace/api-client-react";
+
+type RecordAction = keyof RecordPermission;
 
 interface AuthContextType {
   user: UserProfile | null;
   isLoading: boolean;
   login: (token: string, user: UserProfile) => void;
   logout: () => void;
+  permissions: RolePermissions | null;
+  isSuperAdmin: boolean;
+  canAdmin: (area: keyof RoleAdminCaps) => boolean;
+  canRecord: (entityId: number, action: RecordAction) => boolean;
+  canPage: (pageId: number) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -45,8 +52,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user?.direction]);
 
+  const permissions = user?.permissions ?? null;
+  const isSuperAdmin = permissions?.superAdmin === true;
+
+  const canAdmin = (area: keyof RoleAdminCaps): boolean =>
+    isSuperAdmin || permissions?.admin?.[area] === true;
+
+  const canRecord = (entityId: number, action: RecordAction): boolean =>
+    isSuperAdmin || permissions?.records?.[String(entityId)]?.[action] === true;
+
+  const canPage = (pageId: number): boolean =>
+    isSuperAdmin || (permissions?.pageIds?.includes(pageId) ?? false);
+
   return (
-    <AuthContext.Provider value={{ user: user || null, isLoading: isLoading && !!token, login: handleLogin, logout: handleLogout }}>
+    <AuthContext.Provider
+      value={{
+        user: user || null,
+        isLoading: isLoading && !!token,
+        login: handleLogin,
+        logout: handleLogout,
+        permissions,
+        isSuperAdmin,
+        canAdmin,
+        canRecord,
+        canPage,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

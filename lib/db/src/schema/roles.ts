@@ -2,10 +2,48 @@ import { pgTable, serial, jsonb, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
+/** Per-entity record CRUD rights (keyed by entityId in RolePermissions.records). */
+export interface RecordPermission {
+  view: boolean;
+  create: boolean;
+  update: boolean;
+  delete: boolean;
+}
+
+/** Admin-builder capability areas. */
+export interface RoleAdminCaps {
+  pages: boolean;
+  entities: boolean;
+  roles: boolean;
+  users: boolean;
+  translations: boolean;
+}
+
+/** Structured RBAC permission spec stored on each role. */
+export interface RolePermissions {
+  /** Bypasses all checks (the seeded admin role). */
+  superAdmin: boolean;
+  /** Capability to manage each admin builder. */
+  admin: RoleAdminCaps;
+  /** Page ids visible in the sidebar / accessible (content pages). */
+  pageIds: number[];
+  /** Per-entity record CRUD rights, keyed by stringified entityId. */
+  records: Record<string, RecordPermission>;
+}
+
+/** Default permissions for new/existing roles: no access until granted. */
+export const NO_ACCESS_PERMS: RolePermissions = {
+  superAdmin: false,
+  admin: { pages: false, entities: false, roles: false, users: false, translations: false },
+  pageIds: [],
+  records: {},
+};
+
 export const rolesTable = pgTable("roles", {
   id: serial("id").primaryKey(),
   nameJson: jsonb("name_json").notNull().default({}),
   descriptionJson: jsonb("description_json").default({}),
+  permissionsJson: jsonb("permissions_json").$type<RolePermissions>().notNull().default(NO_ACCESS_PERMS),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

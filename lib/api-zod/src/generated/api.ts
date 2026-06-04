@@ -40,7 +40,24 @@ export const LoginResponse = zod.object({
   "language": zod.enum(['ru', 'en', 'he']),
   "direction": zod.enum(['ltr', 'rtl']),
   "startPageId": zod.number().nullish(),
-  "isActive": zod.boolean()
+  "isActive": zod.boolean(),
+  "permissions": zod.object({
+  "superAdmin": zod.boolean(),
+  "admin": zod.object({
+  "pages": zod.boolean(),
+  "entities": zod.boolean(),
+  "roles": zod.boolean(),
+  "users": zod.boolean(),
+  "translations": zod.boolean()
+}),
+  "pageIds": zod.array(zod.number()),
+  "records": zod.record(zod.string(), zod.object({
+  "view": zod.boolean(),
+  "create": zod.boolean(),
+  "update": zod.boolean(),
+  "delete": zod.boolean()
+}))
+}).optional()
 })
 })
 
@@ -71,7 +88,24 @@ export const GetMeResponse = zod.object({
   "language": zod.enum(['ru', 'en', 'he']),
   "direction": zod.enum(['ltr', 'rtl']),
   "startPageId": zod.number().nullish(),
-  "isActive": zod.boolean()
+  "isActive": zod.boolean(),
+  "permissions": zod.object({
+  "superAdmin": zod.boolean(),
+  "admin": zod.object({
+  "pages": zod.boolean(),
+  "entities": zod.boolean(),
+  "roles": zod.boolean(),
+  "users": zod.boolean(),
+  "translations": zod.boolean()
+}),
+  "pageIds": zod.array(zod.number()),
+  "records": zod.record(zod.string(), zod.object({
+  "view": zod.boolean(),
+  "create": zod.boolean(),
+  "update": zod.boolean(),
+  "delete": zod.boolean()
+}))
+}).optional()
 })
 
 
@@ -334,6 +368,23 @@ export const ListRolesResponseItem = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
+  "permissionsJson": zod.object({
+  "superAdmin": zod.boolean(),
+  "admin": zod.object({
+  "pages": zod.boolean(),
+  "entities": zod.boolean(),
+  "roles": zod.boolean(),
+  "users": zod.boolean(),
+  "translations": zod.boolean()
+}),
+  "pageIds": zod.array(zod.number()),
+  "records": zod.record(zod.string(), zod.object({
+  "view": zod.boolean(),
+  "create": zod.boolean(),
+  "update": zod.boolean(),
+  "delete": zod.boolean()
+}))
+}),
   "userCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -354,6 +405,23 @@ export const CreateRoleBody = zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
+}).optional(),
+  "permissionsJson": zod.object({
+  "superAdmin": zod.boolean(),
+  "admin": zod.object({
+  "pages": zod.boolean(),
+  "entities": zod.boolean(),
+  "roles": zod.boolean(),
+  "users": zod.boolean(),
+  "translations": zod.boolean()
+}),
+  "pageIds": zod.array(zod.number()),
+  "records": zod.record(zod.string(), zod.object({
+  "view": zod.boolean(),
+  "create": zod.boolean(),
+  "update": zod.boolean(),
+  "delete": zod.boolean()
+}))
 }).optional()
 })
 
@@ -377,6 +445,23 @@ export const GetRoleResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
+  "permissionsJson": zod.object({
+  "superAdmin": zod.boolean(),
+  "admin": zod.object({
+  "pages": zod.boolean(),
+  "entities": zod.boolean(),
+  "roles": zod.boolean(),
+  "users": zod.boolean(),
+  "translations": zod.boolean()
+}),
+  "pageIds": zod.array(zod.number()),
+  "records": zod.record(zod.string(), zod.object({
+  "view": zod.boolean(),
+  "create": zod.boolean(),
+  "update": zod.boolean(),
+  "delete": zod.boolean()
+}))
+}),
   "userCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -400,6 +485,23 @@ export const UpdateRoleBody = zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
+}).optional(),
+  "permissionsJson": zod.object({
+  "superAdmin": zod.boolean(),
+  "admin": zod.object({
+  "pages": zod.boolean(),
+  "entities": zod.boolean(),
+  "roles": zod.boolean(),
+  "users": zod.boolean(),
+  "translations": zod.boolean()
+}),
+  "pageIds": zod.array(zod.number()),
+  "records": zod.record(zod.string(), zod.object({
+  "view": zod.boolean(),
+  "create": zod.boolean(),
+  "update": zod.boolean(),
+  "delete": zod.boolean()
+}))
 }).optional()
 })
 
@@ -415,6 +517,23 @@ export const UpdateRoleResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
+  "permissionsJson": zod.object({
+  "superAdmin": zod.boolean(),
+  "admin": zod.object({
+  "pages": zod.boolean(),
+  "entities": zod.boolean(),
+  "roles": zod.boolean(),
+  "users": zod.boolean(),
+  "translations": zod.boolean()
+}),
+  "pageIds": zod.array(zod.number()),
+  "records": zod.record(zod.string(), zod.object({
+  "view": zod.boolean(),
+  "create": zod.boolean(),
+  "update": zod.boolean(),
+  "delete": zod.boolean()
+}))
+}),
   "userCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()

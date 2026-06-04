@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, rolesTable, usersTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
+import { requireAdmin } from "../middlewares/permissions";
 import {
   CreateRoleBody,
   UpdateRoleBody,
@@ -29,7 +30,7 @@ router.get("/roles", requireAuth, async (_req, res): Promise<void> => {
   res.json(roles.map((r) => ({ ...r, userCount: countMap[r.id] ?? 0 })));
 });
 
-router.post("/roles", requireAuth, async (req, res): Promise<void> => {
+router.post("/roles", requireAuth, requireAdmin("roles"), async (req, res): Promise<void> => {
   const parsed = CreateRoleBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -65,7 +66,7 @@ router.get("/roles/:id", requireAuth, async (req, res): Promise<void> => {
   res.json({ ...role, userCount: count?.count ?? 0 });
 });
 
-router.put("/roles/:id", requireAuth, async (req, res): Promise<void> => {
+router.put("/roles/:id", requireAuth, requireAdmin("roles"), async (req, res): Promise<void> => {
   const params = UpdateRoleParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -81,6 +82,7 @@ router.put("/roles/:id", requireAuth, async (req, res): Promise<void> => {
   const updateData: Record<string, unknown> = {};
   if (parsed.data.nameJson != null) updateData.nameJson = parsed.data.nameJson;
   if (parsed.data.descriptionJson != null) updateData.descriptionJson = parsed.data.descriptionJson;
+  if (parsed.data.permissionsJson != null) updateData.permissionsJson = parsed.data.permissionsJson;
 
   const [role] = await db
     .update(rolesTable)
@@ -101,7 +103,7 @@ router.put("/roles/:id", requireAuth, async (req, res): Promise<void> => {
   res.json({ ...role, userCount: count?.count ?? 0 });
 });
 
-router.delete("/roles/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/roles/:id", requireAuth, requireAdmin("roles"), async (req, res): Promise<void> => {
   const params = DeleteRoleParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

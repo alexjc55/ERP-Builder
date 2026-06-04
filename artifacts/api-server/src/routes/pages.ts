@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, pagesTable } from "@workspace/db";
 import { eq, isNull, asc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
+import { requireAdmin } from "../middlewares/permissions";
 import {
   CreatePageBody,
   UpdatePageBody,
@@ -43,7 +44,7 @@ router.get("/pages", requireAuth, async (_req, res): Promise<void> => {
   res.json(pages);
 });
 
-router.post("/pages/reorder", requireAuth, async (req, res): Promise<void> => {
+router.post("/pages/reorder", requireAuth, requireAdmin("pages"), async (req, res): Promise<void> => {
   const parsed = ReorderPagesBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -62,7 +63,7 @@ router.post("/pages/reorder", requireAuth, async (req, res): Promise<void> => {
   res.json({ success: true, message: "Reordered" });
 });
 
-router.post("/pages", requireAuth, async (req, res): Promise<void> => {
+router.post("/pages", requireAuth, requireAdmin("pages"), async (req, res): Promise<void> => {
   const parsed = CreatePageBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -93,7 +94,7 @@ router.get("/pages/:id", requireAuth, async (req, res): Promise<void> => {
   res.json({ ...page, children: [] });
 });
 
-router.put("/pages/:id", requireAuth, async (req, res): Promise<void> => {
+router.put("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): Promise<void> => {
   const params = UpdatePageParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -135,7 +136,7 @@ router.put("/pages/:id", requireAuth, async (req, res): Promise<void> => {
   res.json({ ...page, children: [] });
 });
 
-router.delete("/pages/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): Promise<void> => {
   const params = DeletePageParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

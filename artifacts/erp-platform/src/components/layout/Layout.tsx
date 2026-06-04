@@ -1,4 +1,5 @@
 import { useAuth } from "@/lib/auth";
+import { adminCapForPath } from "@/lib/permissions";
 import { useListPages } from "@workspace/api-client-react";
 import type { Page, MultilingualText } from "@workspace/api-client-react";
 import { useLocation, Link } from "wouter";
@@ -99,16 +100,32 @@ function SidebarItem({
 }
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const { user, logout } = useAuth();
+  const { user, logout, isSuperAdmin, canAdmin, canPage } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { data: pagesData } = useListPages();
+
+  // A page is visible if: superAdmin (all), the home page ("/"), an admin builder
+  // page whose capability is granted, or a content page whose id is granted.
+  const isPageVisible = (page: Page): boolean => {
+    if (isSuperAdmin) return true;
+    const path = page.path || "";
+    if (path === "/") return true;
+    if (path.startsWith("/admin/")) {
+      const cap = adminCapForPath(path);
+      return cap ? canAdmin(cap) : false;
+    }
+    return canPage(page.id);
+  };
 
   const pages = pagesData || [];
   const topPages = pages.filter((p: Page) => !p.parentPageId && p.isActive);
   const subPages = pages.filter((p: Page) => p.parentPageId && p.isActive);
 
   const getSubPages = (parentId: number) =>
-    subPages.filter((p: Page) => p.parentPageId === parentId).sort((a: Page, b: Page) => a.sortOrder - b.sortOrder);
+    subPages
+      .filter((p: Page) => p.parentPageId === parentId)
+      .filter(isPageVisible)
+      .sort((a: Page, b: Page) => a.sortOrder - b.sortOrder);
 
   const initials = user
     ? `${user.firstName?.[0] || ""}${user.lastName?.[0] || ""}`.toUpperCase() || "U"
@@ -130,8 +147,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {topPages.sort((a: Page, b: Page) => a.sortOrder - b.sortOrder).map((page: Page) => {
           const name = getML(page.nameJson);
           const children = getSubPages(page.id);
+          const hasChildPages = subPages.some((p: Page) => p.parentPageId === page.id);
 
-          if (children.length > 0) {
+          // Group header: render only if at least one child is visible.
+          if (hasChildPages) {
+            if (children.length === 0) return null;
             return (
               <SidebarItem key={page.id} name={name} icon={page.icon || "settings"} depth={0}>
                 {children.map((child: Page) => (
@@ -147,6 +167,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             );
           }
 
+          if (!isPageVisible(page)) return null;
           return (
             <SidebarItem key={page.id} name={name} icon={page.icon || "layout-dashboard"} route={page.path || "/"} depth={0} />
           );

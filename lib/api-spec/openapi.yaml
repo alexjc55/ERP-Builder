@@ -1463,6 +1463,8 @@ components:
           type: ["integer", "null"]
         isActive:
           type: boolean
+        permissions:
+          $ref: "#/components/schemas/RolePermissions"
 
     ChangePasswordInput:
       type: object
@@ -1592,9 +1594,54 @@ components:
           format: date-time
 
     # ROLES
+    RecordPermission:
+      type: object
+      required: [view, create, update, delete]
+      properties:
+        view:
+          type: boolean
+        create:
+          type: boolean
+        update:
+          type: boolean
+        delete:
+          type: boolean
+
+    RoleAdminCaps:
+      type: object
+      required: [pages, entities, roles, users, translations]
+      properties:
+        pages:
+          type: boolean
+        entities:
+          type: boolean
+        roles:
+          type: boolean
+        users:
+          type: boolean
+        translations:
+          type: boolean
+
+    RolePermissions:
+      type: object
+      required: [superAdmin, admin, pageIds, records]
+      properties:
+        superAdmin:
+          type: boolean
+        admin:
+          $ref: "#/components/schemas/RoleAdminCaps"
+        pageIds:
+          type: array
+          items:
+            type: integer
+        records:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/RecordPermission"
+
     Role:
       type: object
-      required: [id, nameJson, createdAt, updatedAt]
+      required: [id, nameJson, permissionsJson, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -1602,6 +1649,8 @@ components:
           $ref: "#/components/schemas/MultilingualText"
         descriptionJson:
           $ref: "#/components/schemas/MultilingualText"
+        permissionsJson:
+          $ref: "#/components/schemas/RolePermissions"
         userCount:
           type: integer
         createdAt:
@@ -1619,6 +1668,8 @@ components:
           $ref: "#/components/schemas/MultilingualText"
         descriptionJson:
           $ref: "#/components/schemas/MultilingualText"
+        permissionsJson:
+          $ref: "#/components/schemas/RolePermissions"
 
     RoleUpdate:
       type: object
@@ -1627,6 +1678,8 @@ components:
           $ref: "#/components/schemas/MultilingualText"
         descriptionJson:
           $ref: "#/components/schemas/MultilingualText"
+        permissionsJson:
+          $ref: "#/components/schemas/RolePermissions"
 
     # PAGES
     Page:

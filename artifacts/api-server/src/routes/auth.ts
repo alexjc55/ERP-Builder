@@ -4,6 +4,7 @@ import { db, usersTable, rolesTable, loginHistoryTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { signToken } from "../lib/jwt";
 import { requireAuth } from "../middlewares/auth";
+import { loadPermissions } from "../middlewares/permissions";
 import {
   LoginBody,
   ChangePasswordBody,
@@ -63,6 +64,8 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     .from(rolesTable)
     .where(eq(rolesTable.id, user.roleId));
 
+  const permissions = await loadPermissions(user.roleId);
+
   res.json({
     token,
     user: {
@@ -76,6 +79,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
       direction: user.direction,
       startPageId: user.startPageId,
       isActive: user.isActive,
+      permissions,
     },
   });
 });
@@ -110,6 +114,8 @@ router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
     .from(rolesTable)
     .where(eq(rolesTable.id, user.roleId));
 
+  const permissions = await loadPermissions(user.roleId);
+
   res.json({
     id: user.id,
     email: user.email,
@@ -121,6 +127,7 @@ router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
     direction: user.direction,
     startPageId: user.startPageId,
     isActive: user.isActive,
+    permissions,
   });
 });
 

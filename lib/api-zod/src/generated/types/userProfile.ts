@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MultilingualText } from './multilingualText';
+import type { RolePermissions } from './rolePermissions';
 import type { UserProfileDirection } from './userProfileDirection';
 import type { UserProfileLanguage } from './userProfileLanguage';
 
@@ -21,4 +22,5 @@ export interface UserProfile {
   /** @nullable */
   startPageId?: number | null;
   isActive: boolean;
+  permissions?: RolePermissions;
 }

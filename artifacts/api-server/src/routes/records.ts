@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable } from "@workspace/db";
 import { eq, asc, desc, and, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
+import { requireRecordParam, assertRecord } from "../middlewares/permissions";
 import {
   ListEntityRecordsParams,
   CreateEntityRecordParams,
@@ -155,7 +156,7 @@ async function defaultStatusId(entityId: number): Promise<number | null> {
   return status ? status.id : null;
 }
 
-router.get("/entities/:entityId/records", requireAuth, async (req, res): Promise<void> => {
+router.get("/entities/:entityId/records", requireAuth, requireRecordParam("view"), async (req, res): Promise<void> => {
   const params = ListEntityRecordsParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -173,7 +174,7 @@ router.get("/entities/:entityId/records", requireAuth, async (req, res): Promise
   res.json(records);
 });
 
-router.post("/entities/:entityId/records/query", requireAuth, async (req, res): Promise<void> => {
+router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam("view"), async (req, res): Promise<void> => {
   const params = QueryEntityRecordsParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -219,7 +220,7 @@ router.post("/entities/:entityId/records/query", requireAuth, async (req, res): 
   res.json({ data, total: countRow?.count ?? 0 });
 });
 
-router.post("/entities/:entityId/records", requireAuth, async (req, res): Promise<void> => {
+router.post("/entities/:entityId/records", requireAuth, requireRecordParam("create"), async (req, res): Promise<void> => {
   const params = CreateEntityRecordParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -278,6 +279,7 @@ router.get("/records/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(404).json({ error: "Record not found" });
     return;
   }
+  if (!(await assertRecord(req, res, record.entityId, "view"))) return;
   res.json(record);
 });
 
@@ -302,6 +304,7 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(404).json({ error: "Record not found" });
     return;
   }
+  if (!(await assertRecord(req, res, existing.entityId, "update"))) return;
 
   const hasValues = body.data.valuesJson !== undefined;
   const hasStatus = body.data.statusId !== undefined;
@@ -348,14 +351,18 @@ router.delete("/records/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [deleted] = await db
-    .delete(entityRecordsTable)
+  const [existing] = await db
+    .select({ id: entityRecordsTable.id, entityId: entityRecordsTable.entityId })
+    .from(entityRecordsTable)
     .where(eq(entityRecordsTable.id, params.data.id))
-    .returning({ id: entityRecordsTable.id });
-  if (!deleted) {
+    .limit(1);
+  if (!existing) {
     res.status(404).json({ error: "Record not found" });
     return;
   }
+  if (!(await assertRecord(req, res, existing.entityId, "delete"))) return;
+
+  await db.delete(entityRecordsTable).where(eq(entityRecordsTable.id, params.data.id));
   res.json({ success: true });
 });
 

@@ -10,6 +10,7 @@ import {
 } from "@workspace/db";
 import { eq, and, ne, asc, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
+import { requireAdmin, getPermissions, canRecord } from "../middlewares/permissions";
 import {
   ListEntityRelationsParams,
   CreateEntityRelationParams,
@@ -91,7 +92,7 @@ router.get("/entities/:entityId/relations", requireAuth, async (req, res): Promi
   res.json(relations);
 });
 
-router.post("/entities/:entityId/relations", requireAuth, async (req, res): Promise<void> => {
+router.post("/entities/:entityId/relations", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
   const params = CreateEntityRelationParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -156,7 +157,7 @@ router.get("/relations/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(relation);
 });
 
-router.put("/relations/:id", requireAuth, async (req, res): Promise<void> => {
+router.put("/relations/:id", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
   const params = UpdateRelationParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -244,7 +245,7 @@ router.put("/relations/:id", requireAuth, async (req, res): Promise<void> => {
   }
 });
 
-router.delete("/relations/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/relations/:id", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
   const params = DeleteRelationParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -313,6 +314,11 @@ router.post("/records/:recordId/links", requireAuth, async (req, res): Promise<v
   const srcEntity = await recordEntityId(sourceRecordId);
   if (srcEntity === null) {
     res.status(404).json({ error: "Source record not found" });
+    return;
+  }
+  const perms = await getPermissions(req);
+  if (!canRecord(perms, srcEntity, "update")) {
+    res.status(403).json({ error: "Forbidden" });
     return;
   }
   const tgtEntity = await recordEntityId(targetRecordId);
@@ -394,11 +400,22 @@ router.delete("/links/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [deleted] = await db.delete(recordLinksTable).where(eq(recordLinksTable.id, params.data.id)).returning({ id: recordLinksTable.id });
-  if (!deleted) {
+  const [link] = await db
+    .select({ id: recordLinksTable.id, sourceRecordId: recordLinksTable.sourceRecordId })
+    .from(recordLinksTable)
+    .where(eq(recordLinksTable.id, params.data.id))
+    .limit(1);
+  if (!link) {
     res.status(404).json({ error: "Link not found" });
     return;
   }
+  const srcEntity = await recordEntityId(link.sourceRecordId);
+  const perms = await getPermissions(req);
+  if (srcEntity === null || !canRecord(perms, srcEntity, "update")) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  await db.delete(recordLinksTable).where(eq(recordLinksTable.id, params.data.id));
   res.json({ success: true });
 });
 

@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, entitiesTable, pagesTable } from "@workspace/db";
 import { eq, asc, and, ne } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
+import { requireAdmin } from "../middlewares/permissions";
 import {
   CreateEntityBody,
   UpdateEntityBody,
@@ -50,7 +51,7 @@ router.get("/entities", requireAuth, async (_req, res): Promise<void> => {
   res.json(entities);
 });
 
-router.post("/entities", requireAuth, async (req, res): Promise<void> => {
+router.post("/entities", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
   const parsed = CreateEntityBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -110,7 +111,7 @@ router.get("/entities/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(entity);
 });
 
-router.put("/entities/:id", requireAuth, async (req, res): Promise<void> => {
+router.put("/entities/:id", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
   const params = UpdateEntityParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -181,7 +182,7 @@ router.put("/entities/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(entity);
 });
 
-router.delete("/entities/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/entities/:id", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
   const params = DeleteEntityParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
