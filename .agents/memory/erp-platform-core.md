@@ -53,3 +53,10 @@ description: Key decisions for the Production ERP Builder platform (stages 1-2)
 - Uniqueness must be enforced at TWO layers: an app-level precheck AND mapping the DB unique-violation (Postgres 23505) to 409. The precheck alone is racy; rely on the DB constraint as the source of truth.
 
 **Why:** this is a metadata platform with no hardcoded relationships, so the API must enforce referential integrity itself. Architect flagged a blind cross-entity reorder as the gap these rules close. Applies to every future child-of-parent builder (fields, options, sub-records, etc.).
+
+## Statuses Builder (Stage 6) — "one default" invariant
+- An "at most one X per parent" invariant must be guarded at the DB layer, not just in app logic. App-level "unset others then set this" inside a transaction is correct for single requests but RACY under concurrency. Use a Postgres PARTIAL UNIQUE INDEX (Drizzle: `uniqueIndex(name).on(t.parentId).where(sql\`${t.flag} = true\`)`) as the hard guard.
+- Semantics chosen: AT MOST ONE default per entity (zero is allowed, e.g. mid-configuration; unsetting/deleting the default does not force promotion). Not "exactly one".
+- When a table has multiple unique constraints, the 23505 handler must branch on `err.constraint` (the constraint/index name) to return the right 409 message — don't assume every 23505 is the key conflict.
+
+**Why:** architect FAILed the first pass because the default invariant was only app-enforced (concurrency race). The partial unique index closes it. Applies to any future single-flag-per-parent rule (e.g. primary field, default option).

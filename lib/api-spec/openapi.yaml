@@ -667,6 +667,129 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  # STATUSES
+  /entities/{entityId}/statuses:
+    get:
+      operationId: listEntityStatuses
+      tags: [statuses]
+      summary: List statuses for an entity
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of statuses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Status"
+    post:
+      operationId: createEntityStatus
+      tags: [statuses]
+      summary: Create a status on an entity
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatusInput"
+      responses:
+        "201":
+          description: Status created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+
+  /statuses/{id}:
+    get:
+      operationId: getStatus
+      tags: [statuses]
+      summary: Get status by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Status found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+    put:
+      operationId: updateStatus
+      tags: [statuses]
+      summary: Update status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatusUpdate"
+      responses:
+        "200":
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+    delete:
+      operationId: deleteStatus
+      tags: [statuses]
+      summary: Delete status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /statuses/reorder:
+    post:
+      operationId: reorderStatuses
+      tags: [statuses]
+      summary: Reorder statuses within an entity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatusesReorderInput"
+      responses:
+        "200":
+          description: Reordered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
   # ENTITIES
   /entities:
     get:
@@ -1348,6 +1471,92 @@ components:
           type: integer
         isActive:
           type: boolean
+
+    Status:
+      type: object
+      required: [id, entityId, statusKey, nameJson, color, isDefault, isFinal, sortOrder, isActive, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        entityId:
+          type: integer
+        statusKey:
+          type: string
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        color:
+          type: string
+        isDefault:
+          type: boolean
+        isFinal:
+          type: boolean
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    StatusInput:
+      type: object
+      required: [statusKey, nameJson]
+      properties:
+        statusKey:
+          type: string
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        color:
+          type: string
+        isDefault:
+          type: boolean
+          default: false
+        isFinal:
+          type: boolean
+          default: false
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+          default: true
+
+    StatusUpdate:
+      type: object
+      properties:
+        statusKey:
+          type: string
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        color:
+          type: string
+        isDefault:
+          type: boolean
+        isFinal:
+          type: boolean
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+
+    StatusesReorderInput:
+      type: object
+      required: [entityId, items]
+      properties:
+        entityId:
+          type: integer
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, sortOrder]
+            properties:
+              id:
+                type: integer
+              sortOrder:
+                type: integer
 
     # TRANSLATIONS
     Translation:

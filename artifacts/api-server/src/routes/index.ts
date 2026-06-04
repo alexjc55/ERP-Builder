@@ -6,6 +6,7 @@ import rolesRouter from "./roles";
 import pagesRouter from "./pages";
 import entitiesRouter from "./entities";
 import fieldsRouter from "./fields";
+import statusesRouter from "./statuses";
 import translationsRouter from "./translations";
 import dashboardRouter from "./dashboard";
 
@@ -18,6 +19,7 @@ router.use(rolesRouter);
 router.use(pagesRouter);
 router.use(entitiesRouter);
 router.use(fieldsRouter);
+router.use(statusesRouter);
 router.use(translationsRouter);
 router.use(dashboardRouter);
 

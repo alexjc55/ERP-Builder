@@ -44,6 +44,7 @@ A metadata-driven platform constructor (Airtable/SmartSuite/Notion-like) for bui
 - **Pages Builder** — create/edit/delete navigation pages and nested menu groups, reorder them, assign routes; the live sidebar updates automatically.
 - **Entities Builder** — define data objects (tables) with a system key, multilingual names, icon, and optional binding to a page where they will be displayed.
 - **Fields Builder** — define the columns of each entity: a system key, multilingual name/description, field type, required flag, default value, select options, and ordering. Reorder is entity-scoped.
+- **Statuses Builder** — define the lifecycle statuses of each entity: a system key, multilingual name, color, default/final/active flags, and ordering. Reorder is entity-scoped; at most one default status per entity is enforced at the database layer (partial unique index).
 - **Translations** — manage system UI strings in ru/en/he.
 
 ## User preferences

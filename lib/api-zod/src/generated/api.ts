@@ -771,6 +771,155 @@ export const ReorderFieldsResponse = zod.object({
 
 
 /**
+ * @summary List statuses for an entity
+ */
+export const ListEntityStatusesParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const ListEntityStatusesResponseItem = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "statusKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string(),
+  "isDefault": zod.boolean(),
+  "isFinal": zod.boolean(),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListEntityStatusesResponse = zod.array(ListEntityStatusesResponseItem)
+
+
+/**
+ * @summary Create a status on an entity
+ */
+export const CreateEntityStatusParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const createEntityStatusBodyIsDefaultDefault = false;
+export const createEntityStatusBodyIsFinalDefault = false;
+export const createEntityStatusBodyIsActiveDefault = true;
+
+export const CreateEntityStatusBody = zod.object({
+  "statusKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string().optional(),
+  "isDefault": zod.boolean().default(createEntityStatusBodyIsDefaultDefault),
+  "isFinal": zod.boolean().default(createEntityStatusBodyIsFinalDefault),
+  "sortOrder": zod.number().optional(),
+  "isActive": zod.boolean().default(createEntityStatusBodyIsActiveDefault)
+})
+
+
+/**
+ * @summary Get status by ID
+ */
+export const GetStatusParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetStatusResponse = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "statusKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string(),
+  "isDefault": zod.boolean(),
+  "isFinal": zod.boolean(),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update status
+ */
+export const UpdateStatusParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateStatusBody = zod.object({
+  "statusKey": zod.string().optional(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "color": zod.string().optional(),
+  "isDefault": zod.boolean().optional(),
+  "isFinal": zod.boolean().optional(),
+  "sortOrder": zod.number().optional(),
+  "isActive": zod.boolean().optional()
+})
+
+export const UpdateStatusResponse = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "statusKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string(),
+  "isDefault": zod.boolean(),
+  "isFinal": zod.boolean(),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete status
+ */
+export const DeleteStatusParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteStatusResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
+ * @summary Reorder statuses within an entity
+ */
+export const ReorderStatusesBody = zod.object({
+  "entityId": zod.number(),
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "sortOrder": zod.number()
+}))
+})
+
+export const ReorderStatusesResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
  * @summary List all entities
  */
 export const ListEntitiesResponseItem = zod.object({

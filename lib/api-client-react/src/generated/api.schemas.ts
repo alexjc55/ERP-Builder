@@ -354,6 +354,50 @@ export interface FieldUpdate {
   isActive?: boolean;
 }
 
+export interface Status {
+  id: number;
+  entityId: number;
+  statusKey: string;
+  nameJson: MultilingualText;
+  color: string;
+  isDefault: boolean;
+  isFinal: boolean;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StatusInput {
+  statusKey: string;
+  nameJson: MultilingualText;
+  color?: string;
+  isDefault?: boolean;
+  isFinal?: boolean;
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
+export interface StatusUpdate {
+  statusKey?: string;
+  nameJson?: MultilingualText;
+  color?: string;
+  isDefault?: boolean;
+  isFinal?: boolean;
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
+export type StatusesReorderInputItemsItem = {
+  id: number;
+  sortOrder: number;
+};
+
+export interface StatusesReorderInput {
+  entityId: number;
+  items: StatusesReorderInputItemsItem[];
+}
+
 export interface Translation {
   id: number;
   translationKey: string;
