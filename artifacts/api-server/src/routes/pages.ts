@@ -50,14 +50,14 @@ router.post("/pages/reorder", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  await Promise.all(
-    parsed.data.items.map((item) =>
-      db
+  await db.transaction(async (tx) => {
+    for (const item of parsed.data.items) {
+      await tx
         .update(pagesTable)
         .set({ sortOrder: item.sortOrder })
-        .where(eq(pagesTable.id, item.id))
-    )
-  );
+        .where(eq(pagesTable.id, item.id));
+    }
+  });
 
   res.json({ success: true, message: "Reordered" });
 });
@@ -111,9 +111,15 @@ router.put("/pages/:id", requireAuth, async (req, res): Promise<void> => {
   if (body.nameJson != null) updateData.nameJson = body.nameJson;
   if (body.descriptionJson != null) updateData.descriptionJson = body.descriptionJson;
   if (body.icon != null) updateData.icon = body.icon;
-  if ("parentPageId" in body) updateData.parentPageId = body.parentPageId;
+  if ("path" in body) updateData.path = body.path ?? null;
+  if ("parentPageId" in body) updateData.parentPageId = body.parentPageId ?? null;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
   if (body.isActive != null) updateData.isActive = body.isActive;
+
+  if (body.parentPageId != null && body.parentPageId === params.data.id) {
+    res.status(400).json({ error: "A page cannot be its own parent" });
+    return;
+  }
 
   const [page] = await db
     .update(pagesTable)
@@ -133,6 +139,16 @@ router.delete("/pages/:id", requireAuth, async (req, res): Promise<void> => {
   const params = DeletePageParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const children = await db
+    .select({ id: pagesTable.id })
+    .from(pagesTable)
+    .where(eq(pagesTable.parentPageId, params.data.id));
+
+  if (children.length > 0) {
+    res.status(409).json({ error: "Cannot delete a page that has sub-pages" });
     return;
   }
 

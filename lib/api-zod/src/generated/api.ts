@@ -450,6 +450,7 @@ export const ListPagesResponseItem = zod.object({
   "he": zod.string().optional()
 }).optional(),
   "icon": zod.string(),
+  "path": zod.string().nullish(),
   "parentPageId": zod.number().nullish(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
@@ -477,6 +478,7 @@ export const CreatePageBody = zod.object({
   "he": zod.string().optional()
 }).optional(),
   "icon": zod.string(),
+  "path": zod.string().nullish(),
   "parentPageId": zod.number().nullish(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createPageBodyIsActiveDefault)
@@ -503,6 +505,7 @@ export const GetPageResponse = zod.object({
   "he": zod.string().optional()
 }).optional(),
   "icon": zod.string(),
+  "path": zod.string().nullish(),
   "parentPageId": zod.number().nullish(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
@@ -531,6 +534,7 @@ export const UpdatePageBody = zod.object({
   "he": zod.string().optional()
 }).optional(),
   "icon": zod.string().optional(),
+  "path": zod.string().nullish(),
   "parentPageId": zod.number().nullish(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
@@ -549,6 +553,7 @@ export const UpdatePageResponse = zod.object({
   "he": zod.string().optional()
 }).optional(),
   "icon": zod.string(),
+  "path": zod.string().nullish(),
   "parentPageId": zod.number().nullish(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),

@@ -12,6 +12,8 @@ export interface PageUpdate {
   descriptionJson?: MultilingualText;
   icon?: string;
   /** @nullable */
+  path?: string | null;
+  /** @nullable */
   parentPageId?: number | null;
   sortOrder?: number;
   isActive?: boolean;

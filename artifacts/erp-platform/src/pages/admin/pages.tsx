@@ -4,6 +4,7 @@ import {
   useCreatePage,
   useUpdatePage,
   useDeletePage,
+  useReorderPages,
   type Page,
   type MultilingualText,
 } from "@workspace/api-client-react";
@@ -41,7 +42,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Layout, Loader2, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Trash2, Layout, Loader2, ChevronRight, ChevronUp, ChevronDown } from "lucide-react";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
@@ -61,6 +62,7 @@ export default function PagesPage() {
   const [nameJson, setNameJson] = useState<MLValue>({});
   const [descJson, setDescJson] = useState<MLValue>({});
   const [icon, setIcon] = useState("");
+  const [path, setPath] = useState("");
   const [parentPageId, setParentPageId] = useState<string>("none");
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
@@ -89,11 +91,34 @@ export default function PagesPage() {
     },
   });
 
+  const reorderMutation = useReorderPages({
+    mutation: {
+      onSuccess: () => invalidate(),
+      onError: () => toast({ title: "Ошибка изменения порядка", variant: "destructive" }),
+    },
+  });
+
+  const move = (siblings: Page[], index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= siblings.length) return;
+    const a = siblings[index];
+    const b = siblings[target];
+    reorderMutation.mutate({
+      data: {
+        items: [
+          { id: a.id, sortOrder: b.sortOrder },
+          { id: b.id, sortOrder: a.sortOrder },
+        ],
+      },
+    });
+  };
+
   const openCreate = () => {
     setEditingPage(null);
     setNameJson({});
     setDescJson({});
     setIcon("");
+    setPath("");
     setParentPageId("none");
     setSortOrder(pages.length + 1);
     setIsActive(true);
@@ -107,6 +132,7 @@ export default function PagesPage() {
     setNameJson(typeof n === "object" && n ? { ru: n.ru, en: n.en, he: n.he } : {});
     setDescJson(typeof d === "object" && d ? { ru: d.ru, en: d.en, he: d.he } : {});
     setIcon(page.icon || "");
+    setPath(page.path || "");
     setParentPageId(page.parentPageId ? String(page.parentPageId) : "none");
     setSortOrder(page.sortOrder);
     setIsActive(page.isActive);
@@ -118,7 +144,8 @@ export default function PagesPage() {
       nameJson: nameJson as MultilingualText,
       descriptionJson: descJson as MultilingualText,
       icon: icon || "",
-      parentPageId: parentPageId !== "none" ? Number(parentPageId) : undefined,
+      path: path.trim() || null,
+      parentPageId: parentPageId !== "none" ? Number(parentPageId) : null,
       sortOrder,
       isActive,
     };
@@ -131,6 +158,7 @@ export default function PagesPage() {
 
   const isPending = createMutation.isPending || updateMutation.isPending;
   const topPages = pages.filter((p: Page) => !p.parentPageId);
+  const sortedTop = [...topPages].sort((a: Page, b: Page) => a.sortOrder - b.sortOrder);
   const subPages = (parentId: number) => pages.filter((p: Page) => p.parentPageId === parentId);
 
   return (
@@ -168,7 +196,7 @@ export default function PagesPage() {
                 </tr>
               </thead>
               <tbody>
-                {topPages.sort((a: Page, b: Page) => a.sortOrder - b.sortOrder).map((page: Page) => {
+                {sortedTop.map((page: Page, pi: number) => {
                   const children = subPages(page.id).sort((a: Page, b: Page) => a.sortOrder - b.sortOrder);
                   return [
                     <tr key={page.id} className="border-b border-slate-100 hover:bg-slate-50">
@@ -189,6 +217,12 @@ export default function PagesPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" disabled={pi === 0 || reorderMutation.isPending} onClick={() => move(sortedTop, pi, -1)}>
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" disabled={pi === sortedTop.length - 1 || reorderMutation.isPending} onClick={() => move(sortedTop, pi, 1)}>
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(page)}>
                             <Pencil className="w-3.5 h-3.5" />
                           </Button>
@@ -198,7 +232,7 @@ export default function PagesPage() {
                         </div>
                       </td>
                     </tr>,
-                    ...children.map((child: Page) => (
+                    ...children.map((child: Page, ci: number) => (
                       <tr key={child.id} className="border-b border-slate-100 hover:bg-slate-50 bg-slate-50/50">
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2 pl-6">
@@ -217,6 +251,12 @@ export default function PagesPage() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" disabled={ci === 0 || reorderMutation.isPending} onClick={() => move(children, ci, -1)}>
+                              <ChevronUp className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" disabled={ci === children.length - 1 || reorderMutation.isPending} onClick={() => move(children, ci, 1)}>
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </Button>
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(child)}>
                               <Pencil className="w-3.5 h-3.5" />
                             </Button>
@@ -252,6 +292,11 @@ export default function PagesPage() {
                 <Label>Порядок</Label>
                 <Input type="number" value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value))} />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Путь (маршрут)</Label>
+              <Input value={path} onChange={(e) => setPath(e.target.value)} placeholder="/example" />
+              <p className="text-xs text-slate-400">Адрес страницы в меню. Оставьте пустым для группы-раздела.</p>
             </div>
             <div className="space-y-1.5">
               <Label>Родительская страница</Label>

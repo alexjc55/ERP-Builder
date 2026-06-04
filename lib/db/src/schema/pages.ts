@@ -7,6 +7,7 @@ export const pagesTable = pgTable("pages", {
   nameJson: jsonb("name_json").notNull().default({}),
   descriptionJson: jsonb("description_json").default({}),
   icon: text("icon").notNull().default("file"),
+  path: text("path"),
   parentPageId: integer("parent_page_id"),
   sortOrder: integer("sort_order").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),

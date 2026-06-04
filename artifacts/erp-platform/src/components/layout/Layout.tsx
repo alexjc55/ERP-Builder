@@ -28,15 +28,6 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   "settings": Settings,
 };
 
-const PAGE_ROUTES: Record<string, string> = {
-  "Dashboard": "/",
-  "Administration": "/admin",
-  "Users": "/admin/users",
-  "Roles": "/admin/roles",
-  "Pages": "/admin/pages",
-  "Translations": "/admin/translations",
-};
-
 function getML(val: MultilingualText | string | undefined | null): string {
   if (!val) return "";
   if (typeof val === "string") return val;
@@ -137,32 +128,25 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {topPages.sort((a: Page, b: Page) => a.sortOrder - b.sortOrder).map((page: Page) => {
           const name = getML(page.nameJson);
           const children = getSubPages(page.id);
-          const enName = typeof page.nameJson === "object" ? (page.nameJson as MultilingualText).en || "" : "";
-          const route = PAGE_ROUTES[enName] || "/";
 
           if (children.length > 0) {
             return (
               <SidebarItem key={page.id} name={name} icon={page.icon || "settings"} depth={0}>
-                {children.map((child: Page) => {
-                  const childName = getML(child.nameJson);
-                  const childEnName = typeof child.nameJson === "object" ? (child.nameJson as MultilingualText).en || "" : "";
-                  const childRoute = PAGE_ROUTES[childEnName] || "/";
-                  return (
-                    <SidebarItem
-                      key={child.id}
-                      name={childName}
-                      icon={child.icon || "layout"}
-                      route={childRoute}
-                      depth={1}
-                    />
-                  );
-                })}
+                {children.map((child: Page) => (
+                  <SidebarItem
+                    key={child.id}
+                    name={getML(child.nameJson)}
+                    icon={child.icon || "layout"}
+                    route={child.path || "/"}
+                    depth={1}
+                  />
+                ))}
               </SidebarItem>
             );
           }
 
           return (
-            <SidebarItem key={page.id} name={name} icon={page.icon || "layout-dashboard"} route={route} depth={0} />
+            <SidebarItem key={page.id} name={name} icon={page.icon || "layout-dashboard"} route={page.path || "/"} depth={0} />
           );
         })}
       </nav>

@@ -879,6 +879,8 @@ components:
           $ref: "#/components/schemas/MultilingualText"
         icon:
           type: string
+        path:
+          type: ["string", "null"]
         parentPageId:
           type: ["integer", "null"]
         sortOrder:
@@ -906,6 +908,8 @@ components:
           $ref: "#/components/schemas/MultilingualText"
         icon:
           type: string
+        path:
+          type: ["string", "null"]
         parentPageId:
           type: ["integer", "null"]
         sortOrder:
@@ -923,6 +927,8 @@ components:
           $ref: "#/components/schemas/MultilingualText"
         icon:
           type: string
+        path:
+          type: ["string", "null"]
         parentPageId:
           type: ["integer", "null"]
         sortOrder:

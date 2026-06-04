@@ -10,7 +10,7 @@ import UsersPage from "@/pages/admin/users";
 import RolesPage from "@/pages/admin/roles";
 import PagesPage from "@/pages/admin/pages";
 import TranslationsPage from "@/pages/admin/translations";
-import NotFound from "@/pages/not-found";
+import DynamicPage from "@/pages/dynamic";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient({
@@ -95,7 +95,9 @@ function Router() {
       </Route>
 
       <Route>
-        <NotFound />
+        <ProtectedRoute>
+          <DynamicPage />
+        </ProtectedRoute>
       </Route>
     </Switch>
   );
