@@ -5,7 +5,7 @@ import { useLocation, Link } from "wouter";
 import {
   Building2, LayoutDashboard, Users, Shield, Layout as LayoutIcon,
   Languages, Settings, LogOut, ChevronDown, ChevronRight,
-  Menu, X
+  Menu, X, Database, Table
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,8 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   "layout": LayoutIcon,
   "languages": Languages,
   "settings": Settings,
+  "database": Database,
+  "table": Table,
 };
 
 function getML(val: MultilingualText | string | undefined | null): string {

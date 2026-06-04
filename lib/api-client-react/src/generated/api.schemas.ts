@@ -249,6 +249,42 @@ export interface ReorderInput {
   items: ReorderInputItemsItem[];
 }
 
+export interface Entity {
+  id: number;
+  entityKey: string;
+  nameJson: MultilingualText;
+  descriptionJson?: MultilingualText;
+  icon: string;
+  /** @nullable */
+  pageId?: number | null;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EntityInput {
+  entityKey: string;
+  nameJson: MultilingualText;
+  descriptionJson?: MultilingualText;
+  icon: string;
+  /** @nullable */
+  pageId?: number | null;
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
+export interface EntityUpdate {
+  entityKey?: string;
+  nameJson?: MultilingualText;
+  descriptionJson?: MultilingualText;
+  icon?: string;
+  /** @nullable */
+  pageId?: number | null;
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
 export interface Translation {
   id: number;
   translationKey: string;

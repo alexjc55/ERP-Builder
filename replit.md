@@ -22,15 +22,28 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- DB schema (source of truth): `lib/db/src/schema/*` (one file per table, re-exported from `index.ts`)
+- API contract (source of truth): `lib/api-spec/openapi.yaml` — run codegen after edits
+- Generated client hooks + Zod: consumed via `@workspace/api-client-react` and `@workspace/api-zod`
+- API routes: `artifacts/api-server/src/routes/*` (registered in `routes/index.ts`)
+- Web app: `artifacts/erp-platform/src` — admin pages under `src/pages/admin/`, sidebar in `src/components/layout/Layout.tsx`, router in `src/App.tsx`
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Metadata-driven: pages, entities, roles, menus, translations are all rows in PostgreSQL — no hardcoded screens or routes. The sidebar is built entirely from the `pages` table (each page has a `path`).
+- Contract-first: every endpoint is defined in `openapi.yaml`, then client hooks and Zod validators are generated. Server validates with the generated Zod schemas.
+- Multilingual content is stored as JSONB (`{ru,en,he}`) on each row, rendered via a `getML()` helper that falls back ru → en → he.
+- Referential integrity is enforced in the DB/API (not assumed): e.g. `entities.page_id` is a FK with `ON DELETE SET NULL`, and one-entity-per-page is enforced server-side.
+- Auth is custom email/password JWT (no self-registration). Role-based access control is a deliberately later roadmap stage — mutations are currently auth-gated only.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+A metadata-driven platform constructor (Airtable/SmartSuite/Notion-like) for building production ERP systems through an admin interface without changing source code. Capabilities built so far:
+
+- **Users & Roles** — admin-managed accounts, role definitions, block/unblock, password reset, login history.
+- **Pages Builder** — create/edit/delete navigation pages and nested menu groups, reorder them, assign routes; the live sidebar updates automatically.
+- **Entities Builder** — define data objects (tables) with a system key, multilingual names, icon, and optional binding to a page where they will be displayed.
+- **Translations** — manage system UI strings in ru/en/he.
 
 ## User preferences
 

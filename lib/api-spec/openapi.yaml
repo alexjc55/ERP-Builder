@@ -544,7 +544,98 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
-  # TRANSLATIONS
+  # ENTITIES
+  /entities:
+    get:
+      operationId: listEntities
+      tags: [entities]
+      summary: List all entities
+      responses:
+        "200":
+          description: List of entities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Entity"
+    post:
+      operationId: createEntity
+      tags: [entities]
+      summary: Create a new entity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntityInput"
+      responses:
+        "201":
+          description: Entity created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Entity"
+
+  /entities/{id}:
+    get:
+      operationId: getEntity
+      tags: [entities]
+      summary: Get entity by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Entity found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Entity"
+    put:
+      operationId: updateEntity
+      tags: [entities]
+      summary: Update entity
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntityUpdate"
+      responses:
+        "200":
+          description: Entity updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Entity"
+    delete:
+      operationId: deleteEntity
+      tags: [entities]
+      summary: Delete entity
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
   /translations:
     get:
       operationId: listTranslations
@@ -950,6 +1041,72 @@ components:
                 type: integer
               sortOrder:
                 type: integer
+
+    # ENTITIES
+    Entity:
+      type: object
+      required: [id, entityKey, nameJson, icon, sortOrder, isActive, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        entityKey:
+          type: string
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        descriptionJson:
+          $ref: "#/components/schemas/MultilingualText"
+        icon:
+          type: string
+        pageId:
+          type: ["integer", "null"]
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    EntityInput:
+      type: object
+      required: [entityKey, nameJson, icon]
+      properties:
+        entityKey:
+          type: string
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        descriptionJson:
+          $ref: "#/components/schemas/MultilingualText"
+        icon:
+          type: string
+        pageId:
+          type: ["integer", "null"]
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+          default: true
+
+    EntityUpdate:
+      type: object
+      properties:
+        entityKey:
+          type: string
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        descriptionJson:
+          $ref: "#/components/schemas/MultilingualText"
+        icon:
+          type: string
+        pageId:
+          type: ["integer", "null"]
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
 
     # TRANSLATIONS
     Translation:

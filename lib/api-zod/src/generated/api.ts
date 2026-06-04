@@ -593,6 +593,145 @@ export const ReorderPagesResponse = zod.object({
 
 
 /**
+ * @summary List all entities
+ */
+export const ListEntitiesResponseItem = zod.object({
+  "id": zod.number(),
+  "entityKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "descriptionJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "icon": zod.string(),
+  "pageId": zod.number().nullish(),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListEntitiesResponse = zod.array(ListEntitiesResponseItem)
+
+
+/**
+ * @summary Create a new entity
+ */
+export const createEntityBodyIsActiveDefault = true;
+
+export const CreateEntityBody = zod.object({
+  "entityKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "descriptionJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "icon": zod.string(),
+  "pageId": zod.number().nullish(),
+  "sortOrder": zod.number().optional(),
+  "isActive": zod.boolean().default(createEntityBodyIsActiveDefault)
+})
+
+
+/**
+ * @summary Get entity by ID
+ */
+export const GetEntityParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetEntityResponse = zod.object({
+  "id": zod.number(),
+  "entityKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "descriptionJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "icon": zod.string(),
+  "pageId": zod.number().nullish(),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update entity
+ */
+export const UpdateEntityParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateEntityBody = zod.object({
+  "entityKey": zod.string().optional(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "descriptionJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "icon": zod.string().optional(),
+  "pageId": zod.number().nullish(),
+  "sortOrder": zod.number().optional(),
+  "isActive": zod.boolean().optional()
+})
+
+export const UpdateEntityResponse = zod.object({
+  "id": zod.number(),
+  "entityKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "descriptionJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "icon": zod.string(),
+  "pageId": zod.number().nullish(),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete entity
+ */
+export const DeleteEntityParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteEntityResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
  * @summary List all system translations
  */
 export const ListTranslationsResponseItem = zod.object({

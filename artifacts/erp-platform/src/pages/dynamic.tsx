@@ -1,7 +1,13 @@
 import { useLocation } from "wouter";
-import { useListPages, type Page, type MultilingualText } from "@workspace/api-client-react";
+import {
+  useListPages,
+  useListEntities,
+  type Page,
+  type Entity,
+  type MultilingualText,
+} from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Construction, Loader2 } from "lucide-react";
+import { Construction, Database, Loader2 } from "lucide-react";
 import NotFound from "@/pages/not-found";
 
 function getML(val: MultilingualText | string | undefined | null): string {
@@ -12,9 +18,10 @@ function getML(val: MultilingualText | string | undefined | null): string {
 
 export default function DynamicPage() {
   const [location] = useLocation();
-  const { data: pages = [], isLoading } = useListPages();
+  const { data: pages = [], isLoading: pagesLoading } = useListPages();
+  const { data: entities = [], isLoading: entitiesLoading } = useListEntities();
 
-  if (isLoading) {
+  if (pagesLoading || entitiesLoading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
@@ -28,6 +35,8 @@ export default function DynamicPage() {
     return <NotFound />;
   }
 
+  const entity = entities.find((e: Entity) => e.pageId === page.id && e.isActive);
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -37,20 +46,39 @@ export default function DynamicPage() {
         )}
       </div>
 
-      <Card className="border-slate-200 shadow-sm">
-        <CardContent className="flex flex-col items-center justify-center text-center py-20 gap-3">
-          <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center">
-            <Construction className="w-6 h-6 text-amber-500" />
-          </div>
-          <div>
-            <p className="text-slate-700 font-medium">Страница создана, но не наполнена</p>
-            <p className="text-sm text-slate-400 mt-1 max-w-md">
-              К этой странице ещё не привязана сущность. Содержимое появится после
-              создания сущности в конструкторе (следующий этап).
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      {entity ? (
+        <Card className="border-slate-200 shadow-sm">
+          <CardContent className="flex flex-col items-center justify-center text-center py-20 gap-3">
+            <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center">
+              <Database className="w-6 h-6 text-blue-500" />
+            </div>
+            <div>
+              <p className="text-slate-700 font-medium">
+                Сущность «{getML(entity.nameJson)}» привязана к этой странице
+              </p>
+              <p className="text-sm text-slate-400 mt-1 max-w-md">
+                Ключ: <code className="font-mono">{entity.entityKey}</code>. Поля и данные появятся
+                после настройки полей в конструкторе (следующий этап).
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="border-slate-200 shadow-sm">
+          <CardContent className="flex flex-col items-center justify-center text-center py-20 gap-3">
+            <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center">
+              <Construction className="w-6 h-6 text-amber-500" />
+            </div>
+            <div>
+              <p className="text-slate-700 font-medium">Страница создана, но не наполнена</p>
+              <p className="text-sm text-slate-400 mt-1 max-w-md">
+                К этой странице ещё не привязана сущность. Создайте сущность в конструкторе и
+                выберите эту страницу для отображения.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
