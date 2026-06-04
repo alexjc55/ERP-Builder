@@ -75,7 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const explicit = roleId != null ? field.permissionsJson?.[String(roleId)] : undefined;
     if (explicit) return explicit;
     const rp = permissions?.records?.[String(entityId)];
-    return rp?.update ? "edit" : "view";
+    return rp?.create || rp?.update ? "edit" : "view";
   };
 
   return (

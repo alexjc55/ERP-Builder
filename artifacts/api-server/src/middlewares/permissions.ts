@@ -100,13 +100,15 @@ export function recordOwnedBy(values: Record<string, unknown>, scopeFieldKeys: s
 /**
  * Resolve a field's access level for the requesting role.
  * superAdmin always edits. An explicit per-field entry wins; otherwise the
- * field inherits from the role's record perms (update => edit, else view) so
- * existing fields without explicit perms behave exactly as before.
+ * field inherits from the role's record write perms (create OR update => edit,
+ * else view) so existing fields without explicit perms behave exactly as before:
+ * a create-only role can still populate fields on create, and an update-only role
+ * can edit on update (each write endpoint stays gated by its own record perm).
  */
 export function resolveFieldAccess(field: EntityField, perms: RolePermissions, roleId: number, entityId: number): FieldAccess {
   if (perms.superAdmin) return "edit";
   const explicit = (field.permissionsJson as FieldPermissions | undefined)?.[String(roleId)];
   if (explicit) return explicit;
   const rp = perms.records[String(entityId)];
-  return rp?.update ? "edit" : "view";
+  return rp?.create || rp?.update ? "edit" : "view";
 }
