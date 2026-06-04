@@ -790,6 +790,110 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  # RECORDS
+  /entities/{entityId}/records:
+    get:
+      operationId: listEntityRecords
+      tags: [records]
+      summary: List records for an entity
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EntityRecord"
+    post:
+      operationId: createEntityRecord
+      tags: [records]
+      summary: Create a record on an entity
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordInput"
+      responses:
+        "201":
+          description: Record created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityRecord"
+
+  /records/{id}:
+    get:
+      operationId: getRecord
+      tags: [records]
+      summary: Get record by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Record found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityRecord"
+    put:
+      operationId: updateRecord
+      tags: [records]
+      summary: Update record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordUpdate"
+      responses:
+        "200":
+          description: Record updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityRecord"
+    delete:
+      operationId: deleteRecord
+      tags: [records]
+      summary: Delete record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
   # ENTITIES
   /entities:
     get:
@@ -1557,6 +1661,46 @@ components:
                 type: integer
               sortOrder:
                 type: integer
+
+    # RECORDS
+    EntityRecord:
+      type: object
+      required: [id, entityId, valuesJson, statusId, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        entityId:
+          type: integer
+        valuesJson:
+          type: object
+          additionalProperties: true
+        statusId:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    RecordInput:
+      type: object
+      required: [valuesJson]
+      properties:
+        valuesJson:
+          type: object
+          additionalProperties: true
+        statusId:
+          type: ["integer", "null"]
+
+    RecordUpdate:
+      type: object
+      properties:
+        valuesJson:
+          type: object
+          additionalProperties: true
+        statusId:
+          type: ["integer", "null"]
 
     # TRANSLATIONS
     Translation:

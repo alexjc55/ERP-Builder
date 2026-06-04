@@ -7,8 +7,9 @@ import {
   type MultilingualText,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Construction, Database, Loader2 } from "lucide-react";
+import { Construction, Loader2 } from "lucide-react";
 import NotFound from "@/pages/not-found";
+import { EntityRecords } from "@/components/EntityRecords";
 
 function getML(val: MultilingualText | string | undefined | null): string {
   if (!val) return "";
@@ -47,22 +48,7 @@ export default function DynamicPage() {
       </div>
 
       {entity ? (
-        <Card className="border-slate-200 shadow-sm">
-          <CardContent className="flex flex-col items-center justify-center text-center py-20 gap-3">
-            <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center">
-              <Database className="w-6 h-6 text-blue-500" />
-            </div>
-            <div>
-              <p className="text-slate-700 font-medium">
-                Сущность «{getML(entity.nameJson)}» привязана к этой странице
-              </p>
-              <p className="text-sm text-slate-400 mt-1 max-w-md">
-                Ключ: <code className="font-mono">{entity.entityKey}</code>. Поля и данные появятся
-                после настройки полей в конструкторе (следующий этап).
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        <EntityRecords entityId={entity.id} />
       ) : (
         <Card className="border-slate-200 shadow-sm">
           <CardContent className="flex flex-col items-center justify-center text-center py-20 gap-3">

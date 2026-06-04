@@ -398,6 +398,34 @@ export interface StatusesReorderInput {
   items: StatusesReorderInputItemsItem[];
 }
 
+export type EntityRecordValuesJson = { [key: string]: unknown };
+
+export interface EntityRecord {
+  id: number;
+  entityId: number;
+  valuesJson: EntityRecordValuesJson;
+  /** @nullable */
+  statusId: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type RecordInputValuesJson = { [key: string]: unknown };
+
+export interface RecordInput {
+  valuesJson: RecordInputValuesJson;
+  /** @nullable */
+  statusId?: number | null;
+}
+
+export type RecordUpdateValuesJson = { [key: string]: unknown };
+
+export interface RecordUpdate {
+  valuesJson?: RecordUpdateValuesJson;
+  /** @nullable */
+  statusId?: number | null;
+}
+
 export interface Translation {
   id: number;
   translationKey: string;

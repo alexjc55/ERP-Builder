@@ -25,6 +25,7 @@ import type {
   DashboardStats,
   Entity,
   EntityInput,
+  EntityRecord,
   EntityUpdate,
   ErrorResponse,
   Field,
@@ -38,6 +39,8 @@ import type {
   Page,
   PageInput,
   PageUpdate,
+  RecordInput,
+  RecordUpdate,
   ReorderInput,
   ResetPasswordInput,
   Role,
@@ -2780,6 +2783,374 @@ export const useReorderStatuses = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getReorderStatusesMutationOptions(options));
+    }
+
+export const getListEntityRecordsUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/records`
+}
+
+/**
+ * @summary List records for an entity
+ */
+export const listEntityRecords = async (entityId: number, options?: RequestInit): Promise<EntityRecord[]> => {
+
+  return customFetch<EntityRecord[]>(getListEntityRecordsUrl(entityId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListEntityRecordsQueryKey = (entityId: number,) => {
+    return [
+    `/api/entities/${entityId}/records`
+    ] as const;
+    }
+
+
+export const getListEntityRecordsQueryOptions = <TData = Awaited<ReturnType<typeof listEntityRecords>>, TError = ErrorType<unknown>>(entityId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEntityRecords>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListEntityRecordsQueryKey(entityId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listEntityRecords>>> = ({ signal }) => listEntityRecords(entityId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(entityId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listEntityRecords>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListEntityRecordsQueryResult = NonNullable<Awaited<ReturnType<typeof listEntityRecords>>>
+export type ListEntityRecordsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List records for an entity
+ */
+
+export function useListEntityRecords<TData = Awaited<ReturnType<typeof listEntityRecords>>, TError = ErrorType<unknown>>(
+ entityId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEntityRecords>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListEntityRecordsQueryOptions(entityId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateEntityRecordUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/records`
+}
+
+/**
+ * @summary Create a record on an entity
+ */
+export const createEntityRecord = async (entityId: number,
+    recordInput: RecordInput, options?: RequestInit): Promise<EntityRecord> => {
+
+  return customFetch<EntityRecord>(getCreateEntityRecordUrl(entityId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      recordInput,)
+  }
+);}
+
+
+
+
+export const getCreateEntityRecordMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEntityRecord>>, TError,{entityId: number;data: BodyType<RecordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createEntityRecord>>, TError,{entityId: number;data: BodyType<RecordInput>}, TContext> => {
+
+const mutationKey = ['createEntityRecord'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createEntityRecord>>, {entityId: number;data: BodyType<RecordInput>}> = (props) => {
+          const {entityId,data} = props ?? {};
+
+          return  createEntityRecord(entityId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateEntityRecordMutationResult = NonNullable<Awaited<ReturnType<typeof createEntityRecord>>>
+    export type CreateEntityRecordMutationBody = BodyType<RecordInput>
+    export type CreateEntityRecordMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a record on an entity
+ */
+export const useCreateEntityRecord = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEntityRecord>>, TError,{entityId: number;data: BodyType<RecordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createEntityRecord>>,
+        TError,
+        {entityId: number;data: BodyType<RecordInput>},
+        TContext
+      > => {
+      return useMutation(getCreateEntityRecordMutationOptions(options));
+    }
+
+export const getGetRecordUrl = (id: number,) => {
+
+
+
+
+  return `/api/records/${id}`
+}
+
+/**
+ * @summary Get record by ID
+ */
+export const getRecord = async (id: number, options?: RequestInit): Promise<EntityRecord> => {
+
+  return customFetch<EntityRecord>(getGetRecordUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetRecordQueryKey = (id: number,) => {
+    return [
+    `/api/records/${id}`
+    ] as const;
+    }
+
+
+export const getGetRecordQueryOptions = <TData = Awaited<ReturnType<typeof getRecord>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRecord>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRecordQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRecord>>> = ({ signal }) => getRecord(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRecord>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetRecordQueryResult = NonNullable<Awaited<ReturnType<typeof getRecord>>>
+export type GetRecordQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get record by ID
+ */
+
+export function useGetRecord<TData = Awaited<ReturnType<typeof getRecord>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRecord>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetRecordQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateRecordUrl = (id: number,) => {
+
+
+
+
+  return `/api/records/${id}`
+}
+
+/**
+ * @summary Update record
+ */
+export const updateRecord = async (id: number,
+    recordUpdate: RecordUpdate, options?: RequestInit): Promise<EntityRecord> => {
+
+  return customFetch<EntityRecord>(getUpdateRecordUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      recordUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateRecordMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateRecord>>, TError,{id: number;data: BodyType<RecordUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateRecord>>, TError,{id: number;data: BodyType<RecordUpdate>}, TContext> => {
+
+const mutationKey = ['updateRecord'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateRecord>>, {id: number;data: BodyType<RecordUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateRecord(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateRecordMutationResult = NonNullable<Awaited<ReturnType<typeof updateRecord>>>
+    export type UpdateRecordMutationBody = BodyType<RecordUpdate>
+    export type UpdateRecordMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update record
+ */
+export const useUpdateRecord = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateRecord>>, TError,{id: number;data: BodyType<RecordUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateRecord>>,
+        TError,
+        {id: number;data: BodyType<RecordUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateRecordMutationOptions(options));
+    }
+
+export const getDeleteRecordUrl = (id: number,) => {
+
+
+
+
+  return `/api/records/${id}`
+}
+
+/**
+ * @summary Delete record
+ */
+export const deleteRecord = async (id: number, options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getDeleteRecordUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteRecordMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteRecord>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteRecord>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteRecord'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteRecord>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteRecord(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteRecordMutationResult = NonNullable<Awaited<ReturnType<typeof deleteRecord>>>
+
+    export type DeleteRecordMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete record
+ */
+export const useDeleteRecord = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteRecord>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteRecord>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteRecordMutationOptions(options));
     }
 
 export const getListEntitiesUrl = () => {

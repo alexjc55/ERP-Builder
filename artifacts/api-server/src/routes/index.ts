@@ -7,6 +7,7 @@ import pagesRouter from "./pages";
 import entitiesRouter from "./entities";
 import fieldsRouter from "./fields";
 import statusesRouter from "./statuses";
+import recordsRouter from "./records";
 import translationsRouter from "./translations";
 import dashboardRouter from "./dashboard";
 
@@ -20,6 +21,7 @@ router.use(pagesRouter);
 router.use(entitiesRouter);
 router.use(fieldsRouter);
 router.use(statusesRouter);
+router.use(recordsRouter);
 router.use(translationsRouter);
 router.use(dashboardRouter);
 

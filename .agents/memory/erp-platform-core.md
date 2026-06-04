@@ -60,3 +60,9 @@ description: Key decisions for the Production ERP Builder platform (stages 1-2)
 - When a table has multiple unique constraints, the 23505 handler must branch on `err.constraint` (the constraint/index name) to return the right 409 message — don't assume every 23505 is the key conflict.
 
 **Why:** architect FAILed the first pass because the default invariant was only app-enforced (concurrency race). The partial unique index closes it. Applies to any future single-flag-per-parent rule (e.g. primary field, default option).
+
+## Records / Data Management (Stage 7)
+- `entity_records`: valuesJson (jsonb fieldKey→value map), entityId FK CASCADE, statusId FK SET NULL (nullable).
+- Record values are validated server-side against the entity's ACTIVE fields: unknown key→400, required-missing→400, per-type checks for number/boolean/date/datetime/email/url/phone/select-options.
+- URL fields: must be valid URL AND http:/https: only — other schemes (javascript:, ftp:, etc.) are rejected to prevent stored-XSS via clickable links. **Why:** UI renders url values as `<a href>`.
+- Create status semantics: statusId OMITTED (undefined) → apply entity default status; statusId explicitly null → keep null; a number → must belong to the entity. RecordInput zod uses `nullish()` so undefined vs null is distinguishable; do NOT collapse them.

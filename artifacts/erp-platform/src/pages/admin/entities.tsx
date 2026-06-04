@@ -223,6 +223,15 @@ export default function EntitiesPage() {
                           <CircleDot className="w-3.5 h-3.5" />
                           Статусы
                         </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 gap-1.5 text-slate-600"
+                          onClick={() => navigate(`/admin/entities/${entity.id}/records`)}
+                        >
+                          <Database className="w-3.5 h-3.5" />
+                          Данные
+                        </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(entity)}>
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>

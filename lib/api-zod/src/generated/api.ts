@@ -920,6 +920,89 @@ export const ReorderStatusesResponse = zod.object({
 
 
 /**
+ * @summary List records for an entity
+ */
+export const ListEntityRecordsParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const ListEntityRecordsResponseItem = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "valuesJson": zod.record(zod.string(), zod.unknown()),
+  "statusId": zod.number().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListEntityRecordsResponse = zod.array(ListEntityRecordsResponseItem)
+
+
+/**
+ * @summary Create a record on an entity
+ */
+export const CreateEntityRecordParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const CreateEntityRecordBody = zod.object({
+  "valuesJson": zod.record(zod.string(), zod.unknown()),
+  "statusId": zod.number().nullish()
+})
+
+
+/**
+ * @summary Get record by ID
+ */
+export const GetRecordParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetRecordResponse = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "valuesJson": zod.record(zod.string(), zod.unknown()),
+  "statusId": zod.number().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update record
+ */
+export const UpdateRecordParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateRecordBody = zod.object({
+  "valuesJson": zod.record(zod.string(), zod.unknown()).optional(),
+  "statusId": zod.number().nullish()
+})
+
+export const UpdateRecordResponse = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "valuesJson": zod.record(zod.string(), zod.unknown()),
+  "statusId": zod.number().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete record
+ */
+export const DeleteRecordParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteRecordResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
  * @summary List all entities
  */
 export const ListEntitiesResponseItem = zod.object({
