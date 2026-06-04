@@ -1,1 +1,2 @@
 - [ERP Platform core setup](erp-platform-core.md) — auth, seed accounts, API shape, pages flat list
+- [Relations engine](relations-engine.md) — DB-enforced cardinality; denormalized type kept in lockstep via relation-row lock; Drizzle wraps pg errors on err.cause

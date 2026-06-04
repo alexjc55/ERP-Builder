@@ -1003,6 +1003,196 @@ export const DeleteRecordResponse = zod.object({
 
 
 /**
+ * @summary List relations originating from an entity
+ */
+export const ListEntityRelationsParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const ListEntityRelationsResponseItem = zod.object({
+  "id": zod.number(),
+  "sourceEntityId": zod.number(),
+  "targetEntityId": zod.number(),
+  "relationKey": zod.string(),
+  "relationType": zod.enum(['one_to_one', 'one_to_many', 'many_to_one', 'many_to_many']),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "inverseNameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "settingsJson": zod.record(zod.string(), zod.unknown()),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListEntityRelationsResponse = zod.array(ListEntityRelationsResponseItem)
+
+
+/**
+ * @summary Create a relation from an entity
+ */
+export const CreateEntityRelationParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const CreateEntityRelationBody = zod.object({
+  "targetEntityId": zod.number(),
+  "relationKey": zod.string(),
+  "relationType": zod.enum(['one_to_one', 'one_to_many', 'many_to_one', 'many_to_many']),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "inverseNameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "settingsJson": zod.record(zod.string(), zod.unknown()).optional()
+})
+
+
+/**
+ * @summary Get relation by ID
+ */
+export const GetRelationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetRelationResponse = zod.object({
+  "id": zod.number(),
+  "sourceEntityId": zod.number(),
+  "targetEntityId": zod.number(),
+  "relationKey": zod.string(),
+  "relationType": zod.enum(['one_to_one', 'one_to_many', 'many_to_one', 'many_to_many']),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "inverseNameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "settingsJson": zod.record(zod.string(), zod.unknown()),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update relation
+ */
+export const UpdateRelationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateRelationBody = zod.object({
+  "relationKey": zod.string().optional(),
+  "relationType": zod.enum(['one_to_one', 'one_to_many', 'many_to_one', 'many_to_many']).optional(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "inverseNameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "settingsJson": zod.record(zod.string(), zod.unknown()).optional()
+})
+
+export const UpdateRelationResponse = zod.object({
+  "id": zod.number(),
+  "sourceEntityId": zod.number(),
+  "targetEntityId": zod.number(),
+  "relationKey": zod.string(),
+  "relationType": zod.enum(['one_to_one', 'one_to_many', 'many_to_one', 'many_to_many']),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "inverseNameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "settingsJson": zod.record(zod.string(), zod.unknown()),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete relation
+ */
+export const DeleteRelationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteRelationResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
+ * @summary List linked records for a source record
+ */
+export const ListRecordLinksParams = zod.object({
+  "recordId": zod.coerce.number()
+})
+
+export const ListRecordLinksResponseItem = zod.object({
+  "linkId": zod.number(),
+  "relationId": zod.number(),
+  "record": zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "valuesJson": zod.record(zod.string(), zod.unknown()),
+  "statusId": zod.number().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+})
+export const ListRecordLinksResponse = zod.array(ListRecordLinksResponseItem)
+
+
+/**
+ * @summary Link a target record to a source record
+ */
+export const CreateRecordLinkParams = zod.object({
+  "recordId": zod.coerce.number()
+})
+
+export const CreateRecordLinkBody = zod.object({
+  "relationId": zod.number(),
+  "targetRecordId": zod.number()
+})
+
+
+/**
+ * @summary Delete a record link
+ */
+export const DeleteRecordLinkParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteRecordLinkResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
  * @summary List all entities
  */
 export const ListEntitiesResponseItem = zod.object({

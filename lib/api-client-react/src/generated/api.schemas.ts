@@ -426,6 +426,71 @@ export interface RecordUpdate {
   statusId?: number | null;
 }
 
+export type RelationType = typeof RelationType[keyof typeof RelationType];
+
+
+export const RelationType = {
+  one_to_one: 'one_to_one',
+  one_to_many: 'one_to_many',
+  many_to_one: 'many_to_one',
+  many_to_many: 'many_to_many',
+} as const;
+
+export type RelationSettingsJson = { [key: string]: unknown };
+
+export interface Relation {
+  id: number;
+  sourceEntityId: number;
+  targetEntityId: number;
+  relationKey: string;
+  relationType: RelationType;
+  nameJson: MultilingualText;
+  inverseNameJson: MultilingualText;
+  settingsJson: RelationSettingsJson;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type RelationInputSettingsJson = { [key: string]: unknown };
+
+export interface RelationInput {
+  targetEntityId: number;
+  relationKey: string;
+  relationType: RelationType;
+  nameJson: MultilingualText;
+  inverseNameJson?: MultilingualText;
+  settingsJson?: RelationInputSettingsJson;
+}
+
+export type RelationUpdateSettingsJson = { [key: string]: unknown };
+
+export interface RelationUpdate {
+  relationKey?: string;
+  relationType?: RelationType;
+  nameJson?: MultilingualText;
+  inverseNameJson?: MultilingualText;
+  settingsJson?: RelationUpdateSettingsJson;
+}
+
+export interface RecordLink {
+  id: number;
+  relationId: number;
+  sourceRecordId: number;
+  targetRecordId: number;
+  createdAt: string;
+}
+
+export interface LinkedRecord {
+  linkId: number;
+  relationId: number;
+  record: EntityRecord;
+}
+
+export interface LinkInput {
+  relationId: number;
+  targetRecordId: number;
+}
+
 export interface Translation {
   id: number;
   translationKey: string;

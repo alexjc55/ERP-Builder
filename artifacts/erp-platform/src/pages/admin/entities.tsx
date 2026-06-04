@@ -44,7 +44,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Database, Loader2, Columns3, CircleDot } from "lucide-react";
+import { Plus, Pencil, Trash2, Database, Loader2, Columns3, CircleDot, Share2 } from "lucide-react";
 import { useLocation } from "wouter";
 
 type MLValue = { ru?: string; en?: string; he?: string };
@@ -222,6 +222,15 @@ export default function EntitiesPage() {
                         >
                           <CircleDot className="w-3.5 h-3.5" />
                           Статусы
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 gap-1.5 text-slate-600"
+                          onClick={() => navigate(`/admin/entities/${entity.id}/relations`)}
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                          Связи
                         </Button>
                         <Button
                           variant="ghost"

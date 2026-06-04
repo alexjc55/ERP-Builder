@@ -6,9 +6,15 @@ import {
   useDeleteRecord,
   useListEntityFields,
   useListEntityStatuses,
+  useListEntityRelations,
+  useListRecordLinks,
+  useCreateRecordLink,
+  useDeleteRecordLink,
   type EntityRecord,
   type Field,
   type Status,
+  type Relation,
+  type LinkedRecord,
   type MultilingualText,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -46,7 +52,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, Inbox } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X } from "lucide-react";
 
 const NO_STATUS = "__none__";
 
@@ -339,6 +345,8 @@ export function EntityRecords({ entityId }: { entityId: number }) {
                 </Select>
               </div>
             )}
+
+            {editing && <RecordLinkManager entityId={entityId} recordId={editing.id} />}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Отмена</Button>
@@ -427,4 +435,155 @@ function FieldInput({
     default:
       return <Input value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
   }
+}
+
+/** Best-effort human label for a record: first non-empty field value, else `#id`. */
+function recordLabel(record: EntityRecord): string {
+  const values = (record.valuesJson ?? {}) as Record<string, unknown>;
+  for (const v of Object.values(values)) {
+    if (v !== undefined && v !== null && v !== "" && typeof v !== "object") {
+      return String(v);
+    }
+  }
+  return `#${record.id}`;
+}
+
+/** Link manager shown inside the record edit dialog. Lists each outgoing relation
+ *  with its currently linked records and lets the user add/remove links. */
+function RecordLinkManager({ entityId, recordId }: { entityId: number; recordId: number }) {
+  const { data: relations = [], isLoading: relationsLoading } = useListEntityRelations(entityId);
+  const { data: links = [], isLoading: linksLoading } = useListRecordLinks(recordId);
+
+  if (relationsLoading) {
+    return <Skeleton className="h-10 w-full" />;
+  }
+  if (relations.length === 0) {
+    return null;
+  }
+
+  const linksByRelation = new Map<number, LinkedRecord[]>();
+  for (const link of links) {
+    const arr = linksByRelation.get(link.relationId) ?? [];
+    arr.push(link);
+    linksByRelation.set(link.relationId, arr);
+  }
+
+  return (
+    <div className="space-y-4 border-t border-slate-100 pt-4">
+      <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+        <Link2 className="w-4 h-4 text-blue-600" />
+        Связи
+      </div>
+      {relations.map((relation: Relation) => (
+        <RelationLinkSection
+          key={relation.id}
+          relation={relation}
+          recordId={recordId}
+          existingLinks={linksByRelation.get(relation.id) ?? []}
+          linksLoading={linksLoading}
+        />
+      ))}
+    </div>
+  );
+}
+
+const PICK_PLACEHOLDER = "__pick__";
+
+function RelationLinkSection({
+  relation,
+  recordId,
+  existingLinks,
+  linksLoading,
+}: {
+  relation: Relation;
+  recordId: number;
+  existingLinks: LinkedRecord[];
+  linksLoading: boolean;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [pick, setPick] = useState<string>(PICK_PLACEHOLDER);
+
+  const { data: targetRecords = [], isLoading: targetLoading } = useListEntityRecords(
+    relation.targetEntityId,
+  );
+
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: [`/api/records/${recordId}/links`] });
+
+  const createLink = useCreateRecordLink({
+    mutation: {
+      onSuccess: () => { setPick(PICK_PLACEHOLDER); invalidate(); },
+      onError: (err) => toast({ title: "Не удалось добавить связь", description: extractError(err), variant: "destructive" }),
+    },
+  });
+  const deleteLink = useDeleteRecordLink({
+    mutation: {
+      onSuccess: () => invalidate(),
+      onError: (err) => toast({ title: "Не удалось удалить связь", description: extractError(err), variant: "destructive" }),
+    },
+  });
+
+  const linkedIds = new Set(existingLinks.map((l) => l.record.id));
+  const available = targetRecords.filter((r: EntityRecord) => !linkedIds.has(r.id));
+  const busy = createLink.isPending || deleteLink.isPending;
+
+  const handleAdd = () => {
+    if (pick === PICK_PLACEHOLDER) return;
+    createLink.mutate({ recordId, data: { relationId: relation.id, targetRecordId: Number(pick) } });
+  };
+
+  return (
+    <div className="space-y-2 rounded-md border border-slate-100 p-3">
+      <div className="text-sm font-medium text-slate-600">{getML(relation.nameJson)}</div>
+      {linksLoading ? (
+        <Skeleton className="h-6 w-full" />
+      ) : existingLinks.length === 0 ? (
+        <p className="text-xs text-slate-400">Связанных записей нет.</p>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {existingLinks.map((link) => (
+            <span
+              key={link.linkId}
+              className="inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-700 text-xs px-2 py-1"
+            >
+              {recordLabel(link.record)}
+              <button
+                type="button"
+                className="hover:text-blue-900 disabled:opacity-50"
+                disabled={busy}
+                onClick={() => deleteLink.mutate({ id: link.linkId })}
+                aria-label="Удалить связь"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <Select value={pick} onValueChange={setPick} disabled={targetLoading || available.length === 0}>
+          <SelectTrigger className="h-8 text-sm">
+            <SelectValue placeholder={available.length === 0 ? "Нет доступных записей" : "Выберите запись"} />
+          </SelectTrigger>
+          <SelectContent>
+            {available.map((r: EntityRecord) => (
+              <SelectItem key={r.id} value={String(r.id)}>{recordLabel(r)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-8 gap-1.5"
+          disabled={pick === PICK_PLACEHOLDER || busy}
+          onClick={handleAdd}
+        >
+          {createLink.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+          Связать
+        </Button>
+      </div>
+    </div>
+  );
 }

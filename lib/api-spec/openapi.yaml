@@ -894,6 +894,173 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  # RELATIONS
+  /entities/{entityId}/relations:
+    get:
+      operationId: listEntityRelations
+      tags: [relations]
+      summary: List relations originating from an entity
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of relations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Relation"
+    post:
+      operationId: createEntityRelation
+      tags: [relations]
+      summary: Create a relation from an entity
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RelationInput"
+      responses:
+        "201":
+          description: Relation created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Relation"
+
+  /relations/{id}:
+    get:
+      operationId: getRelation
+      tags: [relations]
+      summary: Get relation by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Relation found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Relation"
+    put:
+      operationId: updateRelation
+      tags: [relations]
+      summary: Update relation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RelationUpdate"
+      responses:
+        "200":
+          description: Relation updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Relation"
+    delete:
+      operationId: deleteRelation
+      tags: [relations]
+      summary: Delete relation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /records/{recordId}/links:
+    get:
+      operationId: listRecordLinks
+      tags: [relations]
+      summary: List linked records for a source record
+      parameters:
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of linked records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LinkedRecord"
+    post:
+      operationId: createRecordLink
+      tags: [relations]
+      summary: Link a target record to a source record
+      parameters:
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkInput"
+      responses:
+        "201":
+          description: Link created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordLink"
+
+  /links/{id}:
+    delete:
+      operationId: deleteRecordLink
+      tags: [relations]
+      summary: Delete a record link
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
   # ENTITIES
   /entities:
     get:
@@ -1701,6 +1868,108 @@ components:
           additionalProperties: true
         statusId:
           type: ["integer", "null"]
+
+    # RELATIONS
+    RelationType:
+      type: string
+      enum: [one_to_one, one_to_many, many_to_one, many_to_many]
+
+    Relation:
+      type: object
+      required: [id, sourceEntityId, targetEntityId, relationKey, relationType, nameJson, inverseNameJson, settingsJson, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        sourceEntityId:
+          type: integer
+        targetEntityId:
+          type: integer
+        relationKey:
+          type: string
+        relationType:
+          $ref: "#/components/schemas/RelationType"
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        inverseNameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        settingsJson:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    RelationInput:
+      type: object
+      required: [targetEntityId, relationKey, relationType, nameJson]
+      properties:
+        targetEntityId:
+          type: integer
+        relationKey:
+          type: string
+        relationType:
+          $ref: "#/components/schemas/RelationType"
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        inverseNameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        settingsJson:
+          type: object
+          additionalProperties: true
+
+    RelationUpdate:
+      type: object
+      properties:
+        relationKey:
+          type: string
+        relationType:
+          $ref: "#/components/schemas/RelationType"
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        inverseNameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        settingsJson:
+          type: object
+          additionalProperties: true
+
+    RecordLink:
+      type: object
+      required: [id, relationId, sourceRecordId, targetRecordId, createdAt]
+      properties:
+        id:
+          type: integer
+        relationId:
+          type: integer
+        sourceRecordId:
+          type: integer
+        targetRecordId:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    LinkedRecord:
+      type: object
+      required: [linkId, relationId, record]
+      properties:
+        linkId:
+          type: integer
+        relationId:
+          type: integer
+        record:
+          $ref: "#/components/schemas/EntityRecord"
+
+    LinkInput:
+      type: object
+      required: [relationId, targetRecordId]
+      properties:
+        relationId:
+          type: integer
+        targetRecordId:
+          type: integer
 
     # TRANSLATIONS
     Translation:

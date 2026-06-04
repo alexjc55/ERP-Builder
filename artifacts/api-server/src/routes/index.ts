@@ -8,6 +8,7 @@ import entitiesRouter from "./entities";
 import fieldsRouter from "./fields";
 import statusesRouter from "./statuses";
 import recordsRouter from "./records";
+import relationsRouter from "./relations";
 import translationsRouter from "./translations";
 import dashboardRouter from "./dashboard";
 
@@ -22,6 +23,7 @@ router.use(entitiesRouter);
 router.use(fieldsRouter);
 router.use(statusesRouter);
 router.use(recordsRouter);
+router.use(relationsRouter);
 router.use(translationsRouter);
 router.use(dashboardRouter);
 
