@@ -3,20 +3,32 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Production ERP Builder API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: users
+    description: User management
+  - name: roles
+    description: Role management
+  - name: pages
+    description: Page and menu management
+  - name: translations
+    description: System translations
+  - name: dashboard
+    description: Dashboard statistics
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +36,586 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # AUTH
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResult"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout current session
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user info
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/change-password:
+    post:
+      operationId: changePassword
+      tags: [auth]
+      summary: Change current user password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordInput"
+      responses:
+        "200":
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # USERS
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: roleId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: isActive
+          in: query
+          schema:
+            type: ["boolean", "null"]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserListResult"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create a new user (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserInput"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get user by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateUser
+      tags: [users]
+      summary: Update user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /users/{id}/block:
+    post:
+      operationId: blockUser
+      tags: [users]
+      summary: Block a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User blocked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}/unblock:
+    post:
+      operationId: unblockUser
+      tags: [users]
+      summary: Unblock a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User unblocked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}/reset-password:
+    post:
+      operationId: resetUserPassword
+      tags: [users]
+      summary: Reset user password (admin sets new password)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordInput"
+      responses:
+        "200":
+          description: Password reset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /users/{id}/login-history:
+    get:
+      operationId: listUserLoginHistory
+      tags: [users]
+      summary: Get login history for a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Login history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LoginHistoryEntry"
+
+  # ROLES
+  /roles:
+    get:
+      operationId: listRoles
+      tags: [roles]
+      summary: List all roles
+      responses:
+        "200":
+          description: List of roles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Role"
+    post:
+      operationId: createRole
+      tags: [roles]
+      summary: Create a new role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoleInput"
+      responses:
+        "201":
+          description: Role created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Role"
+
+  /roles/{id}:
+    get:
+      operationId: getRole
+      tags: [roles]
+      summary: Get role by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Role found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Role"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateRole
+      tags: [roles]
+      summary: Update role
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoleUpdate"
+      responses:
+        "200":
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Role"
+    delete:
+      operationId: deleteRole
+      tags: [roles]
+      summary: Delete role
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # PAGES (dynamic menu)
+  /pages:
+    get:
+      operationId: listPages
+      tags: [pages]
+      summary: List all pages (menu structure)
+      responses:
+        "200":
+          description: List of pages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Page"
+    post:
+      operationId: createPage
+      tags: [pages]
+      summary: Create a new page/menu item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PageInput"
+      responses:
+        "201":
+          description: Page created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Page"
+
+  /pages/{id}:
+    get:
+      operationId: getPage
+      tags: [pages]
+      summary: Get page by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Page found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Page"
+    put:
+      operationId: updatePage
+      tags: [pages]
+      summary: Update page
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PageUpdate"
+      responses:
+        "200":
+          description: Page updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Page"
+    delete:
+      operationId: deletePage
+      tags: [pages]
+      summary: Delete page
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /pages/reorder:
+    post:
+      operationId: reorderPages
+      tags: [pages]
+      summary: Reorder pages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderInput"
+      responses:
+        "200":
+          description: Reordered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # TRANSLATIONS
+  /translations:
+    get:
+      operationId: listTranslations
+      tags: [translations]
+      summary: List all system translations
+      responses:
+        "200":
+          description: Translations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Translation"
+    post:
+      operationId: createTranslation
+      tags: [translations]
+      summary: Create a translation key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TranslationInput"
+      responses:
+        "201":
+          description: Translation created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Translation"
+
+  /translations/{key}:
+    put:
+      operationId: updateTranslation
+      tags: [translations]
+      summary: Update a translation by key
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TranslationUpdate"
+      responses:
+        "200":
+          description: Translation updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Translation"
+
+  # DASHBOARD
+  /dashboard/stats:
+    get:
+      operationId: getDashboardStats
+      tags: [dashboard]
+      summary: Get system dashboard statistics
+      responses:
+        "200":
+          description: System stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +626,373 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required:
+        - success
+
+    # Multilingual label stored as JSONB {ru: ..., en: ..., he: ...}
+    MultilingualText:
+      type: object
+      properties:
+        ru:
+          type: string
+        en:
+          type: string
+        he:
+          type: string
+
+    # AUTH
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResult:
+      type: object
+      required: [token, user]
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserProfile"
+
+    UserProfile:
+      type: object
+      required: [id, email, firstName, lastName, roleId, language, direction, isActive]
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        roleId:
+          type: integer
+        roleName:
+          $ref: "#/components/schemas/MultilingualText"
+        language:
+          type: string
+          enum: [ru, en, he]
+        direction:
+          type: string
+          enum: [ltr, rtl]
+        startPageId:
+          type: ["integer", "null"]
+        isActive:
+          type: boolean
+
+    ChangePasswordInput:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
+          minLength: 6
+
+    ResetPasswordInput:
+      type: object
+      required: [newPassword]
+      properties:
+        newPassword:
+          type: string
+          minLength: 6
+
+    # USERS
+    User:
+      type: object
+      required: [id, email, firstName, lastName, roleId, language, direction, isActive, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        roleId:
+          type: integer
+        roleName:
+          $ref: "#/components/schemas/MultilingualText"
+        language:
+          type: string
+          enum: [ru, en, he]
+        direction:
+          type: string
+          enum: [ltr, rtl]
+        startPageId:
+          type: ["integer", "null"]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    UserListResult:
+      type: object
+      required: [data, total]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        total:
+          type: integer
+
+    UserInput:
+      type: object
+      required: [email, password, firstName, lastName, roleId]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+        firstName:
+          type: string
+        lastName:
+          type: string
+        roleId:
+          type: integer
+        language:
+          type: string
+          enum: [ru, en, he]
+          default: ru
+        direction:
+          type: string
+          enum: [ltr, rtl]
+          default: ltr
+        startPageId:
+          type: ["integer", "null"]
+
+    UserUpdate:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        firstName:
+          type: string
+        lastName:
+          type: string
+        roleId:
+          type: integer
+        language:
+          type: string
+          enum: [ru, en, he]
+        direction:
+          type: string
+          enum: [ltr, rtl]
+        startPageId:
+          type: ["integer", "null"]
+
+    LoginHistoryEntry:
+      type: object
+      required: [id, userId, ipAddress, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        ipAddress:
+          type: string
+        userAgent:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    # ROLES
+    Role:
+      type: object
+      required: [id, nameJson, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        descriptionJson:
+          $ref: "#/components/schemas/MultilingualText"
+        userCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    RoleInput:
+      type: object
+      required: [nameJson]
+      properties:
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        descriptionJson:
+          $ref: "#/components/schemas/MultilingualText"
+
+    RoleUpdate:
+      type: object
+      properties:
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        descriptionJson:
+          $ref: "#/components/schemas/MultilingualText"
+
+    # PAGES
+    Page:
+      type: object
+      required: [id, nameJson, icon, sortOrder, isActive, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        descriptionJson:
+          $ref: "#/components/schemas/MultilingualText"
+        icon:
+          type: string
+        parentPageId:
+          type: ["integer", "null"]
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+        children:
+          type: array
+          items:
+            $ref: "#/components/schemas/Page"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PageInput:
+      type: object
+      required: [nameJson, icon]
+      properties:
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        descriptionJson:
+          $ref: "#/components/schemas/MultilingualText"
+        icon:
+          type: string
+        parentPageId:
+          type: ["integer", "null"]
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+          default: true
+
+    PageUpdate:
+      type: object
+      properties:
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        descriptionJson:
+          $ref: "#/components/schemas/MultilingualText"
+        icon:
+          type: string
+        parentPageId:
+          type: ["integer", "null"]
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+
+    ReorderInput:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, sortOrder]
+            properties:
+              id:
+                type: integer
+              sortOrder:
+                type: integer
+
+    # TRANSLATIONS
+    Translation:
+      type: object
+      required: [id, translationKey, translationsJson, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        translationKey:
+          type: string
+        translationsJson:
+          $ref: "#/components/schemas/MultilingualText"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TranslationInput:
+      type: object
+      required: [translationKey, translationsJson]
+      properties:
+        translationKey:
+          type: string
+        translationsJson:
+          $ref: "#/components/schemas/MultilingualText"
+
+    TranslationUpdate:
+      type: object
+      required: [translationsJson]
+      properties:
+        translationsJson:
+          $ref: "#/components/schemas/MultilingualText"
+
+    # DASHBOARD
+    DashboardStats:
+      type: object
+      required: [totalUsers, activeUsers, totalRoles, totalPages]
+      properties:
+        totalUsers:
+          type: integer
+        activeUsers:
+          type: integer
+        blockedUsers:
+          type: integer
+        totalRoles:
+          type: integer
+        totalPages:
+          type: integer
+        recentLogins:
+          type: integer

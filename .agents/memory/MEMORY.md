@@ -1,0 +1,1 @@
+- [ERP Platform core setup](erp-platform-core.md) — auth, seed accounts, API shape, pages flat list

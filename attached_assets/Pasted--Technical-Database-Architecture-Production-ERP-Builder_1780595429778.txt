@@ -1,0 +1,729 @@
+# Technical Database Architecture
+
+## Production ERP Builder
+
+### Цель документа
+
+Данный документ описывает архитектуру хранения данных платформы.
+
+Платформа является Metadata Driven системой.
+
+Это означает, что:
+
+* страницы создаются через интерфейс;
+* сущности создаются через интерфейс;
+* поля создаются через интерфейс;
+* роли создаются через интерфейс;
+* workflow создаются через интерфейс;
+
+Без изменения кода.
+
+Поэтому база данных должна хранить не только бизнес-данные, но и саму структуру платформы.
+
+---
+
+# Общая архитектура
+
+База данных должна состоять из двух уровней.
+
+## Уровень 1 — Core Metadata
+
+Описывает структуру платформы.
+
+Например:
+
+* страницы
+* сущности
+* поля
+* роли
+* права
+* workflow
+
+---
+
+## Уровень 2 — Business Data
+
+Хранит пользовательские данные.
+
+Например:
+
+* проекты
+* азманот
+* изделия
+* счета
+
+---
+
+# Таблица: users
+
+Хранит пользователей.
+
+Поля:
+
+id
+
+email
+
+password_hash
+
+first_name
+
+last_name
+
+role_id
+
+language
+
+direction
+
+start_page_id
+
+is_active
+
+created_at
+
+updated_at
+
+---
+
+# Таблица: roles
+
+Роли пользователей.
+
+Поля:
+
+id
+
+name_json
+
+description_json
+
+created_at
+
+updated_at
+
+---
+
+Пример:
+
+```json
+{
+  "ru":"Менеджер",
+  "en":"Manager",
+  "he":"מנהל"
+}
+```
+
+---
+
+# Таблица: pages
+
+Страницы меню.
+
+Поля:
+
+id
+
+name_json
+
+description_json
+
+icon
+
+parent_page_id
+
+sort_order
+
+is_active
+
+created_at
+
+updated_at
+
+---
+
+Пример:
+
+Проекты
+
+Производство
+
+Финансы
+
+Настройки
+
+---
+
+# Таблица: page_permissions
+
+Права ролей на страницы.
+
+Поля:
+
+id
+
+page_id
+
+role_id
+
+can_view
+
+can_create
+
+can_edit
+
+can_delete
+
+---
+
+# Таблица: entities
+
+Сущности системы.
+
+Поля:
+
+id
+
+page_id
+
+name_json
+
+description_json
+
+table_name
+
+is_active
+
+created_at
+
+updated_at
+
+---
+
+Примеры:
+
+Projects
+
+Orders
+
+Items
+
+Manufacturers
+
+Invoices
+
+---
+
+# Таблица: fields
+
+Описание полей сущности.
+
+Поля:
+
+id
+
+entity_id
+
+name_json
+
+description_json
+
+field_key
+
+field_type
+
+is_required
+
+is_unique
+
+default_value
+
+is_filterable
+
+is_searchable
+
+sort_order
+
+settings_json
+
+created_at
+
+updated_at
+
+---
+
+field_key:
+
+Системное имя поля.
+
+Пример:
+
+client_price
+
+manufacturer_price
+
+status
+
+---
+
+field_type:
+
+text
+
+long_text
+
+number
+
+currency
+
+date
+
+datetime
+
+checkbox
+
+select
+
+multiselect
+
+status
+
+user
+
+file
+
+image
+
+url
+
+relation
+
+formula
+
+---
+
+settings_json
+
+Дополнительные настройки поля.
+
+Пример для Select:
+
+```json
+{
+  "options":[
+    "Open",
+    "Closed",
+    "Cancelled"
+  ]
+}
+```
+
+---
+
+# Таблица: entity_records
+
+Хранилище данных.
+
+Вариант реализации:
+
+Каждая сущность получает собственную таблицу данных.
+
+ИЛИ
+
+Используется универсальная EAV модель.
+
+Предпочтительно:
+
+Dynamic Table Generator.
+
+После создания сущности система автоматически создает физическую таблицу.
+
+Например:
+
+entity_items
+
+entity_projects
+
+entity_orders
+
+---
+
+Это позволит сохранить высокую производительность.
+
+---
+
+# Таблица: relations
+
+Связи между сущностями.
+
+Поля:
+
+id
+
+source_entity_id
+
+target_entity_id
+
+relation_type
+
+settings_json
+
+---
+
+Пример:
+
+Projects
+
+↓
+
+Orders
+
+↓
+
+Items
+
+---
+
+# Таблица: views
+
+Представления.
+
+Поля:
+
+id
+
+entity_id
+
+name_json
+
+description_json
+
+is_default
+
+settings_json
+
+created_at
+
+updated_at
+
+---
+
+settings_json содержит:
+
+фильтры
+
+сортировку
+
+группировку
+
+скрытые колонки
+
+закрепленные колонки
+
+---
+
+# Таблица: row_visibility_rules
+
+Правила отображения записей.
+
+Поля:
+
+id
+
+view_id
+
+role_id
+
+rule_json
+
+created_at
+
+updated_at
+
+---
+
+Пример:
+
+```json
+{
+  "field":"manufacturer_id",
+  "operator":"=",
+  "value":"CURRENT_USER"
+}
+```
+
+---
+
+# Таблица: field_permissions
+
+Права на колонки.
+
+Поля:
+
+id
+
+field_id
+
+role_id
+
+can_view
+
+can_edit
+
+---
+
+Пример:
+
+Производитель:
+
+Цена клиента
+
+can_view = false
+
+---
+
+# Таблица: workflows
+
+Workflow сущности.
+
+Поля:
+
+id
+
+entity_id
+
+name_json
+
+description_json
+
+is_active
+
+---
+
+# Таблица: workflow_statuses
+
+Статусы workflow.
+
+Поля:
+
+id
+
+workflow_id
+
+name_json
+
+color
+
+sort_order
+
+is_archive_status
+
+---
+
+Пример:
+
+Создано
+
+В работе
+
+Готово
+
+Архив
+
+---
+
+# Таблица: workflow_transitions
+
+Переходы между статусами.
+
+Поля:
+
+id
+
+workflow_id
+
+from_status_id
+
+to_status_id
+
+allowed_roles_json
+
+required_fields_json
+
+actions_json
+
+---
+
+Пример:
+
+Передача производителю.
+
+Требуются поля:
+
+* производитель
+* цена
+* чертеж
+
+---
+
+# Таблица: archives
+
+Не требуется.
+
+Архив хранится внутри записей.
+
+Для каждой записи:
+
+archived
+
+archived_at
+
+---
+
+Записи не перемещаются между таблицами.
+
+---
+
+# Таблица: audit_log
+
+История изменений.
+
+Поля:
+
+id
+
+entity_id
+
+record_id
+
+field_key
+
+old_value
+
+new_value
+
+user_id
+
+created_at
+
+---
+
+Фиксировать любые изменения данных.
+
+---
+
+# Таблица: login_history
+
+История входов.
+
+Поля:
+
+id
+
+user_id
+
+ip_address
+
+user_agent
+
+created_at
+
+---
+
+# Таблица: translations
+
+Системные переводы.
+
+Поля:
+
+id
+
+translation_key
+
+translations_json
+
+created_at
+
+updated_at
+
+---
+
+Важно
+
+Запрещено использовать:
+
+* locale files
+* json translation files
+* i18next dictionaries
+
+Все переводы должны храниться в PostgreSQL.
+
+---
+
+# Таблица: modules
+
+Будущие плагины.
+
+Поля:
+
+id
+
+module_key
+
+name_json
+
+version
+
+is_enabled
+
+settings_json
+
+created_at
+
+updated_at
+
+---
+
+# Таблица: system_events
+
+События системы.
+
+Поля:
+
+id
+
+event_name
+
+entity_id
+
+record_id
+
+payload_json
+
+created_at
+
+---
+
+Примеры:
+
+record.created
+
+record.updated
+
+status.changed
+
+user.created
+
+---
+
+# Обязательное требование
+
+При разработке любой новой функции разработчик обязан сначала проверить:
+
+Можно ли реализовать функцию через существующую metadata architecture?
+
+Если ответ "да", реализация через hardcoded код запрещена.
+
+Любая новая бизнес-логика должна конфигурироваться через данные в PostgreSQL, а не через изменение исходного кода.
+
+Это является основным архитектурным принципом платформы.
