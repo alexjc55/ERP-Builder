@@ -10,6 +10,7 @@ import UsersPage from "@/pages/admin/users";
 import RolesPage from "@/pages/admin/roles";
 import PagesPage from "@/pages/admin/pages";
 import EntitiesPage from "@/pages/admin/entities";
+import EntityFieldsPage from "@/pages/admin/entity-fields";
 import TranslationsPage from "@/pages/admin/translations";
 import DynamicPage from "@/pages/dynamic";
 import { Loader2 } from "lucide-react";
@@ -86,6 +87,12 @@ function Router() {
       <Route path="/admin/pages">
         <ProtectedRoute>
           <PagesPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/entities/:entityId/fields">
+        <ProtectedRoute>
+          <EntityFieldsPage />
         </ProtectedRoute>
       </Route>
 

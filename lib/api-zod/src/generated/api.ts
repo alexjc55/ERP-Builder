@@ -593,6 +593,184 @@ export const ReorderPagesResponse = zod.object({
 
 
 /**
+ * @summary List fields for an entity
+ */
+export const ListEntityFieldsParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const ListEntityFieldsResponseItem = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "fieldKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "descriptionJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone']),
+  "isRequired": zod.boolean(),
+  "defaultValue": zod.string().nullish(),
+  "optionsJson": zod.array(zod.string()),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListEntityFieldsResponse = zod.array(ListEntityFieldsResponseItem)
+
+
+/**
+ * @summary Create a field on an entity
+ */
+export const CreateEntityFieldParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const createEntityFieldBodyIsRequiredDefault = false;
+export const createEntityFieldBodyIsActiveDefault = true;
+
+export const CreateEntityFieldBody = zod.object({
+  "fieldKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "descriptionJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone']),
+  "isRequired": zod.boolean().default(createEntityFieldBodyIsRequiredDefault),
+  "defaultValue": zod.string().nullish(),
+  "optionsJson": zod.array(zod.string()).optional(),
+  "sortOrder": zod.number().optional(),
+  "isActive": zod.boolean().default(createEntityFieldBodyIsActiveDefault)
+})
+
+
+/**
+ * @summary Get field by ID
+ */
+export const GetFieldParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetFieldResponse = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "fieldKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "descriptionJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone']),
+  "isRequired": zod.boolean(),
+  "defaultValue": zod.string().nullish(),
+  "optionsJson": zod.array(zod.string()),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update field
+ */
+export const UpdateFieldParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateFieldBody = zod.object({
+  "fieldKey": zod.string().optional(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "descriptionJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone']).optional(),
+  "isRequired": zod.boolean().optional(),
+  "defaultValue": zod.string().nullish(),
+  "optionsJson": zod.array(zod.string()).optional(),
+  "sortOrder": zod.number().optional(),
+  "isActive": zod.boolean().optional()
+})
+
+export const UpdateFieldResponse = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "fieldKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "descriptionJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone']),
+  "isRequired": zod.boolean(),
+  "defaultValue": zod.string().nullish(),
+  "optionsJson": zod.array(zod.string()),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete field
+ */
+export const DeleteFieldParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteFieldResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
+ * @summary Reorder fields within an entity
+ */
+export const ReorderFieldsBody = zod.object({
+  "entityId": zod.number(),
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "sortOrder": zod.number()
+}))
+})
+
+export const ReorderFieldsResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
  * @summary List all entities
  */
 export const ListEntitiesResponseItem = zod.object({

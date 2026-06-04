@@ -7,3 +7,4 @@ export * from "./audit_log";
 export * from "./system_events";
 export * from "./modules";
 export * from "./entities";
+export * from "./fields";

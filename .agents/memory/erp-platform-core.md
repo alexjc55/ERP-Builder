@@ -4,9 +4,7 @@ description: Key decisions for the Production ERP Builder platform (stages 1-2)
 ---
 
 ## Seed accounts (dev)
-- admin@erp.local / Admin@123 → role_id=1 (Administrator)
-- manager@erp.local / Manager@123 → role_id=2 (Project Manager)
-- cfo@erp.local / Manager@123 → role_id=5 (CFO)
+- The DB is seeded with dev accounts (admin role_id=1, manager role_id=2, cfo role_id=5). For exact emails/passwords read the seed script in `lib/db` — never store credentials here.
 
 ## API shape gotchas
 - `GET /api/pages` returns a FLAT array (not a tree). Frontend filters by parentPageId client-side.
@@ -49,3 +47,9 @@ description: Key decisions for the Production ERP Builder platform (stages 1-2)
 - entityKey uniqueness conflict → 409 on both create and update (update excludes self via `ne(id)`).
 
 **Why:** Metadata-driven platform must keep referential integrity itself since there are no hardcoded relationships; architect review flagged orphan/cardinality/empty-set gaps in the first pass.
+
+## Fields Builder (Stage 5) — integrity decisions
+- Any bulk-reorder endpoint must be SCOPED to its parent: require the parent id in the body, verify every child id belongs to that parent, and add the parent id to each UPDATE's WHERE. A reorder that updates by child id alone can silently mutate another parent's rows.
+- Uniqueness must be enforced at TWO layers: an app-level precheck AND mapping the DB unique-violation (Postgres 23505) to 409. The precheck alone is racy; rely on the DB constraint as the source of truth.
+
+**Why:** this is a metadata platform with no hardcoded relationships, so the API must enforce referential integrity itself. Architect flagged a blind cross-entity reorder as the gap these rules close. Applies to every future child-of-parent builder (fields, options, sub-records, etc.).

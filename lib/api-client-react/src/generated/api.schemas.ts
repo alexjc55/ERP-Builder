@@ -285,6 +285,75 @@ export interface EntityUpdate {
   isActive?: boolean;
 }
 
+export type FieldType = typeof FieldType[keyof typeof FieldType];
+
+
+export const FieldType = {
+  text: 'text',
+  textarea: 'textarea',
+  number: 'number',
+  boolean: 'boolean',
+  date: 'date',
+  datetime: 'datetime',
+  select: 'select',
+  email: 'email',
+  url: 'url',
+  phone: 'phone',
+} as const;
+
+export interface Field {
+  id: number;
+  entityId: number;
+  fieldKey: string;
+  nameJson: MultilingualText;
+  descriptionJson?: MultilingualText;
+  fieldType: FieldType;
+  isRequired: boolean;
+  /** @nullable */
+  defaultValue?: string | null;
+  optionsJson: string[];
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FieldInput {
+  fieldKey: string;
+  nameJson: MultilingualText;
+  descriptionJson?: MultilingualText;
+  fieldType: FieldType;
+  isRequired?: boolean;
+  /** @nullable */
+  defaultValue?: string | null;
+  optionsJson?: string[];
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
+export type FieldsReorderInputItemsItem = {
+  id: number;
+  sortOrder: number;
+};
+
+export interface FieldsReorderInput {
+  entityId: number;
+  items: FieldsReorderInputItemsItem[];
+}
+
+export interface FieldUpdate {
+  fieldKey?: string;
+  nameJson?: MultilingualText;
+  descriptionJson?: MultilingualText;
+  fieldType?: FieldType;
+  isRequired?: boolean;
+  /** @nullable */
+  defaultValue?: string | null;
+  optionsJson?: string[];
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
 export interface Translation {
   id: number;
   translationKey: string;

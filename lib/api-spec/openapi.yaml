@@ -544,6 +544,129 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  # FIELDS
+  /entities/{entityId}/fields:
+    get:
+      operationId: listEntityFields
+      tags: [fields]
+      summary: List fields for an entity
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of fields
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Field"
+    post:
+      operationId: createEntityField
+      tags: [fields]
+      summary: Create a field on an entity
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FieldInput"
+      responses:
+        "201":
+          description: Field created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Field"
+
+  /fields/{id}:
+    get:
+      operationId: getField
+      tags: [fields]
+      summary: Get field by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Field found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Field"
+    put:
+      operationId: updateField
+      tags: [fields]
+      summary: Update field
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FieldUpdate"
+      responses:
+        "200":
+          description: Field updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Field"
+    delete:
+      operationId: deleteField
+      tags: [fields]
+      summary: Delete field
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /fields/reorder:
+    post:
+      operationId: reorderFields
+      tags: [fields]
+      summary: Reorder fields within an entity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FieldsReorderInput"
+      responses:
+        "200":
+          description: Reordered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
   # ENTITIES
   /entities:
     get:
@@ -1103,6 +1226,124 @@ components:
           type: string
         pageId:
           type: ["integer", "null"]
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+
+    # FIELDS
+    FieldType:
+      type: string
+      enum:
+        - text
+        - textarea
+        - number
+        - boolean
+        - date
+        - datetime
+        - select
+        - email
+        - url
+        - phone
+
+    Field:
+      type: object
+      required: [id, entityId, fieldKey, nameJson, fieldType, isRequired, optionsJson, sortOrder, isActive, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        entityId:
+          type: integer
+        fieldKey:
+          type: string
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        descriptionJson:
+          $ref: "#/components/schemas/MultilingualText"
+        fieldType:
+          $ref: "#/components/schemas/FieldType"
+        isRequired:
+          type: boolean
+        defaultValue:
+          type: ["string", "null"]
+        optionsJson:
+          type: array
+          items:
+            type: string
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    FieldInput:
+      type: object
+      required: [fieldKey, nameJson, fieldType]
+      properties:
+        fieldKey:
+          type: string
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        descriptionJson:
+          $ref: "#/components/schemas/MultilingualText"
+        fieldType:
+          $ref: "#/components/schemas/FieldType"
+        isRequired:
+          type: boolean
+          default: false
+        defaultValue:
+          type: ["string", "null"]
+        optionsJson:
+          type: array
+          items:
+            type: string
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+          default: true
+
+    FieldsReorderInput:
+      type: object
+      required: [entityId, items]
+      properties:
+        entityId:
+          type: integer
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, sortOrder]
+            properties:
+              id:
+                type: integer
+              sortOrder:
+                type: integer
+
+    FieldUpdate:
+      type: object
+      properties:
+        fieldKey:
+          type: string
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        descriptionJson:
+          $ref: "#/components/schemas/MultilingualText"
+        fieldType:
+          $ref: "#/components/schemas/FieldType"
+        isRequired:
+          type: boolean
+        defaultValue:
+          type: ["string", "null"]
+        optionsJson:
+          type: array
+          items:
+            type: string
         sortOrder:
           type: integer
         isActive:
