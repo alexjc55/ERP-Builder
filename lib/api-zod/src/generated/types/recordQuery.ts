@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { ArchiveFilter } from './archiveFilter';
 import type { FilterCondition } from './filterCondition';
 import type { RecordQueryFilterConjunction } from './recordQueryFilterConjunction';
 import type { SortSpec } from './sortSpec';
@@ -14,6 +15,7 @@ export interface RecordQuery {
   filterConjunction?: RecordQueryFilterConjunction;
   sorts?: SortSpec[];
   search?: string;
+  archived?: ArchiveFilter;
   /** @minimum 1 */
   page?: number;
   /**

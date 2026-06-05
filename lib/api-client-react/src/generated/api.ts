@@ -3255,7 +3255,7 @@ export const getListEntityRecordsUrl = (entityId: number,) => {
 }
 
 /**
- * @summary List records for an entity
+ * @summary List records for an entity (active records only; archived are hidden)
  */
 export const listEntityRecords = async (entityId: number, options?: RequestInit): Promise<EntityRecord[]> => {
 
@@ -3302,7 +3302,7 @@ export type ListEntityRecordsQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List records for an entity
+ * @summary List records for an entity (active records only; archived are hidden)
  */
 
 export function useListEntityRecords<TData = Awaited<ReturnType<typeof listEntityRecords>>, TError = ErrorType<unknown>>(
@@ -3612,6 +3612,146 @@ export const useDeleteRecord = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteRecordMutationOptions(options));
+    }
+
+export const getArchiveRecordUrl = (id: number,) => {
+
+
+
+
+  return `/api/records/${id}/archive`
+}
+
+/**
+ * @summary Archive a record (manual archival)
+ */
+export const archiveRecord = async (id: number, options?: RequestInit): Promise<EntityRecord> => {
+
+  return customFetch<EntityRecord>(getArchiveRecordUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getArchiveRecordMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveRecord>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof archiveRecord>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['archiveRecord'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof archiveRecord>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  archiveRecord(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ArchiveRecordMutationResult = NonNullable<Awaited<ReturnType<typeof archiveRecord>>>
+
+    export type ArchiveRecordMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Archive a record (manual archival)
+ */
+export const useArchiveRecord = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveRecord>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof archiveRecord>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getArchiveRecordMutationOptions(options));
+    }
+
+export const getUnarchiveRecordUrl = (id: number,) => {
+
+
+
+
+  return `/api/records/${id}/unarchive`
+}
+
+/**
+ * @summary Restore a record from the archive
+ */
+export const unarchiveRecord = async (id: number, options?: RequestInit): Promise<EntityRecord> => {
+
+  return customFetch<EntityRecord>(getUnarchiveRecordUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getUnarchiveRecordMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unarchiveRecord>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unarchiveRecord>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['unarchiveRecord'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unarchiveRecord>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  unarchiveRecord(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnarchiveRecordMutationResult = NonNullable<Awaited<ReturnType<typeof unarchiveRecord>>>
+
+    export type UnarchiveRecordMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Restore a record from the archive
+ */
+export const useUnarchiveRecord = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unarchiveRecord>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof unarchiveRecord>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getUnarchiveRecordMutationOptions(options));
     }
 
 export const getQueryEntityRecordsUrl = (entityId: number,) => {

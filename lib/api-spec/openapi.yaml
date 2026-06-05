@@ -916,7 +916,7 @@ paths:
     get:
       operationId: listEntityRecords
       tags: [records]
-      summary: List records for an entity
+      summary: List records for an entity (active records only; archived are hidden)
       parameters:
         - name: entityId
           in: path
@@ -1014,6 +1014,44 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
+
+  /records/{id}/archive:
+    post:
+      operationId: archiveRecord
+      tags: [records]
+      summary: Archive a record (manual archival)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Record archived
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityRecord"
+
+  /records/{id}/unarchive:
+    post:
+      operationId: unarchiveRecord
+      tags: [records]
+      summary: Restore a record from the archive
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Record restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityRecord"
 
   /entities/{entityId}/records/query:
     post:
@@ -2108,7 +2146,7 @@ components:
 
     Status:
       type: object
-      required: [id, entityId, statusKey, nameJson, color, isDefault, isFinal, sortOrder, isActive, createdAt, updatedAt]
+      required: [id, entityId, statusKey, nameJson, color, isDefault, isFinal, isArchiveTrigger, archiveAfterDays, sortOrder, isActive, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -2124,6 +2162,10 @@ components:
           type: boolean
         isFinal:
           type: boolean
+        isArchiveTrigger:
+          type: boolean
+        archiveAfterDays:
+          type: integer
         sortOrder:
           type: integer
         isActive:
@@ -2151,6 +2193,13 @@ components:
         isFinal:
           type: boolean
           default: false
+        isArchiveTrigger:
+          type: boolean
+          default: false
+        archiveAfterDays:
+          type: integer
+          minimum: 0
+          default: 0
         sortOrder:
           type: integer
         isActive:
@@ -2170,6 +2219,11 @@ components:
           type: boolean
         isFinal:
           type: boolean
+        isArchiveTrigger:
+          type: boolean
+        archiveAfterDays:
+          type: integer
+          minimum: 0
         sortOrder:
           type: integer
         isActive:
@@ -2294,7 +2348,7 @@ components:
     # RECORDS
     EntityRecord:
       type: object
-      required: [id, entityId, valuesJson, statusId, createdAt, updatedAt]
+      required: [id, entityId, valuesJson, statusId, archivedAt, statusChangedAt, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -2305,12 +2359,23 @@ components:
           additionalProperties: true
         statusId:
           type: ["integer", "null"]
+        archivedAt:
+          type: ["string", "null"]
+          format: date-time
+        statusChangedAt:
+          type: ["string", "null"]
+          format: date-time
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
+
+    ArchiveFilter:
+      type: string
+      enum: [active, archived, all]
+      default: active
 
     RecordInput:
       type: object
@@ -2488,6 +2553,8 @@ components:
             $ref: "#/components/schemas/SortSpec"
         search:
           type: string
+        archived:
+          $ref: "#/components/schemas/ArchiveFilter"
         page:
           type: integer
           minimum: 1

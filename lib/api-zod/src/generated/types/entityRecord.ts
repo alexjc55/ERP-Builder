@@ -13,6 +13,10 @@ export interface EntityRecord {
   valuesJson: EntityRecordValuesJson;
   /** @nullable */
   statusId: number | null;
+  /** @nullable */
+  archivedAt: Date | null;
+  /** @nullable */
+  statusChangedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }

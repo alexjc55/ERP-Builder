@@ -1,4 +1,4 @@
-import { pgTable, serial, jsonb, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, jsonb, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { entitiesTable } from "./entities";
@@ -11,6 +11,12 @@ export const entityRecordsTable = pgTable("entity_records", {
     .references(() => entitiesTable.id, { onDelete: "cascade" }),
   valuesJson: jsonb("values_json").notNull().default({}),
   statusId: integer("status_id").references(() => entityStatusesTable.id, { onDelete: "set null" }),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+  statusChangedAt: timestamp("status_changed_at", { withTimezone: true }),
+  // Server-internal: a manual unarchive sets this so the auto-archive sweep skips
+  // the record until its status changes again (otherwise a delay=0 trigger status
+  // would immediately re-archive it). Not exposed via the API.
+  archiveExempt: boolean("archive_exempt").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

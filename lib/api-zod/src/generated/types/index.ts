@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './archiveFilter';
 export * from './authResult';
 export * from './changePasswordInput';
 export * from './dashboardStats';

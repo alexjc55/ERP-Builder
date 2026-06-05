@@ -38,7 +38,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, ArrowLeft, CircleDot, Star, Flag } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, ArrowLeft, CircleDot, Star, Flag, Archive } from "lucide-react";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
@@ -75,6 +75,8 @@ export default function EntityStatusesPage() {
   const [color, setColor] = useState(PRESET_COLORS[0]);
   const [isDefault, setIsDefault] = useState(false);
   const [isFinal, setIsFinal] = useState(false);
+  const [isArchiveTrigger, setIsArchiveTrigger] = useState(false);
+  const [archiveAfterDays, setArchiveAfterDays] = useState(0);
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
 
@@ -114,6 +116,8 @@ export default function EntityStatusesPage() {
     setColor(PRESET_COLORS[0]);
     setIsDefault(statuses.length === 0);
     setIsFinal(false);
+    setIsArchiveTrigger(false);
+    setArchiveAfterDays(0);
     setSortOrder(statuses.length + 1);
     setIsActive(true);
     setDialogOpen(true);
@@ -127,6 +131,8 @@ export default function EntityStatusesPage() {
     setColor(status.color);
     setIsDefault(status.isDefault);
     setIsFinal(status.isFinal);
+    setIsArchiveTrigger(status.isArchiveTrigger);
+    setArchiveAfterDays(status.archiveAfterDays);
     setSortOrder(status.sortOrder);
     setIsActive(status.isActive);
     setDialogOpen(true);
@@ -139,6 +145,8 @@ export default function EntityStatusesPage() {
       color,
       isDefault,
       isFinal,
+      isArchiveTrigger,
+      archiveAfterDays: isArchiveTrigger ? Math.max(0, archiveAfterDays) : 0,
       sortOrder,
       isActive,
     };
@@ -227,7 +235,13 @@ export default function EntityStatusesPage() {
                             <Flag className="w-3 h-3" /> Финальный
                           </span>
                         )}
-                        {!status.isDefault && !status.isFinal && <span className="text-slate-300 text-xs">—</span>}
+                        {status.isArchiveTrigger && (
+                          <span className="inline-flex items-center gap-1 text-indigo-600 text-xs">
+                            <Archive className="w-3 h-3" />
+                            Архив{status.archiveAfterDays > 0 ? ` (${status.archiveAfterDays} дн.)` : ""}
+                          </span>
+                        )}
+                        {!status.isDefault && !status.isFinal && !status.isArchiveTrigger && <span className="text-slate-300 text-xs">—</span>}
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -319,6 +333,33 @@ export default function EntityStatusesPage() {
             <p className="text-xs text-slate-400">
               «По умолчанию» назначается новым записям. У сущности может быть только один статус по умолчанию.
             </p>
+            <div className="rounded-md border border-slate-200 bg-slate-50/50 p-3 space-y-3">
+              <div className="flex items-center gap-2">
+                <Switch checked={isArchiveTrigger} onCheckedChange={setIsArchiveTrigger} id="status-archive-trigger" />
+                <Label htmlFor="status-archive-trigger" className="flex items-center gap-1.5">
+                  <Archive className="w-3.5 h-3.5 text-slate-500" />
+                  Архивировать записи в этом статусе
+                </Label>
+              </div>
+              {isArchiveTrigger && (
+                <div className="space-y-1.5 pl-1">
+                  <Label htmlFor="status-archive-days">Архивировать через (дней)</Label>
+                  <Input
+                    id="status-archive-days"
+                    type="number"
+                    min={0}
+                    value={archiveAfterDays}
+                    onChange={(e) => setArchiveAfterDays(Math.max(0, Number(e.target.value)))}
+                    className="w-32"
+                  />
+                  <p className="text-xs text-slate-400">
+                    {archiveAfterDays === 0
+                      ? "0 — запись архивируется сразу при переходе в этот статус."
+                      : `Запись будет скрыта в архив через ${archiveAfterDays} дн. после перехода в этот статус.`}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Отмена</Button>

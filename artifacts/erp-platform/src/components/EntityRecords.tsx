@@ -10,10 +10,13 @@ import {
   useListEntityRelations,
   useListEntityViews,
   useQueryEntityRecords,
+  useArchiveRecord,
+  useUnarchiveRecord,
   useListRecordLinks,
   useCreateRecordLink,
   useDeleteRecordLink,
   useListUserOptions,
+  type ArchiveFilter,
   type EntityRecord,
   type Field,
   type Status,
@@ -62,7 +65,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, Star, ShieldAlert } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, Star, ShieldAlert, Archive, ArchiveRestore } from "lucide-react";
 
 const NO_STATUS = "__none__";
 const NO_VIEW = "__all__";
@@ -200,6 +203,7 @@ export function EntityRecords({ entityId }: { entityId: number }) {
   // View / filter / search / pagination state for the server-side query endpoint.
   const [selectedViewId, setSelectedViewId] = useState<string>(NO_VIEW);
   const [search, setSearch] = useState("");
+  const [archived, setArchived] = useState<ArchiveFilter>("active");
   const [page, setPage] = useState(1);
   const [records, setRecords] = useState<EntityRecord[]>([]);
   const [total, setTotal] = useState(0);
@@ -215,6 +219,7 @@ export function EntityRecords({ entityId }: { entityId: number }) {
   useEffect(() => {
     setSelectedViewId(NO_VIEW);
     setSearch("");
+    setArchived("active");
     setPage(1);
     setViewInitialized(false);
   }, [entityId]);
@@ -239,10 +244,11 @@ export function EntityRecords({ entityId }: { entityId: number }) {
       filterConjunction: selectedConfig.filterConjunction ?? "and",
       sorts: selectedConfig.sorts ?? [],
       search: search.trim() || undefined,
+      archived,
       page,
       pageSize: PAGE_SIZE,
     }),
-    [selectedConfig.filters, selectedConfig.filterConjunction, selectedConfig.sorts, search, page],
+    [selectedConfig.filters, selectedConfig.filterConjunction, selectedConfig.sorts, search, archived, page],
   );
 
   const queryKey = JSON.stringify(recordQuery);
@@ -302,6 +308,18 @@ export function EntityRecords({ entityId }: { entityId: number }) {
     mutation: {
       onSuccess: () => { toast({ title: "Запись удалена" }); setToDelete(null); invalidate(); },
       onError: () => toast({ title: "Ошибка удаления записи", variant: "destructive" }),
+    },
+  });
+  const archiveMutation = useArchiveRecord({
+    mutation: {
+      onSuccess: () => { toast({ title: "Запись отправлена в архив" }); invalidate(); },
+      onError: (err) => toast({ title: "Ошибка архивации", description: extractError(err), variant: "destructive" }),
+    },
+  });
+  const unarchiveMutation = useUnarchiveRecord({
+    mutation: {
+      onSuccess: () => { toast({ title: "Запись восстановлена из архива" }); invalidate(); },
+      onError: (err) => toast({ title: "Ошибка восстановления", description: extractError(err), variant: "destructive" }),
     },
   });
 
@@ -420,6 +438,26 @@ export function EntityRecords({ entityId }: { entityId: number }) {
               className="h-9 w-56 pl-8 text-sm"
             />
           </div>
+          <div className="flex items-center rounded-md border border-slate-200 p-0.5 bg-white">
+            {([
+              ["active", "Активные"],
+              ["archived", "Архив"],
+              ["all", "Все"],
+            ] as [ArchiveFilter, string][]).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => { setArchived(value); setPage(1); }}
+                className={`px-2.5 h-8 text-xs rounded-[5px] transition ${
+                  archived === value
+                    ? "bg-slate-800 text-white"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
         {canCreate && (
           <Button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 gap-2">
@@ -470,17 +508,24 @@ export function EntityRecords({ entityId }: { entityId: number }) {
                         ))}
                         {statuses.length > 0 && (
                           <td className="px-4 py-3">
-                            {status ? (
-                              <span
-                                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
-                                style={{ backgroundColor: `${status.color}20`, color: status.color }}
-                              >
-                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: status.color }} />
-                                {getML(status.nameJson)}
-                              </span>
-                            ) : (
-                              <span className="text-slate-300">—</span>
-                            )}
+                            <div className="flex items-center gap-2">
+                              {status ? (
+                                <span
+                                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
+                                  style={{ backgroundColor: `${status.color}20`, color: status.color }}
+                                >
+                                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: status.color }} />
+                                  {getML(status.nameJson)}
+                                </span>
+                              ) : (
+                                <span className="text-slate-300">—</span>
+                              )}
+                              {record.archivedAt && (
+                                <span className="inline-flex items-center gap-1 text-indigo-500 text-xs">
+                                  <Archive className="w-3 h-3" /> В архиве
+                                </span>
+                              )}
+                            </div>
                           </td>
                         )}
                         <td className="px-4 py-3">
@@ -489,6 +534,31 @@ export function EntityRecords({ entityId }: { entityId: number }) {
                               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(record)}>
                                 <Pencil className="w-3.5 h-3.5" />
                               </Button>
+                            )}
+                            {canUpdate && (
+                              record.archivedAt ? (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-indigo-500"
+                                  title="Восстановить из архива"
+                                  disabled={unarchiveMutation.isPending}
+                                  onClick={() => unarchiveMutation.mutate({ id: record.id })}
+                                >
+                                  <ArchiveRestore className="w-3.5 h-3.5" />
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-slate-500"
+                                  title="В архив"
+                                  disabled={archiveMutation.isPending}
+                                  onClick={() => archiveMutation.mutate({ id: record.id })}
+                                >
+                                  <Archive className="w-3.5 h-3.5" />
+                                </Button>
+                              )
                             )}
                             {canDelete && (
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => setToDelete(record)}>

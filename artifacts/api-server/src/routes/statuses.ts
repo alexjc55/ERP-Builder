@@ -248,6 +248,14 @@ router.put("/statuses/:id", requireAuth, requireAdmin("entities"), async (req, r
   if (body.color != null) updateData.color = body.color;
   if (body.isDefault != null) updateData.isDefault = body.isDefault;
   if (body.isFinal != null) updateData.isFinal = body.isFinal;
+  if (body.isArchiveTrigger != null) updateData.isArchiveTrigger = body.isArchiveTrigger;
+  if (body.archiveAfterDays != null) {
+    if (!Number.isInteger(body.archiveAfterDays) || body.archiveAfterDays < 0) {
+      res.status(400).json({ error: "archiveAfterDays must be a non-negative integer" });
+      return;
+    }
+    updateData.archiveAfterDays = body.archiveAfterDays;
+  }
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
   if (body.isActive != null) updateData.isActive = body.isActive;
 

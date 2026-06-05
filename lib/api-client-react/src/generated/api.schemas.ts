@@ -420,6 +420,8 @@ export interface Status {
   color: string;
   isDefault: boolean;
   isFinal: boolean;
+  isArchiveTrigger: boolean;
+  archiveAfterDays: number;
   sortOrder: number;
   isActive: boolean;
   createdAt: string;
@@ -432,6 +434,9 @@ export interface StatusInput {
   color?: string;
   isDefault?: boolean;
   isFinal?: boolean;
+  isArchiveTrigger?: boolean;
+  /** @minimum 0 */
+  archiveAfterDays?: number;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -442,6 +447,9 @@ export interface StatusUpdate {
   color?: string;
   isDefault?: boolean;
   isFinal?: boolean;
+  isArchiveTrigger?: boolean;
+  /** @minimum 0 */
+  archiveAfterDays?: number;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -511,9 +519,22 @@ export interface EntityRecord {
   valuesJson: EntityRecordValuesJson;
   /** @nullable */
   statusId: number | null;
+  /** @nullable */
+  archivedAt: string | null;
+  /** @nullable */
+  statusChangedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
+
+export type ArchiveFilter = typeof ArchiveFilter[keyof typeof ArchiveFilter];
+
+
+export const ArchiveFilter = {
+  active: 'active',
+  archived: 'archived',
+  all: 'all',
+} as const;
 
 export type RecordInputValuesJson = { [key: string]: unknown };
 
@@ -639,6 +660,7 @@ export interface RecordQuery {
   filterConjunction?: RecordQueryFilterConjunction;
   sorts?: SortSpec[];
   search?: string;
+  archived?: ArchiveFilter;
   /** @minimum 1 */
   page?: number;
   /**

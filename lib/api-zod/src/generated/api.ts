@@ -937,6 +937,8 @@ export const ListEntityStatusesResponseItem = zod.object({
   "color": zod.string(),
   "isDefault": zod.boolean(),
   "isFinal": zod.boolean(),
+  "isArchiveTrigger": zod.boolean(),
+  "archiveAfterDays": zod.number(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -954,6 +956,10 @@ export const CreateEntityStatusParams = zod.object({
 
 export const createEntityStatusBodyIsDefaultDefault = false;
 export const createEntityStatusBodyIsFinalDefault = false;
+export const createEntityStatusBodyIsArchiveTriggerDefault = false;
+export const createEntityStatusBodyArchiveAfterDaysDefault = 0;
+export const createEntityStatusBodyArchiveAfterDaysMin = 0;
+
 export const createEntityStatusBodyIsActiveDefault = true;
 
 export const CreateEntityStatusBody = zod.object({
@@ -966,6 +972,8 @@ export const CreateEntityStatusBody = zod.object({
   "color": zod.string().optional(),
   "isDefault": zod.boolean().default(createEntityStatusBodyIsDefaultDefault),
   "isFinal": zod.boolean().default(createEntityStatusBodyIsFinalDefault),
+  "isArchiveTrigger": zod.boolean().default(createEntityStatusBodyIsArchiveTriggerDefault),
+  "archiveAfterDays": zod.number().min(createEntityStatusBodyArchiveAfterDaysMin).default(createEntityStatusBodyArchiveAfterDaysDefault),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createEntityStatusBodyIsActiveDefault)
 })
@@ -990,6 +998,8 @@ export const GetStatusResponse = zod.object({
   "color": zod.string(),
   "isDefault": zod.boolean(),
   "isFinal": zod.boolean(),
+  "isArchiveTrigger": zod.boolean(),
+  "archiveAfterDays": zod.number(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -1004,6 +1014,10 @@ export const UpdateStatusParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const updateStatusBodyArchiveAfterDaysMin = 0;
+
+
+
 export const UpdateStatusBody = zod.object({
   "statusKey": zod.string().optional(),
   "nameJson": zod.object({
@@ -1014,6 +1028,8 @@ export const UpdateStatusBody = zod.object({
   "color": zod.string().optional(),
   "isDefault": zod.boolean().optional(),
   "isFinal": zod.boolean().optional(),
+  "isArchiveTrigger": zod.boolean().optional(),
+  "archiveAfterDays": zod.number().min(updateStatusBodyArchiveAfterDaysMin).optional(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
@@ -1030,6 +1046,8 @@ export const UpdateStatusResponse = zod.object({
   "color": zod.string(),
   "isDefault": zod.boolean(),
   "isFinal": zod.boolean(),
+  "isArchiveTrigger": zod.boolean(),
+  "archiveAfterDays": zod.number(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -1220,7 +1238,7 @@ export const DeleteTransitionResponse = zod.object({
 
 
 /**
- * @summary List records for an entity
+ * @summary List records for an entity (active records only; archived are hidden)
  */
 export const ListEntityRecordsParams = zod.object({
   "entityId": zod.coerce.number()
@@ -1231,6 +1249,8 @@ export const ListEntityRecordsResponseItem = zod.object({
   "entityId": zod.number(),
   "valuesJson": zod.record(zod.string(), zod.unknown()),
   "statusId": zod.number().nullable(),
+  "archivedAt": zod.coerce.date().nullable(),
+  "statusChangedAt": zod.coerce.date().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -1262,6 +1282,8 @@ export const GetRecordResponse = zod.object({
   "entityId": zod.number(),
   "valuesJson": zod.record(zod.string(), zod.unknown()),
   "statusId": zod.number().nullable(),
+  "archivedAt": zod.coerce.date().nullable(),
+  "statusChangedAt": zod.coerce.date().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -1284,6 +1306,8 @@ export const UpdateRecordResponse = zod.object({
   "entityId": zod.number(),
   "valuesJson": zod.record(zod.string(), zod.unknown()),
   "statusId": zod.number().nullable(),
+  "archivedAt": zod.coerce.date().nullable(),
+  "statusChangedAt": zod.coerce.date().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -1303,6 +1327,44 @@ export const DeleteRecordResponse = zod.object({
 
 
 /**
+ * @summary Archive a record (manual archival)
+ */
+export const ArchiveRecordParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ArchiveRecordResponse = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "valuesJson": zod.record(zod.string(), zod.unknown()),
+  "statusId": zod.number().nullable(),
+  "archivedAt": zod.coerce.date().nullable(),
+  "statusChangedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Restore a record from the archive
+ */
+export const UnarchiveRecordParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UnarchiveRecordResponse = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "valuesJson": zod.record(zod.string(), zod.unknown()),
+  "statusId": zod.number().nullable(),
+  "archivedAt": zod.coerce.date().nullable(),
+  "statusChangedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Query records for an entity with filters, sorting, search and pagination
  */
 export const QueryEntityRecordsParams = zod.object({
@@ -1311,6 +1373,7 @@ export const QueryEntityRecordsParams = zod.object({
 
 export const queryEntityRecordsBodyFilterConjunctionDefault = `and`;
 export const queryEntityRecordsBodySortsItemDirectionDefault = `asc`;
+export const queryEntityRecordsBodyArchivedDefault = `active`;
 export const queryEntityRecordsBodyPageDefault = 1;
 
 export const queryEntityRecordsBodyPageSizeDefault = 50;
@@ -1330,6 +1393,7 @@ export const QueryEntityRecordsBody = zod.object({
   "direction": zod.enum(['asc', 'desc']).default(queryEntityRecordsBodySortsItemDirectionDefault)
 })).optional(),
   "search": zod.string().optional(),
+  "archived": zod.enum(['active', 'archived', 'all']).default(queryEntityRecordsBodyArchivedDefault),
   "page": zod.number().min(1).default(queryEntityRecordsBodyPageDefault),
   "pageSize": zod.number().min(1).max(queryEntityRecordsBodyPageSizeMax).default(queryEntityRecordsBodyPageSizeDefault)
 })
@@ -1340,6 +1404,8 @@ export const QueryEntityRecordsResponse = zod.object({
   "entityId": zod.number(),
   "valuesJson": zod.record(zod.string(), zod.unknown()),
   "statusId": zod.number().nullable(),
+  "archivedAt": zod.coerce.date().nullable(),
+  "statusChangedAt": zod.coerce.date().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })),
@@ -1504,6 +1570,8 @@ export const ListRecordLinksResponseItem = zod.object({
   "entityId": zod.number(),
   "valuesJson": zod.record(zod.string(), zod.unknown()),
   "statusId": zod.number().nullable(),
+  "archivedAt": zod.coerce.date().nullable(),
+  "statusChangedAt": zod.coerce.date().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })

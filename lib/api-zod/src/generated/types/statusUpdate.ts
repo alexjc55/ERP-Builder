@@ -13,6 +13,9 @@ export interface StatusUpdate {
   color?: string;
   isDefault?: boolean;
   isFinal?: boolean;
+  isArchiveTrigger?: boolean;
+  /** @minimum 0 */
+  archiveAfterDays?: number;
   sortOrder?: number;
   isActive?: boolean;
 }

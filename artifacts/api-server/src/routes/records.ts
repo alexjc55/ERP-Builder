@@ -21,6 +21,8 @@ import {
   DeleteRecordParams,
   QueryEntityRecordsParams,
   QueryEntityRecordsBody,
+  ArchiveRecordParams,
+  UnarchiveRecordParams,
 } from "@workspace/api-zod";
 import type { EntityField } from "@workspace/db";
 import { buildRecordQuery, type RecordQuerySpec } from "./record-query";
@@ -222,6 +224,60 @@ async function defaultStatusId(entityId: number): Promise<number | null> {
   return status ? status.id : null;
 }
 
+type ArchiveFilterValue = "active" | "archived" | "all";
+
+/**
+ * WHERE fragment for the archive display rule. Default ("active") hides archived
+ * records from normal lists/views; "archived" shows only archived; "all" no filter.
+ */
+function archivedWhere(filter: ArchiveFilterValue): SQL | undefined {
+  if (filter === "archived") return sql`${entityRecordsTable.archivedAt} IS NOT NULL`;
+  if (filter === "all") return undefined;
+  return sql`${entityRecordsTable.archivedAt} IS NULL`;
+}
+
+/**
+ * Auto-archive (metadata-driven): any record sitting in an archive-trigger status
+ * past that status's day threshold gets `archivedAt` stamped. Records are never
+ * moved — only flagged — so "archive is not a separate table". Runs lazily before
+ * reads so old data hides automatically without a background scheduler. Idempotent
+ * (guarded on archivedAt IS NULL); no-op when the entity has no archive triggers.
+ */
+async function runAutoArchiveSweep(entityId: number): Promise<void> {
+  const triggers = await db
+    .select({ id: entityStatusesTable.id, days: entityStatusesTable.archiveAfterDays })
+    .from(entityStatusesTable)
+    .where(and(eq(entityStatusesTable.entityId, entityId), eq(entityStatusesTable.isArchiveTrigger, true)));
+  if (triggers.length === 0) return;
+  for (const t of triggers) {
+    const days = Math.max(0, t.days ?? 0);
+    await db
+      .update(entityRecordsTable)
+      .set({ archivedAt: sql`now()` })
+      .where(
+        and(
+          eq(entityRecordsTable.entityId, entityId),
+          eq(entityRecordsTable.statusId, t.id),
+          sql`${entityRecordsTable.archivedAt} IS NULL`,
+          eq(entityRecordsTable.archiveExempt, false),
+          sql`COALESCE(${entityRecordsTable.statusChangedAt}, ${entityRecordsTable.createdAt}) + (${days} * interval '1 day') <= now()`,
+        ),
+      );
+  }
+}
+
+/** Returns the archive-trigger config of a status, or null if not found. */
+async function statusArchiveInfo(
+  statusId: number,
+): Promise<{ isArchiveTrigger: boolean; archiveAfterDays: number } | null> {
+  const [s] = await db
+    .select({ isArchiveTrigger: entityStatusesTable.isArchiveTrigger, archiveAfterDays: entityStatusesTable.archiveAfterDays })
+    .from(entityStatusesTable)
+    .where(eq(entityStatusesTable.id, statusId))
+    .limit(1);
+  return s ?? null;
+}
+
 router.get("/entities/:entityId/records", requireAuth, requireRecordParam("view"), async (req, res): Promise<void> => {
   const params = ListEntityRecordsParams.safeParse(req.params);
   if (!params.success) {
@@ -238,7 +294,9 @@ router.get("/entities/:entityId/records", requireAuth, requireRecordParam("view"
   const perms = await getPermissions(req);
   const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
 
-  let where: SQL = eq(entityRecordsTable.entityId, entityId);
+  // Apply auto-archival, then hide archived rows from this normal list (display rule).
+  await runAutoArchiveSweep(entityId);
+  let where: SQL = and(eq(entityRecordsTable.entityId, entityId), archivedWhere("active")!)!;
   if (scope === "own") {
     where = and(where, ownScopeWhere(scopeFieldKeys, req.user!.userId))!;
   }
@@ -283,8 +341,13 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   const perms = await getPermissions(req);
   const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
 
+  await runAutoArchiveSweep(entityId);
+  const archived = (body.data.archived ?? "active") as ArchiveFilterValue;
+
   const clauses: SQL[] = [eq(entityRecordsTable.entityId, entityId)];
   if (built.where) clauses.push(built.where);
+  const archWhere = archivedWhere(archived);
+  if (archWhere) clauses.push(archWhere);
   if (scope === "own") clauses.push(ownScopeWhere(scopeFieldKeys, req.user!.userId));
   const where = and(...clauses)!;
 
@@ -363,9 +426,10 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
     statusId = body.data.statusId;
   }
 
+  // Stamp when the record entered its status so the N-day auto-archive rule has a baseline.
   const [record] = await db
     .insert(entityRecordsTable)
-    .values({ entityId, valuesJson: result.values, statusId })
+    .values({ entityId, valuesJson: result.values, statusId, statusChangedAt: new Date() })
     .returning();
   res.status(201).json(stripHidden(record, hidden));
 });
@@ -438,7 +502,13 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const update: { valuesJson?: Record<string, unknown>; statusId?: number | null } = {};
+  const update: {
+    valuesJson?: Record<string, unknown>;
+    statusId?: number | null;
+    statusChangedAt?: Date;
+    archivedAt?: Date;
+    archiveExempt?: boolean;
+  } = {};
 
   const fields = await loadActiveFields(existing.entityId);
   const { editable, hidden } = await fieldAccessContext(req, existing.entityId, fields);
@@ -550,6 +620,21 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
+  // When the status actually changes, reset the auto-archive baseline and clear any
+  // manual-unarchive exemption (a new status dwell re-enables auto-archival). If the
+  // new status is an archive-trigger with zero delay, archive immediately; otherwise
+  // the lazy sweep on reads will pick it up once the N-day threshold passes.
+  if (statusChanging) {
+    update.statusChangedAt = new Date();
+    update.archiveExempt = false;
+    if (update.statusId != null) {
+      const info = await statusArchiveInfo(update.statusId);
+      if (info?.isArchiveTrigger && (info.archiveAfterDays ?? 0) === 0) {
+        update.archivedAt = new Date();
+      }
+    }
+  }
+
   const whereClause =
     guardFromStatusId != null
       ? and(
@@ -596,6 +681,81 @@ router.delete("/records/:id", requireAuth, async (req, res): Promise<void> => {
 
   await db.delete(entityRecordsTable).where(eq(entityRecordsTable.id, params.data.id));
   res.json({ success: true });
+});
+
+/**
+ * Manual archive/unarchive. Gated exactly like a record update (record `update`
+ * permission + row-level ownership scope), since archiving is a state change on
+ * the row. Unarchive is always explicit — changing status never auto-unarchives.
+ */
+async function setArchived(
+  req: import("express").Request,
+  res: import("express").Response,
+  recordId: number,
+  archived: boolean,
+): Promise<void> {
+  const [existing] = await db
+    .select()
+    .from(entityRecordsTable)
+    .where(eq(entityRecordsTable.id, recordId))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "Record not found" });
+    return;
+  }
+  if (!(await assertRecord(req, res, existing.entityId, "update"))) return;
+
+  const perms = await getPermissions(req);
+  const { scope, scopeFieldKeys } = effectiveScope(perms, existing.entityId);
+  const existingValues = (existing.valuesJson as Record<string, unknown>) ?? {};
+  if (scope === "own" && !recordOwnedBy(existingValues, scopeFieldKeys, req.user!.userId)) {
+    res.status(404).json({ error: "Record not found" });
+    return;
+  }
+
+  // Unarchive sets the exemption so the auto-archive sweep won't immediately
+  // re-archive a record still sitting in a (delay=0) archive-trigger status; the
+  // exemption is cleared on the next status change. Archiving clears it (an
+  // explicit archive needs no exemption). Guard: only an actual archived→active
+  // transition grants the exemption — unarchiving an already-active record is a
+  // no-op for exemption, so the endpoint can't be used to opt records out of
+  // auto-archival.
+  const wasArchived = existing.archivedAt != null;
+  const set: { archivedAt: Date | null; archiveExempt?: boolean } = {
+    archivedAt: archived ? new Date() : null,
+  };
+  if (archived) {
+    set.archiveExempt = false;
+  } else if (wasArchived) {
+    set.archiveExempt = true;
+  }
+  const [record] = await db
+    .update(entityRecordsTable)
+    .set(set)
+    .where(eq(entityRecordsTable.id, recordId))
+    .returning();
+
+  const fields = await loadActiveFields(existing.entityId);
+  const { hidden } = await fieldAccessContext(req, existing.entityId, fields);
+  res.json(stripHidden(record, hidden));
+}
+
+router.post("/records/:id/archive", requireAuth, async (req, res): Promise<void> => {
+  const params = ArchiveRecordParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  await setArchived(req, res, params.data.id, true);
+});
+
+router.post("/records/:id/unarchive", requireAuth, async (req, res): Promise<void> => {
+  const params = UnarchiveRecordParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  await setArchived(req, res, params.data.id, false);
 });
 
 export default router;

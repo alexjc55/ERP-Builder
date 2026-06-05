@@ -16,6 +16,8 @@ export const entityStatusesTable = pgTable(
     color: text("color").notNull().default("#6b7280"),
     isDefault: boolean("is_default").notNull().default(false),
     isFinal: boolean("is_final").notNull().default(false),
+    isArchiveTrigger: boolean("is_archive_trigger").notNull().default(false),
+    archiveAfterDays: integer("archive_after_days").notNull().default(0),
     sortOrder: integer("sort_order").notNull().default(0),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

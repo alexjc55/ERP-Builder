@@ -15,6 +15,8 @@ export interface Status {
   color: string;
   isDefault: boolean;
   isFinal: boolean;
+  isArchiveTrigger: boolean;
+  archiveAfterDays: number;
   sortOrder: number;
   isActive: boolean;
   createdAt: Date;
