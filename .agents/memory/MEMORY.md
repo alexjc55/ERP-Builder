@@ -1,1 +1,2 @@
 - [Editable records table](editable-records-table.md) — EntityRecords supports inline cell/add-row/setup-mode; inline status edits must mirror the per-row server workflow boundary, not a heuristic.
+- [Dependent record filters](dependent-filters.md) — isFilterable opt-in + status quick-filter + dependent option lists; SELECT DISTINCT must order by ordinal (reused sql frag re-binds params).

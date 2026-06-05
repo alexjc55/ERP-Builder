@@ -110,6 +110,7 @@ export function FieldConfigDialog({
   const [optionsText, setOptionsText] = useState("");
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
+  const [isFilterable, setIsFilterable] = useState(false);
   const [permissions, setPermissions] = useState<FieldPermissions>({});
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -128,6 +129,7 @@ export function FieldConfigDialog({
       setOptionsText((field.optionsJson ?? []).join("\n"));
       setSortOrder(field.sortOrder);
       setIsActive(field.isActive);
+      setIsFilterable(field.isFilterable ?? false);
       setPermissions(field.permissionsJson ?? {});
     } else {
       setFieldKey("");
@@ -139,6 +141,7 @@ export function FieldConfigDialog({
       setOptionsText("");
       setSortOrder(nextSortOrder);
       setIsActive(true);
+      setIsFilterable(false);
       setPermissions({});
     }
   }, [open, field, nextSortOrder]);
@@ -204,6 +207,7 @@ export function FieldConfigDialog({
       permissionsJson: permissions,
       sortOrder,
       isActive,
+      isFilterable,
     };
     if (field) updateMutation.mutate({ id: field.id, data: payload });
     else createMutation.mutate({ entityId, data: payload });
@@ -279,6 +283,10 @@ export function FieldConfigDialog({
               <div className="flex items-center gap-2">
                 <Switch checked={isActive} onCheckedChange={setIsActive} id="fcd-active" />
                 <Label htmlFor="fcd-active">{t("fields.active", "Активно")}</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={isFilterable} onCheckedChange={setIsFilterable} id="fcd-filterable" />
+                <Label htmlFor="fcd-filterable">{t("fields.filterable", "Участвует в фильтре")}</Label>
               </div>
             </div>
 

@@ -19,6 +19,7 @@ export interface FieldUpdate {
   defaultValue?: string | null;
   optionsJson?: string[];
   permissionsJson?: FieldPermissions;
+  isFilterable?: boolean;
   sortOrder?: number;
   isActive?: boolean;
 }

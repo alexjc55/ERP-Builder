@@ -21,6 +21,8 @@ import {
   DeleteRecordParams,
   QueryEntityRecordsParams,
   QueryEntityRecordsBody,
+  GetEntityFilterValuesParams,
+  GetEntityFilterValuesBody,
   ArchiveRecordParams,
   UnarchiveRecordParams,
 } from "@workspace/api-zod";
@@ -385,6 +387,80 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
 
   res.json({ data: data.map((r) => stripHidden(r, hidden)), total: countRow?.count ?? 0 });
 });
+
+router.post(
+  "/entities/:entityId/records/filter-values",
+  requireAuth,
+  requireRecordParam("view"),
+  async (req, res): Promise<void> => {
+    const params = GetEntityFilterValuesParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const body = GetEntityFilterValuesBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+    const { entityId } = params.data;
+    if (!(await entityExists(entityId))) {
+      res.status(404).json({ error: "Entity not found" });
+      return;
+    }
+
+    const fields = await loadActiveFields(entityId);
+    const { hidden } = await fieldAccessContext(req, entityId, fields);
+    const visibleFields = fields.filter((f) => !hidden.has(f.fieldKey));
+
+    const target = visibleFields.find((f) => f.fieldKey === body.data.field);
+    // Only fields opted-in to filtering and visible to this role can have their values listed.
+    if (!target || !target.isFilterable) {
+      res.status(400).json({ error: `Field is not filterable: ${body.data.field}` });
+      return;
+    }
+
+    // Dependent filters: options come from records matching the OTHER active filters.
+    // Strip any filter on the target field itself so its own picks don't narrow its option list.
+    const spec: RecordQuerySpec = {
+      filters: (body.data.filters ?? []).filter((c) => c.field !== body.data.field),
+      filterConjunction: body.data.filterConjunction ?? "and",
+      statusIds: body.data.statusIds ?? undefined,
+      search: body.data.search ?? undefined,
+    };
+    const built = buildRecordQuery(visibleFields, spec);
+    if ("error" in built) {
+      res.status(400).json({ error: built.error });
+      return;
+    }
+
+    const perms = await getPermissions(req);
+    const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
+    const archived = (body.data.archived ?? "active") as ArchiveFilterValue;
+
+    const clauses: SQL[] = [eq(entityRecordsTable.entityId, entityId)];
+    if (built.where) clauses.push(built.where);
+    const archWhere = archivedWhere(archived);
+    if (archWhere) clauses.push(archWhere);
+    if (scope === "own") clauses.push(ownScopeWhere(scopeFieldKeys, req.user!.userId));
+    const valueExpr = sql<string | null>`(${entityRecordsTable.valuesJson} ->> ${body.data.field})`;
+    clauses.push(sql`${valueExpr} IS NOT NULL AND ${valueExpr} <> ''`);
+    const where = and(...clauses)!;
+
+    // ORDER BY ordinal (1) — for SELECT DISTINCT the order-by expression must match the
+    // selected column; re-emitting valueExpr would bind a fresh param and Postgres would
+    // reject it as not in the select list.
+    const rows = await db
+      .selectDistinct({ v: valueExpr })
+      .from(entityRecordsTable)
+      .where(where)
+      .orderBy(sql`1`)
+      .limit(500);
+
+    const values = rows.map((r) => r.v).filter((v): v is string => v != null && v !== "");
+    res.json({ values });
+  },
+);
 
 router.post("/entities/:entityId/records", requireAuth, requireRecordParam("create"), async (req, res): Promise<void> => {
   const params = CreateEntityRecordParams.safeParse(req.params);

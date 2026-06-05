@@ -33,6 +33,8 @@ import type {
   FieldInput,
   FieldUpdate,
   FieldsReorderInput,
+  FilterValuesQuery,
+  FilterValuesResult,
   HealthStatus,
   ImpersonateInput,
   LinkInput,
@@ -4572,6 +4574,78 @@ export const useQueryEntityRecords = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getQueryEntityRecordsMutationOptions(options));
+    }
+
+export const getGetEntityFilterValuesUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/records/filter-values`
+}
+
+/**
+ * @summary Distinct values of a filterable field among records matching the other active filters
+ */
+export const getEntityFilterValues = async (entityId: number,
+    filterValuesQuery: FilterValuesQuery, options?: RequestInit): Promise<FilterValuesResult> => {
+
+  return customFetch<FilterValuesResult>(getGetEntityFilterValuesUrl(entityId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      filterValuesQuery,)
+  }
+);}
+
+
+
+
+export const getGetEntityFilterValuesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getEntityFilterValues>>, TError,{entityId: number;data: BodyType<FilterValuesQuery>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof getEntityFilterValues>>, TError,{entityId: number;data: BodyType<FilterValuesQuery>}, TContext> => {
+
+const mutationKey = ['getEntityFilterValues'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getEntityFilterValues>>, {entityId: number;data: BodyType<FilterValuesQuery>}> = (props) => {
+          const {entityId,data} = props ?? {};
+
+          return  getEntityFilterValues(entityId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GetEntityFilterValuesMutationResult = NonNullable<Awaited<ReturnType<typeof getEntityFilterValues>>>
+    export type GetEntityFilterValuesMutationBody = BodyType<FilterValuesQuery>
+    export type GetEntityFilterValuesMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Distinct values of a filterable field among records matching the other active filters
+ */
+export const useGetEntityFilterValues = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getEntityFilterValues>>, TError,{entityId: number;data: BodyType<FilterValuesQuery>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof getEntityFilterValues>>,
+        TError,
+        {entityId: number;data: BodyType<FilterValuesQuery>},
+        TContext
+      > => {
+      return useMutation(getGetEntityFilterValuesMutationOptions(options));
     }
 
 export const getListEntityRelationsUrl = (entityId: number,) => {

@@ -19,6 +19,7 @@ export interface FieldInput {
   defaultValue?: string | null;
   optionsJson?: string[];
   permissionsJson?: FieldPermissions;
+  isFilterable?: boolean;
   sortOrder?: number;
   isActive?: boolean;
 }

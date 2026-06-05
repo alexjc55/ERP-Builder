@@ -21,6 +21,7 @@ export interface Field {
   defaultValue?: string | null;
   optionsJson: string[];
   permissionsJson?: FieldPermissions;
+  isFilterable?: boolean;
   sortOrder: number;
   isActive: boolean;
   createdAt: Date;

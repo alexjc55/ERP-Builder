@@ -7,21 +7,13 @@
  */
 import type { ArchiveFilter } from './archiveFilter';
 import type { FilterCondition } from './filterCondition';
-import type { RecordQueryFilterConjunction } from './recordQueryFilterConjunction';
-import type { SortSpec } from './sortSpec';
+import type { FilterValuesQueryFilterConjunction } from './filterValuesQueryFilterConjunction';
 
-export interface RecordQuery {
+export interface FilterValuesQuery {
+  field: string;
   filters?: FilterCondition[];
-  filterConjunction?: RecordQueryFilterConjunction;
+  filterConjunction?: FilterValuesQueryFilterConjunction;
   statusIds?: number[];
-  sorts?: SortSpec[];
   search?: string;
   archived?: ArchiveFilter;
-  /** @minimum 1 */
-  page?: number;
-  /**
-     * @minimum 1
-     * @maximum 200
-     */
-  pageSize?: number;
 }

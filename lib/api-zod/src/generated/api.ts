@@ -937,6 +937,7 @@ export const ListEntityFieldsResponseItem = zod.object({
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
+  "isFilterable": zod.boolean().optional(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -953,6 +954,7 @@ export const CreateEntityFieldParams = zod.object({
 })
 
 export const createEntityFieldBodyIsRequiredDefault = false;
+export const createEntityFieldBodyIsFilterableDefault = false;
 export const createEntityFieldBodyIsActiveDefault = true;
 
 export const CreateEntityFieldBody = zod.object({
@@ -972,6 +974,7 @@ export const CreateEntityFieldBody = zod.object({
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()).optional(),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
+  "isFilterable": zod.boolean().default(createEntityFieldBodyIsFilterableDefault),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createEntityFieldBodyIsActiveDefault)
 })
@@ -1003,6 +1006,7 @@ export const GetFieldResponse = zod.object({
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
+  "isFilterable": zod.boolean().optional(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -1034,6 +1038,7 @@ export const UpdateFieldBody = zod.object({
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()).optional(),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
+  "isFilterable": zod.boolean().optional(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
@@ -1057,6 +1062,7 @@ export const UpdateFieldResponse = zod.object({
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
+  "isFilterable": zod.boolean().optional(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -1715,6 +1721,7 @@ export const QueryEntityRecordsBody = zod.object({
   "value": zod.unknown().optional()
 })).optional(),
   "filterConjunction": zod.enum(['and', 'or']).default(queryEntityRecordsBodyFilterConjunctionDefault),
+  "statusIds": zod.array(zod.number()).optional(),
   "sorts": zod.array(zod.object({
   "field": zod.string(),
   "direction": zod.enum(['asc', 'desc']).default(queryEntityRecordsBodySortsItemDirectionDefault)
@@ -1737,6 +1744,34 @@ export const QueryEntityRecordsResponse = zod.object({
   "updatedAt": zod.coerce.date()
 })),
   "total": zod.number()
+})
+
+
+/**
+ * @summary Distinct values of a filterable field among records matching the other active filters
+ */
+export const GetEntityFilterValuesParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const getEntityFilterValuesBodyFilterConjunctionDefault = `and`;
+export const getEntityFilterValuesBodyArchivedDefault = `active`;
+
+export const GetEntityFilterValuesBody = zod.object({
+  "field": zod.string(),
+  "filters": zod.array(zod.object({
+  "field": zod.string(),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in']),
+  "value": zod.unknown().optional()
+})).optional(),
+  "filterConjunction": zod.enum(['and', 'or']).default(getEntityFilterValuesBodyFilterConjunctionDefault),
+  "statusIds": zod.array(zod.number()).optional(),
+  "search": zod.string().optional(),
+  "archived": zod.enum(['active', 'archived', 'all']).default(getEntityFilterValuesBodyArchivedDefault)
+})
+
+export const GetEntityFilterValuesResponse = zod.object({
+  "values": zod.array(zod.string())
 })
 
 

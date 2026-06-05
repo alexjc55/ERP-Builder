@@ -1,4 +1,4 @@
-import { sql, and, or, asc, desc, type SQL } from "drizzle-orm";
+import { sql, and, or, asc, desc, inArray, type SQL } from "drizzle-orm";
 import { entityRecordsTable } from "@workspace/db";
 import type { EntityField } from "@workspace/db";
 
@@ -31,6 +31,7 @@ export interface SortSpec {
 export interface RecordQuerySpec {
   filters?: FilterCondition[];
   filterConjunction?: "and" | "or";
+  statusIds?: number[];
   sorts?: SortSpec[];
   search?: string;
 }
@@ -177,7 +178,13 @@ export function buildRecordQuery(
     }
   }
 
-  const whereParts = [filterWhere, searchWhere].filter((p): p is SQL => p !== undefined);
+  let statusWhere: SQL | undefined;
+  const statusIds = (spec.statusIds ?? []).filter((n) => Number.isInteger(n));
+  if (statusIds.length > 0) {
+    statusWhere = inArray(entityRecordsTable.statusId, statusIds);
+  }
+
+  const whereParts = [filterWhere, searchWhere, statusWhere].filter((p): p is SQL => p !== undefined);
   const where = whereParts.length > 0 ? and(...whereParts) : undefined;
 
   const orderBy: SQL[] = [];

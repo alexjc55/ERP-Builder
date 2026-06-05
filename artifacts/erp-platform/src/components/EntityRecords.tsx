@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   useListEntityRecords,
   useCreateEntityRecord,
@@ -10,6 +10,7 @@ import {
   useListEntityRelations,
   useListEntityViews,
   useQueryEntityRecords,
+  useGetEntityFilterValues,
   useArchiveRecord,
   useUnarchiveRecord,
   useListRecordLinks,
@@ -63,12 +64,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useML, useT } from "@/lib/i18n";
 import { FieldConfigDialog } from "@/components/FieldConfigDialog";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter } from "lucide-react";
 
 const NO_STATUS = "__none__";
 const NO_VIEW = "__all__";
@@ -139,6 +143,119 @@ function renderCellValue(field: Field, value: unknown, userNames?: Map<number, s
   return <span className="text-slate-700">{String(value)}</span>;
 }
 
+// A dependent-filter dropdown for one opt-in field. Options are fetched lazily on open
+// (so the list reflects the records matching the OTHER active filters) and picked as an `in` set.
+function FieldFilterPopover({
+  field,
+  selected,
+  onChange,
+  getOptions,
+  ml,
+  t,
+  userNames,
+}: {
+  field: Field;
+  selected: string[];
+  onChange: (values: string[]) => void;
+  getOptions: (fieldKey: string) => Promise<string[]>;
+  ml: (v: unknown) => string;
+  t: (key: string, def: string) => string;
+  userNames: Map<number, string>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [options, setOptions] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [optSearch, setOptSearch] = useState("");
+
+  const labelFor = (v: string): string => {
+    if (field.fieldType === "user") return userNames.get(Number(v)) ?? `#${v}`;
+    if (field.fieldType === "boolean") return v === "true" ? t("common.yes", "Да") : t("common.no", "Нет");
+    return v;
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setLoading(true);
+    getOptions(field.fieldKey)
+      .then((vals) => { if (!cancelled) setOptions(vals); })
+      .catch(() => { if (!cancelled) setOptions([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, getOptions, field.fieldKey]);
+
+  const toggle = (v: string) =>
+    onChange(selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]);
+
+  const q = optSearch.toLowerCase();
+  const filtered = options.filter((v) => labelFor(v).toLowerCase().includes(q));
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={`h-9 gap-1.5 text-sm ${selected.length > 0 ? "border-blue-400 text-blue-700" : ""}`}
+        >
+          {ml(field.nameJson)}
+          {selected.length > 0 && (
+            <Badge variant="secondary" className="ml-0.5 px-1.5">{selected.length}</Badge>
+          )}
+          <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-64 p-0">
+        <div className="p-2 border-b border-slate-100">
+          <Input
+            value={optSearch}
+            onChange={(e) => setOptSearch(e.target.value)}
+            placeholder={t("records.filterSearchValues", "Поиск значений…")}
+            className="h-8 text-sm"
+          />
+        </div>
+        <ScrollArea className="max-h-64">
+          <div className="p-1">
+            {loading ? (
+              <div className="flex items-center justify-center py-6 text-slate-400">
+                <Loader2 className="w-4 h-4 animate-spin" />
+              </div>
+            ) : filtered.length === 0 ? (
+              <p className="px-2 py-4 text-center text-xs text-slate-400">
+                {t("records.filterNoValues", "Нет значений")}
+              </p>
+            ) : (
+              filtered.map((v) => (
+                <label
+                  key={v}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 cursor-pointer text-sm"
+                >
+                  <Checkbox checked={selected.includes(v)} onCheckedChange={() => toggle(v)} />
+                  <span className="truncate">{labelFor(v)}</span>
+                </label>
+              ))
+            )}
+          </div>
+        </ScrollArea>
+        {selected.length > 0 && (
+          <div className="p-1.5 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="w-full h-7 text-xs text-slate-500"
+              onClick={() => onChange([])}
+            >
+              {t("records.filterClearField", "Очистить")}
+            </Button>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function EntityRecords({ entityId }: { entityId: number }) {
   const ml = useML();
   const t = useT();
@@ -178,6 +295,9 @@ export function EntityRecords({ entityId }: { entityId: number }) {
       currentRoleId == null ||
       f.permissionsJson?.[String(currentRoleId)] !== "hidden",
   );
+  // Fields opted-in to filtering (the "участвует в фильтре" flag), restricted to fields the
+  // role may see — a hidden field must never surface as a filter.
+  const filterableFields = visibleFormFields.filter((f: Field) => f.isFilterable);
   const statusById = new Map(statuses.map((s: Status) => [s.id, s]));
   const isSuperAdmin = user?.permissions?.superAdmin === true;
 
@@ -233,6 +353,8 @@ export function EntityRecords({ entityId }: { entityId: number }) {
   const [selectedViewId, setSelectedViewId] = useState<string>(NO_VIEW);
   const [search, setSearch] = useState("");
   const [archived, setArchived] = useState<ArchiveFilter>("active");
+  const [statusFilter, setStatusFilter] = useState<number[]>([]);
+  const [fieldFilters, setFieldFilters] = useState<Record<string, string[]>>({});
   const [page, setPage] = useState(1);
   const [records, setRecords] = useState<EntityRecord[]>([]);
   const [total, setTotal] = useState(0);
@@ -249,6 +371,8 @@ export function EntityRecords({ entityId }: { entityId: number }) {
     setSelectedViewId(NO_VIEW);
     setSearch("");
     setArchived("active");
+    setStatusFilter([]);
+    setFieldFilters({});
     setPage(1);
     setViewInitialized(false);
   }, [entityId]);
@@ -267,18 +391,81 @@ export function EntityRecords({ entityId }: { entityId: number }) {
   const queryMutation = useQueryEntityRecords();
   const runQuery = queryMutation.mutateAsync;
 
+  // Ad-hoc per-field filters (the opt-in "участвует в фильтре" dropdowns) combine with the
+  // view's saved filters as AND. Each picked field becomes an `in` condition.
+  const adHocFilters = useMemo(
+    () =>
+      Object.entries(fieldFilters)
+        .filter(([, vals]) => vals.length > 0)
+        .map(([field, vals]) => ({ field, operator: "in" as const, value: vals })),
+    [fieldFilters],
+  );
+  const adHocKey = JSON.stringify(adHocFilters);
+  const statusKey = JSON.stringify(statusFilter);
+
   const recordQuery: RecordQuery = useMemo(
     () => ({
-      filters: selectedConfig.filters ?? [],
+      filters: [...(selectedConfig.filters ?? []), ...adHocFilters],
       filterConjunction: selectedConfig.filterConjunction ?? "and",
+      statusIds: statusFilter.length > 0 ? statusFilter : undefined,
       sorts: selectedConfig.sorts ?? [],
       search: search.trim() || undefined,
       archived,
       page,
       pageSize: PAGE_SIZE,
     }),
-    [selectedConfig.filters, selectedConfig.filterConjunction, selectedConfig.sorts, search, archived, page],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedConfig.filters, selectedConfig.filterConjunction, selectedConfig.sorts, adHocKey, statusKey, search, archived, page],
   );
+
+  // Dependent filters: when fetching the option list for a field, we run a query against the
+  // records matching the OTHER active filters (this field's own picks excluded) so co-occurring
+  // values narrow each other (e.g. pick «Отдел» ⇒ «Сотрудник» lists only that department's staff).
+  const filterValuesMutation = useGetEntityFilterValues();
+  const fetchFilterOptions = filterValuesMutation.mutateAsync;
+  const getFilterOptions = useCallback(
+    async (fieldKey: string): Promise<string[]> => {
+      const others = adHocFilters.filter((c) => c.field !== fieldKey);
+      const res = await fetchFilterOptions({
+        entityId,
+        data: {
+          field: fieldKey,
+          filters: [...(selectedConfig.filters ?? []), ...others],
+          // Mirror the records query's conjunction so option lists stay consistent with the
+          // rows actually shown (a view may be configured with OR logic).
+          filterConjunction: selectedConfig.filterConjunction ?? "and",
+          statusIds: statusFilter.length > 0 ? statusFilter : undefined,
+          search: search.trim() || undefined,
+          archived,
+        },
+      });
+      return res.values ?? [];
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [entityId, adHocKey, statusKey, search, archived, selectedConfig.filters, selectedConfig.filterConjunction, fetchFilterOptions],
+  );
+
+  const setFieldFilter = useCallback((fieldKey: string, values: string[]) => {
+    setFieldFilters((prev) => {
+      const next = { ...prev };
+      if (values.length === 0) delete next[fieldKey];
+      else next[fieldKey] = values;
+      return next;
+    });
+    setPage(1);
+  }, []);
+
+  const toggleStatus = useCallback((id: number) => {
+    setStatusFilter((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    setPage(1);
+  }, []);
+
+  const hasActiveFilters = adHocFilters.length > 0 || statusFilter.length > 0;
+  const resetFilters = useCallback(() => {
+    setFieldFilters({});
+    setStatusFilter([]);
+    setPage(1);
+  }, []);
 
   const queryKey = JSON.stringify(recordQuery);
   useEffect(() => {
@@ -593,6 +780,83 @@ export function EntityRecords({ entityId }: { entityId: number }) {
           )}
         </div>
       </div>
+
+      {!setupMode && (statuses.length > 0 || filterableFields.length > 0) && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Filter className="w-4 h-4 text-slate-400 shrink-0" />
+          {statuses.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={`h-9 gap-1.5 text-sm ${statusFilter.length > 0 ? "border-blue-400 text-blue-700" : ""}`}
+                >
+                  {t("records.status", "Статус")}
+                  {statusFilter.length > 0 && (
+                    <Badge variant="secondary" className="ml-0.5 px-1.5">{statusFilter.length}</Badge>
+                  )}
+                  <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-56 p-0">
+                <ScrollArea className="max-h-64">
+                  <div className="p-1">
+                    {statuses.map((s: Status) => (
+                      <label
+                        key={s.id}
+                        className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 cursor-pointer text-sm"
+                      >
+                        <Checkbox checked={statusFilter.includes(s.id)} onCheckedChange={() => toggleStatus(s.id)} />
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: s.color }} />
+                        <span className="truncate">{ml(s.nameJson)}</span>
+                      </label>
+                    ))}
+                  </div>
+                </ScrollArea>
+                {statusFilter.length > 0 && (
+                  <div className="p-1.5 border-t border-slate-100">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="w-full h-7 text-xs text-slate-500"
+                      onClick={() => { setStatusFilter([]); setPage(1); }}
+                    >
+                      {t("records.filterClearField", "Очистить")}
+                    </Button>
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+          )}
+          {filterableFields.map((f: Field) => (
+            <FieldFilterPopover
+              key={f.id}
+              field={f}
+              selected={fieldFilters[f.fieldKey] ?? []}
+              onChange={(vals) => setFieldFilter(f.fieldKey, vals)}
+              getOptions={getFilterOptions}
+              ml={ml}
+              t={t}
+              userNames={userNames}
+            />
+          ))}
+          {hasActiveFilters && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-9 gap-1 text-slate-500"
+              onClick={resetFilters}
+            >
+              <X className="w-3.5 h-3.5" />
+              {t("records.filterReset", "Сбросить фильтры")}
+            </Button>
+          )}
+        </div>
+      )}
 
       {setupMode && (
         <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">

@@ -1305,6 +1305,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/RecordQueryResult"
 
+  /entities/{entityId}/records/filter-values:
+    post:
+      operationId: getEntityFilterValues
+      tags: [records]
+      summary: Distinct values of a filterable field among records matching the other active filters
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FilterValuesQuery"
+      responses:
+        "200":
+          description: Distinct values
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FilterValuesResult"
+
   # RELATIONS
   /entities/{entityId}/relations:
     get:
@@ -2429,6 +2454,8 @@ components:
             type: string
         permissionsJson:
           $ref: "#/components/schemas/FieldPermissions"
+        isFilterable:
+          type: boolean
         sortOrder:
           type: integer
         isActive:
@@ -2463,6 +2490,9 @@ components:
             type: string
         permissionsJson:
           $ref: "#/components/schemas/FieldPermissions"
+        isFilterable:
+          type: boolean
+          default: false
         sortOrder:
           type: integer
         isActive:
@@ -2507,6 +2537,8 @@ components:
             type: string
         permissionsJson:
           $ref: "#/components/schemas/FieldPermissions"
+        isFilterable:
+          type: boolean
         sortOrder:
           type: integer
         isActive:
@@ -2915,6 +2947,10 @@ components:
           type: string
           enum: [and, or]
           default: and
+        statusIds:
+          type: array
+          items:
+            type: integer
         sorts:
           type: array
           items:
@@ -2943,6 +2979,38 @@ components:
             $ref: "#/components/schemas/EntityRecord"
         total:
           type: integer
+
+    FilterValuesQuery:
+      type: object
+      required: [field]
+      properties:
+        field:
+          type: string
+        filters:
+          type: array
+          items:
+            $ref: "#/components/schemas/FilterCondition"
+        filterConjunction:
+          type: string
+          enum: [and, or]
+          default: and
+        statusIds:
+          type: array
+          items:
+            type: integer
+        search:
+          type: string
+        archived:
+          $ref: "#/components/schemas/ArchiveFilter"
+
+    FilterValuesResult:
+      type: object
+      required: [values]
+      properties:
+        values:
+          type: array
+          items:
+            type: string
 
     # RELATIONS
     RelationType:

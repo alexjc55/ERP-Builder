@@ -479,6 +479,7 @@ export interface Field {
   defaultValue?: string | null;
   optionsJson: string[];
   permissionsJson?: FieldPermissions;
+  isFilterable?: boolean;
   sortOrder: number;
   isActive: boolean;
   createdAt: string;
@@ -495,6 +496,7 @@ export interface FieldInput {
   defaultValue?: string | null;
   optionsJson?: string[];
   permissionsJson?: FieldPermissions;
+  isFilterable?: boolean;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -519,6 +521,7 @@ export interface FieldUpdate {
   defaultValue?: string | null;
   optionsJson?: string[];
   permissionsJson?: FieldPermissions;
+  isFilterable?: boolean;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -769,6 +772,7 @@ export const RecordQueryFilterConjunction = {
 export interface RecordQuery {
   filters?: FilterCondition[];
   filterConjunction?: RecordQueryFilterConjunction;
+  statusIds?: number[];
   sorts?: SortSpec[];
   search?: string;
   archived?: ArchiveFilter;
@@ -784,6 +788,27 @@ export interface RecordQuery {
 export interface RecordQueryResult {
   data: EntityRecord[];
   total: number;
+}
+
+export type FilterValuesQueryFilterConjunction = typeof FilterValuesQueryFilterConjunction[keyof typeof FilterValuesQueryFilterConjunction];
+
+
+export const FilterValuesQueryFilterConjunction = {
+  and: 'and',
+  or: 'or',
+} as const;
+
+export interface FilterValuesQuery {
+  field: string;
+  filters?: FilterCondition[];
+  filterConjunction?: FilterValuesQueryFilterConjunction;
+  statusIds?: number[];
+  search?: string;
+  archived?: ArchiveFilter;
+}
+
+export interface FilterValuesResult {
+  values: string[];
 }
 
 export type RelationType = typeof RelationType[keyof typeof RelationType];
