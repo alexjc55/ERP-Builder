@@ -1,2 +1,16 @@
-- [Editable records table](editable-records-table.md) — EntityRecords supports inline cell/add-row/setup-mode; inline status edits must mirror the per-row server workflow boundary, not a heuristic.
+- [ERP platform core](erp-platform-core.md) — key foundational decisions for the metadata-driven Production ERP Builder (contract-first, metadata-driven, multilingual JSONB, custom JWT).
+- [Admin-cap stage pattern](admin-cap-stage-pattern.md) — repeatable recipe for a new admin area: RBAC cap + OpenAPI CRUD + gated route + DB-backed i18n screen.
+- [RBAC permissions](rbac-permissions.md) — how role `permissionsJson` is structured, enforced server-side, and mirrored cosmetically in the UI.
+- [Field & row permissions](erp-field-row-permissions.md) — per-field hidden/view/edit + per-row all/own scope; the boundary decisions that must stay consistent across server and client.
+- [Display-only hide](erp-display-only-hide.md) — when a UI-only column hide is applied even to superAdmin while the server keeps super's full access; the two must not be conflated.
+- [Audit field security](audit-field-security.md) — any endpoint returning historical/raw stored values must re-apply the field-hidden boundary; record-level gating is not enough.
+- [Workflow engine](workflow-engine.md) — status transitions built on entity_statuses; compare-and-set concurrency rule on the records update path.
+- [Archive engine](archive-engine.md) — archival as a flag + lazy sweep; the one column that makes manual unarchive durable.
+- [Relations engine](relations-engine.md) — entity relations + record links: DB-enforced cardinality, Drizzle error wrapping, concurrency lock.
+- [Record views & query](record-views-query.md) — why the records query endpoint is POST, how the frontend consumes it, the per-entity bootstrap-reset rule.
 - [Dependent record filters](dependent-filters.md) — isFilterable opt-in + status quick-filter + dependent option lists; SELECT DISTINCT must order by ordinal (reused sql frag re-binds params).
+- [Editable records table](editable-records-table.md) — inline cell/add-row/setup-mode constraints; inline status edits must mirror the per-row server workflow boundary, not a heuristic.
+- [Event system](event-system.md) — internal best-effort event bus design, the 5 core events, foundation for automations/modules.
+- [Impersonation](erp-impersonation.md) — impersonation modeled on the custom JWT; boundary/no-escalation rules that must stay consistent.
+- [ERP i18n](erp-i18n.md) — how erp-platform i18n is wired and how to keep translation seeding complete.
+- [Orval param collision](orval-param-collision.md) — why adding a query param to a path-param GET breaks api-zod codegen, and how to avoid it.
