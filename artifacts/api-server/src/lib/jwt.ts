@@ -5,6 +5,8 @@ const SECRET = process.env.SESSION_SECRET ?? "dev-secret-change-in-production";
 export interface JwtPayload {
   userId: number;
   roleId: number;
+  /** Set when this token was issued via impersonation; the original admin's user id. */
+  impersonatorId?: number;
 }
 
 export function signToken(payload: JwtPayload): string {

@@ -80,6 +80,14 @@ export interface RolePermissions {
   records: RolePermissionsRecords;
 }
 
+/**
+ * @nullable
+ */
+export type UserProfileImpersonator = {
+  id?: number;
+  name?: string;
+} | null;
+
 export interface UserProfile {
   id: number;
   email: string;
@@ -93,6 +101,8 @@ export interface UserProfile {
   startPageId?: number | null;
   isActive: boolean;
   permissions?: RolePermissions;
+  /** @nullable */
+  impersonator?: UserProfileImpersonator;
 }
 
 export interface AuthResult {
@@ -103,6 +113,10 @@ export interface AuthResult {
 export interface UserOption {
   id: number;
   name: string;
+}
+
+export interface ImpersonateInput {
+  userId: number;
 }
 
 export interface ChangePasswordInput {

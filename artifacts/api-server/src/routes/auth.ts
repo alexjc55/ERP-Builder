@@ -4,14 +4,34 @@ import { db, usersTable, rolesTable, loginHistoryTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { signToken } from "../lib/jwt";
 import { requireAuth } from "../middlewares/auth";
-import { loadPermissions } from "../middlewares/permissions";
+import { loadPermissions, getPermissions } from "../middlewares/permissions";
 import {
   LoginBody,
   ChangePasswordBody,
   UpdateMeBody,
+  ImpersonateBody,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+
+/** Resolve the original admin behind an impersonation token, for display. */
+async function resolveImpersonator(
+  impersonatorId: number | undefined,
+): Promise<{ id: number; name: string } | null> {
+  if (!impersonatorId) return null;
+  const [u] = await db
+    .select({
+      id: usersTable.id,
+      firstName: usersTable.firstName,
+      lastName: usersTable.lastName,
+      email: usersTable.email,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.id, impersonatorId));
+  if (!u) return null;
+  const name = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || u.email;
+  return { id: u.id, name };
+}
 
 router.post("/auth/login", async (req, res): Promise<void> => {
   const parsed = LoginBody.safeParse(req.body);
@@ -116,6 +136,7 @@ router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
     .where(eq(rolesTable.id, user.roleId));
 
   const permissions = await loadPermissions(user.roleId);
+  const impersonator = await resolveImpersonator(req.user!.impersonatorId);
 
   res.json({
     id: user.id,
@@ -129,6 +150,7 @@ router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
     startPageId: user.startPageId,
     isActive: user.isActive,
     permissions,
+    impersonator,
   });
 });
 
@@ -177,6 +199,7 @@ router.put("/auth/me", requireAuth, async (req, res): Promise<void> => {
     .where(eq(rolesTable.id, user.roleId));
 
   const permissions = await loadPermissions(user.roleId);
+  const impersonator = await resolveImpersonator(req.user!.impersonatorId);
 
   res.json({
     id: user.id,
@@ -190,6 +213,7 @@ router.put("/auth/me", requireAuth, async (req, res): Promise<void> => {
     startPageId: user.startPageId,
     isActive: user.isActive,
     permissions,
+    impersonator,
   });
 });
 
@@ -225,6 +249,140 @@ router.post("/auth/change-password", requireAuth, async (req, res): Promise<void
     .where(eq(usersTable.id, req.user!.userId));
 
   res.json({ success: true, message: "Password changed" });
+});
+
+router.post("/auth/impersonate", requireAuth, async (req, res): Promise<void> => {
+  const parsed = ImpersonateBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  // Gate: only superAdmin or the "users" admin capability may impersonate.
+  const actorPerms = await getPermissions(req);
+  if (!actorPerms.superAdmin && !actorPerms.admin.users) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const targetId = parsed.data.userId;
+
+  const [target] = await db
+    .select({
+      id: usersTable.id,
+      email: usersTable.email,
+      firstName: usersTable.firstName,
+      lastName: usersTable.lastName,
+      roleId: usersTable.roleId,
+      language: usersTable.language,
+      direction: usersTable.direction,
+      startPageId: usersTable.startPageId,
+      isActive: usersTable.isActive,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.id, targetId));
+
+  if (!target) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  const targetPerms = await loadPermissions(target.roleId);
+  // No privilege escalation: a non-super admin cannot impersonate a superAdmin.
+  if (!actorPerms.superAdmin && targetPerms.superAdmin) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  // Preserve the original admin across nested impersonation so "stop" always
+  // returns to the real admin, not an intermediate impersonated user.
+  const originalAdminId = req.user!.impersonatorId ?? req.user!.userId;
+
+  const token = signToken({
+    userId: target.id,
+    roleId: target.roleId,
+    impersonatorId: originalAdminId,
+  });
+
+  const [role] = await db
+    .select({ nameJson: rolesTable.nameJson })
+    .from(rolesTable)
+    .where(eq(rolesTable.id, target.roleId));
+
+  const impersonator = await resolveImpersonator(originalAdminId);
+
+  res.json({
+    token,
+    user: {
+      id: target.id,
+      email: target.email,
+      firstName: target.firstName,
+      lastName: target.lastName,
+      roleId: target.roleId,
+      roleName: role?.nameJson ?? {},
+      language: target.language,
+      direction: target.direction,
+      startPageId: target.startPageId,
+      isActive: target.isActive,
+      permissions: targetPerms,
+      impersonator,
+    },
+  });
+});
+
+router.post("/auth/stop-impersonation", requireAuth, async (req, res): Promise<void> => {
+  const impersonatorId = req.user!.impersonatorId;
+  if (!impersonatorId) {
+    res.status(400).json({ error: "Not impersonating" });
+    return;
+  }
+
+  const [admin] = await db
+    .select({
+      id: usersTable.id,
+      email: usersTable.email,
+      firstName: usersTable.firstName,
+      lastName: usersTable.lastName,
+      roleId: usersTable.roleId,
+      language: usersTable.language,
+      direction: usersTable.direction,
+      startPageId: usersTable.startPageId,
+      isActive: usersTable.isActive,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.id, impersonatorId));
+
+  if (!admin) {
+    res.status(401).json({ error: "Original account not found" });
+    return;
+  }
+
+  const token = signToken({ userId: admin.id, roleId: admin.roleId });
+
+  const [role] = await db
+    .select({ nameJson: rolesTable.nameJson })
+    .from(rolesTable)
+    .where(eq(rolesTable.id, admin.roleId));
+
+  const permissions = await loadPermissions(admin.roleId);
+
+  res.json({
+    token,
+    user: {
+      id: admin.id,
+      email: admin.email,
+      firstName: admin.firstName,
+      lastName: admin.lastName,
+      roleId: admin.roleId,
+      roleName: role?.nameJson ?? {},
+      language: admin.language,
+      direction: admin.direction,
+      startPageId: admin.startPageId,
+      isActive: admin.isActive,
+      permissions,
+      impersonator: null,
+    },
+  });
 });
 
 export default router;

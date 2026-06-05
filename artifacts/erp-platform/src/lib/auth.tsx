@@ -1,5 +1,12 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { useGetMe, getGetMeQueryKey, setAuthTokenGetter } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useGetMe,
+  getGetMeQueryKey,
+  setAuthTokenGetter,
+  impersonate as apiImpersonate,
+  stopImpersonation as apiStopImpersonation,
+} from "@workspace/api-client-react";
 import type { UserProfile, RolePermissions, RoleAdminCaps, FieldAccess, FieldPermissions } from "@workspace/api-client-react";
 
 type RecordAction = "view" | "create" | "update" | "delete";
@@ -16,12 +23,17 @@ interface AuthContextType {
   canPage: (pageId: number) => boolean;
   /** Resolve the current user's access to a field; mirrors the server boundary. */
   fieldAccess: (field: { permissionsJson?: FieldPermissions | null }, entityId: number) => FieldAccess;
+  /** Start acting as another user (admin only). */
+  impersonate: (userId: number) => Promise<void>;
+  /** Return to the original admin account. */
+  stopImpersonation: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(localStorage.getItem("erp_token"));
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     setAuthTokenGetter(() => localStorage.getItem("erp_token"));
@@ -44,6 +56,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const handleLogout = () => {
     localStorage.removeItem("erp_token");
     setToken(null);
+  };
+
+  // Switching identity: swap the token and drop all cached data so every query
+  // refetches under the new user (different permissions / scoped rows).
+  const switchIdentity = async (newToken: string) => {
+    localStorage.setItem("erp_token", newToken);
+    queryClient.clear();
+    setToken(newToken);
+    await refetch();
+  };
+
+  const handleImpersonate = async (userId: number) => {
+    const res = await apiImpersonate({ userId });
+    await switchIdentity(res.token);
+  };
+
+  const handleStopImpersonation = async () => {
+    const res = await apiStopImpersonation();
+    await switchIdentity(res.token);
   };
 
   const permissions = user?.permissions ?? null;
@@ -83,6 +114,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         canRecord,
         canPage,
         fieldAccess,
+        impersonate: handleImpersonate,
+        stopImpersonation: handleStopImpersonation,
       }}
     >
       {children}

@@ -34,6 +34,7 @@ import type {
   FieldUpdate,
   FieldsReorderInput,
   HealthStatus,
+  ImpersonateInput,
   LinkInput,
   LinkedRecord,
   ListUsersParams,
@@ -455,6 +456,147 @@ export const useUpdateMe = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getUpdateMeMutationOptions(options));
+    }
+
+export const getImpersonateUrl = () => {
+
+
+
+
+  return `/api/auth/impersonate`
+}
+
+/**
+ * @summary Log in as another user (admin only)
+ */
+export const impersonate = async (impersonateInput: ImpersonateInput, options?: RequestInit): Promise<AuthResult> => {
+
+  return customFetch<AuthResult>(getImpersonateUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      impersonateInput,)
+  }
+);}
+
+
+
+
+export const getImpersonateMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof impersonate>>, TError,{data: BodyType<ImpersonateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof impersonate>>, TError,{data: BodyType<ImpersonateInput>}, TContext> => {
+
+const mutationKey = ['impersonate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof impersonate>>, {data: BodyType<ImpersonateInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  impersonate(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImpersonateMutationResult = NonNullable<Awaited<ReturnType<typeof impersonate>>>
+    export type ImpersonateMutationBody = BodyType<ImpersonateInput>
+    export type ImpersonateMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Log in as another user (admin only)
+ */
+export const useImpersonate = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof impersonate>>, TError,{data: BodyType<ImpersonateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof impersonate>>,
+        TError,
+        {data: BodyType<ImpersonateInput>},
+        TContext
+      > => {
+      return useMutation(getImpersonateMutationOptions(options));
+    }
+
+export const getStopImpersonationUrl = () => {
+
+
+
+
+  return `/api/auth/stop-impersonation`
+}
+
+/**
+ * @summary Stop impersonating and return to the original admin account
+ */
+export const stopImpersonation = async ( options?: RequestInit): Promise<AuthResult> => {
+
+  return customFetch<AuthResult>(getStopImpersonationUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getStopImpersonationMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopImpersonation>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof stopImpersonation>>, TError,void, TContext> => {
+
+const mutationKey = ['stopImpersonation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof stopImpersonation>>, void> = () => {
+
+
+          return  stopImpersonation(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StopImpersonationMutationResult = NonNullable<Awaited<ReturnType<typeof stopImpersonation>>>
+
+    export type StopImpersonationMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Stop impersonating and return to the original admin account
+ */
+export const useStopImpersonation = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopImpersonation>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof stopImpersonation>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getStopImpersonationMutationOptions(options));
     }
 
 export const getChangePasswordUrl = () => {

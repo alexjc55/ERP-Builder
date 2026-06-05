@@ -120,6 +120,56 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /auth/impersonate:
+    post:
+      operationId: impersonate
+      tags: [auth]
+      summary: Log in as another user (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImpersonateInput"
+      responses:
+        "200":
+          description: Impersonation token for the target user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResult"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/stop-impersonation:
+    post:
+      operationId: stopImpersonation
+      tags: [auth]
+      summary: Stop impersonating and return to the original admin account
+      responses:
+        "200":
+          description: Token for the original admin account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResult"
+        "400":
+          description: Not impersonating
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /auth/change-password:
     post:
       operationId: changePassword
@@ -1677,6 +1727,20 @@ components:
           type: boolean
         permissions:
           $ref: "#/components/schemas/RolePermissions"
+        impersonator:
+          type: ["object", "null"]
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+
+    ImpersonateInput:
+      type: object
+      required: [userId]
+      properties:
+        userId:
+          type: integer
 
     ChangePasswordInput:
       type: object

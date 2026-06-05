@@ -47,9 +47,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  Search, UserPlus, Pencil, Trash2, Ban, CheckCircle, Key, Loader2
+  Search, UserPlus, Pencil, Trash2, Ban, CheckCircle, Key, Loader2, LogIn
 } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth";
 
 const LANG_LABELS: Record<string, string> = { ru: "RU", en: "EN", he: "HE" };
 
@@ -89,8 +90,15 @@ export default function UsersPage() {
     direction: UserInputDirection.ltr,
   });
 
+  const { user: currentUser, isSuperAdmin, canAdmin, impersonate } = useAuth();
+  const canImpersonate = isSuperAdmin || canAdmin("users");
+
   const { data: usersResult, isLoading } = useListUsers({ search: search || undefined });
   const { data: roles = [] } = useListRoles();
+
+  const superRoleIds = new Set(roles.filter((r) => r.permissionsJson?.superAdmin).map((r) => r.id));
+  const canImpersonateUser = (u: User) =>
+    canImpersonate && u.id !== currentUser?.id && (isSuperAdmin || !superRoleIds.has(u.roleId));
 
   const users: User[] = Array.isArray(usersResult)
     ? usersResult
@@ -258,6 +266,24 @@ export default function UsersPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
+                          {canImpersonateUser(user) && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-blue-600"
+                              title={t("users.impersonate", "Войти под пользователем")}
+                              onClick={() => {
+                                impersonate(user.id).catch(() =>
+                                  toast({
+                                    title: t("users.impersonateError", "Не удалось войти под пользователем"),
+                                    variant: "destructive",
+                                  })
+                                );
+                              }}
+                            >
+                              <LogIn className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(user)}>
                             <Pencil className="w-3.5 h-3.5" />
                           </Button>

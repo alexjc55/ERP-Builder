@@ -204,7 +204,7 @@ export default function EntityFieldsPage() {
 
   const isPending = createMutation.isPending || updateMutation.isPending;
   const sorted = [...fields].sort((a: Field, b: Field) => a.sortOrder - b.sortOrder);
-  const assignableRoles = roles.filter((r: Role) => !r.permissionsJson?.superAdmin);
+  const assignableRoles = roles;
 
   return (
     <div className="p-6 space-y-6">

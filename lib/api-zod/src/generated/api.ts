@@ -59,7 +59,11 @@ export const LoginResponse = zod.object({
   "scope": zod.enum(['all', 'own']).optional(),
   "scopeFieldKeys": zod.array(zod.string()).optional()
 }))
-}).optional()
+}).optional(),
+  "impersonator": zod.object({
+  "id": zod.number().optional(),
+  "name": zod.string().optional()
+}).nullish()
 })
 })
 
@@ -109,7 +113,11 @@ export const GetMeResponse = zod.object({
   "scope": zod.enum(['all', 'own']).optional(),
   "scopeFieldKeys": zod.array(zod.string()).optional()
 }))
-}).optional()
+}).optional(),
+  "impersonator": zod.object({
+  "id": zod.number().optional(),
+  "name": zod.string().optional()
+}).nullish()
 })
 
 
@@ -155,7 +163,109 @@ export const UpdateMeResponse = zod.object({
   "scope": zod.enum(['all', 'own']).optional(),
   "scopeFieldKeys": zod.array(zod.string()).optional()
 }))
-}).optional()
+}).optional(),
+  "impersonator": zod.object({
+  "id": zod.number().optional(),
+  "name": zod.string().optional()
+}).nullish()
+})
+
+
+/**
+ * @summary Log in as another user (admin only)
+ */
+export const ImpersonateBody = zod.object({
+  "userId": zod.number()
+})
+
+export const ImpersonateResponse = zod.object({
+  "token": zod.string(),
+  "user": zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "roleId": zod.number(),
+  "roleName": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "language": zod.enum(['ru', 'en', 'he']),
+  "direction": zod.enum(['ltr', 'rtl']),
+  "startPageId": zod.number().nullish(),
+  "isActive": zod.boolean(),
+  "permissions": zod.object({
+  "superAdmin": zod.boolean(),
+  "admin": zod.object({
+  "pages": zod.boolean(),
+  "entities": zod.boolean(),
+  "roles": zod.boolean(),
+  "users": zod.boolean(),
+  "translations": zod.boolean()
+}),
+  "pageIds": zod.array(zod.number()),
+  "records": zod.record(zod.string(), zod.object({
+  "view": zod.boolean(),
+  "create": zod.boolean(),
+  "update": zod.boolean(),
+  "delete": zod.boolean(),
+  "scope": zod.enum(['all', 'own']).optional(),
+  "scopeFieldKeys": zod.array(zod.string()).optional()
+}))
+}).optional(),
+  "impersonator": zod.object({
+  "id": zod.number().optional(),
+  "name": zod.string().optional()
+}).nullish()
+})
+})
+
+
+/**
+ * @summary Stop impersonating and return to the original admin account
+ */
+export const StopImpersonationResponse = zod.object({
+  "token": zod.string(),
+  "user": zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "roleId": zod.number(),
+  "roleName": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "language": zod.enum(['ru', 'en', 'he']),
+  "direction": zod.enum(['ltr', 'rtl']),
+  "startPageId": zod.number().nullish(),
+  "isActive": zod.boolean(),
+  "permissions": zod.object({
+  "superAdmin": zod.boolean(),
+  "admin": zod.object({
+  "pages": zod.boolean(),
+  "entities": zod.boolean(),
+  "roles": zod.boolean(),
+  "users": zod.boolean(),
+  "translations": zod.boolean()
+}),
+  "pageIds": zod.array(zod.number()),
+  "records": zod.record(zod.string(), zod.object({
+  "view": zod.boolean(),
+  "create": zod.boolean(),
+  "update": zod.boolean(),
+  "delete": zod.boolean(),
+  "scope": zod.enum(['all', 'own']).optional(),
+  "scopeFieldKeys": zod.array(zod.string()).optional()
+}))
+}).optional(),
+  "impersonator": zod.object({
+  "id": zod.number().optional(),
+  "name": zod.string().optional()
+}).nullish()
+})
 })
 
 

@@ -7,7 +7,7 @@ import { useLocation, Link } from "wouter";
 import {
   Building2, LayoutDashboard, Users, Shield, Layout as LayoutIcon,
   Languages, Settings, LogOut, ChevronDown, ChevronRight,
-  Menu, X, Database, Table, Check
+  Menu, X, Database, Table, Check, UserCog
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -96,7 +96,7 @@ function SidebarItem({
 }
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const { user, logout, isSuperAdmin, canAdmin, canPage } = useAuth();
+  const { user, logout, isSuperAdmin, canAdmin, canPage, stopImpersonation } = useAuth();
   const ml = useML();
   const t = useT();
   const { lang, setLang } = useLang();
@@ -234,6 +234,25 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       )}
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {user?.impersonator && (
+          <div className="flex items-center justify-between gap-3 px-4 py-2 bg-amber-100 border-b border-amber-300 text-sm text-amber-900">
+            <span className="flex items-center gap-2 min-w-0">
+              <UserCog className="w-4 h-4 shrink-0" />
+              <span className="truncate">
+                {t("layout.impersonating", "Вы вошли как")}{" "}
+                <strong>{user.firstName} {user.lastName}</strong>
+              </span>
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 shrink-0 border-amber-400 bg-white hover:bg-amber-50"
+              onClick={() => { void stopImpersonation(); }}
+            >
+              {t("layout.stopImpersonation", "Вернуться к")} {user.impersonator.name}
+            </Button>
+          </div>
+        )}
         <header className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-slate-200">
           <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)}>
             {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}

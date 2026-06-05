@@ -166,6 +166,15 @@ export function EntityRecords({ entityId }: { entityId: number }) {
     .sort((a: Field, b: Field) => a.sortOrder - b.sortOrder);
   // Fields the current user is allowed to see (not hidden by field-level perms).
   const visibleFormFields = fields.filter((f: Field) => fieldAccess(f, entityId) !== "hidden");
+  // Columns shown in the records table. A field explicitly marked "hidden" for the
+  // current role drops its whole column even for a superAdmin (display-only — the
+  // field stays editable in the record dialog and the server bypass is unchanged).
+  const currentRoleId = user?.roleId;
+  const tableFields = visibleFormFields.filter(
+    (f: Field) =>
+      currentRoleId == null ||
+      f.permissionsJson?.[String(currentRoleId)] !== "hidden",
+  );
   const statusById = new Map(statuses.map((s: Status) => [s.id, s]));
   const isSuperAdmin = user?.permissions?.superAdmin === true;
 
@@ -358,9 +367,9 @@ export function EntityRecords({ entityId }: { entityId: number }) {
   const displayFields =
     visibleFields && visibleFields.length > 0
       ? (visibleFields
-          .map((key) => visibleFormFields.find((f: Field) => f.fieldKey === key))
+          .map((key) => tableFields.find((f: Field) => f.fieldKey === key))
           .filter((f): f is Field => Boolean(f)))
-      : visibleFormFields.slice(0, 5);
+      : tableFields.slice(0, 5);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   if (!canView) {

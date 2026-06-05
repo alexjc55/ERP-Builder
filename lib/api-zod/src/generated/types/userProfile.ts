@@ -8,6 +8,7 @@
 import type { MultilingualText } from './multilingualText';
 import type { RolePermissions } from './rolePermissions';
 import type { UserProfileDirection } from './userProfileDirection';
+import type { UserProfileImpersonator } from './userProfileImpersonator';
 import type { UserProfileLanguage } from './userProfileLanguage';
 
 export interface UserProfile {
@@ -23,4 +24,6 @@ export interface UserProfile {
   startPageId?: number | null;
   isActive: boolean;
   permissions?: RolePermissions;
+  /** @nullable */
+  impersonator?: UserProfileImpersonator;
 }
