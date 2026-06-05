@@ -60,6 +60,12 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 _Populate as you build — sharp edges, "always run X before Y" rules._
 
+## Roadmap
+
+- Canonical 16-stage build order lives in `attached_assets/Pasted--Development-Roadmap-Production-ERP-Builder--1780595460_1780595460450.txt` (plus a Master Product Spec and Technical DB Architecture doc in the same folder).
+- Progress: stages 1–9 complete (Core Infra → Users/Roles → Pages → Entities → Fields → Records → Relations → Views → Permissions). **Next = Stage 10: Workflow Engine** (workflows, statuses, transitions, required-fields-per-transition, actions).
+- Remaining after that: 11 Archive, 12 Audit & History, 13 Localization, 14 Event System, 15 Modules Architecture, 16 Production ERP Configuration.
+
 ## Pointers
 
 - See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details

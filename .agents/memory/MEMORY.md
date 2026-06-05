@@ -1,1 +1,2 @@
+- [ERP build roadmap](roadmap.md) — canonical 16-stage order (source in attached_assets/); stages 1–9 done, next = Stage 10 Workflow Engine. Consult before answering "what's next".
 - [ERP field & row permissions](erp-field-row-permissions.md) — per-field hidden/view/edit + per-row all/own; server is hard boundary, client mirrors; hidden must be non-observable (strip all responses + visible-only query whitelist).
