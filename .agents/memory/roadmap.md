@@ -30,7 +30,7 @@ Stages, in strict order (each must be fully finished + tested before the next):
 16. Production ERP Configuration — assemble first real ERP (Проекты, Азманот, Изделия, Производители, Финансы, Архив; roles + workflow + perms + views)
 
 ## Current progress (as of 2026-06-05)
-Stages 1–9 complete. **Next = Stage 10: Workflow Engine.**
+Stages 1–10 complete. **Next = Stage 11: Archive Engine** (archive via status, not a separate table; auto + manual archival; display rules).
 Note: row-level + field-level permissions were briefly mislabeled "Этап 10" in a session
 plan, but per the roadmap they are levels 2–3 of Stage 9 (Permissions Engine).
 

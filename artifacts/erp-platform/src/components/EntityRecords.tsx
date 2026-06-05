@@ -6,6 +6,7 @@ import {
   useDeleteRecord,
   useListEntityFields,
   useListEntityStatuses,
+  useListEntityTransitions,
   useListEntityRelations,
   useListEntityViews,
   useQueryEntityRecords,
@@ -19,6 +20,7 @@ import {
   type Relation,
   type View,
   type ViewConfig,
+  type Transition,
   type RecordQuery,
   type LinkedRecord,
   type MultilingualText,
@@ -140,7 +142,7 @@ function renderCellValue(field: Field, value: unknown, userNames?: Map<number, s
 export function EntityRecords({ entityId }: { entityId: number }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { canRecord, fieldAccess } = useAuth();
+  const { canRecord, fieldAccess, user } = useAuth();
 
   const canView = canRecord(entityId, "view");
   const canCreate = canRecord(entityId, "create");
@@ -149,6 +151,7 @@ export function EntityRecords({ entityId }: { entityId: number }) {
 
   const { data: allFields = [], isLoading: fieldsLoading } = useListEntityFields(entityId);
   const { data: statuses = [] } = useListEntityStatuses(entityId);
+  const { data: transitions = [] } = useListEntityTransitions(entityId);
   const { data: views = [] } = useListEntityViews(entityId);
   const { data: userOptions = [] } = useListUserOptions();
 
@@ -163,12 +166,36 @@ export function EntityRecords({ entityId }: { entityId: number }) {
   // Fields the current user is allowed to see (not hidden by field-level perms).
   const visibleFormFields = fields.filter((f: Field) => fieldAccess(f, entityId) !== "hidden");
   const statusById = new Map(statuses.map((s: Status) => [s.id, s]));
+  const isSuperAdmin = user?.permissions?.superAdmin === true;
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<EntityRecord | null>(null);
   const [toDelete, setToDelete] = useState<EntityRecord | null>(null);
   const [form, setForm] = useState<FormState>({});
   const [statusId, setStatusId] = useState<string>(NO_STATUS);
+
+  // Statuses the user may move the record to, mirroring the server's workflow boundary.
+  // Free choice when: creating, no transitions defined, current status is null, or superAdmin.
+  // Otherwise: current status + targets of transitions allowed for the user's role.
+  const currentEditStatusId = editing?.statusId ?? null;
+  const workflowActive =
+    !!editing && transitions.length > 0 && currentEditStatusId != null && !isSuperAdmin;
+  const allowedStatusIds: Set<number> | null = workflowActive
+    ? new Set<number>([
+        currentEditStatusId as number,
+        ...transitions
+          .filter(
+            (t: Transition) =>
+              t.fromStatusId === currentEditStatusId &&
+              ((t.allowedRoleIds?.length ?? 0) === 0 ||
+                (user?.roleId != null && t.allowedRoleIds.includes(user.roleId))),
+          )
+          .map((t: Transition) => t.toStatusId),
+      ])
+    : null;
+  const selectableStatuses = allowedStatusIds
+    ? statuses.filter((s: Status) => allowedStatusIds.has(s.id))
+    : statuses;
 
   // View / filter / search / pagination state for the server-side query endpoint.
   const [selectedViewId, setSelectedViewId] = useState<string>(NO_VIEW);
@@ -555,14 +582,38 @@ export function EntityRecords({ entityId }: { entityId: number }) {
                     <SelectValue placeholder="Без статуса" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NO_STATUS}>Без статуса</SelectItem>
-                    {statuses.map((s: Status) => (
+                    {!workflowActive && <SelectItem value={NO_STATUS}>Без статуса</SelectItem>}
+                    {selectableStatuses.map((s: Status) => (
                       <SelectItem key={s.id} value={String(s.id)}>
                         {getML(s.nameJson)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {workflowActive && (
+                  <p className="text-xs text-slate-400">
+                    Доступны только разрешённые процессом переходы из текущего статуса.
+                  </p>
+                )}
+                {(() => {
+                  if (!workflowActive) return null;
+                  const targetId = statusId === NO_STATUS ? null : Number(statusId);
+                  if (targetId == null || targetId === currentEditStatusId) return null;
+                  const t = transitions.find(
+                    (tr: Transition) =>
+                      tr.fromStatusId === currentEditStatusId && tr.toStatusId === targetId,
+                  );
+                  const req = t?.requiredFieldKeys ?? [];
+                  if (req.length === 0) return null;
+                  return (
+                    <p className="text-xs text-amber-600">
+                      Для перехода нужно заполнить:{" "}
+                      {req
+                        .map((k) => getML(fields.find((f: Field) => f.fieldKey === k)?.nameJson) || k)
+                        .join(", ")}
+                    </p>
+                  );
+                })()}
               </div>
             )}
 

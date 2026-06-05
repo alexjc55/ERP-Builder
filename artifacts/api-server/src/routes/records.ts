@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable } from "@workspace/db";
+import { db, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable } from "@workspace/db";
 import { eq, asc, desc, and, or, sql, inArray, type SQL } from "drizzle-orm";
 import type { Request } from "express";
 import { requireAuth } from "../middlewares/auth";
@@ -488,11 +488,84 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
+  // Workflow enforcement: when an entity defines transitions, status changes on
+  // its records are restricted to the defined transitions (the server is the
+  // hard boundary; the client only mirrors this cosmetically). superAdmin
+  // bypasses the workflow entirely, consistent with RBAC. A record whose current
+  // status is null is not workflow-governed (no transition can originate from a
+  // null status), so it changes freely; entities with NO transitions are also
+  // free (backward compatible).
+  // When a workflow transition is enforced, the final UPDATE is guarded on the
+  // record's status still being the one we validated against (compare-and-set),
+  // so concurrent status-changing writes cannot bypass the transition graph.
+  let guardFromStatusId: number | null = null;
+  const statusChanging = hasStatus && (update.statusId ?? null) !== (existing.statusId ?? null);
+  if (statusChanging && existing.statusId != null && !perms.superAdmin) {
+    const transitions = await db
+      .select()
+      .from(entityTransitionsTable)
+      .where(eq(entityTransitionsTable.entityId, existing.entityId));
+    if (transitions.length > 0) {
+      guardFromStatusId = existing.statusId;
+      const match = transitions.find(
+        (t) => t.fromStatusId === existing.statusId && t.toStatusId === update.statusId,
+      );
+      if (!match) {
+        res.status(422).json({ error: "This status change is not an allowed transition" });
+        return;
+      }
+      const allowedRoleIds = (match.allowedRoleIds as number[]) ?? [];
+      if (allowedRoleIds.length > 0 && !allowedRoleIds.includes(req.user!.roleId)) {
+        res.status(403).json({ error: "Your role is not allowed to perform this transition" });
+        return;
+      }
+      const actions = (match.actionsJson as { type: string; fieldKey: string; value?: unknown }[]) ?? [];
+      const requiredKeys = (match.requiredFieldKeys as string[]) ?? [];
+      if (actions.length > 0 || requiredKeys.length > 0) {
+        const base: Record<string, unknown> =
+          update.valuesJson !== undefined ? { ...update.valuesJson } : { ...existingValues };
+        for (const a of actions) {
+          if (a.type === "set_field") base[a.fieldKey] = a.value;
+        }
+        if (actions.length > 0) {
+          const result = validateValues(fields, base);
+          if ("error" in result) {
+            res.status(400).json({ error: result.error });
+            return;
+          }
+          const userRefError = await validateUserRefs(fields, result.values);
+          if (userRefError) {
+            res.status(400).json({ error: userRefError });
+            return;
+          }
+          update.valuesJson = result.values;
+        }
+        const finalValues = update.valuesJson ?? base;
+        const missing = requiredKeys.filter((k) => isEmpty(finalValues[k]));
+        if (missing.length > 0) {
+          res.status(422).json({ error: `Fields required for this transition: ${missing.join(", ")}` });
+          return;
+        }
+      }
+    }
+  }
+
+  const whereClause =
+    guardFromStatusId != null
+      ? and(
+          eq(entityRecordsTable.id, params.data.id),
+          eq(entityRecordsTable.statusId, guardFromStatusId),
+        )
+      : eq(entityRecordsTable.id, params.data.id);
   const [record] = await db
     .update(entityRecordsTable)
     .set(update)
-    .where(eq(entityRecordsTable.id, params.data.id))
+    .where(whereClause)
     .returning();
+  if (!record) {
+    res.status(409).json({ error: "Record status changed concurrently; please retry" });
+    return;
+  }
   res.json(stripHidden(record, hidden));
 });
 

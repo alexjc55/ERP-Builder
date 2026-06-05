@@ -1068,6 +1068,158 @@ export const ReorderStatusesResponse = zod.object({
 
 
 /**
+ * @summary List workflow transitions for an entity
+ */
+export const ListEntityTransitionsParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const ListEntityTransitionsResponseItem = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "fromStatusId": zod.number(),
+  "toStatusId": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "allowedRoleIds": zod.array(zod.number()),
+  "requiredFieldKeys": zod.array(zod.string()),
+  "actionsJson": zod.array(zod.object({
+  "type": zod.enum(['set_field']),
+  "fieldKey": zod.string(),
+  "value": zod.unknown().optional()
+})),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListEntityTransitionsResponse = zod.array(ListEntityTransitionsResponseItem)
+
+
+/**
+ * @summary Create a workflow transition on an entity
+ */
+export const CreateEntityTransitionParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const createEntityTransitionBodyAllowedRoleIdsDefault = [];
+export const createEntityTransitionBodyRequiredFieldKeysDefault = [];
+export const createEntityTransitionBodyActionsJsonDefault = [];
+
+export const CreateEntityTransitionBody = zod.object({
+  "fromStatusId": zod.number(),
+  "toStatusId": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "allowedRoleIds": zod.array(zod.number()).default(createEntityTransitionBodyAllowedRoleIdsDefault),
+  "requiredFieldKeys": zod.array(zod.string()).default(createEntityTransitionBodyRequiredFieldKeysDefault),
+  "actionsJson": zod.array(zod.object({
+  "type": zod.enum(['set_field']),
+  "fieldKey": zod.string(),
+  "value": zod.unknown().optional()
+})).default(createEntityTransitionBodyActionsJsonDefault),
+  "sortOrder": zod.number().optional()
+})
+
+
+/**
+ * @summary Get transition by ID
+ */
+export const GetTransitionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetTransitionResponse = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "fromStatusId": zod.number(),
+  "toStatusId": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "allowedRoleIds": zod.array(zod.number()),
+  "requiredFieldKeys": zod.array(zod.string()),
+  "actionsJson": zod.array(zod.object({
+  "type": zod.enum(['set_field']),
+  "fieldKey": zod.string(),
+  "value": zod.unknown().optional()
+})),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update transition
+ */
+export const UpdateTransitionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateTransitionBody = zod.object({
+  "fromStatusId": zod.number().optional(),
+  "toStatusId": zod.number().optional(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "allowedRoleIds": zod.array(zod.number()).optional(),
+  "requiredFieldKeys": zod.array(zod.string()).optional(),
+  "actionsJson": zod.array(zod.object({
+  "type": zod.enum(['set_field']),
+  "fieldKey": zod.string(),
+  "value": zod.unknown().optional()
+})).optional(),
+  "sortOrder": zod.number().optional()
+})
+
+export const UpdateTransitionResponse = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "fromStatusId": zod.number(),
+  "toStatusId": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "allowedRoleIds": zod.array(zod.number()),
+  "requiredFieldKeys": zod.array(zod.string()),
+  "actionsJson": zod.array(zod.object({
+  "type": zod.enum(['set_field']),
+  "fieldKey": zod.string(),
+  "value": zod.unknown().optional()
+})),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete transition
+ */
+export const DeleteTransitionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteTransitionResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
  * @summary List records for an entity
  */
 export const ListEntityRecordsParams = zod.object({

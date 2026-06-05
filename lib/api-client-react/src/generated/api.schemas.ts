@@ -456,6 +456,53 @@ export interface StatusesReorderInput {
   items: StatusesReorderInputItemsItem[];
 }
 
+export type TransitionActionType = typeof TransitionActionType[keyof typeof TransitionActionType];
+
+
+export const TransitionActionType = {
+  set_field: 'set_field',
+} as const;
+
+export interface TransitionAction {
+  type: TransitionActionType;
+  fieldKey: string;
+  value?: unknown;
+}
+
+export interface Transition {
+  id: number;
+  entityId: number;
+  fromStatusId: number;
+  toStatusId: number;
+  nameJson: MultilingualText;
+  allowedRoleIds: number[];
+  requiredFieldKeys: string[];
+  actionsJson: TransitionAction[];
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TransitionInput {
+  fromStatusId: number;
+  toStatusId: number;
+  nameJson?: MultilingualText;
+  allowedRoleIds?: number[];
+  requiredFieldKeys?: string[];
+  actionsJson?: TransitionAction[];
+  sortOrder?: number;
+}
+
+export interface TransitionUpdate {
+  fromStatusId?: number;
+  toStatusId?: number;
+  nameJson?: MultilingualText;
+  allowedRoleIds?: number[];
+  requiredFieldKeys?: string[];
+  actionsJson?: TransitionAction[];
+  sortOrder?: number;
+}
+
 export type EntityRecordValuesJson = { [key: string]: unknown };
 
 export interface EntityRecord {

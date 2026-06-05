@@ -18,6 +18,8 @@ tags:
     description: Role management
   - name: pages
     description: Page and menu management
+  - name: transitions
+    description: Workflow transitions between statuses
   - name: translations
     description: System translations
   - name: dashboard
@@ -800,6 +802,110 @@ paths:
       responses:
         "200":
           description: Reordered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # TRANSITIONS (Workflow Engine)
+  /entities/{entityId}/transitions:
+    get:
+      operationId: listEntityTransitions
+      tags: [transitions]
+      summary: List workflow transitions for an entity
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of transitions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transition"
+    post:
+      operationId: createEntityTransition
+      tags: [transitions]
+      summary: Create a workflow transition on an entity
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransitionInput"
+      responses:
+        "201":
+          description: Transition created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transition"
+
+  /transitions/{id}:
+    get:
+      operationId: getTransition
+      tags: [transitions]
+      summary: Get transition by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Transition found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transition"
+    put:
+      operationId: updateTransition
+      tags: [transitions]
+      summary: Update transition
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransitionUpdate"
+      responses:
+        "200":
+          description: Transition updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transition"
+    delete:
+      operationId: deleteTransition
+      tags: [transitions]
+      summary: Delete transition
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
           content:
             application/json:
               schema:
@@ -2085,6 +2191,105 @@ components:
                 type: integer
               sortOrder:
                 type: integer
+
+    # TRANSITIONS (Workflow Engine)
+    TransitionAction:
+      type: object
+      required: [type, fieldKey]
+      properties:
+        type:
+          type: string
+          enum: [set_field]
+        fieldKey:
+          type: string
+        value: {}
+
+    Transition:
+      type: object
+      required: [id, entityId, fromStatusId, toStatusId, nameJson, allowedRoleIds, requiredFieldKeys, actionsJson, sortOrder, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        entityId:
+          type: integer
+        fromStatusId:
+          type: integer
+        toStatusId:
+          type: integer
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        allowedRoleIds:
+          type: array
+          items:
+            type: integer
+        requiredFieldKeys:
+          type: array
+          items:
+            type: string
+        actionsJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransitionAction"
+        sortOrder:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TransitionInput:
+      type: object
+      required: [fromStatusId, toStatusId]
+      properties:
+        fromStatusId:
+          type: integer
+        toStatusId:
+          type: integer
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        allowedRoleIds:
+          type: array
+          items:
+            type: integer
+          default: []
+        requiredFieldKeys:
+          type: array
+          items:
+            type: string
+          default: []
+        actionsJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransitionAction"
+          default: []
+        sortOrder:
+          type: integer
+
+    TransitionUpdate:
+      type: object
+      properties:
+        fromStatusId:
+          type: integer
+        toStatusId:
+          type: integer
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        allowedRoleIds:
+          type: array
+          items:
+            type: integer
+        requiredFieldKeys:
+          type: array
+          items:
+            type: string
+        actionsJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransitionAction"
+        sortOrder:
+          type: integer
 
     # RECORDS
     EntityRecord:

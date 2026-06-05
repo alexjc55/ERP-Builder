@@ -59,6 +59,9 @@ import type {
   StatusUpdate,
   StatusesReorderInput,
   SuccessResponse,
+  Transition,
+  TransitionInput,
+  TransitionUpdate,
   Translation,
   TranslationInput,
   TranslationUpdate,
@@ -2873,6 +2876,374 @@ export const useReorderStatuses = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getReorderStatusesMutationOptions(options));
+    }
+
+export const getListEntityTransitionsUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/transitions`
+}
+
+/**
+ * @summary List workflow transitions for an entity
+ */
+export const listEntityTransitions = async (entityId: number, options?: RequestInit): Promise<Transition[]> => {
+
+  return customFetch<Transition[]>(getListEntityTransitionsUrl(entityId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListEntityTransitionsQueryKey = (entityId: number,) => {
+    return [
+    `/api/entities/${entityId}/transitions`
+    ] as const;
+    }
+
+
+export const getListEntityTransitionsQueryOptions = <TData = Awaited<ReturnType<typeof listEntityTransitions>>, TError = ErrorType<unknown>>(entityId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEntityTransitions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListEntityTransitionsQueryKey(entityId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listEntityTransitions>>> = ({ signal }) => listEntityTransitions(entityId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(entityId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listEntityTransitions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListEntityTransitionsQueryResult = NonNullable<Awaited<ReturnType<typeof listEntityTransitions>>>
+export type ListEntityTransitionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List workflow transitions for an entity
+ */
+
+export function useListEntityTransitions<TData = Awaited<ReturnType<typeof listEntityTransitions>>, TError = ErrorType<unknown>>(
+ entityId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEntityTransitions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListEntityTransitionsQueryOptions(entityId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateEntityTransitionUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/transitions`
+}
+
+/**
+ * @summary Create a workflow transition on an entity
+ */
+export const createEntityTransition = async (entityId: number,
+    transitionInput: TransitionInput, options?: RequestInit): Promise<Transition> => {
+
+  return customFetch<Transition>(getCreateEntityTransitionUrl(entityId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      transitionInput,)
+  }
+);}
+
+
+
+
+export const getCreateEntityTransitionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEntityTransition>>, TError,{entityId: number;data: BodyType<TransitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createEntityTransition>>, TError,{entityId: number;data: BodyType<TransitionInput>}, TContext> => {
+
+const mutationKey = ['createEntityTransition'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createEntityTransition>>, {entityId: number;data: BodyType<TransitionInput>}> = (props) => {
+          const {entityId,data} = props ?? {};
+
+          return  createEntityTransition(entityId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateEntityTransitionMutationResult = NonNullable<Awaited<ReturnType<typeof createEntityTransition>>>
+    export type CreateEntityTransitionMutationBody = BodyType<TransitionInput>
+    export type CreateEntityTransitionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a workflow transition on an entity
+ */
+export const useCreateEntityTransition = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEntityTransition>>, TError,{entityId: number;data: BodyType<TransitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createEntityTransition>>,
+        TError,
+        {entityId: number;data: BodyType<TransitionInput>},
+        TContext
+      > => {
+      return useMutation(getCreateEntityTransitionMutationOptions(options));
+    }
+
+export const getGetTransitionUrl = (id: number,) => {
+
+
+
+
+  return `/api/transitions/${id}`
+}
+
+/**
+ * @summary Get transition by ID
+ */
+export const getTransition = async (id: number, options?: RequestInit): Promise<Transition> => {
+
+  return customFetch<Transition>(getGetTransitionUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTransitionQueryKey = (id: number,) => {
+    return [
+    `/api/transitions/${id}`
+    ] as const;
+    }
+
+
+export const getGetTransitionQueryOptions = <TData = Awaited<ReturnType<typeof getTransition>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTransition>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTransitionQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTransition>>> = ({ signal }) => getTransition(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTransition>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTransitionQueryResult = NonNullable<Awaited<ReturnType<typeof getTransition>>>
+export type GetTransitionQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get transition by ID
+ */
+
+export function useGetTransition<TData = Awaited<ReturnType<typeof getTransition>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTransition>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTransitionQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateTransitionUrl = (id: number,) => {
+
+
+
+
+  return `/api/transitions/${id}`
+}
+
+/**
+ * @summary Update transition
+ */
+export const updateTransition = async (id: number,
+    transitionUpdate: TransitionUpdate, options?: RequestInit): Promise<Transition> => {
+
+  return customFetch<Transition>(getUpdateTransitionUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      transitionUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateTransitionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTransition>>, TError,{id: number;data: BodyType<TransitionUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateTransition>>, TError,{id: number;data: BodyType<TransitionUpdate>}, TContext> => {
+
+const mutationKey = ['updateTransition'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateTransition>>, {id: number;data: BodyType<TransitionUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateTransition(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateTransitionMutationResult = NonNullable<Awaited<ReturnType<typeof updateTransition>>>
+    export type UpdateTransitionMutationBody = BodyType<TransitionUpdate>
+    export type UpdateTransitionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update transition
+ */
+export const useUpdateTransition = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTransition>>, TError,{id: number;data: BodyType<TransitionUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateTransition>>,
+        TError,
+        {id: number;data: BodyType<TransitionUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateTransitionMutationOptions(options));
+    }
+
+export const getDeleteTransitionUrl = (id: number,) => {
+
+
+
+
+  return `/api/transitions/${id}`
+}
+
+/**
+ * @summary Delete transition
+ */
+export const deleteTransition = async (id: number, options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getDeleteTransitionUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteTransitionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTransition>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTransition>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteTransition'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTransition>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteTransition(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTransitionMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTransition>>>
+
+    export type DeleteTransitionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete transition
+ */
+export const useDeleteTransition = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTransition>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTransition>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteTransitionMutationOptions(options));
     }
 
 export const getListEntityRecordsUrl = (entityId: number,) => {

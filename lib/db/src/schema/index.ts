@@ -12,3 +12,4 @@ export * from "./statuses";
 export * from "./records";
 export * from "./relations";
 export * from "./views";
+export * from "./transitions";

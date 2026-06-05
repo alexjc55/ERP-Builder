@@ -1,2 +1,3 @@
-- [ERP build roadmap](roadmap.md) — canonical 16-stage order (source in attached_assets/); stages 1–9 done, next = Stage 10 Workflow Engine. Consult before answering "what's next".
+- [ERP build roadmap](roadmap.md) — canonical 16-stage order (source in attached_assets/); stages 1–10 done, next = Stage 11 Archive Engine. Consult before answering "what's next".
 - [ERP field & row permissions](erp-field-row-permissions.md) — per-field hidden/view/edit + per-row all/own; server is hard boundary, client mirrors; hidden must be non-observable (strip all responses + visible-only query whitelist).
+- [ERP Workflow Engine](workflow-engine.md) — transitions built on entity_statuses (not a parallel table); server-enforced; record status update is compare-and-set (guard on old status, 409 on drift) to stop concurrent bypass.
