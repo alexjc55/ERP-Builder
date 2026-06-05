@@ -662,6 +662,76 @@ export function EntityRecords({ entityId }: { entityId: number }) {
                       </td>
                     </tr>
                   )}
+                  {canCreate && !setupMode && addingRow && (
+                    <tr className="border-b border-blue-100 bg-blue-50/40">
+                      {displayFields.map((f: Field) => {
+                        const editable = fieldAccess(f, entityId) === "edit";
+                        return (
+                          <td key={f.id} className="px-2 py-1.5 align-top max-w-[260px]">
+                            {editable ? (
+                              <FieldInput
+                                field={f}
+                                value={newRow[f.fieldKey]}
+                                onChange={(v) => setNewRow((prev) => ({ ...prev, [f.fieldKey]: v }))}
+                                userOptions={userOptions}
+                              />
+                            ) : (
+                              <span className="text-slate-300 text-xs">—</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                      {statuses.length > 0 && (
+                        <td className="px-2 py-1.5 align-top">
+                          <Select value={newRowStatus} onValueChange={setNewRowStatus}>
+                            <SelectTrigger className="h-8 w-44 text-sm"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
+                              {statuses.map((s: Status) => (
+                                <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                      )}
+                      <td className="px-2 py-1.5 align-top">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="icon"
+                            className="h-8 w-8 bg-blue-600 hover:bg-blue-700"
+                            title={t("records.saveRow", "Сохранить строку")}
+                            disabled={createMutation.isPending}
+                            onClick={commitNewRow}
+                          >
+                            {createMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-slate-500"
+                            title={t("records.cancel", "Отмена")}
+                            onClick={() => setAddingRow(false)}
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  {canCreate && !setupMode && !addingRow && (
+                    <tr className="border-b border-slate-100">
+                      <td colSpan={displayFields.length + (statuses.length > 0 ? 1 : 0) + 1} className="px-2 py-2">
+                        <button
+                          type="button"
+                          onClick={startAddRow}
+                          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-blue-600 hover:bg-blue-50 transition"
+                        >
+                          <Plus className="w-4 h-4" />
+                          {t("records.addRow", "Добавить строку")}
+                        </button>
+                      </td>
+                    </tr>
+                  )}
                   {records.map((record: EntityRecord) => {
                     const values = (record.valuesJson ?? {}) as Record<string, unknown>;
                     const status = record.statusId != null ? statusById.get(record.statusId) : undefined;
@@ -803,76 +873,6 @@ export function EntityRecords({ entityId }: { entityId: number }) {
                       </tr>
                     );
                   })}
-                  {canCreate && !setupMode && addingRow && (
-                    <tr className="border-b border-blue-100 bg-blue-50/40">
-                      {displayFields.map((f: Field) => {
-                        const editable = fieldAccess(f, entityId) === "edit";
-                        return (
-                          <td key={f.id} className="px-2 py-1.5 align-top max-w-[260px]">
-                            {editable ? (
-                              <FieldInput
-                                field={f}
-                                value={newRow[f.fieldKey]}
-                                onChange={(v) => setNewRow((prev) => ({ ...prev, [f.fieldKey]: v }))}
-                                userOptions={userOptions}
-                              />
-                            ) : (
-                              <span className="text-slate-300 text-xs">—</span>
-                            )}
-                          </td>
-                        );
-                      })}
-                      {statuses.length > 0 && (
-                        <td className="px-2 py-1.5 align-top">
-                          <Select value={newRowStatus} onValueChange={setNewRowStatus}>
-                            <SelectTrigger className="h-8 w-44 text-sm"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
-                              {statuses.map((s: Status) => (
-                                <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                      )}
-                      <td className="px-2 py-1.5 align-top">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            size="icon"
-                            className="h-8 w-8 bg-blue-600 hover:bg-blue-700"
-                            title={t("records.saveRow", "Сохранить строку")}
-                            disabled={createMutation.isPending}
-                            onClick={commitNewRow}
-                          >
-                            {createMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-slate-500"
-                            title={t("records.cancel", "Отмена")}
-                            onClick={() => setAddingRow(false)}
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                  {canCreate && !setupMode && !addingRow && (
-                    <tr className="border-b border-slate-100">
-                      <td colSpan={displayFields.length + (statuses.length > 0 ? 1 : 0) + 1} className="px-2 py-2">
-                        <button
-                          type="button"
-                          onClick={startAddRow}
-                          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-blue-600 hover:bg-blue-50 transition"
-                        >
-                          <Plus className="w-4 h-4" />
-                          {t("records.addRow", "Добавить строку")}
-                        </button>
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>
