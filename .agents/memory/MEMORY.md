@@ -1,1 +1,1 @@
-- [Admin capability stage pattern](admin-cap-stage-pattern.md) — how to add a new metadata-driven admin area (cap + OpenAPI CRUD + gated route + i18n screen) mirroring Roles/Events/Modules.
+- [Editable records table](editable-records-table.md) — EntityRecords supports inline cell/add-row/setup-mode; inline status edits must mirror the per-row server workflow boundary, not a heuristic.

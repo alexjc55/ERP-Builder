@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   useListEntityRecords,
   useCreateEntityRecord,
@@ -66,8 +66,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useML, useT } from "@/lib/i18n";
+import { FieldConfigDialog } from "@/components/FieldConfigDialog";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, Star, ShieldAlert, Archive, ArchiveRestore, History } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check } from "lucide-react";
 
 const NO_STATUS = "__none__";
 const NO_VIEW = "__all__";
@@ -143,12 +144,14 @@ export function EntityRecords({ entityId }: { entityId: number }) {
   const t = useT();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { canRecord, fieldAccess, user } = useAuth();
+  const { canRecord, canAdmin, fieldAccess, user } = useAuth();
 
   const canView = canRecord(entityId, "view");
   const canCreate = canRecord(entityId, "create");
   const canUpdate = canRecord(entityId, "update");
   const canDelete = canRecord(entityId, "delete");
+  // Field/column management (setup mode) is gated exactly like the fields builder.
+  const canConfigureColumns = canAdmin("entities");
 
   const { data: allFields = [], isLoading: fieldsLoading } = useListEntityFields(entityId);
   const { data: statuses = [] } = useListEntityStatuses(entityId);
@@ -184,6 +187,24 @@ export function EntityRecords({ entityId }: { entityId: number }) {
   const [historyFor, setHistoryFor] = useState<EntityRecord | null>(null);
   const [form, setForm] = useState<FormState>({});
   const [statusId, setStatusId] = useState<string>(NO_STATUS);
+
+  // Google-Sheets-style inline editing: which cell is currently being edited.
+  const [editingCell, setEditingCell] = useState<{ recordId: number; fieldKey: string | "__status__" } | null>(null);
+  // Inline "add row" draft state (an alternative to the modal create dialog).
+  const [addingRow, setAddingRow] = useState(false);
+  const [newRow, setNewRow] = useState<FormState>({});
+  const [newRowStatus, setNewRowStatus] = useState<string>(NO_STATUS);
+  // Admin-only setup mode: clicking a column header configures it; "+" adds a column.
+  const [setupMode, setSetupMode] = useState(false);
+  const [columnDialogOpen, setColumnDialogOpen] = useState(false);
+  const [columnField, setColumnField] = useState<Field | null>(null);
+
+  // Leaving an entity resets the transient table-editing UI so it can't leak across entities.
+  useEffect(() => {
+    setEditingCell(null);
+    setAddingRow(false);
+    setSetupMode(false);
+  }, [entityId]);
 
   // Statuses the user may move the record to, mirroring the server's workflow boundary.
   // Free choice when: creating, no transitions defined, current status is null, or superAdmin.
@@ -292,6 +313,9 @@ export function EntityRecords({ entityId }: { entityId: number }) {
     queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/records`] });
     setRefreshTick((t) => t + 1);
   };
+  const invalidateFields = () => {
+    queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/fields`] });
+  };
 
   const handleViewChange = (value: string) => {
     setSelectedViewId(value);
@@ -302,8 +326,15 @@ export function EntityRecords({ entityId }: { entityId: number }) {
 
   const createMutation = useCreateEntityRecord({
     mutation: {
-      onSuccess: () => { toast({ title: t("records.created", "Запись создана") }); setDialogOpen(false); invalidate(); },
+      onSuccess: () => { toast({ title: t("records.created", "Запись создана") }); setDialogOpen(false); setAddingRow(false); invalidate(); },
       onError: (err) => toast({ title: t("records.createError", "Ошибка создания записи"), description: extractError(err), variant: "destructive" }),
+    },
+  });
+  // Dedicated mutation for inline cell/status edits — quietly refreshes (no success toast spam).
+  const cellUpdateMutation = useUpdateRecord({
+    mutation: {
+      onSuccess: () => { setEditingCell(null); invalidate(); },
+      onError: (err) => { setEditingCell(null); toast({ title: t("records.updateError", "Ошибка обновления"), description: extractError(err), variant: "destructive" }); },
     },
   });
   const updateMutation = useUpdateRecord({
@@ -360,6 +391,81 @@ export function EntityRecords({ entityId }: { entityId: number }) {
     } else {
       createMutation.mutate({ entityId, data: { valuesJson, statusId: statusValue } });
     }
+  };
+
+  // Inline editing is available outside setup mode for users who can update records.
+  const inlineEditEnabled = canUpdate && !setupMode;
+
+  // Coerce a raw form value into the JSON shape the API expects for one field.
+  // Empty string is sent verbatim to clear an optional field (server drops empties).
+  const cellValueForPayload = (field: Field, raw: string | number | boolean): unknown => {
+    if (field.fieldType === "boolean") return Boolean(raw);
+    if (raw === "" || raw === undefined || raw === null) return "";
+    if (field.fieldType === "number") return Number(raw);
+    if (field.fieldType === "user") return Number(raw);
+    return raw;
+  };
+
+  const commitCell = (record: EntityRecord, field: Field, raw: string | number | boolean) => {
+    const stored = (record.valuesJson ?? {})[field.fieldKey];
+    const next = cellValueForPayload(field, raw);
+    const normalizedStored =
+      field.fieldType === "boolean" ? Boolean(stored) : stored === undefined || stored === null ? "" : stored;
+    if (next === normalizedStored) { setEditingCell(null); return; }
+    cellUpdateMutation.mutate({ id: record.id, data: { valuesJson: { [field.fieldKey]: next } } });
+  };
+
+  const commitStatus = (record: EntityRecord, value: string) => {
+    const next = value === NO_STATUS ? null : Number(value);
+    if (next === (record.statusId ?? null)) { setEditingCell(null); return; }
+    cellUpdateMutation.mutate({ id: record.id, data: { statusId: next } });
+  };
+
+  // Whether workflow enforcement applies to a given row (mirrors the server boundary).
+  // When active the status cannot be cleared and only allowed transitions are offered.
+  const workflowActiveForRecord = (record: EntityRecord): boolean =>
+    transitions.length > 0 && record.statusId != null && !isSuperAdmin;
+
+  // Statuses a given row may move to, mirroring the server workflow boundary (per-row).
+  const allowedStatusesForRecord = (record: EntityRecord): Status[] => {
+    if (!workflowActiveForRecord(record)) return statuses;
+    const cur = record.statusId ?? null;
+    const ids = new Set<number>([
+      cur as number,
+      ...transitions
+        .filter(
+          (tr: Transition) =>
+            tr.fromStatusId === cur &&
+            ((tr.allowedRoleIds?.length ?? 0) === 0 ||
+              (user?.roleId != null && tr.allowedRoleIds.includes(user.roleId))),
+        )
+        .map((tr: Transition) => tr.toStatusId),
+    ]);
+    return statuses.filter((s: Status) => ids.has(s.id));
+  };
+
+  const startAddRow = () => {
+    const initial: FormState = {};
+    for (const f of fields) initial[f.fieldKey] = emptyForField(f);
+    setNewRow(initial);
+    const def = statuses.find((s: Status) => s.isDefault);
+    setNewRowStatus(def ? String(def.id) : NO_STATUS);
+    setEditingCell(null);
+    setAddingRow(true);
+  };
+
+  const commitNewRow = () => {
+    const valuesJson = formToValues(
+      visibleFormFields.filter((f: Field) => fieldAccess(f, entityId) === "edit"),
+      newRow,
+    );
+    const statusValue = newRowStatus === NO_STATUS ? null : Number(newRowStatus);
+    createMutation.mutate({ entityId, data: { valuesJson, statusId: statusValue } });
+  };
+
+  const openColumnConfig = (field: Field | null) => {
+    setColumnField(field);
+    setColumnDialogOpen(true);
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
@@ -467,25 +573,39 @@ export function EntityRecords({ entityId }: { entityId: number }) {
             ))}
           </div>
         </div>
-        {canCreate && (
-          <Button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 gap-2">
-            <Plus className="w-4 h-4" />
-            {t("records.add", "Добавить запись")}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {canConfigureColumns && (
+            <Button
+              type="button"
+              variant={setupMode ? "default" : "outline"}
+              onClick={() => { setSetupMode((s) => !s); setEditingCell(null); setAddingRow(false); }}
+              className={setupMode ? "bg-amber-500 hover:bg-amber-600 gap-2" : "gap-2"}
+            >
+              <Settings2 className="w-4 h-4" />
+              {t("records.setupMode", "Режим настройки")}
+            </Button>
+          )}
+          {canCreate && !setupMode && (
+            <Button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 gap-2">
+              <Plus className="w-4 h-4" />
+              {t("records.add", "Добавить запись")}
+            </Button>
+          )}
+        </div>
       </div>
+
+      {setupMode && (
+        <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+          <Settings2 className="w-4 h-4" />
+          {t("records.setupHint", "Режим настройки включён. Нажмите на заголовок колонки, чтобы изменить её свойства и права, или «+», чтобы добавить новую колонку.")}
+        </div>
+      )}
 
       <Card className="border-slate-200 shadow-sm">
         <CardContent className="p-0">
           {recordsLoading ? (
             <div className="p-4 space-y-2">
               {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
-            </div>
-          ) : records.length === 0 ? (
-            <div className="text-center py-16 text-slate-400">
-              {total === 0 && (search.trim() || (selectedConfig.filters?.length ?? 0) > 0)
-                ? t("records.emptyFiltered", "Нет записей, удовлетворяющих условиям.")
-                : t("records.emptyNone", "Записей пока нет. Нажмите «Добавить запись», чтобы создать первую.")}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -494,29 +614,123 @@ export function EntityRecords({ entityId }: { entityId: number }) {
                   <tr className="border-b border-slate-100 bg-slate-50">
                     {displayFields.map((f: Field) => (
                       <th key={f.id} className="text-left px-4 py-3 font-medium text-slate-600 whitespace-nowrap">
-                        {ml(f.nameJson)}
+                        {setupMode ? (
+                          <button
+                            type="button"
+                            onClick={() => openColumnConfig(f)}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-2 py-1 text-amber-700 hover:bg-amber-100 transition"
+                            title={t("records.configureColumn", "Настроить колонку")}
+                          >
+                            {ml(f.nameJson)}
+                            <Settings2 className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          ml(f.nameJson)
+                        )}
                       </th>
                     ))}
                     {statuses.length > 0 && (
                       <th className="text-left px-4 py-3 font-medium text-slate-600">{t("records.status", "Статус")}</th>
                     )}
-                    <th className="text-right px-4 py-3 font-medium text-slate-600">{t("records.actions", "Действия")}</th>
+                    {setupMode ? (
+                      <th className="text-right px-4 py-3 font-medium text-slate-600">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => openColumnConfig(null)}
+                          className="bg-amber-500 hover:bg-amber-600 gap-1.5 h-8"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          {t("records.addColumn", "Колонка")}
+                        </Button>
+                      </th>
+                    ) : (
+                      <th className="text-right px-4 py-3 font-medium text-slate-600">{t("records.actions", "Действия")}</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
+                  {records.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={displayFields.length + (statuses.length > 0 ? 1 : 0) + 1}
+                        className="text-center py-12 text-slate-400"
+                      >
+                        {total === 0 && (search.trim() || (selectedConfig.filters?.length ?? 0) > 0)
+                          ? t("records.emptyFiltered", "Нет записей, удовлетворяющих условиям.")
+                          : t("records.emptyNone", "Записей пока нет. Нажмите «Добавить запись», чтобы создать первую.")}
+                      </td>
+                    </tr>
+                  )}
                   {records.map((record: EntityRecord) => {
                     const values = (record.valuesJson ?? {}) as Record<string, unknown>;
                     const status = record.statusId != null ? statusById.get(record.statusId) : undefined;
                     return (
                       <tr key={record.id} className="border-b border-slate-100 hover:bg-slate-50">
-                        {displayFields.map((f: Field) => (
-                          <td key={f.id} className="px-4 py-3 max-w-[240px] truncate">
-                            {renderCellValue(f, values[f.fieldKey], userNames)}
-                          </td>
-                        ))}
+                        {displayFields.map((f: Field) => {
+                          const access = fieldAccess(f, entityId);
+                          const cellEditable = inlineEditEnabled && access === "edit";
+                          const isEditingThis =
+                            editingCell?.recordId === record.id && editingCell?.fieldKey === f.fieldKey;
+                          if (isEditingThis) {
+                            return (
+                              <td key={f.id} className="px-2 py-1.5 max-w-[260px]">
+                                <InlineCellEditor
+                                  field={f}
+                                  initial={valueToForm(f, values[f.fieldKey])}
+                                  userOptions={userOptions}
+                                  onCommit={(raw) => commitCell(record, f, raw)}
+                                  onCancel={() => setEditingCell(null)}
+                                />
+                              </td>
+                            );
+                          }
+                          if (f.fieldType === "boolean" && cellEditable) {
+                            return (
+                              <td key={f.id} className="px-4 py-3 max-w-[240px]">
+                                <Switch
+                                  checked={values[f.fieldKey] === true}
+                                  onCheckedChange={(v) => commitCell(record, f, v)}
+                                />
+                              </td>
+                            );
+                          }
+                          return (
+                            <td
+                              key={f.id}
+                              onClick={cellEditable ? () => setEditingCell({ recordId: record.id, fieldKey: f.fieldKey }) : undefined}
+                              className={`px-4 py-3 max-w-[240px] truncate ${cellEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
+                              title={cellEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
+                            >
+                              {renderCellValue(f, values[f.fieldKey], userNames)}
+                            </td>
+                          );
+                        })}
                         {statuses.length > 0 && (
                           <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
+                            {editingCell?.recordId === record.id && editingCell?.fieldKey === "__status__" ? (
+                              <Select
+                                defaultOpen
+                                value={record.statusId != null ? String(record.statusId) : NO_STATUS}
+                                onValueChange={(v) => commitStatus(record, v)}
+                                onOpenChange={(o) => { if (!o) setEditingCell(null); }}
+                              >
+                                <SelectTrigger className="h-8 w-44 text-sm"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {!workflowActiveForRecord(record) && (
+                                    <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
+                                  )}
+                                  {allowedStatusesForRecord(record).map((s: Status) => (
+                                    <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                            <div
+                              className={`flex items-center gap-2 ${inlineEditEnabled ? "cursor-pointer rounded hover:bg-blue-50/60 -mx-1 px-1" : ""}`}
+                              onClick={inlineEditEnabled ? () => setEditingCell({ recordId: record.id, fieldKey: "__status__" }) : undefined}
+                              title={inlineEditEnabled ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
+                            >
                               {status ? (
                                 <span
                                   className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
@@ -534,6 +748,7 @@ export function EntityRecords({ entityId }: { entityId: number }) {
                                 </span>
                               )}
                             </div>
+                            )}
                           </td>
                         )}
                         <td className="px-4 py-3">
@@ -588,6 +803,76 @@ export function EntityRecords({ entityId }: { entityId: number }) {
                       </tr>
                     );
                   })}
+                  {canCreate && !setupMode && addingRow && (
+                    <tr className="border-b border-blue-100 bg-blue-50/40">
+                      {displayFields.map((f: Field) => {
+                        const editable = fieldAccess(f, entityId) === "edit";
+                        return (
+                          <td key={f.id} className="px-2 py-1.5 align-top max-w-[260px]">
+                            {editable ? (
+                              <FieldInput
+                                field={f}
+                                value={newRow[f.fieldKey]}
+                                onChange={(v) => setNewRow((prev) => ({ ...prev, [f.fieldKey]: v }))}
+                                userOptions={userOptions}
+                              />
+                            ) : (
+                              <span className="text-slate-300 text-xs">—</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                      {statuses.length > 0 && (
+                        <td className="px-2 py-1.5 align-top">
+                          <Select value={newRowStatus} onValueChange={setNewRowStatus}>
+                            <SelectTrigger className="h-8 w-44 text-sm"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
+                              {statuses.map((s: Status) => (
+                                <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                      )}
+                      <td className="px-2 py-1.5 align-top">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="icon"
+                            className="h-8 w-8 bg-blue-600 hover:bg-blue-700"
+                            title={t("records.saveRow", "Сохранить строку")}
+                            disabled={createMutation.isPending}
+                            onClick={commitNewRow}
+                          >
+                            {createMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-slate-500"
+                            title={t("records.cancel", "Отмена")}
+                            onClick={() => setAddingRow(false)}
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  {canCreate && !setupMode && !addingRow && (
+                    <tr className="border-b border-slate-100">
+                      <td colSpan={displayFields.length + (statuses.length > 0 ? 1 : 0) + 1} className="px-2 py-2">
+                        <button
+                          type="button"
+                          onClick={startAddRow}
+                          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-blue-600 hover:bg-blue-50 transition"
+                        >
+                          <Plus className="w-4 h-4" />
+                          {t("records.addRow", "Добавить строку")}
+                        </button>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -741,6 +1026,17 @@ export function EntityRecords({ entityId }: { entityId: number }) {
         fieldNameByKey={new Map(allFields.map((f: Field) => [f.fieldKey, ml(f.nameJson)]))}
         statusById={statusById}
       />
+
+      {canConfigureColumns && (
+        <FieldConfigDialog
+          open={columnDialogOpen}
+          onOpenChange={setColumnDialogOpen}
+          entityId={entityId}
+          field={columnField}
+          nextSortOrder={allFields.length + 1}
+          onSaved={() => { invalidateFields(); }}
+        />
+      )}
     </div>
   );
 }
@@ -864,6 +1160,96 @@ function RecordHistoryList({
         </tbody>
       </table>
     </div>
+  );
+}
+
+/**
+ * Inline (in-cell) editor used by the Google-Sheets-style records table.
+ * Text-like inputs commit on Enter/blur and cancel on Escape; select/user
+ * commit on choice. Boolean is handled by the table itself (toggles in place).
+ */
+function InlineCellEditor({
+  field,
+  initial,
+  userOptions,
+  onCommit,
+  onCancel,
+}: {
+  field: Field;
+  initial: string | number | boolean;
+  userOptions: UserOption[];
+  onCommit: (raw: string | number | boolean) => void;
+  onCancel: () => void;
+}) {
+  const t = useT();
+  const [draft, setDraft] = useState<string | number | boolean>(initial);
+  const cancelRef = useRef(false);
+  const committedRef = useRef(false);
+
+  const commitOnce = (raw: string | number | boolean) => {
+    if (committedRef.current) return;
+    committedRef.current = true;
+    onCommit(raw);
+  };
+
+  if (field.fieldType === "select" || field.fieldType === "user") {
+    const options =
+      field.fieldType === "user"
+        ? userOptions.map((u) => ({ value: String(u.id), label: u.name }))
+        : (Array.isArray(field.optionsJson) ? (field.optionsJson as string[]) : []).map((o) => ({ value: o, label: o }));
+    return (
+      <Select
+        defaultOpen
+        value={draft ? String(draft) : ""}
+        onValueChange={(v) => commitOnce(field.fieldType === "user" ? Number(v) : v)}
+        onOpenChange={(o) => { if (!o && !committedRef.current) onCancel(); }}
+      >
+        <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t("records.selectValue", "Выберите значение")} /></SelectTrigger>
+        <SelectContent>
+          {options.map((o) => (
+            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
+  }
+
+  if (field.fieldType === "textarea") {
+    return (
+      <Textarea
+        autoFocus
+        rows={2}
+        className="text-sm"
+        value={String(draft ?? "")}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Escape") { cancelRef.current = true; (e.target as HTMLTextAreaElement).blur(); } }}
+        onBlur={() => { if (cancelRef.current) onCancel(); else commitOnce(draft); }}
+      />
+    );
+  }
+
+  const inputType =
+    field.fieldType === "number" ? "number"
+    : field.fieldType === "date" ? "date"
+    : field.fieldType === "datetime" ? "datetime-local"
+    : field.fieldType === "email" ? "email"
+    : field.fieldType === "url" ? "url"
+    : field.fieldType === "phone" ? "tel"
+    : "text";
+
+  return (
+    <Input
+      autoFocus
+      type={inputType}
+      className="h-8 text-sm"
+      value={draft === "" || draft === undefined ? "" : String(draft)}
+      onChange={(e) => setDraft(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
+        else if (e.key === "Escape") { cancelRef.current = true; (e.target as HTMLInputElement).blur(); }
+      }}
+      onBlur={() => { if (cancelRef.current) onCancel(); else commitOnce(draft); }}
+    />
   );
 }
 
