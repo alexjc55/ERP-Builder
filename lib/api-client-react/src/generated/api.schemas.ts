@@ -578,6 +578,16 @@ export interface StatusesReorderInput {
   items: StatusesReorderInputItemsItem[];
 }
 
+export type TransitionsReorderInputItemsItem = {
+  id: number;
+  sortOrder: number;
+};
+
+export interface TransitionsReorderInput {
+  entityId: number;
+  items: TransitionsReorderInputItemsItem[];
+}
+
 export type TransitionActionType = typeof TransitionActionType[keyof typeof TransitionActionType];
 
 

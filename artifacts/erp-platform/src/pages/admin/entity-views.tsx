@@ -5,6 +5,7 @@ import {
   useCreateEntityView,
   useUpdateView,
   useDeleteView,
+  useReorderViews,
   useListEntities,
   useListEntityFields,
   type View,
@@ -52,7 +53,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, ArrowLeft, LayoutList, Star, Filter, ArrowDownUp, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, ArrowLeft, LayoutList, Star, Filter, ArrowDownUp, X, ChevronUp, ChevronDown } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
 
 type MLValue = { ru?: string; en?: string; he?: string };
@@ -170,6 +171,29 @@ export default function EntityViewsPage() {
       onError: (err) => toast({ title: t("views.deleteError", "Ошибка удаления вида"), description: extractError(err), variant: "destructive" }),
     },
   });
+  const reorderMutation = useReorderViews({
+    mutation: {
+      onSuccess: () => invalidate(),
+      onError: () => toast({ title: t("views.reorderError", "Ошибка изменения порядка"), variant: "destructive" }),
+    },
+  });
+
+  const move = (list: View[], index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= list.length) return;
+    const a = list[index];
+    const b = list[target];
+    reorderMutation.mutate({
+      entityId,
+      data: {
+        entityId,
+        items: [
+          { id: a.id, sortOrder: b.sortOrder },
+          { id: b.id, sortOrder: a.sortOrder },
+        ],
+      },
+    });
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -254,6 +278,7 @@ export default function EntityViewsPage() {
 
   const isPending = createMutation.isPending || updateMutation.isPending;
   const noFields = fields.length === 0;
+  const sortedViews = [...views].sort((a: View, b: View) => a.sortOrder - b.sortOrder);
 
   return (
     <div className="p-6 space-y-6">
@@ -310,7 +335,7 @@ export default function EntityViewsPage() {
                 </tr>
               </thead>
               <tbody>
-                {views.map((view: View) => {
+                {sortedViews.map((view: View, idx: number) => {
                   const cfg = (view.configJson ?? {}) as ViewConfig;
                   const fCount = cfg.filters?.length ?? 0;
                   const sCount = cfg.sorts?.length ?? 0;
@@ -332,6 +357,12 @@ export default function EntityViewsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" disabled={idx === 0 || reorderMutation.isPending} onClick={() => move(sortedViews, idx, -1)}>
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" disabled={idx === sortedViews.length - 1 || reorderMutation.isPending} onClick={() => move(sortedViews, idx, 1)}>
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(view)}>
                             <Pencil className="w-3.5 h-3.5" />
                           </Button>

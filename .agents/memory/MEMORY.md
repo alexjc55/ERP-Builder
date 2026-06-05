@@ -8,6 +8,7 @@
 - [Archive engine](archive-engine.md) — archival as a flag + lazy sweep; the one column that makes manual unarchive durable.
 - [Relations engine](relations-engine.md) — entity relations + record links: DB-enforced cardinality, Drizzle error wrapping, concurrency lock.
 - [Record views & query](record-views-query.md) — why the records query endpoint is POST, how the frontend consumes it, the per-entity bootstrap-reset rule.
+- [List reorder pattern](list-reorder-pattern.md) — sortOrder arrow reordering must be a single transactional */reorder endpoint, not paired client swaps; records columns reorder via field sortOrder.
 - [Dependent record filters](dependent-filters.md) — isFilterable opt-in + status quick-filter + dependent option lists; SELECT DISTINCT must order by ordinal (reused sql frag re-binds params).
 - [Editable records table](editable-records-table.md) — inline cell/add-row/setup-mode constraints; inline status edits must mirror the per-row server workflow boundary, not a heuristic.
 - [Event system](event-system.md) — internal best-effort event bus design, the 5 core events, foundation for automations/modules.

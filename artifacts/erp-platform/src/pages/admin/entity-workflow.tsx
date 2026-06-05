@@ -4,6 +4,7 @@ import {
   useListEntityTransitions,
   useCreateEntityTransition,
   useUpdateTransition,
+  useReorderTransitions,
   useDeleteTransition,
   useListEntityStatuses,
   useListEntityFields,
@@ -51,7 +52,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, ArrowLeft, Workflow, ArrowRight, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, ArrowLeft, Workflow, ArrowRight, X, ChevronUp, ChevronDown } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
 
 type MLValue = { ru?: string; en?: string; he?: string };
@@ -115,6 +116,30 @@ export default function EntityWorkflowPage() {
       onError: () => toast({ title: t("workflow.deleteError", "Ошибка удаления перехода"), variant: "destructive" }),
     },
   });
+
+  const reorderMutation = useReorderTransitions({
+    mutation: {
+      onSuccess: () => invalidate(),
+      onError: () => toast({ title: t("workflow.reorderError", "Ошибка изменения порядка"), variant: "destructive" }),
+    },
+  });
+
+  const move = (list: Transition[], index: number, direction: -1 | 1) => {
+    if (!entityId) return;
+    const target = index + direction;
+    if (target < 0 || target >= list.length) return;
+    const a = list[index];
+    const b = list[target];
+    reorderMutation.mutate({
+      data: {
+        entityId,
+        items: [
+          { id: a.id, sortOrder: b.sortOrder },
+          { id: b.id, sortOrder: a.sortOrder },
+        ],
+      },
+    });
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -276,7 +301,7 @@ export default function EntityWorkflowPage() {
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((tr: Transition) => (
+                {sorted.map((tr: Transition, idx: number) => (
                   <tr key={tr.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center gap-2">
@@ -303,6 +328,12 @@ export default function EntityWorkflowPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" disabled={idx === 0 || reorderMutation.isPending} onClick={() => move(sorted, idx, -1)}>
+                          <ChevronUp className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" disabled={idx === sorted.length - 1 || reorderMutation.isPending} onClick={() => move(sorted, idx, 1)}>
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(tr)}>
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>

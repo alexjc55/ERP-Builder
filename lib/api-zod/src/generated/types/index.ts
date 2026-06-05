@@ -89,6 +89,8 @@ export * from './transition';
 export * from './transitionAction';
 export * from './transitionActionType';
 export * from './transitionInput';
+export * from './transitionsReorderInput';
+export * from './transitionsReorderInputItemsItem';
 export * from './transitionUpdate';
 export * from './translation';
 export * from './translationInput';

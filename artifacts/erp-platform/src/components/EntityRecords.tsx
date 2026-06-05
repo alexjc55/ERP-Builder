@@ -5,6 +5,7 @@ import {
   useUpdateRecord,
   useDeleteRecord,
   useListEntityFields,
+  useReorderFields,
   useListEntityStatuses,
   useListEntityTransitions,
   useListEntityRelations,
@@ -504,6 +505,29 @@ export function EntityRecords({ entityId }: { entityId: number }) {
     queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/fields`] });
   };
 
+  const reorderFieldsMutation = useReorderFields({
+    mutation: {
+      onSuccess: () => invalidateFields(),
+      onError: () => toast({ title: t("records.reorderColumnError", "Ошибка изменения порядка колонок"), variant: "destructive" }),
+    },
+  });
+
+  const moveColumn = (list: Field[], index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= list.length) return;
+    const a = list[index];
+    const b = list[target];
+    reorderFieldsMutation.mutate({
+      data: {
+        entityId,
+        items: [
+          { id: a.id, sortOrder: b.sortOrder },
+          { id: b.id, sortOrder: a.sortOrder },
+        ],
+      },
+    });
+  };
+
   const handleViewChange = (value: string) => {
     setSelectedViewId(value);
     setPage(1);
@@ -657,9 +681,10 @@ export function EntityRecords({ entityId }: { entityId: number }) {
 
   const isPending = createMutation.isPending || updateMutation.isPending;
   const visibleFields = selectedConfig.visibleFields;
+  const hasCustomColumnOrder = Boolean(visibleFields && visibleFields.length > 0);
   const displayFields =
-    visibleFields && visibleFields.length > 0
-      ? (visibleFields
+    hasCustomColumnOrder
+      ? (visibleFields!
           .map((key) => tableFields.find((f: Field) => f.fieldKey === key))
           .filter((f): f is Field => Boolean(f)))
       : tableFields.slice(0, 5);
@@ -876,18 +901,44 @@ export function EntityRecords({ entityId }: { entityId: number }) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50">
-                    {displayFields.map((f: Field) => (
+                    {displayFields.map((f: Field, ci: number) => (
                       <th key={f.id} className="text-left px-4 py-3 font-medium text-slate-600 whitespace-nowrap">
                         {setupMode ? (
-                          <button
-                            type="button"
-                            onClick={() => openColumnConfig(f)}
-                            className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-2 py-1 text-amber-700 hover:bg-amber-100 transition"
-                            title={t("records.configureColumn", "Настроить колонку")}
-                          >
-                            {ml(f.nameJson)}
-                            <Settings2 className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="inline-flex items-center gap-1">
+                            {!hasCustomColumnOrder && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-slate-400"
+                                  disabled={ci === 0 || reorderFieldsMutation.isPending}
+                                  onClick={() => moveColumn(displayFields, ci, -1)}
+                                  title={t("records.moveColumnLeft", "Левее")}
+                                >
+                                  <ChevronLeft className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-slate-400"
+                                  disabled={ci === displayFields.length - 1 || reorderFieldsMutation.isPending}
+                                  onClick={() => moveColumn(displayFields, ci, 1)}
+                                  title={t("records.moveColumnRight", "Правее")}
+                                >
+                                  <ChevronRight className="w-3.5 h-3.5" />
+                                </Button>
+                              </>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => openColumnConfig(f)}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-2 py-1 text-amber-700 hover:bg-amber-100 transition"
+                              title={t("records.configureColumn", "Настроить колонку")}
+                            >
+                              {ml(f.nameJson)}
+                              <Settings2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         ) : (
                           ml(f.nameJson)
                         )}

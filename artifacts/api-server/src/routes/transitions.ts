@@ -18,6 +18,7 @@ import {
   UpdateTransitionParams,
   UpdateTransitionBody,
   DeleteTransitionParams,
+  ReorderTransitionsBody,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -180,6 +181,54 @@ router.post(
     }
   },
 );
+
+router.post("/transitions/reorder", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
+  const parsed = ReorderTransitionsBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const { entityId, items } = parsed.data;
+
+  if (!(await entityExists(entityId))) {
+    res.status(404).json({ error: "Entity not found" });
+    return;
+  }
+
+  if (items.length === 0) {
+    res.json({ success: true, message: "Reordered" });
+    return;
+  }
+
+  const ids = items.map((i) => i.id);
+  if (new Set(ids).size !== ids.length) {
+    res.status(400).json({ error: "Duplicate transition ids in reorder payload" });
+    return;
+  }
+  const owned = await db
+    .select({ id: entityTransitionsTable.id })
+    .from(entityTransitionsTable)
+    .where(and(eq(entityTransitionsTable.entityId, entityId), inArray(entityTransitionsTable.id, ids)));
+  const ownedIds = new Set(owned.map((t) => t.id));
+
+  const foreign = ids.filter((id) => !ownedIds.has(id));
+  if (foreign.length > 0) {
+    res.status(400).json({ error: `Some transitions do not belong to this entity: ${foreign.join(", ")}` });
+    return;
+  }
+
+  await db.transaction(async (tx) => {
+    for (const item of items) {
+      await tx
+        .update(entityTransitionsTable)
+        .set({ sortOrder: item.sortOrder })
+        .where(and(eq(entityTransitionsTable.id, item.id), eq(entityTransitionsTable.entityId, entityId)));
+    }
+  });
+
+  res.json({ success: true, message: "Reordered" });
+});
 
 router.get("/transitions/:id", requireAuth, async (req, res): Promise<void> => {
   const params = GetTransitionParams.safeParse(req.params);

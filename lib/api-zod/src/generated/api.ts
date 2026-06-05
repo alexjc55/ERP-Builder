@@ -1268,6 +1268,23 @@ export const ReorderStatusesResponse = zod.object({
 
 
 /**
+ * @summary Reorder workflow transitions within an entity
+ */
+export const ReorderTransitionsBody = zod.object({
+  "entityId": zod.number(),
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "sortOrder": zod.number()
+}))
+})
+
+export const ReorderTransitionsResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
  * @summary List workflow transitions for an entity
  */
 export const ListEntityTransitionsParams = zod.object({

@@ -880,6 +880,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  /transitions/reorder:
+    post:
+      operationId: reorderTransitions
+      tags: [transitions]
+      summary: Reorder workflow transitions within an entity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransitionsReorderInput"
+      responses:
+        "200":
+          description: Reordered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
   # TRANSITIONS (Workflow Engine)
   /entities/{entityId}/transitions:
     get:
@@ -2647,6 +2666,23 @@ components:
                 type: integer
 
     # TRANSITIONS (Workflow Engine)
+    TransitionsReorderInput:
+      type: object
+      required: [entityId, items]
+      properties:
+        entityId:
+          type: integer
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, sortOrder]
+            properties:
+              id:
+                type: integer
+              sortOrder:
+                type: integer
+
     TransitionAction:
       type: object
       required: [type, fieldKey]

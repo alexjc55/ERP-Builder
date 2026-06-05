@@ -71,6 +71,7 @@ import type {
   Transition,
   TransitionInput,
   TransitionUpdate,
+  TransitionsReorderInput,
   Translation,
   TranslationInput,
   TranslationUpdate,
@@ -3098,6 +3099,77 @@ export const useReorderStatuses = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getReorderStatusesMutationOptions(options));
+    }
+
+export const getReorderTransitionsUrl = () => {
+
+
+
+
+  return `/api/transitions/reorder`
+}
+
+/**
+ * @summary Reorder workflow transitions within an entity
+ */
+export const reorderTransitions = async (transitionsReorderInput: TransitionsReorderInput, options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getReorderTransitionsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      transitionsReorderInput,)
+  }
+);}
+
+
+
+
+export const getReorderTransitionsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderTransitions>>, TError,{data: BodyType<TransitionsReorderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reorderTransitions>>, TError,{data: BodyType<TransitionsReorderInput>}, TContext> => {
+
+const mutationKey = ['reorderTransitions'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reorderTransitions>>, {data: BodyType<TransitionsReorderInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  reorderTransitions(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReorderTransitionsMutationResult = NonNullable<Awaited<ReturnType<typeof reorderTransitions>>>
+    export type ReorderTransitionsMutationBody = BodyType<TransitionsReorderInput>
+    export type ReorderTransitionsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Reorder workflow transitions within an entity
+ */
+export const useReorderTransitions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderTransitions>>, TError,{data: BodyType<TransitionsReorderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reorderTransitions>>,
+        TError,
+        {data: BodyType<TransitionsReorderInput>},
+        TContext
+      > => {
+      return useMutation(getReorderTransitionsMutationOptions(options));
     }
 
 export const getListEntityTransitionsUrl = (entityId: number,) => {

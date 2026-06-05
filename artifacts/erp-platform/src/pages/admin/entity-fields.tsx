@@ -5,6 +5,7 @@ import {
   useCreateEntityField,
   useUpdateField,
   useDeleteField,
+  useReorderFields,
   useListEntities,
   useListRoles,
   type Field,
@@ -51,7 +52,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, ArrowLeft, Columns3, KeyRound } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, ArrowLeft, Columns3, KeyRound, ChevronUp, ChevronDown } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
 
 type MLValue = { ru?: string; en?: string; he?: string };
@@ -133,6 +134,29 @@ export default function EntityFieldsPage() {
       onError: () => toast({ title: t("fields.deleteError", "Ошибка удаления поля"), variant: "destructive" }),
     },
   });
+
+  const reorderMutation = useReorderFields({
+    mutation: {
+      onSuccess: () => invalidate(),
+      onError: () => toast({ title: t("fields.reorderError", "Ошибка изменения порядка"), variant: "destructive" }),
+    },
+  });
+
+  const move = (list: Field[], index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= list.length) return;
+    const a = list[index];
+    const b = list[target];
+    reorderMutation.mutate({
+      data: {
+        entityId,
+        items: [
+          { id: a.id, sortOrder: b.sortOrder },
+          { id: b.id, sortOrder: a.sortOrder },
+        ],
+      },
+    });
+  };
 
   const openCreate = () => {
     setEditingField(null);
@@ -258,7 +282,7 @@ export default function EntityFieldsPage() {
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((field: Field) => (
+                {sorted.map((field: Field, idx: number) => (
                   <tr key={field.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="px-4 py-3">
                       <span className="font-medium text-slate-700">{ml(field.nameJson)}</span>
@@ -287,6 +311,12 @@ export default function EntityFieldsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" disabled={idx === 0 || reorderMutation.isPending} onClick={() => move(sorted, idx, -1)}>
+                          <ChevronUp className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" disabled={idx === sorted.length - 1 || reorderMutation.isPending} onClick={() => move(sorted, idx, 1)}>
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(field)}>
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>
