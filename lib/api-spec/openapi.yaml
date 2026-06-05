@@ -1053,6 +1053,27 @@ paths:
               schema:
                 $ref: "#/components/schemas/EntityRecord"
 
+  /records/{id}/audit:
+    get:
+      operationId: listRecordAuditLogs
+      tags: [audit]
+      summary: List the change history (audit log) of a record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Audit log entries, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditLogEntry"
+
   /entities/{entityId}/records/query:
     post:
       operationId: queryEntityRecords
@@ -1756,6 +1777,30 @@ components:
         ipAddress:
           type: string
         userAgent:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    AuditLogEntry:
+      type: object
+      required: [id, fieldKey, oldValue, newValue, userId, userName, createdAt]
+      properties:
+        id:
+          type: integer
+        entityId:
+          type: ["integer", "null"]
+        recordId:
+          type: ["integer", "null"]
+        fieldKey:
+          type: ["string", "null"]
+        oldValue:
+          type: ["string", "null"]
+        newValue:
+          type: ["string", "null"]
+        userId:
+          type: ["integer", "null"]
+        userName:
           type: ["string", "null"]
         createdAt:
           type: string

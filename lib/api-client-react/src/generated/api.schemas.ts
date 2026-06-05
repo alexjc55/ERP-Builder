@@ -221,6 +221,25 @@ export interface LoginHistoryEntry {
   createdAt: string;
 }
 
+export interface AuditLogEntry {
+  id: number;
+  /** @nullable */
+  entityId?: number | null;
+  /** @nullable */
+  recordId?: number | null;
+  /** @nullable */
+  fieldKey: string | null;
+  /** @nullable */
+  oldValue: string | null;
+  /** @nullable */
+  newValue: string | null;
+  /** @nullable */
+  userId: number | null;
+  /** @nullable */
+  userName: string | null;
+  createdAt: string;
+}
+
 export interface Role {
   id: number;
   nameJson: MultilingualText;

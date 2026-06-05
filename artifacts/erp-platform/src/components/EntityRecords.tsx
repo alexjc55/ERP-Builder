@@ -16,7 +16,9 @@ import {
   useCreateRecordLink,
   useDeleteRecordLink,
   useListUserOptions,
+  useListRecordAuditLogs,
   type ArchiveFilter,
+  type AuditLogEntry,
   type EntityRecord,
   type Field,
   type Status,
@@ -65,7 +67,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, Star, ShieldAlert, Archive, ArchiveRestore } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, Star, ShieldAlert, Archive, ArchiveRestore, History } from "lucide-react";
 
 const NO_STATUS = "__none__";
 const NO_VIEW = "__all__";
@@ -174,6 +176,7 @@ export function EntityRecords({ entityId }: { entityId: number }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<EntityRecord | null>(null);
   const [toDelete, setToDelete] = useState<EntityRecord | null>(null);
+  const [historyFor, setHistoryFor] = useState<EntityRecord | null>(null);
   const [form, setForm] = useState<FormState>({});
   const [statusId, setStatusId] = useState<string>(NO_STATUS);
 
@@ -535,6 +538,15 @@ export function EntityRecords({ entityId }: { entityId: number }) {
                                 <Pencil className="w-3.5 h-3.5" />
                               </Button>
                             )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-slate-500"
+                              title="История изменений"
+                              onClick={() => setHistoryFor(record)}
+                            >
+                              <History className="w-3.5 h-3.5" />
+                            </Button>
                             {canUpdate && (
                               record.archivedAt ? (
                                 <Button
@@ -717,6 +729,132 @@ export function EntityRecords({ entityId }: { entityId: number }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <RecordHistoryDialog
+        record={historyFor}
+        onClose={() => setHistoryFor(null)}
+        fieldNameByKey={new Map(allFields.map((f: Field) => [f.fieldKey, getML(f.nameJson)]))}
+        statusById={statusById}
+      />
+    </div>
+  );
+}
+
+const AUDIT_RESERVED: Record<string, string> = {
+  __status__: "Статус",
+  __archived__: "Архив",
+  __created__: "Запись создана",
+  __deleted__: "Запись удалена",
+};
+
+function RecordHistoryDialog({
+  record,
+  onClose,
+  fieldNameByKey,
+  statusById,
+}: {
+  record: EntityRecord | null;
+  onClose: () => void;
+  fieldNameByKey: Map<string, string>;
+  statusById: Map<number, Status>;
+}) {
+  return (
+    <Dialog open={!!record} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>История изменений</DialogTitle>
+          <DialogDescription>Кто, когда и что изменил: прежнее значение → новое.</DialogDescription>
+        </DialogHeader>
+        {record && (
+          <RecordHistoryList recordId={record.id} fieldNameByKey={fieldNameByKey} statusById={statusById} />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RecordHistoryList({
+  recordId,
+  fieldNameByKey,
+  statusById,
+}: {
+  recordId: number;
+  fieldNameByKey: Map<string, string>;
+  statusById: Map<number, Status>;
+}) {
+  const { data: entries = [], isLoading } = useListRecordAuditLogs(recordId);
+
+  const fieldLabel = (key: string | null): string => {
+    if (!key) return "—";
+    if (AUDIT_RESERVED[key]) return AUDIT_RESERVED[key];
+    return fieldNameByKey.get(key) || key;
+  };
+
+  const renderValue = (key: string | null, value: string | null): string => {
+    if (value === null) return "∅";
+    if (key === "__status__") {
+      const s = statusById.get(Number(value));
+      return s ? getML(s.nameJson) : value;
+    }
+    if (key === "__archived__") return value === "true" ? "Да" : "Нет";
+    return value;
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+      </div>
+    );
+  }
+
+  if (entries.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-10 text-slate-400 gap-2">
+        <Inbox className="w-8 h-8" />
+        <p className="text-sm">Изменений пока нет</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs text-slate-400 border-b">
+            <th className="px-3 py-2 font-medium">Когда</th>
+            <th className="px-3 py-2 font-medium">Кто</th>
+            <th className="px-3 py-2 font-medium">Поле</th>
+            <th className="px-3 py-2 font-medium">Изменение</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((e: AuditLogEntry) => (
+            <tr key={e.id} className="border-b last:border-0 align-top">
+              <td className="px-3 py-2 whitespace-nowrap text-slate-500">
+                {new Date(e.createdAt).toLocaleString("ru-RU")}
+              </td>
+              <td className="px-3 py-2 whitespace-nowrap">{e.userName || "—"}</td>
+              <td className="px-3 py-2">{fieldLabel(e.fieldKey)}</td>
+              <td className="px-3 py-2">
+                {e.fieldKey === "__created__" || e.fieldKey === "__deleted__" ? (
+                  <span className="text-slate-500">
+                    {e.fieldKey === "__deleted__" && e.oldValue ? e.oldValue : "—"}
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2 flex-wrap">
+                    <span className="text-slate-400 line-through">{renderValue(e.fieldKey, e.oldValue)}</span>
+                    <span className="text-slate-300">→</span>
+                    <span className="text-slate-700 font-medium">{renderValue(e.fieldKey, e.newValue)}</span>
+                  </span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

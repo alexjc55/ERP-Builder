@@ -1365,6 +1365,27 @@ export const UnarchiveRecordResponse = zod.object({
 
 
 /**
+ * @summary List the change history (audit log) of a record
+ */
+export const ListRecordAuditLogsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListRecordAuditLogsResponseItem = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number().nullish(),
+  "recordId": zod.number().nullish(),
+  "fieldKey": zod.string().nullable(),
+  "oldValue": zod.string().nullable(),
+  "newValue": zod.string().nullable(),
+  "userId": zod.number().nullable(),
+  "userName": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})
+export const ListRecordAuditLogsResponse = zod.array(ListRecordAuditLogsResponseItem)
+
+
+/**
  * @summary Query records for an entity with filters, sorting, search and pagination
  */
 export const QueryEntityRecordsParams = zod.object({

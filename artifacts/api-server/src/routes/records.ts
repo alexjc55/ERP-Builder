@@ -24,8 +24,17 @@ import {
   ArchiveRecordParams,
   UnarchiveRecordParams,
 } from "@workspace/api-zod";
-import type { EntityField } from "@workspace/db";
+import type { EntityField, InsertAuditLog } from "@workspace/db";
 import { buildRecordQuery, type RecordQuerySpec } from "./record-query";
+import {
+  writeAudit,
+  auditStr,
+  diffValues,
+  AUDIT_STATUS,
+  AUDIT_ARCHIVED,
+  AUDIT_CREATED,
+  AUDIT_DELETED,
+} from "./audit-log";
 
 const router: IRouter = Router();
 
@@ -431,6 +440,24 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
     .insert(entityRecordsTable)
     .values({ entityId, valuesJson: result.values, statusId, statusChangedAt: new Date() })
     .returning();
+
+  // Audit: record the initial value of every set field (old = null) plus the
+  // initial status; if nothing was set, leave a creation marker so the row's
+  // existence is always traceable.
+  const userId = req.user!.userId;
+  const createEntries: InsertAuditLog[] = [];
+  for (const f of fields) {
+    const v = auditStr(result.values[f.fieldKey]);
+    if (v !== null) createEntries.push({ entityId, recordId: record.id, fieldKey: f.fieldKey, oldValue: null, newValue: v, userId });
+  }
+  if (statusId != null) {
+    createEntries.push({ entityId, recordId: record.id, fieldKey: AUDIT_STATUS, oldValue: null, newValue: String(statusId), userId });
+  }
+  if (createEntries.length === 0) {
+    createEntries.push({ entityId, recordId: record.id, fieldKey: AUDIT_CREATED, oldValue: null, newValue: null, userId });
+  }
+  await writeAudit(createEntries, req.log);
+
   res.status(201).json(stripHidden(record, hidden));
 });
 
@@ -651,6 +678,34 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(409).json({ error: "Record status changed concurrently; please retry" });
     return;
   }
+
+  // Audit: one entry per changed data field, plus status and (consequent)
+  // archival flips. Diffing the persisted value map against the prior one keeps
+  // the trail accurate even when workflow set_field actions mutated values.
+  const userId = req.user!.userId;
+  const updateEntries: InsertAuditLog[] = [];
+  if (update.valuesJson !== undefined) {
+    const after = record.valuesJson as Record<string, unknown>;
+    for (const c of diffValues(existingValues, after, fields.map((f) => f.fieldKey))) {
+      updateEntries.push({ entityId: existing.entityId, recordId: record.id, ...c, userId });
+    }
+  }
+  if (statusChanging) {
+    updateEntries.push({
+      entityId: existing.entityId,
+      recordId: record.id,
+      fieldKey: AUDIT_STATUS,
+      oldValue: existing.statusId != null ? String(existing.statusId) : null,
+      newValue: record.statusId != null ? String(record.statusId) : null,
+      userId,
+    });
+    // A delay=0 archive-trigger status archives immediately as a side effect.
+    if (existing.archivedAt == null && record.archivedAt != null) {
+      updateEntries.push({ entityId: existing.entityId, recordId: record.id, fieldKey: AUDIT_ARCHIVED, oldValue: "false", newValue: "true", userId });
+    }
+  }
+  await writeAudit(updateEntries, req.log);
+
   res.json(stripHidden(record, hidden));
 });
 
@@ -680,6 +735,21 @@ router.delete("/records/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   await db.delete(entityRecordsTable).where(eq(entityRecordsTable.id, params.data.id));
+
+  // Audit: one deletion marker carrying a snapshot of the record's data so the
+  // trail preserves what was removed even though the row is gone.
+  await writeAudit(
+    [{
+      entityId: existing.entityId,
+      recordId: params.data.id,
+      fieldKey: AUDIT_DELETED,
+      oldValue: Object.keys(values).length > 0 ? auditStr(values) : null,
+      newValue: null,
+      userId: req.user!.userId,
+    }],
+    req.log,
+  );
+
   res.json({ success: true });
 });
 
@@ -734,6 +804,21 @@ async function setArchived(
     .set(set)
     .where(eq(entityRecordsTable.id, recordId))
     .returning();
+
+  // Audit: log the archival flip only when it actually changed state.
+  if (wasArchived !== archived) {
+    await writeAudit(
+      [{
+        entityId: existing.entityId,
+        recordId,
+        fieldKey: AUDIT_ARCHIVED,
+        oldValue: String(wasArchived),
+        newValue: String(archived),
+        userId: req.user!.userId,
+      }],
+      req.log,
+    );
+  }
 
   const fields = await loadActiveFields(existing.entityId);
   const { hidden } = await fieldAccessContext(req, existing.entityId, fields);

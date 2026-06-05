@@ -1,2 +1,3 @@
 - [Orval param collision](orval-param-collision.md) — adding a query param to a path-param GET breaks api-zod codegen (TS2308); keep filters on POST bodies.
 - [Archive engine design](archive-engine.md) — archive is a record flag + lazy sweep; the archiveExempt column is what makes manual unarchive durable.
+- [Audit endpoint field security](audit-field-security.md) — endpoints returning stored/historical values (audit, snapshots) must re-apply the hidden-field boundary, not just record-level gating.

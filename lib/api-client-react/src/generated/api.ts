@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AuditLogEntry,
   AuthResult,
   ChangePasswordInput,
   DashboardStats,
@@ -3753,6 +3754,83 @@ export const useUnarchiveRecord = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getUnarchiveRecordMutationOptions(options));
     }
+
+export const getListRecordAuditLogsUrl = (id: number,) => {
+
+
+
+
+  return `/api/records/${id}/audit`
+}
+
+/**
+ * @summary List the change history (audit log) of a record
+ */
+export const listRecordAuditLogs = async (id: number, options?: RequestInit): Promise<AuditLogEntry[]> => {
+
+  return customFetch<AuditLogEntry[]>(getListRecordAuditLogsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListRecordAuditLogsQueryKey = (id: number,) => {
+    return [
+    `/api/records/${id}/audit`
+    ] as const;
+    }
+
+
+export const getListRecordAuditLogsQueryOptions = <TData = Awaited<ReturnType<typeof listRecordAuditLogs>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listRecordAuditLogs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListRecordAuditLogsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listRecordAuditLogs>>> = ({ signal }) => listRecordAuditLogs(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listRecordAuditLogs>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListRecordAuditLogsQueryResult = NonNullable<Awaited<ReturnType<typeof listRecordAuditLogs>>>
+export type ListRecordAuditLogsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List the change history (audit log) of a record
+ */
+
+export function useListRecordAuditLogs<TData = Awaited<ReturnType<typeof listRecordAuditLogs>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listRecordAuditLogs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListRecordAuditLogsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getQueryEntityRecordsUrl = (entityId: number,) => {
 

@@ -7,6 +7,7 @@
  */
 
 export * from './archiveFilter';
+export * from './auditLogEntry';
 export * from './authResult';
 export * from './changePasswordInput';
 export * from './dashboardStats';
