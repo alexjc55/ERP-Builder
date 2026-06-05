@@ -24,6 +24,7 @@ export interface UserProfile {
   startPageId?: number | null;
   isActive: boolean;
   permissions?: RolePermissions;
+  isGuest?: boolean;
   /** @nullable */
   impersonator?: UserProfileImpersonator;
 }

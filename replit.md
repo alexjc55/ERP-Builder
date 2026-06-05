@@ -55,6 +55,7 @@ A metadata-driven platform constructor (Airtable/SmartSuite/Notion-like) for bui
 - **Archive Engine** — archival as a record flag with lazy metadata-driven auto-archival and explicit manual archive/unarchive. Memory: `archive-engine.md`.
 - **Audit & History** — best-effort change history (who/when/what/old→new) that re-applies the field-hidden boundary on read. Memory: `audit-field-security.md`.
 - **Impersonation** — admin "log in as user" on top of the custom JWT with no-escalation guard. Memory: `erp-impersonation.md`.
+- **Passwordless Guest Access** — "client = passwordless user": admins create a passwordless account + a "Гость" role, then generate an unguessable shareable link that mints a read-only guest JWT (RBAC drives sidebar/columns/own-rows). Read-only is a hard guard at `requireAuth`; guest reads are side-effect free; links bind to passwordless accounts only. Memory: `guest-access.md`.
 - **Event System** — internal best-effort event bus + durable log; foundation for future automations. Memory: `event-system.md`.
 - **Modules Architecture** — metadata-driven registry/infrastructure for future plugins (plugins themselves intentionally not built). Memory: `admin-cap-stage-pattern.md`.
 - **Localization Engine** — whole UI switchable ru/en/he with all strings DB-backed (no locale files). Memory: `erp-i18n.md`.

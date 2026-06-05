@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 import { I18nProvider } from "@/lib/i18n";
 import Layout from "@/components/layout/Layout";
 import LoginPage from "@/pages/login";
+import GuestEntryPage from "@/pages/guest";
 import DashboardPage from "@/pages/dashboard";
 import UsersPage from "@/pages/admin/users";
 import RolesPage from "@/pages/admin/roles";
@@ -99,6 +100,10 @@ function Router() {
         <PublicRoute>
           <LoginPage />
         </PublicRoute>
+      </Route>
+
+      <Route path="/guest/:token">
+        {(params) => <GuestEntryPage key={params.token} />}
       </Route>
 
       <Route path="/">

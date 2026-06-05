@@ -35,6 +35,10 @@ import type {
   FieldsReorderInput,
   FilterValuesQuery,
   FilterValuesResult,
+  GuestLink,
+  GuestLinkCreated,
+  GuestLinkInput,
+  GuestRedeemInput,
   HealthStatus,
   ImpersonateInput,
   LinkInput,
@@ -605,6 +609,296 @@ export const useStopImpersonation = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getStopImpersonationMutationOptions(options));
+    }
+
+export const getRedeemGuestLinkUrl = () => {
+
+
+
+
+  return `/api/guest/redeem`
+}
+
+/**
+ * @summary Exchange a guest link token for a read-only session (public, no auth)
+ */
+export const redeemGuestLink = async (guestRedeemInput: GuestRedeemInput, options?: RequestInit): Promise<AuthResult> => {
+
+  return customFetch<AuthResult>(getRedeemGuestLinkUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      guestRedeemInput,)
+  }
+);}
+
+
+
+
+export const getRedeemGuestLinkMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof redeemGuestLink>>, TError,{data: BodyType<GuestRedeemInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof redeemGuestLink>>, TError,{data: BodyType<GuestRedeemInput>}, TContext> => {
+
+const mutationKey = ['redeemGuestLink'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof redeemGuestLink>>, {data: BodyType<GuestRedeemInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  redeemGuestLink(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RedeemGuestLinkMutationResult = NonNullable<Awaited<ReturnType<typeof redeemGuestLink>>>
+    export type RedeemGuestLinkMutationBody = BodyType<GuestRedeemInput>
+    export type RedeemGuestLinkMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Exchange a guest link token for a read-only session (public, no auth)
+ */
+export const useRedeemGuestLink = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof redeemGuestLink>>, TError,{data: BodyType<GuestRedeemInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof redeemGuestLink>>,
+        TError,
+        {data: BodyType<GuestRedeemInput>},
+        TContext
+      > => {
+      return useMutation(getRedeemGuestLinkMutationOptions(options));
+    }
+
+export const getListGuestLinksUrl = (id: number,) => {
+
+
+
+
+  return `/api/users/${id}/guest-links`
+}
+
+/**
+ * @summary List guest links for a user (admin)
+ */
+export const listGuestLinks = async (id: number, options?: RequestInit): Promise<GuestLink[]> => {
+
+  return customFetch<GuestLink[]>(getListGuestLinksUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListGuestLinksQueryKey = (id: number,) => {
+    return [
+    `/api/users/${id}/guest-links`
+    ] as const;
+    }
+
+
+export const getListGuestLinksQueryOptions = <TData = Awaited<ReturnType<typeof listGuestLinks>>, TError = ErrorType<ErrorResponse>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGuestLinks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListGuestLinksQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGuestLinks>>> = ({ signal }) => listGuestLinks(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGuestLinks>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListGuestLinksQueryResult = NonNullable<Awaited<ReturnType<typeof listGuestLinks>>>
+export type ListGuestLinksQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary List guest links for a user (admin)
+ */
+
+export function useListGuestLinks<TData = Awaited<ReturnType<typeof listGuestLinks>>, TError = ErrorType<ErrorResponse>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGuestLinks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListGuestLinksQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateGuestLinkUrl = (id: number,) => {
+
+
+
+
+  return `/api/users/${id}/guest-links`
+}
+
+/**
+ * @summary Create a guest link for a user (admin). The token is returned once.
+ */
+export const createGuestLink = async (id: number,
+    guestLinkInput: GuestLinkInput, options?: RequestInit): Promise<GuestLinkCreated> => {
+
+  return customFetch<GuestLinkCreated>(getCreateGuestLinkUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      guestLinkInput,)
+  }
+);}
+
+
+
+
+export const getCreateGuestLinkMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGuestLink>>, TError,{id: number;data: BodyType<GuestLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createGuestLink>>, TError,{id: number;data: BodyType<GuestLinkInput>}, TContext> => {
+
+const mutationKey = ['createGuestLink'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createGuestLink>>, {id: number;data: BodyType<GuestLinkInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createGuestLink(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateGuestLinkMutationResult = NonNullable<Awaited<ReturnType<typeof createGuestLink>>>
+    export type CreateGuestLinkMutationBody = BodyType<GuestLinkInput>
+    export type CreateGuestLinkMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Create a guest link for a user (admin). The token is returned once.
+ */
+export const useCreateGuestLink = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGuestLink>>, TError,{id: number;data: BodyType<GuestLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createGuestLink>>,
+        TError,
+        {id: number;data: BodyType<GuestLinkInput>},
+        TContext
+      > => {
+      return useMutation(getCreateGuestLinkMutationOptions(options));
+    }
+
+export const getRevokeGuestLinkUrl = (id: number,) => {
+
+
+
+
+  return `/api/guest-links/${id}/revoke`
+}
+
+/**
+ * @summary Revoke a guest link (admin)
+ */
+export const revokeGuestLink = async (id: number, options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getRevokeGuestLinkUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getRevokeGuestLinkMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeGuestLink>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokeGuestLink>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['revokeGuestLink'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeGuestLink>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  revokeGuestLink(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokeGuestLinkMutationResult = NonNullable<Awaited<ReturnType<typeof revokeGuestLink>>>
+
+    export type RevokeGuestLinkMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Revoke a guest link (admin)
+ */
+export const useRevokeGuestLink = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeGuestLink>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof revokeGuestLink>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRevokeGuestLinkMutationOptions(options));
     }
 
 export const getChangePasswordUrl = () => {

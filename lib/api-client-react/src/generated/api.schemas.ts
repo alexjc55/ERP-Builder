@@ -103,6 +103,7 @@ export interface UserProfile {
   startPageId?: number | null;
   isActive: boolean;
   permissions?: RolePermissions;
+  isGuest?: boolean;
   /** @nullable */
   impersonator?: UserProfileImpersonator;
 }
@@ -154,6 +155,44 @@ export interface UpdateMeInput {
 export interface ResetPasswordInput {
   /** @minLength 6 */
   newPassword: string;
+}
+
+export interface GuestRedeemInput {
+  token: string;
+}
+
+export interface GuestLink {
+  id: number;
+  userId: number;
+  /** @nullable */
+  label?: string | null;
+  /** @nullable */
+  expiresAt?: string | null;
+  /** @nullable */
+  revokedAt?: string | null;
+  /** @nullable */
+  lastUsedAt?: string | null;
+  createdAt: string;
+  /** True when the link is neither revoked nor expired. */
+  isActive: boolean;
+}
+
+export interface GuestLinkInput {
+  /** @nullable */
+  label?: string | null;
+  /**
+     * Optional expiry. Null or omitted means the link never expires.
+     * @nullable
+     */
+  expiresAt?: string | null;
+}
+
+export interface GuestLinkCreated {
+  link: GuestLink;
+  /** The one-time plaintext token. Shown only at creation; not retrievable later. */
+  token: string;
+  /** Ready-to-share guest URL containing the token. */
+  url: string;
 }
 
 export type UserLanguage = typeof UserLanguage[keyof typeof UserLanguage];
@@ -213,8 +252,12 @@ export const UserInputDirection = {
 
 export interface UserInput {
   email: string;
-  /** @minLength 6 */
-  password: string;
+  /**
+     * Omit or null to create a passwordless guest user (cannot log in with a password; access only via a guest link).
+     * @minLength 6
+     * @nullable
+     */
+  password?: string | null;
   firstName: string;
   lastName: string;
   roleId: number;

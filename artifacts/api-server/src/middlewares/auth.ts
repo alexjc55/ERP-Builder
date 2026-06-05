@@ -24,6 +24,22 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     return;
   }
 
+  // Defense-in-depth: a passwordless guest token is strictly read-only. Even if a
+  // Guest role were ever misconfigured with write/admin perms, the token itself
+  // cannot reach any mutating endpoint. Reads are GET, plus the records query
+  // endpoint which is a POST by design.
+  if (payload.guest && !isGuestReadSafe(req)) {
+    res.status(403).json({ error: "Guest access is read-only" });
+    return;
+  }
+
   req.user = payload;
   next();
+}
+
+/** Requests a guest token is allowed to make: any GET, or the POST records-query read. */
+function isGuestReadSafe(req: Request): boolean {
+  if (req.method === "GET") return true;
+  if (req.method === "POST" && /\/records\/query$/.test(req.path)) return true;
+  return false;
 }

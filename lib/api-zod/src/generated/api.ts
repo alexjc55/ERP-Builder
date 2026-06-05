@@ -62,6 +62,7 @@ export const LoginResponse = zod.object({
   "scopeFieldKeys": zod.array(zod.string()).optional()
 }))
 }).optional(),
+  "isGuest": zod.boolean().optional(),
   "impersonator": zod.object({
   "id": zod.number().optional(),
   "name": zod.string().optional()
@@ -118,6 +119,7 @@ export const GetMeResponse = zod.object({
   "scopeFieldKeys": zod.array(zod.string()).optional()
 }))
 }).optional(),
+  "isGuest": zod.boolean().optional(),
   "impersonator": zod.object({
   "id": zod.number().optional(),
   "name": zod.string().optional()
@@ -170,6 +172,7 @@ export const UpdateMeResponse = zod.object({
   "scopeFieldKeys": zod.array(zod.string()).optional()
 }))
 }).optional(),
+  "isGuest": zod.boolean().optional(),
   "impersonator": zod.object({
   "id": zod.number().optional(),
   "name": zod.string().optional()
@@ -222,6 +225,7 @@ export const ImpersonateResponse = zod.object({
   "scopeFieldKeys": zod.array(zod.string()).optional()
 }))
 }).optional(),
+  "isGuest": zod.boolean().optional(),
   "impersonator": zod.object({
   "id": zod.number().optional(),
   "name": zod.string().optional()
@@ -271,11 +275,127 @@ export const StopImpersonationResponse = zod.object({
   "scopeFieldKeys": zod.array(zod.string()).optional()
 }))
 }).optional(),
+  "isGuest": zod.boolean().optional(),
   "impersonator": zod.object({
   "id": zod.number().optional(),
   "name": zod.string().optional()
 }).nullish()
 })
+})
+
+
+/**
+ * @summary Exchange a guest link token for a read-only session (public, no auth)
+ */
+export const RedeemGuestLinkBody = zod.object({
+  "token": zod.string()
+})
+
+export const RedeemGuestLinkResponse = zod.object({
+  "token": zod.string(),
+  "user": zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "roleId": zod.number(),
+  "roleName": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "language": zod.enum(['ru', 'en', 'he']),
+  "direction": zod.enum(['ltr', 'rtl']),
+  "startPageId": zod.number().nullish(),
+  "isActive": zod.boolean(),
+  "permissions": zod.object({
+  "superAdmin": zod.boolean(),
+  "admin": zod.object({
+  "pages": zod.boolean(),
+  "entities": zod.boolean(),
+  "roles": zod.boolean(),
+  "users": zod.boolean(),
+  "translations": zod.boolean(),
+  "events": zod.boolean(),
+  "modules": zod.boolean()
+}),
+  "pageIds": zod.array(zod.number()),
+  "records": zod.record(zod.string(), zod.object({
+  "view": zod.boolean(),
+  "create": zod.boolean(),
+  "update": zod.boolean(),
+  "delete": zod.boolean(),
+  "scope": zod.enum(['all', 'own']).optional(),
+  "scopeFieldKeys": zod.array(zod.string()).optional()
+}))
+}).optional(),
+  "isGuest": zod.boolean().optional(),
+  "impersonator": zod.object({
+  "id": zod.number().optional(),
+  "name": zod.string().optional()
+}).nullish()
+})
+})
+
+
+/**
+ * @summary List guest links for a user (admin)
+ */
+export const ListGuestLinksParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListGuestLinksResponseItem = zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "label": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().nullish(),
+  "revokedAt": zod.coerce.date().nullish(),
+  "lastUsedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "isActive": zod.boolean().describe('True when the link is neither revoked nor expired.')
+})
+export const ListGuestLinksResponse = zod.array(ListGuestLinksResponseItem)
+
+
+/**
+ * @summary Create a guest link for a user (admin). The token is returned once.
+ */
+export const CreateGuestLinkParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const CreateGuestLinkBody = zod.object({
+  "label": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().nullish().describe('Optional expiry. Null or omitted means the link never expires.')
+})
+
+export const CreateGuestLinkResponse = zod.object({
+  "link": zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "label": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().nullish(),
+  "revokedAt": zod.coerce.date().nullish(),
+  "lastUsedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "isActive": zod.boolean().describe('True when the link is neither revoked nor expired.')
+}),
+  "token": zod.string().describe('The one-time plaintext token. Shown only at creation; not retrievable later.'),
+  "url": zod.string().describe('Ready-to-share guest URL containing the token.')
+})
+
+
+/**
+ * @summary Revoke a guest link (admin)
+ */
+export const RevokeGuestLinkParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RevokeGuestLinkResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
 })
 
 
@@ -344,7 +464,7 @@ export const createUserBodyDirectionDefault = `ltr`;
 
 export const CreateUserBody = zod.object({
   "email": zod.string().email(),
-  "password": zod.string().min(createUserBodyPasswordMin),
+  "password": zod.string().min(createUserBodyPasswordMin).nullish().describe('Omit or null to create a passwordless guest user (cannot log in with a password; access only via a guest link).'),
   "firstName": zod.string(),
   "lastName": zod.string(),
   "roleId": zod.number(),

@@ -13,5 +13,6 @@
 - [Editable records table](editable-records-table.md) — inline cell/add-row/setup-mode constraints; inline status edits must mirror the per-row server workflow boundary, not a heuristic.
 - [Event system](event-system.md) — internal best-effort event bus design, the 5 core events, foundation for automations/modules.
 - [Impersonation](erp-impersonation.md) — impersonation modeled on the custom JWT; boundary/no-escalation rules that must stay consistent.
+- [Passwordless guest access](guest-access.md) — shareable-link guest sessions: read-only is a hard guard at requireAuth (not RBAC), guest reads must be side-effect free, links bind to passwordless accounts only.
 - [ERP i18n](erp-i18n.md) — how erp-platform i18n is wired and how to keep translation seeding complete.
 - [Orval param collision](orval-param-collision.md) — why adding a query param to a path-param GET breaks api-zod codegen, and how to avoid it.

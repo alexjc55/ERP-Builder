@@ -170,6 +170,125 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  # GUEST ACCESS (passwordless shareable links)
+  /guest/redeem:
+    post:
+      operationId: redeemGuestLink
+      tags: [guest]
+      summary: Exchange a guest link token for a read-only session (public, no auth)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GuestRedeemInput"
+      responses:
+        "200":
+          description: Read-only session token for the guest user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResult"
+        "401":
+          description: Invalid, expired, or revoked link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/{id}/guest-links:
+    get:
+      operationId: listGuestLinks
+      tags: [guest]
+      summary: List guest links for a user (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Guest links for the user
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GuestLink"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createGuestLink
+      tags: [guest]
+      summary: Create a guest link for a user (admin). The token is returned once.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GuestLinkInput"
+      responses:
+        "200":
+          description: Created guest link including the one-time plaintext token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuestLinkCreated"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /guest-links/{id}/revoke:
+    post:
+      operationId: revokeGuestLink
+      tags: [guest]
+      summary: Revoke a guest link (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Guest link not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /auth/change-password:
     post:
       operationId: changePassword
@@ -1904,6 +2023,8 @@ components:
           type: boolean
         permissions:
           $ref: "#/components/schemas/RolePermissions"
+        isGuest:
+          type: boolean
         impersonator:
           type: ["object", "null"]
           properties:
@@ -1948,6 +2069,62 @@ components:
         newPassword:
           type: string
           minLength: 6
+
+    GuestRedeemInput:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+
+    GuestLink:
+      type: object
+      required: [id, userId, createdAt, isActive]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        label:
+          type: ["string", "null"]
+        expiresAt:
+          type: ["string", "null"]
+          format: date-time
+        revokedAt:
+          type: ["string", "null"]
+          format: date-time
+        lastUsedAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        isActive:
+          type: boolean
+          description: True when the link is neither revoked nor expired.
+
+    GuestLinkInput:
+      type: object
+      properties:
+        label:
+          type: ["string", "null"]
+        expiresAt:
+          type: ["string", "null"]
+          format: date-time
+          description: Optional expiry. Null or omitted means the link never expires.
+
+    GuestLinkCreated:
+      type: object
+      required: [link, url, token]
+      properties:
+        link:
+          $ref: "#/components/schemas/GuestLink"
+        token:
+          type: string
+          description: The one-time plaintext token. Shown only at creation; not retrievable later.
+        url:
+          type: string
+          description: Ready-to-share guest URL containing the token.
 
     # USERS
     User:
@@ -1996,14 +2173,15 @@ components:
 
     UserInput:
       type: object
-      required: [email, password, firstName, lastName, roleId]
+      required: [email, firstName, lastName, roleId]
       properties:
         email:
           type: string
           format: email
         password:
-          type: string
+          type: ["string", "null"]
           minLength: 6
+          description: Omit or null to create a passwordless guest user (cannot log in with a password; access only via a guest link).
         firstName:
           type: string
         lastName:

@@ -7,6 +7,8 @@ export interface JwtPayload {
   roleId: number;
   /** Set when this token was issued via impersonation; the original admin's user id. */
   impersonatorId?: number;
+  /** Set when this token was issued via a passwordless guest link. Read-only access. */
+  guest?: boolean;
 }
 
 export function signToken(payload: JwtPayload): string {

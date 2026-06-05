@@ -6,6 +6,7 @@ import {
   setAuthTokenGetter,
   impersonate as apiImpersonate,
   stopImpersonation as apiStopImpersonation,
+  redeemGuestLink as apiRedeemGuestLink,
 } from "@workspace/api-client-react";
 import type { UserProfile, RolePermissions, RoleAdminCaps, FieldAccess, FieldPermissions } from "@workspace/api-client-react";
 
@@ -27,6 +28,10 @@ interface AuthContextType {
   impersonate: (userId: number) => Promise<void>;
   /** Return to the original admin account. */
   stopImpersonation: () => Promise<void>;
+  /** True when the session was opened via a passwordless guest link (read-only). */
+  isGuest: boolean;
+  /** Exchange a guest link token for a read-only session. */
+  redeemGuest: (token: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -77,6 +82,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await switchIdentity(res.token);
   };
 
+  const handleRedeemGuest = async (guestToken: string) => {
+    const res = await apiRedeemGuestLink({ token: guestToken });
+    await switchIdentity(res.token);
+  };
+
   const permissions = user?.permissions ?? null;
   const isSuperAdmin = permissions?.superAdmin === true;
 
@@ -116,6 +126,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         fieldAccess,
         impersonate: handleImpersonate,
         stopImpersonation: handleStopImpersonation,
+        isGuest: user?.isGuest === true,
+        redeemGuest: handleRedeemGuest,
       }}
     >
       {children}

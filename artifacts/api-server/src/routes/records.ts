@@ -313,7 +313,9 @@ router.get("/entities/:entityId/records", requireAuth, requireRecordParam("view"
   const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
 
   // Apply auto-archival, then hide archived rows from this normal list (display rule).
-  await runAutoArchiveSweep(entityId);
+  // Guests are strictly read-only: never let a guest read trigger the archival write
+  // sweep. Non-guest reads still keep archival up to date.
+  if (!req.user?.guest) await runAutoArchiveSweep(entityId);
   let where: SQL = and(eq(entityRecordsTable.entityId, entityId), archivedWhere("active")!)!;
   if (scope === "own") {
     where = and(where, ownScopeWhere(scopeFieldKeys, req.user!.userId))!;
@@ -359,7 +361,8 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   const perms = await getPermissions(req);
   const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
 
-  await runAutoArchiveSweep(entityId);
+  // Guests are strictly read-only: skip the archival write sweep for guest sessions.
+  if (!req.user?.guest) await runAutoArchiveSweep(entityId);
   const archived = (body.data.archived ?? "active") as ArchiveFilterValue;
 
   const clauses: SQL[] = [eq(entityRecordsTable.entityId, entityId)];

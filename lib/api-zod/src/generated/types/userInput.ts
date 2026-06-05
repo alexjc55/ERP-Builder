@@ -10,8 +10,12 @@ import type { UserInputLanguage } from './userInputLanguage';
 
 export interface UserInput {
   email: string;
-  /** @minLength 6 */
-  password: string;
+  /**
+     * Omit or null to create a passwordless guest user (cannot log in with a password; access only via a guest link).
+     * @minLength 6
+     * @nullable
+     */
+  password?: string | null;
   firstName: string;
   lastName: string;
   roleId: number;

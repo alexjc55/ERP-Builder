@@ -122,7 +122,9 @@ router.post("/users", requireAuth, requireAdmin("users"), async (req, res): Prom
   }
 
   const { password, email, ...rest } = parsed.data;
-  const passwordHash = await bcrypt.hash(password, 10);
+  // A null/omitted password creates a passwordless guest user: they can never log
+  // in with a password, only via a guest link (which issues a read-only token).
+  const passwordHash = password ? await bcrypt.hash(password, 10) : null;
 
   const [existing] = await db
     .select({ id: usersTable.id })

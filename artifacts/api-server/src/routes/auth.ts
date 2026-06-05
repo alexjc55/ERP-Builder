@@ -58,7 +58,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     .from(usersTable)
     .where(eq(usersTable.email, email.toLowerCase()));
 
-  if (!user || !user.isActive) {
+  if (!user || !user.isActive || !user.passwordHash) {
     res.status(401).json({ error: "Invalid credentials" });
     return;
   }
@@ -150,6 +150,7 @@ router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
     startPageId: user.startPageId,
     isActive: user.isActive,
     permissions,
+    isGuest: req.user!.guest ?? false,
     impersonator,
   });
 });
@@ -213,6 +214,7 @@ router.put("/auth/me", requireAuth, async (req, res): Promise<void> => {
     startPageId: user.startPageId,
     isActive: user.isActive,
     permissions,
+    isGuest: req.user!.guest ?? false,
     impersonator,
   });
 });
@@ -231,7 +233,7 @@ router.post("/auth/change-password", requireAuth, async (req, res): Promise<void
     .from(usersTable)
     .where(eq(usersTable.id, req.user!.userId));
 
-  if (!user) {
+  if (!user || !user.passwordHash) {
     res.status(404).json({ error: "User not found" });
     return;
   }
