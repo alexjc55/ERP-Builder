@@ -52,6 +52,7 @@ export interface RoleAdminCaps {
   roles: boolean;
   users: boolean;
   translations: boolean;
+  events: boolean;
 }
 
 export type RecordScope = typeof RecordScope[keyof typeof RecordScope];
@@ -276,6 +277,26 @@ export interface AuditLogEntry {
   /** @nullable */
   userName: string | null;
   createdAt: string;
+}
+
+export type SystemEventPayloadJson = { [key: string]: unknown };
+
+export interface SystemEvent {
+  id: number;
+  eventName: string;
+  /** @nullable */
+  entityId: number | null;
+  /** @nullable */
+  recordId: number | null;
+  payloadJson: SystemEventPayloadJson;
+  /** @nullable */
+  actorName: string | null;
+  createdAt: string;
+}
+
+export interface SystemEventList {
+  data: SystemEvent[];
+  total: number;
 }
 
 export interface Role {
@@ -833,6 +854,13 @@ roleId?: number | null;
  * @nullable
  */
 isActive?: boolean | null;
+limit?: number;
+offset?: number;
+};
+
+export type ListEventsParams = {
+eventName?: string;
+entityId?: number;
 limit?: number;
 offset?: number;
 };

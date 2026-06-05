@@ -4,6 +4,7 @@ import { db, usersTable, rolesTable, loginHistoryTable } from "@workspace/db";
 import { eq, ilike, and, sql, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
+import { emitEvent, EVENT_USER_CREATED } from "../lib/events";
 import {
   CreateUserBody,
   UpdateUserBody,
@@ -149,6 +150,15 @@ router.post("/users", requireAuth, requireAdmin("users"), async (req, res): Prom
       createdAt: usersTable.createdAt,
       updatedAt: usersTable.updatedAt,
     });
+
+  await emitEvent(
+    {
+      eventName: EVENT_USER_CREATED,
+      recordId: user.id,
+      payload: { actorUserId: req.user!.userId, userId: user.id, roleId: user.roleId },
+    },
+    req.log,
+  );
 
   const result = await getUserWithRole(user.id);
   res.status(201).json(result);

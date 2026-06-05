@@ -48,7 +48,8 @@ export const LoginResponse = zod.object({
   "entities": zod.boolean(),
   "roles": zod.boolean(),
   "users": zod.boolean(),
-  "translations": zod.boolean()
+  "translations": zod.boolean(),
+  "events": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -102,7 +103,8 @@ export const GetMeResponse = zod.object({
   "entities": zod.boolean(),
   "roles": zod.boolean(),
   "users": zod.boolean(),
-  "translations": zod.boolean()
+  "translations": zod.boolean(),
+  "events": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -152,7 +154,8 @@ export const UpdateMeResponse = zod.object({
   "entities": zod.boolean(),
   "roles": zod.boolean(),
   "users": zod.boolean(),
-  "translations": zod.boolean()
+  "translations": zod.boolean(),
+  "events": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -202,7 +205,8 @@ export const ImpersonateResponse = zod.object({
   "entities": zod.boolean(),
   "roles": zod.boolean(),
   "users": zod.boolean(),
-  "translations": zod.boolean()
+  "translations": zod.boolean(),
+  "events": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -249,7 +253,8 @@ export const StopImpersonationResponse = zod.object({
   "entities": zod.boolean(),
   "roles": zod.boolean(),
   "users": zod.boolean(),
-  "translations": zod.boolean()
+  "translations": zod.boolean(),
+  "events": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -545,7 +550,8 @@ export const ListRolesResponseItem = zod.object({
   "entities": zod.boolean(),
   "roles": zod.boolean(),
   "users": zod.boolean(),
-  "translations": zod.boolean()
+  "translations": zod.boolean(),
+  "events": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -585,7 +591,8 @@ export const CreateRoleBody = zod.object({
   "entities": zod.boolean(),
   "roles": zod.boolean(),
   "users": zod.boolean(),
-  "translations": zod.boolean()
+  "translations": zod.boolean(),
+  "events": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -626,7 +633,8 @@ export const GetRoleResponse = zod.object({
   "entities": zod.boolean(),
   "roles": zod.boolean(),
   "users": zod.boolean(),
-  "translations": zod.boolean()
+  "translations": zod.boolean(),
+  "events": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -669,7 +677,8 @@ export const UpdateRoleBody = zod.object({
   "entities": zod.boolean(),
   "roles": zod.boolean(),
   "users": zod.boolean(),
-  "translations": zod.boolean()
+  "translations": zod.boolean(),
+  "events": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -702,7 +711,8 @@ export const UpdateRoleResponse = zod.object({
   "entities": zod.boolean(),
   "roles": zod.boolean(),
   "users": zod.boolean(),
-  "translations": zod.boolean()
+  "translations": zod.boolean(),
+  "events": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -1539,6 +1549,30 @@ export const ListRecordAuditLogsResponseItem = zod.object({
   "createdAt": zod.coerce.date()
 })
 export const ListRecordAuditLogsResponse = zod.array(ListRecordAuditLogsResponseItem)
+
+
+/**
+ * @summary List system events (newest first), with optional filters and pagination
+ */
+export const ListEventsQueryParams = zod.object({
+  "eventName": zod.coerce.string().optional(),
+  "entityId": zod.coerce.number().optional(),
+  "limit": zod.coerce.number().optional(),
+  "offset": zod.coerce.number().optional()
+})
+
+export const ListEventsResponse = zod.object({
+  "data": zod.array(zod.object({
+  "id": zod.number(),
+  "eventName": zod.string(),
+  "entityId": zod.number().nullable(),
+  "recordId": zod.number().nullable(),
+  "payloadJson": zod.record(zod.string(), zod.unknown()),
+  "actorName": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
 
 
 /**

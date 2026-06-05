@@ -28,6 +28,8 @@ export interface RoleAdminCaps {
   roles: boolean;
   users: boolean;
   translations: boolean;
+  /** View the system event stream (Event System). */
+  events: boolean;
 }
 
 /** Structured RBAC permission spec stored on each role. */
@@ -45,7 +47,7 @@ export interface RolePermissions {
 /** Default permissions for new/existing roles: no access until granted. */
 export const NO_ACCESS_PERMS: RolePermissions = {
   superAdmin: false,
-  admin: { pages: false, entities: false, roles: false, users: false, translations: false },
+  admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false },
   pageIds: [],
   records: {},
 };

@@ -37,6 +37,7 @@ import type {
   ImpersonateInput,
   LinkInput,
   LinkedRecord,
+  ListEventsParams,
   ListUsersParams,
   LoginHistoryEntry,
   LoginInput,
@@ -61,6 +62,7 @@ import type {
   StatusUpdate,
   StatusesReorderInput,
   SuccessResponse,
+  SystemEventList,
   Transition,
   TransitionInput,
   TransitionUpdate,
@@ -4034,6 +4036,90 @@ export function useListRecordAuditLogs<TData = Awaited<ReturnType<typeof listRec
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListRecordAuditLogsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListEventsUrl = (params?: ListEventsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/events?${stringifiedParams}` : `/api/events`
+}
+
+/**
+ * @summary List system events (newest first), with optional filters and pagination
+ */
+export const listEvents = async (params?: ListEventsParams, options?: RequestInit): Promise<SystemEventList> => {
+
+  return customFetch<SystemEventList>(getListEventsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListEventsQueryKey = (params?: ListEventsParams,) => {
+    return [
+    `/api/events`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListEventsQueryOptions = <TData = Awaited<ReturnType<typeof listEvents>>, TError = ErrorType<unknown>>(params?: ListEventsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListEventsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listEvents>>> = ({ signal }) => listEvents(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listEvents>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListEventsQueryResult = NonNullable<Awaited<ReturnType<typeof listEvents>>>
+export type ListEventsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List system events (newest first), with optional filters and pagination
+ */
+
+export function useListEvents<TData = Awaited<ReturnType<typeof listEvents>>, TError = ErrorType<unknown>>(
+ params?: ListEventsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListEventsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

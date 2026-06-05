@@ -12,4 +12,5 @@ export interface RoleAdminCaps {
   roles: boolean;
   users: boolean;
   translations: boolean;
+  events: boolean;
 }

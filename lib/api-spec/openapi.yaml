@@ -1147,6 +1147,41 @@ paths:
                 items:
                   $ref: "#/components/schemas/AuditLogEntry"
 
+  # EVENTS
+  /events:
+    get:
+      operationId: listEvents
+      tags: [events]
+      summary: List system events (newest first), with optional filters and pagination
+      parameters:
+        - name: eventName
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: entityId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: System events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemEventList"
+
   /entities/{entityId}/records/query:
     post:
       operationId: queryEntityRecords
@@ -1905,6 +1940,39 @@ components:
           type: string
           format: date-time
 
+    # EVENTS
+    SystemEvent:
+      type: object
+      required: [id, eventName, entityId, recordId, payloadJson, actorName, createdAt]
+      properties:
+        id:
+          type: integer
+        eventName:
+          type: string
+        entityId:
+          type: ["integer", "null"]
+        recordId:
+          type: ["integer", "null"]
+        payloadJson:
+          type: object
+          additionalProperties: true
+        actorName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    SystemEventList:
+      type: object
+      required: [data, total]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SystemEvent"
+        total:
+          type: integer
+
     # ROLES
     RecordScope:
       type: string
@@ -1931,7 +1999,7 @@ components:
 
     RoleAdminCaps:
       type: object
-      required: [pages, entities, roles, users, translations]
+      required: [pages, entities, roles, users, translations, events]
       properties:
         pages:
           type: boolean
@@ -1942,6 +2010,8 @@ components:
         users:
           type: boolean
         translations:
+          type: boolean
+        events:
           type: boolean
 
     RolePermissions:

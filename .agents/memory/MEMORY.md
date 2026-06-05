@@ -10,3 +10,4 @@
 - [Record Views & query](record-views-query.md) — why the records query endpoint is POST and the per-entity bootstrap-reset rule.
 - [DB-backed i18n](erp-i18n.md) — UI strings live in the `translations` table, not files; keep seeding complete (template keys are JSON-only).
 - [Orval param collision](orval-param-collision.md) — adding a query param to a path-param GET breaks api-zod codegen; carry filters on a POST body.
+- [Event System](event-system.md) — best-effort event bus (persist + in-process dispatch); the 5 core events and the after-the-mutation emission rule.

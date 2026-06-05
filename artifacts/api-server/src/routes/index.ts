@@ -14,6 +14,7 @@ import viewsRouter from "./views";
 import translationsRouter from "./translations";
 import dashboardRouter from "./dashboard";
 import auditLogRouter from "./audit-log";
+import eventsRouter from "./events";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(viewsRouter);
 router.use(translationsRouter);
 router.use(dashboardRouter);
 router.use(auditLogRouter);
+router.use(eventsRouter);
 
 export default router;

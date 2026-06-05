@@ -7,7 +7,7 @@ import { useLocation, Link } from "wouter";
 import {
   Building2, LayoutDashboard, Users, Shield, Layout as LayoutIcon,
   Languages, Settings, LogOut, ChevronDown, ChevronRight,
-  Menu, X, Database, Table, Check, UserCog
+  Menu, X, Database, Table, Check, UserCog, Activity
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   "settings": Settings,
   "database": Database,
   "table": Table,
+  "activity": Activity,
 };
 
 function SidebarItem({

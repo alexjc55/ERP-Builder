@@ -35,6 +35,13 @@ import {
   AUDIT_CREATED,
   AUDIT_DELETED,
 } from "./audit-log";
+import {
+  emitEvent,
+  EVENT_RECORD_CREATED,
+  EVENT_RECORD_UPDATED,
+  EVENT_RECORD_DELETED,
+  EVENT_STATUS_CHANGED,
+} from "../lib/events";
 
 const router: IRouter = Router();
 
@@ -458,6 +465,16 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
   }
   await writeAudit(createEntries, req.log);
 
+  await emitEvent(
+    {
+      eventName: EVENT_RECORD_CREATED,
+      entityId,
+      recordId: record.id,
+      payload: { actorUserId: userId, statusId: record.statusId },
+    },
+    req.log,
+  );
+
   res.status(201).json(stripHidden(record, hidden));
 });
 
@@ -706,6 +723,28 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
   }
   await writeAudit(updateEntries, req.log);
 
+  const events: Parameters<typeof emitEvent>[0] = [
+    {
+      eventName: EVENT_RECORD_UPDATED,
+      entityId: existing.entityId,
+      recordId: record.id,
+      payload: { actorUserId: userId },
+    },
+  ];
+  if (statusChanging) {
+    events.push({
+      eventName: EVENT_STATUS_CHANGED,
+      entityId: existing.entityId,
+      recordId: record.id,
+      payload: {
+        actorUserId: userId,
+        from: existing.statusId ?? null,
+        to: record.statusId ?? null,
+      },
+    });
+  }
+  await emitEvent(events, req.log);
+
   res.json(stripHidden(record, hidden));
 });
 
@@ -747,6 +786,16 @@ router.delete("/records/:id", requireAuth, async (req, res): Promise<void> => {
       newValue: null,
       userId: req.user!.userId,
     }],
+    req.log,
+  );
+
+  await emitEvent(
+    {
+      eventName: EVENT_RECORD_DELETED,
+      entityId: existing.entityId,
+      recordId: params.data.id,
+      payload: { actorUserId: req.user!.userId },
+    },
     req.log,
   );
 
