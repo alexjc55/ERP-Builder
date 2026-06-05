@@ -11,6 +11,18 @@ import {
 
 const router: IRouter = Router();
 
+// Drizzle wraps the underlying pg error, so the SQLSTATE code can live on
+// err.cause rather than the top-level error. Walk the cause chain to find it.
+function isUniqueViolation(err: unknown): boolean {
+  let e: unknown = err;
+  for (let depth = 0; e && depth < 5; depth++) {
+    const obj = e as { code?: string; cause?: unknown };
+    if (obj.code === "23505") return true;
+    e = obj.cause;
+  }
+  return false;
+}
+
 router.get("/translations", requireAuth, async (_req, res): Promise<void> => {
   const translations = await db
     .select()
@@ -26,12 +38,20 @@ router.post("/translations", requireAuth, requireAdmin("translations"), async (r
     return;
   }
 
-  const [translation] = await db
-    .insert(translationsTable)
-    .values(parsed.data)
-    .returning();
+  try {
+    const [translation] = await db
+      .insert(translationsTable)
+      .values(parsed.data)
+      .returning();
 
-  res.status(201).json(translation);
+    res.status(201).json(translation);
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      res.status(409).json({ error: "A translation with this key already exists" });
+      return;
+    }
+    throw err;
+  }
 });
 
 router.put("/translations/:key", requireAuth, requireAdmin("translations"), async (req, res): Promise<void> => {
