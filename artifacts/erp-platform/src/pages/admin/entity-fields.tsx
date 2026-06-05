@@ -52,6 +52,7 @@ import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Loader2, ArrowLeft, Columns3, KeyRound } from "lucide-react";
+import { useML, useT } from "@/lib/i18n";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
@@ -79,13 +80,9 @@ function typeLabel(t: string): string {
   return FIELD_TYPES.find((ft) => ft.value === t)?.label ?? t;
 }
 
-function getML(val: MultilingualText | string | undefined | null): string {
-  if (!val) return "";
-  if (typeof val === "string") return val;
-  return val.ru || val.en || val.he || "";
-}
-
 export default function EntityFieldsPage() {
+  const ml = useML();
+  const t = useT();
   const params = useParams();
   const entityId = Number(params.entityId);
   const [, navigate] = useLocation();
@@ -118,22 +115,22 @@ export default function EntityFieldsPage() {
 
   const createMutation = useCreateEntityField({
     mutation: {
-      onSuccess: () => { toast({ title: "Поле создано" }); setDialogOpen(false); invalidate(); },
-      onError: (err) => toast({ title: "Ошибка создания поля", description: extractError(err), variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("fields.created", "Поле создано") }); setDialogOpen(false); invalidate(); },
+      onError: (err) => toast({ title: t("fields.createError", "Ошибка создания поля"), description: extractError(err), variant: "destructive" }),
     },
   });
 
   const updateMutation = useUpdateField({
     mutation: {
-      onSuccess: () => { toast({ title: "Поле обновлено" }); setDialogOpen(false); invalidate(); },
-      onError: (err) => toast({ title: "Ошибка обновления", description: extractError(err), variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("fields.updated", "Поле обновлено") }); setDialogOpen(false); invalidate(); },
+      onError: (err) => toast({ title: t("fields.updateError", "Ошибка обновления"), description: extractError(err), variant: "destructive" }),
     },
   });
 
   const deleteMutation = useDeleteField({
     mutation: {
-      onSuccess: () => { toast({ title: "Поле удалено" }); setDeleteField(null); invalidate(); },
-      onError: () => toast({ title: "Ошибка удаления поля", variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("fields.deleted", "Поле удалено") }); setDeleteField(null); invalidate(); },
+      onError: () => toast({ title: t("fields.deleteError", "Ошибка удаления поля"), variant: "destructive" }),
     },
   });
 
@@ -217,21 +214,21 @@ export default function EntityFieldsPage() {
           className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-3"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          К списку сущностей
+          {t("fields.backToEntities", "К списку сущностей")}
         </button>
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
               <Columns3 className="w-6 h-6 text-blue-600" />
-              Поля{entity ? `: ${getML(entity.nameJson)}` : ""}
+              {t("fields.title", "Поля")}{entity ? `: ${ml(entity.nameJson)}` : ""}
             </h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              Структура полей сущности{entity ? <> <code className="text-xs">{entity.entityKey}</code></> : null}
+              {t("fields.subtitle", "Структура полей сущности")}{entity ? <> <code className="text-xs">{entity.entityKey}</code></> : null}
             </p>
           </div>
           <Button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 gap-2">
             <Plus className="w-4 h-4" />
-            Добавить поле
+            {t("fields.add", "Добавить поле")}
           </Button>
         </div>
       </div>
@@ -246,46 +243,46 @@ export default function EntityFieldsPage() {
             </div>
           ) : fields.length === 0 ? (
             <div className="text-center py-16 text-slate-400">
-              У этой сущности ещё нет полей. Нажмите «Добавить поле», чтобы создать первое.
+              {t("fields.empty", "У этой сущности ещё нет полей. Нажмите «Добавить поле», чтобы создать первое.")}
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Название</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Ключ</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Тип</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Обязательное</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Статус</th>
-                  <th className="text-right px-4 py-3 font-medium text-slate-600">Действия</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("fields.name", "Название")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("fields.key", "Ключ")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("fields.typeHeader", "Тип")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("fields.required", "Обязательное")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("fields.status", "Статус")}</th>
+                  <th className="text-right px-4 py-3 font-medium text-slate-600">{t("fields.actions", "Действия")}</th>
                 </tr>
               </thead>
               <tbody>
                 {sorted.map((field: Field) => (
                   <tr key={field.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="px-4 py-3">
-                      <span className="font-medium text-slate-700">{getML(field.nameJson)}</span>
+                      <span className="font-medium text-slate-700">{ml(field.nameJson)}</span>
                     </td>
                     <td className="px-4 py-3 text-slate-500 font-mono text-xs">{field.fieldKey}</td>
                     <td className="px-4 py-3">
                       <Badge className="bg-slate-100 text-slate-600 border-0 font-normal">
-                        {typeLabel(field.fieldType)}
+                        {t(`fields.type.${field.fieldType}`, typeLabel(field.fieldType))}
                       </Badge>
                     </td>
                     <td className="px-4 py-3">
                       {field.isRequired ? (
                         <span className="inline-flex items-center gap-1 text-amber-600 text-xs">
-                          <KeyRound className="w-3 h-3" /> Да
+                          <KeyRound className="w-3 h-3" /> {t("fields.yes", "Да")}
                         </span>
                       ) : (
-                        <span className="text-slate-400 text-xs">Нет</span>
+                        <span className="text-slate-400 text-xs">{t("fields.no", "Нет")}</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
                       {field.isActive ? (
-                        <Badge className="bg-emerald-100 text-emerald-700 border-0 font-normal">Активно</Badge>
+                        <Badge className="bg-emerald-100 text-emerald-700 border-0 font-normal">{t("fields.active", "Активно")}</Badge>
                       ) : (
-                        <Badge className="bg-slate-100 text-slate-500 border-0 font-normal">Скрыто</Badge>
+                        <Badge className="bg-slate-100 text-slate-500 border-0 font-normal">{t("fields.access.hidden", "Скрыто")}</Badge>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -309,16 +306,16 @@ export default function EntityFieldsPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg max-h-[88vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingField ? "Редактировать поле" : "Новое поле"}</DialogTitle>
+            <DialogTitle>{editingField ? t("fields.editTitle", "Редактировать поле") : t("fields.newTitle", "Новое поле")}</DialogTitle>
             <DialogDescription>
-              Поле — это столбец данных сущности с типом, обязательностью и значением по умолчанию.
+              {t("fields.dialogDesc", "Поле — это столбец данных сущности с типом, обязательностью и значением по умолчанию.")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <MultilingualInput label="Название" value={nameJson} onChange={setNameJson} required />
-            <MultilingualInput label="Описание" value={descJson} onChange={setDescJson} multiline />
+            <MultilingualInput label={t("fields.name", "Название")} value={nameJson} onChange={setNameJson} required />
+            <MultilingualInput label={t("fields.description", "Описание")} value={descJson} onChange={setDescJson} multiline />
             <div className="space-y-1.5">
-              <Label>Системный ключ</Label>
+              <Label>{t("fields.systemKey", "Системный ключ")}</Label>
               <Input
                 value={fieldKey}
                 onChange={(e) => setFieldKey(e.target.value)}
@@ -326,40 +323,40 @@ export default function EntityFieldsPage() {
                 className="font-mono"
               />
               <p className="text-xs text-slate-400">
-                Только строчные латинские буквы, цифры и подчёркивания (например, <code>start_date</code>). Уникален в пределах сущности.
+                {t("fields.keyHintPre", "Только строчные латинские буквы, цифры и подчёркивания (например, ")}<code>start_date</code>{t("fields.keyHintPost", "). Уникален в пределах сущности.")}
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Тип поля</Label>
+                <Label>{t("fields.fieldType", "Тип поля")}</Label>
                 <Select value={fieldType} onValueChange={(v) => setFieldType(v as FieldType)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {FIELD_TYPES.map((ft) => (
-                      <SelectItem key={ft.value} value={ft.value}>{ft.label}</SelectItem>
+                      <SelectItem key={ft.value} value={ft.value}>{t(`fields.type.${ft.value}`, ft.label)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Порядок</Label>
+                <Label>{t("fields.sortOrder", "Порядок")}</Label>
                 <Input type="number" value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value))} />
               </div>
             </div>
             {fieldType === "select" && (
               <div className="space-y-1.5">
-                <Label>Варианты списка</Label>
+                <Label>{t("fields.options", "Варианты списка")}</Label>
                 <Textarea
                   value={optionsText}
                   onChange={(e) => setOptionsText(e.target.value)}
-                  placeholder={"Новая\nВ работе\nЗавершена"}
+                  placeholder={t("fields.optionsPlaceholder", "Новая\nВ работе\nЗавершена")}
                   rows={4}
                 />
-                <p className="text-xs text-slate-400">По одному варианту на строку.</p>
+                <p className="text-xs text-slate-400">{t("fields.optionsHint", "По одному варианту на строку.")}</p>
               </div>
             )}
             <div className="space-y-1.5">
-              <Label>Значение по умолчанию</Label>
+              <Label>{t("fields.defaultValue", "Значение по умолчанию")}</Label>
               <Input
                 value={defaultValue}
                 onChange={(e) => setDefaultValue(e.target.value)}
@@ -369,35 +366,35 @@ export default function EntityFieldsPage() {
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2">
                 <Switch checked={isRequired} onCheckedChange={setIsRequired} id="field-required" />
-                <Label htmlFor="field-required">Обязательное</Label>
+                <Label htmlFor="field-required">{t("fields.required", "Обязательное")}</Label>
               </div>
               <div className="flex items-center gap-2">
                 <Switch checked={isActive} onCheckedChange={setIsActive} id="field-active" />
-                <Label htmlFor="field-active">Активно</Label>
+                <Label htmlFor="field-active">{t("fields.active", "Активно")}</Label>
               </div>
             </div>
 
             <div className="border-t border-slate-100 pt-4 space-y-2">
-              <Label>Доступ к полю по ролям</Label>
+              <Label>{t("fields.accessByRoles", "Доступ к полю по ролям")}</Label>
               <p className="text-xs text-slate-400">
-                «По умолчанию» — поле наследует права роли на записи (изменение ⇒ редактирование, иначе просмотр). Суперадмины видят и редактируют всё.
+                {t("fields.accessHint", "«По умолчанию» — поле наследует права роли на записи (изменение ⇒ редактирование, иначе просмотр). Суперадмины видят и редактируют всё.")}
               </p>
               {assignableRoles.length === 0 ? (
-                <p className="text-xs text-slate-400">Нет ролей для настройки.</p>
+                <p className="text-xs text-slate-400">{t("fields.noRoles", "Нет ролей для настройки.")}</p>
               ) : (
                 <div className="space-y-2 pt-1">
                   {assignableRoles.map((role: Role) => (
                     <div key={role.id} className="flex items-center justify-between gap-3">
-                      <span className="text-sm text-slate-700 truncate">{getML(role.nameJson)}</span>
+                      <span className="text-sm text-slate-700 truncate">{ml(role.nameJson)}</span>
                       <Select
                         value={permissions[String(role.id)] ?? "inherit"}
                         onValueChange={(v) => setRoleAccess(role.id, v as FieldAccess | "inherit")}
                       >
                         <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="inherit">По умолчанию</SelectItem>
+                          <SelectItem value="inherit">{t("fields.inherit", "По умолчанию")}</SelectItem>
                           {FIELD_ACCESS_OPTIONS.map((o) => (
-                            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                            <SelectItem key={o.value} value={o.value}>{t(`fields.access.${o.value}`, o.label)}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -408,9 +405,9 @@ export default function EntityFieldsPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Отмена</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("fields.cancel", "Отмена")}</Button>
             <Button onClick={handleSubmit} disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
-              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editingField ? "Сохранить" : "Создать"}
+              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editingField ? t("fields.save", "Сохранить") : t("fields.create", "Создать")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -419,18 +416,18 @@ export default function EntityFieldsPage() {
       <AlertDialog open={!!deleteField} onOpenChange={(o) => !o && setDeleteField(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Удалить поле?</AlertDialogTitle>
+            <AlertDialogTitle>{t("fields.deleteTitle", "Удалить поле?")}</AlertDialogTitle>
             <AlertDialogDescription>
-              "{getML(deleteField?.nameJson)}" будет удалено безвозвратно.
+              "{ml(deleteField?.nameJson)}" {t("fields.deleteSuffix", "будет удалено безвозвратно.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogCancel>{t("fields.cancel", "Отмена")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700"
               onClick={() => deleteField && deleteMutation.mutate({ id: deleteField.id })}
             >
-              Удалить
+              {t("fields.delete", "Удалить")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

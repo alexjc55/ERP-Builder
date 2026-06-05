@@ -4,21 +4,17 @@ import {
   useListEntities,
   type Page,
   type Entity,
-  type MultilingualText,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Construction, Loader2, ShieldAlert } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import { EntityRecords } from "@/components/EntityRecords";
 import { useAuth } from "@/lib/auth";
-
-function getML(val: MultilingualText | string | undefined | null): string {
-  if (!val) return "";
-  if (typeof val === "string") return val;
-  return val.ru || val.en || val.he || "";
-}
+import { useML, useT } from "@/lib/i18n";
 
 export default function DynamicPage() {
+  const ml = useML();
+  const t = useT();
   const [location] = useLocation();
   const { canPage } = useAuth();
   const { data: pages = [], isLoading: pagesLoading } = useListPages();
@@ -45,9 +41,9 @@ export default function DynamicPage() {
           <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mx-auto">
             <ShieldAlert className="w-7 h-7 text-red-500" />
           </div>
-          <h1 className="text-xl font-semibold text-slate-800">Доступ запрещён</h1>
+          <h1 className="text-xl font-semibold text-slate-800">{t("page.accessDenied", "Доступ запрещён")}</h1>
           <p className="text-sm text-slate-500">
-            У вас нет прав для просмотра этой страницы. Обратитесь к администратору.
+            {t("page.accessDeniedDesc", "У вас нет прав для просмотра этой страницы. Обратитесь к администратору.")}
           </p>
         </div>
       </div>
@@ -59,9 +55,9 @@ export default function DynamicPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-800">{getML(page.nameJson)}</h1>
-        {getML(page.descriptionJson) && (
-          <p className="text-sm text-slate-500 mt-0.5">{getML(page.descriptionJson)}</p>
+        <h1 className="text-2xl font-bold text-slate-800">{ml(page.nameJson)}</h1>
+        {ml(page.descriptionJson) && (
+          <p className="text-sm text-slate-500 mt-0.5">{ml(page.descriptionJson)}</p>
         )}
       </div>
 
@@ -74,10 +70,9 @@ export default function DynamicPage() {
               <Construction className="w-6 h-6 text-amber-500" />
             </div>
             <div>
-              <p className="text-slate-700 font-medium">Страница создана, но не наполнена</p>
+              <p className="text-slate-700 font-medium">{t("page.emptyTitle", "Страница создана, но не наполнена")}</p>
               <p className="text-sm text-slate-400 mt-1 max-w-md">
-                К этой странице ещё не привязана сущность. Создайте сущность в конструкторе и
-                выберите эту страницу для отображения.
+                {t("page.emptyDesc", "К этой странице ещё не привязана сущность. Создайте сущность в конструкторе и выберите эту страницу для отображения.")}
               </p>
             </div>
           </CardContent>

@@ -28,7 +28,6 @@ import {
   type Transition,
   type RecordQuery,
   type LinkedRecord,
-  type MultilingualText,
   type UserOption,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -66,18 +65,13 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
+import { useML, useT } from "@/lib/i18n";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, Star, ShieldAlert, Archive, ArchiveRestore, History } from "lucide-react";
 
 const NO_STATUS = "__none__";
 const NO_VIEW = "__all__";
 const PAGE_SIZE = 50;
-
-function getML(val: MultilingualText | string | undefined | null): string {
-  if (!val) return "";
-  if (typeof val === "string") return val;
-  return val.ru || val.en || val.he || "";
-}
 
 function extractError(err: unknown): string | undefined {
   if (err && typeof err === "object" && "response" in err) {
@@ -145,6 +139,8 @@ function renderCellValue(field: Field, value: unknown, userNames?: Map<number, s
 }
 
 export function EntityRecords({ entityId }: { entityId: number }) {
+  const ml = useML();
+  const t = useT();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { canRecord, fieldAccess, user } = useAuth();
@@ -272,7 +268,7 @@ export function EntityRecords({ entityId }: { entityId: number }) {
         if (cancelled) return;
         setRecords([]);
         setTotal(0);
-        toast({ title: "Ошибка загрузки записей", description: extractError(err), variant: "destructive" });
+        toast({ title: t("records.loadError", "Ошибка загрузки записей"), description: extractError(err), variant: "destructive" });
       })
       .finally(() => {
         if (!cancelled) setRecordsLoading(false);
@@ -297,32 +293,32 @@ export function EntityRecords({ entityId }: { entityId: number }) {
 
   const createMutation = useCreateEntityRecord({
     mutation: {
-      onSuccess: () => { toast({ title: "Запись создана" }); setDialogOpen(false); invalidate(); },
-      onError: (err) => toast({ title: "Ошибка создания записи", description: extractError(err), variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("records.created", "Запись создана") }); setDialogOpen(false); invalidate(); },
+      onError: (err) => toast({ title: t("records.createError", "Ошибка создания записи"), description: extractError(err), variant: "destructive" }),
     },
   });
   const updateMutation = useUpdateRecord({
     mutation: {
-      onSuccess: () => { toast({ title: "Запись обновлена" }); setDialogOpen(false); invalidate(); },
-      onError: (err) => toast({ title: "Ошибка обновления", description: extractError(err), variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("records.updated", "Запись обновлена") }); setDialogOpen(false); invalidate(); },
+      onError: (err) => toast({ title: t("records.updateError", "Ошибка обновления"), description: extractError(err), variant: "destructive" }),
     },
   });
   const deleteMutation = useDeleteRecord({
     mutation: {
-      onSuccess: () => { toast({ title: "Запись удалена" }); setToDelete(null); invalidate(); },
-      onError: () => toast({ title: "Ошибка удаления записи", variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("records.deleted", "Запись удалена") }); setToDelete(null); invalidate(); },
+      onError: () => toast({ title: t("records.deleteError", "Ошибка удаления записи"), variant: "destructive" }),
     },
   });
   const archiveMutation = useArchiveRecord({
     mutation: {
-      onSuccess: () => { toast({ title: "Запись отправлена в архив" }); invalidate(); },
-      onError: (err) => toast({ title: "Ошибка архивации", description: extractError(err), variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("records.archived", "Запись отправлена в архив") }); invalidate(); },
+      onError: (err) => toast({ title: t("records.archiveError", "Ошибка архивации"), description: extractError(err), variant: "destructive" }),
     },
   });
   const unarchiveMutation = useUnarchiveRecord({
     mutation: {
-      onSuccess: () => { toast({ title: "Запись восстановлена из архива" }); invalidate(); },
-      onError: (err) => toast({ title: "Ошибка восстановления", description: extractError(err), variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("records.unarchived", "Запись восстановлена из архива") }); invalidate(); },
+      onError: (err) => toast({ title: t("records.unarchiveError", "Ошибка восстановления"), description: extractError(err), variant: "destructive" }),
     },
   });
 
@@ -374,9 +370,9 @@ export function EntityRecords({ entityId }: { entityId: number }) {
           <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
             <ShieldAlert className="w-6 h-6 text-red-500" />
           </div>
-          <p className="text-slate-700 font-medium">Нет доступа к записям</p>
+          <p className="text-slate-700 font-medium">{t("records.noAccess", "Нет доступа к записям")}</p>
           <p className="text-sm text-slate-400 max-w-md">
-            У вашей роли нет прав на просмотр данных этой сущности.
+            {t("records.noAccessDesc", "У вашей роли нет прав на просмотр данных этой сущности.")}
           </p>
         </CardContent>
       </Card>
@@ -398,9 +394,9 @@ export function EntityRecords({ entityId }: { entityId: number }) {
           <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center">
             <Inbox className="w-6 h-6 text-amber-500" />
           </div>
-          <p className="text-slate-700 font-medium">У этой сущности ещё нет полей</p>
+          <p className="text-slate-700 font-medium">{t("records.noFields", "У этой сущности ещё нет полей")}</p>
           <p className="text-sm text-slate-400 max-w-md">
-            Сначала настройте поля в конструкторе полей — без них нельзя создавать записи.
+            {t("records.noFieldsDesc", "Сначала настройте поля в конструкторе полей — без них нельзя создавать записи.")}
           </p>
         </CardContent>
       </Card>
@@ -419,12 +415,12 @@ export function EntityRecords({ entityId }: { entityId: number }) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NO_VIEW}>Все записи</SelectItem>
+                  <SelectItem value={NO_VIEW}>{t("records.allRecords", "Все записи")}</SelectItem>
                   {views.map((v: View) => (
                     <SelectItem key={v.id} value={String(v.id)}>
                       <span className="inline-flex items-center gap-1.5">
                         {v.isDefault && <Star className="w-3 h-3 text-amber-500 fill-amber-400" />}
-                        {getML(v.nameJson)}
+                        {ml(v.nameJson)}
                       </span>
                     </SelectItem>
                   ))}
@@ -437,15 +433,15 @@ export function EntityRecords({ entityId }: { entityId: number }) {
             <Input
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              placeholder="Поиск…"
+              placeholder={t("records.searchPlaceholder", "Поиск…")}
               className="h-9 w-56 pl-8 text-sm"
             />
           </div>
           <div className="flex items-center rounded-md border border-slate-200 p-0.5 bg-white">
             {([
-              ["active", "Активные"],
-              ["archived", "Архив"],
-              ["all", "Все"],
+              ["active", t("records.filterActive", "Активные")],
+              ["archived", t("records.filterArchived", "Архив")],
+              ["all", t("records.filterAll", "Все")],
             ] as [ArchiveFilter, string][]).map(([value, label]) => (
               <button
                 key={value}
@@ -465,7 +461,7 @@ export function EntityRecords({ entityId }: { entityId: number }) {
         {canCreate && (
           <Button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 gap-2">
             <Plus className="w-4 h-4" />
-            Добавить запись
+            {t("records.add", "Добавить запись")}
           </Button>
         )}
       </div>
@@ -479,8 +475,8 @@ export function EntityRecords({ entityId }: { entityId: number }) {
           ) : records.length === 0 ? (
             <div className="text-center py-16 text-slate-400">
               {total === 0 && (search.trim() || (selectedConfig.filters?.length ?? 0) > 0)
-                ? "Нет записей, удовлетворяющих условиям."
-                : "Записей пока нет. Нажмите «Добавить запись», чтобы создать первую."}
+                ? t("records.emptyFiltered", "Нет записей, удовлетворяющих условиям.")
+                : t("records.emptyNone", "Записей пока нет. Нажмите «Добавить запись», чтобы создать первую.")}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -489,13 +485,13 @@ export function EntityRecords({ entityId }: { entityId: number }) {
                   <tr className="border-b border-slate-100 bg-slate-50">
                     {displayFields.map((f: Field) => (
                       <th key={f.id} className="text-left px-4 py-3 font-medium text-slate-600 whitespace-nowrap">
-                        {getML(f.nameJson)}
+                        {ml(f.nameJson)}
                       </th>
                     ))}
                     {statuses.length > 0 && (
-                      <th className="text-left px-4 py-3 font-medium text-slate-600">Статус</th>
+                      <th className="text-left px-4 py-3 font-medium text-slate-600">{t("records.status", "Статус")}</th>
                     )}
-                    <th className="text-right px-4 py-3 font-medium text-slate-600">Действия</th>
+                    <th className="text-right px-4 py-3 font-medium text-slate-600">{t("records.actions", "Действия")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -518,14 +514,14 @@ export function EntityRecords({ entityId }: { entityId: number }) {
                                   style={{ backgroundColor: `${status.color}20`, color: status.color }}
                                 >
                                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: status.color }} />
-                                  {getML(status.nameJson)}
+                                  {ml(status.nameJson)}
                                 </span>
                               ) : (
                                 <span className="text-slate-300">—</span>
                               )}
                               {record.archivedAt && (
                                 <span className="inline-flex items-center gap-1 text-indigo-500 text-xs">
-                                  <Archive className="w-3 h-3" /> В архиве
+                                  <Archive className="w-3 h-3" /> {t("records.inArchive", "В архиве")}
                                 </span>
                               )}
                             </div>
@@ -542,7 +538,7 @@ export function EntityRecords({ entityId }: { entityId: number }) {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-slate-500"
-                              title="История изменений"
+                              title={t("records.history", "История изменений")}
                               onClick={() => setHistoryFor(record)}
                             >
                               <History className="w-3.5 h-3.5" />
@@ -553,7 +549,7 @@ export function EntityRecords({ entityId }: { entityId: number }) {
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8 text-indigo-500"
-                                  title="Восстановить из архива"
+                                  title={t("records.restoreFromArchive", "Восстановить из архива")}
                                   disabled={unarchiveMutation.isPending}
                                   onClick={() => unarchiveMutation.mutate({ id: record.id })}
                                 >
@@ -564,7 +560,7 @@ export function EntityRecords({ entityId }: { entityId: number }) {
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8 text-slate-500"
-                                  title="В архив"
+                                  title={t("records.toArchive", "В архив")}
                                   disabled={archiveMutation.isPending}
                                   onClick={() => archiveMutation.mutate({ id: record.id })}
                                 >
@@ -593,7 +589,7 @@ export function EntityRecords({ entityId }: { entityId: number }) {
       {total > 0 && (
         <div className="flex items-center justify-between text-sm text-slate-500">
           <span>
-            Показано {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} из {total}
+            {t("records.shown", "Показано")} {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} {t("records.of", "из")} {total}
           </span>
           {totalPages > 1 && (
             <div className="flex items-center gap-2">
@@ -604,10 +600,10 @@ export function EntityRecords({ entityId }: { entityId: number }) {
                 disabled={page <= 1 || recordsLoading}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
-                <ChevronLeft className="w-3.5 h-3.5" /> Назад
+                <ChevronLeft className="w-3.5 h-3.5" /> {t("records.prev", "Назад")}
               </Button>
               <span className="text-xs text-slate-400">
-                Стр. {page} из {totalPages}
+                {t("records.page", "Стр.")} {page} {t("records.of", "из")} {totalPages}
               </span>
               <Button
                 variant="outline"
@@ -616,7 +612,7 @@ export function EntityRecords({ entityId }: { entityId: number }) {
                 disabled={page >= totalPages || recordsLoading}
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               >
-                Вперёд <ChevronRight className="w-3.5 h-3.5" />
+                {t("records.next", "Вперёд")} <ChevronRight className="w-3.5 h-3.5" />
               </Button>
             </div>
           )}
@@ -626,9 +622,9 @@ export function EntityRecords({ entityId }: { entityId: number }) {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editing ? "Редактировать запись" : "Новая запись"}</DialogTitle>
+            <DialogTitle>{editing ? t("records.editTitle", "Редактировать запись") : t("records.newTitle", "Новая запись")}</DialogTitle>
             <DialogDescription>
-              Заполните поля записи. Обязательные поля помечены звёздочкой.
+              {t("records.dialogDesc", "Заполните поля записи. Обязательные поля помечены звёздочкой.")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -638,9 +634,9 @@ export function EntityRecords({ entityId }: { entityId: number }) {
               return (
                 <div key={field.id} className="space-y-1.5">
                   <Label>
-                    {getML(field.nameJson)}
+                    {ml(field.nameJson)}
                     {field.isRequired && <span className="text-red-500 ml-0.5">*</span>}
-                    {readOnly && <span className="ml-1.5 text-xs font-normal text-slate-400">(только чтение)</span>}
+                    {readOnly && <span className="ml-1.5 text-xs font-normal text-slate-400">{t("records.readOnly", "(только чтение)")}</span>}
                   </Label>
                   <FieldInput
                     field={field}
@@ -649,8 +645,8 @@ export function EntityRecords({ entityId }: { entityId: number }) {
                     disabled={readOnly}
                     userOptions={userOptions}
                   />
-                  {getML(field.descriptionJson) && (
-                    <p className="text-xs text-slate-400">{getML(field.descriptionJson)}</p>
+                  {ml(field.descriptionJson) && (
+                    <p className="text-xs text-slate-400">{ml(field.descriptionJson)}</p>
                   )}
                 </div>
               );
@@ -658,40 +654,40 @@ export function EntityRecords({ entityId }: { entityId: number }) {
 
             {statuses.length > 0 && (
               <div className="space-y-1.5">
-                <Label>Статус</Label>
+                <Label>{t("records.status", "Статус")}</Label>
                 <Select value={statusId} onValueChange={setStatusId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Без статуса" />
+                    <SelectValue placeholder={t("records.noStatus", "Без статуса")} />
                   </SelectTrigger>
                   <SelectContent>
-                    {!workflowActive && <SelectItem value={NO_STATUS}>Без статуса</SelectItem>}
+                    {!workflowActive && <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>}
                     {selectableStatuses.map((s: Status) => (
                       <SelectItem key={s.id} value={String(s.id)}>
-                        {getML(s.nameJson)}
+                        {ml(s.nameJson)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 {workflowActive && (
                   <p className="text-xs text-slate-400">
-                    Доступны только разрешённые процессом переходы из текущего статуса.
+                    {t("records.workflowHint", "Доступны только разрешённые процессом переходы из текущего статуса.")}
                   </p>
                 )}
                 {(() => {
                   if (!workflowActive) return null;
                   const targetId = statusId === NO_STATUS ? null : Number(statusId);
                   if (targetId == null || targetId === currentEditStatusId) return null;
-                  const t = transitions.find(
+                  const matchedTransition = transitions.find(
                     (tr: Transition) =>
                       tr.fromStatusId === currentEditStatusId && tr.toStatusId === targetId,
                   );
-                  const req = t?.requiredFieldKeys ?? [];
+                  const req = matchedTransition?.requiredFieldKeys ?? [];
                   if (req.length === 0) return null;
                   return (
                     <p className="text-xs text-amber-600">
-                      Для перехода нужно заполнить:{" "}
+                      {t("records.transitionRequired", "Для перехода нужно заполнить:")}{" "}
                       {req
-                        .map((k) => getML(fields.find((f: Field) => f.fieldKey === k)?.nameJson) || k)
+                        .map((k) => ml(fields.find((f: Field) => f.fieldKey === k)?.nameJson) || k)
                         .join(", ")}
                     </p>
                   );
@@ -702,9 +698,9 @@ export function EntityRecords({ entityId }: { entityId: number }) {
             {editing && <RecordLinkManager entityId={entityId} recordId={editing.id} />}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Отмена</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("records.cancel", "Отмена")}</Button>
             <Button onClick={handleSubmit} disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
-              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editing ? "Сохранить" : "Создать"}
+              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editing ? t("records.save", "Сохранить") : t("records.create", "Создать")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -713,18 +709,18 @@ export function EntityRecords({ entityId }: { entityId: number }) {
       <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Удалить запись?</AlertDialogTitle>
+            <AlertDialogTitle>{t("records.deleteTitle", "Удалить запись?")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Запись будет удалена безвозвратно.
+              {t("records.deleteConfirm", "Запись будет удалена безвозвратно.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogCancel>{t("records.cancel", "Отмена")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700"
               onClick={() => toDelete && deleteMutation.mutate({ id: toDelete.id })}
             >
-              Удалить
+              {t("records.delete", "Удалить")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -733,7 +729,7 @@ export function EntityRecords({ entityId }: { entityId: number }) {
       <RecordHistoryDialog
         record={historyFor}
         onClose={() => setHistoryFor(null)}
-        fieldNameByKey={new Map(allFields.map((f: Field) => [f.fieldKey, getML(f.nameJson)]))}
+        fieldNameByKey={new Map(allFields.map((f: Field) => [f.fieldKey, ml(f.nameJson)]))}
         statusById={statusById}
       />
     </div>
@@ -758,12 +754,13 @@ function RecordHistoryDialog({
   fieldNameByKey: Map<string, string>;
   statusById: Map<number, Status>;
 }) {
+  const t = useT();
   return (
     <Dialog open={!!record} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>История изменений</DialogTitle>
-          <DialogDescription>Кто, когда и что изменил: прежнее значение → новое.</DialogDescription>
+          <DialogTitle>{t("records.history", "История изменений")}</DialogTitle>
+          <DialogDescription>{t("records.historyDesc", "Кто, когда и что изменил: прежнее значение → новое.")}</DialogDescription>
         </DialogHeader>
         {record && (
           <RecordHistoryList recordId={record.id} fieldNameByKey={fieldNameByKey} statusById={statusById} />
@@ -782,6 +779,8 @@ function RecordHistoryList({
   fieldNameByKey: Map<string, string>;
   statusById: Map<number, Status>;
 }) {
+  const ml = useML();
+  const t = useT();
   const { data: entries = [], isLoading } = useListRecordAuditLogs(recordId);
 
   const fieldLabel = (key: string | null): string => {
@@ -794,9 +793,9 @@ function RecordHistoryList({
     if (value === null) return "∅";
     if (key === "__status__") {
       const s = statusById.get(Number(value));
-      return s ? getML(s.nameJson) : value;
+      return s ? ml(s.nameJson) : value;
     }
-    if (key === "__archived__") return value === "true" ? "Да" : "Нет";
+    if (key === "__archived__") return value === "true" ? t("records.yes", "Да") : t("records.no", "Нет");
     return value;
   };
 
@@ -814,7 +813,7 @@ function RecordHistoryList({
     return (
       <div className="flex flex-col items-center justify-center py-10 text-slate-400 gap-2">
         <Inbox className="w-8 h-8" />
-        <p className="text-sm">Изменений пока нет</p>
+        <p className="text-sm">{t("records.historyEmpty", "Изменений пока нет")}</p>
       </div>
     );
   }
@@ -824,10 +823,10 @@ function RecordHistoryList({
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-xs text-slate-400 border-b">
-            <th className="px-3 py-2 font-medium">Когда</th>
-            <th className="px-3 py-2 font-medium">Кто</th>
-            <th className="px-3 py-2 font-medium">Поле</th>
-            <th className="px-3 py-2 font-medium">Изменение</th>
+            <th className="px-3 py-2 font-medium">{t("records.when", "Когда")}</th>
+            <th className="px-3 py-2 font-medium">{t("records.who", "Кто")}</th>
+            <th className="px-3 py-2 font-medium">{t("records.field", "Поле")}</th>
+            <th className="px-3 py-2 font-medium">{t("records.change", "Изменение")}</th>
           </tr>
         </thead>
         <tbody>
@@ -872,6 +871,7 @@ function FieldInput({
   disabled?: boolean;
   userOptions?: UserOption[];
 }) {
+  const t = useT();
   switch (field.fieldType) {
     case "textarea":
       return <Textarea value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} disabled={disabled} />;
@@ -879,7 +879,7 @@ function FieldInput({
       return (
         <div className="flex items-center gap-2">
           <Switch checked={Boolean(value)} onCheckedChange={onChange} disabled={disabled} />
-          <span className="text-sm text-slate-500">{value ? "Да" : "Нет"}</span>
+          <span className="text-sm text-slate-500">{value ? t("records.yes", "Да") : t("records.no", "Нет")}</span>
         </div>
       );
     case "number":
@@ -909,7 +909,7 @@ function FieldInput({
           disabled={disabled}
         >
           <SelectTrigger>
-            <SelectValue placeholder="Выберите пользователя" />
+            <SelectValue placeholder={t("records.selectUser", "Выберите пользователя")} />
           </SelectTrigger>
           <SelectContent>
             {userOptions.map((u) => (
@@ -924,7 +924,7 @@ function FieldInput({
       return (
         <Select value={value ? String(value) : ""} onValueChange={onChange} disabled={disabled}>
           <SelectTrigger>
-            <SelectValue placeholder="Выберите значение" />
+            <SelectValue placeholder={t("records.selectValue", "Выберите значение")} />
           </SelectTrigger>
           <SelectContent>
             {options.map((opt) => (
@@ -953,6 +953,7 @@ function recordLabel(record: EntityRecord): string {
 /** Link manager shown inside the record edit dialog. Lists each outgoing relation
  *  with its currently linked records and lets the user add/remove links. */
 function RecordLinkManager({ entityId, recordId }: { entityId: number; recordId: number }) {
+  const t = useT();
   const { data: relations = [], isLoading: relationsLoading } = useListEntityRelations(entityId);
   const { data: links = [], isLoading: linksLoading } = useListRecordLinks(recordId);
 
@@ -974,7 +975,7 @@ function RecordLinkManager({ entityId, recordId }: { entityId: number; recordId:
     <div className="space-y-4 border-t border-slate-100 pt-4">
       <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
         <Link2 className="w-4 h-4 text-blue-600" />
-        Связи
+        {t("records.links", "Связи")}
       </div>
       {relations.map((relation: Relation) => (
         <RelationLinkSection
@@ -1002,6 +1003,8 @@ function RelationLinkSection({
   existingLinks: LinkedRecord[];
   linksLoading: boolean;
 }) {
+  const ml = useML();
+  const t = useT();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [pick, setPick] = useState<string>(PICK_PLACEHOLDER);
@@ -1016,13 +1019,13 @@ function RelationLinkSection({
   const createLink = useCreateRecordLink({
     mutation: {
       onSuccess: () => { setPick(PICK_PLACEHOLDER); invalidate(); },
-      onError: (err) => toast({ title: "Не удалось добавить связь", description: extractError(err), variant: "destructive" }),
+      onError: (err) => toast({ title: t("records.linkAddError", "Не удалось добавить связь"), description: extractError(err), variant: "destructive" }),
     },
   });
   const deleteLink = useDeleteRecordLink({
     mutation: {
       onSuccess: () => invalidate(),
-      onError: (err) => toast({ title: "Не удалось удалить связь", description: extractError(err), variant: "destructive" }),
+      onError: (err) => toast({ title: t("records.linkDeleteError", "Не удалось удалить связь"), description: extractError(err), variant: "destructive" }),
     },
   });
 
@@ -1037,11 +1040,11 @@ function RelationLinkSection({
 
   return (
     <div className="space-y-2 rounded-md border border-slate-100 p-3">
-      <div className="text-sm font-medium text-slate-600">{getML(relation.nameJson)}</div>
+      <div className="text-sm font-medium text-slate-600">{ml(relation.nameJson)}</div>
       {linksLoading ? (
         <Skeleton className="h-6 w-full" />
       ) : existingLinks.length === 0 ? (
-        <p className="text-xs text-slate-400">Связанных записей нет.</p>
+        <p className="text-xs text-slate-400">{t("records.noLinks", "Связанных записей нет.")}</p>
       ) : (
         <div className="flex flex-wrap gap-1.5">
           {existingLinks.map((link) => (
@@ -1055,7 +1058,7 @@ function RelationLinkSection({
                 className="hover:text-blue-900 disabled:opacity-50"
                 disabled={busy}
                 onClick={() => deleteLink.mutate({ id: link.linkId })}
-                aria-label="Удалить связь"
+                aria-label={t("records.deleteLink", "Удалить связь")}
               >
                 <X className="w-3 h-3" />
               </button>
@@ -1066,7 +1069,7 @@ function RelationLinkSection({
       <div className="flex items-center gap-2">
         <Select value={pick} onValueChange={setPick} disabled={targetLoading || available.length === 0}>
           <SelectTrigger className="h-8 text-sm">
-            <SelectValue placeholder={available.length === 0 ? "Нет доступных записей" : "Выберите запись"} />
+            <SelectValue placeholder={available.length === 0 ? t("records.noAvailable", "Нет доступных записей") : t("records.selectRecord", "Выберите запись")} />
           </SelectTrigger>
           <SelectContent>
             {available.map((r: EntityRecord) => (
@@ -1083,7 +1086,7 @@ function RelationLinkSection({
           onClick={handleAdd}
         >
           {createLink.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-          Связать
+          {t("records.link", "Связать")}
         </Button>
       </div>
     </div>

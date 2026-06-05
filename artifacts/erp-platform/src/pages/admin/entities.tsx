@@ -46,16 +46,13 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Database, Loader2, Columns3, CircleDot, Share2, LayoutList, Workflow } from "lucide-react";
 import { useLocation } from "wouter";
+import { useML, useT } from "@/lib/i18n";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
-function getML(val: MultilingualText | string | undefined | null): string {
-  if (!val) return "";
-  if (typeof val === "string") return val;
-  return val.ru || val.en || val.he || "";
-}
-
 export default function EntitiesPage() {
+  const ml = useML();
+  const t = useT();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
@@ -78,22 +75,22 @@ export default function EntitiesPage() {
 
   const createMutation = useCreateEntity({
     mutation: {
-      onSuccess: () => { toast({ title: "Сущность создана" }); setDialogOpen(false); invalidate(); },
-      onError: (err) => toast({ title: "Ошибка создания сущности", description: extractError(err), variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("entities.created", "Сущность создана") }); setDialogOpen(false); invalidate(); },
+      onError: (err) => toast({ title: t("entities.createError", "Ошибка создания сущности"), description: extractError(err), variant: "destructive" }),
     },
   });
 
   const updateMutation = useUpdateEntity({
     mutation: {
-      onSuccess: () => { toast({ title: "Сущность обновлена" }); setDialogOpen(false); invalidate(); },
-      onError: (err) => toast({ title: "Ошибка обновления", description: extractError(err), variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("entities.updated", "Сущность обновлена") }); setDialogOpen(false); invalidate(); },
+      onError: (err) => toast({ title: t("entities.updateError", "Ошибка обновления"), description: extractError(err), variant: "destructive" }),
     },
   });
 
   const deleteMutation = useDeleteEntity({
     mutation: {
-      onSuccess: () => { toast({ title: "Сущность удалена" }); setDeleteEntity(null); invalidate(); },
-      onError: () => toast({ title: "Ошибка удаления сущности", variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("entities.deleted", "Сущность удалена") }); setDeleteEntity(null); invalidate(); },
+      onError: () => toast({ title: t("entities.deleteError", "Ошибка удаления сущности"), variant: "destructive" }),
     },
   });
 
@@ -146,19 +143,19 @@ export default function EntitiesPage() {
   const pageName = (id: number | null | undefined) => {
     if (!id) return null;
     const p = pages.find((pg: Page) => pg.id === id);
-    return p ? getML(p.nameJson) : null;
+    return p ? ml(p.nameJson) : null;
   };
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Сущности</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Конструктор объектов данных вашей системы</p>
+          <h1 className="text-2xl font-bold text-slate-800">{t("entities.title", "Сущности")}</h1>
+          <p className="text-sm text-slate-500 mt-0.5">{t("entities.subtitle", "Конструктор объектов данных вашей системы")}</p>
         </div>
         <Button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 gap-2">
           <Plus className="w-4 h-4" />
-          Создать сущность
+          {t("entities.create", "Создать сущность")}
         </Button>
       </div>
 
@@ -172,17 +169,17 @@ export default function EntitiesPage() {
             </div>
           ) : entities.length === 0 ? (
             <div className="text-center py-16 text-slate-400">
-              Сущности ещё не созданы. Нажмите «Создать сущность», чтобы добавить первую.
+              {t("entities.empty", "Сущности ещё не созданы. Нажмите «Создать сущность», чтобы добавить первую.")}
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Название</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Ключ</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Страница</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Статус</th>
-                  <th className="text-right px-4 py-3 font-medium text-slate-600">Действия</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("entities.colName", "Название")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("entities.colKey", "Ключ")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("entities.colPage", "Страница")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("entities.colStatus", "Статус")}</th>
+                  <th className="text-right px-4 py-3 font-medium text-slate-600">{t("entities.colActions", "Действия")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -191,16 +188,16 @@ export default function EntitiesPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <Database className="w-4 h-4 text-slate-400" />
-                        <span className="font-medium text-slate-700">{getML(entity.nameJson)}</span>
+                        <span className="font-medium text-slate-700">{ml(entity.nameJson)}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-slate-500 font-mono text-xs">{entity.entityKey}</td>
                     <td className="px-4 py-3 text-slate-500">{pageName(entity.pageId) || "—"}</td>
                     <td className="px-4 py-3">
                       {entity.isActive ? (
-                        <Badge className="bg-emerald-100 text-emerald-700 border-0 font-normal">Активна</Badge>
+                        <Badge className="bg-emerald-100 text-emerald-700 border-0 font-normal">{t("entities.statusActive", "Активна")}</Badge>
                       ) : (
-                        <Badge className="bg-slate-100 text-slate-500 border-0 font-normal">Скрыта</Badge>
+                        <Badge className="bg-slate-100 text-slate-500 border-0 font-normal">{t("entities.statusHidden", "Скрыта")}</Badge>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -212,7 +209,7 @@ export default function EntitiesPage() {
                           onClick={() => navigate(`/admin/entities/${entity.id}/fields`)}
                         >
                           <Columns3 className="w-3.5 h-3.5" />
-                          Поля
+                          {t("entities.fields", "Поля")}
                         </Button>
                         <Button
                           variant="ghost"
@@ -221,7 +218,7 @@ export default function EntitiesPage() {
                           onClick={() => navigate(`/admin/entities/${entity.id}/statuses`)}
                         >
                           <CircleDot className="w-3.5 h-3.5" />
-                          Статусы
+                          {t("entities.statuses", "Статусы")}
                         </Button>
                         <Button
                           variant="ghost"
@@ -230,7 +227,7 @@ export default function EntitiesPage() {
                           onClick={() => navigate(`/admin/entities/${entity.id}/relations`)}
                         >
                           <Share2 className="w-3.5 h-3.5" />
-                          Связи
+                          {t("entities.relations", "Связи")}
                         </Button>
                         <Button
                           variant="ghost"
@@ -239,7 +236,7 @@ export default function EntitiesPage() {
                           onClick={() => navigate(`/admin/entities/${entity.id}/views`)}
                         >
                           <LayoutList className="w-3.5 h-3.5" />
-                          Виды
+                          {t("entities.views", "Виды")}
                         </Button>
                         <Button
                           variant="ghost"
@@ -248,7 +245,7 @@ export default function EntitiesPage() {
                           onClick={() => navigate(`/admin/entities/${entity.id}/workflow`)}
                         >
                           <Workflow className="w-3.5 h-3.5" />
-                          Процессы
+                          {t("entities.workflow", "Процессы")}
                         </Button>
                         <Button
                           variant="ghost"
@@ -257,7 +254,7 @@ export default function EntitiesPage() {
                           onClick={() => navigate(`/admin/entities/${entity.id}/records`)}
                         >
                           <Database className="w-3.5 h-3.5" />
-                          Данные
+                          {t("entities.records", "Данные")}
                         </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(entity)}>
                           <Pencil className="w-3.5 h-3.5" />
@@ -278,16 +275,16 @@ export default function EntitiesPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingEntity ? "Редактировать сущность" : "Новая сущность"}</DialogTitle>
+            <DialogTitle>{editingEntity ? t("entities.editTitle", "Редактировать сущность") : t("entities.newTitle", "Новая сущность")}</DialogTitle>
             <DialogDescription>
-              Сущность — это объект данных (таблица). Поля добавляются на следующем этапе.
+              {t("entities.dialogDesc", "Сущность — это объект данных (таблица). Поля добавляются на следующем этапе.")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <MultilingualInput label="Название" value={nameJson} onChange={setNameJson} required />
-            <MultilingualInput label="Описание" value={descJson} onChange={setDescJson} multiline />
+            <MultilingualInput label={t("entities.fieldName", "Название")} value={nameJson} onChange={setNameJson} required />
+            <MultilingualInput label={t("entities.fieldDescription", "Описание")} value={descJson} onChange={setDescJson} multiline />
             <div className="space-y-1.5">
-              <Label>Системный ключ</Label>
+              <Label>{t("entities.fieldKey", "Системный ключ")}</Label>
               <Input
                 value={entityKey}
                 onChange={(e) => setEntityKey(e.target.value)}
@@ -295,43 +292,43 @@ export default function EntitiesPage() {
                 className="font-mono"
               />
               <p className="text-xs text-slate-400">
-                Только строчные латинские буквы, цифры и подчёркивания (например, <code>projects</code>). Используется в хранилище данных.
+                {t("entities.keyHintBefore", "Только строчные латинские буквы, цифры и подчёркивания (например,")} <code>projects</code>{t("entities.keyHintAfter", "). Используется в хранилище данных.")}
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Иконка</Label>
+                <Label>{t("entities.fieldIcon", "Иконка")}</Label>
                 <Input value={icon} onChange={(e) => setIcon(e.target.value)} placeholder="table" />
               </div>
               <div className="space-y-1.5">
-                <Label>Порядок</Label>
+                <Label>{t("entities.fieldOrder", "Порядок")}</Label>
                 <Input type="number" value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value))} />
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Страница отображения</Label>
+              <Label>{t("entities.fieldPage", "Страница отображения")}</Label>
               <Select value={pageId} onValueChange={setPageId}>
-                <SelectTrigger><SelectValue placeholder="Не привязана" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("entities.pageUnbound", "Не привязана")} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">— Не привязана —</SelectItem>
+                  <SelectItem value="none">{t("entities.pageUnboundOption", "— Не привязана —")}</SelectItem>
                   {navPages.map((p: Page) => (
                     <SelectItem key={p.id} value={String(p.id)}>
-                      {getML(p.nameJson)}
+                      {ml(p.nameJson)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-slate-400">На какой странице меню будет показана эта сущность.</p>
+              <p className="text-xs text-slate-400">{t("entities.pageHint", "На какой странице меню будет показана эта сущность.")}</p>
             </div>
             <div className="flex items-center gap-2">
               <Switch checked={isActive} onCheckedChange={setIsActive} id="entity-active" />
-              <Label htmlFor="entity-active">Активна</Label>
+              <Label htmlFor="entity-active">{t("entities.fieldActive", "Активна")}</Label>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Отмена</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("entities.cancel", "Отмена")}</Button>
             <Button onClick={handleSubmit} disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
-              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editingEntity ? "Сохранить" : "Создать"}
+              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editingEntity ? t("entities.save", "Сохранить") : t("entities.createShort", "Создать")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -340,18 +337,18 @@ export default function EntitiesPage() {
       <AlertDialog open={!!deleteEntity} onOpenChange={(o) => !o && setDeleteEntity(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Удалить сущность?</AlertDialogTitle>
+            <AlertDialogTitle>{t("entities.deleteConfirmTitle", "Удалить сущность?")}</AlertDialogTitle>
             <AlertDialogDescription>
-              "{getML(deleteEntity?.nameJson)}" будет удалена безвозвратно.
+              "{ml(deleteEntity?.nameJson)}" {t("entities.deleteConfirmDesc", "будет удалена безвозвратно.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogCancel>{t("entities.cancel", "Отмена")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700"
               onClick={() => deleteEntity && deleteMutation.mutate({ id: deleteEntity.id })}
             >
-              Удалить
+              {t("entities.delete", "Удалить")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

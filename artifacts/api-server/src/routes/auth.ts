@@ -8,6 +8,7 @@ import { loadPermissions } from "../middlewares/permissions";
 import {
   LoginBody,
   ChangePasswordBody,
+  UpdateMeBody,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -89,6 +90,67 @@ router.post("/auth/logout", (_req, res): void => {
 });
 
 router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
+  const [user] = await db
+    .select({
+      id: usersTable.id,
+      email: usersTable.email,
+      firstName: usersTable.firstName,
+      lastName: usersTable.lastName,
+      roleId: usersTable.roleId,
+      language: usersTable.language,
+      direction: usersTable.direction,
+      startPageId: usersTable.startPageId,
+      isActive: usersTable.isActive,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.id, req.user!.userId));
+
+  if (!user) {
+    res.status(401).json({ error: "User not found" });
+    return;
+  }
+
+  const [role] = await db
+    .select({ nameJson: rolesTable.nameJson })
+    .from(rolesTable)
+    .where(eq(rolesTable.id, user.roleId));
+
+  const permissions = await loadPermissions(user.roleId);
+
+  res.json({
+    id: user.id,
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    roleId: user.roleId,
+    roleName: role?.nameJson ?? {},
+    language: user.language,
+    direction: user.direction,
+    startPageId: user.startPageId,
+    isActive: user.isActive,
+    permissions,
+  });
+});
+
+router.put("/auth/me", requireAuth, async (req, res): Promise<void> => {
+  const parsed = UpdateMeBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const updates: Record<string, unknown> = {};
+  if (parsed.data.language !== undefined) updates.language = parsed.data.language;
+  if (parsed.data.direction !== undefined) updates.direction = parsed.data.direction;
+  if (parsed.data.startPageId !== undefined) updates.startPageId = parsed.data.startPageId;
+
+  if (Object.keys(updates).length > 0) {
+    await db
+      .update(usersTable)
+      .set(updates)
+      .where(eq(usersTable.id, req.user!.userId));
+  }
+
   const [user] = await db
     .select({
       id: usersTable.id,

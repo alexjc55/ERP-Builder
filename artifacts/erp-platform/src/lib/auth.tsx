@@ -46,14 +46,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(null);
   };
 
-  useEffect(() => {
-    if (user?.direction === "rtl") {
-      document.documentElement.dir = "rtl";
-    } else {
-      document.documentElement.dir = "ltr";
-    }
-  }, [user?.direction]);
-
   const permissions = user?.permissions ?? null;
   const isSuperAdmin = permissions?.superAdmin === true;
 

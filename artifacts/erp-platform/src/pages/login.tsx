@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { useT } from "@/lib/i18n";
 import { Building2, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
@@ -15,6 +16,7 @@ export default function LoginPage() {
   const { login } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const t = useT();
 
   const loginMutation = useLogin({
     mutation: {
@@ -24,8 +26,8 @@ export default function LoginPage() {
       },
       onError: () => {
         toast({
-          title: "Ошибка входа",
-          description: "Неверный email или пароль",
+          title: t("login.error", "Ошибка входа"),
+          description: t("login.errorDesc", "Неверный email или пароль"),
           variant: "destructive",
         });
       },
@@ -54,9 +56,9 @@ export default function LoginPage() {
 
         <Card className="border-slate-700 shadow-2xl bg-slate-800/50 backdrop-blur">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl text-white">Вход в систему</CardTitle>
+            <CardTitle className="text-2xl text-white">{t("login.title", "Вход в систему")}</CardTitle>
             <CardDescription className="text-slate-400">
-              Введите ваши учётные данные для доступа к платформе
+              {t("login.subtitle", "Введите ваши учётные данные для доступа к платформе")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -74,7 +76,7 @@ export default function LoginPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-slate-200">Пароль</Label>
+                <Label htmlFor="password" className="text-slate-200">{t("login.password", "Пароль")}</Label>
                 <Input
                   id="password"
                   type="password"
@@ -91,9 +93,9 @@ export default function LoginPage() {
                 disabled={loginMutation.isPending}
               >
                 {loginMutation.isPending ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Вход...</>
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t("login.loggingIn", "Вход...")}</>
                 ) : (
-                  "Войти"
+                  t("login.submit", "Войти")
                 )}
               </Button>
             </form>

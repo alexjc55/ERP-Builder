@@ -114,6 +114,52 @@ export const GetMeResponse = zod.object({
 
 
 /**
+ * @summary Update own profile (language / text direction / start page)
+ */
+export const UpdateMeBody = zod.object({
+  "language": zod.enum(['ru', 'en', 'he']).optional(),
+  "direction": zod.enum(['ltr', 'rtl']).optional(),
+  "startPageId": zod.number().nullish()
+})
+
+export const UpdateMeResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "roleId": zod.number(),
+  "roleName": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "language": zod.enum(['ru', 'en', 'he']),
+  "direction": zod.enum(['ltr', 'rtl']),
+  "startPageId": zod.number().nullish(),
+  "isActive": zod.boolean(),
+  "permissions": zod.object({
+  "superAdmin": zod.boolean(),
+  "admin": zod.object({
+  "pages": zod.boolean(),
+  "entities": zod.boolean(),
+  "roles": zod.boolean(),
+  "users": zod.boolean(),
+  "translations": zod.boolean()
+}),
+  "pageIds": zod.array(zod.number()),
+  "records": zod.record(zod.string(), zod.object({
+  "view": zod.boolean(),
+  "create": zod.boolean(),
+  "update": zod.boolean(),
+  "delete": zod.boolean(),
+  "scope": zod.enum(['all', 'own']).optional(),
+  "scopeFieldKeys": zod.array(zod.string()).optional()
+}))
+}).optional()
+})
+
+
+/**
  * @summary Change current user password
  */
 export const changePasswordBodyNewPasswordMin = 6;

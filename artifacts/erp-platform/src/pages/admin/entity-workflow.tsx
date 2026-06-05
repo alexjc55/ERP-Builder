@@ -52,15 +52,10 @@ import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Loader2, ArrowLeft, Workflow, ArrowRight, X } from "lucide-react";
+import { useML, useT } from "@/lib/i18n";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 type ActionRow = { fieldKey: string; value: string };
-
-function getML(val: MultilingualText | string | undefined | null): string {
-  if (!val) return "";
-  if (typeof val === "string") return val;
-  return val.ru || val.en || val.he || "";
-}
 
 export default function EntityWorkflowPage() {
   const params = useParams();
@@ -68,6 +63,8 @@ export default function EntityWorkflowPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const ml = useML();
+  const t = useT();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Transition | null>(null);
@@ -100,22 +97,22 @@ export default function EntityWorkflowPage() {
 
   const createMutation = useCreateEntityTransition({
     mutation: {
-      onSuccess: () => { toast({ title: "Переход создан" }); setDialogOpen(false); invalidate(); },
-      onError: (err) => toast({ title: "Ошибка создания перехода", description: extractError(err), variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("workflow.transitionCreated", "Переход создан") }); setDialogOpen(false); invalidate(); },
+      onError: (err) => toast({ title: t("workflow.createError", "Ошибка создания перехода"), description: extractError(err), variant: "destructive" }),
     },
   });
 
   const updateMutation = useUpdateTransition({
     mutation: {
-      onSuccess: () => { toast({ title: "Переход обновлён" }); setDialogOpen(false); invalidate(); },
-      onError: (err) => toast({ title: "Ошибка обновления", description: extractError(err), variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("workflow.transitionUpdated", "Переход обновлён") }); setDialogOpen(false); invalidate(); },
+      onError: (err) => toast({ title: t("workflow.updateError", "Ошибка обновления"), description: extractError(err), variant: "destructive" }),
     },
   });
 
   const deleteMutation = useDeleteTransition({
     mutation: {
-      onSuccess: () => { toast({ title: "Переход удалён" }); setToDelete(null); invalidate(); },
-      onError: () => toast({ title: "Ошибка удаления перехода", variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("workflow.transitionDeleted", "Переход удалён") }); setToDelete(null); invalidate(); },
+      onError: () => toast({ title: t("workflow.deleteError", "Ошибка удаления перехода"), variant: "destructive" }),
     },
   });
 
@@ -176,7 +173,7 @@ export default function EntityWorkflowPage() {
 
   const handleSubmit = () => {
     if (!fromStatusId || !toStatusId) {
-      toast({ title: "Укажите статусы перехода", variant: "destructive" });
+      toast({ title: t("workflow.specifyStatuses", "Укажите статусы перехода"), variant: "destructive" });
       return;
     }
     const actionsJson: TransitionAction[] = actions
@@ -210,7 +207,7 @@ export default function EntityWorkflowPage() {
         style={{ backgroundColor: `${s.color}20`, color: s.color }}
       >
         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
-        {getML(s.nameJson)}
+        {ml(s.nameJson)}
       </span>
     );
   };
@@ -223,16 +220,16 @@ export default function EntityWorkflowPage() {
           className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-3"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          К списку сущностей
+          {t("workflow.backToEntities", "К списку сущностей")}
         </button>
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
               <Workflow className="w-6 h-6 text-blue-600" />
-              Процессы{entity ? `: ${getML(entity.nameJson)}` : ""}
+              {t("workflow.title", "Процессы")}{entity ? `: ${ml(entity.nameJson)}` : ""}
             </h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              Разрешённые переходы между статусами. Пока переходов нет — статус можно менять свободно.
+              {t("workflow.subtitle", "Разрешённые переходы между статусами. Пока переходов нет — статус можно менять свободно.")}
             </p>
           </div>
           <Button
@@ -241,7 +238,7 @@ export default function EntityWorkflowPage() {
             className="bg-blue-600 hover:bg-blue-700 gap-2"
           >
             <Plus className="w-4 h-4" />
-            Добавить переход
+            {t("workflow.addTransition", "Добавить переход")}
           </Button>
         </div>
       </div>
@@ -249,7 +246,7 @@ export default function EntityWorkflowPage() {
       {statuses.length === 0 && (
         <Card className="border-amber-200 bg-amber-50">
           <CardContent className="py-4 text-sm text-amber-700">
-            Сначала создайте статусы этой сущности — переходы определяются между ними.
+            {t("workflow.noStatusesWarning", "Сначала создайте статусы этой сущности — переходы определяются между ними.")}
           </CardContent>
         </Card>
       )}
@@ -264,52 +261,52 @@ export default function EntityWorkflowPage() {
             </div>
           ) : transitions.length === 0 ? (
             <div className="text-center py-16 text-slate-400">
-              Переходов пока нет. Без переходов статус записи можно менять на любой.
+              {t("workflow.empty", "Переходов пока нет. Без переходов статус записи можно менять на любой.")}
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Переход</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Название</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Кто может</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Обяз. поля</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Действия</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("workflow.colTransition", "Переход")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("workflow.colName", "Название")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("workflow.colWhoCan", "Кто может")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("workflow.colRequiredFields", "Обяз. поля")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("workflow.colActions", "Действия")}</th>
                   <th className="text-right px-4 py-3 font-medium text-slate-600"></th>
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((t: Transition) => (
-                  <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50">
+                {sorted.map((tr: Transition) => (
+                  <tr key={tr.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center gap-2">
-                        <StatusChip id={t.fromStatusId} />
+                        <StatusChip id={tr.fromStatusId} />
                         <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
-                        <StatusChip id={t.toStatusId} />
+                        <StatusChip id={tr.toStatusId} />
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{getML(t.nameJson) || <span className="text-slate-300">—</span>}</td>
+                    <td className="px-4 py-3 text-slate-600">{ml(tr.nameJson) || <span className="text-slate-300">—</span>}</td>
                     <td className="px-4 py-3 text-slate-500 text-xs">
-                      {(t.allowedRoleIds?.length ?? 0) === 0
-                        ? "Все роли"
-                        : t.allowedRoleIds
-                            .map((id) => getML(roles.find((r: Role) => r.id === id)?.nameJson) || `#${id}`)
+                      {(tr.allowedRoleIds?.length ?? 0) === 0
+                        ? t("workflow.allRoles", "Все роли")
+                        : tr.allowedRoleIds
+                            .map((id) => ml(roles.find((r: Role) => r.id === id)?.nameJson) || `#${id}`)
                             .join(", ")}
                     </td>
                     <td className="px-4 py-3 text-slate-500 text-xs font-mono">
-                      {(t.requiredFieldKeys?.length ?? 0) === 0 ? <span className="text-slate-300">—</span> : t.requiredFieldKeys.join(", ")}
+                      {(tr.requiredFieldKeys?.length ?? 0) === 0 ? <span className="text-slate-300">—</span> : tr.requiredFieldKeys.join(", ")}
                     </td>
                     <td className="px-4 py-3 text-slate-500 text-xs">
-                      {(t.actionsJson?.length ?? 0) === 0
+                      {(tr.actionsJson?.length ?? 0) === 0
                         ? <span className="text-slate-300">—</span>
-                        : t.actionsJson.map((a: TransitionAction) => `${a.fieldKey}=${a.value == null ? "∅" : String(a.value)}`).join(", ")}
+                        : tr.actionsJson.map((a: TransitionAction) => `${a.fieldKey}=${a.value == null ? "∅" : String(a.value)}`).join(", ")}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(t)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(tr)}>
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => setToDelete(t)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => setToDelete(tr)}>
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
@@ -325,96 +322,96 @@ export default function EntityWorkflowPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editing ? "Редактировать переход" : "Новый переход"}</DialogTitle>
+            <DialogTitle>{editing ? t("workflow.editTransition", "Редактировать переход") : t("workflow.newTransition", "Новый переход")}</DialogTitle>
             <DialogDescription>
-              Переход разрешает смену статуса записи. Можно ограничить роли, потребовать заполнения полей и задать действия.
+              {t("workflow.dialogDescription", "Переход разрешает смену статуса записи. Можно ограничить роли, потребовать заполнения полей и задать действия.")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Из статуса</Label>
+                <Label>{t("workflow.fromStatus", "Из статуса")}</Label>
                 <Select value={fromStatusId} onValueChange={setFromStatusId}>
-                  <SelectTrigger><SelectValue placeholder="Статус" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("workflow.statusPlaceholder", "Статус")} /></SelectTrigger>
                   <SelectContent>
                     {statuses.map((s: Status) => (
-                      <SelectItem key={s.id} value={String(s.id)}>{getML(s.nameJson)}</SelectItem>
+                      <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>В статус</Label>
+                <Label>{t("workflow.toStatus", "В статус")}</Label>
                 <Select value={toStatusId} onValueChange={setToStatusId}>
-                  <SelectTrigger><SelectValue placeholder="Статус" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("workflow.statusPlaceholder", "Статус")} /></SelectTrigger>
                   <SelectContent>
                     {statuses.map((s: Status) => (
-                      <SelectItem key={s.id} value={String(s.id)}>{getML(s.nameJson)}</SelectItem>
+                      <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            <MultilingualInput label="Название (необязательно)" value={nameJson} onChange={setNameJson} />
+            <MultilingualInput label={t("workflow.nameOptional", "Название (необязательно)")} value={nameJson} onChange={setNameJson} />
 
             <div className="space-y-1.5">
-              <Label>Кто может выполнять</Label>
+              <Label>{t("workflow.whoCanExecute", "Кто может выполнять")}</Label>
               {roles.length === 0 ? (
-                <p className="text-xs text-slate-400">Ролей нет.</p>
+                <p className="text-xs text-slate-400">{t("workflow.noRoles", "Ролей нет.")}</p>
               ) : (
                 <div className="space-y-1.5 rounded-md border border-slate-200 p-2 max-h-32 overflow-y-auto">
                   {roles.map((r: Role) => (
                     <label key={r.id} className="flex items-center gap-2 text-sm cursor-pointer">
                       <Checkbox checked={allowedRoleIds.includes(r.id)} onCheckedChange={() => toggleRole(r.id)} />
-                      {getML(r.nameJson) || `Роль #${r.id}`}
+                      {ml(r.nameJson) || `${t("workflow.rolePrefix", "Роль")} #${r.id}`}
                     </label>
                   ))}
                 </div>
               )}
-              <p className="text-xs text-slate-400">Если не выбрана ни одна роль — переход доступен всем ролям.</p>
+              <p className="text-xs text-slate-400">{t("workflow.rolesHint", "Если не выбрана ни одна роль — переход доступен всем ролям.")}</p>
             </div>
 
             <div className="space-y-1.5">
-              <Label>Обязательные поля для перехода</Label>
+              <Label>{t("workflow.requiredFieldsLabel", "Обязательные поля для перехода")}</Label>
               {fields.length === 0 ? (
-                <p className="text-xs text-slate-400">У сущности нет полей.</p>
+                <p className="text-xs text-slate-400">{t("workflow.noFields", "У сущности нет полей.")}</p>
               ) : (
                 <div className="space-y-1.5 rounded-md border border-slate-200 p-2 max-h-32 overflow-y-auto">
                   {fields.map((f: Field) => (
                     <label key={f.fieldKey} className="flex items-center gap-2 text-sm cursor-pointer">
                       <Checkbox checked={requiredFieldKeys.includes(f.fieldKey)} onCheckedChange={() => toggleField(f.fieldKey)} />
-                      {getML(f.nameJson) || f.fieldKey} <code className="text-xs text-slate-400">{f.fieldKey}</code>
+                      {ml(f.nameJson) || f.fieldKey} <code className="text-xs text-slate-400">{f.fieldKey}</code>
                     </label>
                   ))}
                 </div>
               )}
-              <p className="text-xs text-slate-400">Эти поля должны быть заполнены, иначе переход не выполнится.</p>
+              <p className="text-xs text-slate-400">{t("workflow.requiredFieldsHint", "Эти поля должны быть заполнены, иначе переход не выполнится.")}</p>
             </div>
 
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <Label>Действия при переходе</Label>
+                <Label>{t("workflow.actionsLabel", "Действия при переходе")}</Label>
                 <Button type="button" variant="outline" size="sm" className="h-7 gap-1" onClick={addAction} disabled={fields.length === 0}>
-                  <Plus className="w-3 h-3" /> Поле
+                  <Plus className="w-3 h-3" /> {t("workflow.field", "Поле")}
                 </Button>
               </div>
               {actions.length === 0 ? (
-                <p className="text-xs text-slate-400">Нет действий. Можно автоматически проставлять значения полей.</p>
+                <p className="text-xs text-slate-400">{t("workflow.noActions", "Нет действий. Можно автоматически проставлять значения полей.")}</p>
               ) : (
                 <div className="space-y-2">
                   {actions.map((a, i) => (
                     <div key={i} className="flex items-center gap-2">
                       <Select value={a.fieldKey} onValueChange={(v) => updateAction(i, { fieldKey: v })}>
-                        <SelectTrigger className="flex-1"><SelectValue placeholder="Поле" /></SelectTrigger>
+                        <SelectTrigger className="flex-1"><SelectValue placeholder={t("workflow.field", "Поле")} /></SelectTrigger>
                         <SelectContent>
                           {fields.map((f: Field) => (
-                            <SelectItem key={f.fieldKey} value={f.fieldKey}>{getML(f.nameJson) || f.fieldKey}</SelectItem>
+                            <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson) || f.fieldKey}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                       <span className="text-slate-400">=</span>
-                      <Input className="flex-1" value={a.value} onChange={(e) => updateAction(i, { value: e.target.value })} placeholder="значение" />
+                      <Input className="flex-1" value={a.value} onChange={(e) => updateAction(i, { value: e.target.value })} placeholder={t("workflow.valuePlaceholder", "значение")} />
                       <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => removeAction(i)}>
                         <X className="w-3.5 h-3.5" />
                       </Button>
@@ -425,14 +422,14 @@ export default function EntityWorkflowPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Порядок</Label>
+              <Label>{t("workflow.order", "Порядок")}</Label>
               <Input type="number" value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value))} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Отмена</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("workflow.cancel", "Отмена")}</Button>
             <Button onClick={handleSubmit} disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
-              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editing ? "Сохранить" : "Создать"}
+              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editing ? t("workflow.save", "Сохранить") : t("workflow.create", "Создать")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -441,18 +438,18 @@ export default function EntityWorkflowPage() {
       <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Удалить переход?</AlertDialogTitle>
+            <AlertDialogTitle>{t("workflow.deleteTitle", "Удалить переход?")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Переход {toDelete ? `${getML(statusById.get(toDelete.fromStatusId)?.nameJson)} → ${getML(statusById.get(toDelete.toStatusId)?.nameJson)}` : ""} будет удалён безвозвратно.
+              {t("workflow.deleteConfirmPrefix", "Переход")} {toDelete ? `${ml(statusById.get(toDelete.fromStatusId)?.nameJson)} → ${ml(statusById.get(toDelete.toStatusId)?.nameJson)}` : ""} {t("workflow.deleteConfirmSuffix", "будет удалён безвозвратно.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogCancel>{t("workflow.cancel", "Отмена")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700"
               onClick={() => toDelete && deleteMutation.mutate({ id: toDelete.id })}
             >
-              Удалить
+              {t("workflow.delete", "Удалить")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

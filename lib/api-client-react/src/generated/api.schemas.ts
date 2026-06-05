@@ -111,6 +111,30 @@ export interface ChangePasswordInput {
   newPassword: string;
 }
 
+export type UpdateMeInputLanguage = typeof UpdateMeInputLanguage[keyof typeof UpdateMeInputLanguage];
+
+
+export const UpdateMeInputLanguage = {
+  ru: 'ru',
+  en: 'en',
+  he: 'he',
+} as const;
+
+export type UpdateMeInputDirection = typeof UpdateMeInputDirection[keyof typeof UpdateMeInputDirection];
+
+
+export const UpdateMeInputDirection = {
+  ltr: 'ltr',
+  rtl: 'rtl',
+} as const;
+
+export interface UpdateMeInput {
+  language?: UpdateMeInputLanguage;
+  direction?: UpdateMeInputDirection;
+  /** @nullable */
+  startPageId?: number | null;
+}
+
 export interface ResetPasswordInput {
   /** @minLength 6 */
   newPassword: string;

@@ -1,9 +1,9 @@
 import { useGetDashboardStats } from "@workspace/api-client-react";
-import type { MultilingualText } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Shield, Layout, TrendingUp, Activity } from "lucide-react";
+import { useML, useT } from "@/lib/i18n";
 
 function StatCard({
   title,
@@ -39,24 +39,20 @@ function StatCard({
   );
 }
 
-function getML(val: MultilingualText | string | undefined | null): string {
-  if (!val) return "";
-  if (typeof val === "string") return val;
-  return val.ru || val.en || val.he || "";
-}
-
 export default function DashboardPage() {
   const { user } = useAuth();
   const { data: stats, isLoading } = useGetDashboardStats();
+  const ml = useML();
+  const t = useT();
 
   const greeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return "Доброе утро";
-    if (hour < 18) return "Добрый день";
-    return "Добрый вечер";
+    if (hour < 12) return t("dashboard.morning", "Доброе утро");
+    if (hour < 18) return t("dashboard.afternoon", "Добрый день");
+    return t("dashboard.evening", "Добрый вечер");
   };
 
-  const roleDisplay = user?.roleName ? getML(user.roleName) : "—";
+  const roleDisplay = user?.roleName ? ml(user.roleName) : "—";
 
   return (
     <div className="p-6 space-y-6">
@@ -76,21 +72,21 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <StatCard
-          title="Пользователи"
+          title={t("dashboard.users", "Пользователи")}
           value={stats?.totalUsers}
           icon={Users}
           color="bg-blue-600"
           isLoading={isLoading}
         />
         <StatCard
-          title="Роли"
+          title={t("dashboard.roles", "Роли")}
           value={stats?.totalRoles}
           icon={Shield}
           color="bg-violet-600"
           isLoading={isLoading}
         />
         <StatCard
-          title="Страницы"
+          title={t("dashboard.pages", "Страницы")}
           value={stats?.totalPages}
           icon={Layout}
           color="bg-emerald-600"
@@ -103,13 +99,13 @@ export default function DashboardPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-semibold text-slate-700 flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-blue-600" />
-              Активность системы
+              {t("dashboard.systemActivity", "Активность системы")}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
               <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                <span className="text-sm text-slate-600">Активных пользователей</span>
+                <span className="text-sm text-slate-600">{t("dashboard.activeUsers", "Активных пользователей")}</span>
                 {isLoading ? (
                   <Skeleton className="h-5 w-8" />
                 ) : (
@@ -117,7 +113,7 @@ export default function DashboardPage() {
                 )}
               </div>
               <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                <span className="text-sm text-slate-600">Заблокированных пользователей</span>
+                <span className="text-sm text-slate-600">{t("dashboard.blockedUsers", "Заблокированных пользователей")}</span>
                 {isLoading ? (
                   <Skeleton className="h-5 w-8" />
                 ) : (
@@ -125,7 +121,7 @@ export default function DashboardPage() {
                 )}
               </div>
               <div className="flex items-center justify-between py-2">
-                <span className="text-sm text-slate-600">Недавних входов</span>
+                <span className="text-sm text-slate-600">{t("dashboard.recentLogins", "Недавних входов")}</span>
                 {isLoading ? (
                   <Skeleton className="h-5 w-8" />
                 ) : (
@@ -140,24 +136,24 @@ export default function DashboardPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-semibold text-slate-700 flex items-center gap-2">
               <Activity className="w-4 h-4 text-emerald-600" />
-              Информация о системе
+              {t("dashboard.systemInfo", "Информация о системе")}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
               <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                <span className="text-sm text-slate-600">Версия платформы</span>
+                <span className="text-sm text-slate-600">{t("dashboard.platformVersion", "Версия платформы")}</span>
                 <span className="text-sm font-semibold text-slate-800">1.0.0-alpha</span>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                <span className="text-sm text-slate-600">Статус базы данных</span>
+                <span className="text-sm text-slate-600">{t("dashboard.dbStatus", "Статус базы данных")}</span>
                 <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-600">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  Активна
+                  {t("dashboard.dbActive", "Активна")}
                 </span>
               </div>
               <div className="flex items-center justify-between py-2">
-                <span className="text-sm text-slate-600">Ваша роль</span>
+                <span className="text-sm text-slate-600">{t("dashboard.yourRole", "Ваша роль")}</span>
                 <span className="text-sm font-semibold text-blue-600">{roleDisplay}</span>
               </div>
             </div>

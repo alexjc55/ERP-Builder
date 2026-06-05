@@ -53,6 +53,7 @@ import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Loader2, ArrowLeft, LayoutList, Star, Filter, ArrowDownUp, X } from "lucide-react";
+import { useML, useT } from "@/lib/i18n";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
@@ -82,12 +83,6 @@ function operatorNeedsValue(op: FilterOperator): boolean {
 
 function operatorIsArray(op: FilterOperator): boolean {
   return FILTER_OPERATORS.find((o) => o.value === op)?.arrayValue ?? false;
-}
-
-function getML(val: MultilingualText | string | undefined | null): string {
-  if (!val) return "";
-  if (typeof val === "string") return val;
-  return val.ru || val.en || val.he || "";
 }
 
 function extractError(err: unknown): string | undefined {
@@ -126,6 +121,8 @@ export default function EntityViewsPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const ml = useML();
+  const t = useT();
 
   const { data: entities = [] } = useListEntities();
   const entity = entities.find((e: Entity) => e.id === entityId);
@@ -135,7 +132,7 @@ export default function EntityViewsPage() {
     .sort((a: Field, b: Field) => a.sortOrder - b.sortOrder);
   const fieldLabel = (key: string): string => {
     const f = fields.find((x: Field) => x.fieldKey === key);
-    return f ? getML(f.nameJson) : key;
+    return f ? ml(f.nameJson) : key;
   };
 
   const { data: views = [], isLoading } = useListEntityViews(entityId);
@@ -157,20 +154,20 @@ export default function EntityViewsPage() {
 
   const createMutation = useCreateEntityView({
     mutation: {
-      onSuccess: () => { toast({ title: "Вид создан" }); setDialogOpen(false); invalidate(); },
-      onError: (err) => toast({ title: "Ошибка создания вида", description: extractError(err), variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("views.created", "Вид создан") }); setDialogOpen(false); invalidate(); },
+      onError: (err) => toast({ title: t("views.createError", "Ошибка создания вида"), description: extractError(err), variant: "destructive" }),
     },
   });
   const updateMutation = useUpdateView({
     mutation: {
-      onSuccess: () => { toast({ title: "Вид обновлён" }); setDialogOpen(false); invalidate(); },
-      onError: (err) => toast({ title: "Ошибка обновления", description: extractError(err), variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("views.updated", "Вид обновлён") }); setDialogOpen(false); invalidate(); },
+      onError: (err) => toast({ title: t("views.updateError", "Ошибка обновления"), description: extractError(err), variant: "destructive" }),
     },
   });
   const deleteMutation = useDeleteView({
     mutation: {
-      onSuccess: () => { toast({ title: "Вид удалён" }); setToDelete(null); invalidate(); },
-      onError: (err) => toast({ title: "Ошибка удаления вида", description: extractError(err), variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("views.deleted", "Вид удалён") }); setToDelete(null); invalidate(); },
+      onError: (err) => toast({ title: t("views.deleteError", "Ошибка удаления вида"), description: extractError(err), variant: "destructive" }),
     },
   });
 
@@ -266,21 +263,21 @@ export default function EntityViewsPage() {
           className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-3"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          К списку сущностей
+          {t("views.backToEntities", "К списку сущностей")}
         </button>
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
               <LayoutList className="w-6 h-6 text-blue-600" />
-              Виды{entity ? `: ${getML(entity.nameJson)}` : ""}
+              {`${t("views.title", "Виды")}${entity ? `: ${ml(entity.nameJson)}` : ""}`}
             </h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              Сохранённые виды записей: фильтры, сортировка и поиск{entity ? <> <code className="text-xs">{entity.entityKey}</code></> : null}
+              {t("views.subtitle", "Сохранённые виды записей: фильтры, сортировка и поиск")}{entity ? <> <code className="text-xs">{entity.entityKey}</code></> : null}
             </p>
           </div>
           <Button onClick={openCreate} disabled={noFields} className="bg-blue-600 hover:bg-blue-700 gap-2">
             <Plus className="w-4 h-4" />
-            Добавить вид
+            {t("views.add", "Добавить вид")}
           </Button>
         </div>
       </div>
@@ -295,21 +292,21 @@ export default function EntityViewsPage() {
             </div>
           ) : noFields ? (
             <div className="text-center py-16 text-slate-400">
-              Сначала настройте поля сущности — виды фильтруют и сортируют записи по полям.
+              {t("views.noFields", "Сначала настройте поля сущности — виды фильтруют и сортируют записи по полям.")}
             </div>
           ) : views.length === 0 ? (
             <div className="text-center py-16 text-slate-400">
-              У этой сущности ещё нет видов. Нажмите «Добавить вид», чтобы создать первый.
+              {t("views.empty", "У этой сущности ещё нет видов. Нажмите «Добавить вид», чтобы создать первый.")}
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Название</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Ключ</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Фильтры</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Сортировка</th>
-                  <th className="text-right px-4 py-3 font-medium text-slate-600">Действия</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("views.name", "Название")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("views.key", "Ключ")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("views.filters", "Фильтры")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("views.sorting", "Сортировка")}</th>
+                  <th className="text-right px-4 py-3 font-medium text-slate-600">{t("views.actions", "Действия")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -322,13 +319,13 @@ export default function EntityViewsPage() {
                       <td className="px-4 py-3 font-medium text-slate-700">
                         <span className="inline-flex items-center gap-1.5">
                           {view.isDefault && <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />}
-                          {getML(view.nameJson)}
+                          {ml(view.nameJson)}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-slate-500 font-mono text-xs">{view.viewKey}</td>
                       <td className="px-4 py-3 text-slate-500">
                         {fCount > 0 ? <Badge className="bg-slate-100 text-slate-600 border-0 font-normal">{fCount}</Badge> : <span className="text-slate-300">—</span>}
-                        {cfg.search ? <Badge className="ml-1 bg-blue-50 text-blue-600 border-0 font-normal">поиск</Badge> : null}
+                        {cfg.search ? <Badge className="ml-1 bg-blue-50 text-blue-600 border-0 font-normal">{t("views.searchBadge", "поиск")}</Badge> : null}
                       </td>
                       <td className="px-4 py-3 text-slate-500">
                         {sCount > 0 ? <Badge className="bg-slate-100 text-slate-600 border-0 font-normal">{sCount}</Badge> : <span className="text-slate-300">—</span>}
@@ -355,15 +352,15 @@ export default function EntityViewsPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editing ? "Редактировать вид" : "Новый вид"}</DialogTitle>
+            <DialogTitle>{editing ? t("views.editTitle", "Редактировать вид") : t("views.newTitle", "Новый вид")}</DialogTitle>
             <DialogDescription>
-              Вид — это сохранённый набор фильтров, сортировки и поиска для записей сущности.
+              {t("views.dialogDesc", "Вид — это сохранённый набор фильтров, сортировки и поиска для записей сущности.")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <MultilingualInput label="Название" value={nameJson} onChange={setNameJson} required />
+            <MultilingualInput label={t("views.name", "Название")} value={nameJson} onChange={setNameJson} required />
             <div className="space-y-1.5">
-              <Label>Системный ключ</Label>
+              <Label>{t("views.systemKey", "Системный ключ")}</Label>
               <Input
                 value={viewKey}
                 onChange={(e) => setViewKey(e.target.value)}
@@ -371,24 +368,24 @@ export default function EntityViewsPage() {
                 className="font-mono"
               />
               <p className="text-xs text-slate-400">
-                Только строчные латинские буквы, цифры и подчёркивания. Уникален в пределах сущности.
+                {t("views.keyHint", "Только строчные латинские буквы, цифры и подчёркивания. Уникален в пределах сущности.")}
               </p>
             </div>
             <div className="flex items-center gap-2">
               <Switch checked={isDefault} onCheckedChange={setIsDefault} />
-              <Label className="cursor-pointer">Вид по умолчанию</Label>
+              <Label className="cursor-pointer">{t("views.defaultView", "Вид по умолчанию")}</Label>
             </div>
 
             <div className="space-y-1.5">
-              <Label>Поиск по тексту</Label>
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Подстрока по текстовым полям" />
+              <Label>{t("views.textSearch", "Поиск по тексту")}</Label>
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("views.searchPlaceholder", "Подстрока по текстовым полям")} />
             </div>
 
             <div className="space-y-2 border-t border-slate-100 pt-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
                   <Filter className="w-4 h-4 text-blue-600" />
-                  Фильтры
+                  {t("views.filters", "Фильтры")}
                 </div>
                 <div className="flex items-center gap-2">
                   {filters.length > 1 && (
@@ -397,18 +394,18 @@ export default function EntityViewsPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="and">Все условия (И)</SelectItem>
-                        <SelectItem value="or">Любое (ИЛИ)</SelectItem>
+                        <SelectItem value="and">{t("views.condAll", "Все условия (И)")}</SelectItem>
+                        <SelectItem value="or">{t("views.condAny", "Любое (ИЛИ)")}</SelectItem>
                       </SelectContent>
                     </Select>
                   )}
                   <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5" onClick={addFilter}>
-                    <Plus className="w-3.5 h-3.5" /> Условие
+                    <Plus className="w-3.5 h-3.5" /> {t("views.condition", "Условие")}
                   </Button>
                 </div>
               </div>
               {filters.length === 0 ? (
-                <p className="text-xs text-slate-400">Без фильтров показываются все записи.</p>
+                <p className="text-xs text-slate-400">{t("views.noFiltersHint", "Без фильтров показываются все записи.")}</p>
               ) : (
                 <div className="space-y-2">
                   {filters.map((f, idx) => (
@@ -417,7 +414,7 @@ export default function EntityViewsPage() {
                         <SelectTrigger className="h-8 text-sm flex-1"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {fields.map((fld: Field) => (
-                            <SelectItem key={fld.fieldKey} value={fld.fieldKey}>{getML(fld.nameJson)}</SelectItem>
+                            <SelectItem key={fld.fieldKey} value={fld.fieldKey}>{ml(fld.nameJson)}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -425,7 +422,7 @@ export default function EntityViewsPage() {
                         <SelectTrigger className="h-8 text-sm w-44"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {FILTER_OPERATORS.map((o) => (
-                            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                            <SelectItem key={o.value} value={o.value}>{t(`views.op_${o.value}`, o.label)}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -433,7 +430,7 @@ export default function EntityViewsPage() {
                         className="h-8 text-sm flex-1"
                         value={f.valueText}
                         disabled={!operatorNeedsValue(f.operator)}
-                        placeholder={operatorIsArray(f.operator) ? "a, b, c" : operatorNeedsValue(f.operator) ? "значение" : "—"}
+                        placeholder={operatorIsArray(f.operator) ? "a, b, c" : operatorNeedsValue(f.operator) ? t("views.value", "значение") : "—"}
                         onChange={(e) => updateFilter(idx, { valueText: e.target.value })}
                       />
                       <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-500 shrink-0" onClick={() => removeFilter(idx)}>
@@ -449,14 +446,14 @@ export default function EntityViewsPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
                   <ArrowDownUp className="w-4 h-4 text-blue-600" />
-                  Сортировка
+                  {t("views.sorting", "Сортировка")}
                 </div>
                 <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5" onClick={addSort}>
-                  <Plus className="w-3.5 h-3.5" /> Поле
+                  <Plus className="w-3.5 h-3.5" /> {t("views.field", "Поле")}
                 </Button>
               </div>
               {sorts.length === 0 ? (
-                <p className="text-xs text-slate-400">По умолчанию — по дате создания (сначала новые).</p>
+                <p className="text-xs text-slate-400">{t("views.noSortsHint", "По умолчанию — по дате создания (сначала новые).")}</p>
               ) : (
                 <div className="space-y-2">
                   {sorts.map((s, idx) => (
@@ -465,15 +462,15 @@ export default function EntityViewsPage() {
                         <SelectTrigger className="h-8 text-sm flex-1"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {fields.map((fld: Field) => (
-                            <SelectItem key={fld.fieldKey} value={fld.fieldKey}>{getML(fld.nameJson)}</SelectItem>
+                            <SelectItem key={fld.fieldKey} value={fld.fieldKey}>{ml(fld.nameJson)}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                       <Select value={s.direction} onValueChange={(v) => updateSort(idx, { direction: v as SortSpecDirection })}>
                         <SelectTrigger className="h-8 text-sm w-40"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="asc">По возрастанию</SelectItem>
-                          <SelectItem value="desc">По убыванию</SelectItem>
+                          <SelectItem value="asc">{t("views.asc", "По возрастанию")}</SelectItem>
+                          <SelectItem value="desc">{t("views.desc", "По убыванию")}</SelectItem>
                         </SelectContent>
                       </Select>
                       <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-500 shrink-0" onClick={() => removeSort(idx)}>
@@ -486,9 +483,9 @@ export default function EntityViewsPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Отмена</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("views.cancel", "Отмена")}</Button>
             <Button onClick={handleSubmit} disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
-              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editing ? "Сохранить" : "Создать"}
+              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editing ? t("views.save", "Сохранить") : t("views.create", "Создать")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -497,18 +494,18 @@ export default function EntityViewsPage() {
       <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Удалить вид?</AlertDialogTitle>
+            <AlertDialogTitle>{t("views.deleteTitle", "Удалить вид?")}</AlertDialogTitle>
             <AlertDialogDescription>
-              "{getML(toDelete?.nameJson)}" будет удалён. Записи не затрагиваются.
+              {`"${ml(toDelete?.nameJson)}" ${t("views.deleteConfirm", "будет удалён. Записи не затрагиваются.")}`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogCancel>{t("views.cancel", "Отмена")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700"
               onClick={() => toDelete && deleteMutation.mutate({ id: toDelete.id })}
             >
-              Удалить
+              {t("views.delete", "Удалить")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

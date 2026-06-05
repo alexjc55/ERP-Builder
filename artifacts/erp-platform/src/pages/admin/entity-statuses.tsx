@@ -39,6 +39,7 @@ import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Loader2, ArrowLeft, CircleDot, Star, Flag, Archive } from "lucide-react";
+import { useML, useT } from "@/lib/i18n";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
@@ -53,13 +54,9 @@ const PRESET_COLORS = [
   "#14b8a6",
 ];
 
-function getML(val: MultilingualText | string | undefined | null): string {
-  if (!val) return "";
-  if (typeof val === "string") return val;
-  return val.ru || val.en || val.he || "";
-}
-
 export default function EntityStatusesPage() {
+  const ml = useML();
+  const t = useT();
   const params = useParams();
   const entityId = Number(params.entityId);
   const [, navigate] = useLocation();
@@ -90,22 +87,22 @@ export default function EntityStatusesPage() {
 
   const createMutation = useCreateEntityStatus({
     mutation: {
-      onSuccess: () => { toast({ title: "Статус создан" }); setDialogOpen(false); invalidate(); },
-      onError: (err) => toast({ title: "Ошибка создания статуса", description: extractError(err), variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("statuses.created", "Статус создан") }); setDialogOpen(false); invalidate(); },
+      onError: (err) => toast({ title: t("statuses.createError", "Ошибка создания статуса"), description: extractError(err), variant: "destructive" }),
     },
   });
 
   const updateMutation = useUpdateStatus({
     mutation: {
-      onSuccess: () => { toast({ title: "Статус обновлён" }); setDialogOpen(false); invalidate(); },
-      onError: (err) => toast({ title: "Ошибка обновления", description: extractError(err), variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("statuses.updated", "Статус обновлён") }); setDialogOpen(false); invalidate(); },
+      onError: (err) => toast({ title: t("statuses.updateError", "Ошибка обновления"), description: extractError(err), variant: "destructive" }),
     },
   });
 
   const deleteMutation = useDeleteStatus({
     mutation: {
-      onSuccess: () => { toast({ title: "Статус удалён" }); setDeleteStatus(null); invalidate(); },
-      onError: () => toast({ title: "Ошибка удаления статуса", variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("statuses.deleted", "Статус удалён") }); setDeleteStatus(null); invalidate(); },
+      onError: () => toast({ title: t("statuses.deleteError", "Ошибка удаления статуса"), variant: "destructive" }),
     },
   });
 
@@ -168,21 +165,21 @@ export default function EntityStatusesPage() {
           className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-3"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          К списку сущностей
+          {t("statuses.backToEntities", "К списку сущностей")}
         </button>
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
               <CircleDot className="w-6 h-6 text-blue-600" />
-              Статусы{entity ? `: ${getML(entity.nameJson)}` : ""}
+              {`${t("statuses.title", "Статусы")}${entity ? `: ${ml(entity.nameJson)}` : ""}`}
             </h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              Жизненный цикл записей сущности{entity ? <> <code className="text-xs">{entity.entityKey}</code></> : null}
+              {t("statuses.subtitle", "Жизненный цикл записей сущности")}{entity ? <> <code className="text-xs">{entity.entityKey}</code></> : null}
             </p>
           </div>
           <Button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 gap-2">
             <Plus className="w-4 h-4" />
-            Добавить статус
+            {t("statuses.add", "Добавить статус")}
           </Button>
         </div>
       </div>
@@ -197,17 +194,17 @@ export default function EntityStatusesPage() {
             </div>
           ) : statuses.length === 0 ? (
             <div className="text-center py-16 text-slate-400">
-              У этой сущности ещё нет статусов. Нажмите «Добавить статус», чтобы создать первый.
+              {t("statuses.empty", "У этой сущности ещё нет статусов. Нажмите «Добавить статус», чтобы создать первый.")}
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Название</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Ключ</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Признаки</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Статус</th>
-                  <th className="text-right px-4 py-3 font-medium text-slate-600">Действия</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("statuses.colName", "Название")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("statuses.colKey", "Ключ")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("statuses.colFlags", "Признаки")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("statuses.colStatus", "Статус")}</th>
+                  <th className="text-right px-4 py-3 font-medium text-slate-600">{t("statuses.colActions", "Действия")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -219,7 +216,7 @@ export default function EntityStatusesPage() {
                           className="inline-block w-3 h-3 rounded-full border border-black/10"
                           style={{ backgroundColor: status.color }}
                         />
-                        <span className="font-medium text-slate-700">{getML(status.nameJson)}</span>
+                        <span className="font-medium text-slate-700">{ml(status.nameJson)}</span>
                       </span>
                     </td>
                     <td className="px-4 py-3 text-slate-500 font-mono text-xs">{status.statusKey}</td>
@@ -227,18 +224,18 @@ export default function EntityStatusesPage() {
                       <div className="flex items-center gap-1.5">
                         {status.isDefault && (
                           <span className="inline-flex items-center gap-1 text-amber-600 text-xs">
-                            <Star className="w-3 h-3 fill-amber-500 text-amber-500" /> По умолчанию
+                            <Star className="w-3 h-3 fill-amber-500 text-amber-500" /> {t("statuses.default", "По умолчанию")}
                           </span>
                         )}
                         {status.isFinal && (
                           <span className="inline-flex items-center gap-1 text-slate-500 text-xs">
-                            <Flag className="w-3 h-3" /> Финальный
+                            <Flag className="w-3 h-3" /> {t("statuses.final", "Финальный")}
                           </span>
                         )}
                         {status.isArchiveTrigger && (
                           <span className="inline-flex items-center gap-1 text-indigo-600 text-xs">
                             <Archive className="w-3 h-3" />
-                            Архив{status.archiveAfterDays > 0 ? ` (${status.archiveAfterDays} дн.)` : ""}
+                            {`${t("statuses.archive", "Архив")}${status.archiveAfterDays > 0 ? ` (${status.archiveAfterDays} ${t("statuses.daysShort", "дн.")})` : ""}`}
                           </span>
                         )}
                         {!status.isDefault && !status.isFinal && !status.isArchiveTrigger && <span className="text-slate-300 text-xs">—</span>}
@@ -246,9 +243,9 @@ export default function EntityStatusesPage() {
                     </td>
                     <td className="px-4 py-3">
                       {status.isActive ? (
-                        <Badge className="bg-emerald-100 text-emerald-700 border-0 font-normal">Активно</Badge>
+                        <Badge className="bg-emerald-100 text-emerald-700 border-0 font-normal">{t("statuses.active", "Активно")}</Badge>
                       ) : (
-                        <Badge className="bg-slate-100 text-slate-500 border-0 font-normal">Скрыто</Badge>
+                        <Badge className="bg-slate-100 text-slate-500 border-0 font-normal">{t("statuses.hidden", "Скрыто")}</Badge>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -272,15 +269,15 @@ export default function EntityStatusesPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingStatus ? "Редактировать статус" : "Новый статус"}</DialogTitle>
+            <DialogTitle>{editingStatus ? t("statuses.editTitle", "Редактировать статус") : t("statuses.newTitle", "Новый статус")}</DialogTitle>
             <DialogDescription>
-              Статус — это этап жизненного цикла записи (например, «Новая», «В работе», «Завершена»).
+              {t("statuses.dialogDesc", "Статус — это этап жизненного цикла записи (например, «Новая», «В работе», «Завершена»).")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <MultilingualInput label="Название" value={nameJson} onChange={setNameJson} required />
+            <MultilingualInput label={t("statuses.colName", "Название")} value={nameJson} onChange={setNameJson} required />
             <div className="space-y-1.5">
-              <Label>Системный ключ</Label>
+              <Label>{t("statuses.systemKey", "Системный ключ")}</Label>
               <Input
                 value={statusKey}
                 onChange={(e) => setStatusKey(e.target.value)}
@@ -288,11 +285,11 @@ export default function EntityStatusesPage() {
                 className="font-mono"
               />
               <p className="text-xs text-slate-400">
-                Только строчные латинские буквы, цифры и подчёркивания (например, <code>in_progress</code>). Уникален в пределах сущности.
+                {t("statuses.keyHintPre", "Только строчные латинские буквы, цифры и подчёркивания (например,")} <code>in_progress</code>{t("statuses.keyHintPost", "). Уникален в пределах сущности.")}
               </p>
             </div>
             <div className="space-y-1.5">
-              <Label>Цвет</Label>
+              <Label>{t("statuses.color", "Цвет")}</Label>
               <div className="flex items-center gap-2">
                 {PRESET_COLORS.map((c) => (
                   <button
@@ -313,37 +310,37 @@ export default function EntityStatusesPage() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Порядок</Label>
+              <Label>{t("statuses.order", "Порядок")}</Label>
               <Input type="number" value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value))} />
             </div>
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
               <div className="flex items-center gap-2">
                 <Switch checked={isDefault} onCheckedChange={setIsDefault} id="status-default" />
-                <Label htmlFor="status-default">По умолчанию</Label>
+                <Label htmlFor="status-default">{t("statuses.default", "По умолчанию")}</Label>
               </div>
               <div className="flex items-center gap-2">
                 <Switch checked={isFinal} onCheckedChange={setIsFinal} id="status-final" />
-                <Label htmlFor="status-final">Финальный</Label>
+                <Label htmlFor="status-final">{t("statuses.final", "Финальный")}</Label>
               </div>
               <div className="flex items-center gap-2">
                 <Switch checked={isActive} onCheckedChange={setIsActive} id="status-active" />
-                <Label htmlFor="status-active">Активно</Label>
+                <Label htmlFor="status-active">{t("statuses.active", "Активно")}</Label>
               </div>
             </div>
             <p className="text-xs text-slate-400">
-              «По умолчанию» назначается новым записям. У сущности может быть только один статус по умолчанию.
+              {t("statuses.defaultHint", "«По умолчанию» назначается новым записям. У сущности может быть только один статус по умолчанию.")}
             </p>
             <div className="rounded-md border border-slate-200 bg-slate-50/50 p-3 space-y-3">
               <div className="flex items-center gap-2">
                 <Switch checked={isArchiveTrigger} onCheckedChange={setIsArchiveTrigger} id="status-archive-trigger" />
                 <Label htmlFor="status-archive-trigger" className="flex items-center gap-1.5">
                   <Archive className="w-3.5 h-3.5 text-slate-500" />
-                  Архивировать записи в этом статусе
+                  {t("statuses.archiveRecords", "Архивировать записи в этом статусе")}
                 </Label>
               </div>
               {isArchiveTrigger && (
                 <div className="space-y-1.5 pl-1">
-                  <Label htmlFor="status-archive-days">Архивировать через (дней)</Label>
+                  <Label htmlFor="status-archive-days">{t("statuses.archiveAfterDays", "Архивировать через (дней)")}</Label>
                   <Input
                     id="status-archive-days"
                     type="number"
@@ -354,17 +351,17 @@ export default function EntityStatusesPage() {
                   />
                   <p className="text-xs text-slate-400">
                     {archiveAfterDays === 0
-                      ? "0 — запись архивируется сразу при переходе в этот статус."
-                      : `Запись будет скрыта в архив через ${archiveAfterDays} дн. после перехода в этот статус.`}
+                      ? t("statuses.archiveImmediate", "0 — запись архивируется сразу при переходе в этот статус.")
+                      : `${t("statuses.archiveDelayedPre", "Запись будет скрыта в архив через")} ${archiveAfterDays} ${t("statuses.archiveDelayedPost", "дн. после перехода в этот статус.")}`}
                   </p>
                 </div>
               )}
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Отмена</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("statuses.cancel", "Отмена")}</Button>
             <Button onClick={handleSubmit} disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
-              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editingStatus ? "Сохранить" : "Создать"}
+              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editingStatus ? t("statuses.save", "Сохранить") : t("statuses.create", "Создать")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -373,18 +370,18 @@ export default function EntityStatusesPage() {
       <AlertDialog open={!!deleteStatus} onOpenChange={(o) => !o && setDeleteStatus(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Удалить статус?</AlertDialogTitle>
+            <AlertDialogTitle>{t("statuses.deleteConfirmTitle", "Удалить статус?")}</AlertDialogTitle>
             <AlertDialogDescription>
-              "{getML(deleteStatus?.nameJson)}" будет удалён безвозвратно.
+              {`"${ml(deleteStatus?.nameJson)}" ${t("statuses.deleteConfirmDesc", "будет удалён безвозвратно.")}`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogCancel>{t("statuses.cancel", "Отмена")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700"
               onClick={() => deleteStatus && deleteMutation.mutate({ id: deleteStatus.id })}
             >
-              Удалить
+              {t("statuses.delete", "Удалить")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

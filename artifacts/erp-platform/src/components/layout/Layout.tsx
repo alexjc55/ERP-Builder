@@ -1,12 +1,13 @@
 import { useAuth } from "@/lib/auth";
+import { useML, useT, useLang, LANGS } from "@/lib/i18n";
 import { adminCapForPath } from "@/lib/permissions";
 import { useListPages } from "@workspace/api-client-react";
-import type { Page, MultilingualText } from "@workspace/api-client-react";
+import type { Page } from "@workspace/api-client-react";
 import { useLocation, Link } from "wouter";
 import {
   Building2, LayoutDashboard, Users, Shield, Layout as LayoutIcon,
   Languages, Settings, LogOut, ChevronDown, ChevronRight,
-  Menu, X, Database, Table
+  Menu, X, Database, Table, Check
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -30,12 +32,6 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   "database": Database,
   "table": Table,
 };
-
-function getML(val: MultilingualText | string | undefined | null): string {
-  if (!val) return "";
-  if (typeof val === "string") return val;
-  return val.ru || val.en || val.he || "";
-}
 
 function SidebarItem({
   name,
@@ -101,6 +97,9 @@ function SidebarItem({
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout, isSuperAdmin, canAdmin, canPage } = useAuth();
+  const ml = useML();
+  const t = useT();
+  const { lang, setLang } = useLang();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { data: pagesData } = useListPages();
 
@@ -145,7 +144,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
         {topPages.sort((a: Page, b: Page) => a.sortOrder - b.sortOrder).map((page: Page) => {
-          const name = getML(page.nameJson);
+          const name = ml(page.nameJson);
           const children = getSubPages(page.id);
           const hasChildPages = subPages.some((p: Page) => p.parentPageId === page.id);
 
@@ -157,7 +156,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 {children.map((child: Page) => (
                   <SidebarItem
                     key={child.id}
-                    name={getML(child.nameJson)}
+                    name={ml(child.nameJson)}
                     icon={child.icon || "layout"}
                     route={child.path || "/"}
                     depth={1}
@@ -193,14 +192,29 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuLabel className="flex items-center gap-2 text-xs font-normal text-slate-500">
+              <Languages className="w-4 h-4" />
+              {t("layout.language", "Язык")}
+            </DropdownMenuLabel>
+            {LANGS.map((l) => (
+              <DropdownMenuItem
+                key={l.code}
+                onClick={() => setLang(l.code)}
+                className="justify-between"
+              >
+                <span>{l.label}</span>
+                {lang === l.code && <Check className="w-4 h-4 text-blue-600" />}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
             <DropdownMenuItem disabled>
               <Settings className="w-4 h-4 mr-2" />
-              Настройки
+              {t("layout.settings", "Настройки")}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={logout} className="text-red-500 focus:text-red-500">
               <LogOut className="w-4 h-4 mr-2" />
-              Выйти
+              {t("layout.logout", "Выйти")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -43,16 +43,13 @@ import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Layout, Loader2, ChevronRight, ChevronUp, ChevronDown } from "lucide-react";
+import { useML, useT } from "@/lib/i18n";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
-function getML(val: MultilingualText | string | undefined | null): string {
-  if (!val) return "";
-  if (typeof val === "string") return val;
-  return val.ru || val.en || val.he || "";
-}
-
 export default function PagesPage() {
+  const ml = useML();
+  const t = useT();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -73,28 +70,28 @@ export default function PagesPage() {
 
   const createMutation = useCreatePage({
     mutation: {
-      onSuccess: () => { toast({ title: "Страница создана" }); setDialogOpen(false); invalidate(); },
-      onError: () => toast({ title: "Ошибка создания страницы", variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("pages.created", "Страница создана") }); setDialogOpen(false); invalidate(); },
+      onError: () => toast({ title: t("pages.createError", "Ошибка создания страницы"), variant: "destructive" }),
     },
   });
 
   const updateMutation = useUpdatePage({
     mutation: {
-      onSuccess: () => { toast({ title: "Страница обновлена" }); setDialogOpen(false); invalidate(); },
+      onSuccess: () => { toast({ title: t("pages.updated", "Страница обновлена") }); setDialogOpen(false); invalidate(); },
     },
   });
 
   const deleteMutation = useDeletePage({
     mutation: {
-      onSuccess: () => { toast({ title: "Страница удалена" }); setDeletePage(null); invalidate(); },
-      onError: () => toast({ title: "Нельзя удалить страницу с дочерними", variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("pages.deleted", "Страница удалена") }); setDeletePage(null); invalidate(); },
+      onError: () => toast({ title: t("pages.deleteChildrenError", "Нельзя удалить страницу с дочерними"), variant: "destructive" }),
     },
   });
 
   const reorderMutation = useReorderPages({
     mutation: {
       onSuccess: () => invalidate(),
-      onError: () => toast({ title: "Ошибка изменения порядка", variant: "destructive" }),
+      onError: () => toast({ title: t("pages.reorderError", "Ошибка изменения порядка"), variant: "destructive" }),
     },
   });
 
@@ -165,12 +162,12 @@ export default function PagesPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Страницы</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Управление навигацией и пунктами меню</p>
+          <h1 className="text-2xl font-bold text-slate-800">{t("pages.title", "Страницы")}</h1>
+          <p className="text-sm text-slate-500 mt-0.5">{t("pages.subtitle", "Управление навигацией и пунктами меню")}</p>
         </div>
         <Button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 gap-2">
           <Plus className="w-4 h-4" />
-          Создать страницу
+          {t("pages.create", "Создать страницу")}
         </Button>
       </div>
 
@@ -183,16 +180,16 @@ export default function PagesPage() {
               ))}
             </div>
           ) : pages.length === 0 ? (
-            <div className="text-center py-16 text-slate-400">Страницы не найдены</div>
+            <div className="text-center py-16 text-slate-400">{t("pages.empty", "Страницы не найдены")}</div>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Название</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Иконка</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Порядок</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Статус</th>
-                  <th className="text-right px-4 py-3 font-medium text-slate-600">Действия</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("pages.colName", "Название")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("pages.colIcon", "Иконка")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("pages.colOrder", "Порядок")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("pages.colStatus", "Статус")}</th>
+                  <th className="text-right px-4 py-3 font-medium text-slate-600">{t("pages.colActions", "Действия")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -203,16 +200,16 @@ export default function PagesPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <Layout className="w-4 h-4 text-slate-400" />
-                          <span className="font-medium text-slate-700">{getML(page.nameJson)}</span>
+                          <span className="font-medium text-slate-700">{ml(page.nameJson)}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-slate-500 font-mono text-xs">{page.icon || "—"}</td>
                       <td className="px-4 py-3 text-slate-500">{page.sortOrder}</td>
                       <td className="px-4 py-3">
                         {page.isActive ? (
-                          <Badge className="bg-emerald-100 text-emerald-700 border-0 font-normal">Активна</Badge>
+                          <Badge className="bg-emerald-100 text-emerald-700 border-0 font-normal">{t("pages.statusActive", "Активна")}</Badge>
                         ) : (
-                          <Badge className="bg-slate-100 text-slate-500 border-0 font-normal">Скрыта</Badge>
+                          <Badge className="bg-slate-100 text-slate-500 border-0 font-normal">{t("pages.statusHidden", "Скрыта")}</Badge>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -237,16 +234,16 @@ export default function PagesPage() {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2 pl-6">
                             <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
-                            <span className="text-slate-600">{getML(child.nameJson)}</span>
+                            <span className="text-slate-600">{ml(child.nameJson)}</span>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-slate-500 font-mono text-xs">{child.icon || "—"}</td>
                         <td className="px-4 py-3 text-slate-500">{child.sortOrder}</td>
                         <td className="px-4 py-3">
                           {child.isActive ? (
-                            <Badge className="bg-emerald-100 text-emerald-700 border-0 font-normal">Активна</Badge>
+                            <Badge className="bg-emerald-100 text-emerald-700 border-0 font-normal">{t("pages.statusActive", "Активна")}</Badge>
                           ) : (
-                            <Badge className="bg-slate-100 text-slate-500 border-0 font-normal">Скрыта</Badge>
+                            <Badge className="bg-slate-100 text-slate-500 border-0 font-normal">{t("pages.statusHidden", "Скрыта")}</Badge>
                           )}
                         </td>
                         <td className="px-4 py-3">
@@ -278,35 +275,35 @@ export default function PagesPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingPage ? "Редактировать страницу" : "Новая страница"}</DialogTitle>
+            <DialogTitle>{editingPage ? t("pages.editTitle", "Редактировать страницу") : t("pages.newTitle", "Новая страница")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <MultilingualInput label="Название" value={nameJson} onChange={setNameJson} required />
-            <MultilingualInput label="Описание" value={descJson} onChange={setDescJson} multiline />
+            <MultilingualInput label={t("pages.colName", "Название")} value={nameJson} onChange={setNameJson} required />
+            <MultilingualInput label={t("pages.description", "Описание")} value={descJson} onChange={setDescJson} multiline />
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Иконка</Label>
+                <Label>{t("pages.colIcon", "Иконка")}</Label>
                 <Input value={icon} onChange={(e) => setIcon(e.target.value)} placeholder="layout-dashboard" />
               </div>
               <div className="space-y-1.5">
-                <Label>Порядок</Label>
+                <Label>{t("pages.colOrder", "Порядок")}</Label>
                 <Input type="number" value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value))} />
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Путь (маршрут)</Label>
+              <Label>{t("pages.path", "Путь (маршрут)")}</Label>
               <Input value={path} onChange={(e) => setPath(e.target.value)} placeholder="/example" />
-              <p className="text-xs text-slate-400">Адрес страницы в меню. Оставьте пустым для группы-раздела.</p>
+              <p className="text-xs text-slate-400">{t("pages.pathHint", "Адрес страницы в меню. Оставьте пустым для группы-раздела.")}</p>
             </div>
             <div className="space-y-1.5">
-              <Label>Родительская страница</Label>
+              <Label>{t("pages.parent", "Родительская страница")}</Label>
               <Select value={parentPageId} onValueChange={setParentPageId}>
-                <SelectTrigger><SelectValue placeholder="Корневая страница" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("pages.rootPlaceholder", "Корневая страница")} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">— Корневая —</SelectItem>
+                  <SelectItem value="none">{t("pages.rootOption", "— Корневая —")}</SelectItem>
                   {topPages.filter((p: Page) => !editingPage || p.id !== editingPage.id).map((p: Page) => (
                     <SelectItem key={p.id} value={String(p.id)}>
-                      {getML(p.nameJson)}
+                      {ml(p.nameJson)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -314,13 +311,13 @@ export default function PagesPage() {
             </div>
             <div className="flex items-center gap-2">
               <Switch checked={isActive} onCheckedChange={setIsActive} id="page-active" />
-              <Label htmlFor="page-active">Активна (видна в меню)</Label>
+              <Label htmlFor="page-active">{t("pages.activeInMenu", "Активна (видна в меню)")}</Label>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Отмена</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("pages.cancel", "Отмена")}</Button>
             <Button onClick={handleSubmit} disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
-              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editingPage ? "Сохранить" : "Создать"}
+              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editingPage ? t("pages.save", "Сохранить") : t("pages.createShort", "Создать")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -329,18 +326,18 @@ export default function PagesPage() {
       <AlertDialog open={!!deletePage} onOpenChange={(o) => !o && setDeletePage(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Удалить страницу?</AlertDialogTitle>
+            <AlertDialogTitle>{t("pages.deleteTitle", "Удалить страницу?")}</AlertDialogTitle>
             <AlertDialogDescription>
-              "{getML(deletePage?.nameJson)}" будет удалена безвозвратно.
+              "{ml(deletePage?.nameJson)}" {t("pages.deleteConfirm", "будет удалена безвозвратно.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogCancel>{t("pages.cancel", "Отмена")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700"
               onClick={() => deletePage && deleteMutation.mutate({ id: deletePage.id })}
             >
-              Удалить
+              {t("pages.delete", "Удалить")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

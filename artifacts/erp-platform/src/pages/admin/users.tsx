@@ -11,7 +11,6 @@ import {
   type User,
   type UserInput,
   type UserUpdate,
-  type MultilingualText,
   UserInputLanguage,
   UserInputDirection,
 } from "@workspace/api-client-react";
@@ -50,14 +49,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Search, UserPlus, Pencil, Trash2, Ban, CheckCircle, Key, Loader2
 } from "lucide-react";
+import { useML, useT } from "@/lib/i18n";
 
 const LANG_LABELS: Record<string, string> = { ru: "RU", en: "EN", he: "HE" };
-
-function getML(val: MultilingualText | string | undefined | null): string {
-  if (!val) return "";
-  if (typeof val === "string") return val;
-  return val.ru || val.en || val.he || "";
-}
 
 function getInitials(firstName?: string, lastName?: string) {
   return `${firstName?.[0] || ""}${lastName?.[0] || ""}`.toUpperCase() || "?";
@@ -74,6 +68,8 @@ interface FormState {
 }
 
 export default function UsersPage() {
+  const ml = useML();
+  const t = useT();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -104,29 +100,29 @@ export default function UsersPage() {
 
   const createMutation = useCreateUser({
     mutation: {
-      onSuccess: () => { toast({ title: "Пользователь создан" }); setDialogOpen(false); invalidate(); },
-      onError: (e: unknown) => toast({ title: "Ошибка", description: (e as { message?: string })?.message, variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("users.created", "Пользователь создан") }); setDialogOpen(false); invalidate(); },
+      onError: (e: unknown) => toast({ title: t("users.error", "Ошибка"), description: (e as { message?: string })?.message, variant: "destructive" }),
     },
   });
 
   const updateMutation = useUpdateUser({
     mutation: {
-      onSuccess: () => { toast({ title: "Пользователь обновлён" }); setDialogOpen(false); invalidate(); },
-      onError: (e: unknown) => toast({ title: "Ошибка", description: (e as { message?: string })?.message, variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("users.updated", "Пользователь обновлён") }); setDialogOpen(false); invalidate(); },
+      onError: (e: unknown) => toast({ title: t("users.error", "Ошибка"), description: (e as { message?: string })?.message, variant: "destructive" }),
     },
   });
 
   const deleteMutation = useDeleteUser({
     mutation: {
-      onSuccess: () => { toast({ title: "Пользователь удалён" }); setDeleteUser(null); invalidate(); },
+      onSuccess: () => { toast({ title: t("users.deleted", "Пользователь удалён") }); setDeleteUser(null); invalidate(); },
     },
   });
 
-  const blockMutation = useBlockUser({ mutation: { onSuccess: () => { toast({ title: "Заблокирован" }); invalidate(); } } });
-  const unblockMutation = useUnblockUser({ mutation: { onSuccess: () => { toast({ title: "Разблокирован" }); invalidate(); } } });
+  const blockMutation = useBlockUser({ mutation: { onSuccess: () => { toast({ title: t("users.blocked", "Заблокирован") }); invalidate(); } } });
+  const unblockMutation = useUnblockUser({ mutation: { onSuccess: () => { toast({ title: t("users.unblocked", "Разблокирован") }); invalidate(); } } });
   const resetPwMutation = useResetUserPassword({
     mutation: {
-      onSuccess: () => { toast({ title: "Пароль сброшен" }); setResetPwUser(null); setNewPassword(""); invalidate(); },
+      onSuccess: () => { toast({ title: t("users.passwordReset", "Пароль сброшен") }); setResetPwUser(null); setNewPassword(""); invalidate(); },
     },
   });
 
@@ -181,19 +177,19 @@ export default function UsersPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Пользователи</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Управление учётными записями</p>
+          <h1 className="text-2xl font-bold text-slate-800">{t("users.title", "Пользователи")}</h1>
+          <p className="text-sm text-slate-500 mt-0.5">{t("users.subtitle", "Управление учётными записями")}</p>
         </div>
         <Button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 gap-2">
           <UserPlus className="w-4 h-4" />
-          Создать
+          {t("users.create", "Создать")}
         </Button>
       </div>
 
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
         <Input
-          placeholder="Поиск по имени или email..."
+          placeholder={t("users.searchPlaceholder", "Поиск по имени или email...")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-9"
@@ -206,12 +202,12 @@ export default function UsersPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Пользователь</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("users.colUser", "Пользователь")}</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Email</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Роль</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Язык</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Статус</th>
-                  <th className="text-right px-4 py-3 font-medium text-slate-600">Действия</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("users.colRole", "Роль")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("users.colLanguage", "Язык")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("users.colStatus", "Статус")}</th>
+                  <th className="text-right px-4 py-3 font-medium text-slate-600">{t("users.colActions", "Действия")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -226,7 +222,7 @@ export default function UsersPage() {
                 ) : users.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
-                      Пользователи не найдены
+                      {t("users.empty", "Пользователи не найдены")}
                     </td>
                   </tr>
                 ) : (
@@ -247,7 +243,7 @@ export default function UsersPage() {
                       <td className="px-4 py-3 text-slate-500">{user.email}</td>
                       <td className="px-4 py-3">
                         <Badge variant="secondary" className="font-normal">
-                          {getML(user.roleName) || "—"}
+                          {ml(user.roleName) || "—"}
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-slate-500">
@@ -255,9 +251,9 @@ export default function UsersPage() {
                       </td>
                       <td className="px-4 py-3">
                         {user.isActive ? (
-                          <Badge className="bg-emerald-100 text-emerald-700 border-0 font-normal">Активен</Badge>
+                          <Badge className="bg-emerald-100 text-emerald-700 border-0 font-normal">{t("users.active", "Активен")}</Badge>
                         ) : (
-                          <Badge className="bg-red-100 text-red-600 border-0 font-normal">Заблокирован</Badge>
+                          <Badge className="bg-red-100 text-red-600 border-0 font-normal">{t("users.blocked", "Заблокирован")}</Badge>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -294,16 +290,16 @@ export default function UsersPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingUser ? "Редактировать пользователя" : "Новый пользователь"}</DialogTitle>
+            <DialogTitle>{editingUser ? t("users.editTitle", "Редактировать пользователя") : t("users.newTitle", "Новый пользователь")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Имя *</Label>
+                <Label>{t("users.firstName", "Имя")} *</Label>
                 <Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
               </div>
               <div className="space-y-1.5">
-                <Label>Фамилия *</Label>
+                <Label>{t("users.lastName", "Фамилия")} *</Label>
                 <Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
               </div>
             </div>
@@ -313,20 +309,20 @@ export default function UsersPage() {
             </div>
             {!editingUser && (
               <div className="space-y-1.5">
-                <Label>Пароль *</Label>
+                <Label>{t("users.password", "Пароль")} *</Label>
                 <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
               </div>
             )}
             <div className="space-y-1.5">
-              <Label>Роль *</Label>
+              <Label>{t("users.colRole", "Роль")} *</Label>
               <Select value={String(form.roleId)} onValueChange={(v) => setForm({ ...form, roleId: Number(v) })}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Выберите роль" />
+                  <SelectValue placeholder={t("users.selectRole", "Выберите роль")} />
                 </SelectTrigger>
                 <SelectContent>
                   {roles.map((r) => (
                     <SelectItem key={r.id} value={String(r.id)}>
-                      {getML(r.nameJson) || "—"}
+                      {ml(r.nameJson) || "—"}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -334,18 +330,18 @@ export default function UsersPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Язык</Label>
+                <Label>{t("users.colLanguage", "Язык")}</Label>
                 <Select value={form.language} onValueChange={(v) => setForm({ ...form, language: v as UserInputLanguage })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ru">Русский</SelectItem>
+                    <SelectItem value="ru">{t("users.langRussian", "Русский")}</SelectItem>
                     <SelectItem value="en">English</SelectItem>
                     <SelectItem value="he">עברית</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Направление</Label>
+                <Label>{t("users.direction", "Направление")}</Label>
                 <Select value={form.direction} onValueChange={(v) => setForm({ ...form, direction: v as UserInputDirection })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -357,9 +353,9 @@ export default function UsersPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Отмена</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("users.cancel", "Отмена")}</Button>
             <Button onClick={handleSubmit} disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
-              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editingUser ? "Сохранить" : "Создать"}
+              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editingUser ? t("users.save", "Сохранить") : t("users.create", "Создать")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -368,18 +364,18 @@ export default function UsersPage() {
       <AlertDialog open={!!deleteUser} onOpenChange={(o) => !o && setDeleteUser(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Удалить пользователя?</AlertDialogTitle>
+            <AlertDialogTitle>{t("users.deleteTitle", "Удалить пользователя?")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Пользователь {deleteUser?.firstName} {deleteUser?.lastName} будет удалён без возможности восстановления.
+              {t("users.deleteConfirmPrefix", "Пользователь")} {deleteUser?.firstName} {deleteUser?.lastName} {t("users.deleteConfirmSuffix", "будет удалён без возможности восстановления.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogCancel>{t("users.cancel", "Отмена")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700"
               onClick={() => deleteUser && deleteMutation.mutate({ id: deleteUser.id })}
             >
-              Удалить
+              {t("users.delete", "Удалить")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -388,27 +384,27 @@ export default function UsersPage() {
       <Dialog open={!!resetPwUser} onOpenChange={(o) => !o && setResetPwUser(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Сброс пароля</DialogTitle>
+            <DialogTitle>{t("users.resetPwTitle", "Сброс пароля")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <p className="text-sm text-slate-500">
-              Введите новый пароль для {resetPwUser?.firstName} {resetPwUser?.lastName}
+              {t("users.resetPwPrompt", "Введите новый пароль для")} {resetPwUser?.firstName} {resetPwUser?.lastName}
             </p>
             <Input
               type="password"
-              placeholder="Новый пароль"
+              placeholder={t("users.newPasswordPlaceholder", "Новый пароль")}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setResetPwUser(null)}>Отмена</Button>
+            <Button variant="outline" onClick={() => setResetPwUser(null)}>{t("users.cancel", "Отмена")}</Button>
             <Button
               onClick={() => resetPwUser && resetPwMutation.mutate({ id: resetPwUser.id, data: { newPassword } })}
               disabled={!newPassword || resetPwMutation.isPending}
               className="bg-blue-600 hover:bg-blue-700"
             >
-              {resetPwMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Сбросить"}
+              {resetPwMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : t("users.reset", "Сбросить")}
             </Button>
           </DialogFooter>
         </DialogContent>

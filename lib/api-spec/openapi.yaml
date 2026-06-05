@@ -96,6 +96,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateMe
+      tags: [auth]
+      summary: Update own profile (language / text direction / start page)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMeInput"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /auth/change-password:
     post:
@@ -1664,6 +1687,18 @@ components:
         newPassword:
           type: string
           minLength: 6
+
+    UpdateMeInput:
+      type: object
+      properties:
+        language:
+          type: string
+          enum: [ru, en, he]
+        direction:
+          type: string
+          enum: [ltr, rtl]
+        startPageId:
+          type: ["integer", "null"]
 
     ResetPasswordInput:
       type: object
