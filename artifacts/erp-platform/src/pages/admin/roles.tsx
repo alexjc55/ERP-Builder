@@ -512,6 +512,11 @@ function EntityScopeRow({
                   </label>
                 ))}
               </div>
+              {!userFields.some((f: Field) => scopeFieldKeys.includes(f.fieldKey)) && (
+                <p className="text-xs text-amber-600">
+                  Не выбрано ни одного поля-владельца — при «Только свои» записи не будут видны. Отметьте хотя бы одно поле.
+                </p>
+              )}
             </div>
           )}
         </div>

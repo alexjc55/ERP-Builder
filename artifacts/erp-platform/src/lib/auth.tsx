@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useGetMe, getGetMeQueryKey, setAuthTokenGetter } from "@workspace/api-client-react";
-import type { UserProfile, RolePermissions, RoleAdminCaps, RecordPermission, FieldAccess, FieldPermissions } from "@workspace/api-client-react";
+import type { UserProfile, RolePermissions, RoleAdminCaps, FieldAccess, FieldPermissions } from "@workspace/api-client-react";
 
-type RecordAction = keyof RecordPermission;
+type RecordAction = "view" | "create" | "update" | "delete";
 
 interface AuthContextType {
   user: UserProfile | null;
