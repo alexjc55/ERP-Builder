@@ -19,6 +19,7 @@ import EntityWorkflowPage from "@/pages/admin/entity-workflow";
 import EntityRecordsPage from "@/pages/admin/entity-records";
 import TranslationsPage from "@/pages/admin/translations";
 import EventsPage from "@/pages/admin/events";
+import ModulesPage from "@/pages/admin/modules";
 import DynamicPage from "@/pages/dynamic";
 import { Loader2, ShieldAlert } from "lucide-react";
 import type { RoleAdminCaps } from "@workspace/api-client-react";
@@ -127,6 +128,12 @@ function Router() {
       <Route path="/admin/events">
         <ProtectedRoute adminCap="events">
           <EventsPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/modules">
+        <ProtectedRoute adminCap="modules">
+          <ModulesPage />
         </ProtectedRoute>
       </Route>
 

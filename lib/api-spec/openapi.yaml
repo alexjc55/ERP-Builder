@@ -1182,6 +1182,104 @@ paths:
               schema:
                 $ref: "#/components/schemas/SystemEventList"
 
+  # MODULES (Modules Architecture — plugin registry)
+  /modules:
+    get:
+      operationId: listModules
+      tags: [modules]
+      summary: List all registered modules
+      responses:
+        "200":
+          description: List of modules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Module"
+    post:
+      operationId: createModule
+      tags: [modules]
+      summary: Register a new module
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModuleInput"
+      responses:
+        "201":
+          description: Module created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Module"
+
+  /modules/{id}:
+    get:
+      operationId: getModule
+      tags: [modules]
+      summary: Get module by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Module found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Module"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateModule
+      tags: [modules]
+      summary: Update module (key is immutable)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModuleUpdate"
+      responses:
+        "200":
+          description: Module updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Module"
+    delete:
+      operationId: deleteModule
+      tags: [modules]
+      summary: Delete module
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
   /entities/{entityId}/records/query:
     post:
       operationId: queryEntityRecords
@@ -1973,6 +2071,60 @@ components:
         total:
           type: integer
 
+    # MODULES (Modules Architecture — plugin registry infrastructure)
+    Module:
+      type: object
+      required: [id, moduleKey, nameJson, version, isEnabled, settingsJson, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        moduleKey:
+          type: string
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        version:
+          type: string
+        isEnabled:
+          type: boolean
+        settingsJson:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ModuleInput:
+      type: object
+      required: [moduleKey, nameJson]
+      properties:
+        moduleKey:
+          type: string
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        version:
+          type: string
+        isEnabled:
+          type: boolean
+        settingsJson:
+          type: object
+          additionalProperties: true
+
+    ModuleUpdate:
+      type: object
+      properties:
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        version:
+          type: string
+        isEnabled:
+          type: boolean
+        settingsJson:
+          type: object
+          additionalProperties: true
+
     # ROLES
     RecordScope:
       type: string
@@ -1999,7 +2151,7 @@ components:
 
     RoleAdminCaps:
       type: object
-      required: [pages, entities, roles, users, translations, events]
+      required: [pages, entities, roles, users, translations, events, modules]
       properties:
         pages:
           type: boolean
@@ -2012,6 +2164,8 @@ components:
         translations:
           type: boolean
         events:
+          type: boolean
+        modules:
           type: boolean
 
     RolePermissions:

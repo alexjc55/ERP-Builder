@@ -1,13 +1,1 @@
-- [ERP Platform Core](erp-platform-core.md) — key platform-wide decisions for the metadata-driven Production ERP Builder.
-- [RBAC permissions model](rbac-permissions.md) — how role permissions are structured, enforced server-side, and mirrored in the UI.
-- [Field & row permissions](erp-field-row-permissions.md) — per-field (hidden/view/edit) and per-row (all/own) access; server is the hard boundary.
-- [Display-only vs hard boundary](erp-display-only-hide.md) — a UI-only column-hide can intentionally apply to superAdmin while the server keeps super's edit access.
-- [Impersonation](erp-impersonation.md) — JWT-carried impersonatorId, no-escalation rule, nested impersonation preserves the original admin.
-- [Audit endpoint field security](audit-field-security.md) — endpoints returning raw/historical values must re-apply the field hidden boundary.
-- [Archive engine design](archive-engine.md) — record archival via flag + lazy sweep; the column that makes manual unarchive durable.
-- [Workflow engine](workflow-engine.md) — status transitions built on entity_statuses; compare-and-set concurrency rule on record status change.
-- [Relations engine](relations-engine.md) — DB-enforced cardinality, Drizzle error wrapping, concurrency lock on link create/type change.
-- [Record Views & query](record-views-query.md) — why the records query endpoint is POST and the per-entity bootstrap-reset rule.
-- [DB-backed i18n](erp-i18n.md) — UI strings live in the `translations` table, not files; keep seeding complete (template keys are JSON-only).
-- [Orval param collision](orval-param-collision.md) — adding a query param to a path-param GET breaks api-zod codegen; carry filters on a POST body.
-- [Event System](event-system.md) — best-effort event bus (persist + in-process dispatch); the 5 core events and the after-the-mutation emission rule.
+- [Admin capability stage pattern](admin-cap-stage-pattern.md) — how to add a new metadata-driven admin area (cap + OpenAPI CRUD + gated route + i18n screen) mirroring Roles/Events/Modules.

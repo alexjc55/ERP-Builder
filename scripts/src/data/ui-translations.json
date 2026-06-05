@@ -3016,5 +3016,191 @@
     "ru": "Всего",
     "en": "Total",
     "he": "סה\"כ"
+  },
+  {
+    "key": "modules.title",
+    "ru": "Модули",
+    "en": "Modules",
+    "he": "מודולים"
+  },
+  {
+    "key": "modules.subtitle",
+    "ru": "Реестр модулей — инфраструктура для будущих плагинов",
+    "en": "Module registry — infrastructure for future plugins",
+    "he": "מרשם מודולים — תשתית לתוספים עתידיים"
+  },
+  {
+    "key": "modules.add",
+    "ru": "Добавить модуль",
+    "en": "Add module",
+    "he": "הוסף מודול"
+  },
+  {
+    "key": "modules.empty",
+    "ru": "Модулей пока нет",
+    "en": "No modules yet",
+    "he": "אין מודולים עדיין"
+  },
+  {
+    "key": "modules.col.name",
+    "ru": "Название",
+    "en": "Name",
+    "he": "שם"
+  },
+  {
+    "key": "modules.col.key",
+    "ru": "Ключ",
+    "en": "Key",
+    "he": "מפתח"
+  },
+  {
+    "key": "modules.col.version",
+    "ru": "Версия",
+    "en": "Version",
+    "he": "גרסה"
+  },
+  {
+    "key": "modules.col.status",
+    "ru": "Статус",
+    "en": "Status",
+    "he": "סטטוס"
+  },
+  {
+    "key": "modules.col.actions",
+    "ru": "Действия",
+    "en": "Actions",
+    "he": "פעולות"
+  },
+  {
+    "key": "modules.enabled",
+    "ru": "Включён",
+    "en": "Enabled",
+    "he": "מופעל"
+  },
+  {
+    "key": "modules.disabled",
+    "ru": "Выключен",
+    "en": "Disabled",
+    "he": "מושבת"
+  },
+  {
+    "key": "modules.newTitle",
+    "ru": "Новый модуль",
+    "en": "New module",
+    "he": "מודול חדש"
+  },
+  {
+    "key": "modules.editTitle",
+    "ru": "Редактировать модуль",
+    "en": "Edit module",
+    "he": "ערוך מודול"
+  },
+  {
+    "key": "modules.name",
+    "ru": "Название",
+    "en": "Name",
+    "he": "שם"
+  },
+  {
+    "key": "modules.key",
+    "ru": "Системный ключ",
+    "en": "System key",
+    "he": "מפתח מערכת"
+  },
+  {
+    "key": "modules.keyImmutable",
+    "ru": "Ключ нельзя изменить после создания",
+    "en": "The key cannot be changed after creation",
+    "he": "לא ניתן לשנות את המפתח לאחר היצירה"
+  },
+  {
+    "key": "modules.keyInvalid",
+    "ru": "Ключ: строчные латинские буквы, цифры, _; начинается с буквы",
+    "en": "Key: lowercase letters, digits, _; must start with a letter",
+    "he": "מפתח: אותיות קטנות, ספרות, _; חייב להתחיל באות"
+  },
+  {
+    "key": "modules.version",
+    "ru": "Версия",
+    "en": "Version",
+    "he": "גרסה"
+  },
+  {
+    "key": "modules.enable",
+    "ru": "Включён",
+    "en": "Enabled",
+    "he": "מופעל"
+  },
+  {
+    "key": "modules.enableDesc",
+    "ru": "Активные модули доступны платформе",
+    "en": "Enabled modules are available to the platform",
+    "he": "מודולים מופעלים זמינים לפלטפורמה"
+  },
+  {
+    "key": "modules.settings",
+    "ru": "Настройки (JSON)",
+    "en": "Settings (JSON)",
+    "he": "הגדרות (JSON)"
+  },
+  {
+    "key": "modules.settingsInvalid",
+    "ru": "Настройки должны быть корректным JSON-объектом",
+    "en": "Settings must be a valid JSON object",
+    "he": "ההגדרות חייבות להיות אובייקט JSON תקין"
+  },
+  {
+    "key": "modules.nameRequired",
+    "ru": "Укажите название",
+    "en": "Name is required",
+    "he": "נדרש שם"
+  },
+  {
+    "key": "modules.created",
+    "ru": "Модуль зарегистрирован",
+    "en": "Module registered",
+    "he": "המודול נרשם"
+  },
+  {
+    "key": "modules.createError",
+    "ru": "Ошибка регистрации модуля",
+    "en": "Failed to register module",
+    "he": "רישום המודול נכשל"
+  },
+  {
+    "key": "modules.updated",
+    "ru": "Модуль обновлён",
+    "en": "Module updated",
+    "he": "המודול עודכן"
+  },
+  {
+    "key": "modules.updateError",
+    "ru": "Ошибка обновления модуля",
+    "en": "Failed to update module",
+    "he": "עדכון המודול נכשל"
+  },
+  {
+    "key": "modules.deleted",
+    "ru": "Модуль удалён",
+    "en": "Module deleted",
+    "he": "המודול נמחק"
+  },
+  {
+    "key": "modules.deleteError",
+    "ru": "Ошибка удаления модуля",
+    "en": "Failed to delete module",
+    "he": "מחיקת המודול נכשלה"
+  },
+  {
+    "key": "modules.deleteTitle",
+    "ru": "Удалить модуль?",
+    "en": "Delete module?",
+    "he": "למחוק את המודול?"
+  },
+  {
+    "key": "modules.deleteDesc",
+    "ru": "Это действие нельзя отменить.",
+    "en": "This action cannot be undone.",
+    "he": "לא ניתן לבטל פעולה זו."
   }
 ]

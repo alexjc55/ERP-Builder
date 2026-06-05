@@ -53,6 +53,7 @@ export interface RoleAdminCaps {
   users: boolean;
   translations: boolean;
   events: boolean;
+  modules: boolean;
 }
 
 export type RecordScope = typeof RecordScope[keyof typeof RecordScope];
@@ -297,6 +298,38 @@ export interface SystemEvent {
 export interface SystemEventList {
   data: SystemEvent[];
   total: number;
+}
+
+export type ModuleSettingsJson = { [key: string]: unknown };
+
+export interface Module {
+  id: number;
+  moduleKey: string;
+  nameJson: MultilingualText;
+  version: string;
+  isEnabled: boolean;
+  settingsJson: ModuleSettingsJson;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ModuleInputSettingsJson = { [key: string]: unknown };
+
+export interface ModuleInput {
+  moduleKey: string;
+  nameJson: MultilingualText;
+  version?: string;
+  isEnabled?: boolean;
+  settingsJson?: ModuleInputSettingsJson;
+}
+
+export type ModuleUpdateSettingsJson = { [key: string]: unknown };
+
+export interface ModuleUpdate {
+  nameJson?: MultilingualText;
+  version?: string;
+  isEnabled?: boolean;
+  settingsJson?: ModuleUpdateSettingsJson;
 }
 
 export interface Role {

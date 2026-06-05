@@ -49,7 +49,8 @@ export const LoginResponse = zod.object({
   "roles": zod.boolean(),
   "users": zod.boolean(),
   "translations": zod.boolean(),
-  "events": zod.boolean()
+  "events": zod.boolean(),
+  "modules": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -104,7 +105,8 @@ export const GetMeResponse = zod.object({
   "roles": zod.boolean(),
   "users": zod.boolean(),
   "translations": zod.boolean(),
-  "events": zod.boolean()
+  "events": zod.boolean(),
+  "modules": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -155,7 +157,8 @@ export const UpdateMeResponse = zod.object({
   "roles": zod.boolean(),
   "users": zod.boolean(),
   "translations": zod.boolean(),
-  "events": zod.boolean()
+  "events": zod.boolean(),
+  "modules": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -206,7 +209,8 @@ export const ImpersonateResponse = zod.object({
   "roles": zod.boolean(),
   "users": zod.boolean(),
   "translations": zod.boolean(),
-  "events": zod.boolean()
+  "events": zod.boolean(),
+  "modules": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -254,7 +258,8 @@ export const StopImpersonationResponse = zod.object({
   "roles": zod.boolean(),
   "users": zod.boolean(),
   "translations": zod.boolean(),
-  "events": zod.boolean()
+  "events": zod.boolean(),
+  "modules": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -551,7 +556,8 @@ export const ListRolesResponseItem = zod.object({
   "roles": zod.boolean(),
   "users": zod.boolean(),
   "translations": zod.boolean(),
-  "events": zod.boolean()
+  "events": zod.boolean(),
+  "modules": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -592,7 +598,8 @@ export const CreateRoleBody = zod.object({
   "roles": zod.boolean(),
   "users": zod.boolean(),
   "translations": zod.boolean(),
-  "events": zod.boolean()
+  "events": zod.boolean(),
+  "modules": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -634,7 +641,8 @@ export const GetRoleResponse = zod.object({
   "roles": zod.boolean(),
   "users": zod.boolean(),
   "translations": zod.boolean(),
-  "events": zod.boolean()
+  "events": zod.boolean(),
+  "modules": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -678,7 +686,8 @@ export const UpdateRoleBody = zod.object({
   "roles": zod.boolean(),
   "users": zod.boolean(),
   "translations": zod.boolean(),
-  "events": zod.boolean()
+  "events": zod.boolean(),
+  "modules": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -712,7 +721,8 @@ export const UpdateRoleResponse = zod.object({
   "roles": zod.boolean(),
   "users": zod.boolean(),
   "translations": zod.boolean(),
-  "events": zod.boolean()
+  "events": zod.boolean(),
+  "modules": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -1572,6 +1582,112 @@ export const ListEventsResponse = zod.object({
   "createdAt": zod.coerce.date()
 })),
   "total": zod.number()
+})
+
+
+/**
+ * @summary List all registered modules
+ */
+export const ListModulesResponseItem = zod.object({
+  "id": zod.number(),
+  "moduleKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "version": zod.string(),
+  "isEnabled": zod.boolean(),
+  "settingsJson": zod.record(zod.string(), zod.unknown()),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListModulesResponse = zod.array(ListModulesResponseItem)
+
+
+/**
+ * @summary Register a new module
+ */
+export const CreateModuleBody = zod.object({
+  "moduleKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "version": zod.string().optional(),
+  "isEnabled": zod.boolean().optional(),
+  "settingsJson": zod.record(zod.string(), zod.unknown()).optional()
+})
+
+
+/**
+ * @summary Get module by ID
+ */
+export const GetModuleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetModuleResponse = zod.object({
+  "id": zod.number(),
+  "moduleKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "version": zod.string(),
+  "isEnabled": zod.boolean(),
+  "settingsJson": zod.record(zod.string(), zod.unknown()),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update module (key is immutable)
+ */
+export const UpdateModuleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateModuleBody = zod.object({
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "version": zod.string().optional(),
+  "isEnabled": zod.boolean().optional(),
+  "settingsJson": zod.record(zod.string(), zod.unknown()).optional()
+})
+
+export const UpdateModuleResponse = zod.object({
+  "id": zod.number(),
+  "moduleKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "version": zod.string(),
+  "isEnabled": zod.boolean(),
+  "settingsJson": zod.record(zod.string(), zod.unknown()),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete module
+ */
+export const DeleteModuleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteModuleResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
 })
 
 

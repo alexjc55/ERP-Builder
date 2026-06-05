@@ -15,6 +15,7 @@ import translationsRouter from "./translations";
 import dashboardRouter from "./dashboard";
 import auditLogRouter from "./audit-log";
 import eventsRouter from "./events";
+import modulesRouter from "./modules";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use(translationsRouter);
 router.use(dashboardRouter);
 router.use(auditLogRouter);
 router.use(eventsRouter);
+router.use(modulesRouter);
 
 export default router;
