@@ -42,18 +42,39 @@ function SidebarItem({
   route,
   children,
   depth = 0,
+  collapsed = false,
 }: {
   name: string;
   icon?: string;
   route?: string;
   children?: React.ReactNode;
   depth?: number;
+  collapsed?: boolean;
 }) {
   const [location] = useLocation();
   const [expanded, setExpanded] = useState(true);
   const hasChildren = !!children;
   const isActive = route ? (route === "/" ? location === route : location.startsWith(route)) : false;
   const IconComp = icon ? (ICON_MAP[icon] || LayoutDashboard) : LayoutDashboard;
+
+  // Collapsed (icon rail) — groups are flattened by the parent, so here we only
+  // ever render leaf links as centered icons with a tooltip.
+  if (collapsed) {
+    return (
+      <Link href={route || "/"}>
+        <a
+          title={name}
+          className={cn(
+            "flex items-center justify-center px-0 py-2.5 rounded-lg transition-colors",
+            "text-slate-300 hover:bg-slate-700/60 hover:text-white",
+            isActive && "bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 hover:text-blue-300"
+          )}
+        >
+          <IconComp className={cn("w-5 h-5 shrink-0", isActive ? "text-blue-400" : "text-slate-400")} />
+        </a>
+      </Link>
+    );
+  }
 
   if (hasChildren) {
     return (
@@ -150,27 +171,42 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     ? `${user.firstName?.[0] || ""}${user.lastName?.[0] || ""}`.toUpperCase() || "U"
     : "U";
 
-  const Sidebar = (
-    <div className="flex flex-col h-full bg-slate-900 w-64 border-r border-slate-700/60">
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-slate-700/60">
+  const renderSidebar = (collapsed: boolean) => (
+    <div
+      className={cn(
+        "flex flex-col h-full bg-slate-900 border-r border-slate-700/60 transition-all",
+        collapsed ? "w-16" : "w-64"
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-center border-b border-slate-700/60",
+          collapsed ? "flex-col gap-2 px-2 py-4" : "gap-3 px-4 py-5"
+        )}
+      >
         <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
           <Building2 className="w-5 h-5 text-white" />
         </div>
-        <div>
-          <div className="text-sm font-bold text-white leading-tight">ERP Builder</div>
-          <div className="text-xs text-slate-500">Production Platform</div>
-        </div>
+        {!collapsed && (
+          <div>
+            <div className="text-sm font-bold text-white leading-tight">ERP Builder</div>
+            <div className="text-xs text-slate-500">Production Platform</div>
+          </div>
+        )}
         <button
           onClick={toggleDesktopSidebar}
-          title={t("layout.collapseSidebar", "Свернуть меню")}
-          aria-label={t("layout.collapseSidebar", "Свернуть меню")}
-          className="hidden lg:flex ml-auto w-7 h-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-700/60 hover:text-white shrink-0"
+          title={collapsed ? t("layout.expandSidebar", "Развернуть меню") : t("layout.collapseSidebar", "Свернуть меню")}
+          aria-label={collapsed ? t("layout.expandSidebar", "Развернуть меню") : t("layout.collapseSidebar", "Свернуть меню")}
+          className={cn(
+            "hidden lg:flex items-center justify-center rounded-md text-slate-400 hover:bg-slate-700/60 hover:text-white shrink-0",
+            collapsed ? "w-9 h-7" : "ml-auto w-7 h-7"
+          )}
         >
-          <PanelLeftClose className="w-4 h-4" />
+          {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
         </button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+      <nav className={cn("flex-1 overflow-y-auto py-4 space-y-1", collapsed ? "px-2" : "px-3")}>
         {topPages.sort((a: Page, b: Page) => a.sortOrder - b.sortOrder).map((page: Page) => {
           const name = ml(page.nameJson);
           const children = getSubPages(page.id);
@@ -179,6 +215,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           // Group header: render only if at least one child is visible.
           if (hasChildPages) {
             if (children.length === 0) return null;
+            // In the icon rail there is no room for an expandable group, so the
+            // group's visible children are flattened into standalone icons.
+            if (collapsed) {
+              return children.map((child: Page) => (
+                <SidebarItem
+                  key={child.id}
+                  name={ml(child.nameJson)}
+                  icon={child.icon || "layout"}
+                  route={child.path || "/"}
+                  collapsed
+                />
+              ));
+            }
             return (
               <SidebarItem key={page.id} name={name} icon={page.icon || "settings"} depth={0}>
                 {children.map((child: Page) => (
@@ -196,28 +245,48 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
           if (!isPageVisible(page)) return null;
           return (
-            <SidebarItem key={page.id} name={name} icon={page.icon || "layout-dashboard"} route={page.path || "/"} depth={0} />
+            <SidebarItem
+              key={page.id}
+              name={name}
+              icon={page.icon || "layout-dashboard"}
+              route={page.path || "/"}
+              depth={0}
+              collapsed={collapsed}
+            />
           );
         })}
       </nav>
 
-      <div className="px-3 py-4 border-t border-slate-700/60">
+      <div className={cn("border-t border-slate-700/60", collapsed ? "px-2 py-4 flex justify-center" : "px-3 py-4")}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-slate-800 transition-colors">
-              <Avatar className="w-8 h-8 bg-blue-600">
-                <AvatarFallback className="bg-blue-600 text-white text-xs font-semibold">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 text-left min-w-0">
-                <div className="text-sm font-medium text-white truncate">
-                  {user?.firstName} {user?.lastName}
+            {collapsed ? (
+              <button
+                title={`${user?.firstName || ""} ${user?.lastName || ""}`.trim()}
+                className="flex items-center justify-center p-1 rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                <Avatar className="w-8 h-8 bg-blue-600">
+                  <AvatarFallback className="bg-blue-600 text-white text-xs font-semibold">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+              </button>
+            ) : (
+              <button className="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-slate-800 transition-colors">
+                <Avatar className="w-8 h-8 bg-blue-600">
+                  <AvatarFallback className="bg-blue-600 text-white text-xs font-semibold">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 text-left min-w-0">
+                  <div className="text-sm font-medium text-white truncate">
+                    {user?.firstName} {user?.lastName}
+                  </div>
+                  <div className="text-xs text-slate-500 truncate">{user?.email}</div>
                 </div>
-                <div className="text-xs text-slate-500 truncate">{user?.email}</div>
-              </div>
-              <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />
-            </button>
+                <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />
+              </button>
+            )}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
             <DropdownMenuLabel className="flex items-center gap-2 text-xs font-normal text-slate-500">
@@ -252,23 +321,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
-      {!desktopCollapsed && <div className="hidden lg:flex shrink-0">{Sidebar}</div>}
-
-      {desktopCollapsed && (
-        <button
-          onClick={toggleDesktopSidebar}
-          title={t("layout.expandSidebar", "Показать меню")}
-          aria-label={t("layout.expandSidebar", "Показать меню")}
-          className="hidden lg:flex fixed left-3 top-3 z-40 w-8 h-8 items-center justify-center rounded-md bg-slate-900 text-white shadow-lg hover:bg-slate-800"
-        >
-          <PanelLeftOpen className="w-4 h-4" />
-        </button>
-      )}
+      <div className="hidden lg:flex shrink-0">{renderSidebar(desktopCollapsed)}</div>
 
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
-          <div className="absolute left-0 top-0 h-full">{Sidebar}</div>
+          <div className="absolute left-0 top-0 h-full">{renderSidebar(false)}</div>
         </div>
       )}
 
