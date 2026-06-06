@@ -7,7 +7,8 @@ import { useLocation, Link } from "wouter";
 import {
   Building2, LayoutDashboard, Users, Shield, Layout as LayoutIcon,
   Languages, Settings, LogOut, ChevronDown, ChevronRight,
-  Menu, X, Database, Table, Check, UserCog, Activity, Puzzle, Eye
+  Menu, X, Database, Table, Check, UserCog, Activity, Puzzle, Eye,
+  PanelLeftClose, PanelLeftOpen
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -103,6 +104,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const t = useT();
   const { lang, setLang } = useLang();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [desktopCollapsed, setDesktopCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("sidebarCollapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleDesktopSidebar = () =>
+    setDesktopCollapsed((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem("sidebarCollapsed", next ? "1" : "0");
+      } catch {
+        /* ignore persistence errors */
+      }
+      return next;
+    });
   const { data: pagesData } = useListPages();
 
   // A page is visible if: superAdmin (all), the home page ("/"), an admin builder
@@ -142,6 +160,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="text-sm font-bold text-white leading-tight">ERP Builder</div>
           <div className="text-xs text-slate-500">Production Platform</div>
         </div>
+        <button
+          onClick={toggleDesktopSidebar}
+          title={t("layout.collapseSidebar", "Свернуть меню")}
+          aria-label={t("layout.collapseSidebar", "Свернуть меню")}
+          className="hidden lg:flex ml-auto w-7 h-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-700/60 hover:text-white shrink-0"
+        >
+          <PanelLeftClose className="w-4 h-4" />
+        </button>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
@@ -226,7 +252,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
-      <div className="hidden lg:flex shrink-0">{Sidebar}</div>
+      {!desktopCollapsed && <div className="hidden lg:flex shrink-0">{Sidebar}</div>}
+
+      {desktopCollapsed && (
+        <button
+          onClick={toggleDesktopSidebar}
+          title={t("layout.expandSidebar", "Показать меню")}
+          aria-label={t("layout.expandSidebar", "Показать меню")}
+          className="hidden lg:flex fixed left-3 top-3 z-40 w-8 h-8 items-center justify-center rounded-md bg-slate-900 text-white shadow-lg hover:bg-slate-800"
+        >
+          <PanelLeftOpen className="w-4 h-4" />
+        </button>
+      )}
 
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
