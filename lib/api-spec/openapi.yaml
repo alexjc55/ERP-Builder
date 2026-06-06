@@ -2653,6 +2653,8 @@ components:
           $ref: "#/components/schemas/FieldPermissions"
         isFilterable:
           type: boolean
+        showInTable:
+          type: boolean
         sortOrder:
           type: integer
         isActive:
@@ -2690,6 +2692,9 @@ components:
         isFilterable:
           type: boolean
           default: false
+        showInTable:
+          type: boolean
+          default: true
         sortOrder:
           type: integer
         isActive:
@@ -2735,6 +2740,8 @@ components:
         permissionsJson:
           $ref: "#/components/schemas/FieldPermissions"
         isFilterable:
+          type: boolean
+        showInTable:
           type: boolean
         sortOrder:
           type: integer

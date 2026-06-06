@@ -682,12 +682,16 @@ export function EntityRecords({ entityId }: { entityId: number }) {
   const isPending = createMutation.isPending || updateMutation.isPending;
   const visibleFields = selectedConfig.visibleFields;
   const hasCustomColumnOrder = Boolean(visibleFields && visibleFields.length > 0);
-  const displayFields =
-    hasCustomColumnOrder
+  // In setup mode the admin manages every column (including ones hidden from the
+  // table), so show all role-visible fields. Otherwise: a selected view dictates
+  // the columns; with no view, show all fields opted-in via "Показывать в таблице".
+  const displayFields = setupMode
+    ? tableFields
+    : hasCustomColumnOrder
       ? (visibleFields!
           .map((key) => tableFields.find((f: Field) => f.fieldKey === key))
           .filter((f): f is Field => Boolean(f)))
-      : tableFields.slice(0, 5);
+      : tableFields.filter((f: Field) => f.showInTable !== false);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   if (!canView) {

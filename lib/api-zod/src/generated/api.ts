@@ -1058,6 +1058,7 @@ export const ListEntityFieldsResponseItem = zod.object({
   "optionsJson": zod.array(zod.string()),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "isFilterable": zod.boolean().optional(),
+  "showInTable": zod.boolean().optional(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -1075,6 +1076,7 @@ export const CreateEntityFieldParams = zod.object({
 
 export const createEntityFieldBodyIsRequiredDefault = false;
 export const createEntityFieldBodyIsFilterableDefault = false;
+export const createEntityFieldBodyShowInTableDefault = true;
 export const createEntityFieldBodyIsActiveDefault = true;
 
 export const CreateEntityFieldBody = zod.object({
@@ -1095,6 +1097,7 @@ export const CreateEntityFieldBody = zod.object({
   "optionsJson": zod.array(zod.string()).optional(),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "isFilterable": zod.boolean().default(createEntityFieldBodyIsFilterableDefault),
+  "showInTable": zod.boolean().default(createEntityFieldBodyShowInTableDefault),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createEntityFieldBodyIsActiveDefault)
 })
@@ -1127,6 +1130,7 @@ export const GetFieldResponse = zod.object({
   "optionsJson": zod.array(zod.string()),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "isFilterable": zod.boolean().optional(),
+  "showInTable": zod.boolean().optional(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -1159,6 +1163,7 @@ export const UpdateFieldBody = zod.object({
   "optionsJson": zod.array(zod.string()).optional(),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "isFilterable": zod.boolean().optional(),
+  "showInTable": zod.boolean().optional(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
@@ -1183,6 +1188,7 @@ export const UpdateFieldResponse = zod.object({
   "optionsJson": zod.array(zod.string()),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "isFilterable": zod.boolean().optional(),
+  "showInTable": zod.boolean().optional(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),

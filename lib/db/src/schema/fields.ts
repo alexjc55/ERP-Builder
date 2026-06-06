@@ -25,6 +25,7 @@ export const entityFieldsTable = pgTable(
     optionsJson: jsonb("options_json").notNull().default([]),
     permissionsJson: jsonb("permissions_json").$type<FieldPermissions>().notNull().default({}),
     isFilterable: boolean("is_filterable").notNull().default(false),
+    showInTable: boolean("show_in_table").notNull().default(true),
     sortOrder: integer("sort_order").notNull().default(0),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

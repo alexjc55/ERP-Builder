@@ -111,6 +111,7 @@ export function FieldConfigDialog({
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
   const [isFilterable, setIsFilterable] = useState(false);
+  const [showInTable, setShowInTable] = useState(true);
   const [permissions, setPermissions] = useState<FieldPermissions>({});
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -130,6 +131,7 @@ export function FieldConfigDialog({
       setSortOrder(field.sortOrder);
       setIsActive(field.isActive);
       setIsFilterable(field.isFilterable ?? false);
+      setShowInTable(field.showInTable ?? true);
       setPermissions(field.permissionsJson ?? {});
     } else {
       setFieldKey("");
@@ -142,6 +144,7 @@ export function FieldConfigDialog({
       setSortOrder(nextSortOrder);
       setIsActive(true);
       setIsFilterable(false);
+      setShowInTable(true);
       setPermissions({});
     }
   }, [open, field, nextSortOrder]);
@@ -208,6 +211,7 @@ export function FieldConfigDialog({
       sortOrder,
       isActive,
       isFilterable,
+      showInTable,
     };
     if (field) updateMutation.mutate({ id: field.id, data: payload });
     else createMutation.mutate({ entityId, data: payload });
@@ -287,6 +291,10 @@ export function FieldConfigDialog({
               <div className="flex items-center gap-2">
                 <Switch checked={isFilterable} onCheckedChange={setIsFilterable} id="fcd-filterable" />
                 <Label htmlFor="fcd-filterable">{t("fields.filterable", "Участвует в фильтре")}</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={showInTable} onCheckedChange={setShowInTable} id="fcd-show-in-table" />
+                <Label htmlFor="fcd-show-in-table">{t("fields.showInTable", "Показывать в таблице")}</Label>
               </div>
             </div>
 
