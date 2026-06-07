@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
+import { APP_SECRET } from "./secret";
 
-const SECRET = process.env.SESSION_SECRET ?? "dev-secret-change-in-production";
+const SECRET = APP_SECRET;
 
 export interface JwtPayload {
   userId: number;

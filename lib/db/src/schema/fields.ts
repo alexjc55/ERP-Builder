@@ -9,6 +9,16 @@ export type FieldAccess = "hidden" | "view" | "edit";
 /** Field-level permission map: stringified roleId -> access level. */
 export type FieldPermissions = Record<string, FieldAccess>;
 
+/** A source a `file`-type field value may come from. */
+export type FileSource = "server" | "gdrive" | "link";
+
+/**
+ * Per-field configuration for a `file`-type field. `allowedSources` lists which
+ * fill-time sources are offered/accepted. Empty/unset means the legacy default
+ * (server upload only).
+ */
+export type FileFieldConfig = { allowedSources?: FileSource[] };
+
 export const entityFieldsTable = pgTable(
   "entity_fields",
   {
@@ -24,6 +34,7 @@ export const entityFieldsTable = pgTable(
     defaultValue: text("default_value"),
     optionsJson: jsonb("options_json").notNull().default([]),
     permissionsJson: jsonb("permissions_json").$type<FieldPermissions>().notNull().default({}),
+    fileConfigJson: jsonb("file_config_json").$type<FileFieldConfig>().notNull().default({}),
     isFilterable: boolean("is_filterable").notNull().default(false),
     showInTable: boolean("show_in_table").notNull().default(true),
     sortOrder: integer("sort_order").notNull().default(0),

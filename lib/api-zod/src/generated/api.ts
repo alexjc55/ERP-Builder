@@ -83,7 +83,8 @@ export const LoginResponse = zod.object({
   "users": zod.boolean(),
   "translations": zod.boolean(),
   "events": zod.boolean(),
-  "modules": zod.boolean()
+  "modules": zod.boolean(),
+  "googleDrive": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -140,7 +141,8 @@ export const GetMeResponse = zod.object({
   "users": zod.boolean(),
   "translations": zod.boolean(),
   "events": zod.boolean(),
-  "modules": zod.boolean()
+  "modules": zod.boolean(),
+  "googleDrive": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -193,7 +195,8 @@ export const UpdateMeResponse = zod.object({
   "users": zod.boolean(),
   "translations": zod.boolean(),
   "events": zod.boolean(),
-  "modules": zod.boolean()
+  "modules": zod.boolean(),
+  "googleDrive": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -246,7 +249,8 @@ export const ImpersonateResponse = zod.object({
   "users": zod.boolean(),
   "translations": zod.boolean(),
   "events": zod.boolean(),
-  "modules": zod.boolean()
+  "modules": zod.boolean(),
+  "googleDrive": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -296,7 +300,8 @@ export const StopImpersonationResponse = zod.object({
   "users": zod.boolean(),
   "translations": zod.boolean(),
   "events": zod.boolean(),
-  "modules": zod.boolean()
+  "modules": zod.boolean(),
+  "googleDrive": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -350,7 +355,8 @@ export const RedeemGuestLinkResponse = zod.object({
   "users": zod.boolean(),
   "translations": zod.boolean(),
   "events": zod.boolean(),
-  "modules": zod.boolean()
+  "modules": zod.boolean(),
+  "googleDrive": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -710,7 +716,8 @@ export const ListRolesResponseItem = zod.object({
   "users": zod.boolean(),
   "translations": zod.boolean(),
   "events": zod.boolean(),
-  "modules": zod.boolean()
+  "modules": zod.boolean(),
+  "googleDrive": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -752,7 +759,8 @@ export const CreateRoleBody = zod.object({
   "users": zod.boolean(),
   "translations": zod.boolean(),
   "events": zod.boolean(),
-  "modules": zod.boolean()
+  "modules": zod.boolean(),
+  "googleDrive": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -795,7 +803,8 @@ export const GetRoleResponse = zod.object({
   "users": zod.boolean(),
   "translations": zod.boolean(),
   "events": zod.boolean(),
-  "modules": zod.boolean()
+  "modules": zod.boolean(),
+  "googleDrive": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -840,7 +849,8 @@ export const UpdateRoleBody = zod.object({
   "users": zod.boolean(),
   "translations": zod.boolean(),
   "events": zod.boolean(),
-  "modules": zod.boolean()
+  "modules": zod.boolean(),
+  "googleDrive": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -875,7 +885,8 @@ export const UpdateRoleResponse = zod.object({
   "users": zod.boolean(),
   "translations": zod.boolean(),
   "events": zod.boolean(),
-  "modules": zod.boolean()
+  "modules": zod.boolean(),
+  "googleDrive": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -1090,6 +1101,9 @@ export const ListEntityFieldsResponseItem = zod.object({
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
+  "fileConfigJson": zod.object({
+  "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional()
+}).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "sortOrder": zod.number(),
@@ -1129,6 +1143,9 @@ export const CreateEntityFieldBody = zod.object({
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()).optional(),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
+  "fileConfigJson": zod.object({
+  "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional()
+}).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "isFilterable": zod.boolean().default(createEntityFieldBodyIsFilterableDefault),
   "showInTable": zod.boolean().default(createEntityFieldBodyShowInTableDefault),
   "sortOrder": zod.number().optional(),
@@ -1162,6 +1179,9 @@ export const GetFieldResponse = zod.object({
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
+  "fileConfigJson": zod.object({
+  "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional()
+}).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "sortOrder": zod.number(),
@@ -1195,6 +1215,9 @@ export const UpdateFieldBody = zod.object({
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()).optional(),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
+  "fileConfigJson": zod.object({
+  "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional()
+}).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "sortOrder": zod.number().optional(),
@@ -1220,6 +1243,9 @@ export const UpdateFieldResponse = zod.object({
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
+  "fileConfigJson": zod.object({
+  "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional()
+}).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "sortOrder": zod.number(),
@@ -2576,6 +2602,80 @@ export const GetDashboardStatsResponse = zod.object({
   "totalRoles": zod.number(),
   "totalPages": zod.number(),
   "recentLogins": zod.number().optional()
+})
+
+
+/**
+ * @summary Lightweight Drive readiness for file-field forms (any authenticated user)
+ */
+export const GetGoogleDriveStatusResponse = zod.object({
+  "connected": zod.boolean().describe('A refresh token is stored.'),
+  "folderConfigured": zod.boolean().describe('An upload target folder is configured.')
+})
+
+
+/**
+ * @summary Full Drive connection info (admin)
+ */
+export const GetGoogleDriveConnectionResponse = zod.object({
+  "keyMode": zod.enum(['builtin', 'own']),
+  "connected": zod.boolean(),
+  "folderConfigured": zod.boolean(),
+  "builtinAvailable": zod.boolean().describe('Whether the platform ships built-in OAuth client credentials.'),
+  "hasOwnCreds": zod.boolean().describe('Whether own-mode client secret is stored.'),
+  "ownClientId": zod.string().optional().describe('The stored own-mode OAuth client ID (not secret).'),
+  "redirectUri": zod.string().describe('The OAuth redirect URI to register in the Google client.'),
+  "accountEmail": zod.string().optional(),
+  "folderId": zod.string().optional(),
+  "folderName": zod.string().optional()
+})
+
+
+/**
+ * @summary Set the Drive key mode and (for own mode) client credentials (admin)
+ */
+export const UpdateGoogleDriveConnectionBody = zod.object({
+  "keyMode": zod.enum(['builtin', 'own']),
+  "ownClientId": zod.string().optional(),
+  "ownClientSecret": zod.string().optional().describe('Plaintext client secret; stored encrypted. Omit to keep existing.')
+})
+
+export const UpdateGoogleDriveConnectionResponse = zod.object({
+  "keyMode": zod.enum(['builtin', 'own']),
+  "connected": zod.boolean(),
+  "folderConfigured": zod.boolean(),
+  "builtinAvailable": zod.boolean().describe('Whether the platform ships built-in OAuth client credentials.'),
+  "hasOwnCreds": zod.boolean().describe('Whether own-mode client secret is stored.'),
+  "ownClientId": zod.string().optional().describe('The stored own-mode OAuth client ID (not secret).'),
+  "redirectUri": zod.string().describe('The OAuth redirect URI to register in the Google client.'),
+  "accountEmail": zod.string().optional(),
+  "folderId": zod.string().optional(),
+  "folderName": zod.string().optional()
+})
+
+
+/**
+ * @summary Begin the Drive OAuth consent flow; returns the consent URL (admin)
+ */
+export const StartGoogleDriveOauthResponse = zod.object({
+  "authUrl": zod.string()
+})
+
+
+/**
+ * @summary Disconnect Drive, clearing stored tokens and folder (admin)
+ */
+export const DisconnectGoogleDriveResponse = zod.object({
+  "keyMode": zod.enum(['builtin', 'own']),
+  "connected": zod.boolean(),
+  "folderConfigured": zod.boolean(),
+  "builtinAvailable": zod.boolean().describe('Whether the platform ships built-in OAuth client credentials.'),
+  "hasOwnCreds": zod.boolean().describe('Whether own-mode client secret is stored.'),
+  "ownClientId": zod.string().optional().describe('The stored own-mode OAuth client ID (not secret).'),
+  "redirectUri": zod.string().describe('The OAuth redirect URI to register in the Google client.'),
+  "accountEmail": zod.string().optional(),
+  "folderId": zod.string().optional(),
+  "folderName": zod.string().optional()
 })
 
 

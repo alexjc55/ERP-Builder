@@ -1,20 +1,78 @@
 import { requestUploadUrl } from "@workspace/api-client-react";
 
-/** Stored value shape for a `file`-type field. */
-export interface FileValue {
+/** A source a `file`-type field value may come from. */
+export type FileSource = "server" | "gdrive" | "link";
+
+/** Server upload (object storage). Legacy values omit `kind` but have a path. */
+export interface ServerFileValue {
+  kind?: "server";
   path: string;
   name: string;
   contentType?: string;
   size?: number;
 }
 
+/** A file managed in Google Drive (uploaded through our server). */
+export interface GDriveFileValue {
+  kind: "gdrive";
+  fileId: string;
+  name: string;
+  contentType?: string;
+  size?: number;
+  webViewLink?: string;
+}
+
+/** An external link pasted by the user. */
+export interface LinkFileValue {
+  kind: "link";
+  url: string;
+  name?: string;
+}
+
+/** Stored value shape for a `file`-type field (polymorphic by source). */
+export type FileValue = ServerFileValue | GDriveFileValue | LinkFileValue;
+
+/** Resolve the source of a stored file value (legacy = server). */
+export function fileValueKind(value: FileValue): FileSource {
+  const k = (value as { kind?: string }).kind;
+  if (k === "gdrive" || k === "link") return k;
+  return "server";
+}
+
+export function isServerFile(value: FileValue): value is ServerFileValue {
+  return fileValueKind(value) === "server";
+}
+export function isGDriveFile(value: FileValue): value is GDriveFileValue {
+  return fileValueKind(value) === "gdrive";
+}
+export function isLinkFile(value: FileValue): value is LinkFileValue {
+  return fileValueKind(value) === "link";
+}
+
 export function isFileValue(value: unknown): value is FileValue {
-  return (
-    !!value &&
-    typeof value === "object" &&
-    typeof (value as Record<string, unknown>).path === "string" &&
-    typeof (value as Record<string, unknown>).name === "string"
-  );
+  if (!value || typeof value !== "object") return false;
+  const o = value as Record<string, unknown>;
+  if (o.kind === "link") return typeof o.url === "string";
+  if (o.kind === "gdrive") return typeof o.fileId === "string" && typeof o.name === "string";
+  // server or legacy (no kind)
+  return typeof o.path === "string" && typeof o.name === "string";
+}
+
+/** Display name for any file value (links may omit a name → fall back to URL). */
+export function fileValueName(value: FileValue): string {
+  if (isLinkFile(value)) return value.name && value.name.trim() ? value.name : value.url;
+  return value.name;
+}
+
+/**
+ * Resolve which file sources a field offers. Mirrors the server default: an
+ * empty/unset config means server upload only (legacy behavior).
+ */
+export function fileAllowedSources(
+  config: { allowedSources?: FileSource[] } | null | undefined,
+): FileSource[] {
+  const list = config?.allowedSources;
+  return Array.isArray(list) && list.length > 0 ? list : ["server"];
 }
 
 /**
@@ -39,9 +97,75 @@ export async function uploadFile(
   return { path: res.objectPath, contentType, size: file.size };
 }
 
+/** Result of uploading a file into the managed Google Drive folder. */
+export interface GDriveUploadResult {
+  fileId: string;
+  name: string;
+  contentType?: string;
+  size?: number;
+  webViewLink?: string;
+}
+
+/**
+ * Upload a file into the configured Google Drive folder via our server (which
+ * holds the Drive credentials — they are never exposed to the client). Returns
+ * the created Drive file's metadata to store as a `gdrive` file value.
+ */
+export async function uploadToGoogleDrive(file: File): Promise<GDriveUploadResult> {
+  const token = localStorage.getItem("erp_token");
+  const headers: Record<string, string> = {
+    "Content-Type": file.type || "application/octet-stream",
+    "X-File-Name": encodeURIComponent(file.name),
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const resp = await fetch("/api/google-drive/upload", {
+    method: "POST",
+    headers,
+    body: file,
+  });
+  if (!resp.ok) {
+    throw new Error(`Drive upload failed (${resp.status})`);
+  }
+  return (await resp.json()) as GDriveUploadResult;
+}
+
 /** API serving URL for a stored object path (e.g. `/objects/uploads/uuid`). */
 export function objectServingUrl(path: string): string {
   return `/api/storage${path}`;
+}
+
+/** API serving URL for a managed Google Drive file's content (auth-gated proxy). */
+export function gdriveContentUrl(fileId: string): string {
+  return `/api/google-drive/files/${encodeURIComponent(fileId)}/content`;
+}
+
+/**
+ * Fetch an auth-gated URL as a blob object URL using the stored bearer token.
+ * `<img>`/`<iframe>` can't carry the Authorization header, so we fetch the bytes
+ * and hand back a blob URL. The caller must revoke it.
+ */
+async function fetchAuthedBlobUrl(url: string): Promise<string> {
+  const token = localStorage.getItem("erp_token");
+  const resp = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!resp.ok) {
+    throw new Error(`Failed to load (${resp.status})`);
+  }
+  const blob = await resp.blob();
+  return URL.createObjectURL(blob);
+}
+
+/** Fetch a managed Google Drive file's content as a blob object URL. */
+export function fetchGDriveBlobUrl(fileId: string): Promise<string> {
+  return fetchAuthedBlobUrl(gdriveContentUrl(fileId));
+}
+
+/** Open a managed Google Drive file (proxied bytes) in a new browser tab. */
+export async function openGDriveInNewTab(fileId: string): Promise<void> {
+  const url = await fetchGDriveBlobUrl(fileId);
+  window.open(url, "_blank", "noopener");
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 /**
@@ -49,16 +173,8 @@ export function objectServingUrl(path: string): string {
  * Bearer token, which `<img src>` / `<iframe src>` cannot carry, so we fetch the
  * bytes and hand back a blob URL. The caller is responsible for revoking it.
  */
-export async function fetchObjectBlobUrl(path: string): Promise<string> {
-  const token = localStorage.getItem("erp_token");
-  const resp = await fetch(objectServingUrl(path), {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  if (!resp.ok) {
-    throw new Error(`Failed to load object (${resp.status})`);
-  }
-  const blob = await resp.blob();
-  return URL.createObjectURL(blob);
+export function fetchObjectBlobUrl(path: string): Promise<string> {
+  return fetchAuthedBlobUrl(objectServingUrl(path));
 }
 
 /** Fetch an auth-gated object and open it in a new browser tab. */

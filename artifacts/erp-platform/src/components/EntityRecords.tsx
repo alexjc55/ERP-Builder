@@ -72,15 +72,23 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   uploadFile,
   openObjectInNewTab,
+  openGDriveInNewTab,
   fetchObjectBlobUrl,
+  fetchGDriveBlobUrl,
   detectUrlPreview,
   contentTypeKind,
   isFileValue,
+  isGDriveFile,
+  isLinkFile,
+  fileAllowedSources,
+  uploadToGoogleDrive,
   type FileValue,
+  type FileSource,
 } from "@/lib/storage";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useML, useT } from "@/lib/i18n";
+import { useGoogleDriveReady } from "@/lib/googleDrive";
 import { FieldConfigDialog } from "@/components/FieldConfigDialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion } from "lucide-react";
@@ -156,8 +164,22 @@ function renderCellValue(field: Field, value: unknown, userNames?: Map<number, s
   return <span className="text-slate-700">{String(value)}</span>;
 }
 
-/** Auth-gated preview of a stored object, fetched as a blob (image inline, pdf in an iframe). */
-function ObjectPreview({ path, contentType, name }: { path: string; contentType?: string; name: string }) {
+/**
+ * Auth-gated preview of a file fetched as a blob (image inline, pdf in an
+ * iframe). `load` fetches a blob object URL (server object or proxied Drive
+ * file); the loaded URL is revoked on cleanup.
+ */
+function BlobPreview({
+  load,
+  loadKey,
+  contentType,
+  name,
+}: {
+  load: () => Promise<string>;
+  loadKey: string;
+  contentType?: string;
+  name: string;
+}) {
   const t = useT();
   const kind = contentTypeKind(contentType, name);
   const [url, setUrl] = useState<string | null>(null);
@@ -169,7 +191,7 @@ function ObjectPreview({ path, contentType, name }: { path: string; contentType?
     let made: string | null = null;
     setUrl(null);
     setError(false);
-    fetchObjectBlobUrl(path)
+    load()
       .then((u) => {
         if (active) {
           made = u;
@@ -183,7 +205,8 @@ function ObjectPreview({ path, contentType, name }: { path: string; contentType?
       active = false;
       if (made) URL.revokeObjectURL(made);
     };
-  }, [path, kind]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadKey, kind]);
 
   if (kind === "other") {
     return (
@@ -209,8 +232,18 @@ function ObjectPreview({ path, contentType, name }: { path: string; contentType?
   return <iframe src={url} title={name} className="h-64 w-full rounded border-0" />;
 }
 
-/** A filled file cell: a named link that opens the file, with a hover preview. */
+/** A filled file cell, rendered per source (server / Google Drive / link). */
 function FileCell({ value }: { value: FileValue }) {
+  if (isLinkFile(value)) {
+    return <UrlPreviewCell url={value.url} label={value.name && value.name.trim() ? value.name : value.url} />;
+  }
+
+  const isGDrive = isGDriveFile(value);
+  const open = () =>
+    isGDrive ? openGDriveInNewTab(value.fileId) : openObjectInNewTab(value.path);
+  const loadKey = isGDrive ? `gdrive:${value.fileId}` : `server:${value.path}`;
+  const load = () => (isGDrive ? fetchGDriveBlobUrl(value.fileId) : fetchObjectBlobUrl(value.path));
+
   return (
     <HoverCard openDelay={200}>
       <HoverCardTrigger asChild>
@@ -218,7 +251,7 @@ function FileCell({ value }: { value: FileValue }) {
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            void openObjectInNewTab(value.path);
+            void open();
           }}
           className="inline-flex max-w-full items-center gap-1.5 text-blue-600 hover:underline"
         >
@@ -227,14 +260,14 @@ function FileCell({ value }: { value: FileValue }) {
         </button>
       </HoverCardTrigger>
       <HoverCardContent className="w-80 p-2" onClick={(e) => e.stopPropagation()}>
-        <ObjectPreview path={value.path} contentType={value.contentType} name={value.name} />
+        <BlobPreview load={load} loadKey={loadKey} contentType={value.contentType} name={value.name} />
       </HoverCardContent>
     </HoverCard>
   );
 }
 
 /** A url cell: a link, plus a hover preview when it points to an image, pdf, or Google Drive file. */
-function UrlPreviewCell({ url }: { url: string }) {
+function UrlPreviewCell({ url, label }: { url: string; label?: string }) {
   const preview = detectUrlPreview(url);
   const link = (
     <a
@@ -244,7 +277,7 @@ function UrlPreviewCell({ url }: { url: string }) {
       className="text-blue-600 hover:underline"
       onClick={(e) => e.stopPropagation()}
     >
-      {url}
+      {label ?? url}
     </a>
   );
   if (preview.kind === null) return link;
@@ -1632,7 +1665,14 @@ function InlineCellEditor({
   };
 
   if (field.fieldType === "file") {
-    return <InlineFileEditor initial={initial} onCommit={commitOnce} onCancel={onCancel} />;
+    return (
+      <InlineFileEditor
+        initial={initial}
+        allowedSources={fileAllowedSources(field.fileConfigJson)}
+        onCommit={commitOnce}
+        onCancel={onCancel}
+      />
+    );
   }
 
   if (field.fieldType === "select" || field.fieldType === "user") {
@@ -1712,7 +1752,14 @@ function FieldInput({
   const t = useT();
   switch (field.fieldType) {
     case "file":
-      return <FileFieldInput value={value} onChange={onChange} disabled={disabled} />;
+      return (
+        <FileFieldInput
+          value={value}
+          onChange={onChange}
+          disabled={disabled}
+          allowedSources={fileAllowedSources(field.fileConfigJson)}
+        />
+      );
     case "textarea":
       return <Textarea value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} disabled={disabled} />;
     case "boolean":
@@ -1779,27 +1826,49 @@ function FieldInput({
   }
 }
 
+function sourceLabel(t: (k: string, d: string) => string, source: FileSource): string {
+  if (source === "server") return t("records.fileSource.server", "Сервер");
+  if (source === "gdrive") return t("records.fileSource.gdrive", "Google Drive");
+  return t("records.fileSource.link", "Ссылка");
+}
+
 /**
- * File picker for a `file`-type field: uploads via the presigned flow and keeps
- * an editable display name. Used both in the record dialog/add-row (via FieldInput)
- * and inside the inline editor.
+ * Multi-source picker for a `file`-type field. Offers the sources allowed by the
+ * field config (server upload, Google Drive, external link) and keeps an editable
+ * display name. The committed value is the polymorphic FileValue. Used in the
+ * record dialog/add-row (via FieldInput) and inside the inline editor.
  */
 function FileFieldInput({
   value,
   onChange,
   disabled = false,
   compact = false,
+  allowedSources = ["server"],
 }: {
   value: unknown;
   onChange: (v: FileValue | "") => void;
   disabled?: boolean;
   compact?: boolean;
+  allowedSources?: FileSource[];
 }) {
   const t = useT();
   const { toast } = useToast();
+  const gdriveReady = useGoogleDriveReady();
   const fileValue = isFileValue(value) ? value : null;
+  const currentKind: FileSource = fileValue
+    ? isLinkFile(fileValue)
+      ? "link"
+      : isGDriveFile(fileValue)
+        ? "gdrive"
+        : "server"
+    : allowedSources[0] ?? "server";
+  const [source, setSource] = useState<FileSource>(
+    allowedSources.includes(currentKind) ? currentKind : allowedSources[0] ?? "server",
+  );
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const showName = source === fileValueSourceOf(fileValue);
 
   const handlePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1809,8 +1878,9 @@ function FileFieldInput({
     try {
       const res = await uploadFile(file);
       onChange({
+        kind: "server",
         path: res.path,
-        name: fileValue?.name?.trim() ? fileValue.name : file.name,
+        name: source === "server" && fileValue && !isLinkFile(fileValue) && fileValue.name?.trim() ? fileValue.name : file.name,
         contentType: res.contentType,
         size: res.size,
       });
@@ -1821,41 +1891,141 @@ function FileFieldInput({
     }
   };
 
+  const handleDriveUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    try {
+      const res = await uploadToGoogleDrive(file);
+      onChange({
+        kind: "gdrive",
+        fileId: res.fileId,
+        name: res.name,
+        contentType: res.contentType,
+        size: res.size,
+        webViewLink: res.webViewLink,
+      });
+    } catch {
+      toast({ title: t("records.driveUploadError", "Не удалось загрузить в Google Drive"), variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
     <div className="space-y-1.5">
-      <div className="flex items-center gap-2">
-        <input ref={inputRef} type="file" className="hidden" onChange={handlePick} disabled={disabled || uploading} />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className={compact ? "h-8" : undefined}
-          disabled={disabled || uploading}
-          onClick={() => inputRef.current?.click()}
-        >
-          {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-          <span className="ml-1.5">
-            {fileValue ? t("records.fileReplace", "Заменить файл") : t("records.fileUpload", "Загрузить файл")}
-          </span>
-        </Button>
-        {fileValue && (
+      {allowedSources.length > 1 && (
+        <div className="flex flex-wrap gap-1">
+          {allowedSources.map((s) => (
+            <Button
+              key={s}
+              type="button"
+              variant={s === source ? "default" : "outline"}
+              size="sm"
+              className={`h-7 px-2.5 text-xs ${s === source ? "bg-blue-600 hover:bg-blue-700" : ""}`}
+              disabled={disabled || uploading}
+              onClick={() => setSource(s)}
+            >
+              {sourceLabel(t, s)}
+            </Button>
+          ))}
+        </div>
+      )}
+
+      {source === "server" && (
+        <div className="flex items-center gap-2">
+          <input ref={inputRef} type="file" className="hidden" onChange={handlePick} disabled={disabled || uploading} />
           <Button
             type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-slate-500"
-            disabled={disabled}
-            title={t("records.fileRemove", "Удалить файл")}
-            onClick={() => onChange("")}
+            variant="outline"
+            size="sm"
+            className={compact ? "h-8" : undefined}
+            disabled={disabled || uploading}
+            onClick={() => inputRef.current?.click()}
           >
-            <X className="h-3.5 w-3.5" />
+            {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+            <span className="ml-1.5">
+              {showName ? t("records.fileReplace", "Заменить файл") : t("records.fileUpload", "Загрузить файл")}
+            </span>
           </Button>
-        )}
-      </div>
-      {fileValue && (
+          {fileValue && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-slate-500"
+              disabled={disabled}
+              title={t("records.fileRemove", "Удалить файл")}
+              onClick={() => onChange("")}
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+      )}
+
+      {source === "gdrive" && (
+        <div className="flex items-center gap-2">
+          <input ref={inputRef} type="file" className="hidden" onChange={handleDriveUpload} disabled={disabled || uploading || !gdriveReady} />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={compact ? "h-8" : undefined}
+            disabled={disabled || uploading || !gdriveReady}
+            onClick={() => inputRef.current?.click()}
+          >
+            {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+            <span className="ml-1.5">
+              {showName ? t("records.driveReplace", "Заменить в Google Drive") : t("records.driveUpload", "Загрузить в Google Drive")}
+            </span>
+          </Button>
+          {fileValue && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-slate-500"
+              disabled={disabled}
+              title={t("records.fileRemove", "Удалить файл")}
+              onClick={() => onChange("")}
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+      )}
+
+      {source === "gdrive" && !gdriveReady && (
+        <p className="text-xs text-amber-600">
+          {t("records.driveNotConnected", "Google Drive не подключён. Подключите его в настройках.")}
+        </p>
+      )}
+
+      {source === "link" && (
         <Input
-          value={fileValue.name}
-          onChange={(e) => onChange({ ...fileValue, name: e.target.value })}
+          type="url"
+          value={fileValue && isLinkFile(fileValue) ? fileValue.url : ""}
+          onChange={(e) => {
+            const url = e.target.value;
+            if (!url) {
+              onChange("");
+              return;
+            }
+            const prevName = fileValue && isLinkFile(fileValue) ? fileValue.name : undefined;
+            onChange({ kind: "link", url, ...(prevName ? { name: prevName } : {}) });
+          }}
+          placeholder="https://"
+          disabled={disabled}
+          className={compact ? "h-8 text-sm" : undefined}
+        />
+      )}
+
+      {showName && fileValue && (
+        <Input
+          value={isLinkFile(fileValue) ? (fileValue.name ?? "") : fileValue.name}
+          onChange={(e) => onChange({ ...fileValue, name: e.target.value } as FileValue)}
           placeholder={t("records.fileDisplayName", "Отображаемое имя")}
           disabled={disabled}
           className={compact ? "h-8 text-sm" : undefined}
@@ -1865,14 +2035,24 @@ function FileFieldInput({
   );
 }
 
+/** The source of the current value, or null when empty. */
+function fileValueSourceOf(value: FileValue | null): FileSource | null {
+  if (!value) return null;
+  if (isLinkFile(value)) return "link";
+  if (isGDriveFile(value)) return "gdrive";
+  return "server";
+}
+
 /** Inline (in-cell) file editor with a draft + explicit Save, so renaming does not
  *  commit on every keystroke. */
 function InlineFileEditor({
   initial,
+  allowedSources = ["server"],
   onCommit,
   onCancel,
 }: {
   initial: CellValue;
+  allowedSources?: FileSource[];
   onCommit: (v: CellValue) => void;
   onCancel: () => void;
 }) {
@@ -1880,7 +2060,7 @@ function InlineFileEditor({
   const [draft, setDraft] = useState<FileValue | "">(isFileValue(initial) ? initial : "");
   return (
     <div className="min-w-[220px] space-y-2 rounded-md border border-blue-200 bg-white p-2 shadow-sm">
-      <FileFieldInput value={draft} onChange={setDraft} compact />
+      <FileFieldInput value={draft} onChange={setDraft} allowedSources={allowedSources} compact />
       <div className="flex items-center gap-1">
         <Button size="sm" className="h-7 bg-blue-600 hover:bg-blue-700" onClick={() => onCommit(draft)}>
           {t("records.save", "Сохранить")}

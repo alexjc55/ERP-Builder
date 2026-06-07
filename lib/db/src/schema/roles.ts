@@ -32,6 +32,8 @@ export interface RoleAdminCaps {
   events: boolean;
   /** Manage the module registry (Modules Architecture). */
   modules: boolean;
+  /** Manage the Google Drive connection used by file fields. */
+  googleDrive: boolean;
 }
 
 /** Structured RBAC permission spec stored on each role. */
@@ -49,7 +51,7 @@ export interface RolePermissions {
 /** Default permissions for new/existing roles: no access until granted. */
 export const NO_ACCESS_PERMS: RolePermissions = {
   superAdmin: false,
-  admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false },
+  admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, googleDrive: false },
   pageIds: [],
   records: {},
 };

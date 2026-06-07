@@ -21,6 +21,7 @@ import EntityRecordsPage from "@/pages/admin/entity-records";
 import TranslationsPage from "@/pages/admin/translations";
 import EventsPage from "@/pages/admin/events";
 import ModulesPage from "@/pages/admin/modules";
+import GoogleDrivePage from "@/pages/admin/google-drive";
 import DynamicPage from "@/pages/dynamic";
 import { Loader2, ShieldAlert } from "lucide-react";
 import type { RoleAdminCaps } from "@workspace/api-client-react";
@@ -139,6 +140,12 @@ function Router() {
       <Route path="/admin/modules">
         <ProtectedRoute adminCap="modules">
           <ModulesPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/google-drive">
+        <ProtectedRoute adminCap="googleDrive">
+          <GoogleDrivePage />
         </ProtectedRoute>
       </Route>
 

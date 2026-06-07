@@ -60,6 +60,7 @@ A metadata-driven platform constructor (Airtable/SmartSuite/Notion-like) for bui
 - **Modules Architecture** — metadata-driven registry/infrastructure for future plugins (plugins themselves intentionally not built). Memory: `admin-cap-stage-pattern.md`.
 - **Localization Engine** — whole UI switchable ru/en/he with all strings DB-backed (no locale files). Memory: `erp-i18n.md`.
 - **Translations** — manage system UI strings in ru/en/he.
+- **Multi-source file fields** — the `file` field type is polymorphic at fill time (server upload / Google Drive upload / pasted link); admins opt into allowed sources per field. Managed Drive files are reference-based and served through a permission-mirroring proxy. Google Drive uses `drive.file` scope with built-in (env creds) or own-keys (admin creds, AES-256-GCM at rest) modes, configured at `/admin/google-drive`. Memory: `multi-source-file-field.md`, `app-secret-fail-fast.md`.
 
 > Pattern for adding a new admin area (RBAC cap + OpenAPI CRUD + gated route + DB-backed i18n screen): `admin-cap-stage-pattern.md`.
 

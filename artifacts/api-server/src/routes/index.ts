@@ -18,6 +18,7 @@ import auditLogRouter from "./audit-log";
 import eventsRouter from "./events";
 import modulesRouter from "./modules";
 import storageRouter from "./storage";
+import googleDriveRouter from "./google-drive";
 
 const router: IRouter = Router();
 
@@ -40,5 +41,6 @@ router.use(auditLogRouter);
 router.use(eventsRouter);
 router.use(modulesRouter);
 router.use(storageRouter);
+router.use(googleDriveRouter);
 
 export default router;

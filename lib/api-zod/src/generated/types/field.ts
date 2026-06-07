@@ -7,6 +7,7 @@
  */
 import type { FieldPermissions } from './fieldPermissions';
 import type { FieldType } from './fieldType';
+import type { FileFieldConfig } from './fileFieldConfig';
 import type { MultilingualText } from './multilingualText';
 
 export interface Field {
@@ -21,6 +22,7 @@ export interface Field {
   defaultValue?: string | null;
   optionsJson: string[];
   permissionsJson?: FieldPermissions;
+  fileConfigJson?: FileFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
   sortOrder: number;

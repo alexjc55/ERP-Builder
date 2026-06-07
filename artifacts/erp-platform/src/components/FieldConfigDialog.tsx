@@ -10,6 +10,7 @@ import {
   type FieldPermissions,
   type Role,
   type MultilingualText,
+  type FileSource,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,6 +70,12 @@ const FIELD_ACCESS_OPTIONS: { value: FieldAccess; label: string }[] = [
   { value: "hidden", label: "Скрыто" },
 ];
 
+const FILE_SOURCES: { value: FileSource; labelKey: string; label: string }[] = [
+  { value: "server", labelKey: "fields.fileSource.server", label: "Загрузка на сервер" },
+  { value: "gdrive", labelKey: "fields.fileSource.gdrive", label: "Загрузка в Google Drive" },
+  { value: "link", labelKey: "fields.fileSource.link", label: "Ссылка" },
+];
+
 function extractError(err: unknown): string | undefined {
   if (err && typeof err === "object" && "response" in err) {
     const resp = (err as { response?: { data?: { error?: string } } }).response;
@@ -114,6 +121,7 @@ export function FieldConfigDialog({
   const [isFilterable, setIsFilterable] = useState(false);
   const [showInTable, setShowInTable] = useState(true);
   const [permissions, setPermissions] = useState<FieldPermissions>({});
+  const [allowedSources, setAllowedSources] = useState<FileSource[]>(["server"]);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Sync form state whenever the dialog opens for a given field (or create).
@@ -134,6 +142,10 @@ export function FieldConfigDialog({
       setIsFilterable(field.isFilterable ?? false);
       setShowInTable(field.showInTable ?? true);
       setPermissions(field.permissionsJson ?? {});
+      {
+        const src = field.fileConfigJson?.allowedSources;
+        setAllowedSources(Array.isArray(src) && src.length > 0 ? src : ["server"]);
+      }
     } else {
       setFieldKey("");
       setNameJson({});
@@ -147,6 +159,7 @@ export function FieldConfigDialog({
       setIsFilterable(false);
       setShowInTable(true);
       setPermissions({});
+      setAllowedSources(["server"]);
     }
   }, [open, field, nextSortOrder]);
 
@@ -213,6 +226,10 @@ export function FieldConfigDialog({
       isActive,
       isFilterable,
       showInTable,
+      fileConfigJson:
+        fieldType === "file"
+          ? { allowedSources: allowedSources.length > 0 ? allowedSources : (["server"] as FileSource[]) }
+          : {},
     };
     if (field) updateMutation.mutate({ id: field.id, data: payload });
     else createMutation.mutate({ entityId, data: payload });
@@ -274,6 +291,34 @@ export function FieldConfigDialog({
                   rows={4}
                 />
                 <p className="text-xs text-slate-400">{t("fields.optionsHint", "По одному варианту на строку.")}</p>
+              </div>
+            )}
+            {fieldType === "file" && (
+              <div className="space-y-2">
+                <Label>{t("fields.fileSources", "Разрешённые источники файлов")}</Label>
+                <p className="text-xs text-slate-400">
+                  {t("fields.fileSourcesHint", "Выберите, как пользователи смогут прикреплять файлы. Должен быть выбран хотя бы один источник.")}
+                </p>
+                <div className="space-y-1.5 pt-1">
+                  {FILE_SOURCES.map((s) => {
+                    const checked = allowedSources.includes(s.value);
+                    return (
+                      <div key={s.value} className="flex items-center gap-2">
+                        <Switch
+                          id={`fcd-src-${s.value}`}
+                          checked={checked}
+                          onCheckedChange={(on) =>
+                            setAllowedSources((prev) => {
+                              const next = on ? [...prev, s.value] : prev.filter((x) => x !== s.value);
+                              return next.length > 0 ? next : prev;
+                            })
+                          }
+                        />
+                        <Label htmlFor={`fcd-src-${s.value}`}>{t(s.labelKey, s.label)}</Label>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
             <div className="space-y-1.5">

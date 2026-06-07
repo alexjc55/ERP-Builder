@@ -3202,5 +3202,359 @@
     "ru": "Это действие нельзя отменить.",
     "en": "This action cannot be undone.",
     "he": "לא ניתן לבטל פעולה זו."
+  },
+  {
+    "key": "fields.fileSources",
+    "ru": "Источники файлов",
+    "en": "File sources",
+    "he": "מקורות קבצים"
+  },
+  {
+    "key": "fields.fileSourcesHint",
+    "ru": "Какие способы добавления файла доступны при заполнении (нужен хотя бы один)",
+    "en": "Which ways to add a file are available when filling in (at least one required)",
+    "he": "אילו דרכים להוספת קובץ זמינות בעת המילוי (נדרשת לפחות אחת)"
+  },
+  {
+    "key": "records.fileSource.server",
+    "ru": "Сервер",
+    "en": "Server",
+    "he": "שרת"
+  },
+  {
+    "key": "records.fileSource.gdrive",
+    "ru": "Google Drive",
+    "en": "Google Drive",
+    "he": "Google Drive"
+  },
+  {
+    "key": "records.fileSource.link",
+    "ru": "Ссылка",
+    "en": "Link",
+    "he": "קישור"
+  },
+  {
+    "key": "records.fileUpload",
+    "ru": "Загрузить файл",
+    "en": "Upload file",
+    "he": "העלאת קובץ"
+  },
+  {
+    "key": "records.fileUploadError",
+    "ru": "Не удалось загрузить файл",
+    "en": "Failed to upload file",
+    "he": "העלאת הקובץ נכשלה"
+  },
+  {
+    "key": "records.fileReplace",
+    "ru": "Заменить файл",
+    "en": "Replace file",
+    "he": "החלפת קובץ"
+  },
+  {
+    "key": "records.fileRemove",
+    "ru": "Удалить файл",
+    "en": "Remove file",
+    "he": "הסרת קובץ"
+  },
+  {
+    "key": "records.fileDisplayName",
+    "ru": "Отображаемое имя",
+    "en": "Display name",
+    "he": "שם לתצוגה"
+  },
+  {
+    "key": "records.filePreviewError",
+    "ru": "Не удалось загрузить предпросмотр",
+    "en": "Failed to load preview",
+    "he": "טעינת התצוגה המקדימה נכשלה"
+  },
+  {
+    "key": "records.driveUpload",
+    "ru": "Загрузить в Google Drive",
+    "en": "Upload to Google Drive",
+    "he": "העלאה ל-Google Drive"
+  },
+  {
+    "key": "records.driveReplace",
+    "ru": "Заменить в Google Drive",
+    "en": "Replace in Google Drive",
+    "he": "החלפה ב-Google Drive"
+  },
+  {
+    "key": "records.driveUploadError",
+    "ru": "Не удалось загрузить в Google Drive",
+    "en": "Failed to upload to Google Drive",
+    "he": "ההעלאה ל-Google Drive נכשלה"
+  },
+  {
+    "key": "records.driveNotConnected",
+    "ru": "Google Drive не подключён. Подключите его в настройках.",
+    "en": "Google Drive is not connected. Connect it in settings.",
+    "he": "Google Drive אינו מחובר. חברו אותו בהגדרות."
+  },
+  {
+    "key": "gdrive.title",
+    "ru": "Google Drive",
+    "en": "Google Drive",
+    "he": "Google Drive"
+  },
+  {
+    "key": "gdrive.subtitle",
+    "ru": "Подключите Google Drive для загрузки файлов в полях типа «файл»",
+    "en": "Connect Google Drive to upload files in file-type fields",
+    "he": "חברו את Google Drive להעלאת קבצים בשדות מסוג «קובץ»"
+  },
+  {
+    "key": "gdrive.statusConnected",
+    "ru": "Подключено",
+    "en": "Connected",
+    "he": "מחובר"
+  },
+  {
+    "key": "gdrive.statusDisconnected",
+    "ru": "Не подключено",
+    "en": "Not connected",
+    "he": "לא מחובר"
+  },
+  {
+    "key": "gdrive.statusTitle",
+    "ru": "Состояние подключения",
+    "en": "Connection status",
+    "he": "מצב החיבור"
+  },
+  {
+    "key": "gdrive.account",
+    "ru": "Аккаунт",
+    "en": "Account",
+    "he": "חשבון"
+  },
+  {
+    "key": "gdrive.folder",
+    "ru": "Папка загрузок",
+    "en": "Uploads folder",
+    "he": "תיקיית העלאות"
+  },
+  {
+    "key": "gdrive.mode",
+    "ru": "Режим ключей",
+    "en": "Key mode",
+    "he": "מצב מפתחות"
+  },
+  {
+    "key": "gdrive.modeBuiltin",
+    "ru": "Встроенные",
+    "en": "Built-in",
+    "he": "מובנים"
+  },
+  {
+    "key": "gdrive.modeOwn",
+    "ru": "Собственные",
+    "en": "Own",
+    "he": "משלך"
+  },
+  {
+    "key": "gdrive.unavailable",
+    "ru": "недоступно",
+    "en": "unavailable",
+    "he": "לא זמין"
+  },
+  {
+    "key": "gdrive.connect",
+    "ru": "Подключить Google Drive",
+    "en": "Connect Google Drive",
+    "he": "חיבור Google Drive"
+  },
+  {
+    "key": "gdrive.reconnect",
+    "ru": "Переподключить",
+    "en": "Reconnect",
+    "he": "חיבור מחדש"
+  },
+  {
+    "key": "gdrive.disconnect",
+    "ru": "Отключить",
+    "en": "Disconnect",
+    "he": "ניתוק"
+  },
+  {
+    "key": "gdrive.needCreds",
+    "ru": "Сначала сохраните Client ID и Client Secret ниже",
+    "en": "First save the Client ID and Client Secret below",
+    "he": "תחילה שמרו את ה-Client ID וה-Client Secret למטה"
+  },
+  {
+    "key": "gdrive.builtinUnavailable",
+    "ru": "Встроенные ключи недоступны — переключитесь на собственные",
+    "en": "Built-in keys are unavailable — switch to your own",
+    "he": "המפתחות המובנים אינם זמינים — עברו למפתחות משלכם"
+  },
+  {
+    "key": "gdrive.credsTitle",
+    "ru": "Ключи OAuth",
+    "en": "OAuth keys",
+    "he": "מפתחות OAuth"
+  },
+  {
+    "key": "gdrive.clientId",
+    "ru": "Client ID",
+    "en": "Client ID",
+    "he": "Client ID"
+  },
+  {
+    "key": "gdrive.clientSecret",
+    "ru": "Client Secret",
+    "en": "Client Secret",
+    "he": "Client Secret"
+  },
+  {
+    "key": "gdrive.secretStored",
+    "ru": "•••••• (сохранён, оставьте пустым чтобы не менять)",
+    "en": "•••••• (stored, leave empty to keep)",
+    "he": "•••••• (שמור, השאירו ריק כדי לא לשנות)"
+  },
+  {
+    "key": "gdrive.save",
+    "ru": "Сохранить",
+    "en": "Save",
+    "he": "שמירה"
+  },
+  {
+    "key": "gdrive.saved",
+    "ru": "Настройки сохранены",
+    "en": "Settings saved",
+    "he": "ההגדרות נשמרו"
+  },
+  {
+    "key": "gdrive.saveError",
+    "ru": "Ошибка сохранения настроек",
+    "en": "Failed to save settings",
+    "he": "שמירת ההגדרות נכשלה"
+  },
+  {
+    "key": "gdrive.startError",
+    "ru": "Не удалось начать подключение",
+    "en": "Failed to start connection",
+    "he": "פתיחת החיבור נכשלה"
+  },
+  {
+    "key": "gdrive.connectedToast",
+    "ru": "Google Drive подключён",
+    "en": "Google Drive connected",
+    "he": "Google Drive חובר"
+  },
+  {
+    "key": "gdrive.connectError",
+    "ru": "Не удалось подключить Google Drive",
+    "en": "Failed to connect Google Drive",
+    "he": "חיבור Google Drive נכשל"
+  },
+  {
+    "key": "gdrive.disconnected",
+    "ru": "Google Drive отключён",
+    "en": "Google Drive disconnected",
+    "he": "Google Drive נותק"
+  },
+  {
+    "key": "gdrive.disconnectError",
+    "ru": "Ошибка отключения",
+    "en": "Failed to disconnect",
+    "he": "הניתוק נכשל"
+  },
+  {
+    "key": "gdrive.disconnectConfirmTitle",
+    "ru": "Отключить Google Drive?",
+    "en": "Disconnect Google Drive?",
+    "he": "לנתק את Google Drive?"
+  },
+  {
+    "key": "gdrive.disconnectConfirm",
+    "ru": "Токен доступа будет удалён. Уже загруженные файлы останутся в Google Drive, но новые загрузки станут недоступны до повторного подключения.",
+    "en": "The access token will be removed. Already uploaded files stay in Google Drive, but new uploads will be unavailable until you reconnect.",
+    "he": "אסימון הגישה יוסר. קבצים שכבר הועלו יישארו ב-Google Drive, אך העלאות חדשות לא יהיו זמינות עד לחיבור מחדש."
+  },
+  {
+    "key": "gdrive.copied",
+    "ru": "Скопировано",
+    "en": "Copied",
+    "he": "הועתק"
+  },
+  {
+    "key": "gdrive.copyError",
+    "ru": "Не удалось скопировать",
+    "en": "Failed to copy",
+    "he": "ההעתקה נכשלה"
+  },
+  {
+    "key": "gdrive.builtinReady",
+    "ru": "Используются встроенные ключи платформы. Нажмите «Сохранить», затем подключите Google Drive.",
+    "en": "Using the platform's built-in keys. Click \"Save\", then connect Google Drive.",
+    "he": "נעשה שימוש במפתחות המובנים של הפלטפורמה. לחצו «שמירה» ואז חברו את Google Drive."
+  },
+  {
+    "key": "gdrive.builtinMissing",
+    "ru": "Встроенные ключи не настроены в этой установке. Выберите режим «Собственные».",
+    "en": "Built-in keys are not configured in this installation. Choose the \"Own\" mode.",
+    "he": "המפתחות המובנים אינם מוגדרים בהתקנה זו. בחרו במצב «משלך»."
+  },
+  {
+    "key": "gdrive.wizardTitle",
+    "ru": "Как получить ключи (бесплатный аккаунт Gmail)",
+    "en": "How to get keys (free Gmail account)",
+    "he": "כיצד להשיג מפתחות (חשבון Gmail חינמי)"
+  },
+  {
+    "key": "gdrive.step1",
+    "ru": "Откройте",
+    "en": "Open",
+    "he": "פתחו"
+  },
+  {
+    "key": "gdrive.step1b",
+    "ru": "и создайте проект.",
+    "en": "and create a project.",
+    "he": "וצרו פרויקט."
+  },
+  {
+    "key": "gdrive.step2",
+    "ru": "Включите",
+    "en": "Enable",
+    "he": "הפעילו"
+  },
+  {
+    "key": "gdrive.step3",
+    "ru": "В разделе",
+    "en": "In",
+    "he": "בקטע"
+  },
+  {
+    "key": "gdrive.step3b",
+    "ru": "выберите «External», добавьте себя в Test users.",
+    "en": "choose \"External\" and add yourself to Test users.",
+    "he": "בחרו «External» והוסיפו את עצמכם ל-Test users."
+  },
+  {
+    "key": "gdrive.step4",
+    "ru": "В разделе",
+    "en": "In",
+    "he": "בקטע"
+  },
+  {
+    "key": "gdrive.step4b",
+    "ru": "создайте «OAuth client ID» → тип «Web application».",
+    "en": "create an \"OAuth client ID\" → type \"Web application\".",
+    "he": "צרו «OAuth client ID» ← סוג «Web application»."
+  },
+  {
+    "key": "gdrive.step5",
+    "ru": "Добавьте этот Redirect URI:",
+    "en": "Add this Redirect URI:",
+    "he": "הוסיפו את ה-Redirect URI הזה:"
+  },
+  {
+    "key": "gdrive.step6",
+    "ru": "Скопируйте Client ID и Client Secret в поля ниже и сохраните.",
+    "en": "Copy the Client ID and Client Secret into the fields below and save.",
+    "he": "העתיקו את ה-Client ID וה-Client Secret לשדות למטה ושמרו."
   }
 ]

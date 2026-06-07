@@ -5,6 +5,57 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+export interface GoogleDriveStatus {
+  /** A refresh token is stored. */
+  connected: boolean;
+  /** An upload target folder is configured. */
+  folderConfigured: boolean;
+}
+
+export type GoogleDriveConnectionInfoKeyMode = typeof GoogleDriveConnectionInfoKeyMode[keyof typeof GoogleDriveConnectionInfoKeyMode];
+
+
+export const GoogleDriveConnectionInfoKeyMode = {
+  builtin: 'builtin',
+  own: 'own',
+} as const;
+
+export interface GoogleDriveConnectionInfo {
+  keyMode: GoogleDriveConnectionInfoKeyMode;
+  connected: boolean;
+  folderConfigured: boolean;
+  /** Whether the platform ships built-in OAuth client credentials. */
+  builtinAvailable: boolean;
+  /** Whether own-mode client secret is stored. */
+  hasOwnCreds: boolean;
+  /** The stored own-mode OAuth client ID (not secret). */
+  ownClientId?: string;
+  /** The OAuth redirect URI to register in the Google client. */
+  redirectUri: string;
+  accountEmail?: string;
+  folderId?: string;
+  folderName?: string;
+}
+
+export type GoogleDriveConnectionUpdateKeyMode = typeof GoogleDriveConnectionUpdateKeyMode[keyof typeof GoogleDriveConnectionUpdateKeyMode];
+
+
+export const GoogleDriveConnectionUpdateKeyMode = {
+  builtin: 'builtin',
+  own: 'own',
+} as const;
+
+export interface GoogleDriveConnectionUpdate {
+  keyMode: GoogleDriveConnectionUpdateKeyMode;
+  ownClientId?: string;
+  /** Plaintext client secret; stored encrypted. Omit to keep existing. */
+  ownClientSecret?: string;
+}
+
+export interface GoogleDriveAuthUrl {
+  authUrl: string;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -80,6 +131,7 @@ export interface RoleAdminCaps {
   translations: boolean;
   events: boolean;
   modules: boolean;
+  googleDrive: boolean;
 }
 
 export type RecordScope = typeof RecordScope[keyof typeof RecordScope];
@@ -537,6 +589,25 @@ export const FieldAccess = {
 
 export interface FieldPermissions {[key: string]: FieldAccess}
 
+/**
+ * A source a file-type field value may come from.
+ */
+export type FileSource = typeof FileSource[keyof typeof FileSource];
+
+
+export const FileSource = {
+  server: 'server',
+  gdrive: 'gdrive',
+  link: 'link',
+} as const;
+
+/**
+ * Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered/accepted. Empty or unset means the legacy default (server upload only).
+ */
+export interface FileFieldConfig {
+  allowedSources?: FileSource[];
+}
+
 export interface Field {
   id: number;
   entityId: number;
@@ -549,6 +620,7 @@ export interface Field {
   defaultValue?: string | null;
   optionsJson: string[];
   permissionsJson?: FieldPermissions;
+  fileConfigJson?: FileFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
   sortOrder: number;
@@ -567,6 +639,7 @@ export interface FieldInput {
   defaultValue?: string | null;
   optionsJson?: string[];
   permissionsJson?: FieldPermissions;
+  fileConfigJson?: FileFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
   sortOrder?: number;
@@ -593,6 +666,7 @@ export interface FieldUpdate {
   defaultValue?: string | null;
   optionsJson?: string[];
   permissionsJson?: FieldPermissions;
+  fileConfigJson?: FileFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
   sortOrder?: number;

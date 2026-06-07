@@ -8,7 +8,7 @@ import {
   Building2, LayoutDashboard, Users, Shield, Layout as LayoutIcon,
   Languages, Settings, LogOut, ChevronDown, ChevronRight,
   Menu, X, Database, Table, Check, UserCog, Activity, Puzzle, Eye,
-  PanelLeftClose, PanelLeftOpen
+  PanelLeftClose, PanelLeftOpen, HardDrive
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   "table": Table,
   "activity": Activity,
   "puzzle": Puzzle,
+  "hard-drive": HardDrive,
 };
 
 function SidebarItem({

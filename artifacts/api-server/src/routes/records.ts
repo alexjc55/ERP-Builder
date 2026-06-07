@@ -26,7 +26,7 @@ import {
   ArchiveRecordParams,
   UnarchiveRecordParams,
 } from "@workspace/api-zod";
-import type { EntityField, InsertAuditLog } from "@workspace/db";
+import type { EntityField, InsertAuditLog, FileSource, FileFieldConfig } from "@workspace/db";
 import { buildRecordQuery, type RecordQuerySpec } from "./record-query";
 import {
   writeAudit,
@@ -67,6 +67,90 @@ function isEmpty(value: unknown): boolean {
  * Validate a record's values against the entity's active field definitions.
  * Returns the cleaned values object, or an error message string.
  */
+/**
+ * Resolve the file sources a field accepts. Empty/unset config means the legacy
+ * default: server upload only. This is the hard server boundary for which kinds
+ * of file value may be stored, regardless of what the client offers.
+ */
+function allowedFileSources(field: EntityField): FileSource[] {
+  const cfg = field.fileConfigJson as FileFieldConfig | null | undefined;
+  const list = cfg?.allowedSources;
+  return Array.isArray(list) && list.length > 0 ? list : ["server"];
+}
+
+/**
+ * Validate & normalize a single `file` field value. Returns the cleaned object
+ * on success or an error message string on failure. Handles the polymorphic
+ * server/gdrive/link union and treats legacy (kind-less, path-bearing) values
+ * as server. The value's source must be within the field's allowedSources.
+ */
+function validateFileValue(field: EntityField, raw: unknown): Record<string, unknown> | string {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    return `Field "${field.fieldKey}" must be a file`;
+  }
+  const obj = raw as Record<string, unknown>;
+  const rawKind = obj.kind;
+  // Legacy values have no `kind` but carry a server path → treat as server.
+  const kind: FileSource =
+    rawKind === "gdrive" || rawKind === "link" || rawKind === "server"
+      ? rawKind
+      : "server";
+
+  const allowed = allowedFileSources(field);
+  if (!allowed.includes(kind)) {
+    return `Field "${field.fieldKey}" does not allow this file source`;
+  }
+
+  if (kind === "server") {
+    const path = obj.path;
+    const name = obj.name;
+    if (typeof path !== "string" || !path.startsWith("/objects/")) {
+      return `Field "${field.fieldKey}" has an invalid file path`;
+    }
+    if (typeof name !== "string" || name.trim() === "") {
+      return `Field "${field.fieldKey}" file must have a name`;
+    }
+    const out: Record<string, unknown> = { kind: "server", path, name: name.trim() };
+    if (typeof obj.contentType === "string" && obj.contentType.length > 0) out.contentType = obj.contentType;
+    if (typeof obj.size === "number" && Number.isFinite(obj.size)) out.size = obj.size;
+    return out;
+  }
+
+  if (kind === "gdrive") {
+    const fileId = obj.fileId;
+    const name = obj.name;
+    if (typeof fileId !== "string" || fileId.trim() === "") {
+      return `Field "${field.fieldKey}" has an invalid Google Drive file id`;
+    }
+    if (typeof name !== "string" || name.trim() === "") {
+      return `Field "${field.fieldKey}" file must have a name`;
+    }
+    const out: Record<string, unknown> = { kind: "gdrive", fileId: fileId.trim(), name: name.trim() };
+    if (typeof obj.contentType === "string" && obj.contentType.length > 0) out.contentType = obj.contentType;
+    if (typeof obj.size === "number" && Number.isFinite(obj.size)) out.size = obj.size;
+    if (typeof obj.webViewLink === "string" && obj.webViewLink.length > 0) out.webViewLink = obj.webViewLink;
+    return out;
+  }
+
+  // kind === "link"
+  const url = obj.url;
+  if (typeof url !== "string") {
+    return `Field "${field.fieldKey}" must be a valid URL`;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return `Field "${field.fieldKey}" must be a valid URL`;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return `Field "${field.fieldKey}" link must be an http or https URL`;
+  }
+  const out: Record<string, unknown> = { kind: "link", url };
+  if (typeof obj.name === "string" && obj.name.trim() !== "") out.name = obj.name.trim();
+  return out;
+}
+
 function validateValues(fields: EntityField[], values: Record<string, unknown>): { values: Record<string, unknown> } | { error: string } {
   const fieldByKey = new Map(fields.map((f) => [f.fieldKey, f]));
 
@@ -154,24 +238,17 @@ function validateValues(fields: EntityField[], values: Record<string, unknown>):
         break;
       }
       case "file": {
-        // A file value is an object: { path, name, contentType?, size? }. The path
-        // must point into our private object dir (uploaded via the presigned flow);
-        // we never trust an arbitrary client-supplied path or external URL here.
-        if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
-          return { error: `Field "${field.fieldKey}" must be a file` };
+        // A file value is a polymorphic object discriminated by `kind`:
+        //   server: { kind:"server", path:"/objects/…", name, contentType?, size? }
+        //   gdrive: { kind:"gdrive", fileId, name, contentType?, size?, webViewLink? }
+        //   link:   { kind:"link", url:"http(s)://…", name? }
+        // Legacy values have no `kind` but a server `path` and are treated as
+        // server. The chosen source must be permitted by the field config
+        // (allowedSources); empty/unset config means server-only (legacy).
+        const cleanedFile = validateFileValue(field, raw);
+        if (typeof cleanedFile === "string") {
+          return { error: cleanedFile };
         }
-        const obj = raw as Record<string, unknown>;
-        const path = obj.path;
-        const name = obj.name;
-        if (typeof path !== "string" || !path.startsWith("/objects/")) {
-          return { error: `Field "${field.fieldKey}" has an invalid file path` };
-        }
-        if (typeof name !== "string" || name.trim() === "") {
-          return { error: `Field "${field.fieldKey}" file must have a name` };
-        }
-        const cleanedFile: Record<string, unknown> = { path, name: name.trim() };
-        if (typeof obj.contentType === "string" && obj.contentType.length > 0) cleanedFile.contentType = obj.contentType;
-        if (typeof obj.size === "number" && Number.isFinite(obj.size)) cleanedFile.size = obj.size;
         cleaned[field.fieldKey] = cleanedFile;
         break;
       }

@@ -26,6 +26,8 @@ tags:
     description: Dashboard statistics
   - name: Storage
     description: Object storage upload and serving endpoints
+  - name: googleDrive
+    description: Google Drive connection used by file fields
 
 paths:
   /storage/uploads/request-url:
@@ -1962,8 +1964,139 @@ paths:
               schema:
                 $ref: "#/components/schemas/DashboardStats"
 
+  # GOOGLE DRIVE
+  /google-drive/status:
+    get:
+      operationId: getGoogleDriveStatus
+      tags: [googleDrive]
+      summary: Lightweight Drive readiness for file-field forms (any authenticated user)
+      responses:
+        "200":
+          description: Drive readiness
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoogleDriveStatus"
+
+  /google-drive/connection:
+    get:
+      operationId: getGoogleDriveConnection
+      tags: [googleDrive]
+      summary: Full Drive connection info (admin)
+      responses:
+        "200":
+          description: Connection info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoogleDriveConnectionInfo"
+    put:
+      operationId: updateGoogleDriveConnection
+      tags: [googleDrive]
+      summary: Set the Drive key mode and (for own mode) client credentials (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoogleDriveConnectionUpdate"
+      responses:
+        "200":
+          description: Updated connection info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoogleDriveConnectionInfo"
+
+  /google-drive/oauth/start:
+    post:
+      operationId: startGoogleDriveOauth
+      tags: [googleDrive]
+      summary: Begin the Drive OAuth consent flow; returns the consent URL (admin)
+      responses:
+        "200":
+          description: Consent URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoogleDriveAuthUrl"
+
+  /google-drive/disconnect:
+    post:
+      operationId: disconnectGoogleDrive
+      tags: [googleDrive]
+      summary: Disconnect Drive, clearing stored tokens and folder (admin)
+      responses:
+        "200":
+          description: Updated connection info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoogleDriveConnectionInfo"
+
 components:
   schemas:
+    GoogleDriveStatus:
+      type: object
+      required: [connected, folderConfigured]
+      properties:
+        connected:
+          type: boolean
+          description: A refresh token is stored.
+        folderConfigured:
+          type: boolean
+          description: An upload target folder is configured.
+
+    GoogleDriveConnectionInfo:
+      type: object
+      required: [keyMode, connected, folderConfigured, builtinAvailable, hasOwnCreds, redirectUri]
+      properties:
+        keyMode:
+          type: string
+          enum: [builtin, own]
+        connected:
+          type: boolean
+        folderConfigured:
+          type: boolean
+        builtinAvailable:
+          type: boolean
+          description: Whether the platform ships built-in OAuth client credentials.
+        hasOwnCreds:
+          type: boolean
+          description: Whether own-mode client secret is stored.
+        ownClientId:
+          type: string
+          description: The stored own-mode OAuth client ID (not secret).
+        redirectUri:
+          type: string
+          description: The OAuth redirect URI to register in the Google client.
+        accountEmail:
+          type: string
+        folderId:
+          type: string
+        folderName:
+          type: string
+
+    GoogleDriveConnectionUpdate:
+      type: object
+      required: [keyMode]
+      properties:
+        keyMode:
+          type: string
+          enum: [builtin, own]
+        ownClientId:
+          type: string
+        ownClientSecret:
+          type: string
+          description: Plaintext client secret; stored encrypted. Omit to keep existing.
+
+    GoogleDriveAuthUrl:
+      type: object
+      required: [authUrl]
+      properties:
+        authUrl:
+          type: string
+
     HealthStatus:
       type: object
       properties:
@@ -2438,7 +2571,7 @@ components:
 
     RoleAdminCaps:
       type: object
-      required: [pages, entities, roles, users, translations, events, modules]
+      required: [pages, entities, roles, users, translations, events, modules, googleDrive]
       properties:
         pages:
           type: boolean
@@ -2453,6 +2586,8 @@ components:
         events:
           type: boolean
         modules:
+          type: boolean
+        googleDrive:
           type: boolean
 
     RolePermissions:
@@ -2691,6 +2826,23 @@ components:
       additionalProperties:
         $ref: "#/components/schemas/FieldAccess"
 
+    FileSource:
+      type: string
+      description: A source a file-type field value may come from.
+      enum: [server, gdrive, link]
+
+    FileFieldConfig:
+      type: object
+      description: >-
+        Per-field configuration for a `file`-type field. `allowedSources` lists
+        which fill-time sources are offered/accepted. Empty or unset means the
+        legacy default (server upload only).
+      properties:
+        allowedSources:
+          type: array
+          items:
+            $ref: "#/components/schemas/FileSource"
+
     Field:
       type: object
       required: [id, entityId, fieldKey, nameJson, fieldType, isRequired, optionsJson, sortOrder, isActive, createdAt, updatedAt]
@@ -2717,6 +2869,8 @@ components:
             type: string
         permissionsJson:
           $ref: "#/components/schemas/FieldPermissions"
+        fileConfigJson:
+          $ref: "#/components/schemas/FileFieldConfig"
         isFilterable:
           type: boolean
         showInTable:
@@ -2755,6 +2909,8 @@ components:
             type: string
         permissionsJson:
           $ref: "#/components/schemas/FieldPermissions"
+        fileConfigJson:
+          $ref: "#/components/schemas/FileFieldConfig"
         isFilterable:
           type: boolean
           default: false
@@ -2805,6 +2961,8 @@ components:
             type: string
         permissionsJson:
           $ref: "#/components/schemas/FieldPermissions"
+        fileConfigJson:
+          $ref: "#/components/schemas/FileFieldConfig"
         isFilterable:
           type: boolean
         showInTable:
