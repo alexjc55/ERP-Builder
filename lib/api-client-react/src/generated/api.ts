@@ -55,7 +55,13 @@ import type {
   ModuleInput,
   ModuleUpdate,
   Page,
+  PageField,
+  PageFieldInput,
+  PageFieldUpdate,
+  PageFieldsReorderInput,
   PageInput,
+  PageRecordValue,
+  PageRecordValueInput,
   PageUpdate,
   RecordInput,
   RecordLink,
@@ -3034,6 +3040,519 @@ export const useReorderFields = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getReorderFieldsMutationOptions(options));
+    }
+
+export const getListPageFieldsUrl = (pageId: number,) => {
+
+
+
+
+  return `/api/pages/${pageId}/fields`
+}
+
+/**
+ * @summary List page-local fields for a page
+ */
+export const listPageFields = async (pageId: number, options?: RequestInit): Promise<PageField[]> => {
+
+  return customFetch<PageField[]>(getListPageFieldsUrl(pageId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPageFieldsQueryKey = (pageId: number,) => {
+    return [
+    `/api/pages/${pageId}/fields`
+    ] as const;
+    }
+
+
+export const getListPageFieldsQueryOptions = <TData = Awaited<ReturnType<typeof listPageFields>>, TError = ErrorType<unknown>>(pageId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPageFields>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPageFieldsQueryKey(pageId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPageFields>>> = ({ signal }) => listPageFields(pageId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(pageId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPageFields>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPageFieldsQueryResult = NonNullable<Awaited<ReturnType<typeof listPageFields>>>
+export type ListPageFieldsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List page-local fields for a page
+ */
+
+export function useListPageFields<TData = Awaited<ReturnType<typeof listPageFields>>, TError = ErrorType<unknown>>(
+ pageId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPageFields>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPageFieldsQueryOptions(pageId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreatePageFieldUrl = (pageId: number,) => {
+
+
+
+
+  return `/api/pages/${pageId}/fields`
+}
+
+/**
+ * @summary Create a page-local field
+ */
+export const createPageField = async (pageId: number,
+    pageFieldInput: PageFieldInput, options?: RequestInit): Promise<PageField> => {
+
+  return customFetch<PageField>(getCreatePageFieldUrl(pageId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      pageFieldInput,)
+  }
+);}
+
+
+
+
+export const getCreatePageFieldMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPageField>>, TError,{pageId: number;data: BodyType<PageFieldInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createPageField>>, TError,{pageId: number;data: BodyType<PageFieldInput>}, TContext> => {
+
+const mutationKey = ['createPageField'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPageField>>, {pageId: number;data: BodyType<PageFieldInput>}> = (props) => {
+          const {pageId,data} = props ?? {};
+
+          return  createPageField(pageId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreatePageFieldMutationResult = NonNullable<Awaited<ReturnType<typeof createPageField>>>
+    export type CreatePageFieldMutationBody = BodyType<PageFieldInput>
+    export type CreatePageFieldMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a page-local field
+ */
+export const useCreatePageField = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPageField>>, TError,{pageId: number;data: BodyType<PageFieldInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createPageField>>,
+        TError,
+        {pageId: number;data: BodyType<PageFieldInput>},
+        TContext
+      > => {
+      return useMutation(getCreatePageFieldMutationOptions(options));
+    }
+
+export const getUpdatePageFieldUrl = (id: number,) => {
+
+
+
+
+  return `/api/page-fields/${id}`
+}
+
+/**
+ * @summary Update a page-local field
+ */
+export const updatePageField = async (id: number,
+    pageFieldUpdate: PageFieldUpdate, options?: RequestInit): Promise<PageField> => {
+
+  return customFetch<PageField>(getUpdatePageFieldUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      pageFieldUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdatePageFieldMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePageField>>, TError,{id: number;data: BodyType<PageFieldUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updatePageField>>, TError,{id: number;data: BodyType<PageFieldUpdate>}, TContext> => {
+
+const mutationKey = ['updatePageField'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePageField>>, {id: number;data: BodyType<PageFieldUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updatePageField(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdatePageFieldMutationResult = NonNullable<Awaited<ReturnType<typeof updatePageField>>>
+    export type UpdatePageFieldMutationBody = BodyType<PageFieldUpdate>
+    export type UpdatePageFieldMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update a page-local field
+ */
+export const useUpdatePageField = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePageField>>, TError,{id: number;data: BodyType<PageFieldUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updatePageField>>,
+        TError,
+        {id: number;data: BodyType<PageFieldUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdatePageFieldMutationOptions(options));
+    }
+
+export const getDeletePageFieldUrl = (id: number,) => {
+
+
+
+
+  return `/api/page-fields/${id}`
+}
+
+/**
+ * @summary Delete a page-local field
+ */
+export const deletePageField = async (id: number, options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getDeletePageFieldUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeletePageFieldMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePageField>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deletePageField>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deletePageField'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deletePageField>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deletePageField(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeletePageFieldMutationResult = NonNullable<Awaited<ReturnType<typeof deletePageField>>>
+
+    export type DeletePageFieldMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a page-local field
+ */
+export const useDeletePageField = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePageField>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deletePageField>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeletePageFieldMutationOptions(options));
+    }
+
+export const getReorderPageFieldsUrl = () => {
+
+
+
+
+  return `/api/page-fields/reorder`
+}
+
+/**
+ * @summary Reorder page-local fields within a page
+ */
+export const reorderPageFields = async (pageFieldsReorderInput: PageFieldsReorderInput, options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getReorderPageFieldsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      pageFieldsReorderInput,)
+  }
+);}
+
+
+
+
+export const getReorderPageFieldsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderPageFields>>, TError,{data: BodyType<PageFieldsReorderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reorderPageFields>>, TError,{data: BodyType<PageFieldsReorderInput>}, TContext> => {
+
+const mutationKey = ['reorderPageFields'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reorderPageFields>>, {data: BodyType<PageFieldsReorderInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  reorderPageFields(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReorderPageFieldsMutationResult = NonNullable<Awaited<ReturnType<typeof reorderPageFields>>>
+    export type ReorderPageFieldsMutationBody = BodyType<PageFieldsReorderInput>
+    export type ReorderPageFieldsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Reorder page-local fields within a page
+ */
+export const useReorderPageFields = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderPageFields>>, TError,{data: BodyType<PageFieldsReorderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reorderPageFields>>,
+        TError,
+        {data: BodyType<PageFieldsReorderInput>},
+        TContext
+      > => {
+      return useMutation(getReorderPageFieldsMutationOptions(options));
+    }
+
+export const getListPageRecordValuesUrl = (pageId: number,) => {
+
+
+
+
+  return `/api/pages/${pageId}/record-values`
+}
+
+/**
+ * @summary List page-local field values for all records shown on a page
+ */
+export const listPageRecordValues = async (pageId: number, options?: RequestInit): Promise<PageRecordValue[]> => {
+
+  return customFetch<PageRecordValue[]>(getListPageRecordValuesUrl(pageId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPageRecordValuesQueryKey = (pageId: number,) => {
+    return [
+    `/api/pages/${pageId}/record-values`
+    ] as const;
+    }
+
+
+export const getListPageRecordValuesQueryOptions = <TData = Awaited<ReturnType<typeof listPageRecordValues>>, TError = ErrorType<unknown>>(pageId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPageRecordValues>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPageRecordValuesQueryKey(pageId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPageRecordValues>>> = ({ signal }) => listPageRecordValues(pageId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(pageId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPageRecordValues>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPageRecordValuesQueryResult = NonNullable<Awaited<ReturnType<typeof listPageRecordValues>>>
+export type ListPageRecordValuesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List page-local field values for all records shown on a page
+ */
+
+export function useListPageRecordValues<TData = Awaited<ReturnType<typeof listPageRecordValues>>, TError = ErrorType<unknown>>(
+ pageId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPageRecordValues>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPageRecordValuesQueryOptions(pageId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getSetPageRecordValuesUrl = (pageId: number,
+    recordId: number,) => {
+
+
+
+
+  return `/api/pages/${pageId}/records/${recordId}/values`
+}
+
+/**
+ * @summary Upsert page-local field values for one record
+ */
+export const setPageRecordValues = async (pageId: number,
+    recordId: number,
+    pageRecordValueInput: PageRecordValueInput, options?: RequestInit): Promise<PageRecordValue> => {
+
+  return customFetch<PageRecordValue>(getSetPageRecordValuesUrl(pageId,recordId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      pageRecordValueInput,)
+  }
+);}
+
+
+
+
+export const getSetPageRecordValuesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setPageRecordValues>>, TError,{pageId: number;recordId: number;data: BodyType<PageRecordValueInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setPageRecordValues>>, TError,{pageId: number;recordId: number;data: BodyType<PageRecordValueInput>}, TContext> => {
+
+const mutationKey = ['setPageRecordValues'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setPageRecordValues>>, {pageId: number;recordId: number;data: BodyType<PageRecordValueInput>}> = (props) => {
+          const {pageId,recordId,data} = props ?? {};
+
+          return  setPageRecordValues(pageId,recordId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetPageRecordValuesMutationResult = NonNullable<Awaited<ReturnType<typeof setPageRecordValues>>>
+    export type SetPageRecordValuesMutationBody = BodyType<PageRecordValueInput>
+    export type SetPageRecordValuesMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Upsert page-local field values for one record
+ */
+export const useSetPageRecordValues = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setPageRecordValues>>, TError,{pageId: number;recordId: number;data: BodyType<PageRecordValueInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setPageRecordValues>>,
+        TError,
+        {pageId: number;recordId: number;data: BodyType<PageRecordValueInput>},
+        TContext
+      > => {
+      return useMutation(getSetPageRecordValuesMutationOptions(options));
     }
 
 export const getListEntityStatusesUrl = (entityId: number,) => {

@@ -3790,5 +3790,59 @@
     "ru": "Ничего не найдено",
     "en": "Nothing found",
     "he": "לא נמצא דבר"
+  },
+  {
+    "key": "fields.filterable",
+    "ru": "Участвует в фильтре",
+    "en": "Filterable",
+    "he": "משתתף בסינון"
+  },
+  {
+    "key": "fields.formula",
+    "ru": "Формула",
+    "en": "Formula",
+    "he": "נוסחה"
+  },
+  {
+    "key": "fields.formulaError",
+    "ru": "Ошибка формулы",
+    "en": "Formula error",
+    "he": "שגיאת נוסחה"
+  },
+  {
+    "key": "fields.showInTable",
+    "ru": "Показывать в таблице",
+    "en": "Show in table",
+    "he": "הצג בטבלה"
+  },
+  {
+    "key": "pageFields.dialogDesc",
+    "ru": "Поле страницы — это дополнительный столбец, который хранится на этой странице и не изменяет исходную сущность.",
+    "en": "A page field is an extra column stored on this page that does not change the source entity.",
+    "he": "שדה עמוד הוא עמודה נוספת שנשמרת בעמוד זה ואינה משנה את הישות המקורית."
+  },
+  {
+    "key": "pageFields.editTitle",
+    "ru": "Редактировать поле страницы",
+    "en": "Edit page field",
+    "he": "עריכת שדה עמוד"
+  },
+  {
+    "key": "pageFields.newTitle",
+    "ru": "Новое поле страницы",
+    "en": "New page field",
+    "he": "שדה עמוד חדש"
+  },
+  {
+    "key": "pageFields.keyTaken",
+    "ru": "Такой ключ уже используется на этой странице.",
+    "en": "This key is already used on this page.",
+    "he": "מפתח זה כבר בשימוש בעמוד זה."
+  },
+  {
+    "key": "pageFields.fillAfterCreate",
+    "ru": "Заполняется после создания записи",
+    "en": "Filled after the record is created",
+    "he": "ממולא לאחר יצירת הרשומה"
   }
 ]

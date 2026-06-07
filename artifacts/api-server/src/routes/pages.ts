@@ -73,6 +73,16 @@ async function entityExists(entityId: number): Promise<boolean> {
   return Boolean(e);
 }
 
+/** True if some entity is bound to this page (entities.page_id === pageId). */
+async function pageHasBoundEntity(pageId: number): Promise<boolean> {
+  const [e] = await db
+    .select({ id: entitiesTable.id })
+    .from(entitiesTable)
+    .where(eq(entitiesTable.pageId, pageId))
+    .limit(1);
+  return Boolean(e);
+}
+
 router.post("/pages", requireAuth, requireAdmin("pages"), async (req, res): Promise<void> => {
   const parsed = CreatePageBody.safeParse(req.body);
   if (!parsed.success) {
@@ -141,6 +151,13 @@ router.put("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): P
 
   if (body.mirrorEntityId != null && !(await entityExists(body.mirrorEntityId))) {
     res.status(400).json({ error: "Mirror entity not found" });
+    return;
+  }
+
+  if (body.mirrorEntityId != null && (await pageHasBoundEntity(params.data.id))) {
+    res.status(409).json({
+      error: "This page already has a bound entity; it cannot also mirror an entity",
+    });
     return;
   }
 

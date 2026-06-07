@@ -150,7 +150,11 @@ export default function EntitiesPage() {
 
   const isPending = createMutation.isPending || updateMutation.isPending;
   const sorted = [...entities].sort((a: Entity, b: Entity) => a.sortOrder - b.sortOrder);
-  const navPages = [...pages].sort((a: Page, b: Page) => a.sortOrder - b.sortOrder);
+  // A page that mirrors an entity cannot also have a bound entity (either/or),
+  // so such pages are not offered as binding targets here.
+  const navPages = [...pages]
+    .filter((p: Page) => p.mirrorEntityId == null)
+    .sort((a: Page, b: Page) => a.sortOrder - b.sortOrder);
 
   useEffect(() => {
     if (!search) return;

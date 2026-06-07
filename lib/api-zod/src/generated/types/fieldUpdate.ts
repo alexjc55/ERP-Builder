@@ -5,9 +5,11 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { FieldFormatRule } from './fieldFormatRule';
 import type { FieldPermissions } from './fieldPermissions';
 import type { FieldType } from './fieldType';
 import type { FileFieldConfig } from './fileFieldConfig';
+import type { FormulaFieldConfig } from './formulaFieldConfig';
 import type { MultilingualText } from './multilingualText';
 import type { UserFieldConfig } from './userFieldConfig';
 
@@ -23,6 +25,8 @@ export interface FieldUpdate {
   permissionsJson?: FieldPermissions;
   fileConfigJson?: FileFieldConfig;
   userConfigJson?: UserFieldConfig;
+  formatRulesJson?: FieldFormatRule[];
+  formulaConfigJson?: FormulaFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
   sortOrder?: number;

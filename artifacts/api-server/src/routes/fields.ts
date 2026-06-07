@@ -246,6 +246,8 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   if (body.isRequired != null) updateData.isRequired = body.isRequired;
   if ("defaultValue" in body) updateData.defaultValue = body.defaultValue ?? null;
   if (body.optionsJson != null) updateData.optionsJson = body.optionsJson;
+  if (body.formatRulesJson != null) updateData.formatRulesJson = body.formatRulesJson;
+  if (body.formulaConfigJson != null) updateData.formulaConfigJson = body.formulaConfigJson;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
   if (body.isActive != null) updateData.isActive = body.isActive;
   if (body.permissionsJson != null) updateData.permissionsJson = body.permissionsJson;

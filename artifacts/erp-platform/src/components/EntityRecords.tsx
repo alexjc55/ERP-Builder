@@ -19,6 +19,12 @@ import {
   useDeleteRecordLink,
   useListUserOptions,
   useListRecordAuditLogs,
+  useListPageFields,
+  useListPageRecordValues,
+  getListPageFieldsQueryKey,
+  getListPageRecordValuesQueryKey,
+  useSetPageRecordValues,
+  type PageField,
   type ArchiveFilter,
   type AuditLogEntry,
   type EntityRecord,
@@ -99,6 +105,9 @@ import { useAuth } from "@/lib/auth";
 import { useML, useT } from "@/lib/i18n";
 import { useGoogleDriveReady } from "@/lib/googleDrive";
 import { FieldConfigDialog } from "@/components/FieldConfigDialog";
+import { PageFieldConfigDialog } from "@/components/PageFieldConfigDialog";
+import { formatFormulaResult, evaluateFormula } from "@/lib/formula";
+import { computeRowFormatting, type FormatField } from "@/lib/formatRules";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow } from "lucide-react";
 import { Link } from "wouter";
@@ -427,6 +436,7 @@ function FieldFilterPopover({
 export function EntityRecords({
   entityId,
   visibleFieldKeys,
+  pageId,
 }: {
   entityId: number;
   /**
@@ -436,6 +446,13 @@ export function EntityRecords({
    * this entity. Null/empty means "all visible fields".
    */
   visibleFieldKeys?: string[];
+  /**
+   * Mirror-page id. When set, this records table is rendered inside a mirror
+   * page and may carry page-local fields: extra columns whose definitions and
+   * per-record values live on the page (not on the source entity). Adding a
+   * column in setup mode here creates a page-local field, never an entity field.
+   */
+  pageId?: number;
 }) {
   const ml = useML();
   const t = useT();
@@ -460,6 +477,42 @@ export function EntityRecords({
     () => new Map(userOptions.map((u: UserOption) => [u.id, u.name])),
     [userOptions],
   );
+
+  // Page-local fields: extra columns that live on a mirror page rather than on
+  // the source entity. Loaded only when this table is rendered inside a page.
+  const isMirrorPage = pageId != null;
+  const { data: allPageFields = [] } = useListPageFields(pageId ?? 0, {
+    query: { enabled: isMirrorPage, queryKey: getListPageFieldsQueryKey(pageId ?? 0) },
+  });
+  const { data: pageRecordValues = [] } = useListPageRecordValues(pageId ?? 0, {
+    query: { enabled: isMirrorPage, queryKey: getListPageRecordValuesQueryKey(pageId ?? 0) },
+  });
+  const pageFields = useMemo(
+    () =>
+      [...allPageFields]
+        .filter((f: PageField) => f.isActive)
+        .sort((a: PageField, b: PageField) => a.sortOrder - b.sortOrder),
+    [allPageFields],
+  );
+  const pageValuesByRecord = useMemo(() => {
+    const m = new Map<number, Record<string, unknown>>();
+    for (const row of pageRecordValues) {
+      m.set(row.recordId, (row.valuesJson ?? {}) as Record<string, unknown>);
+    }
+    return m;
+  }, [pageRecordValues]);
+
+  const setPageValuesMutation = useSetPageRecordValues({
+    mutation: {
+      onSuccess: () => {
+        if (pageId != null) {
+          queryClient.invalidateQueries({ queryKey: [`/api/pages/${pageId}/record-values`] });
+        }
+      },
+      onError: () =>
+        toast({ title: t("records.saveError", "Не удалось сохранить значение"), variant: "destructive" }),
+    },
+  });
 
   // Optional mirror-page projection: restrict to a chosen subset of field keys.
   const mirrorKeySet =
@@ -502,6 +555,9 @@ export function EntityRecords({
   const [setupMode, setSetupMode] = useState(false);
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [columnField, setColumnField] = useState<Field | null>(null);
+  // Page-local field config (mirror pages only).
+  const [pageColumnDialogOpen, setPageColumnDialogOpen] = useState(false);
+  const [pageColumnField, setPageColumnField] = useState<PageField | null>(null);
 
   // Leaving an entity resets the transient table-editing UI so it can't leak across entities.
   useEffect(() => {
@@ -687,6 +743,11 @@ export function EntityRecords({
   const invalidateFields = () => {
     queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/fields`] });
   };
+  const invalidatePageFields = () => {
+    if (pageId != null) {
+      queryClient.invalidateQueries({ queryKey: [`/api/pages/${pageId}/fields`] });
+    }
+  };
 
   const reorderFieldsMutation = useReorderFields({
     mutation: {
@@ -815,6 +876,24 @@ export function EntityRecords({
     cellUpdateMutation.mutate({ id: record.id, data: { statusId: next } });
   };
 
+  // Inline commit for a page-local field value. Page values are stored as a
+  // whole JSONB map per (page, record), so we merge the existing values with the
+  // single edited key before writing.
+  const commitPageCell = (record: EntityRecord, field: PageField, raw: CellValue) => {
+    if (pageId == null) { setEditingCell(null); return; }
+    const existing = pageValuesByRecord.get(record.id) ?? {};
+    const stored = existing[field.fieldKey];
+    const next = cellValueForPayload(field as unknown as Field, raw);
+    const normalizedStored =
+      field.fieldType === "boolean" ? Boolean(stored) : stored === undefined || stored === null ? "" : stored;
+    if (next === normalizedStored) { setEditingCell(null); return; }
+    const merged: Record<string, unknown> = { ...existing };
+    if (next === "" || next === undefined || next === null) delete merged[field.fieldKey];
+    else merged[field.fieldKey] = next;
+    setEditingCell(null);
+    setPageValuesMutation.mutate({ pageId, recordId: record.id, data: { valuesJson: merged } });
+  };
+
   // Whether workflow enforcement applies to a given row (mirrors the server boundary).
   // When active the status cannot be cleared and only allowed transitions are offered.
   const workflowActiveForRecord = (record: EntityRecord): boolean =>
@@ -861,6 +940,28 @@ export function EntityRecords({
     setColumnField(field);
     setColumnDialogOpen(true);
   };
+  const openPageColumnConfig = (field: PageField | null) => {
+    setPageColumnField(field);
+    setPageColumnDialogOpen(true);
+  };
+
+  // Merge an entity record's stored values with its page-local values so formula
+  // fields (entity- or page-defined) can reference either set by field key.
+  const allValuesFor = (record: EntityRecord): Record<string, unknown> => ({
+    ...((record.valuesJson ?? {}) as Record<string, unknown>),
+    ...(pageValuesByRecord.get(record.id) ?? {}),
+  });
+  // Raw value of a field for one record: evaluated for formula fields, stored
+  // otherwise. Used both for rendering and for conditional-format matching.
+  const fieldRawValue = (
+    field: { fieldKey: string; fieldType: string; formulaConfigJson?: { expression?: string } | null },
+    allValues: Record<string, unknown>,
+  ): unknown => {
+    if (field.fieldType === "function") {
+      return evaluateFormula(field.formulaConfigJson?.expression ?? "", allValues);
+    }
+    return allValues[field.fieldKey];
+  };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
   const visibleFields = selectedConfig.visibleFields;
@@ -875,6 +976,12 @@ export function EntityRecords({
           .map((key) => tableFields.find((f: Field) => f.fieldKey === key))
           .filter((f): f is Field => Boolean(f)))
       : tableFields.filter((f: Field) => f.showInTable !== false);
+  // Page-local columns are appended after the entity columns. In setup mode the
+  // admin sees them all; otherwise only those opted-in via "Показывать в таблице".
+  const displayedPageFields = setupMode
+    ? pageFields
+    : pageFields.filter((f: PageField) => f.showInTable !== false);
+  const extraColCount = displayedPageFields.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   if (!canView) {
@@ -1109,7 +1216,7 @@ export function EntityRecords({
                   <tr className="border-b border-slate-100 bg-slate-50">
                     {displayFields.map((f: Field, ci: number) => (
                       <th key={f.id} className="text-left px-4 py-3 font-medium text-slate-600 whitespace-nowrap">
-                        {setupMode ? (
+                        {setupMode && !isMirrorPage ? (
                           <div className="inline-flex items-center gap-1">
                             {!hasCustomColumnOrder && (
                               <>
@@ -1150,6 +1257,26 @@ export function EntityRecords({
                         )}
                       </th>
                     ))}
+                    {displayedPageFields.map((pf: PageField) => (
+                      <th key={`pf-${pf.id}`} className="text-left px-4 py-3 font-medium text-purple-600 whitespace-nowrap">
+                        {setupMode ? (
+                          <button
+                            type="button"
+                            onClick={() => openPageColumnConfig(pf)}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-purple-300 bg-white px-2 py-1 text-purple-700 hover:bg-purple-100 transition"
+                            title={t("pageFields.configureColumn", "Настроить поле страницы")}
+                          >
+                            {ml(pf.nameJson)}
+                            <Settings2 className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <span className="inline-flex items-center gap-1" title={t("pageFields.badge", "Поле страницы")}>
+                            {ml(pf.nameJson)}
+                            <Columns3 className="w-3 h-3 text-purple-300" />
+                          </span>
+                        )}
+                      </th>
+                    ))}
                     {statuses.length > 0 && (
                       <th className="text-left px-4 py-3 font-medium text-slate-600">{t("records.status", "Статус")}</th>
                     )}
@@ -1158,11 +1285,11 @@ export function EntityRecords({
                         <Button
                           type="button"
                           size="sm"
-                          onClick={() => openColumnConfig(null)}
-                          className="bg-amber-500 hover:bg-amber-600 gap-1.5 h-8"
+                          onClick={() => (isMirrorPage ? openPageColumnConfig(null) : openColumnConfig(null))}
+                          className={`gap-1.5 h-8 ${isMirrorPage ? "bg-purple-500 hover:bg-purple-600" : "bg-amber-500 hover:bg-amber-600"}`}
                         >
                           <Plus className="w-3.5 h-3.5" />
-                          {t("records.addColumn", "Колонка")}
+                          {isMirrorPage ? t("pageFields.addColumn", "Поле страницы") : t("records.addColumn", "Колонка")}
                         </Button>
                       </th>
                     ) : (
@@ -1174,7 +1301,7 @@ export function EntityRecords({
                   {records.length === 0 && (
                     <tr>
                       <td
-                        colSpan={displayFields.length + (statuses.length > 0 ? 1 : 0) + 1}
+                        colSpan={displayFields.length + extraColCount + (statuses.length > 0 ? 1 : 0) + 1}
                         className="text-center py-12 text-slate-400"
                       >
                         {total === 0 && (search.trim() || (selectedConfig.filters?.length ?? 0) > 0)
@@ -1186,7 +1313,7 @@ export function EntityRecords({
                   {canCreate && !setupMode && addingRow && (
                     <tr className="border-b border-blue-100 bg-blue-50/40">
                       {displayFields.map((f: Field) => {
-                        const editable = fieldAccess(f, entityId) === "edit";
+                        const editable = fieldAccess(f, entityId) === "edit" && f.fieldType !== "function";
                         return (
                           <td key={f.id} className="px-2 py-1.5 align-top max-w-[260px]">
                             {editable ? (
@@ -1202,6 +1329,11 @@ export function EntityRecords({
                           </td>
                         );
                       })}
+                      {displayedPageFields.map((pf: PageField) => (
+                        <td key={`pf-${pf.id}`} className="px-2 py-1.5 align-top max-w-[260px]">
+                          <span className="text-slate-300 text-xs" title={t("pageFields.fillAfterCreate", "Заполняется после создания записи")}>—</span>
+                        </td>
+                      ))}
                       {statuses.length > 0 && (
                         <td className="px-2 py-1.5 align-top">
                           <Select value={newRowStatus} onValueChange={setNewRowStatus}>
@@ -1241,7 +1373,7 @@ export function EntityRecords({
                   )}
                   {canCreate && !setupMode && !addingRow && (
                     <tr className="border-b border-slate-100">
-                      <td colSpan={displayFields.length + (statuses.length > 0 ? 1 : 0) + 1} className="px-2 py-2">
+                      <td colSpan={displayFields.length + extraColCount + (statuses.length > 0 ? 1 : 0) + 1} className="px-2 py-2">
                         <button
                           type="button"
                           onClick={startAddRow}
@@ -1255,12 +1387,33 @@ export function EntityRecords({
                   )}
                   {records.map((record: EntityRecord) => {
                     const values = (record.valuesJson ?? {}) as Record<string, unknown>;
+                    const pageValues = pageValuesByRecord.get(record.id) ?? {};
+                    const allValues = { ...values, ...pageValues };
                     const status = record.statusId != null ? statusById.get(record.statusId) : undefined;
+                    // Conditional formatting across both entity and page columns.
+                    const formatFields: FormatField[] = [
+                      ...displayFields.map((f: Field) => ({ fieldKey: f.fieldKey, formatRulesJson: f.formatRulesJson })),
+                      ...displayedPageFields.map((pf: PageField) => ({ fieldKey: pf.fieldKey, formatRulesJson: pf.formatRulesJson })),
+                    ];
+                    const formatFieldByKey = new Map<string, { fieldType: string; formulaConfigJson?: { expression?: string } | null }>([
+                      ...displayFields.map((f: Field) => [f.fieldKey, { fieldType: f.fieldType, formulaConfigJson: f.formulaConfigJson }] as const),
+                      ...displayedPageFields.map((pf: PageField) => [pf.fieldKey, { fieldType: pf.fieldType, formulaConfigJson: pf.formulaConfigJson }] as const),
+                    ]);
+                    const formatting = computeRowFormatting(formatFields, (key) => {
+                      const def = formatFieldByKey.get(key);
+                      return def ? fieldRawValue({ fieldKey: key, ...def }, allValues) : allValues[key];
+                    });
                     return (
-                      <tr key={record.id} className="border-b border-slate-100 hover:bg-slate-50">
+                      <tr
+                        key={record.id}
+                        className="border-b border-slate-100 hover:bg-slate-50"
+                        style={formatting.rowColor ? { backgroundColor: formatting.rowColor } : undefined}
+                      >
                         {displayFields.map((f: Field) => {
                           const access = fieldAccess(f, entityId);
-                          const cellEditable = inlineEditEnabled && access === "edit";
+                          const isFunction = f.fieldType === "function";
+                          const cellEditable = inlineEditEnabled && access === "edit" && !isFunction;
+                          const cellBg = formatting.cellColors[f.fieldKey];
                           const isEditingThis =
                             editingCell?.recordId === record.id && editingCell?.fieldKey === f.fieldKey;
                           if (isEditingThis) {
@@ -1278,11 +1431,25 @@ export function EntityRecords({
                           }
                           if (f.fieldType === "boolean" && cellEditable) {
                             return (
-                              <td key={f.id} className="px-4 py-3 max-w-[240px]">
+                              <td key={f.id} className="px-4 py-3 max-w-[240px]" style={cellBg ? { backgroundColor: cellBg } : undefined}>
                                 <Switch
                                   checked={values[f.fieldKey] === true}
                                   onCheckedChange={(v) => commitCell(record, f, v)}
                                 />
+                              </td>
+                            );
+                          }
+                          if (isFunction) {
+                            const computed = formatFormulaResult(f.formulaConfigJson?.expression ?? "", allValues);
+                            return (
+                              <td key={f.id} className="px-4 py-3 max-w-[240px] truncate" style={cellBg ? { backgroundColor: cellBg } : undefined}>
+                                {computed.error ? (
+                                  <span className="text-red-400 text-xs" title={computed.text}>{t("fields.formulaError", "Ошибка формулы")}</span>
+                                ) : computed.text === "" ? (
+                                  <span className="text-slate-300">—</span>
+                                ) : (
+                                  <span className="text-slate-700">{computed.text}</span>
+                                )}
                               </td>
                             );
                           }
@@ -1291,9 +1458,67 @@ export function EntityRecords({
                               key={f.id}
                               onClick={cellEditable ? () => setEditingCell({ recordId: record.id, fieldKey: f.fieldKey }) : undefined}
                               className={`px-4 py-3 max-w-[240px] truncate ${cellEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
+                              style={cellBg ? { backgroundColor: cellBg } : undefined}
                               title={cellEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
                             >
                               {renderCellValue(f, values[f.fieldKey], userNames)}
+                            </td>
+                          );
+                        })}
+                        {displayedPageFields.map((pf: PageField) => {
+                          const isFunction = pf.fieldType === "function";
+                          const cellEditable = inlineEditEnabled && !isFunction;
+                          const cellBg = formatting.cellColors[pf.fieldKey];
+                          const pfKey = `pf:${pf.fieldKey}`;
+                          const isEditingThis =
+                            editingCell?.recordId === record.id && editingCell?.fieldKey === pfKey;
+                          const pageFieldAsField = { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
+                          if (isEditingThis) {
+                            return (
+                              <td key={`pf-${pf.id}`} className="px-2 py-1.5 max-w-[260px]">
+                                <InlineCellEditor
+                                  field={pageFieldAsField}
+                                  initial={valueToForm(pageFieldAsField, pageValues[pf.fieldKey])}
+                                  userOptions={userOptions}
+                                  onCommit={(raw) => commitPageCell(record, pf, raw)}
+                                  onCancel={() => setEditingCell(null)}
+                                />
+                              </td>
+                            );
+                          }
+                          if (pf.fieldType === "boolean" && cellEditable) {
+                            return (
+                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={cellBg ? { backgroundColor: cellBg } : undefined}>
+                                <Switch
+                                  checked={pageValues[pf.fieldKey] === true}
+                                  onCheckedChange={(v) => commitPageCell(record, pf, v)}
+                                />
+                              </td>
+                            );
+                          }
+                          if (isFunction) {
+                            const computed = formatFormulaResult(pf.formulaConfigJson?.expression ?? "", allValues);
+                            return (
+                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px] truncate" style={cellBg ? { backgroundColor: cellBg } : undefined}>
+                                {computed.error ? (
+                                  <span className="text-red-400 text-xs" title={computed.text}>{t("fields.formulaError", "Ошибка формулы")}</span>
+                                ) : computed.text === "" ? (
+                                  <span className="text-slate-300">—</span>
+                                ) : (
+                                  <span className="text-slate-700">{computed.text}</span>
+                                )}
+                              </td>
+                            );
+                          }
+                          return (
+                            <td
+                              key={`pf-${pf.id}`}
+                              onClick={cellEditable ? () => setEditingCell({ recordId: record.id, fieldKey: pfKey }) : undefined}
+                              className={`px-4 py-3 max-w-[240px] truncate ${cellEditable ? "cursor-text hover:bg-purple-50/60 rounded" : ""}`}
+                              style={cellBg ? { backgroundColor: cellBg } : undefined}
+                              title={cellEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
+                            >
+                              {renderCellValue(pageFieldAsField, pageValues[pf.fieldKey], userNames)}
                             </td>
                           );
                         })}
@@ -1556,6 +1781,16 @@ export function EntityRecords({
           field={columnField}
           nextSortOrder={allFields.length + 1}
           onSaved={() => { invalidateFields(); }}
+        />
+      )}
+      {canConfigureColumns && isMirrorPage && pageId != null && (
+        <PageFieldConfigDialog
+          open={pageColumnDialogOpen}
+          onOpenChange={setPageColumnDialogOpen}
+          pageId={pageId}
+          field={pageColumnField}
+          nextSortOrder={allPageFields.length + 1}
+          onSaved={() => { invalidatePageFields(); }}
         />
       )}
     </div>

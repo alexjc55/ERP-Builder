@@ -25,6 +25,39 @@ export type FileFieldConfig = { allowedSources?: FileSource[] };
  */
 export type UserFieldConfig = { allowedRoleIds?: number[] };
 
+/** Comparison used by a conditional-formatting rule. */
+export type FormatOperator =
+  | "equals"
+  | "notEquals"
+  | "contains"
+  | "notContains"
+  | "empty"
+  | "notEmpty"
+  | "gt"
+  | "lt"
+  | "gte"
+  | "lte";
+
+/**
+ * One conditional-formatting rule. When the cell value matches `operator`/`value`
+ * the cell is painted `cellColor` and/or the whole row `rowColor` (hex strings).
+ * Rules are evaluated in order; the first match wins per field. Cell colors take
+ * precedence over row colors on the same cell.
+ */
+export type FieldFormatRule = {
+  operator: FormatOperator;
+  value?: string;
+  cellColor?: string;
+  rowColor?: string;
+};
+
+/**
+ * Per-field configuration for a `function`-type field. `expression` is a safe
+ * formula referencing other fields of the same record via `{field_key}`. It is
+ * evaluated at read time (never stored) by a sandboxed evaluator.
+ */
+export type FormulaFieldConfig = { expression?: string };
+
 export const entityFieldsTable = pgTable(
   "entity_fields",
   {
@@ -42,6 +75,8 @@ export const entityFieldsTable = pgTable(
     permissionsJson: jsonb("permissions_json").$type<FieldPermissions>().notNull().default({}),
     fileConfigJson: jsonb("file_config_json").$type<FileFieldConfig>().notNull().default({}),
     userConfigJson: jsonb("user_config_json").$type<UserFieldConfig>().notNull().default({}),
+    formatRulesJson: jsonb("format_rules_json").$type<FieldFormatRule[]>().notNull().default([]),
+    formulaConfigJson: jsonb("formula_config_json").$type<FormulaFieldConfig>().notNull().default({}),
     isFilterable: boolean("is_filterable").notNull().default(false),
     showInTable: boolean("show_in_table").notNull().default(true),
     sortOrder: integer("sort_order").notNull().default(0),

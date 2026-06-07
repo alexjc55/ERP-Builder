@@ -1,17 +1,12 @@
 import { useEffect, useState } from "react";
 import {
-  useCreateEntityField,
-  useUpdateField,
-  useDeleteField,
-  useListRoles,
-  useListEntityFields,
-  type Field,
+  useCreatePageField,
+  useUpdatePageField,
+  useDeletePageField,
+  useListPageFields,
+  type PageField,
   type FieldType,
-  type FieldAccess,
-  type FieldPermissions,
-  type Role,
   type MultilingualText,
-  type FileSource,
   type FieldFormatRule,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -64,21 +59,7 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "email", label: "Email" },
   { value: "url", label: "Ссылка (URL)" },
   { value: "phone", label: "Телефон" },
-  { value: "user", label: "Пользователь" },
-  { value: "file", label: "Файл" },
   { value: "function", label: "Формула (вычисляемое)" },
-];
-
-const FIELD_ACCESS_OPTIONS: { value: FieldAccess; label: string }[] = [
-  { value: "edit", label: "Редактирование" },
-  { value: "view", label: "Просмотр" },
-  { value: "hidden", label: "Скрыто" },
-];
-
-const FILE_SOURCES: { value: FileSource; labelKey: string; label: string }[] = [
-  { value: "server", labelKey: "fields.fileSource.server", label: "Загрузка на сервер" },
-  { value: "gdrive", labelKey: "fields.fileSource.gdrive", label: "Загрузка в Google Drive" },
-  { value: "link", labelKey: "fields.fileSource.link", label: "Ссылка" },
 ];
 
 function extractError(err: unknown): string | undefined {
@@ -90,30 +71,30 @@ function extractError(err: unknown): string | undefined {
 }
 
 /**
- * Shared create/edit dialog for an entity field (column). Used by the fields
- * builder and the records-page setup mode. Encapsulates the form, the per-role
- * access matrix, and the create/update/delete mutations.
+ * Create/edit dialog for a page-local field (a column that lives on a mirror
+ * page, not on the source entity). Mirrors {@link FieldConfigDialog} but writes
+ * to the page-fields endpoints and omits entity-only options (per-role access,
+ * file/user config, filtering).
  */
-export function FieldConfigDialog({
+export function PageFieldConfigDialog({
   open,
   onOpenChange,
-  entityId,
+  pageId,
   field,
   nextSortOrder,
   onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  entityId: number;
-  field: Field | null;
+  pageId: number;
+  field: PageField | null;
   nextSortOrder: number;
   onSaved: () => void;
 }) {
   const ml = useML();
   const t = useT();
   const { toast } = useToast();
-  const { data: roles = [] } = useListRoles();
-  const { data: existingFields = [] } = useListEntityFields(entityId);
+  const { data: existingFields = [] } = useListPageFields(pageId);
 
   const [fieldKey, setFieldKey] = useState("");
   const [nameJson, setNameJson] = useState<MLValue>({});
@@ -124,16 +105,11 @@ export function FieldConfigDialog({
   const [optionsText, setOptionsText] = useState("");
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
-  const [isFilterable, setIsFilterable] = useState(false);
   const [showInTable, setShowInTable] = useState(true);
-  const [permissions, setPermissions] = useState<FieldPermissions>({});
-  const [allowedSources, setAllowedSources] = useState<FileSource[]>(["server"]);
-  const [allowedRoleIds, setAllowedRoleIds] = useState<number[]>([]);
   const [formatRules, setFormatRules] = useState<FieldFormatRule[]>([]);
   const [formula, setFormula] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // Sync form state whenever the dialog opens for a given field (or create).
   useEffect(() => {
     if (!open) return;
     if (field) {
@@ -148,16 +124,7 @@ export function FieldConfigDialog({
       setOptionsText((field.optionsJson ?? []).join("\n"));
       setSortOrder(field.sortOrder);
       setIsActive(field.isActive);
-      setIsFilterable(field.isFilterable ?? false);
       setShowInTable(field.showInTable ?? true);
-      setPermissions(field.permissionsJson ?? {});
-      {
-        const src = field.fileConfigJson?.allowedSources;
-        setAllowedSources(Array.isArray(src) && src.length > 0 ? src : ["server"]);
-      }
-      setAllowedRoleIds(
-        Array.isArray(field.userConfigJson?.allowedRoleIds) ? field.userConfigJson!.allowedRoleIds : [],
-      );
       setFormatRules(Array.isArray(field.formatRulesJson) ? field.formatRulesJson : []);
       setFormula(field.formulaConfigJson?.expression ?? "");
     } else {
@@ -170,17 +137,13 @@ export function FieldConfigDialog({
       setOptionsText("");
       setSortOrder(nextSortOrder);
       setIsActive(true);
-      setIsFilterable(false);
       setShowInTable(true);
-      setPermissions({});
-      setAllowedSources(["server"]);
-      setAllowedRoleIds([]);
       setFormatRules([]);
       setFormula("");
     }
   }, [open, field, nextSortOrder]);
 
-  const createMutation = useCreateEntityField({
+  const createMutation = useCreatePageField({
     mutation: {
       onSuccess: () => {
         toast({ title: t("fields.created", "Поле создано") });
@@ -192,7 +155,7 @@ export function FieldConfigDialog({
     },
   });
 
-  const updateMutation = useUpdateField({
+  const updateMutation = useUpdatePageField({
     mutation: {
       onSuccess: () => {
         toast({ title: t("fields.updated", "Поле обновлено") });
@@ -204,7 +167,7 @@ export function FieldConfigDialog({
     },
   });
 
-  const deleteMutation = useDeleteField({
+  const deleteMutation = useDeletePageField({
     mutation: {
       onSuccess: () => {
         toast({ title: t("fields.deleted", "Поле удалено") });
@@ -216,19 +179,8 @@ export function FieldConfigDialog({
     },
   });
 
-  const setRoleAccess = (roleId: number, access: FieldAccess | "inherit") => {
-    setPermissions((prev) => {
-      const next = { ...prev };
-      if (access === "inherit") delete next[String(roleId)];
-      else next[String(roleId)] = access;
-      return next;
-    });
-  };
-
-  // Auto-generate the system key from the name when left blank (mirrors the
-  // entity-fields builder), so users no longer have to type a valid key by hand.
   const existingKeys = new Set(
-    existingFields.filter((f: Field) => f.id !== field?.id).map((f: Field) => f.fieldKey),
+    existingFields.filter((f: PageField) => f.id !== field?.id).map((f: PageField) => f.fieldKey),
   );
   const trimmedKey = fieldKey.trim();
   const nameForKey = (nameJson.en || nameJson.ru || nameJson.he || "").toString();
@@ -237,6 +189,7 @@ export function FieldConfigDialog({
   const manualKeyTaken = trimmedKey !== "" && existingKeys.has(trimmedKey);
   const effectiveKey = trimmedKey || generatedKey;
 
+  const formatFieldType: FieldType = fieldType;
   const handleSubmit = () => {
     const options = optionsText
       .split("\n")
@@ -250,21 +203,14 @@ export function FieldConfigDialog({
       isRequired,
       defaultValue: defaultValue.trim() ? defaultValue.trim() : null,
       optionsJson: options,
-      permissionsJson: permissions,
       sortOrder,
       isActive,
-      isFilterable,
       showInTable,
-      fileConfigJson:
-        fieldType === "file"
-          ? { allowedSources: allowedSources.length > 0 ? allowedSources : (["server"] as FileSource[]) }
-          : {},
-      userConfigJson: fieldType === "user" ? { allowedRoleIds } : {},
       formatRulesJson: formatRules,
       formulaConfigJson: fieldType === "function" ? { expression: formula.trim() } : {},
     };
     if (field) updateMutation.mutate({ id: field.id, data: payload });
-    else createMutation.mutate({ entityId, data: payload });
+    else createMutation.mutate({ pageId, data: payload });
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
@@ -275,9 +221,9 @@ export function FieldConfigDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-lg max-h-[88vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{field ? t("fields.editTitle", "Редактировать поле") : t("fields.newTitle", "Новое поле")}</DialogTitle>
+            <DialogTitle>{field ? t("pageFields.editTitle", "Редактировать поле страницы") : t("pageFields.newTitle", "Новое поле страницы")}</DialogTitle>
             <DialogDescription>
-              {t("fields.dialogDesc", "Поле — это столбец данных сущности с типом, обязательностью и значением по умолчанию.")}
+              {t("pageFields.dialogDesc", "Поле страницы — это дополнительный столбец, который хранится на этой странице и не изменяет исходную сущность.")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -285,14 +231,9 @@ export function FieldConfigDialog({
             <MultilingualInput label={t("fields.description", "Описание")} value={descJson} onChange={setDescJson} multiline />
             <div className="space-y-1.5">
               <Label>{t("fields.systemKey", "Системный ключ")}</Label>
-              <Input
-                value={fieldKey}
-                onChange={(e) => setFieldKey(e.target.value)}
-                placeholder="title"
-                className="font-mono"
-              />
+              <Input value={fieldKey} onChange={(e) => setFieldKey(e.target.value)} placeholder="title" className="font-mono" />
               {manualKeyTaken ? (
-                <p className="text-xs text-red-500">{t("fields.keyTaken", "Такой ключ уже используется в этой сущности.")}</p>
+                <p className="text-xs text-red-500">{t("pageFields.keyTaken", "Такой ключ уже используется на этой странице.")}</p>
               ) : keyFormatInvalid ? (
                 <p className="text-xs text-red-500">{t("fields.keyInvalid", "Только строчные латинские буквы, цифры и подчёркивания.")}</p>
               ) : (
@@ -331,65 +272,6 @@ export function FieldConfigDialog({
                 <p className="text-xs text-slate-400">{t("fields.optionsHint", "По одному варианту на строку.")}</p>
               </div>
             )}
-            {fieldType === "file" && (
-              <div className="space-y-2">
-                <Label>{t("fields.fileSources", "Разрешённые источники файлов")}</Label>
-                <p className="text-xs text-slate-400">
-                  {t("fields.fileSourcesHint", "Выберите, как пользователи смогут прикреплять файлы. Должен быть выбран хотя бы один источник.")}
-                </p>
-                <div className="space-y-1.5 pt-1">
-                  {FILE_SOURCES.map((s) => {
-                    const checked = allowedSources.includes(s.value);
-                    return (
-                      <div key={s.value} className="flex items-center gap-2">
-                        <Switch
-                          id={`fcd-src-${s.value}`}
-                          checked={checked}
-                          onCheckedChange={(on) =>
-                            setAllowedSources((prev) => {
-                              const next = on ? [...prev, s.value] : prev.filter((x) => x !== s.value);
-                              return next.length > 0 ? next : prev;
-                            })
-                          }
-                        />
-                        <Label htmlFor={`fcd-src-${s.value}`}>{t(s.labelKey, s.label)}</Label>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-            {fieldType === "user" && (
-              <div className="space-y-2">
-                <Label>{t("fields.userRoles", "Доступные роли пользователей")}</Label>
-                <p className="text-xs text-slate-400">
-                  {t("fields.userRolesHint", "Ограничьте выбор пользователями указанных ролей. Если ничего не выбрано — доступны все пользователи.")}
-                </p>
-                {roles.length === 0 ? (
-                  <p className="text-xs text-slate-400">{t("fields.noRoles", "Нет ролей для настройки.")}</p>
-                ) : (
-                  <div className="space-y-1.5 pt-1">
-                    {roles.map((role: Role) => {
-                      const checked = allowedRoleIds.includes(role.id);
-                      return (
-                        <div key={role.id} className="flex items-center gap-2">
-                          <Switch
-                            id={`fcd-role-${role.id}`}
-                            checked={checked}
-                            onCheckedChange={(on) =>
-                              setAllowedRoleIds((prev) =>
-                                on ? [...prev, role.id] : prev.filter((x) => x !== role.id),
-                              )
-                            }
-                          />
-                          <Label htmlFor={`fcd-role-${role.id}`}>{ml(role.nameJson)}</Label>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
             {fieldType === "function" && (
               <div className="space-y-1.5">
                 <Label>{t("fields.formula", "Формула")}</Label>
@@ -416,60 +298,26 @@ export function FieldConfigDialog({
             )}
             <div className="grid grid-cols-2 gap-x-4 gap-y-3">
               <div className="flex items-center gap-2">
-                <Switch checked={isRequired} onCheckedChange={setIsRequired} id="fcd-required" />
-                <Label htmlFor="fcd-required">{t("fields.required", "Обязательное")}</Label>
+                <Switch checked={isRequired} onCheckedChange={setIsRequired} id="pfcd-required" />
+                <Label htmlFor="pfcd-required">{t("fields.required", "Обязательное")}</Label>
               </div>
               <div className="flex items-center gap-2">
-                <Switch checked={isActive} onCheckedChange={setIsActive} id="fcd-active" />
-                <Label htmlFor="fcd-active">{t("fields.active", "Активно")}</Label>
+                <Switch checked={isActive} onCheckedChange={setIsActive} id="pfcd-active" />
+                <Label htmlFor="pfcd-active">{t("fields.active", "Активно")}</Label>
               </div>
               <div className="flex items-center gap-2">
-                <Switch checked={isFilterable} onCheckedChange={setIsFilterable} id="fcd-filterable" />
-                <Label htmlFor="fcd-filterable">{t("fields.filterable", "Участвует в фильтре")}</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Switch checked={showInTable} onCheckedChange={setShowInTable} id="fcd-show-in-table" />
-                <Label htmlFor="fcd-show-in-table">{t("fields.showInTable", "Показывать в таблице")}</Label>
+                <Switch checked={showInTable} onCheckedChange={setShowInTable} id="pfcd-show-in-table" />
+                <Label htmlFor="pfcd-show-in-table">{t("fields.showInTable", "Показывать в таблице")}</Label>
               </div>
             </div>
 
             <div className="border-t border-slate-100 pt-4">
               <FieldFormatRulesEditor
-                fieldType={fieldType}
+                fieldType={formatFieldType}
                 options={optionsText.split("\n").map((o) => o.trim()).filter(Boolean)}
                 rules={formatRules}
                 onChange={setFormatRules}
               />
-            </div>
-
-            <div className="border-t border-slate-100 pt-4 space-y-2">
-              <Label>{t("fields.accessByRoles", "Доступ к полю по ролям")}</Label>
-              <p className="text-xs text-slate-400">
-                {t("fields.accessHint", "«По умолчанию» — поле наследует права роли на записи (изменение ⇒ редактирование, иначе просмотр). Суперадмины видят и редактируют всё.")}
-              </p>
-              {roles.length === 0 ? (
-                <p className="text-xs text-slate-400">{t("fields.noRoles", "Нет ролей для настройки.")}</p>
-              ) : (
-                <div className="space-y-2 pt-1">
-                  {roles.map((role: Role) => (
-                    <div key={role.id} className="flex items-center justify-between gap-3">
-                      <span className="text-sm text-slate-700 truncate">{ml(role.nameJson)}</span>
-                      <Select
-                        value={permissions[String(role.id)] ?? "inherit"}
-                        onValueChange={(v) => setRoleAccess(role.id, v as FieldAccess | "inherit")}
-                      >
-                        <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="inherit">{t("fields.inherit", "По умолчанию")}</SelectItem>
-                          {FIELD_ACCESS_OPTIONS.map((o) => (
-                            <SelectItem key={o.value} value={o.value}>{t(`fields.access.${o.value}`, o.label)}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
           <DialogFooter className="gap-2 sm:justify-between">

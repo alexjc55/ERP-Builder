@@ -179,6 +179,8 @@ function validateValues(fields: EntityField[], values: Record<string, unknown>, 
   const cleaned: Record<string, unknown> = {};
 
   for (const field of fields) {
+    // Function/formula fields are computed at read time and never stored.
+    if (field.fieldType === "function") continue;
     const raw = values[field.fieldKey];
 
     if (isEmpty(raw)) {

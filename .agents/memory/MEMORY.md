@@ -11,6 +11,7 @@
 - [List reorder pattern](list-reorder-pattern.md) — sortOrder arrow reordering must be a single transactional */reorder endpoint, not paired client swaps; records columns reorder via field sortOrder.
 - [Dependent record filters](dependent-filters.md) — isFilterable opt-in + status quick-filter + dependent option lists; SELECT DISTINCT must order by ordinal (reused sql frag re-binds params).
 - [Editable records table](editable-records-table.md) — inline cell/add-row/setup-mode constraints; inline status edits must mirror the per-row server workflow boundary, not a heuristic.
+- [Page-local & computed fields](page-local-and-computed-fields.md) — mirror-page page-local fields (separate value storage, RBAC = entity records boundary), per-field conditional formatting, read-only function/formula fields.
 - [Event system](event-system.md) — internal best-effort event bus design, the 5 core events, foundation for automations/modules.
 - [Impersonation](erp-impersonation.md) — impersonation modeled on the custom JWT; boundary/no-escalation rules that must stay consistent.
 - [Passwordless guest access](guest-access.md) — shareable-link guest sessions: read-only is a hard guard at requireAuth (not RBAC), guest reads must be side-effect free, links bind to passwordless accounts only.

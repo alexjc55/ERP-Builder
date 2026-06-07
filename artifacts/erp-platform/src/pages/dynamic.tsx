@@ -73,6 +73,7 @@ export default function DynamicPage() {
         <EntityRecords
           entityId={entity.id}
           visibleFieldKeys={mirrorEntity ? page.mirrorFieldKeysJson ?? undefined : undefined}
+          pageId={mirrorEntity ? page.id : undefined}
         />
       ) : (
         <Card className="border-slate-200 shadow-sm">

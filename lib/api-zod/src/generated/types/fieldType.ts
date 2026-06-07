@@ -22,4 +22,5 @@ export const FieldType = {
   phone: 'phone',
   user: 'user',
   file: 'file',
+  function: 'function',
 } as const;

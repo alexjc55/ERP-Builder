@@ -6,28 +6,21 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { FieldFormatRule } from './fieldFormatRule';
-import type { FieldPermissions } from './fieldPermissions';
 import type { FieldType } from './fieldType';
-import type { FileFieldConfig } from './fileFieldConfig';
 import type { FormulaFieldConfig } from './formulaFieldConfig';
 import type { MultilingualText } from './multilingualText';
-import type { UserFieldConfig } from './userFieldConfig';
 
-export interface FieldInput {
-  fieldKey: string;
-  nameJson: MultilingualText;
+export interface PageFieldUpdate {
+  fieldKey?: string;
+  nameJson?: MultilingualText;
   descriptionJson?: MultilingualText;
-  fieldType: FieldType;
+  fieldType?: FieldType;
   isRequired?: boolean;
   /** @nullable */
   defaultValue?: string | null;
   optionsJson?: string[];
-  permissionsJson?: FieldPermissions;
-  fileConfigJson?: FileFieldConfig;
-  userConfigJson?: UserFieldConfig;
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
-  isFilterable?: boolean;
   showInTable?: boolean;
   sortOrder?: number;
   isActive?: boolean;

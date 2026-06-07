@@ -2,6 +2,8 @@ export * from "./users";
 export * from "./guest_links";
 export * from "./roles";
 export * from "./pages";
+export * from "./page_fields";
+export * from "./page_record_values";
 export * from "./translations";
 export * from "./login_history";
 export * from "./audit_log";

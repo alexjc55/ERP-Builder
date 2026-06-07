@@ -1107,7 +1107,7 @@ export const ListEntityFieldsResponseItem = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
@@ -1118,6 +1118,15 @@ export const ListEntityFieldsResponseItem = zod.object({
   "userConfigJson": zod.object({
   "allowedRoleIds": zod.array(zod.number()).optional()
 }).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected.'),
+  "formatRulesJson": zod.array(zod.object({
+  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
+  "value": zod.string().optional(),
+  "cellColor": zod.string().optional(),
+  "rowColor": zod.string().optional()
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "formulaConfigJson": zod.object({
+  "expression": zod.string().optional()
+}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "sortOrder": zod.number(),
@@ -1152,7 +1161,7 @@ export const CreateEntityFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function']),
   "isRequired": zod.boolean().default(createEntityFieldBodyIsRequiredDefault),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()).optional(),
@@ -1163,6 +1172,15 @@ export const CreateEntityFieldBody = zod.object({
   "userConfigJson": zod.object({
   "allowedRoleIds": zod.array(zod.number()).optional()
 }).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected.'),
+  "formatRulesJson": zod.array(zod.object({
+  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
+  "value": zod.string().optional(),
+  "cellColor": zod.string().optional(),
+  "rowColor": zod.string().optional()
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "formulaConfigJson": zod.object({
+  "expression": zod.string().optional()
+}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
   "isFilterable": zod.boolean().default(createEntityFieldBodyIsFilterableDefault),
   "showInTable": zod.boolean().default(createEntityFieldBodyShowInTableDefault),
   "sortOrder": zod.number().optional(),
@@ -1191,7 +1209,7 @@ export const GetFieldResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
@@ -1202,6 +1220,15 @@ export const GetFieldResponse = zod.object({
   "userConfigJson": zod.object({
   "allowedRoleIds": zod.array(zod.number()).optional()
 }).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected.'),
+  "formatRulesJson": zod.array(zod.object({
+  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
+  "value": zod.string().optional(),
+  "cellColor": zod.string().optional(),
+  "rowColor": zod.string().optional()
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "formulaConfigJson": zod.object({
+  "expression": zod.string().optional()
+}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "sortOrder": zod.number(),
@@ -1230,7 +1257,7 @@ export const UpdateFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file']).optional(),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function']).optional(),
   "isRequired": zod.boolean().optional(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()).optional(),
@@ -1241,6 +1268,15 @@ export const UpdateFieldBody = zod.object({
   "userConfigJson": zod.object({
   "allowedRoleIds": zod.array(zod.number()).optional()
 }).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected.'),
+  "formatRulesJson": zod.array(zod.object({
+  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
+  "value": zod.string().optional(),
+  "cellColor": zod.string().optional(),
+  "rowColor": zod.string().optional()
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "formulaConfigJson": zod.object({
+  "expression": zod.string().optional()
+}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "sortOrder": zod.number().optional(),
@@ -1261,7 +1297,7 @@ export const UpdateFieldResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
@@ -1272,6 +1308,15 @@ export const UpdateFieldResponse = zod.object({
   "userConfigJson": zod.object({
   "allowedRoleIds": zod.array(zod.number()).optional()
 }).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected.'),
+  "formatRulesJson": zod.array(zod.object({
+  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
+  "value": zod.string().optional(),
+  "cellColor": zod.string().optional(),
+  "rowColor": zod.string().optional()
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "formulaConfigJson": zod.object({
+  "expression": zod.string().optional()
+}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "sortOrder": zod.number(),
@@ -1309,6 +1354,225 @@ export const ReorderFieldsResponse = zod.object({
   "success": zod.boolean(),
   "message": zod.string().optional()
 })
+
+
+/**
+ * @summary List page-local fields for a page
+ */
+export const ListPageFieldsParams = zod.object({
+  "pageId": zod.coerce.number()
+})
+
+export const ListPageFieldsResponseItem = zod.object({
+  "id": zod.number(),
+  "pageId": zod.number(),
+  "fieldKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "descriptionJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function']),
+  "isRequired": zod.boolean(),
+  "defaultValue": zod.string().nullish(),
+  "optionsJson": zod.array(zod.string()),
+  "formatRulesJson": zod.array(zod.object({
+  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
+  "value": zod.string().optional(),
+  "cellColor": zod.string().optional(),
+  "rowColor": zod.string().optional()
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "formulaConfigJson": zod.object({
+  "expression": zod.string().optional()
+}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
+  "showInTable": zod.boolean().optional(),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListPageFieldsResponse = zod.array(ListPageFieldsResponseItem)
+
+
+/**
+ * @summary Create a page-local field
+ */
+export const CreatePageFieldParams = zod.object({
+  "pageId": zod.coerce.number()
+})
+
+export const createPageFieldBodyIsRequiredDefault = false;
+export const createPageFieldBodyShowInTableDefault = true;
+export const createPageFieldBodyIsActiveDefault = true;
+
+export const CreatePageFieldBody = zod.object({
+  "fieldKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "descriptionJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function']),
+  "isRequired": zod.boolean().default(createPageFieldBodyIsRequiredDefault),
+  "defaultValue": zod.string().nullish(),
+  "optionsJson": zod.array(zod.string()).optional(),
+  "formatRulesJson": zod.array(zod.object({
+  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
+  "value": zod.string().optional(),
+  "cellColor": zod.string().optional(),
+  "rowColor": zod.string().optional()
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "formulaConfigJson": zod.object({
+  "expression": zod.string().optional()
+}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
+  "showInTable": zod.boolean().default(createPageFieldBodyShowInTableDefault),
+  "sortOrder": zod.number().optional(),
+  "isActive": zod.boolean().default(createPageFieldBodyIsActiveDefault)
+})
+
+
+/**
+ * @summary Update a page-local field
+ */
+export const UpdatePageFieldParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdatePageFieldBody = zod.object({
+  "fieldKey": zod.string().optional(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "descriptionJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function']).optional(),
+  "isRequired": zod.boolean().optional(),
+  "defaultValue": zod.string().nullish(),
+  "optionsJson": zod.array(zod.string()).optional(),
+  "formatRulesJson": zod.array(zod.object({
+  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
+  "value": zod.string().optional(),
+  "cellColor": zod.string().optional(),
+  "rowColor": zod.string().optional()
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "formulaConfigJson": zod.object({
+  "expression": zod.string().optional()
+}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
+  "showInTable": zod.boolean().optional(),
+  "sortOrder": zod.number().optional(),
+  "isActive": zod.boolean().optional()
+})
+
+export const UpdatePageFieldResponse = zod.object({
+  "id": zod.number(),
+  "pageId": zod.number(),
+  "fieldKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "descriptionJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function']),
+  "isRequired": zod.boolean(),
+  "defaultValue": zod.string().nullish(),
+  "optionsJson": zod.array(zod.string()),
+  "formatRulesJson": zod.array(zod.object({
+  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
+  "value": zod.string().optional(),
+  "cellColor": zod.string().optional(),
+  "rowColor": zod.string().optional()
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "formulaConfigJson": zod.object({
+  "expression": zod.string().optional()
+}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
+  "showInTable": zod.boolean().optional(),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a page-local field
+ */
+export const DeletePageFieldParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeletePageFieldResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
+ * @summary Reorder page-local fields within a page
+ */
+export const ReorderPageFieldsBody = zod.object({
+  "pageId": zod.number(),
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "sortOrder": zod.number()
+}))
+})
+
+export const ReorderPageFieldsResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
+ * @summary List page-local field values for all records shown on a page
+ */
+export const ListPageRecordValuesParams = zod.object({
+  "pageId": zod.coerce.number()
+})
+
+export const ListPageRecordValuesResponseItem = zod.object({
+  "recordId": zod.number(),
+  "valuesJson": zod.record(zod.string(), zod.unknown())
+}).describe('Page-local field values for one mirrored record.')
+export const ListPageRecordValuesResponse = zod.array(ListPageRecordValuesResponseItem)
+
+
+/**
+ * @summary Upsert page-local field values for one record
+ */
+export const SetPageRecordValuesParams = zod.object({
+  "pageId": zod.coerce.number(),
+  "recordId": zod.coerce.number()
+})
+
+export const SetPageRecordValuesBody = zod.object({
+  "valuesJson": zod.record(zod.string(), zod.unknown())
+})
+
+export const SetPageRecordValuesResponse = zod.object({
+  "recordId": zod.number(),
+  "valuesJson": zod.record(zod.string(), zod.unknown())
+}).describe('Page-local field values for one mirrored record.')
 
 
 /**

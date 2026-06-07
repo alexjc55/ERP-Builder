@@ -54,6 +54,13 @@ import { useML, useT } from "@/lib/i18n";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
+/** Ensure a non-empty path starts with a single leading slash. Empty stays empty. */
+function withSlash(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  return `/${trimmed.replace(/^\/+/, "")}`;
+}
+
 export default function PagesPage() {
   const ml = useML();
   const t = useT();
@@ -154,12 +161,28 @@ export default function PagesPage() {
     setDialogOpen(true);
   };
 
+  // A page that has a bound entity (entities.page_id === page.id) must not also
+  // mirror another entity, and vice versa — the two bindings are mutually
+  // exclusive (issue: a page showing both is illogical). Disable the mirror
+  // selector when the page being edited already has a bound entity.
+  const boundEntity = editingPage ? entityForPage(editingPage.id) : undefined;
+  const mirrorLockedByBinding = !!boundEntity;
+  const normalizedPath = withSlash(path);
+  // Path is required whenever the page renders data (a mirror entity), otherwise
+  // navigating to it falls through to the dashboard.
+  const pathRequired = mirrorEntityId !== "none";
+  const pathMissing = pathRequired && normalizedPath === "";
+
   const handleSubmit = () => {
+    if (pathMissing) {
+      toast({ title: t("pages.pathRequiredError", "Укажите путь для страницы со связанной сущностью"), variant: "destructive" });
+      return;
+    }
     const payload = {
       nameJson: nameJson as MultilingualText,
       descriptionJson: descJson as MultilingualText,
       icon: icon || "",
-      path: path.trim() || null,
+      path: normalizedPath || null,
       parentPageId: parentPageId !== "none" ? Number(parentPageId) : null,
       mirrorEntityId: mirrorEntityId !== "none" ? Number(mirrorEntityId) : null,
       mirrorFieldKeysJson:
@@ -330,9 +353,23 @@ export default function PagesPage() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>{t("pages.path", "Путь (маршрут)")}</Label>
-              <Input value={path} onChange={(e) => setPath(e.target.value)} placeholder="/example" />
-              <p className="text-xs text-slate-400">{t("pages.pathHint", "Адрес страницы в меню. Оставьте пустым для группы-раздела.")}</p>
+              <Label>
+                {t("pages.path", "Путь (маршрут)")}
+                {pathRequired && <span className="text-red-500"> *</span>}
+              </Label>
+              <Input
+                value={path}
+                onChange={(e) => setPath(e.target.value)}
+                onBlur={() => setPath((p) => withSlash(p))}
+                placeholder="/example"
+              />
+              {pathMissing ? (
+                <p className="text-xs text-red-500">
+                  {t("pages.pathRequiredHint", "Для страницы со связанной сущностью путь обязателен.")}
+                </p>
+              ) : (
+                <p className="text-xs text-slate-400">{t("pages.pathHint", "Адрес страницы в меню. Слеш в начале добавится автоматически. Оставьте пустым для группы-раздела.")}</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>{t("pages.parent", "Родительская страница")}</Label>
@@ -350,8 +387,14 @@ export default function PagesPage() {
             </div>
             <div className="space-y-1.5 rounded-md border border-slate-200 p-3">
               <Label>{t("pages.mirrorEntity", "Связанная сущность (живые данные)")}</Label>
+              {mirrorLockedByBinding && (
+                <p className="text-xs text-amber-600">
+                  {t("pages.mirrorLocked", "К этой странице уже привязана сущность. Зеркало недоступно — страница может быть либо привязанной, либо зеркалом.")}
+                </p>
+              )}
               <Select
                 value={mirrorEntityId}
+                disabled={mirrorLockedByBinding}
                 onValueChange={(v) => {
                   setMirrorEntityId(v);
                   setMirrorFieldKeys([]);
@@ -394,7 +437,7 @@ export default function PagesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("pages.cancel", "Отмена")}</Button>
-            <Button onClick={handleSubmit} disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={handleSubmit} disabled={isPending || pathMissing} className="bg-blue-600 hover:bg-blue-700">
               {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editingPage ? t("pages.save", "Сохранить") : t("pages.createShort", "Создать")}
             </Button>
           </DialogFooter>

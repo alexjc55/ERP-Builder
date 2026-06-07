@@ -591,7 +591,41 @@ export const FieldType = {
   phone: 'phone',
   user: 'user',
   file: 'file',
+  function: 'function',
 } as const;
+
+export type FormatOperator = typeof FormatOperator[keyof typeof FormatOperator];
+
+
+export const FormatOperator = {
+  equals: 'equals',
+  notEquals: 'notEquals',
+  contains: 'contains',
+  notContains: 'notContains',
+  empty: 'empty',
+  notEmpty: 'notEmpty',
+  gt: 'gt',
+  lt: 'lt',
+  gte: 'gte',
+  lte: 'lte',
+} as const;
+
+/**
+ * One conditional-formatting rule. When a cell value matches operator/value, the cell is painted cellColor and/or the row rowColor. Rules are evaluated in order; first match wins per field.
+ */
+export interface FieldFormatRule {
+  operator: FormatOperator;
+  value?: string;
+  cellColor?: string;
+  rowColor?: string;
+}
+
+/**
+ * Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.
+ */
+export interface FormulaFieldConfig {
+  expression?: string;
+}
 
 export type FieldAccess = typeof FieldAccess[keyof typeof FieldAccess];
 
@@ -644,6 +678,8 @@ export interface Field {
   permissionsJson?: FieldPermissions;
   fileConfigJson?: FileFieldConfig;
   userConfigJson?: UserFieldConfig;
+  formatRulesJson?: FieldFormatRule[];
+  formulaConfigJson?: FormulaFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
   sortOrder: number;
@@ -664,6 +700,8 @@ export interface FieldInput {
   permissionsJson?: FieldPermissions;
   fileConfigJson?: FileFieldConfig;
   userConfigJson?: UserFieldConfig;
+  formatRulesJson?: FieldFormatRule[];
+  formulaConfigJson?: FormulaFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
   sortOrder?: number;
@@ -692,10 +730,90 @@ export interface FieldUpdate {
   permissionsJson?: FieldPermissions;
   fileConfigJson?: FileFieldConfig;
   userConfigJson?: UserFieldConfig;
+  formatRulesJson?: FieldFormatRule[];
+  formulaConfigJson?: FormulaFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
   sortOrder?: number;
   isActive?: boolean;
+}
+
+export interface PageField {
+  id: number;
+  pageId: number;
+  fieldKey: string;
+  nameJson: MultilingualText;
+  descriptionJson?: MultilingualText;
+  fieldType: FieldType;
+  isRequired: boolean;
+  /** @nullable */
+  defaultValue?: string | null;
+  optionsJson: string[];
+  formatRulesJson?: FieldFormatRule[];
+  formulaConfigJson?: FormulaFieldConfig;
+  showInTable?: boolean;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PageFieldInput {
+  fieldKey: string;
+  nameJson: MultilingualText;
+  descriptionJson?: MultilingualText;
+  fieldType: FieldType;
+  isRequired?: boolean;
+  /** @nullable */
+  defaultValue?: string | null;
+  optionsJson?: string[];
+  formatRulesJson?: FieldFormatRule[];
+  formulaConfigJson?: FormulaFieldConfig;
+  showInTable?: boolean;
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
+export interface PageFieldUpdate {
+  fieldKey?: string;
+  nameJson?: MultilingualText;
+  descriptionJson?: MultilingualText;
+  fieldType?: FieldType;
+  isRequired?: boolean;
+  /** @nullable */
+  defaultValue?: string | null;
+  optionsJson?: string[];
+  formatRulesJson?: FieldFormatRule[];
+  formulaConfigJson?: FormulaFieldConfig;
+  showInTable?: boolean;
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
+export type PageFieldsReorderInputItemsItem = {
+  id: number;
+  sortOrder: number;
+};
+
+export interface PageFieldsReorderInput {
+  pageId: number;
+  items: PageFieldsReorderInputItemsItem[];
+}
+
+export type PageRecordValueValuesJson = { [key: string]: unknown };
+
+/**
+ * Page-local field values for one mirrored record.
+ */
+export interface PageRecordValue {
+  recordId: number;
+  valuesJson: PageRecordValueValuesJson;
+}
+
+export type PageRecordValueInputValuesJson = { [key: string]: unknown };
+
+export interface PageRecordValueInput {
+  valuesJson: PageRecordValueInputValuesJson;
 }
 
 export interface Status {

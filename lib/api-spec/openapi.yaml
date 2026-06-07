@@ -913,6 +913,163 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  # PAGE-LOCAL FIELDS (mirror pages)
+  /pages/{pageId}/fields:
+    get:
+      operationId: listPageFields
+      tags: [pageFields]
+      summary: List page-local fields for a page
+      parameters:
+        - name: pageId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of page-local fields
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PageField"
+    post:
+      operationId: createPageField
+      tags: [pageFields]
+      summary: Create a page-local field
+      parameters:
+        - name: pageId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PageFieldInput"
+      responses:
+        "201":
+          description: Page field created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageField"
+
+  /page-fields/{id}:
+    put:
+      operationId: updatePageField
+      tags: [pageFields]
+      summary: Update a page-local field
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PageFieldUpdate"
+      responses:
+        "200":
+          description: Page field updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageField"
+    delete:
+      operationId: deletePageField
+      tags: [pageFields]
+      summary: Delete a page-local field
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /page-fields/reorder:
+    post:
+      operationId: reorderPageFields
+      tags: [pageFields]
+      summary: Reorder page-local fields within a page
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PageFieldsReorderInput"
+      responses:
+        "200":
+          description: Reordered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /pages/{pageId}/record-values:
+    get:
+      operationId: listPageRecordValues
+      tags: [pageFields]
+      summary: List page-local field values for all records shown on a page
+      parameters:
+        - name: pageId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Page-local values keyed by record
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PageRecordValue"
+
+  /pages/{pageId}/records/{recordId}/values:
+    put:
+      operationId: setPageRecordValues
+      tags: [pageFields]
+      summary: Upsert page-local field values for one record
+      parameters:
+        - name: pageId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PageRecordValueInput"
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageRecordValue"
+
   # STATUSES
   /entities/{entityId}/statuses:
     get:
@@ -2839,6 +2996,48 @@ components:
         - phone
         - user
         - file
+        - function
+
+    FormatOperator:
+      type: string
+      enum:
+        - equals
+        - notEquals
+        - contains
+        - notContains
+        - empty
+        - notEmpty
+        - gt
+        - lt
+        - gte
+        - lte
+
+    FieldFormatRule:
+      type: object
+      required: [operator]
+      description: >-
+        One conditional-formatting rule. When a cell value matches
+        operator/value, the cell is painted cellColor and/or the row rowColor.
+        Rules are evaluated in order; first match wins per field.
+      properties:
+        operator:
+          $ref: "#/components/schemas/FormatOperator"
+        value:
+          type: string
+        cellColor:
+          type: string
+        rowColor:
+          type: string
+
+    FormulaFieldConfig:
+      type: object
+      description: >-
+        Per-field configuration for a `function`-type field. `expression` is a
+        safe formula referencing other fields of the same record via
+        {field_key}; it is computed at read time and never stored.
+      properties:
+        expression:
+          type: string
 
     FieldAccess:
       type: string
@@ -2908,6 +3107,12 @@ components:
           $ref: "#/components/schemas/FileFieldConfig"
         userConfigJson:
           $ref: "#/components/schemas/UserFieldConfig"
+        formatRulesJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldFormatRule"
+        formulaConfigJson:
+          $ref: "#/components/schemas/FormulaFieldConfig"
         isFilterable:
           type: boolean
         showInTable:
@@ -2950,6 +3155,12 @@ components:
           $ref: "#/components/schemas/FileFieldConfig"
         userConfigJson:
           $ref: "#/components/schemas/UserFieldConfig"
+        formatRulesJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldFormatRule"
+        formulaConfigJson:
+          $ref: "#/components/schemas/FormulaFieldConfig"
         isFilterable:
           type: boolean
           default: false
@@ -3004,6 +3215,12 @@ components:
           $ref: "#/components/schemas/FileFieldConfig"
         userConfigJson:
           $ref: "#/components/schemas/UserFieldConfig"
+        formatRulesJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldFormatRule"
+        formulaConfigJson:
+          $ref: "#/components/schemas/FormulaFieldConfig"
         isFilterable:
           type: boolean
         showInTable:
@@ -3012,6 +3229,154 @@ components:
           type: integer
         isActive:
           type: boolean
+
+    # PAGE-LOCAL FIELDS (mirror pages)
+    PageField:
+      type: object
+      required: [id, pageId, fieldKey, nameJson, fieldType, isRequired, optionsJson, sortOrder, isActive, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        pageId:
+          type: integer
+        fieldKey:
+          type: string
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        descriptionJson:
+          $ref: "#/components/schemas/MultilingualText"
+        fieldType:
+          $ref: "#/components/schemas/FieldType"
+        isRequired:
+          type: boolean
+        defaultValue:
+          type: ["string", "null"]
+        optionsJson:
+          type: array
+          items:
+            type: string
+        formatRulesJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldFormatRule"
+        formulaConfigJson:
+          $ref: "#/components/schemas/FormulaFieldConfig"
+        showInTable:
+          type: boolean
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PageFieldInput:
+      type: object
+      required: [fieldKey, nameJson, fieldType]
+      properties:
+        fieldKey:
+          type: string
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        descriptionJson:
+          $ref: "#/components/schemas/MultilingualText"
+        fieldType:
+          $ref: "#/components/schemas/FieldType"
+        isRequired:
+          type: boolean
+          default: false
+        defaultValue:
+          type: ["string", "null"]
+        optionsJson:
+          type: array
+          items:
+            type: string
+        formatRulesJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldFormatRule"
+        formulaConfigJson:
+          $ref: "#/components/schemas/FormulaFieldConfig"
+        showInTable:
+          type: boolean
+          default: true
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+          default: true
+
+    PageFieldUpdate:
+      type: object
+      properties:
+        fieldKey:
+          type: string
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        descriptionJson:
+          $ref: "#/components/schemas/MultilingualText"
+        fieldType:
+          $ref: "#/components/schemas/FieldType"
+        isRequired:
+          type: boolean
+        defaultValue:
+          type: ["string", "null"]
+        optionsJson:
+          type: array
+          items:
+            type: string
+        formatRulesJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldFormatRule"
+        formulaConfigJson:
+          $ref: "#/components/schemas/FormulaFieldConfig"
+        showInTable:
+          type: boolean
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+
+    PageFieldsReorderInput:
+      type: object
+      required: [pageId, items]
+      properties:
+        pageId:
+          type: integer
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, sortOrder]
+            properties:
+              id:
+                type: integer
+              sortOrder:
+                type: integer
+
+    PageRecordValue:
+      type: object
+      required: [recordId, valuesJson]
+      description: Page-local field values for one mirrored record.
+      properties:
+        recordId:
+          type: integer
+        valuesJson:
+          type: object
+          additionalProperties: true
+
+    PageRecordValueInput:
+      type: object
+      required: [valuesJson]
+      properties:
+        valuesJson:
+          type: object
+          additionalProperties: true
 
     Status:
       type: object

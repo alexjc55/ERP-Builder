@@ -20,11 +20,19 @@ async function validatePageBinding(
   excludeEntityId: number | null,
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
   const [page] = await db
-    .select({ id: pagesTable.id })
+    .select({ id: pagesTable.id, mirrorEntityId: pagesTable.mirrorEntityId })
     .from(pagesTable)
     .where(eq(pagesTable.id, pageId));
   if (!page) {
     return { ok: false, status: 400, error: "Selected page does not exist" };
+  }
+
+  if (page.mirrorEntityId != null) {
+    return {
+      ok: false,
+      status: 409,
+      error: "This page already mirrors an entity; it cannot also be bound to an entity",
+    };
   }
 
   const conflictWhere =
