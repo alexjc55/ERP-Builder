@@ -36,6 +36,7 @@ import {
   uploadToFolder,
   downloadDriveFile,
   saveConnectionTokens,
+  isGoogleDriveModuleEnabled,
 } from "../lib/googleDrive";
 
 const router: IRouter = Router();
@@ -77,10 +78,11 @@ function connectionInfo(conn: GoogleDriveConnection) {
  * authenticated user may read whether Drive uploads are available.
  */
 router.get("/google-drive/status", requireAuth, async (_req, res): Promise<void> => {
-  const conn = await getConnection();
+  const [conn, enabled] = await Promise.all([getConnection(), isGoogleDriveModuleEnabled()]);
   res.json({
     connected: Boolean(conn?.refreshTokenEnc),
     folderConfigured: Boolean(conn?.folderId),
+    enabled,
   });
 });
 
@@ -195,6 +197,10 @@ router.post(
   express.raw({ type: () => true, limit: "50mb" }),
   async (req: Request, res: Response): Promise<void> => {
     try {
+      if (!(await isGoogleDriveModuleEnabled())) {
+        res.status(403).json({ error: "Google Drive module is disabled" });
+        return;
+      }
       const conn = await getConnection();
       if (!conn?.refreshTokenEnc || !conn.folderId) {
         res.status(409).json({ error: "Google Drive is not connected" });

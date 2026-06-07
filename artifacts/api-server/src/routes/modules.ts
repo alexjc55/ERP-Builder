@@ -15,6 +15,12 @@ const router: IRouter = Router();
 
 const MODULE_KEY_RE = /^[a-z][a-z0-9_]*$/;
 
+/**
+ * System modules are platform-managed (seeded, with a dedicated settings screen)
+ * and may be toggled on/off but never deleted from the registry.
+ */
+const SYSTEM_MODULE_KEYS = ["google_drive"];
+
 /** Unwrap drizzle's query-error wrapper to find the underlying pg error. */
 function pgError(err: unknown): { code?: string; constraint?: string } | null {
   let e: unknown = err;
@@ -151,6 +157,20 @@ router.delete("/modules/:id", requireAuth, requireAdmin("modules"), async (req, 
   const params = DeleteModuleParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [target] = await db
+    .select({ moduleKey: modulesTable.moduleKey })
+    .from(modulesTable)
+    .where(eq(modulesTable.id, params.data.id));
+
+  if (!target) {
+    res.status(404).json({ error: "Module not found" });
+    return;
+  }
+  if (SYSTEM_MODULE_KEYS.includes(target.moduleKey)) {
+    res.status(400).json({ error: "System modules cannot be deleted" });
     return;
   }
 

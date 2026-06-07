@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import {
   useListModules,
   useCreateModule,
@@ -35,17 +36,27 @@ import {
 } from "@/components/ui/alert-dialog";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
-import { Puzzle, Plus, Pencil, Trash2 } from "lucide-react";
+import { Puzzle, Plus, Pencil, Trash2, Settings2 } from "lucide-react";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
 const MODULE_KEY_RE = /^[a-z][a-z0-9_]*$/;
+
+/**
+ * Modules with a dedicated settings screen (vs. the generic JSON editor). These
+ * are platform-managed system modules: toggle on/off here, configure via their
+ * own page; they cannot be edited as raw JSON or deleted.
+ */
+const MODULE_SETTINGS_ROUTES: Record<string, string> = {
+  google_drive: "/admin/google-drive",
+};
 
 export default function ModulesPage() {
   const ml = useML();
   const t = useT();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
 
   const { data, isLoading } = useListModules();
   const modules: Module[] = data ?? [];
@@ -209,12 +220,25 @@ export default function ModulesPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => openEdit(m)}>
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => setDeleting(m)}>
-                            <Trash2 className="w-4 h-4 text-red-500" />
-                          </Button>
+                          {MODULE_SETTINGS_ROUTES[m.moduleKey] ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setLocation(MODULE_SETTINGS_ROUTES[m.moduleKey])}
+                            >
+                              <Settings2 className="w-4 h-4 mr-1.5" />
+                              {t("modules.openSettings", "Настройки")}
+                            </Button>
+                          ) : (
+                            <>
+                              <Button variant="ghost" size="sm" onClick={() => openEdit(m)}>
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => setDeleting(m)}>
+                                <Trash2 className="w-4 h-4 text-red-500" />
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>

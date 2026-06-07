@@ -2038,7 +2038,7 @@ components:
   schemas:
     GoogleDriveStatus:
       type: object
-      required: [connected, folderConfigured]
+      required: [connected, folderConfigured, enabled]
       properties:
         connected:
           type: boolean
@@ -2046,6 +2046,9 @@ components:
         folderConfigured:
           type: boolean
           description: An upload target folder is configured.
+        enabled:
+          type: boolean
+          description: The Google Drive module is toggled on in the modules registry.
 
     GoogleDriveConnectionInfo:
       type: object

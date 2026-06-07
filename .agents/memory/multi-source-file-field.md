@@ -24,6 +24,20 @@ via `fileConfigJson.allowedSources` on the field; the default is server-only.
   records permission model changes, this proxy must change in lockstep.
 - **Drive write/admin endpoints are POST**, so the `requireAuth` guest read-only
   guard already blocks guest tokens from uploading or changing the connection.
+- **Google Drive is a toggleable Module**, not a standalone admin screen. It lives
+  as a row in the `modules` registry (`module_key='google_drive'`), is a *system*
+  module (delete is blocked server-side), and its config page is reached via the
+  module's "Настройки" button — it is intentionally absent from the sidebar.
+  `GET /google-drive/status` returns `enabled`; `isGoogleDriveModuleEnabled()`
+  defaults to **true when the row is missing** (graceful in a fresh deploy where the
+  data row hasn't been seeded). Disabling is therefore always explicit.
+- **Module-off is a hard write boundary, not a read boundary.** When the module is
+  off, new/changed `gdrive` values are rejected on the records write path and the
+  upload endpoint returns 403, but an *unchanged* previously-stored `gdrive` value
+  (same `fileId`) must pass validation so unrelated edits to the same record still
+  succeed and existing Drive files stay readable. The records update path
+  re-validates the whole merged row, so this prev-value exemption is what prevents
+  module-off from blocking ordinary edits on records that already hold a gdrive file.
 
 ## Google Drive connection
 

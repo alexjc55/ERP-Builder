@@ -3042,6 +3042,12 @@
     "he": "אין מודולים עדיין"
   },
   {
+    "key": "modules.openSettings",
+    "ru": "Настройки",
+    "en": "Settings",
+    "he": "הגדרות"
+  },
+  {
     "key": "modules.col.name",
     "ru": "Название",
     "en": "Name",

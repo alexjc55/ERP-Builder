@@ -28,6 +28,7 @@ import {
 } from "@workspace/api-zod";
 import type { EntityField, InsertAuditLog, FileSource, FileFieldConfig } from "@workspace/db";
 import { buildRecordQuery, type RecordQuerySpec } from "./record-query";
+import { isGoogleDriveModuleEnabled } from "../lib/googleDrive";
 import {
   writeAudit,
   auditStr,
@@ -84,7 +85,7 @@ function allowedFileSources(field: EntityField): FileSource[] {
  * server/gdrive/link union and treats legacy (kind-less, path-bearing) values
  * as server. The value's source must be within the field's allowedSources.
  */
-function validateFileValue(field: EntityField, raw: unknown): Record<string, unknown> | string {
+function validateFileValue(field: EntityField, raw: unknown, gdriveModuleEnabled: boolean, prevValue?: unknown): Record<string, unknown> | string {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     return `Field "${field.fieldKey}" must be a file`;
   }
@@ -125,6 +126,20 @@ function validateFileValue(field: EntityField, raw: unknown): Record<string, unk
     if (typeof name !== "string" || name.trim() === "") {
       return `Field "${field.fieldKey}" file must have a name`;
     }
+    // Hard boundary: when the Google Drive module is off, no *new* gdrive value
+    // may be written. An unchanged previously-stored gdrive value (same fileId)
+    // is allowed through so existing values stay usable and unrelated edits to
+    // the same record still succeed.
+    if (!gdriveModuleEnabled) {
+      const prev =
+        prevValue && typeof prevValue === "object" && !Array.isArray(prevValue)
+          ? (prevValue as Record<string, unknown>)
+          : null;
+      const unchanged = prev?.kind === "gdrive" && prev.fileId === fileId.trim();
+      if (!unchanged) {
+        return `Field "${field.fieldKey}" does not allow this file source`;
+      }
+    }
     const out: Record<string, unknown> = { kind: "gdrive", fileId: fileId.trim(), name: name.trim() };
     if (typeof obj.contentType === "string" && obj.contentType.length > 0) out.contentType = obj.contentType;
     if (typeof obj.size === "number" && Number.isFinite(obj.size)) out.size = obj.size;
@@ -151,7 +166,7 @@ function validateFileValue(field: EntityField, raw: unknown): Record<string, unk
   return out;
 }
 
-function validateValues(fields: EntityField[], values: Record<string, unknown>): { values: Record<string, unknown> } | { error: string } {
+function validateValues(fields: EntityField[], values: Record<string, unknown>, gdriveModuleEnabled: boolean, prevValues: Record<string, unknown> = {}): { values: Record<string, unknown> } | { error: string } {
   const fieldByKey = new Map(fields.map((f) => [f.fieldKey, f]));
 
   // Reject unknown keys (metadata-driven integrity: no junk columns).
@@ -245,7 +260,7 @@ function validateValues(fields: EntityField[], values: Record<string, unknown>):
         // Legacy values have no `kind` but a server `path` and are treated as
         // server. The chosen source must be permitted by the field config
         // (allowedSources); empty/unset config means server-only (legacy).
-        const cleanedFile = validateFileValue(field, raw);
+        const cleanedFile = validateFileValue(field, raw, gdriveModuleEnabled, prevValues[field.fieldKey]);
         if (typeof cleanedFile === "string") {
           return { error: cleanedFile };
         }
@@ -596,7 +611,8 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
   for (const f of fields) {
     if (editable.has(f.fieldKey) && f.fieldKey in rawValues) incoming[f.fieldKey] = rawValues[f.fieldKey];
   }
-  const result = validateValues(fields, incoming);
+  const gdriveModuleEnabled = await isGoogleDriveModuleEnabled();
+  const result = validateValues(fields, incoming, gdriveModuleEnabled);
   if ("error" in result) {
     res.status(400).json({ error: result.error });
     return;
@@ -755,7 +771,8 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
         candidate[key] = existingValues[key];
       }
     }
-    const result = validateValues(fields, candidate);
+    const gdriveModuleEnabled = await isGoogleDriveModuleEnabled();
+    const result = validateValues(fields, candidate, gdriveModuleEnabled, existingValues);
     if ("error" in result) {
       res.status(400).json({ error: result.error });
       return;
@@ -820,7 +837,8 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
           if (a.type === "set_field") base[a.fieldKey] = a.value;
         }
         if (actions.length > 0) {
-          const result = validateValues(fields, base);
+          const gdriveModuleEnabled = await isGoogleDriveModuleEnabled();
+          const result = validateValues(fields, base, gdriveModuleEnabled, existingValues);
           if ("error" in result) {
             res.status(400).json({ error: result.error });
             return;

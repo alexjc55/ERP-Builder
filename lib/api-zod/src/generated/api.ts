@@ -2610,7 +2610,8 @@ export const GetDashboardStatsResponse = zod.object({
  */
 export const GetGoogleDriveStatusResponse = zod.object({
   "connected": zod.boolean().describe('A refresh token is stored.'),
-  "folderConfigured": zod.boolean().describe('An upload target folder is configured.')
+  "folderConfigured": zod.boolean().describe('An upload target folder is configured.'),
+  "enabled": zod.boolean().describe('The Google Drive module is toggled on in the modules registry.')
 })
 
 

@@ -1,6 +1,6 @@
 import { OAuth2Client } from "google-auth-library";
 import { eq } from "drizzle-orm";
-import { db, googleDriveConnectionTable, type GoogleDriveConnection } from "@workspace/db";
+import { db, googleDriveConnectionTable, modulesTable, type GoogleDriveConnection } from "@workspace/db";
 import { decryptSecret, encryptSecret } from "./crypto";
 
 /**
@@ -13,6 +13,23 @@ import { decryptSecret, encryptSecret } from "./crypto";
 export const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 export const DRIVE_CONNECTION_ID = 1;
 export const DRIVE_FOLDER_NAME = "ERP Uploads";
+
+/** Module-registry key for the Google Drive module (system, non-deletable). */
+export const GOOGLE_DRIVE_MODULE_KEY = "google_drive";
+
+/**
+ * Whether the Google Drive module is toggled on in the modules registry. This is
+ * the master switch: when off, the only file source is the normal server upload.
+ * A missing row (e.g. registry not yet seeded) is treated as enabled so the
+ * feature is never silently broken by deploy ordering — disabling is explicit.
+ */
+export async function isGoogleDriveModuleEnabled(): Promise<boolean> {
+  const [row] = await db
+    .select({ isEnabled: modulesTable.isEnabled })
+    .from(modulesTable)
+    .where(eq(modulesTable.moduleKey, GOOGLE_DRIVE_MODULE_KEY));
+  return row ? row.isEnabled : true;
+}
 
 export interface DriveClientCreds {
   clientId: string;

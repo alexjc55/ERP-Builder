@@ -10,6 +10,8 @@ export interface GoogleDriveStatus {
   connected: boolean;
   /** An upload target folder is configured. */
   folderConfigured: boolean;
+  /** The Google Drive module is toggled on in the modules registry. */
+  enabled: boolean;
 }
 
 export type GoogleDriveConnectionInfoKeyMode = typeof GoogleDriveConnectionInfoKeyMode[keyof typeof GoogleDriveConnectionInfoKeyMode];
