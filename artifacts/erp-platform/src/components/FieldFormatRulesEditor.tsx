@@ -72,6 +72,33 @@ export function FieldFormatRulesEditor({
     onChange([...rules, { operator: op, value: "", cellColor: "#fee2e2", rowColor: "" }]);
   };
 
+  const renderColorControl = (label: string, value: string, onColorChange: (v: string) => void) => (
+    <div className="flex items-center gap-1.5">
+      <span className="text-xs text-slate-500">{label}</span>
+      <input
+        type="color"
+        className="h-7 w-9 rounded border border-slate-200 bg-white p-0.5 cursor-pointer"
+        value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : "#ffffff"}
+        onChange={(e) => onColorChange(e.target.value)}
+      />
+      <Input
+        className="h-7 w-24 font-mono text-xs"
+        value={value}
+        onChange={(e) => {
+          const v = e.target.value.trim();
+          onColorChange(v === "" ? "" : v.startsWith("#") ? v : `#${v}`);
+        }}
+        placeholder="#RRGGBB"
+        spellCheck={false}
+      />
+      {value ? (
+        <button type="button" className="text-xs text-slate-400 hover:text-slate-600" onClick={() => onColorChange("")}>
+          ✕
+        </button>
+      ) : null}
+    </div>
+  );
+
   const renderValueInput = (rule: FieldFormatRule, idx: number) => {
     if (!needsValue(rule.operator)) return <div className="text-xs text-slate-400 self-center">—</div>;
     if (fieldType === "boolean") {
@@ -128,35 +155,9 @@ export function FieldFormatRulesEditor({
               </Select>
               {renderValueInput(rule, idx)}
             </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-slate-500">{t("fields.cellColor", "Ячейка")}</span>
-                <input
-                  type="color"
-                  className="h-7 w-9 rounded border border-slate-200 bg-white p-0.5"
-                  value={rule.cellColor || "#ffffff"}
-                  onChange={(e) => update(idx, { cellColor: e.target.value })}
-                />
-                {rule.cellColor ? (
-                  <button type="button" className="text-xs text-slate-400 hover:text-slate-600" onClick={() => update(idx, { cellColor: "" })}>
-                    ✕
-                  </button>
-                ) : null}
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-slate-500">{t("fields.rowColor", "Строка")}</span>
-                <input
-                  type="color"
-                  className="h-7 w-9 rounded border border-slate-200 bg-white p-0.5"
-                  value={rule.rowColor || "#ffffff"}
-                  onChange={(e) => update(idx, { rowColor: e.target.value })}
-                />
-                {rule.rowColor ? (
-                  <button type="button" className="text-xs text-slate-400 hover:text-slate-600" onClick={() => update(idx, { rowColor: "" })}>
-                    ✕
-                  </button>
-                ) : null}
-              </div>
+            <div className="flex items-center gap-3 flex-wrap">
+              {renderColorControl(t("fields.cellColor", "Ячейка"), rule.cellColor ?? "", (v) => update(idx, { cellColor: v }))}
+              {renderColorControl(t("fields.rowColor", "Строка"), rule.rowColor ?? "", (v) => update(idx, { rowColor: v }))}
               <Button
                 type="button"
                 variant="ghost"
