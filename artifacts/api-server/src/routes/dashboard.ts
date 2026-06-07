@@ -78,6 +78,7 @@ interface ChartSpec {
   aggregation: "count" | "sum";
   fieldKey?: string | null;
   statusIds?: number[] | null;
+  showValues?: boolean | null;
 }
 
 interface TableSpec {
@@ -582,6 +583,7 @@ router.get("/pages/:id/dashboard/data", requireAuth, async (req, res): Promise<v
           ...base,
           widgetType: "chart" as const,
           chartType: config.chart.type,
+          showValues: config.chart.showValues ?? false,
           series,
           formula: null,
           format: config.format ?? null,

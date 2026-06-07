@@ -48,6 +48,7 @@ import {
   Tooltip,
   Legend,
   CartesianGrid,
+  LabelList,
 } from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -191,11 +192,13 @@ function WidgetChart({
   chartType,
   series,
   color,
+  showValues = false,
   t,
 }: {
   chartType: string;
   series: ChartSeriesPoint[];
   color: string;
+  showValues?: boolean;
   t: (key: string, fallback: string) => string;
 }) {
   const hex = TAILWIND_HEX[color] ?? "#2563eb";
@@ -219,6 +222,7 @@ function WidgetChart({
             cy="50%"
             outerRadius="80%"
             innerRadius={chartType === "donut" ? "55%" : 0}
+            label={showValues ? { fontSize: 11, fill: "#334155" } : undefined}
           >
             {series.map((p, i) => (
               <Cell key={i} fill={p.color ?? CHART_PALETTE[i % CHART_PALETTE.length]} />
@@ -239,7 +243,9 @@ function WidgetChart({
           <XAxis dataKey="label" tick={{ fontSize: 11 }} />
           <YAxis tick={{ fontSize: 11 }} />
           <Tooltip />
-          <Line type="monotone" dataKey="value" stroke={hex} strokeWidth={2} dot={false} />
+          <Line type="monotone" dataKey="value" stroke={hex} strokeWidth={2} dot={showValues}>
+            {showValues && <LabelList dataKey="value" position="top" style={{ fontSize: 11, fill: "#334155" }} />}
+          </Line>
         </LineChart>
       </ResponsiveContainer>
     );
@@ -253,7 +259,9 @@ function WidgetChart({
           <XAxis dataKey="label" tick={{ fontSize: 11 }} />
           <YAxis tick={{ fontSize: 11 }} />
           <Tooltip />
-          <Area type="monotone" dataKey="value" stroke={hex} fill={hex} fillOpacity={0.2} strokeWidth={2} />
+          <Area type="monotone" dataKey="value" stroke={hex} fill={hex} fillOpacity={0.2} strokeWidth={2}>
+            {showValues && <LabelList dataKey="value" position="top" style={{ fontSize: 11, fill: "#334155" }} />}
+          </Area>
         </AreaChart>
       </ResponsiveContainer>
     );
@@ -268,6 +276,7 @@ function WidgetChart({
         <YAxis tick={{ fontSize: 11 }} />
         <Tooltip />
         <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+          {showValues && <LabelList dataKey="value" position="top" style={{ fontSize: 11, fill: "#334155" }} />}
           {series.map((p, i) => (
             <Cell key={i} fill={p.color ?? hex} />
           ))}
@@ -363,7 +372,7 @@ function WidgetCard({ w, ml, currencySymbol, t }: { w: DashboardWidgetData; ml: 
         <CardContent className="flex h-full flex-col p-4">
           <p className="text-sm font-medium text-slate-500 truncate">{ml(w.titleJson)}</p>
           <div className="flex-1 min-h-0 mt-2">
-            <WidgetChart chartType={w.chartType ?? "bar"} series={w.series ?? []} color={w.color} t={t} />
+            <WidgetChart chartType={w.chartType ?? "bar"} series={w.series ?? []} color={w.color} showValues={w.showValues ?? false} t={t} />
           </div>
         </CardContent>
       </Card>
@@ -710,6 +719,7 @@ type ChartDraft = {
   aggregation: ChartConfigAggregation;
   fieldKey: string | null;
   statusIds: number[];
+  showValues: boolean;
 };
 
 type TableDraft = {
@@ -786,6 +796,7 @@ function WidgetEditorDialog({
       aggregation: c?.aggregation ?? "count",
       fieldKey: c?.fieldKey ?? null,
       statusIds: c?.statusIds ?? [],
+      showValues: c?.showValues ?? false,
     };
   });
   const [table, setTable] = useState<TableDraft>(() => {
@@ -849,6 +860,7 @@ function WidgetEditorDialog({
             aggregation: chart.aggregation,
             fieldKey: chart.aggregation === "sum" ? chart.fieldKey : null,
             statusIds: chart.statusIds.length > 0 ? chart.statusIds : null,
+            showValues: chart.showValues,
           },
         },
       };
@@ -1091,7 +1103,7 @@ function ChartEditor({
               }`}
             >
               <div className="pointer-events-none h-12 w-full">
-                <WidgetChart chartType={opt.value} series={SAMPLE_CHART_SERIES} color={DEFAULT_COLOR} t={t} />
+                <WidgetChart chartType={opt.value} series={SAMPLE_CHART_SERIES} color={DEFAULT_COLOR} showValues={chart.showValues} t={t} />
               </div>
               <span className="text-center text-[10px] leading-tight text-slate-500">{t(opt.labelKey, opt.fallback)}</span>
             </button>
@@ -1201,6 +1213,11 @@ function ChartEditor({
           </div>
         </div>
       )}
+
+      <label className="flex items-center gap-2 text-sm pt-1">
+        <Checkbox checked={chart.showValues} onCheckedChange={(v) => onChange({ showValues: v === true })} />
+        {t("dash.showValues", "Показывать значения на графике")}
+      </label>
     </div>
   );
 }

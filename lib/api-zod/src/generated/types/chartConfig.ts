@@ -24,4 +24,9 @@ export interface ChartConfig {
      * @nullable
      */
   statusIds?: number[] | null;
+  /**
+     * When true, render numeric value labels directly on the chart; when false/null, values show only on hover
+     * @nullable
+     */
+  showValues?: boolean | null;
 }

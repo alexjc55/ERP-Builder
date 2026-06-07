@@ -24,6 +24,11 @@ export interface DashboardWidgetData {
   widgetType?: DashboardWidgetDataWidgetType;
   /** @nullable */
   chartType?: string | null;
+  /**
+     * When true, the chart widget renders numeric value labels directly on the chart
+     * @nullable
+     */
+  showValues?: boolean | null;
   /** Grouped buckets for chart widgets (admin-authoritative real totals) */
   series?: ChartSeriesPoint[];
   /** Column metadata for table widgets, in display order */

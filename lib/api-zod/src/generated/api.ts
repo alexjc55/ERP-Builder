@@ -1198,7 +1198,8 @@ export const ListDashboardWidgetsResponseItem = zod.object({
 }),
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
-  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "showValues": zod.boolean().nullish().describe('When true, render numeric value labels directly on the chart; when false\/null, values show only on hover')
 }).optional(),
   "table": zod.object({
   "entityId": zod.number(),
@@ -1252,7 +1253,8 @@ export const CreateDashboardWidgetBody = zod.object({
 }),
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
-  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "showValues": zod.boolean().nullish().describe('When true, render numeric value labels directly on the chart; when false\/null, values show only on hover')
 }).optional(),
   "table": zod.object({
   "entityId": zod.number(),
@@ -1297,7 +1299,8 @@ export const CreateDashboardWidgetResponse = zod.object({
 }),
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
-  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "showValues": zod.boolean().nullish().describe('When true, render numeric value labels directly on the chart; when false\/null, values show only on hover')
 }).optional(),
   "table": zod.object({
   "entityId": zod.number(),
@@ -1338,6 +1341,7 @@ export const GetDashboardDataResponseItem = zod.object({
   "sortOrder": zod.number(),
   "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal(null)]).nullish(),
   "chartType": zod.string().nullish(),
+  "showValues": zod.boolean().nullish().describe('When true, the chart widget renders numeric value labels directly on the chart'),
   "series": zod.array(zod.object({
   "label": zod.string(),
   "value": zod.number(),
@@ -1392,7 +1396,8 @@ export const UpdateDashboardWidgetBody = zod.object({
 }),
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
-  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "showValues": zod.boolean().nullish().describe('When true, render numeric value labels directly on the chart; when false\/null, values show only on hover')
 }).optional(),
   "table": zod.object({
   "entityId": zod.number(),
@@ -1437,7 +1442,8 @@ export const UpdateDashboardWidgetResponse = zod.object({
 }),
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
-  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "showValues": zod.boolean().nullish().describe('When true, render numeric value labels directly on the chart; when false\/null, values show only on hover')
 }).optional(),
   "table": zod.object({
   "entityId": zod.number(),

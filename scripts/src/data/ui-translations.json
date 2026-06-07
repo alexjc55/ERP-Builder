@@ -4440,6 +4440,12 @@
     "he": "תרשים"
   },
   {
+    "key": "dash.showValues",
+    "ru": "Показывать значения на графике",
+    "en": "Show values on the chart",
+    "he": "הצג ערכים על התרשים"
+  },
+  {
     "key": "dash.typeTable",
     "ru": "Таблица",
     "en": "Table",

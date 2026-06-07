@@ -3186,6 +3186,9 @@ components:
           items:
             type: integer
           description: Restrict to records in these statuses; empty/null = all statuses
+        showValues:
+          type: ["boolean", "null"]
+          description: When true, render numeric value labels directly on the chart; when false/null, values show only on hover
 
     TableConfig:
       type: object
@@ -3341,6 +3344,9 @@ components:
           enum: [metric, chart, table, null]
         chartType:
           type: ["string", "null"]
+        showValues:
+          type: ["boolean", "null"]
+          description: When true, the chart widget renders numeric value labels directly on the chart
         series:
           type: array
           items:
