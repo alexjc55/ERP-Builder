@@ -2586,7 +2586,7 @@ export const queryEntityRecordsBodyPageSizeMax = 200;
 export const QueryEntityRecordsBody = zod.object({
   "filters": zod.array(zod.object({
   "field": zod.string(),
-  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in']),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
   "value": zod.unknown().optional()
 })).optional(),
   "filterConjunction": zod.enum(['and', 'or']).default(queryEntityRecordsBodyFilterConjunctionDefault),
@@ -2631,7 +2631,7 @@ export const GetEntityFilterValuesBody = zod.object({
   "field": zod.string(),
   "filters": zod.array(zod.object({
   "field": zod.string(),
-  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in']),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
   "value": zod.unknown().optional()
 })).optional(),
   "filterConjunction": zod.enum(['and', 'or']).default(getEntityFilterValuesBodyFilterConjunctionDefault),
@@ -2859,7 +2859,7 @@ export const ListEntityViewsResponseItem = zod.object({
   "configJson": zod.object({
   "filters": zod.array(zod.object({
   "field": zod.string(),
-  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in']),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
   "value": zod.unknown().optional()
 })).optional(),
   "filterConjunction": zod.enum(['and', 'or']).default(listEntityViewsResponseConfigJsonFilterConjunctionDefault),
@@ -2901,7 +2901,7 @@ export const CreateEntityViewBody = zod.object({
   "configJson": zod.object({
   "filters": zod.array(zod.object({
   "field": zod.string(),
-  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in']),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
   "value": zod.unknown().optional()
 })).optional(),
   "filterConjunction": zod.enum(['and', 'or']).default(createEntityViewBodyConfigJsonFilterConjunctionDefault),
@@ -2940,7 +2940,7 @@ export const GetViewResponse = zod.object({
   "configJson": zod.object({
   "filters": zod.array(zod.object({
   "field": zod.string(),
-  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in']),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
   "value": zod.unknown().optional()
 })).optional(),
   "filterConjunction": zod.enum(['and', 'or']).default(getViewResponseConfigJsonFilterConjunctionDefault),
@@ -2979,7 +2979,7 @@ export const UpdateViewBody = zod.object({
   "configJson": zod.object({
   "filters": zod.array(zod.object({
   "field": zod.string(),
-  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in']),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
   "value": zod.unknown().optional()
 })).optional(),
   "filterConjunction": zod.enum(['and', 'or']).default(updateViewBodyConfigJsonFilterConjunctionDefault),
@@ -3010,7 +3010,7 @@ export const UpdateViewResponse = zod.object({
   "configJson": zod.object({
   "filters": zod.array(zod.object({
   "field": zod.string(),
-  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in']),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
   "value": zod.unknown().optional()
 })).optional(),
   "filterConjunction": zod.enum(['and', 'or']).default(updateViewResponseConfigJsonFilterConjunctionDefault),

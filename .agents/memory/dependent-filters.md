@@ -30,6 +30,21 @@ current pick (which would make it impossible to widen a selection).
 the option fetch used AND while the table used OR, the dropdowns would offer values inconsistent with
 the displayed rows.
 
+## Date/datetime fields filter via a calendar + a single `between` condition
+A filterable date/datetime field renders a calendar popover (single day or range) plus presets
+(today / 7d / 30d / this month / last month / this year / max=clear), NOT the distinct-value
+dropdown. The picked range is sent as ONE `between` filter condition with `value=[from, toExclusive]`
+(half-open `[from, day-after-to)`), never as two `gte`+`lt` conditions.
+**Why one condition, not two:** ad-hoc filters are flattened into the records query under the
+view's `filterConjunction`. Two separate `gte`/`lt` conditions would be OR-combined under an
+OR-configured view (matching nearly everything). A `between` condition is internally AND, so it
+stays correct under any conjunction. The server's `buildCondition` implements `between` type-aware
+(timestamptz for dates, numeric for numbers, text otherwise).
+**How to apply:** any "range" filter (date or numeric) should be a single internally-AND operator,
+not a pair of conditions, because the surrounding conjunction is not guaranteed to be AND. Active
+date filters must also be fed into `getEntityFilterValues` (self-excluding the target field) so the
+dependent dropdowns narrow by the date range too.
+
 ## SELECT DISTINCT + ORDER BY gotcha (the bug that cost the most here)
 Building the distinct query as
 `db.selectDistinct({ v: valueExpr }).orderBy(asc(valueExpr))` FAILS at runtime in Postgres.

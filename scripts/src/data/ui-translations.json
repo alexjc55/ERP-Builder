@@ -3030,6 +3030,48 @@
     "he": "סטטוס"
   },
   {
+    "key": "records.dateFilterToday",
+    "ru": "Сегодня",
+    "en": "Today",
+    "he": "היום"
+  },
+  {
+    "key": "records.dateFilter7days",
+    "ru": "7 дней",
+    "en": "7 days",
+    "he": "7 ימים"
+  },
+  {
+    "key": "records.dateFilter30days",
+    "ru": "30 дней",
+    "en": "30 days",
+    "he": "30 ימים"
+  },
+  {
+    "key": "records.dateFilterThisMonth",
+    "ru": "Этот месяц",
+    "en": "This month",
+    "he": "החודש"
+  },
+  {
+    "key": "records.dateFilterLastMonth",
+    "ru": "Прошлый месяц",
+    "en": "Last month",
+    "he": "החודש שעבר"
+  },
+  {
+    "key": "records.dateFilterThisYear",
+    "ru": "Этот год",
+    "en": "This year",
+    "he": "השנה"
+  },
+  {
+    "key": "records.dateFilterMax",
+    "ru": "Максимум",
+    "en": "All time",
+    "he": "כל הזמן"
+  },
+  {
     "key": "records.actions",
     "ru": "Действия",
     "en": "Actions",

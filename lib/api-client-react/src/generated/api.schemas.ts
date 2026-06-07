@@ -1211,6 +1211,7 @@ export const FilterOperator = {
   is_empty: 'is_empty',
   is_not_empty: 'is_not_empty',
   in: 'in',
+  between: 'between',
 } as const;
 
 export interface FilterCondition {

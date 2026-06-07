@@ -110,8 +110,21 @@ import { PageFieldConfigDialog } from "@/components/PageFieldConfigDialog";
 import { formatFormulaResult, evaluateFormula } from "@/lib/formula";
 import { computeRowFormatting, type FormatField } from "@/lib/formatRules";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon } from "lucide-react";
 import { Link } from "wouter";
+import { Calendar } from "@/components/ui/calendar";
+import type { DateRange } from "react-day-picker";
+import {
+  format as formatDate,
+  parseISO,
+  addDays,
+  subDays,
+  startOfMonth,
+  endOfMonth,
+  subMonths,
+  startOfYear,
+  endOfYear,
+} from "date-fns";
 
 const NO_STATUS = "__none__";
 const NO_VIEW = "__all__";
@@ -434,6 +447,143 @@ function FieldFilterPopover({
   );
 }
 
+/** Inclusive day-string range stored per date field: { from, to } as "yyyy-MM-dd". */
+export interface DateRangeFilter {
+  from: string;
+  to: string;
+}
+
+const DAY_FMT = "yyyy-MM-dd";
+
+/** Filter popover for date/datetime fields: a range calendar plus quick presets. */
+function DateFilterPopover({
+  field,
+  value,
+  onChange,
+  ml,
+  t,
+}: {
+  field: Field;
+  value: DateRangeFilter | undefined;
+  onChange: (value: DateRangeFilter | undefined) => void;
+  ml: (v: unknown) => string;
+  t: (key: string, def: string) => string;
+}) {
+  const [open, setOpen] = useState(false);
+  // Local in-progress range so the user can build a range across two calendar clicks before it
+  // commits to the parent (and triggers a query). Synced from the committed value on open.
+  const [draft, setDraft] = useState<DateRange | undefined>(undefined);
+
+  useEffect(() => {
+    if (open) {
+      setDraft(value ? { from: parseISO(value.from), to: parseISO(value.to) } : undefined);
+    }
+  }, [open, value]);
+
+  const commit = (from: Date, to: Date) => {
+    setDraft({ from, to });
+    onChange({ from: formatDate(from, DAY_FMT), to: formatDate(to, DAY_FMT) });
+  };
+
+  const clear = () => {
+    setDraft(undefined);
+    onChange(undefined);
+  };
+
+  const onSelect = (range: DateRange | undefined) => {
+    setDraft(range);
+    // Only commit (and run the query) once both ends are picked — clicking the same day twice
+    // yields from===to (a single-day filter).
+    if (range?.from && range?.to) {
+      onChange({ from: formatDate(range.from, DAY_FMT), to: formatDate(range.to, DAY_FMT) });
+    }
+  };
+
+  const presets: { label: string; run: () => void }[] = (() => {
+    const today = new Date();
+    return [
+      { label: t("records.dateFilterToday", "Сегодня"), run: () => commit(today, today) },
+      { label: t("records.dateFilter7days", "7 дней"), run: () => commit(subDays(today, 6), today) },
+      { label: t("records.dateFilter30days", "30 дней"), run: () => commit(subDays(today, 29), today) },
+      { label: t("records.dateFilterThisMonth", "Этот месяц"), run: () => commit(startOfMonth(today), endOfMonth(today)) },
+      {
+        label: t("records.dateFilterLastMonth", "Прошлый месяц"),
+        run: () => {
+          const prev = subMonths(today, 1);
+          commit(startOfMonth(prev), endOfMonth(prev));
+        },
+      },
+      { label: t("records.dateFilterThisYear", "Этот год"), run: () => commit(startOfYear(today), endOfYear(today)) },
+      { label: t("records.dateFilterMax", "Максимум"), run: clear },
+    ];
+  })();
+
+  const buttonLabel = (() => {
+    if (!value) return null;
+    const from = formatDate(parseISO(value.from), "dd.MM.yyyy");
+    if (value.from === value.to) return from;
+    return `${from} – ${formatDate(parseISO(value.to), "dd.MM.yyyy")}`;
+  })();
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={`h-9 gap-1.5 text-sm ${value ? "border-blue-400 text-blue-700" : ""}`}
+        >
+          <CalendarIcon className="w-3.5 h-3.5 opacity-70" />
+          {ml(field.nameJson)}
+          {buttonLabel && (
+            <Badge variant="secondary" className="ml-0.5 px-1.5 font-normal">{buttonLabel}</Badge>
+          )}
+          <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-auto p-0">
+        <div className="flex flex-col sm:flex-row">
+          <div className="flex flex-col gap-1 border-b border-slate-100 p-2 sm:border-b-0 sm:border-r">
+            {presets.map((p) => (
+              <Button
+                key={p.label}
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 justify-start text-sm font-normal"
+                onClick={p.run}
+              >
+                {p.label}
+              </Button>
+            ))}
+          </div>
+          <Calendar
+            mode="range"
+            numberOfMonths={1}
+            defaultMonth={draft?.from}
+            selected={draft}
+            onSelect={onSelect}
+          />
+        </div>
+        {value && (
+          <div className="border-t border-slate-100 p-1.5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 w-full text-xs text-slate-500"
+              onClick={clear}
+            >
+              {t("records.filterClearField", "Очистить")}
+            </Button>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function EntityRecords({
   entityId,
   visibleFieldKeys,
@@ -597,6 +747,7 @@ export function EntityRecords({
   const [archived, setArchived] = useState<ArchiveFilter>("active");
   const [statusFilter, setStatusFilter] = useState<number[]>([]);
   const [fieldFilters, setFieldFilters] = useState<Record<string, string[]>>({});
+  const [dateFilters, setDateFilters] = useState<Record<string, DateRangeFilter>>({});
   const [page, setPage] = useState(1);
   const [records, setRecords] = useState<EntityRecord[]>([]);
   const [total, setTotal] = useState(0);
@@ -616,6 +767,7 @@ export function EntityRecords({
     setArchived("active");
     setStatusFilter([]);
     setFieldFilters({});
+    setDateFilters({});
     setPage(1);
     setViewInitialized(false);
   }, [entityId]);
@@ -646,9 +798,24 @@ export function EntityRecords({
   const adHocKey = JSON.stringify(adHocFilters);
   const statusKey = JSON.stringify(statusFilter);
 
+  // Date-field filters become a single half-open `between` interval: [from, day AFTER to).
+  // Using one condition (internally AND) keeps the range correct regardless of the view's
+  // filterConjunction. The server casts both the stored value and the bounds to timestamptz in
+  // the same session tz, so day-level comparison stays consistent for date and datetime fields.
+  const dateFilterConditions = useMemo(
+    () =>
+      Object.entries(dateFilters).map(([field, range]) => ({
+        field,
+        operator: "between" as const,
+        value: [range.from, formatDate(addDays(parseISO(range.to), 1), DAY_FMT)],
+      })),
+    [dateFilters],
+  );
+  const dateKey = JSON.stringify(dateFilters);
+
   const recordQuery: RecordQuery = useMemo(
     () => ({
-      filters: [...(selectedConfig.filters ?? []), ...adHocFilters],
+      filters: [...(selectedConfig.filters ?? []), ...adHocFilters, ...dateFilterConditions],
       filterConjunction: selectedConfig.filterConjunction ?? "and",
       statusIds: statusFilter.length > 0 ? statusFilter : undefined,
       sorts: selectedConfig.sorts ?? [],
@@ -658,7 +825,7 @@ export function EntityRecords({
       pageSize: PAGE_SIZE,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedConfig.filters, selectedConfig.filterConjunction, selectedConfig.sorts, adHocKey, statusKey, search, archived, page],
+    [selectedConfig.filters, selectedConfig.filterConjunction, selectedConfig.sorts, adHocKey, dateKey, statusKey, search, archived, page],
   );
 
   // Dependent filters: when fetching the option list for a field, we run a query against the
@@ -668,12 +835,15 @@ export function EntityRecords({
   const fetchFilterOptions = filterValuesMutation.mutateAsync;
   const getFilterOptions = useCallback(
     async (fieldKey: string): Promise<string[]> => {
+      // Self-exclude the target field from BOTH the value filters and the date filters so the
+      // option list reflects what the OTHER active filters (incl. date ranges) narrow to.
       const others = adHocFilters.filter((c) => c.field !== fieldKey);
+      const dateOthers = dateFilterConditions.filter((c) => c.field !== fieldKey);
       const res = await fetchFilterOptions({
         entityId,
         data: {
           field: fieldKey,
-          filters: [...(selectedConfig.filters ?? []), ...others],
+          filters: [...(selectedConfig.filters ?? []), ...others, ...dateOthers],
           // Mirror the records query's conjunction so option lists stay consistent with the
           // rows actually shown (a view may be configured with OR logic).
           filterConjunction: selectedConfig.filterConjunction ?? "and",
@@ -685,7 +855,7 @@ export function EntityRecords({
       return res.values ?? [];
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [entityId, adHocKey, statusKey, search, archived, selectedConfig.filters, selectedConfig.filterConjunction, fetchFilterOptions],
+    [entityId, adHocKey, dateKey, statusKey, search, archived, selectedConfig.filters, selectedConfig.filterConjunction, fetchFilterOptions],
   );
 
   const setFieldFilter = useCallback((fieldKey: string, values: string[]) => {
@@ -698,14 +868,26 @@ export function EntityRecords({
     setPage(1);
   }, []);
 
+  const setDateFilter = useCallback((fieldKey: string, range: DateRangeFilter | undefined) => {
+    setDateFilters((prev) => {
+      const next = { ...prev };
+      if (!range) delete next[fieldKey];
+      else next[fieldKey] = range;
+      return next;
+    });
+    setPage(1);
+  }, []);
+
   const toggleStatus = useCallback((id: number) => {
     setStatusFilter((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
     setPage(1);
   }, []);
 
-  const hasActiveFilters = adHocFilters.length > 0 || statusFilter.length > 0;
+  const hasActiveFilters =
+    adHocFilters.length > 0 || statusFilter.length > 0 || Object.keys(dateFilters).length > 0;
   const resetFilters = useCallback(() => {
     setFieldFilters({});
+    setDateFilters({});
     setStatusFilter([]);
     setPage(1);
   }, []);
@@ -1212,18 +1394,29 @@ export function EntityRecords({
               </PopoverContent>
             </Popover>
           )}
-          {filterableFields.map((f: Field) => (
-            <FieldFilterPopover
-              key={f.id}
-              field={f}
-              selected={fieldFilters[f.fieldKey] ?? []}
-              onChange={(vals) => setFieldFilter(f.fieldKey, vals)}
-              getOptions={getFilterOptions}
-              ml={ml}
-              t={t}
-              userNames={userNames}
-            />
-          ))}
+          {filterableFields.map((f: Field) =>
+            f.fieldType === "date" || f.fieldType === "datetime" ? (
+              <DateFilterPopover
+                key={f.id}
+                field={f}
+                value={dateFilters[f.fieldKey]}
+                onChange={(range) => setDateFilter(f.fieldKey, range)}
+                ml={ml}
+                t={t}
+              />
+            ) : (
+              <FieldFilterPopover
+                key={f.id}
+                field={f}
+                selected={fieldFilters[f.fieldKey] ?? []}
+                onChange={(vals) => setFieldFilter(f.fieldKey, vals)}
+                getOptions={getFilterOptions}
+                ml={ml}
+                t={t}
+                userNames={userNames}
+              />
+            ),
+          )}
           {hasActiveFilters && (
             <Button
               type="button"

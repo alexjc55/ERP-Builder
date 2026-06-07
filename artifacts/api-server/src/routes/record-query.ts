@@ -15,7 +15,8 @@ export type FilterOperator =
   | "lte"
   | "is_empty"
   | "is_not_empty"
-  | "in";
+  | "in"
+  | "between";
 
 export interface FilterCondition {
   field: string;
@@ -64,6 +65,32 @@ function buildCondition(cond: FilterCondition, fieldType: string): { sql: SQL } 
     if (cond.value.length === 0) return { sql: sql`false` };
     const parts = cond.value.map((v) => sql`${String(v)}`);
     return { sql: sql`${expr} IN (${sql.join(parts, sql`, `)})` };
+  }
+
+  // Half-open range [from, to): a single condition that is internally AND, so it stays correct
+  // regardless of the surrounding filterConjunction (used by the date-range filter UI).
+  if (op === "between") {
+    if (!Array.isArray(cond.value) || cond.value.length !== 2) {
+      return { error: `Operator "between" requires a [from, to] array for field "${cond.field}"` };
+    }
+    const [from, to] = cond.value;
+    if (from === undefined || from === null || to === undefined || to === null) {
+      return { error: `Operator "between" requires both bounds for field "${cond.field}"` };
+    }
+    if (DATE_TYPES.has(fieldType)) {
+      const e = sql`(${expr})::timestamptz`;
+      return { sql: sql`(${e} >= ${String(from)}::timestamptz AND ${e} < ${String(to)}::timestamptz)` };
+    }
+    if (NUMERIC_TYPES.has(fieldType)) {
+      const lo = Number(from);
+      const hi = Number(to);
+      if (Number.isNaN(lo) || Number.isNaN(hi)) {
+        return { error: `Field "${cond.field}" expects numeric range bounds` };
+      }
+      const e = sql`(${expr})::numeric`;
+      return { sql: sql`(${e} >= ${lo} AND ${e} < ${hi})` };
+    }
+    return { sql: sql`(${expr} >= ${String(from)} AND ${expr} < ${String(to)})` };
   }
 
   const value = cond.value;

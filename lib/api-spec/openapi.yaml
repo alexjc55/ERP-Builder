@@ -4082,6 +4082,7 @@ components:
         - is_empty
         - is_not_empty
         - in
+        - between
 
     FilterCondition:
       type: object
