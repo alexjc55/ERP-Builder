@@ -6,7 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChartSeriesPoint } from './chartSeriesPoint';
+import type { DashboardWidgetDataColorStyle } from './dashboardWidgetDataColorStyle';
 import type { DashboardWidgetDataMetrics } from './dashboardWidgetDataMetrics';
+import type { DashboardWidgetDataTextColor } from './dashboardWidgetDataTextColor';
 import type { DashboardWidgetDataWidgetType } from './dashboardWidgetDataWidgetType';
 import type { MultilingualText } from './multilingualText';
 import type { TableColumn } from './tableColumn';
@@ -39,6 +41,10 @@ export interface DashboardWidgetData {
   formula?: string | null;
   /** @nullable */
   format?: string | null;
+  /** @nullable */
+  colorStyle?: DashboardWidgetDataColorStyle;
+  /** @nullable */
+  textColor?: DashboardWidgetDataTextColor;
   /** Computed value per metric key (admin-authoritative real totals) */
   metrics: DashboardWidgetDataMetrics;
 }

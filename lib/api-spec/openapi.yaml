@@ -3231,6 +3231,14 @@ components:
           $ref: "#/components/schemas/ChartConfig"
         table:
           $ref: "#/components/schemas/TableConfig"
+        colorStyle:
+          type: ["string", "null"]
+          enum: [icon, border, fill, null]
+          description: How the widget color is applied — icon box (default), card border, or full fill.
+        textColor:
+          type: ["string", "null"]
+          enum: [light, dark, null]
+          description: Font color when colorStyle is "fill" (light = white text, dark = dark text).
 
     DashboardWidget:
       type: object
@@ -3366,6 +3374,12 @@ components:
           type: ["string", "null"]
         format:
           type: ["string", "null"]
+        colorStyle:
+          type: ["string", "null"]
+          enum: [icon, border, fill, null]
+        textColor:
+          type: ["string", "null"]
+          enum: [light, dark, null]
         metrics:
           type: object
           additionalProperties:

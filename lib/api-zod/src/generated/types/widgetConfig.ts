@@ -7,7 +7,9 @@
  */
 import type { ChartConfig } from './chartConfig';
 import type { TableConfig } from './tableConfig';
+import type { WidgetConfigColorStyle } from './widgetConfigColorStyle';
 import type { WidgetConfigFormat } from './widgetConfigFormat';
+import type { WidgetConfigTextColor } from './widgetConfigTextColor';
 import type { WidgetConfigWidgetType } from './widgetConfigWidgetType';
 import type { WidgetMetric } from './widgetMetric';
 
@@ -27,4 +29,14 @@ export interface WidgetConfig {
   format?: WidgetConfigFormat;
   chart?: ChartConfig;
   table?: TableConfig;
+  /**
+     * How the widget color is applied — icon box (default), card border, or full fill.
+     * @nullable
+     */
+  colorStyle?: WidgetConfigColorStyle;
+  /**
+     * Font color when colorStyle is "fill" (light = white text, dark = dark text).
+     * @nullable
+     */
+  textColor?: WidgetConfigTextColor;
 }

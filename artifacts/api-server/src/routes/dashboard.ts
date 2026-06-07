@@ -95,6 +95,8 @@ interface WidgetConfigShape {
   format?: string | null;
   chart?: ChartSpec | null;
   table?: TableSpec | null;
+  colorStyle?: "icon" | "border" | "fill" | null;
+  textColor?: "light" | "dark" | null;
 }
 
 // Bounds for a table widget's row count (admin-supplied limit is clamped here).
@@ -573,6 +575,10 @@ router.get("/pages/:id/dashboard/data", requireAuth, async (req, res): Promise<v
         titleJson: w.titleJson,
         icon: w.icon,
         color: w.color,
+        // Coerce to the contract enums so the response stays valid even if a value
+        // was written directly to the DB outside the (Zod-validated) write path.
+        colorStyle: (["icon", "border", "fill"] as const).find((s) => s === config.colorStyle) ?? null,
+        textColor: (["light", "dark"] as const).find((c) => c === config.textColor) ?? null,
         gridW: w.gridW,
         gridH: w.gridH,
         sortOrder: w.sortOrder,

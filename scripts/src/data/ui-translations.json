@@ -4254,6 +4254,48 @@
     "he": "צבע"
   },
   {
+    "key": "dash.colorStyle",
+    "ru": "Применение цвета",
+    "en": "Color style",
+    "he": "סגנון צבע"
+  },
+  {
+    "key": "dash.colorStyleIcon",
+    "ru": "Иконка",
+    "en": "Icon",
+    "he": "סמל"
+  },
+  {
+    "key": "dash.colorStyleBorder",
+    "ru": "Обводка",
+    "en": "Border",
+    "he": "מסגרת"
+  },
+  {
+    "key": "dash.colorStyleFill",
+    "ru": "Заливка",
+    "en": "Fill",
+    "he": "מילוי"
+  },
+  {
+    "key": "dash.textColor",
+    "ru": "Цвет шрифта",
+    "en": "Text color",
+    "he": "צבע טקסט"
+  },
+  {
+    "key": "dash.textColorLight",
+    "ru": "Светлый",
+    "en": "Light",
+    "he": "בהיר"
+  },
+  {
+    "key": "dash.textColorDark",
+    "ru": "Тёмный",
+    "en": "Dark",
+    "he": "כהה"
+  },
+  {
     "key": "dash.metrics",
     "ru": "Метрики",
     "en": "Metrics",

@@ -688,6 +688,31 @@ export const WidgetConfigFormat = {
   percent: 'percent',
 } as const;
 
+/**
+ * How the widget color is applied — icon box (default), card border, or full fill.
+ * @nullable
+ */
+export type WidgetConfigColorStyle = typeof WidgetConfigColorStyle[keyof typeof WidgetConfigColorStyle] | null;
+
+
+export const WidgetConfigColorStyle = {
+  icon: 'icon',
+  border: 'border',
+  fill: 'fill',
+} as const;
+
+/**
+ * Font color when colorStyle is "fill" (light = white text, dark = dark text).
+ * @nullable
+ */
+export type WidgetConfigTextColor = typeof WidgetConfigTextColor[keyof typeof WidgetConfigTextColor] | null;
+
+
+export const WidgetConfigTextColor = {
+  light: 'light',
+  dark: 'dark',
+} as const;
+
 export interface WidgetConfig {
   /**
      * metric (default) = number cards; chart = graph; table = entity rows.
@@ -704,6 +729,16 @@ export interface WidgetConfig {
   format?: WidgetConfigFormat;
   chart?: ChartConfig;
   table?: TableConfig;
+  /**
+     * How the widget color is applied — icon box (default), card border, or full fill.
+     * @nullable
+     */
+  colorStyle?: WidgetConfigColorStyle;
+  /**
+     * Font color when colorStyle is "fill" (light = white text, dark = dark text).
+     * @nullable
+     */
+  textColor?: WidgetConfigTextColor;
 }
 
 export interface DashboardWidget {
@@ -771,6 +806,29 @@ export const DashboardWidgetDataWidgetType = {
 } as const;
 
 /**
+ * @nullable
+ */
+export type DashboardWidgetDataColorStyle = typeof DashboardWidgetDataColorStyle[keyof typeof DashboardWidgetDataColorStyle] | null;
+
+
+export const DashboardWidgetDataColorStyle = {
+  icon: 'icon',
+  border: 'border',
+  fill: 'fill',
+} as const;
+
+/**
+ * @nullable
+ */
+export type DashboardWidgetDataTextColor = typeof DashboardWidgetDataTextColor[keyof typeof DashboardWidgetDataTextColor] | null;
+
+
+export const DashboardWidgetDataTextColor = {
+  light: 'light',
+  dark: 'dark',
+} as const;
+
+/**
  * Computed value per metric key (admin-authoritative real totals)
  */
 export type DashboardWidgetDataMetrics = {[key: string]: number};
@@ -802,6 +860,10 @@ export interface DashboardWidgetData {
   formula?: string | null;
   /** @nullable */
   format?: string | null;
+  /** @nullable */
+  colorStyle?: DashboardWidgetDataColorStyle;
+  /** @nullable */
+  textColor?: DashboardWidgetDataTextColor;
   /** Computed value per metric key (admin-authoritative real totals) */
   metrics: DashboardWidgetDataMetrics;
 }

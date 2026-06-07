@@ -1206,7 +1206,9 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "fieldKeys": zod.array(zod.string()).describe('Field keys shown as table columns, in display order'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
-}).optional()
+}).optional(),
+  "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish().describe('How the widget color is applied — icon box (default), card border, or full fill.'),
+  "textColor": zod.union([zod.literal('light'),zod.literal('dark'),zod.literal(null)]).nullish().describe('Font color when colorStyle is \"fill\" (light = white text, dark = dark text).')
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
   "icon": zod.string(),
@@ -1261,7 +1263,9 @@ export const CreateDashboardWidgetBody = zod.object({
   "fieldKeys": zod.array(zod.string()).describe('Field keys shown as table columns, in display order'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
-}).optional()
+}).optional(),
+  "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish().describe('How the widget color is applied — icon box (default), card border, or full fill.'),
+  "textColor": zod.union([zod.literal('light'),zod.literal('dark'),zod.literal(null)]).nullish().describe('Font color when colorStyle is \"fill\" (light = white text, dark = dark text).')
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
   "icon": zod.string().optional(),
@@ -1307,7 +1311,9 @@ export const CreateDashboardWidgetResponse = zod.object({
   "fieldKeys": zod.array(zod.string()).describe('Field keys shown as table columns, in display order'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
-}).optional()
+}).optional(),
+  "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish().describe('How the widget color is applied — icon box (default), card border, or full fill.'),
+  "textColor": zod.union([zod.literal('light'),zod.literal('dark'),zod.literal(null)]).nullish().describe('Font color when colorStyle is \"fill\" (light = white text, dark = dark text).')
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
   "icon": zod.string(),
@@ -1358,6 +1364,8 @@ export const GetDashboardDataResponseItem = zod.object({
 })).optional().describe('Rows for table widgets (admin-authoritative, status-filtered, limited)'),
   "formula": zod.string().nullish(),
   "format": zod.string().nullish(),
+  "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish(),
+  "textColor": zod.union([zod.literal('light'),zod.literal('dark'),zod.literal(null)]).nullish(),
   "metrics": zod.record(zod.string(), zod.number()).describe('Computed value per metric key (admin-authoritative real totals)')
 })
 export const GetDashboardDataResponse = zod.array(GetDashboardDataResponseItem)
@@ -1404,7 +1412,9 @@ export const UpdateDashboardWidgetBody = zod.object({
   "fieldKeys": zod.array(zod.string()).describe('Field keys shown as table columns, in display order'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
-}).optional()
+}).optional(),
+  "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish().describe('How the widget color is applied — icon box (default), card border, or full fill.'),
+  "textColor": zod.union([zod.literal('light'),zod.literal('dark'),zod.literal(null)]).nullish().describe('Font color when colorStyle is \"fill\" (light = white text, dark = dark text).')
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
   "icon": zod.string().optional(),
@@ -1450,7 +1460,9 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "fieldKeys": zod.array(zod.string()).describe('Field keys shown as table columns, in display order'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
-}).optional()
+}).optional(),
+  "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish().describe('How the widget color is applied — icon box (default), card border, or full fill.'),
+  "textColor": zod.union([zod.literal('light'),zod.literal('dark'),zod.literal(null)]).nullish().describe('Font color when colorStyle is \"fill\" (light = white text, dark = dark text).')
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
   "icon": zod.string(),

@@ -49,6 +49,11 @@ Must be enforced on **every** path that can change page type, against the **effe
 - **Display code must treat empty icon as "no icon", never fall back to a default.** Use `w.icon ? getIconComponent(w.icon) : null` and conditionally render the icon box. **Why:** the old `w.icon || DEFAULT_ICON` fallback (in card renders AND the editor `useState` init) coerced a cleared icon back to the default, so users couldn't actually save a widget without an icon — it always "reappeared".
 - Editor init must distinguish create vs edit: new widget → `DEFAULT_ICON`; existing widget → `widget.icon ?? ""` (use `??`, not `||`, so a stored empty string is preserved). Server already persists `""` correctly (`body.icon != null` is true for empty string; column is notNull with a default only for omitted icons).
 
+## Widget color style (icon / border / fill)
+- A metric widget's `color` (a tailwind bg-* class) can be applied three ways via `config.colorStyle`: `icon` (default, tint icon box only), `border` (colored card border), `fill` (fill whole card + `config.textColor` light|dark for font color). Stored in the config JSONB — NOT new DB columns (no migration). Added to OpenAPI WidgetConfig + DashboardWidgetData; server threads them into the dashboard-data `base`, coercing to the enum on read (defends against direct-DB edits since the write path is Zod-validated).
+- **Tailwind purge trap:** border mode needs a `border-*` class per preset — these are kept as a literal `COLOR_BORDER` map (bg-class → border-class), never derived by string-replacing `bg-`→`border-`, or Tailwind's content scanner purges them. **Why:** dynamically-built class names aren't seen by the scanner.
+- colorStyle/textColor are metric-only in the UI (chart `color` means series color; fill would make a chart unreadable). textColor is a deliberate manual admin choice — do NOT auto-override it for contrast; the user asked to control font color themselves.
+
 ## How to apply
 - Adding a new metric aggregation type: extend the server aggregation helper AND `validateConfig`, and keep the regex-guarded cast for any numeric coercion.
 - Any new endpoint returning widget data must re-apply both authorization gates before computing values.

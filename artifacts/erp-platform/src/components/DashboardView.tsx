@@ -84,6 +84,7 @@ import {
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { IconPicker } from "@/components/IconPicker";
 import { getIconComponent } from "@/lib/icons";
+import { cn } from "@/lib/utils";
 import { evaluateFormula } from "@/lib/formula";
 import { useAuth } from "@/lib/auth";
 import { useML, useT } from "@/lib/i18n";
@@ -106,6 +107,22 @@ const COLOR_PRESETS = [
 
 const DEFAULT_COLOR = "bg-blue-600";
 const DEFAULT_ICON = "TrendingUp";
+
+/**
+ * Border class per preset bg class, used by the "border" color style. Kept as
+ * literal strings (not derived via string replace) so Tailwind's content scanner
+ * keeps them in the build instead of purging dynamically-built class names.
+ */
+const COLOR_BORDER: Record<string, string> = {
+  "bg-blue-600": "border-blue-600",
+  "bg-violet-600": "border-violet-600",
+  "bg-emerald-600": "border-emerald-600",
+  "bg-amber-500": "border-amber-500",
+  "bg-red-500": "border-red-500",
+  "bg-cyan-600": "border-cyan-600",
+  "bg-pink-600": "border-pink-600",
+  "bg-slate-600": "border-slate-600",
+};
 
 const GRID_COLS = 4;
 const GRID_ROWS_MAX = 4;
@@ -381,17 +398,37 @@ function WidgetCard({ w, ml, currencySymbol, t }: { w: DashboardWidgetData; ml: 
 
   const Icon = w.icon ? getIconComponent(w.icon, LayoutDashboard) : null;
   const value = resolveValue(w);
+  const colorClass = w.color || DEFAULT_COLOR;
+  const colorStyle = w.colorStyle ?? "icon";
+  const isFill = colorStyle === "fill";
+  const isBorder = colorStyle === "border";
+  const fillDark = (w.textColor ?? "light") === "dark";
+  const fillText = fillDark ? "text-slate-900" : "text-white";
   return (
-    <Card className="h-full border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+    <Card
+      className={cn(
+        "h-full shadow-sm hover:shadow-md transition-shadow",
+        isFill
+          ? `${colorClass} border-transparent`
+          : isBorder
+            ? `bg-white border-2 ${COLOR_BORDER[colorClass] ?? "border-blue-600"}`
+            : "border-slate-200",
+      )}
+    >
       <CardContent className="flex h-full items-center p-6">
         <div className="flex w-full items-center justify-between">
           <div className="min-w-0">
-            <p className="text-sm font-medium text-slate-500 truncate">{ml(w.titleJson)}</p>
-            <p className="text-3xl font-bold text-slate-800 mt-1">{formatValue(value, w.format, currencySymbol)}</p>
+            <p className={cn("text-sm font-medium truncate", isFill ? `${fillText} opacity-90` : "text-slate-500")}>{ml(w.titleJson)}</p>
+            <p className={cn("text-3xl font-bold mt-1", isFill ? fillText : "text-slate-800")}>{formatValue(value, w.format, currencySymbol)}</p>
           </div>
           {Icon && (
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${w.color || DEFAULT_COLOR}`}>
-              <Icon className="w-6 h-6 text-white" />
+            <div
+              className={cn(
+                "w-12 h-12 rounded-xl flex items-center justify-center shrink-0",
+                isFill ? (fillDark ? "bg-black/10" : "bg-white/20") : colorClass,
+              )}
+            >
+              <Icon className={cn("w-6 h-6", isFill ? fillText : "text-white")} />
             </div>
           )}
         </div>
@@ -773,6 +810,8 @@ function WidgetEditorDialog({
   );
   const [icon, setIcon] = useState(widget ? (widget.icon ?? "") : DEFAULT_ICON);
   const [color, setColor] = useState(widget?.color || DEFAULT_COLOR);
+  const [colorStyle, setColorStyle] = useState<"icon" | "border" | "fill">(widget?.config.colorStyle ?? "icon");
+  const [textColor, setTextColor] = useState<"light" | "dark">(widget?.config.textColor ?? "light");
   const [format, setFormat] = useState<string>(widget?.config.format || "number");
   const [formula, setFormula] = useState(widget?.config.formula || "");
   const [restrictRoles, setRestrictRoles] = useState<boolean>(
@@ -853,6 +892,8 @@ function WidgetEditorDialog({
         ...base,
         config: {
           widgetType: "chart",
+          colorStyle,
+          textColor,
           format: format as WidgetConfigFormat,
           chart: {
             type: chart.type,
@@ -883,6 +924,8 @@ function WidgetEditorDialog({
         ...base,
         config: {
           widgetType: "table",
+          colorStyle,
+          textColor,
           table: {
             entityId: table.entityId,
             fieldKeys: table.fieldKeys,
@@ -917,6 +960,8 @@ function WidgetEditorDialog({
       ...base,
       config: {
         widgetType: "metric",
+        colorStyle,
+        textColor,
         metrics: metrics.map<WidgetMetric>((m) => ({
           key: m.key,
           entityId: m.entityId as number,
@@ -990,6 +1035,58 @@ function WidgetEditorDialog({
               ))}
             </div>
           </div>
+
+          {widgetType === "metric" && (
+            <div className="space-y-1.5">
+              <Label>{t("dash.colorStyle", "Применение цвета")}</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  ["icon", t("dash.colorStyleIcon", "Иконка")],
+                  ["border", t("dash.colorStyleBorder", "Обводка")],
+                  ["fill", t("dash.colorStyleFill", "Заливка")],
+                ] as const).map(([val, label]) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setColorStyle(val)}
+                    className={cn(
+                      "rounded-md border px-2 py-1.5 text-sm transition-colors",
+                      colorStyle === val
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-slate-200 text-slate-600 hover:bg-slate-50",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {colorStyle === "fill" && (
+                <div className="pt-1">
+                  <Label className="text-xs text-slate-500">{t("dash.textColor", "Цвет шрифта")}</Label>
+                  <div className="mt-1 grid grid-cols-2 gap-2">
+                    {([
+                      ["light", t("dash.textColorLight", "Светлый")],
+                      ["dark", t("dash.textColorDark", "Тёмный")],
+                    ] as const).map(([val, label]) => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => setTextColor(val)}
+                        className={cn(
+                          "rounded-md border px-2 py-1.5 text-sm transition-colors",
+                          textColor === val
+                            ? "border-blue-500 bg-blue-50 text-blue-700"
+                            : "border-slate-200 text-slate-600 hover:bg-slate-50",
+                        )}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {widgetType === "chart" ? (
             <ChartEditor chart={chart} entities={entities} onChange={(patch) => setChart((prev) => ({ ...prev, ...patch }))} ml={ml} t={t} />
