@@ -348,6 +348,36 @@
     "he": "פעיל (גלוי בתפריט)"
   },
   {
+    "key": "pages.mirrorEntity",
+    "ru": "Связанная сущность (живые данные)",
+    "en": "Linked entity (live data)",
+    "he": "ישות מקושרת (נתונים חיים)"
+  },
+  {
+    "key": "pages.mirrorNone",
+    "ru": "— Обычная страница —",
+    "en": "— Regular page —",
+    "he": "— דף רגיל —"
+  },
+  {
+    "key": "pages.mirrorHint",
+    "ru": "Страница покажет живые записи выбранной сущности. Изменения двусторонние; видимость строк и полей определяется правами роли.",
+    "en": "The page will show the live records of the selected entity. Edits flow both ways; row and field visibility is governed by the role's permissions.",
+    "he": "הדף יציג את הרשומות החיות של הישות שנבחרה. עריכות זורמות לשני הכיוונים; נראות שורות ושדות נקבעת לפי הרשאות התפקיד."
+  },
+  {
+    "key": "pages.mirrorFields",
+    "ru": "Какие поля показать (пусто = все)",
+    "en": "Which fields to show (empty = all)",
+    "he": "אילו שדות להציג (ריק = הכול)"
+  },
+  {
+    "key": "pages.mirrorNoFields",
+    "ru": "У сущности нет полей.",
+    "en": "The entity has no fields.",
+    "he": "לישות אין שדות."
+  },
+  {
     "key": "pages.cancel",
     "ru": "Отмена",
     "en": "Cancel",

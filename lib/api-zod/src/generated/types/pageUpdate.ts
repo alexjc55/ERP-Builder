@@ -15,6 +15,10 @@ export interface PageUpdate {
   path?: string | null;
   /** @nullable */
   parentPageId?: number | null;
+  /** @nullable */
+  mirrorEntityId?: number | null;
+  /** @nullable */
+  mirrorFieldKeysJson?: string[] | null;
   sortOrder?: number;
   isActive?: boolean;
 }

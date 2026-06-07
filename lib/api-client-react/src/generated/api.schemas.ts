@@ -487,6 +487,10 @@ export interface Page {
   path?: string | null;
   /** @nullable */
   parentPageId?: number | null;
+  /** @nullable */
+  mirrorEntityId?: number | null;
+  /** @nullable */
+  mirrorFieldKeysJson?: string[] | null;
   sortOrder: number;
   isActive: boolean;
   children?: Page[];
@@ -502,6 +506,10 @@ export interface PageInput {
   path?: string | null;
   /** @nullable */
   parentPageId?: number | null;
+  /** @nullable */
+  mirrorEntityId?: number | null;
+  /** @nullable */
+  mirrorFieldKeysJson?: string[] | null;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -514,6 +522,10 @@ export interface PageUpdate {
   path?: string | null;
   /** @nullable */
   parentPageId?: number | null;
+  /** @nullable */
+  mirrorEntityId?: number | null;
+  /** @nullable */
+  mirrorFieldKeysJson?: string[] | null;
   sortOrder?: number;
   isActive?: boolean;
 }

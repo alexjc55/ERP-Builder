@@ -424,7 +424,19 @@ function FieldFilterPopover({
   );
 }
 
-export function EntityRecords({ entityId }: { entityId: number }) {
+export function EntityRecords({
+  entityId,
+  visibleFieldKeys,
+}: {
+  entityId: number;
+  /**
+   * Display-level projection (used by mirror pages): when provided, only these
+   * field keys are shown in the table and record dialog. This is purely cosmetic
+   * — real per-field/per-row security is still enforced server-side by RBAC on
+   * this entity. Null/empty means "all visible fields".
+   */
+  visibleFieldKeys?: string[];
+}) {
   const ml = useML();
   const t = useT();
   const { toast } = useToast();
@@ -449,8 +461,12 @@ export function EntityRecords({ entityId }: { entityId: number }) {
     [userOptions],
   );
 
+  // Optional mirror-page projection: restrict to a chosen subset of field keys.
+  const mirrorKeySet =
+    visibleFieldKeys && visibleFieldKeys.length > 0 ? new Set(visibleFieldKeys) : null;
   const fields = [...allFields]
     .filter((f: Field) => f.isActive)
+    .filter((f: Field) => !mirrorKeySet || mirrorKeySet.has(f.fieldKey))
     .sort((a: Field, b: Field) => a.sortOrder - b.sortOrder);
   // Fields the current user is allowed to see (not hidden by field-level perms).
   const visibleFormFields = fields.filter((f: Field) => fieldAccess(f, entityId) !== "hidden");

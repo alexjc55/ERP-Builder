@@ -5,7 +5,11 @@ import {
   useUpdatePage,
   useDeletePage,
   useReorderPages,
+  useListEntities,
+  useListEntityFields,
   type Page,
+  type Entity,
+  type Field,
   type MultilingualText,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -39,6 +43,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { IconPicker } from "@/components/IconPicker";
 import { useToast } from "@/hooks/use-toast";
@@ -64,8 +69,11 @@ export default function PagesPage() {
   const [parentPageId, setParentPageId] = useState<string>("none");
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
+  const [mirrorEntityId, setMirrorEntityId] = useState<string>("none");
+  const [mirrorFieldKeys, setMirrorFieldKeys] = useState<string[]>([]);
 
   const { data: pages = [], isLoading } = useListPages();
+  const { data: entities = [] } = useListEntities();
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["/api/pages"] });
 
@@ -120,6 +128,8 @@ export default function PagesPage() {
     setParentPageId("none");
     setSortOrder(pages.length + 1);
     setIsActive(true);
+    setMirrorEntityId("none");
+    setMirrorFieldKeys([]);
     setDialogOpen(true);
   };
 
@@ -134,6 +144,8 @@ export default function PagesPage() {
     setParentPageId(page.parentPageId ? String(page.parentPageId) : "none");
     setSortOrder(page.sortOrder);
     setIsActive(page.isActive);
+    setMirrorEntityId(page.mirrorEntityId ? String(page.mirrorEntityId) : "none");
+    setMirrorFieldKeys(page.mirrorFieldKeysJson ?? []);
     setDialogOpen(true);
   };
 
@@ -144,6 +156,9 @@ export default function PagesPage() {
       icon: icon || "",
       path: path.trim() || null,
       parentPageId: parentPageId !== "none" ? Number(parentPageId) : null,
+      mirrorEntityId: mirrorEntityId !== "none" ? Number(mirrorEntityId) : null,
+      mirrorFieldKeysJson:
+        mirrorEntityId !== "none" && mirrorFieldKeys.length > 0 ? mirrorFieldKeys : null,
       sortOrder,
       isActive,
     };
@@ -310,6 +325,45 @@ export default function PagesPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-1.5 rounded-md border border-slate-200 p-3">
+              <Label>{t("pages.mirrorEntity", "Связанная сущность (живые данные)")}</Label>
+              <Select
+                value={mirrorEntityId}
+                onValueChange={(v) => {
+                  setMirrorEntityId(v);
+                  setMirrorFieldKeys([]);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t("pages.mirrorNone", "— Обычная страница —")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{t("pages.mirrorNone", "— Обычная страница —")}</SelectItem>
+                  {entities
+                    .filter((e: Entity) => e.isActive)
+                    .map((e: Entity) => (
+                      <SelectItem key={e.id} value={String(e.id)}>
+                        {ml(e.nameJson)}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-400">
+                {t(
+                  "pages.mirrorHint",
+                  "Страница покажет живые записи выбранной сущности. Изменения двусторонние; видимость строк и полей определяется правами роли.",
+                )}
+              </p>
+              {mirrorEntityId !== "none" && (
+                <MirrorFieldPicker
+                  entityId={Number(mirrorEntityId)}
+                  selected={mirrorFieldKeys}
+                  onChange={setMirrorFieldKeys}
+                  ml={ml}
+                  t={t}
+                />
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <Switch checked={isActive} onCheckedChange={setIsActive} id="page-active" />
               <Label htmlFor="page-active">{t("pages.activeInMenu", "Активна (видна в меню)")}</Label>
@@ -343,6 +397,54 @@ export default function PagesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+function MirrorFieldPicker({
+  entityId,
+  selected,
+  onChange,
+  ml,
+  t,
+}: {
+  entityId: number;
+  selected: string[];
+  onChange: (keys: string[]) => void;
+  ml: (v: unknown) => string;
+  t: (key: string, fallback: string) => string;
+}) {
+  const { data: fields = [], isLoading } = useListEntityFields(entityId);
+  const active = fields.filter((f: Field) => f.isActive);
+
+  const toggle = (key: string, checked: boolean) => {
+    if (checked) onChange([...selected, key]);
+    else onChange(selected.filter((k) => k !== key));
+  };
+
+  if (isLoading) {
+    return <Skeleton className="h-20 w-full" />;
+  }
+  if (active.length === 0) {
+    return <p className="text-xs text-slate-400">{t("pages.mirrorNoFields", "У сущности нет полей.")}</p>;
+  }
+
+  return (
+    <div className="space-y-2 pt-1">
+      <p className="text-xs font-medium text-slate-600">
+        {t("pages.mirrorFields", "Какие поля показать (пусто = все)")}
+      </p>
+      <div className="grid grid-cols-2 gap-1.5 max-h-44 overflow-y-auto">
+        {active.map((f: Field) => (
+          <label key={f.id} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+            <Checkbox
+              checked={selected.includes(f.fieldKey)}
+              onCheckedChange={(c) => toggle(f.fieldKey, c === true)}
+            />
+            <span className="truncate">{ml(f.nameJson)}</span>
+          </label>
+        ))}
+      </div>
     </div>
   );
 }

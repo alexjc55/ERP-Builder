@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, pagesTable } from "@workspace/db";
+import { db, pagesTable, entitiesTable } from "@workspace/db";
 import { eq, isNull, asc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
@@ -63,10 +63,25 @@ router.post("/pages/reorder", requireAuth, requireAdmin("pages"), async (req, re
   res.json({ success: true, message: "Reordered" });
 });
 
+/** True if the entity exists (used to validate a page's mirror target). */
+async function entityExists(entityId: number): Promise<boolean> {
+  const [e] = await db
+    .select({ id: entitiesTable.id })
+    .from(entitiesTable)
+    .where(eq(entitiesTable.id, entityId))
+    .limit(1);
+  return Boolean(e);
+}
+
 router.post("/pages", requireAuth, requireAdmin("pages"), async (req, res): Promise<void> => {
   const parsed = CreatePageBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  if (parsed.data.mirrorEntityId != null && !(await entityExists(parsed.data.mirrorEntityId))) {
+    res.status(400).json({ error: "Mirror entity not found" });
     return;
   }
 
@@ -114,11 +129,18 @@ router.put("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): P
   if (body.icon != null) updateData.icon = body.icon;
   if ("path" in body) updateData.path = body.path ?? null;
   if ("parentPageId" in body) updateData.parentPageId = body.parentPageId ?? null;
+  if ("mirrorEntityId" in body) updateData.mirrorEntityId = body.mirrorEntityId ?? null;
+  if ("mirrorFieldKeysJson" in body) updateData.mirrorFieldKeysJson = body.mirrorFieldKeysJson ?? null;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
   if (body.isActive != null) updateData.isActive = body.isActive;
 
   if (body.parentPageId != null && body.parentPageId === params.data.id) {
     res.status(400).json({ error: "A page cannot be its own parent" });
+    return;
+  }
+
+  if (body.mirrorEntityId != null && !(await entityExists(body.mirrorEntityId))) {
+    res.status(400).json({ error: "Mirror entity not found" });
     return;
   }
 

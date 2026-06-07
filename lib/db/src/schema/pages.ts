@@ -9,6 +9,16 @@ export const pagesTable = pgTable("pages", {
   icon: text("icon").notNull().default("file"),
   path: text("path"),
   parentPageId: integer("parent_page_id"),
+  // Mirror page: when set, this page displays the live records of an existing
+  // entity (a second, read-through window onto another entity's data). Stored as
+  // a plain integer (not a hard FK) to avoid a circular pages<->entities import;
+  // existence is validated in the API and the renderer tolerates a dangling id.
+  mirrorEntityId: integer("mirror_entity_id"),
+  // Optional display projection: the subset of the mirrored entity's field keys
+  // to show. Null/empty means "all visible fields". This is a display-level
+  // projection only — real security (row scope, field hiding) is enforced by RBAC
+  // on the mirrored entity.
+  mirrorFieldKeysJson: jsonb("mirror_field_keys_json").$type<string[]>(),
   sortOrder: integer("sort_order").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

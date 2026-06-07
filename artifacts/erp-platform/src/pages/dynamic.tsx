@@ -50,7 +50,15 @@ export default function DynamicPage() {
     );
   }
 
-  const entity = entities.find((e: Entity) => e.pageId === page.id && e.isActive);
+  // A mirror page displays the live records of an existing ("source") entity,
+  // optionally projected to a chosen subset of fields. The source entity must
+  // still exist and be active. Real security (per-client row scope, hidden
+  // fields) is enforced server-side by RBAC on the mirrored entity.
+  const mirrorEntity =
+    page.mirrorEntityId != null
+      ? entities.find((e: Entity) => e.id === page.mirrorEntityId && e.isActive)
+      : undefined;
+  const entity = mirrorEntity ?? entities.find((e: Entity) => e.pageId === page.id && e.isActive);
 
   return (
     <div className="p-6 space-y-6">
@@ -62,7 +70,10 @@ export default function DynamicPage() {
       </div>
 
       {entity ? (
-        <EntityRecords entityId={entity.id} />
+        <EntityRecords
+          entityId={entity.id}
+          visibleFieldKeys={mirrorEntity ? page.mirrorFieldKeysJson ?? undefined : undefined}
+        />
       ) : (
         <Card className="border-slate-200 shadow-sm">
           <CardContent className="flex flex-col items-center justify-center text-center py-20 gap-3">
