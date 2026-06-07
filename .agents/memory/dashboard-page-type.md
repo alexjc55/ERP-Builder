@@ -30,6 +30,19 @@ Must be enforced on **every** path that can change page type, against the **effe
 ## RBAC
 - Widget CRUD/reorder is gated by the existing **`pages`** admin cap — managing dashboards == managing pages. No new RBAC cap was added.
 
+## Chart widgets
+- A widget is either `widgetType: "metric"` (number cards, the default/legacy shape) or `widgetType: "chart"`. `config.metrics` may be absent for charts — any edit-mode UI reading `config.metrics.length` MUST guard (`config.metrics?.length ?? 0`) or it crashes on chart widgets.
+- Chart config = `{type: bar|line|area|pie|donut, entityId, groupBy:{kind: status|field, fieldKey?}, aggregation: count|sum, fieldKey?, statusIds?}`. Server computes a `series` of `{label, value, color?}` buckets, **admin-authoritative** exactly like metric values (same two auth gates before compute; same regex-guarded numeric cast for sum).
+- Group-by status uses a LEFT JOIN to `entity_statuses` ordered by status `sortOrder`, with an explicit fallback label for null/dangling status. Group-by field buckets null/empty as "—", orders by aggregated value (`ORDER BY 2 DESC`), and caps at 50 buckets. Status `color` flows into series points so the client colors pie/bar cells.
+- Frontend renders with **recharts**; widget `color` is a tailwind bg class, so charts map it to hex via a `TAILWIND_HEX` table (recharts needs real color values, not class names).
+
+## Grid layout
+- Widgets carry `gridW`/`gridH` (cell spans, default 1×1) persisted in CRUD. The viewer grid is a fixed-column CSS grid; each widget wrapper sets inline `gridColumn: span W` / `gridRow: span H`. Use inline styles, NOT dynamic tailwind `col-span-N` classes (they'd be purged). Clamp W to the column count and H to a sane max.
+
+## Records column totals (related, not dashboard-specific)
+- `records/query` returns `numericTotals` ({fieldKey → sum}) computed over the **full filtered set** (records are paginated, so totals must be server-side, never summed client-side from one page).
+- Only numeric fields flagged `showColumnTotal` AND present in the request's `visibleFields` are summed — this preserves the hidden-field boundary (a hidden numeric field must never leak via its total). Same regex-guarded `::numeric` cast as dashboard sums.
+
 ## How to apply
 - Adding a new metric aggregation type: extend the server aggregation helper AND `validateConfig`, and keep the regex-guarded cast for any numeric coercion.
 - Any new endpoint returning widget data must re-apply both authorization gates before computing values.

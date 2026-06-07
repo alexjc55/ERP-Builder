@@ -3156,10 +3156,44 @@ components:
             type: integer
           description: Restrict to records in these statuses; empty/null = all statuses
 
+    ChartConfig:
+      type: object
+      required: [type, entityId, groupBy, aggregation]
+      properties:
+        type:
+          type: string
+          enum: [bar, line, area, pie, donut]
+        entityId:
+          type: integer
+        groupBy:
+          type: object
+          required: [kind]
+          properties:
+            kind:
+              type: string
+              enum: [status, field]
+            fieldKey:
+              type: ["string", "null"]
+              description: Field whose values form the chart buckets (when kind = field)
+        aggregation:
+          type: string
+          enum: [count, sum]
+        fieldKey:
+          type: ["string", "null"]
+          description: Numeric field to sum per bucket (required when aggregation = sum)
+        statusIds:
+          type: ["array", "null"]
+          items:
+            type: integer
+          description: Restrict to records in these statuses; empty/null = all statuses
+
     WidgetConfig:
       type: object
-      required: [metrics]
       properties:
+        widgetType:
+          type: ["string", "null"]
+          enum: [metric, chart, null]
+          description: metric (default) = number cards; chart = graph driven by chart.
         metrics:
           type: array
           items:
@@ -3170,10 +3204,12 @@ components:
         format:
           type: ["string", "null"]
           enum: [number, currency, percent, null]
+        chart:
+          $ref: "#/components/schemas/ChartConfig"
 
     DashboardWidget:
       type: object
-      required: [id, pageId, titleJson, config, icon, color, sortOrder, createdAt, updatedAt]
+      required: [id, pageId, titleJson, config, icon, color, gridW, gridH, sortOrder, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -3191,6 +3227,10 @@ components:
           type: string
         color:
           type: string
+        gridW:
+          type: integer
+        gridH:
+          type: integer
         sortOrder:
           type: integer
         createdAt:
@@ -3216,12 +3256,27 @@ components:
           type: string
         color:
           type: string
+        gridW:
+          type: integer
+        gridH:
+          type: integer
         sortOrder:
           type: integer
 
+    ChartSeriesPoint:
+      type: object
+      required: [label, value]
+      properties:
+        label:
+          type: string
+        value:
+          type: number
+        color:
+          type: ["string", "null"]
+
     DashboardWidgetData:
       type: object
-      required: [id, titleJson, icon, color, sortOrder, metrics]
+      required: [id, titleJson, icon, color, gridW, gridH, sortOrder, metrics]
       properties:
         id:
           type: integer
@@ -3231,8 +3286,22 @@ components:
           type: string
         color:
           type: string
+        gridW:
+          type: integer
+        gridH:
+          type: integer
         sortOrder:
           type: integer
+        widgetType:
+          type: ["string", "null"]
+          enum: [metric, chart, null]
+        chartType:
+          type: ["string", "null"]
+        series:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChartSeriesPoint"
+          description: Grouped buckets for chart widgets (admin-authoritative real totals)
         formula:
           type: ["string", "null"]
         format:
@@ -3446,6 +3515,8 @@ components:
           type: boolean
         showInTable:
           type: boolean
+        showColumnTotal:
+          type: boolean
         sortOrder:
           type: integer
         isActive:
@@ -3496,6 +3567,9 @@ components:
         showInTable:
           type: boolean
           default: true
+        showColumnTotal:
+          type: boolean
+          default: false
         sortOrder:
           type: integer
         isActive:
@@ -3554,6 +3628,8 @@ components:
           type: boolean
         showInTable:
           type: boolean
+        showColumnTotal:
+          type: boolean
         sortOrder:
           type: integer
         isActive:
@@ -3591,6 +3667,8 @@ components:
         formulaConfigJson:
           $ref: "#/components/schemas/FormulaFieldConfig"
         showInTable:
+          type: boolean
+        showColumnTotal:
           type: boolean
         sortOrder:
           type: integer
@@ -3633,6 +3711,9 @@ components:
         showInTable:
           type: boolean
           default: true
+        showColumnTotal:
+          type: boolean
+          default: false
         sortOrder:
           type: integer
         isActive:
@@ -3665,6 +3746,8 @@ components:
         formulaConfigJson:
           $ref: "#/components/schemas/FormulaFieldConfig"
         showInTable:
+          type: boolean
+        showColumnTotal:
           type: boolean
         sortOrder:
           type: integer
@@ -4165,6 +4248,11 @@ components:
             $ref: "#/components/schemas/EntityRecord"
         total:
           type: integer
+        numericTotals:
+          type: object
+          additionalProperties:
+            type: number
+          description: Sum per numeric field flagged showColumnTotal, over the full filtered set (all pages).
 
     FilterValuesQuery:
       type: object

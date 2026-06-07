@@ -17,6 +17,8 @@ export interface DashboardWidget {
   visibleRoleIds?: number[] | null;
   icon: string;
   color: string;
+  gridW: number;
+  gridH: number;
   sortOrder: number;
   createdAt: Date;
   updatedAt: Date;

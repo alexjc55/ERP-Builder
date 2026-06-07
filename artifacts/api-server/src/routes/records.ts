@@ -504,7 +504,30 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     .limit(pageSize)
     .offset(offset);
 
-  res.json({ data: data.map((r) => stripHidden(r, hidden)), total: countRow?.count ?? 0 });
+  // Column totals: sum each visible numeric field flagged showColumnTotal over the
+  // FULL filtered set (every page), not just the current page. Non-numeric stored
+  // text is skipped so an unguarded ::numeric cast can never error.
+  const NUMERIC_RE = "^-?[0-9]+(\\.[0-9]+)?$";
+  const totalFields = visibleFields.filter((f) => f.fieldType === "number" && f.showColumnTotal);
+  let numericTotals: Record<string, number> | undefined;
+  if (totalFields.length > 0) {
+    const sel: Record<string, SQL<number>> = {};
+    for (const f of totalFields) {
+      const k = f.fieldKey;
+      sel[k] = sql<number>`COALESCE(SUM(CASE WHEN (${entityRecordsTable.valuesJson} ->> ${k}) ~ ${NUMERIC_RE} THEN (${entityRecordsTable.valuesJson} ->> ${k})::numeric ELSE 0 END), 0)::float8`;
+    }
+    const [row] = await db.select(sel).from(entityRecordsTable).where(where);
+    numericTotals = {};
+    for (const f of totalFields) {
+      numericTotals[f.fieldKey] = Number((row as Record<string, unknown> | undefined)?.[f.fieldKey] ?? 0);
+    }
+  }
+
+  res.json({
+    data: data.map((r) => stripHidden(r, hidden)),
+    total: countRow?.count ?? 0,
+    ...(numericTotals ? { numericTotals } : {}),
+  });
 });
 
 router.post(

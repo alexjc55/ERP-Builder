@@ -24,6 +24,7 @@ export interface PageField {
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
   showInTable?: boolean;
+  showColumnTotal?: boolean;
   sortOrder: number;
   isActive: boolean;
   createdAt: Date;

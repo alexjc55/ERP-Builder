@@ -589,6 +589,71 @@ export interface WidgetMetric {
   statusIds?: number[] | null;
 }
 
+export type ChartConfigType = typeof ChartConfigType[keyof typeof ChartConfigType];
+
+
+export const ChartConfigType = {
+  bar: 'bar',
+  line: 'line',
+  area: 'area',
+  pie: 'pie',
+  donut: 'donut',
+} as const;
+
+export type ChartConfigGroupByKind = typeof ChartConfigGroupByKind[keyof typeof ChartConfigGroupByKind];
+
+
+export const ChartConfigGroupByKind = {
+  status: 'status',
+  field: 'field',
+} as const;
+
+export type ChartConfigGroupBy = {
+  kind: ChartConfigGroupByKind;
+  /**
+     * Field whose values form the chart buckets (when kind = field)
+     * @nullable
+     */
+  fieldKey?: string | null;
+};
+
+export type ChartConfigAggregation = typeof ChartConfigAggregation[keyof typeof ChartConfigAggregation];
+
+
+export const ChartConfigAggregation = {
+  count: 'count',
+  sum: 'sum',
+} as const;
+
+export interface ChartConfig {
+  type: ChartConfigType;
+  entityId: number;
+  groupBy: ChartConfigGroupBy;
+  aggregation: ChartConfigAggregation;
+  /**
+     * Numeric field to sum per bucket (required when aggregation = sum)
+     * @nullable
+     */
+  fieldKey?: string | null;
+  /**
+     * Restrict to records in these statuses; empty/null = all statuses
+     * @nullable
+     */
+  statusIds?: number[] | null;
+}
+
+/**
+ * metric (default) = number cards; chart = graph driven by chart.
+ * @nullable
+ */
+export type WidgetConfigWidgetType = typeof WidgetConfigWidgetType[keyof typeof WidgetConfigWidgetType] | null;
+
+
+export const WidgetConfigWidgetType = {
+  metric: 'metric',
+  chart: 'chart',
+} as const;
+
 /**
  * @nullable
  */
@@ -602,7 +667,12 @@ export const WidgetConfigFormat = {
 } as const;
 
 export interface WidgetConfig {
-  metrics: WidgetMetric[];
+  /**
+     * metric (default) = number cards; chart = graph driven by chart.
+     * @nullable
+     */
+  widgetType?: WidgetConfigWidgetType;
+  metrics?: WidgetMetric[];
   /**
      * Optional expression combining metric keys as {key}
      * @nullable
@@ -610,6 +680,7 @@ export interface WidgetConfig {
   formula?: string | null;
   /** @nullable */
   format?: WidgetConfigFormat;
+  chart?: ChartConfig;
 }
 
 export interface DashboardWidget {
@@ -621,6 +692,8 @@ export interface DashboardWidget {
   visibleRoleIds?: number[] | null;
   icon: string;
   color: string;
+  gridW: number;
+  gridH: number;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -633,8 +706,28 @@ export interface DashboardWidgetInput {
   visibleRoleIds?: number[] | null;
   icon?: string;
   color?: string;
+  gridW?: number;
+  gridH?: number;
   sortOrder?: number;
 }
+
+export interface ChartSeriesPoint {
+  label: string;
+  value: number;
+  /** @nullable */
+  color?: string | null;
+}
+
+/**
+ * @nullable
+ */
+export type DashboardWidgetDataWidgetType = typeof DashboardWidgetDataWidgetType[keyof typeof DashboardWidgetDataWidgetType] | null;
+
+
+export const DashboardWidgetDataWidgetType = {
+  metric: 'metric',
+  chart: 'chart',
+} as const;
 
 /**
  * Computed value per metric key (admin-authoritative real totals)
@@ -646,7 +739,15 @@ export interface DashboardWidgetData {
   titleJson: MultilingualText;
   icon: string;
   color: string;
+  gridW: number;
+  gridH: number;
   sortOrder: number;
+  /** @nullable */
+  widgetType?: DashboardWidgetDataWidgetType;
+  /** @nullable */
+  chartType?: string | null;
+  /** Grouped buckets for chart widgets (admin-authoritative real totals) */
+  series?: ChartSeriesPoint[];
   /** @nullable */
   formula?: string | null;
   /** @nullable */
@@ -798,6 +899,7 @@ export interface Field {
   formulaConfigJson?: FormulaFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
+  showColumnTotal?: boolean;
   sortOrder: number;
   isActive: boolean;
   createdAt: string;
@@ -820,6 +922,7 @@ export interface FieldInput {
   formulaConfigJson?: FormulaFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
+  showColumnTotal?: boolean;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -850,6 +953,7 @@ export interface FieldUpdate {
   formulaConfigJson?: FormulaFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
+  showColumnTotal?: boolean;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -868,6 +972,7 @@ export interface PageField {
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
   showInTable?: boolean;
+  showColumnTotal?: boolean;
   sortOrder: number;
   isActive: boolean;
   createdAt: string;
@@ -886,6 +991,7 @@ export interface PageFieldInput {
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
   showInTable?: boolean;
+  showColumnTotal?: boolean;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -902,6 +1008,7 @@ export interface PageFieldUpdate {
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
   showInTable?: boolean;
+  showColumnTotal?: boolean;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -1206,9 +1313,16 @@ export interface RecordQuery {
   pageSize?: number;
 }
 
+/**
+ * Sum per numeric field flagged showColumnTotal, over the full filtered set (all pages).
+ */
+export type RecordQueryResultNumericTotals = {[key: string]: number};
+
 export interface RecordQueryResult {
   data: EntityRecord[];
   total: number;
+  /** Sum per numeric field flagged showColumnTotal, over the full filtered set (all pages). */
+  numericTotals?: RecordQueryResultNumericTotals;
 }
 
 export type FilterValuesQueryFilterConjunction = typeof FilterValuesQueryFilterConjunction[keyof typeof FilterValuesQueryFilterConjunction];

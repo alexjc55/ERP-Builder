@@ -15,5 +15,7 @@ export interface DashboardWidgetInput {
   visibleRoleIds?: number[] | null;
   icon?: string;
   color?: string;
+  gridW?: number;
+  gridH?: number;
   sortOrder?: number;
 }

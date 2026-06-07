@@ -16,15 +16,37 @@ import {
   useGetSettings,
   getGetSettingsQueryKey,
   type DashboardWidget,
+  type DashboardWidgetInput,
   type DashboardWidgetData,
   type WidgetMetric,
   type WidgetConfigFormat,
+  type ChartSeriesPoint,
+  type ChartConfigType,
+  type ChartConfigGroupByKind,
+  type ChartConfigAggregation,
   type Entity,
   type Field,
   type Status,
   type Role,
   type MultilingualText,
 } from "@workspace/api-client-react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  AreaChart,
+  Area,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  CartesianGrid,
+} from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,6 +104,34 @@ const COLOR_PRESETS = [
 const DEFAULT_COLOR = "bg-blue-600";
 const DEFAULT_ICON = "TrendingUp";
 
+const GRID_COLS = 4;
+
+/** Map a tailwind preset bg class to a concrete hex for chart fills/strokes. */
+const TAILWIND_HEX: Record<string, string> = {
+  "bg-blue-600": "#2563eb",
+  "bg-violet-600": "#7c3aed",
+  "bg-emerald-600": "#059669",
+  "bg-amber-500": "#f59e0b",
+  "bg-red-500": "#ef4444",
+  "bg-cyan-600": "#0891b2",
+  "bg-pink-600": "#db2777",
+  "bg-slate-600": "#475569",
+};
+
+/** Fallback palette for chart buckets that carry no per-point color. */
+const CHART_PALETTE = [
+  "#2563eb",
+  "#7c3aed",
+  "#059669",
+  "#f59e0b",
+  "#ef4444",
+  "#0891b2",
+  "#db2777",
+  "#475569",
+  "#14b8a6",
+  "#a855f7",
+];
+
 /**
  * Format a computed value for display per the widget's chosen format. The
  * currency symbol is admin-configurable (Settings → "Символ валюты") and passed
@@ -117,13 +167,117 @@ function resolveValue(w: DashboardWidgetData): number {
   return keys.length > 0 ? metrics[keys[0]] : 0;
 }
 
-function WidgetCard({ w, ml, currencySymbol }: { w: DashboardWidgetData; ml: (v: unknown) => string; currencySymbol: string }) {
+/** Render a chart widget's series with the chosen chart type. */
+function WidgetChart({
+  chartType,
+  series,
+  color,
+  t,
+}: {
+  chartType: string;
+  series: ChartSeriesPoint[];
+  color: string;
+  t: (key: string, fallback: string) => string;
+}) {
+  const hex = TAILWIND_HEX[color] ?? "#2563eb";
+  if (!series || series.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-slate-400">
+        {t("dash.noData", "Нет данных")}
+      </div>
+    );
+  }
+
+  if (chartType === "pie" || chartType === "donut") {
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={series}
+            dataKey="value"
+            nameKey="label"
+            cx="50%"
+            cy="50%"
+            outerRadius="80%"
+            innerRadius={chartType === "donut" ? "55%" : 0}
+          >
+            {series.map((p, i) => (
+              <Cell key={i} fill={p.color ?? CHART_PALETTE[i % CHART_PALETTE.length]} />
+            ))}
+          </Pie>
+          <Tooltip />
+          <Legend />
+        </PieChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  if (chartType === "line") {
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={series} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+          <YAxis tick={{ fontSize: 11 }} />
+          <Tooltip />
+          <Line type="monotone" dataKey="value" stroke={hex} strokeWidth={2} dot={false} />
+        </LineChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  if (chartType === "area") {
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={series} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+          <YAxis tick={{ fontSize: 11 }} />
+          <Tooltip />
+          <Area type="monotone" dataKey="value" stroke={hex} fill={hex} fillOpacity={0.2} strokeWidth={2} />
+        </AreaChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  // default: bar
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={series} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+        <YAxis tick={{ fontSize: 11 }} />
+        <Tooltip />
+        <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+          {series.map((p, i) => (
+            <Cell key={i} fill={p.color ?? hex} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+function WidgetCard({ w, ml, currencySymbol, t }: { w: DashboardWidgetData; ml: (v: unknown) => string; currencySymbol: string; t: (key: string, fallback: string) => string }) {
+  if (w.widgetType === "chart") {
+    return (
+      <Card className="h-full border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+        <CardContent className="flex h-full flex-col p-4">
+          <p className="text-sm font-medium text-slate-500 truncate">{ml(w.titleJson)}</p>
+          <div className="flex-1 min-h-0 mt-2">
+            <WidgetChart chartType={w.chartType ?? "bar"} series={w.series ?? []} color={w.color} t={t} />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const Icon = getIconComponent(w.icon || DEFAULT_ICON, LayoutDashboard);
   const value = resolveValue(w);
   return (
-    <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between">
+    <Card className="h-full border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+      <CardContent className="flex h-full items-center p-6">
+        <div className="flex w-full items-center justify-between">
           <div className="min-w-0">
             <p className="text-sm font-medium text-slate-500 truncate">{ml(w.titleJson)}</p>
             <p className="text-3xl font-bold text-slate-800 mt-1">{formatValue(value, w.format, currencySymbol)}</p>
@@ -236,6 +390,7 @@ export default function DashboardView({ pageId }: { pageId: number }) {
           <div className="space-y-2">
             {sortedEdit.map((w, i) => {
               const Icon = getIconComponent(w.icon || DEFAULT_ICON, LayoutDashboard);
+              const isChart = w.config.widgetType === "chart";
               return (
                 <Card key={w.id} className="border-slate-200 shadow-sm">
                   <CardContent className="flex items-center gap-3 p-3">
@@ -245,8 +400,10 @@ export default function DashboardView({ pageId }: { pageId: number }) {
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-slate-700 truncate">{ml(w.titleJson)}</p>
                       <p className="text-xs text-slate-400">
-                        {t("dash.metricsCount", "Метрик")}: {w.config.metrics.length}
-                        {w.config.formula ? ` · ${t("dash.hasFormula", "формула")}` : ""}
+                        {isChart
+                          ? `${t("dash.chartWidget", "График")} · ${w.config.chart?.type ?? ""}`
+                          : `${t("dash.metricsCount", "Метрик")}: ${w.config.metrics?.length ?? 0}${w.config.formula ? ` · ${t("dash.hasFormula", "формула")}` : ""}`}
+                        {` · ${w.gridW}×${w.gridH}`}
                         {w.visibleRoleIds && w.visibleRoleIds.length > 0 ? ` · ${t("dash.roleLimited", "ограничено ролями")}` : ""}
                       </p>
                     </div>
@@ -275,8 +432,21 @@ export default function DashboardView({ pageId }: { pageId: number }) {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {sortedData.map((w) => <WidgetCard key={w.id} w={w} ml={ml} currencySymbol={currencySymbol} />)}
+        <div
+          className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 auto-rows-[8rem]"
+        >
+          {sortedData.map((w) => (
+            <div
+              key={w.id}
+              className="min-w-0"
+              style={{
+                gridColumn: `span ${Math.min(Math.max(w.gridW || 1, 1), GRID_COLS)}`,
+                gridRow: `span ${Math.max(w.gridH || 1, 1)}`,
+              }}
+            >
+              <WidgetCard w={w} ml={ml} currencySymbol={currencySymbol} t={t} />
+            </div>
+          ))}
         </div>
       )}
 
@@ -322,6 +492,16 @@ type DraftMetric = {
   statusIds: number[];
 };
 
+type ChartDraft = {
+  type: ChartConfigType;
+  entityId: number | null;
+  groupByKind: ChartConfigGroupByKind;
+  groupByFieldKey: string | null;
+  aggregation: ChartConfigAggregation;
+  fieldKey: string | null;
+  statusIds: number[];
+};
+
 function WidgetEditorDialog({
   pageId: _pageId,
   widget,
@@ -337,8 +517,8 @@ function WidgetEditorDialog({
   widget: DashboardWidget | null;
   nextSortOrder: number;
   onClose: () => void;
-  onCreate: (data: { titleJson: MultilingualText; config: { metrics: WidgetMetric[]; formula?: string | null; format?: WidgetConfigFormat }; visibleRoleIds?: number[] | null; icon?: string; color?: string; sortOrder?: number }) => void;
-  onUpdate: (wid: number, data: { titleJson: MultilingualText; config: { metrics: WidgetMetric[]; formula?: string | null; format?: WidgetConfigFormat }; visibleRoleIds?: number[] | null; icon?: string; color?: string; sortOrder?: number }) => void;
+  onCreate: (data: DashboardWidgetInput) => void;
+  onUpdate: (wid: number, data: DashboardWidgetInput) => void;
   isPending: boolean;
   ml: (v: unknown) => string;
   t: (key: string, fallback: string) => string;
@@ -351,16 +531,21 @@ function WidgetEditorDialog({
     const tj = widget?.titleJson;
     return typeof tj === "object" && tj ? { ru: tj.ru, en: tj.en, he: tj.he } : {};
   });
+  const [widgetType, setWidgetType] = useState<"metric" | "chart">(
+    widget?.config.widgetType === "chart" ? "chart" : "metric",
+  );
   const [icon, setIcon] = useState(widget?.icon || DEFAULT_ICON);
   const [color, setColor] = useState(widget?.color || DEFAULT_COLOR);
   const [format, setFormat] = useState<string>(widget?.config.format || "number");
   const [formula, setFormula] = useState(widget?.config.formula || "");
+  const [gridW, setGridW] = useState<number>(widget?.gridW ?? 1);
+  const [gridH, setGridH] = useState<number>(widget?.gridH ?? 1);
   const [restrictRoles, setRestrictRoles] = useState<boolean>(
     !!(widget?.visibleRoleIds && widget.visibleRoleIds.length > 0),
   );
   const [visibleRoleIds, setVisibleRoleIds] = useState<number[]>(widget?.visibleRoleIds ?? []);
   const [metrics, setMetrics] = useState<DraftMetric[]>(() =>
-    widget
+    widget && widget.config.metrics && widget.config.metrics.length > 0
       ? widget.config.metrics.map((m) => ({
           key: m.key,
           entityId: m.entityId,
@@ -370,6 +555,18 @@ function WidgetEditorDialog({
         }))
       : [{ key: "m1", entityId: null, aggregation: "count", fieldKey: null, statusIds: [] }],
   );
+  const [chart, setChart] = useState<ChartDraft>(() => {
+    const c = widget?.config.chart;
+    return {
+      type: c?.type ?? "bar",
+      entityId: c?.entityId ?? null,
+      groupByKind: c?.groupBy?.kind ?? "status",
+      groupByFieldKey: c?.groupBy?.fieldKey ?? null,
+      aggregation: c?.aggregation ?? "count",
+      fieldKey: c?.fieldKey ?? null,
+      statusIds: c?.statusIds ?? [],
+    };
+  });
 
   const updateMetric = (i: number, patch: Partial<DraftMetric>) =>
     setMetrics((prev) => prev.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
@@ -382,46 +579,90 @@ function WidgetEditorDialog({
   const toggleRole = (roleId: number) =>
     setVisibleRoleIds((prev) => (prev.includes(roleId) ? prev.filter((r) => r !== roleId) : [...prev, roleId]));
 
-  const handleSubmit = () => {
+  const buildData = (): DashboardWidgetInput | null => {
+    const base = {
+      titleJson: titleJson as MultilingualText,
+      visibleRoleIds: restrictRoles && visibleRoleIds.length > 0 ? visibleRoleIds : null,
+      icon,
+      color,
+      gridW: Math.min(Math.max(Math.round(gridW) || 1, 1), GRID_COLS),
+      gridH: Math.min(Math.max(Math.round(gridH) || 1, 1), 4),
+      sortOrder: widget?.sortOrder ?? nextSortOrder,
+    };
+
+    if (widgetType === "chart") {
+      if (chart.entityId == null) {
+        toast({ title: t("dash.chartNeedsEntity", "Выберите сущность для графика"), variant: "destructive" });
+        return null;
+      }
+      if (chart.groupByKind === "field" && !chart.groupByFieldKey) {
+        toast({ title: t("dash.chartNeedsGroupField", "Выберите поле для группировки"), variant: "destructive" });
+        return null;
+      }
+      if (chart.aggregation === "sum" && !chart.fieldKey) {
+        toast({ title: t("dash.metricNeedsField", "Для суммы выберите числовое поле"), variant: "destructive" });
+        return null;
+      }
+      return {
+        ...base,
+        config: {
+          widgetType: "chart",
+          format: format as WidgetConfigFormat,
+          chart: {
+            type: chart.type,
+            entityId: chart.entityId,
+            groupBy: {
+              kind: chart.groupByKind,
+              fieldKey: chart.groupByKind === "field" ? chart.groupByFieldKey : null,
+            },
+            aggregation: chart.aggregation,
+            fieldKey: chart.aggregation === "sum" ? chart.fieldKey : null,
+            statusIds: chart.statusIds.length > 0 ? chart.statusIds : null,
+          },
+        },
+      };
+    }
+
     const keys = new Set<string>();
     for (const m of metrics) {
       if (!m.key || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(m.key)) {
         toast({ title: t("dash.invalidKey", "Некорректный ключ метрики (латиница/цифры/_)"), variant: "destructive" });
-        return;
+        return null;
       }
       if (keys.has(m.key)) {
         toast({ title: t("dash.dupKey", "Ключи метрик должны быть уникальны"), variant: "destructive" });
-        return;
+        return null;
       }
       keys.add(m.key);
       if (m.entityId == null) {
         toast({ title: t("dash.metricNeedsEntity", "Выберите сущность для каждой метрики"), variant: "destructive" });
-        return;
+        return null;
       }
       if (m.aggregation === "sum" && !m.fieldKey) {
         toast({ title: t("dash.metricNeedsField", "Для суммы выберите числовое поле"), variant: "destructive" });
-        return;
+        return null;
       }
     }
-    const config = {
-      metrics: metrics.map<WidgetMetric>((m) => ({
-        key: m.key,
-        entityId: m.entityId as number,
-        aggregation: m.aggregation,
-        fieldKey: m.aggregation === "sum" ? m.fieldKey : null,
-        statusIds: m.statusIds.length > 0 ? m.statusIds : null,
-      })),
-      formula: formula.trim() ? formula.trim() : null,
-      format: format as WidgetConfigFormat,
+    return {
+      ...base,
+      config: {
+        widgetType: "metric",
+        metrics: metrics.map<WidgetMetric>((m) => ({
+          key: m.key,
+          entityId: m.entityId as number,
+          aggregation: m.aggregation,
+          fieldKey: m.aggregation === "sum" ? m.fieldKey : null,
+          statusIds: m.statusIds.length > 0 ? m.statusIds : null,
+        })),
+        formula: formula.trim() ? formula.trim() : null,
+        format: format as WidgetConfigFormat,
+      },
     };
-    const data = {
-      titleJson: titleJson as MultilingualText,
-      config,
-      visibleRoleIds: restrictRoles && visibleRoleIds.length > 0 ? visibleRoleIds : null,
-      icon,
-      color,
-      sortOrder: widget?.sortOrder ?? nextSortOrder,
-    };
+  };
+
+  const handleSubmit = () => {
+    const data = buildData();
+    if (!data) return;
     if (widget) onUpdate(widget.id, data);
     else onCreate(data);
   };
@@ -434,10 +675,17 @@ function WidgetEditorDialog({
         </DialogHeader>
         <div className="space-y-4 py-2">
           <MultilingualInput label={t("dash.widgetTitle", "Заголовок")} value={titleJson} onChange={setTitleJson} required />
+
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>{t("dash.icon", "Иконка")}</Label>
-              <IconPicker value={icon} onChange={setIcon} />
+              <Label>{t("dash.widgetType", "Тип виджета")}</Label>
+              <Select value={widgetType} onValueChange={(v) => setWidgetType(v as "metric" | "chart")}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="metric">{t("dash.typeMetric", "Показатель")}</SelectItem>
+                  <SelectItem value="chart">{t("dash.typeChart", "График")}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <Label>{t("dash.format", "Формат")}</Label>
@@ -449,6 +697,35 @@ function WidgetEditorDialog({
                   <SelectItem value="percent">{t("dash.formatPercent", "Процент")}</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>{t("dash.icon", "Иконка")}</Label>
+              <IconPicker value={icon} onChange={setIcon} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label>{t("dash.gridW", "Ширина (ячеек)")}</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={GRID_COLS}
+                  value={gridW}
+                  onChange={(e) => setGridW(Number(e.target.value))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t("dash.gridH", "Высота (ячеек)")}</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={4}
+                  value={gridH}
+                  onChange={(e) => setGridH(Number(e.target.value))}
+                />
+              </div>
             </div>
           </div>
 
@@ -466,36 +743,42 @@ function WidgetEditorDialog({
             </div>
           </div>
 
-          <div className="space-y-2 rounded-md border border-slate-200 p-3">
-            <div className="flex items-center justify-between">
-              <Label>{t("dash.metrics", "Метрики")}</Label>
-              <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={addMetric}>
-                <Plus className="w-3.5 h-3.5" />
-                {t("dash.addMetric", "Метрика")}
-              </Button>
-            </div>
-            {metrics.map((m, i) => (
-              <MetricEditor
-                key={i}
-                metric={m}
-                index={i}
-                entities={entities}
-                canRemove={metrics.length > 1}
-                onChange={(patch) => updateMetric(i, patch)}
-                onRemove={() => removeMetric(i)}
-                ml={ml}
-                t={t}
-              />
-            ))}
-          </div>
+          {widgetType === "chart" ? (
+            <ChartEditor chart={chart} entities={entities} onChange={(patch) => setChart((prev) => ({ ...prev, ...patch }))} ml={ml} t={t} />
+          ) : (
+            <>
+              <div className="space-y-2 rounded-md border border-slate-200 p-3">
+                <div className="flex items-center justify-between">
+                  <Label>{t("dash.metrics", "Метрики")}</Label>
+                  <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={addMetric}>
+                    <Plus className="w-3.5 h-3.5" />
+                    {t("dash.addMetric", "Метрика")}
+                  </Button>
+                </div>
+                {metrics.map((m, i) => (
+                  <MetricEditor
+                    key={i}
+                    metric={m}
+                    index={i}
+                    entities={entities}
+                    canRemove={metrics.length > 1}
+                    onChange={(patch) => updateMetric(i, patch)}
+                    onRemove={() => removeMetric(i)}
+                    ml={ml}
+                    t={t}
+                  />
+                ))}
+              </div>
 
-          <div className="space-y-1.5">
-            <Label>{t("dash.formula", "Формула (необязательно)")}</Label>
-            <Input value={formula} onChange={(e) => setFormula(e.target.value)} placeholder="{m1} / {m2} * 100" />
-            <p className="text-xs text-slate-400">
-              {t("dash.formulaHint", "Комбинируйте метрики по ключу: {m1}. Без формулы показывается первая метрика.")}
-            </p>
-          </div>
+              <div className="space-y-1.5">
+                <Label>{t("dash.formula", "Формула (необязательно)")}</Label>
+                <Input value={formula} onChange={(e) => setFormula(e.target.value)} placeholder="{m1} / {m2} * 100" />
+                <p className="text-xs text-slate-400">
+                  {t("dash.formulaHint", "Комбинируйте метрики по ключу: {m1}. Без формулы показывается первая метрика.")}
+                </p>
+              </div>
+            </>
+          )}
 
           <div className="space-y-2 rounded-md border border-slate-200 p-3">
             <div className="flex items-center gap-2">
@@ -524,6 +807,159 @@ function WidgetEditorDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ChartEditor({
+  chart,
+  entities,
+  onChange,
+  ml,
+  t,
+}: {
+  chart: ChartDraft;
+  entities: Entity[];
+  onChange: (patch: Partial<ChartDraft>) => void;
+  ml: (v: unknown) => string;
+  t: (key: string, fallback: string) => string;
+}) {
+  const { data: fields = [] } = useListEntityFields(chart.entityId ?? 0, {
+    query: { enabled: chart.entityId != null, queryKey: getListEntityFieldsQueryKey(chart.entityId ?? 0) },
+  });
+  const { data: statuses = [] } = useListEntityStatuses(chart.entityId ?? 0, {
+    query: { enabled: chart.entityId != null, queryKey: getListEntityStatusesQueryKey(chart.entityId ?? 0) },
+  });
+  const numericFields = fields.filter((f: Field) => f.fieldType === "number");
+  const groupableFields = fields.filter((f: Field) => f.fieldType !== "function" && f.fieldType !== "file");
+
+  const toggleStatus = (sid: number) => {
+    const next = chart.statusIds.includes(sid)
+      ? chart.statusIds.filter((s) => s !== sid)
+      : [...chart.statusIds, sid];
+    onChange({ statusIds: next });
+  };
+
+  return (
+    <div className="space-y-3 rounded-md border border-slate-200 p-3">
+      <Label>{t("dash.chartSettings", "Настройки графика")}</Label>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1.5">
+          <p className="text-xs text-slate-400">{t("dash.chartType", "Тип графика")}</p>
+          <Select value={chart.type} onValueChange={(v) => onChange({ type: v as ChartConfigType })}>
+            <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="bar">{t("dash.chartBar", "Столбчатый")}</SelectItem>
+              <SelectItem value="line">{t("dash.chartLine", "Линейный")}</SelectItem>
+              <SelectItem value="area">{t("dash.chartArea", "Область")}</SelectItem>
+              <SelectItem value="pie">{t("dash.chartPie", "Круговой")}</SelectItem>
+              <SelectItem value="donut">{t("dash.chartDonut", "Кольцевой")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <p className="text-xs text-slate-400">{t("dash.selectEntity", "Сущность")}</p>
+          <Select
+            value={chart.entityId != null ? String(chart.entityId) : ""}
+            onValueChange={(v) => onChange({ entityId: Number(v), fieldKey: null, groupByFieldKey: null, statusIds: [] })}
+          >
+            <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectEntity", "Сущность")} /></SelectTrigger>
+            <SelectContent>
+              {entities.filter((e) => e.isActive).map((e) => (
+                <SelectItem key={e.id} value={String(e.id)}>{ml(e.nameJson)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1.5">
+          <p className="text-xs text-slate-400">{t("dash.groupBy", "Группировать по")}</p>
+          <Select value={chart.groupByKind} onValueChange={(v) => onChange({ groupByKind: v as ChartConfigGroupByKind, groupByFieldKey: null })}>
+            <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="status">{t("dash.groupByStatus", "Статусу")}</SelectItem>
+              <SelectItem value="field">{t("dash.groupByField", "Полю")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {chart.groupByKind === "field" && (
+          <div className="space-y-1.5">
+            <p className="text-xs text-slate-400">{t("dash.groupField", "Поле группировки")}</p>
+            <Select
+              value={chart.groupByFieldKey ?? ""}
+              onValueChange={(v) => onChange({ groupByFieldKey: v })}
+              disabled={chart.entityId == null}
+            >
+              <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectField", "Поле")} /></SelectTrigger>
+              <SelectContent>
+                {groupableFields.length === 0 ? (
+                  <div className="px-2 py-1.5 text-xs text-slate-400">{t("dash.noFields", "Нет полей")}</div>
+                ) : (
+                  groupableFields.map((f: Field) => (
+                    <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson)}</SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1.5">
+          <p className="text-xs text-slate-400">{t("dash.aggregation", "Агрегация")}</p>
+          <Select value={chart.aggregation} onValueChange={(v) => onChange({ aggregation: v as ChartConfigAggregation })}>
+            <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="count">{t("dash.aggCount", "Количество")}</SelectItem>
+              <SelectItem value="sum">{t("dash.aggSum", "Сумма")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {chart.aggregation === "sum" && (
+          <div className="space-y-1.5">
+            <p className="text-xs text-slate-400">{t("dash.selectField", "Числовое поле")}</p>
+            <Select
+              value={chart.fieldKey ?? ""}
+              onValueChange={(v) => onChange({ fieldKey: v })}
+              disabled={chart.entityId == null}
+            >
+              <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectField", "Числовое поле")} /></SelectTrigger>
+              <SelectContent>
+                {numericFields.length === 0 ? (
+                  <div className="px-2 py-1.5 text-xs text-slate-400">{t("dash.noNumericFields", "Нет числовых полей")}</div>
+                ) : (
+                  numericFields.map((f: Field) => (
+                    <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson)}</SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+
+      {chart.entityId != null && statuses.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-xs text-slate-400">{t("dash.statusFilter", "Статусы (пусто = все)")}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {statuses.map((s: Status) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => toggleStatus(s.id)}
+                className={chart.statusIds.includes(s.id) ? "" : "opacity-50"}
+              >
+                <Badge style={{ backgroundColor: s.color }} className="border-0 text-white font-normal cursor-pointer">
+                  {ml(s.nameJson)}
+                </Badge>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

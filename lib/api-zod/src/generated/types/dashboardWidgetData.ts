@@ -5,7 +5,9 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { ChartSeriesPoint } from './chartSeriesPoint';
 import type { DashboardWidgetDataMetrics } from './dashboardWidgetDataMetrics';
+import type { DashboardWidgetDataWidgetType } from './dashboardWidgetDataWidgetType';
 import type { MultilingualText } from './multilingualText';
 
 export interface DashboardWidgetData {
@@ -13,7 +15,15 @@ export interface DashboardWidgetData {
   titleJson: MultilingualText;
   icon: string;
   color: string;
+  gridW: number;
+  gridH: number;
   sortOrder: number;
+  /** @nullable */
+  widgetType?: DashboardWidgetDataWidgetType;
+  /** @nullable */
+  chartType?: string | null;
+  /** Grouped buckets for chart widgets (admin-authoritative real totals) */
+  series?: ChartSeriesPoint[];
   /** @nullable */
   formula?: string | null;
   /** @nullable */

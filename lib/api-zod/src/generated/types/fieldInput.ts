@@ -29,6 +29,7 @@ export interface FieldInput {
   formulaConfigJson?: FormulaFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
+  showColumnTotal?: boolean;
   sortOrder?: number;
   isActive?: boolean;
 }

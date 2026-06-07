@@ -6,8 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EntityRecord } from './entityRecord';
+import type { RecordQueryResultNumericTotals } from './recordQueryResultNumericTotals';
 
 export interface RecordQueryResult {
   data: EntityRecord[];
   total: number;
+  /** Sum per numeric field flagged showColumnTotal, over the full filtered set (all pages). */
+  numericTotals?: RecordQueryResultNumericTotals;
 }

@@ -28,6 +28,8 @@ export const dashboardWidgetsTable = pgTable("dashboard_widgets", {
   visibleRoleIdsJson: jsonb("visible_role_ids_json").$type<number[]>(),
   icon: text("icon").notNull().default("bar-chart-3"),
   color: text("color").notNull().default("blue"),
+  gridW: integer("grid_w").notNull().default(1),
+  gridH: integer("grid_h").notNull().default(1),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

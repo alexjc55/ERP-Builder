@@ -22,6 +22,7 @@ export interface PageFieldInput {
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
   showInTable?: boolean;
+  showColumnTotal?: boolean;
   sortOrder?: number;
   isActive?: boolean;
 }

@@ -1179,19 +1179,33 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph driven by chart.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum)'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
-})),
+})).optional(),
   "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
-  "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish()
+  "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish(),
+  "chart": zod.object({
+  "type": zod.enum(['bar', 'line', 'area', 'pie', 'donut']),
+  "entityId": zod.number(),
+  "groupBy": zod.object({
+  "kind": zod.enum(['status', 'field']),
+  "fieldKey": zod.string().nullish().describe('Field whose values form the chart buckets (when kind = field)')
+}),
+  "aggregation": zod.enum(['count', 'sum']),
+  "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+}).optional()
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
   "icon": zod.string(),
   "color": zod.string(),
+  "gridW": zod.number(),
+  "gridH": zod.number(),
   "sortOrder": zod.number(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -1213,19 +1227,33 @@ export const CreateDashboardWidgetBody = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph driven by chart.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum)'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
-})),
+})).optional(),
   "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
-  "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish()
+  "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish(),
+  "chart": zod.object({
+  "type": zod.enum(['bar', 'line', 'area', 'pie', 'donut']),
+  "entityId": zod.number(),
+  "groupBy": zod.object({
+  "kind": zod.enum(['status', 'field']),
+  "fieldKey": zod.string().nullish().describe('Field whose values form the chart buckets (when kind = field)')
+}),
+  "aggregation": zod.enum(['count', 'sum']),
+  "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+}).optional()
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
   "icon": zod.string().optional(),
   "color": zod.string().optional(),
+  "gridW": zod.number().optional(),
+  "gridH": zod.number().optional(),
   "sortOrder": zod.number().optional()
 })
 
@@ -1238,19 +1266,33 @@ export const CreateDashboardWidgetResponse = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph driven by chart.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum)'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
-})),
+})).optional(),
   "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
-  "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish()
+  "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish(),
+  "chart": zod.object({
+  "type": zod.enum(['bar', 'line', 'area', 'pie', 'donut']),
+  "entityId": zod.number(),
+  "groupBy": zod.object({
+  "kind": zod.enum(['status', 'field']),
+  "fieldKey": zod.string().nullish().describe('Field whose values form the chart buckets (when kind = field)')
+}),
+  "aggregation": zod.enum(['count', 'sum']),
+  "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+}).optional()
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
   "icon": zod.string(),
   "color": zod.string(),
+  "gridW": zod.number(),
+  "gridH": zod.number(),
   "sortOrder": zod.number(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -1273,7 +1315,16 @@ export const GetDashboardDataResponseItem = zod.object({
 }),
   "icon": zod.string(),
   "color": zod.string(),
+  "gridW": zod.number(),
+  "gridH": zod.number(),
   "sortOrder": zod.number(),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal(null)]).nullish(),
+  "chartType": zod.string().nullish(),
+  "series": zod.array(zod.object({
+  "label": zod.string(),
+  "value": zod.number(),
+  "color": zod.string().nullish()
+})).optional().describe('Grouped buckets for chart widgets (admin-authoritative real totals)'),
   "formula": zod.string().nullish(),
   "format": zod.string().nullish(),
   "metrics": zod.record(zod.string(), zod.number()).describe('Computed value per metric key (admin-authoritative real totals)')
@@ -1295,19 +1346,33 @@ export const UpdateDashboardWidgetBody = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph driven by chart.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum)'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
-})),
+})).optional(),
   "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
-  "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish()
+  "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish(),
+  "chart": zod.object({
+  "type": zod.enum(['bar', 'line', 'area', 'pie', 'donut']),
+  "entityId": zod.number(),
+  "groupBy": zod.object({
+  "kind": zod.enum(['status', 'field']),
+  "fieldKey": zod.string().nullish().describe('Field whose values form the chart buckets (when kind = field)')
+}),
+  "aggregation": zod.enum(['count', 'sum']),
+  "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+}).optional()
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
   "icon": zod.string().optional(),
   "color": zod.string().optional(),
+  "gridW": zod.number().optional(),
+  "gridH": zod.number().optional(),
   "sortOrder": zod.number().optional()
 })
 
@@ -1320,19 +1385,33 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph driven by chart.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum)'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
-})),
+})).optional(),
   "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
-  "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish()
+  "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish(),
+  "chart": zod.object({
+  "type": zod.enum(['bar', 'line', 'area', 'pie', 'donut']),
+  "entityId": zod.number(),
+  "groupBy": zod.object({
+  "kind": zod.enum(['status', 'field']),
+  "fieldKey": zod.string().nullish().describe('Field whose values form the chart buckets (when kind = field)')
+}),
+  "aggregation": zod.enum(['count', 'sum']),
+  "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+}).optional()
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
   "icon": zod.string(),
   "color": zod.string(),
+  "gridW": zod.number(),
+  "gridH": zod.number(),
   "sortOrder": zod.number(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -1411,6 +1490,7 @@ export const ListEntityFieldsResponseItem = zod.object({
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
+  "showColumnTotal": zod.boolean().optional(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -1429,6 +1509,7 @@ export const CreateEntityFieldParams = zod.object({
 export const createEntityFieldBodyIsRequiredDefault = false;
 export const createEntityFieldBodyIsFilterableDefault = false;
 export const createEntityFieldBodyShowInTableDefault = true;
+export const createEntityFieldBodyShowColumnTotalDefault = false;
 export const createEntityFieldBodyIsActiveDefault = true;
 
 export const CreateEntityFieldBody = zod.object({
@@ -1465,6 +1546,7 @@ export const CreateEntityFieldBody = zod.object({
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
   "isFilterable": zod.boolean().default(createEntityFieldBodyIsFilterableDefault),
   "showInTable": zod.boolean().default(createEntityFieldBodyShowInTableDefault),
+  "showColumnTotal": zod.boolean().default(createEntityFieldBodyShowColumnTotalDefault),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createEntityFieldBodyIsActiveDefault)
 })
@@ -1513,6 +1595,7 @@ export const GetFieldResponse = zod.object({
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
+  "showColumnTotal": zod.boolean().optional(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -1561,6 +1644,7 @@ export const UpdateFieldBody = zod.object({
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
+  "showColumnTotal": zod.boolean().optional(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
@@ -1601,6 +1685,7 @@ export const UpdateFieldResponse = zod.object({
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
+  "showColumnTotal": zod.boolean().optional(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -1673,6 +1758,7 @@ export const ListPageFieldsResponseItem = zod.object({
   "expression": zod.string().optional()
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
   "showInTable": zod.boolean().optional(),
+  "showColumnTotal": zod.boolean().optional(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -1690,6 +1776,7 @@ export const CreatePageFieldParams = zod.object({
 
 export const createPageFieldBodyIsRequiredDefault = false;
 export const createPageFieldBodyShowInTableDefault = true;
+export const createPageFieldBodyShowColumnTotalDefault = false;
 export const createPageFieldBodyIsActiveDefault = true;
 
 export const CreatePageFieldBody = zod.object({
@@ -1718,6 +1805,7 @@ export const CreatePageFieldBody = zod.object({
   "expression": zod.string().optional()
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
   "showInTable": zod.boolean().default(createPageFieldBodyShowInTableDefault),
+  "showColumnTotal": zod.boolean().default(createPageFieldBodyShowColumnTotalDefault),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createPageFieldBodyIsActiveDefault)
 })
@@ -1756,6 +1844,7 @@ export const UpdatePageFieldBody = zod.object({
   "expression": zod.string().optional()
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
   "showInTable": zod.boolean().optional(),
+  "showColumnTotal": zod.boolean().optional(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
@@ -1788,6 +1877,7 @@ export const UpdatePageFieldResponse = zod.object({
   "expression": zod.string().optional()
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
   "showInTable": zod.boolean().optional(),
+  "showColumnTotal": zod.boolean().optional(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -2522,7 +2612,8 @@ export const QueryEntityRecordsResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })),
-  "total": zod.number()
+  "total": zod.number(),
+  "numericTotals": zod.record(zod.string(), zod.number()).optional().describe('Sum per numeric field flagged showColumnTotal, over the full filtered set (all pages).')
 })
 
 

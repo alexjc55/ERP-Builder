@@ -110,6 +110,7 @@ export function PageFieldConfigDialog({
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
   const [showInTable, setShowInTable] = useState(true);
+  const [showColumnTotal, setShowColumnTotal] = useState(false);
   const [formatRules, setFormatRules] = useState<FieldFormatRule[]>([]);
   const [formula, setFormula] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -129,6 +130,7 @@ export function PageFieldConfigDialog({
       setSortOrder(field.sortOrder);
       setIsActive(field.isActive);
       setShowInTable(field.showInTable ?? true);
+      setShowColumnTotal(field.showColumnTotal ?? false);
       setFormatRules(Array.isArray(field.formatRulesJson) ? field.formatRulesJson : []);
       setFormula(field.formulaConfigJson?.expression ?? "");
     } else {
@@ -142,6 +144,7 @@ export function PageFieldConfigDialog({
       setSortOrder(nextSortOrder);
       setIsActive(true);
       setShowInTable(true);
+      setShowColumnTotal(false);
       setFormatRules([]);
       setFormula("");
     }
@@ -224,6 +227,7 @@ export function PageFieldConfigDialog({
       sortOrder,
       isActive,
       showInTable,
+      showColumnTotal: fieldType === "number" ? showColumnTotal : false,
       formatRulesJson: formatRules,
       formulaConfigJson: fieldType === "function" ? { expression: formula.trim() } : {},
     };
@@ -312,6 +316,12 @@ export function PageFieldConfigDialog({
                 <Switch checked={showInTable} onCheckedChange={setShowInTable} id="pfcd-show-in-table" />
                 <Label htmlFor="pfcd-show-in-table">{t("fields.showInTable", "Показывать в таблице")}</Label>
               </div>
+              {fieldType === "number" && (
+                <div className="flex items-center gap-2">
+                  <Switch checked={showColumnTotal} onCheckedChange={setShowColumnTotal} id="pfcd-show-column-total" />
+                  <Label htmlFor="pfcd-show-column-total">{t("fields.showColumnTotal", "Показывать сумму столбца")}</Label>
+                </div>
+              )}
             </div>
 
             <div className="border-t border-slate-100 pt-4">

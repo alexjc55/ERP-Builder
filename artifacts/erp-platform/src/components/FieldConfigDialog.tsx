@@ -127,6 +127,7 @@ export function FieldConfigDialog({
   const [isActive, setIsActive] = useState(true);
   const [isFilterable, setIsFilterable] = useState(false);
   const [showInTable, setShowInTable] = useState(true);
+  const [showColumnTotal, setShowColumnTotal] = useState(false);
   const [permissions, setPermissions] = useState<FieldPermissions>({});
   const [allowedSources, setAllowedSources] = useState<FileSource[]>(["server"]);
   const [allowedRoleIds, setAllowedRoleIds] = useState<number[]>([]);
@@ -151,6 +152,7 @@ export function FieldConfigDialog({
       setIsActive(field.isActive);
       setIsFilterable(field.isFilterable ?? false);
       setShowInTable(field.showInTable ?? true);
+      setShowColumnTotal(field.showColumnTotal ?? false);
       setPermissions(field.permissionsJson ?? {});
       {
         const src = field.fileConfigJson?.allowedSources;
@@ -173,6 +175,7 @@ export function FieldConfigDialog({
       setIsActive(true);
       setIsFilterable(false);
       setShowInTable(true);
+      setShowColumnTotal(false);
       setPermissions({});
       setAllowedSources(["server"]);
       setAllowedRoleIds([]);
@@ -261,6 +264,7 @@ export function FieldConfigDialog({
       isActive,
       isFilterable,
       showInTable,
+      showColumnTotal: fieldType === "number" ? showColumnTotal : false,
       fileConfigJson:
         fieldType === "file"
           ? { allowedSources: allowedSources.length > 0 ? allowedSources : (["server"] as FileSource[]) }
@@ -422,6 +426,12 @@ export function FieldConfigDialog({
                 <Switch checked={showInTable} onCheckedChange={setShowInTable} id="fcd-show-in-table" />
                 <Label htmlFor="fcd-show-in-table">{t("fields.showInTable", "Показывать в таблице")}</Label>
               </div>
+              {fieldType === "number" && (
+                <div className="flex items-center gap-2">
+                  <Switch checked={showColumnTotal} onCheckedChange={setShowColumnTotal} id="fcd-show-column-total" />
+                  <Label htmlFor="fcd-show-column-total">{t("fields.showColumnTotal", "Показывать сумму столбца")}</Label>
+                </div>
+              )}
             </div>
 
             <div className="border-t border-slate-100 pt-4">

@@ -5,11 +5,18 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { ChartConfig } from './chartConfig';
 import type { WidgetConfigFormat } from './widgetConfigFormat';
+import type { WidgetConfigWidgetType } from './widgetConfigWidgetType';
 import type { WidgetMetric } from './widgetMetric';
 
 export interface WidgetConfig {
-  metrics: WidgetMetric[];
+  /**
+     * metric (default) = number cards; chart = graph driven by chart.
+     * @nullable
+     */
+  widgetType?: WidgetConfigWidgetType;
+  metrics?: WidgetMetric[];
   /**
      * Optional expression combining metric keys as {key}
      * @nullable
@@ -17,4 +24,5 @@ export interface WidgetConfig {
   formula?: string | null;
   /** @nullable */
   format?: WidgetConfigFormat;
+  chart?: ChartConfig;
 }

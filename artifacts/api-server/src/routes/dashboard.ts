@@ -8,6 +8,7 @@ import {
   entitiesTable,
   entityFieldsTable,
   entityRecordsTable,
+  entityStatusesTable,
   dashboardWidgetsTable,
   type DashboardWidget,
 } from "@workspace/db";
@@ -70,6 +71,29 @@ interface WidgetMetricSpec {
   statusIds?: number[] | null;
 }
 
+interface ChartSpec {
+  type: "bar" | "line" | "area" | "pie" | "donut";
+  entityId: number;
+  groupBy: { kind: "status" | "field"; fieldKey?: string | null };
+  aggregation: "count" | "sum";
+  fieldKey?: string | null;
+  statusIds?: number[] | null;
+}
+
+interface WidgetConfigShape {
+  widgetType?: "metric" | "chart" | null;
+  metrics?: WidgetMetricSpec[];
+  formula?: string | null;
+  format?: string | null;
+  chart?: ChartSpec | null;
+}
+
+/** Resolve a multilingual JSON value with the platform ru → en → he fallback. */
+function resolveML(j: unknown): string {
+  const m = (j ?? {}) as Record<string, string>;
+  return m.ru || m.en || m.he || "";
+}
+
 /** Serialize a stored widget row into the API shape (config/visibleRoleIds). */
 function serializeWidget(w: DashboardWidget) {
   return {
@@ -80,6 +104,8 @@ function serializeWidget(w: DashboardWidget) {
     visibleRoleIds: w.visibleRoleIdsJson ?? null,
     icon: w.icon,
     color: w.color,
+    gridW: w.gridW,
+    gridH: w.gridH,
     sortOrder: w.sortOrder,
     createdAt: w.createdAt,
     updatedAt: w.updatedAt,
@@ -91,7 +117,50 @@ function serializeWidget(w: DashboardWidget) {
  * existing entity, sum metrics need an existing numeric field, and metric keys
  * must be unique within the widget. Returns an error message or null.
  */
-async function validateConfig(config: { metrics?: WidgetMetricSpec[] } | undefined): Promise<string | null> {
+async function validateChartConfig(chart: ChartSpec | null | undefined): Promise<string | null> {
+  if (!chart) return "Chart config is required";
+  const validTypes = ["bar", "line", "area", "pie", "donut"];
+  if (!validTypes.includes(chart.type)) return `Invalid chart type: ${chart.type}`;
+
+  const [entity] = await db
+    .select({ id: entitiesTable.id })
+    .from(entitiesTable)
+    .where(eq(entitiesTable.id, chart.entityId))
+    .limit(1);
+  if (!entity) return `Entity ${chart.entityId} not found`;
+
+  const kind = chart.groupBy?.kind;
+  if (kind === "field") {
+    if (!chart.groupBy.fieldKey) return "Group-by field is required";
+    const [f] = await db
+      .select({ id: entityFieldsTable.id })
+      .from(entityFieldsTable)
+      .where(and(eq(entityFieldsTable.entityId, chart.entityId), eq(entityFieldsTable.fieldKey, chart.groupBy.fieldKey)))
+      .limit(1);
+    if (!f) return `Group-by field "${chart.groupBy.fieldKey}" not found`;
+  } else if (kind !== "status") {
+    return "Invalid groupBy.kind";
+  }
+
+  if (chart.aggregation === "sum") {
+    if (!chart.fieldKey) return "Sum aggregation requires a numeric field";
+    const [field] = await db
+      .select({ fieldType: entityFieldsTable.fieldType })
+      .from(entityFieldsTable)
+      .where(and(eq(entityFieldsTable.entityId, chart.entityId), eq(entityFieldsTable.fieldKey, chart.fieldKey)))
+      .limit(1);
+    if (!field) return `Field "${chart.fieldKey}" not found on entity ${chart.entityId}`;
+    if (field.fieldType !== "number") return `Field "${chart.fieldKey}" is not numeric`;
+  } else if (chart.aggregation !== "count") {
+    return "Invalid aggregation";
+  }
+  return null;
+}
+
+async function validateConfig(config: WidgetConfigShape | undefined): Promise<string | null> {
+  if (config?.widgetType === "chart") {
+    return validateChartConfig(config.chart);
+  }
   const metrics = config?.metrics ?? [];
   if (metrics.length === 0) return "At least one metric is required";
   const seen = new Set<string>();
@@ -152,6 +221,65 @@ async function computeMetric(m: WidgetMetricSpec): Promise<number> {
   return Number(row?.v ?? 0);
 }
 
+/**
+ * Compute a chart widget's grouped buckets. ADMIN-AUTHORITATIVE like computeMetric:
+ * real totals over the entity's non-archived records, independent of the viewing
+ * role's data permissions (access is governed by per-widget role visibility).
+ * Group either by record status (colored, ordered by status order) or by the raw
+ * value of a chosen field.
+ */
+async function computeChartSeries(
+  c: ChartSpec,
+): Promise<Array<{ label: string; value: number; color?: string | null }>> {
+  const conds = [eq(entityRecordsTable.entityId, c.entityId), isNull(entityRecordsTable.archivedAt)];
+  const statusIds = (c.statusIds ?? []).filter((n) => Number.isInteger(n));
+  if (statusIds.length > 0) conds.push(inArray(entityRecordsTable.statusId, statusIds));
+
+  const valueExpr =
+    c.aggregation === "sum" && c.fieldKey
+      ? sql<number>`COALESCE(SUM(CASE WHEN (${entityRecordsTable.valuesJson} ->> ${c.fieldKey}) ~ ${NUMERIC_RE} THEN (${entityRecordsTable.valuesJson} ->> ${c.fieldKey})::numeric ELSE 0 END), 0)::float8`
+      : sql<number>`count(*)::int`;
+
+  if (c.groupBy?.kind === "status") {
+    const rows = await db
+      .select({
+        statusId: entityStatusesTable.id,
+        nameJson: entityStatusesTable.nameJson,
+        color: entityStatusesTable.color,
+        sortOrder: entityStatusesTable.sortOrder,
+        v: valueExpr,
+      })
+      .from(entityRecordsTable)
+      .leftJoin(entityStatusesTable, eq(entityStatusesTable.id, entityRecordsTable.statusId))
+      .where(and(...conds))
+      .groupBy(
+        entityStatusesTable.id,
+        entityStatusesTable.nameJson,
+        entityStatusesTable.color,
+        entityStatusesTable.sortOrder,
+      )
+      .orderBy(asc(entityStatusesTable.sortOrder));
+    return rows.map((r) => ({
+      label: r.statusId ? resolveML(r.nameJson) || "—" : "—",
+      value: Number(r.v ?? 0),
+      color: r.color ?? null,
+    }));
+  }
+
+  // Group by raw field value. Empty/null values bucket under "—". Order by value
+  // descending using the ordinal position (re-using a sql fragment re-binds params).
+  const key = c.groupBy.fieldKey as string;
+  const labelExpr = sql<string>`COALESCE(NULLIF(${entityRecordsTable.valuesJson} ->> ${key}, ''), '—')`;
+  const rows = await db
+    .select({ label: labelExpr, v: valueExpr })
+    .from(entityRecordsTable)
+    .where(and(...conds))
+    .groupBy(labelExpr)
+    .orderBy(sql`2 desc`)
+    .limit(50);
+  return rows.map((r) => ({ label: String(r.label ?? "—"), value: Number(r.v ?? 0), color: null }));
+}
+
 /** True if the role may access (see) the given content page. */
 function canAccessPage(perms: { superAdmin: boolean; pageIds: number[] }, pageId: number): boolean {
   return perms.superAdmin || perms.pageIds.includes(pageId);
@@ -203,7 +331,7 @@ router.post("/pages/:id/dashboard/widgets", requireAuth, requireAdmin("pages"), 
     res.status(404).json({ error: "Dashboard page not found" });
     return;
   }
-  const configError = await validateConfig(parsed.data.config as { metrics?: WidgetMetricSpec[] });
+  const configError = await validateConfig(parsed.data.config as WidgetConfigShape);
   if (configError) {
     res.status(400).json({ error: configError });
     return;
@@ -218,6 +346,8 @@ router.post("/pages/:id/dashboard/widgets", requireAuth, requireAdmin("pages"), 
       visibleRoleIdsJson: body.visibleRoleIds ?? null,
       ...(body.icon != null ? { icon: body.icon } : {}),
       ...(body.color != null ? { color: body.color } : {}),
+      ...(body.gridW != null ? { gridW: body.gridW } : {}),
+      ...(body.gridH != null ? { gridH: body.gridH } : {}),
       ...(body.sortOrder != null ? { sortOrder: body.sortOrder } : {}),
     })
     .returning();
@@ -235,7 +365,7 @@ router.put("/dashboard/widgets/:wid", requireAuth, requireAdmin("pages"), async 
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const configError = await validateConfig(parsed.data.config as { metrics?: WidgetMetricSpec[] });
+  const configError = await validateConfig(parsed.data.config as WidgetConfigShape);
   if (configError) {
     res.status(400).json({ error: configError });
     return;
@@ -248,6 +378,8 @@ router.put("/dashboard/widgets/:wid", requireAuth, requireAdmin("pages"), async 
   };
   if (body.icon != null) updateData.icon = body.icon;
   if (body.color != null) updateData.color = body.color;
+  if (body.gridW != null) updateData.gridW = body.gridW;
+  if (body.gridH != null) updateData.gridH = body.gridH;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
 
   const [widget] = await db
@@ -322,21 +454,35 @@ router.get("/pages/:id/dashboard/data", requireAuth, async (req, res): Promise<v
 
   const data = await Promise.all(
     visible.map(async (w) => {
-      const config = (w.configJson ?? {}) as {
-        metrics?: WidgetMetricSpec[];
-        formula?: string | null;
-        format?: string | null;
+      const config = (w.configJson ?? {}) as WidgetConfigShape;
+      const base = {
+        id: w.id,
+        titleJson: w.titleJson,
+        icon: w.icon,
+        color: w.color,
+        gridW: w.gridW,
+        gridH: w.gridH,
+        sortOrder: w.sortOrder,
       };
+      if (config.widgetType === "chart" && config.chart) {
+        const series = await computeChartSeries(config.chart);
+        return {
+          ...base,
+          widgetType: "chart" as const,
+          chartType: config.chart.type,
+          series,
+          formula: null,
+          format: config.format ?? null,
+          metrics: {},
+        };
+      }
       const metrics: Record<string, number> = {};
       for (const m of config.metrics ?? []) {
         metrics[m.key] = await computeMetric(m);
       }
       return {
-        id: w.id,
-        titleJson: w.titleJson,
-        icon: w.icon,
-        color: w.color,
-        sortOrder: w.sortOrder,
+        ...base,
+        widgetType: "metric" as const,
         formula: config.formula ?? null,
         format: config.format ?? null,
         metrics,

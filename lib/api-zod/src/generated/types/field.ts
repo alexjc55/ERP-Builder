@@ -31,6 +31,7 @@ export interface Field {
   formulaConfigJson?: FormulaFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
+  showColumnTotal?: boolean;
   sortOrder: number;
   isActive: boolean;
   createdAt: Date;

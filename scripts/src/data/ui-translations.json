@@ -4342,5 +4342,149 @@
     "ru": "Страница покажет панель виджетов. Виджеты настраиваются на самой странице кнопкой «Настроить».",
     "en": "The page will show a widget dashboard. Widgets are configured on the page itself via the “Configure” button.",
     "he": "העמוד יציג לוח וידג'טים. הווידג'טים מוגדרים בעמוד עצמו באמצעות כפתור «הגדרה»."
+  },
+  {
+    "key": "fields.showColumnTotal",
+    "ru": "Показывать сумму столбца",
+    "en": "Show column total",
+    "he": "הצג סכום עמודה"
+  },
+  {
+    "key": "records.columnTotal",
+    "ru": "Сумма",
+    "en": "Total",
+    "he": "סכום"
+  },
+  {
+    "key": "dash.widgetType",
+    "ru": "Тип виджета",
+    "en": "Widget type",
+    "he": "סוג וידג'ט"
+  },
+  {
+    "key": "dash.typeMetric",
+    "ru": "Показатель",
+    "en": "Metric",
+    "he": "מדד"
+  },
+  {
+    "key": "dash.typeChart",
+    "ru": "График",
+    "en": "Chart",
+    "he": "תרשים"
+  },
+  {
+    "key": "dash.chartWidget",
+    "ru": "График",
+    "en": "Chart",
+    "he": "תרשים"
+  },
+  {
+    "key": "dash.gridW",
+    "ru": "Ширина (ячеек)",
+    "en": "Width (cells)",
+    "he": "רוחב (תאים)"
+  },
+  {
+    "key": "dash.gridH",
+    "ru": "Высота (ячеек)",
+    "en": "Height (cells)",
+    "he": "גובה (תאים)"
+  },
+  {
+    "key": "dash.chartSettings",
+    "ru": "Настройки графика",
+    "en": "Chart settings",
+    "he": "הגדרות תרשים"
+  },
+  {
+    "key": "dash.chartType",
+    "ru": "Тип графика",
+    "en": "Chart type",
+    "he": "סוג תרשים"
+  },
+  {
+    "key": "dash.chartBar",
+    "ru": "Столбчатый",
+    "en": "Bar",
+    "he": "עמודות"
+  },
+  {
+    "key": "dash.chartLine",
+    "ru": "Линейный",
+    "en": "Line",
+    "he": "קו"
+  },
+  {
+    "key": "dash.chartArea",
+    "ru": "Область",
+    "en": "Area",
+    "he": "שטח"
+  },
+  {
+    "key": "dash.chartPie",
+    "ru": "Круговой",
+    "en": "Pie",
+    "he": "עוגה"
+  },
+  {
+    "key": "dash.chartDonut",
+    "ru": "Кольцевой",
+    "en": "Donut",
+    "he": "טבעת"
+  },
+  {
+    "key": "dash.groupBy",
+    "ru": "Группировать по",
+    "en": "Group by",
+    "he": "קבץ לפי"
+  },
+  {
+    "key": "dash.groupByStatus",
+    "ru": "Статусу",
+    "en": "Status",
+    "he": "סטטוס"
+  },
+  {
+    "key": "dash.groupByField",
+    "ru": "Полю",
+    "en": "Field",
+    "he": "שדה"
+  },
+  {
+    "key": "dash.groupField",
+    "ru": "Поле группировки",
+    "en": "Group field",
+    "he": "שדה קיבוץ"
+  },
+  {
+    "key": "dash.aggregation",
+    "ru": "Агрегация",
+    "en": "Aggregation",
+    "he": "צבירה"
+  },
+  {
+    "key": "dash.noFields",
+    "ru": "Нет полей",
+    "en": "No fields",
+    "he": "אין שדות"
+  },
+  {
+    "key": "dash.noData",
+    "ru": "Нет данных",
+    "en": "No data",
+    "he": "אין נתונים"
+  },
+  {
+    "key": "dash.chartNeedsEntity",
+    "ru": "Выберите сущность для графика",
+    "en": "Select an entity for the chart",
+    "he": "בחר ישות לתרשים"
+  },
+  {
+    "key": "dash.chartNeedsGroupField",
+    "ru": "Выберите поле для группировки",
+    "en": "Select a field to group by",
+    "he": "בחר שדה לקיבוץ"
   }
 ]

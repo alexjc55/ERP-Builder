@@ -600,6 +600,7 @@ export function EntityRecords({
   const [page, setPage] = useState(1);
   const [records, setRecords] = useState<EntityRecord[]>([]);
   const [total, setTotal] = useState(0);
+  const [numericTotals, setNumericTotals] = useState<Record<string, number>>({});
   const [recordsLoading, setRecordsLoading] = useState(true);
   const [refreshTick, setRefreshTick] = useState(0);
 
@@ -722,11 +723,13 @@ export function EntityRecords({
         if (cancelled) return;
         setRecords(res.data);
         setTotal(res.total);
+        setNumericTotals(res.numericTotals ?? {});
       })
       .catch((err) => {
         if (cancelled) return;
         setRecords([]);
         setTotal(0);
+        setNumericTotals({});
         toast({ title: t("records.loadError", "Ошибка загрузки записей"), description: extractError(err), variant: "destructive" });
       })
       .finally(() => {
@@ -1272,6 +1275,36 @@ export function EntityRecords({
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
+                  {Object.keys(numericTotals).length > 0 && (
+                    <tr className="border-b border-slate-100 bg-slate-100/70">
+                      {displayFields.map((f: Field) => (
+                        <th key={`tot-${f.id}`} className="text-left px-4 py-2 whitespace-nowrap">
+                          {numericTotals[f.fieldKey] !== undefined ? (
+                            <span className="text-xs text-slate-500">
+                              {t("records.columnTotal", "Сумма")}:{" "}
+                              <span className="font-semibold text-slate-700">
+                                {numericTotals[f.fieldKey].toLocaleString("ru-RU")}
+                              </span>
+                            </span>
+                          ) : null}
+                        </th>
+                      ))}
+                      {displayedPageFields.map((pf: PageField) => (
+                        <th key={`tot-pf-${pf.id}`} className="text-left px-4 py-2 whitespace-nowrap">
+                          {numericTotals[pf.fieldKey] !== undefined ? (
+                            <span className="text-xs text-slate-500">
+                              {t("records.columnTotal", "Сумма")}:{" "}
+                              <span className="font-semibold text-slate-700">
+                                {numericTotals[pf.fieldKey].toLocaleString("ru-RU")}
+                              </span>
+                            </span>
+                          ) : null}
+                        </th>
+                      ))}
+                      {statuses.length > 0 && <th className="px-4 py-2" />}
+                      <th className="px-4 py-2" />
+                    </tr>
+                  )}
                   <tr className="border-b border-slate-100 bg-slate-50">
                     {displayFields.map((f: Field, ci: number) => (
                       <th key={f.id} className="text-left px-4 py-3 font-medium text-slate-600 whitespace-nowrap">

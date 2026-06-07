@@ -28,6 +28,7 @@ export const pageFieldsTable = pgTable(
     formatRulesJson: jsonb("format_rules_json").$type<FieldFormatRule[]>().notNull().default([]),
     formulaConfigJson: jsonb("formula_config_json").$type<FormulaFieldConfig>().notNull().default({}),
     showInTable: boolean("show_in_table").notNull().default(true),
+    showColumnTotal: boolean("show_column_total").notNull().default(false),
     sortOrder: integer("sort_order").notNull().default(0),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
