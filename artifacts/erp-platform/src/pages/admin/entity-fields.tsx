@@ -13,6 +13,7 @@ import {
   type FieldType,
   type FieldAccess,
   type FieldPermissions,
+  type FileSource,
   type Role,
   type MultilingualText,
 } from "@workspace/api-client-react";
@@ -69,6 +70,13 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "url", label: "Ссылка (URL)" },
   { value: "phone", label: "Телефон" },
   { value: "user", label: "Пользователь" },
+  { value: "file", label: "Файл" },
+];
+
+const FILE_SOURCES: { value: FileSource; labelKey: string; label: string }[] = [
+  { value: "server", labelKey: "fields.fileSource.server", label: "Загрузка на сервер" },
+  { value: "gdrive", labelKey: "fields.fileSource.gdrive", label: "Загрузка в Google Drive" },
+  { value: "link", labelKey: "fields.fileSource.link", label: "Ссылка" },
 ];
 
 const FIELD_ACCESS_OPTIONS: { value: FieldAccess; label: string }[] = [
@@ -104,6 +112,7 @@ export default function EntityFieldsPage() {
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
   const [permissions, setPermissions] = useState<FieldPermissions>({});
+  const [allowedSources, setAllowedSources] = useState<FileSource[]>(["server"]);
 
   const { data: entities = [] } = useListEntities();
   const { data: roles = [] } = useListRoles();
@@ -170,6 +179,7 @@ export default function EntityFieldsPage() {
     setSortOrder(fields.length + 1);
     setIsActive(true);
     setPermissions({});
+    setAllowedSources(["server"]);
     setDialogOpen(true);
   };
 
@@ -187,6 +197,11 @@ export default function EntityFieldsPage() {
     setSortOrder(field.sortOrder);
     setIsActive(field.isActive);
     setPermissions(field.permissionsJson ?? {});
+    setAllowedSources(
+      field.fileConfigJson?.allowedSources && field.fileConfigJson.allowedSources.length > 0
+        ? field.fileConfigJson.allowedSources
+        : ["server"],
+    );
     setDialogOpen(true);
   };
 
@@ -206,6 +221,10 @@ export default function EntityFieldsPage() {
       permissionsJson: permissions,
       sortOrder,
       isActive,
+      fileConfigJson:
+        fieldType === "file"
+          ? { allowedSources: allowedSources.length > 0 ? allowedSources : (["server"] as FileSource[]) }
+          : {},
     };
     if (editingField) {
       updateMutation.mutate({ id: editingField.id, data: payload });
@@ -383,6 +402,34 @@ export default function EntityFieldsPage() {
                   rows={4}
                 />
                 <p className="text-xs text-slate-400">{t("fields.optionsHint", "По одному варианту на строку.")}</p>
+              </div>
+            )}
+            {fieldType === "file" && (
+              <div className="space-y-2">
+                <Label>{t("fields.fileSources", "Разрешённые источники файлов")}</Label>
+                <p className="text-xs text-slate-400">
+                  {t("fields.fileSourcesHint", "Выберите, как пользователи смогут прикреплять файлы. Должен быть выбран хотя бы один источник.")}
+                </p>
+                <div className="space-y-1.5 pt-1">
+                  {FILE_SOURCES.map((s) => {
+                    const checked = allowedSources.includes(s.value);
+                    return (
+                      <div key={s.value} className="flex items-center gap-2">
+                        <Switch
+                          id={`field-src-${s.value}`}
+                          checked={checked}
+                          onCheckedChange={(on) =>
+                            setAllowedSources((prev) => {
+                              const next = on ? [...prev, s.value] : prev.filter((x) => x !== s.value);
+                              return next.length > 0 ? next : prev;
+                            })
+                          }
+                        />
+                        <Label htmlFor={`field-src-${s.value}`}>{t(s.labelKey, s.label)}</Label>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
             <div className="space-y-1.5">

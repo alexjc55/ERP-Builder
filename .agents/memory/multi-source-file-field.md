@@ -52,3 +52,19 @@ via `fileConfigJson.allowedSources` on the field; the default is server-only.
 
 **Deviation from original plan:** uploads land in an auto-created Drive folder
 ("ERP Uploads") instead of a Google Picker folder chooser. Picker was descoped.
+
+## Two field editors must stay in sync
+
+There are **two** field-editor UIs and they each carry their own copy of the
+`FIELD_TYPES` list and the file-config (allowedSources) block: the dedicated
+Fields page (`entity-fields.tsx`) and the inline dialog used in the records
+table (`FieldConfigDialog.tsx`). Adding a field type / config to one but not the
+other is a silent gap — the `file` type was originally only added to the inline
+dialog, so admins on the Fields page couldn't create file fields at all. Any new
+field type or per-type config must be mirrored in BOTH.
+
+**i18n key prefix gotcha:** both editors reference the file-source labels under
+`fields.fileSource.{server,gdrive,link}` (and `fields.type.file`), but the seed
+originally only had `records.fileSource.*`. `t(key, default)` falls back to the
+Russian default, so a missing key shows untranslated in en/he rather than erroring.
+When adding type/source labels, seed the `fields.*`-prefixed keys, not just `records.*`.

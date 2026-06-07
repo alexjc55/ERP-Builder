@@ -2250,6 +2250,12 @@
     "he": "משתמש"
   },
   {
+    "key": "fields.type.file",
+    "ru": "Файл",
+    "en": "File",
+    "he": "קובץ"
+  },
+  {
     "key": "fields.access.edit",
     "ru": "Редактирование",
     "en": "Editing",
@@ -3226,6 +3232,24 @@
     "ru": "Какие способы добавления файла доступны при заполнении (нужен хотя бы один)",
     "en": "Which ways to add a file are available when filling in (at least one required)",
     "he": "אילו דרכים להוספת קובץ זמינות בעת המילוי (נדרשת לפחות אחת)"
+  },
+  {
+    "key": "fields.fileSource.server",
+    "ru": "Загрузка на сервер",
+    "en": "Upload to server",
+    "he": "העלאה לשרת"
+  },
+  {
+    "key": "fields.fileSource.gdrive",
+    "ru": "Загрузка в Google Drive",
+    "en": "Upload to Google Drive",
+    "he": "העלאה ל-Google Drive"
+  },
+  {
+    "key": "fields.fileSource.link",
+    "ru": "Ссылка",
+    "en": "Link",
+    "he": "קישור"
   },
   {
     "key": "records.fileSource.server",
