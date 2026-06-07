@@ -912,6 +912,18 @@
     "he": "חיפוש לפי שם או אימייל..."
   },
   {
+    "key": "users.filterByRole",
+    "ru": "Фильтр по роли",
+    "en": "Filter by role",
+    "he": "סינון לפי תפקיד"
+  },
+  {
+    "key": "users.allRoles",
+    "ru": "Все роли",
+    "en": "All roles",
+    "he": "כל התפקידים"
+  },
+  {
     "key": "users.colUser",
     "ru": "Пользователь",
     "en": "User",

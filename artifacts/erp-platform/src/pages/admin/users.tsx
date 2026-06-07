@@ -80,6 +80,7 @@ export default function UsersPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [deleteUser, setDeleteUser] = useState<User | null>(null);
@@ -114,6 +115,9 @@ export default function UsersPage() {
   const users: User[] = Array.isArray(usersResult)
     ? usersResult
     : (usersResult as { data?: User[] } | undefined)?.data ?? [];
+
+  const filteredUsers: User[] =
+    roleFilter === "all" ? users : users.filter((u) => String(u.roleId) === roleFilter);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["/api/users"] });
 
@@ -208,14 +212,29 @@ export default function UsersPage() {
         </Button>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-        <Input
-          placeholder={t("users.searchPlaceholder", "Поиск по имени или email...")}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative max-w-sm flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Input
+            placeholder={t("users.searchPlaceholder", "Поиск по имени или email...")}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select value={roleFilter} onValueChange={setRoleFilter}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder={t("users.filterByRole", "Фильтр по роли")} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("users.allRoles", "Все роли")}</SelectItem>
+            {roles.map((r) => (
+              <SelectItem key={r.id} value={String(r.id)}>
+                {ml(r.nameJson) || "—"}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <Card className="border-slate-200 shadow-sm">
@@ -241,14 +260,14 @@ export default function UsersPage() {
                       ))}
                     </tr>
                   ))
-                ) : users.length === 0 ? (
+                ) : filteredUsers.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
                       {t("users.empty", "Пользователи не найдены")}
                     </td>
                   </tr>
                 ) : (
-                  users.map((user) => (
+                  filteredUsers.map((user) => (
                     <tr key={user.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2.5">
