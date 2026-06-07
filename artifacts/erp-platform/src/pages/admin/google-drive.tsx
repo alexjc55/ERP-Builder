@@ -135,7 +135,7 @@ export default function GoogleDrivePage() {
   };
 
   return (
-    <div className="space-y-5 max-w-3xl">
+    <div className="p-6 space-y-5 max-w-3xl">
       <Button
         variant="ghost"
         size="sm"

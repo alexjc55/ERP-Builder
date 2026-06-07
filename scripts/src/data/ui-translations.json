@@ -3757,9 +3757,9 @@
   },
   {
     "key": "gdrive.builtinUnavailable",
-    "ru": "Встроенные ключи недоступны — переключитесь на собственные",
-    "en": "Built-in keys are unavailable — switch to your own",
-    "he": "המפתחות המובנים אינם זמינים — עברו למפתחות משלכם"
+    "ru": "Встроенные ключи не настроены (GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET) — переключитесь на «Собственные»",
+    "en": "Built-in keys are not configured (GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET) — switch to \"Own\"",
+    "he": "המפתחות המובנים אינם מוגדרים (GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET) — עברו ל«משלך»"
   },
   {
     "key": "gdrive.credsTitle",
@@ -3865,9 +3865,9 @@
   },
   {
     "key": "gdrive.builtinMissing",
-    "ru": "Встроенные ключи не настроены в этой установке. Выберите режим «Собственные».",
-    "en": "Built-in keys are not configured in this installation. Choose the \"Own\" mode.",
-    "he": "המפתחות המובנים אינם מוגדרים בהתקנה זו. בחרו במצב «משלך»."
+    "ru": "Встроенные ключи задаются на уровне платформы через переменные окружения GOOGLE_OAUTH_CLIENT_ID и GOOGLE_OAUTH_CLIENT_SECRET (не через эту форму) и сейчас не настроены. Добавьте эти секреты в окружение или выберите режим «Собственные» и введите свои ключи ниже.",
+    "en": "Built-in keys are set at the platform level via the GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET environment variables (not through this form) and are not configured yet. Add these secrets to the environment, or choose the \"Own\" mode and enter your own keys below.",
+    "he": "המפתחות המובנים מוגדרים ברמת הפלטפורמה דרך משתני הסביבה GOOGLE_OAUTH_CLIENT_ID ו-GOOGLE_OAUTH_CLIENT_SECRET (לא דרך טופס זה) וכרגע אינם מוגדרים. הוסיפו סודות אלה לסביבה או בחרו במצב «משלך» והזינו מפתחות משלכם למטה."
   },
   {
     "key": "gdrive.wizardTitle",
