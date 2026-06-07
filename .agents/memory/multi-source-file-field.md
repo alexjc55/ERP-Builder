@@ -68,3 +68,14 @@ field type or per-type config must be mirrored in BOTH.
 originally only had `records.fileSource.*`. `t(key, default)` falls back to the
 Russian default, so a missing key shows untranslated in en/he rather than erroring.
 When adding type/source labels, seed the `fields.*`-prefixed keys, not just `records.*`.
+
+## File hover-preview in the records table
+
+The records-table file cell shows an auth-gated hover preview: images inline,
+PDFs in an `<iframe>` fed a blob object URL. A raw PDF blob renders the browser's
+**native** PDF viewer (toolbar + side "Layers"/thumbnail panel), which overflows
+a small hover card and covers adjacent UI. Always append
+`#toolbar=0&navpanes=0&view=FitH` to a PDF blob/file iframe src so only the page
+renders. Do NOT add these params to the Google Drive embed preview (link cells) —
+that uses Google's own clean embed and is unaffected; gate the params on the
+preview kind being `pdf`.

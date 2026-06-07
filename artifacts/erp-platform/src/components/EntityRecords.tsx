@@ -229,7 +229,7 @@ function BlobPreview({
   if (kind === "image") {
     return <img src={url} alt={name} className="max-h-64 w-full rounded object-contain" />;
   }
-  return <iframe src={url} title={name} className="h-64 w-full rounded border-0" />;
+  return <iframe src={`${url}#toolbar=0&navpanes=0&view=FitH`} title={name} className="h-80 w-full rounded border-0" />;
 }
 
 /** A filled file cell, rendered per source (server / Google Drive / link). */
@@ -290,7 +290,11 @@ function UrlPreviewCell({ url, label }: { url: string; label?: string }) {
         {preview.kind === "image" ? (
           <img src={preview.src} alt={url} className="max-h-64 w-full rounded object-contain" />
         ) : (
-          <iframe src={preview.src} title={url} className="h-64 w-full rounded border-0" />
+          <iframe
+            src={preview.kind === "pdf" ? `${preview.src}#toolbar=0&navpanes=0&view=FitH` : preview.src}
+            title={url}
+            className="h-80 w-full rounded border-0"
+          />
         )}
       </HoverCardContent>
     </HoverCard>
