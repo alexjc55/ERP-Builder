@@ -1,23 +1,101 @@
 import { useRef } from "react";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useT } from "@/lib/i18n";
 
 export type FormulaFieldRef = { key: string; label: string };
 
-/** Functions that take arguments — clicking inserts `name()` with the caret inside. */
-const FORMULA_FUNCS = [
-  "if",
-  "round",
-  "min",
-  "max",
-  "sum",
-  "abs",
-  "concat",
-  "coalesce",
-  "upper",
-  "lower",
-  "len",
+/**
+ * Functions that take arguments — clicking inserts `name()` with the caret
+ * inside. `sig` shows the signature (parameters separated by commas), `example`
+ * a concrete call, `descKey`/`descFallback` a short i18n description — all shown
+ * on hover so users know how to separate parameters.
+ */
+const FORMULA_FUNCS: {
+  name: string;
+  sig: string;
+  example: string;
+  descKey: string;
+  descFallback: string;
+}[] = [
+  {
+    name: "if",
+    sig: "if(условие, если_да, если_нет)",
+    example: 'if({qty} > 10, "опт", "розница")',
+    descKey: "fields.fnIf",
+    descFallback: "Возвращает второй аргумент, если условие истинно, иначе третий.",
+  },
+  {
+    name: "round",
+    sig: "round(число, знаки)",
+    example: "round({price} * 1.2, 2)",
+    descKey: "fields.fnRound",
+    descFallback: "Округляет число до указанного количества знаков после запятой.",
+  },
+  {
+    name: "min",
+    sig: "min(число1, число2, …)",
+    example: "min({plan}, {fact})",
+    descKey: "fields.fnMin",
+    descFallback: "Наименьшее из перечисленных значений.",
+  },
+  {
+    name: "max",
+    sig: "max(число1, число2, …)",
+    example: "max({plan}, {fact})",
+    descKey: "fields.fnMax",
+    descFallback: "Наибольшее из перечисленных значений.",
+  },
+  {
+    name: "sum",
+    sig: "sum(число1, число2, …)",
+    example: "sum({q1}, {q2}, {q3})",
+    descKey: "fields.fnSum",
+    descFallback: "Сумма всех перечисленных значений.",
+  },
+  {
+    name: "abs",
+    sig: "abs(число)",
+    example: "abs({balance})",
+    descKey: "fields.fnAbs",
+    descFallback: "Абсолютное значение (модуль) числа.",
+  },
+  {
+    name: "concat",
+    sig: "concat(значение1, значение2, …)",
+    example: 'concat({first}, " ", {last})',
+    descKey: "fields.fnConcat",
+    descFallback: "Объединяет значения в одну строку.",
+  },
+  {
+    name: "coalesce",
+    sig: "coalesce(значение1, значение2, …)",
+    example: "coalesce({nick}, {name})",
+    descKey: "fields.fnCoalesce",
+    descFallback: "Первое непустое значение из перечисленных.",
+  },
+  {
+    name: "upper",
+    sig: "upper(текст)",
+    example: "upper({code})",
+    descKey: "fields.fnUpper",
+    descFallback: "Переводит текст в ВЕРХНИЙ регистр.",
+  },
+  {
+    name: "lower",
+    sig: "lower(текст)",
+    example: "lower({email})",
+    descKey: "fields.fnLower",
+    descFallback: "Переводит текст в нижний регистр.",
+  },
+  {
+    name: "len",
+    sig: "len(текст)",
+    example: "len({title})",
+    descKey: "fields.fnLen",
+    descFallback: "Количество символов в тексте.",
+  },
 ];
 
 /**
@@ -88,15 +166,24 @@ export function FormulaEditor({
         <p className="text-xs text-slate-500">{t("fields.formulaInsertFunc", "Функции:")}</p>
         <div className="flex flex-wrap gap-1">
           {FORMULA_FUNCS.map((fn) => (
-            <button
-              key={fn}
-              type="button"
-              onClick={() => insert(`${fn}()`, 1)}
-              className="px-2 py-0.5 rounded border border-slate-200 bg-white hover:bg-slate-100 hover:border-slate-300 font-mono text-xs text-slate-600 transition-colors"
-              title={`${fn}(…)`}
-            >
-              {fn}
-            </button>
+            <Tooltip key={fn.name}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => insert(`${fn.name}()`, 1)}
+                  className="px-2 py-0.5 rounded border border-slate-200 bg-white hover:bg-slate-100 hover:border-slate-300 font-mono text-xs text-slate-600 transition-colors"
+                >
+                  {fn.name}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs space-y-1">
+                <p className="font-mono text-[11px]">{fn.sig}</p>
+                <p className="opacity-80">{t(fn.descKey, fn.descFallback)}</p>
+                <p className="font-mono text-[11px] opacity-70">
+                  {t("fields.fnExample", "Пример")}: {fn.example}
+                </p>
+              </TooltipContent>
+            </Tooltip>
           ))}
         </div>
       </div>
