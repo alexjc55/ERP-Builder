@@ -42,6 +42,12 @@
     "he": "אימייל"
   },
   {
+    "key": "settings.language",
+    "ru": "Язык интерфейса",
+    "en": "Interface language",
+    "he": "שפת הממשק"
+  },
+  {
     "key": "settings.save",
     "ru": "Сохранить",
     "en": "Save",

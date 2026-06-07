@@ -16,6 +16,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
 import { Building2, User, Lock, Image as ImageIcon, Loader2, Upload, Trash2 } from "lucide-react";
@@ -32,16 +39,23 @@ export default function SettingsPage() {
   // ---- Profile ----
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [language, setLanguage] = useState<"ru" | "en" | "he">("ru");
   useEffect(() => {
     setFirstName(user?.firstName ?? "");
     setLastName(user?.lastName ?? "");
-  }, [user?.firstName, user?.lastName]);
+    setLanguage((user?.language as "ru" | "en" | "he") ?? "ru");
+  }, [user?.firstName, user?.lastName, user?.language]);
 
   const updateMe = useUpdateMe();
   const saveProfile = async () => {
     try {
       const updated = await updateMe.mutateAsync({
-        data: { firstName: firstName.trim(), lastName: lastName.trim() },
+        data: {
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          language,
+          direction: language === "he" ? "rtl" : "ltr",
+        },
       });
       queryClient.setQueryData(getGetMeQueryKey(), updated);
       toast({ title: t("settings.profileSaved", "Профиль обновлён") });
@@ -172,6 +186,19 @@ export default function SettingsPage() {
           <div className="space-y-1.5">
             <Label className="text-sm font-medium text-slate-700">{t("settings.email", "Email")}</Label>
             <Input value={user?.email ?? ""} disabled />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium text-slate-700">{t("settings.language", "Язык интерфейса")}</Label>
+            <Select value={language} onValueChange={(v) => setLanguage(v as "ru" | "en" | "he")}>
+              <SelectTrigger className="w-full sm:w-60">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ru">Русский</SelectItem>
+                <SelectItem value="en">English</SelectItem>
+                <SelectItem value="he">עברית</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex justify-end">
             <Button onClick={saveProfile} disabled={updateMe.isPending}>
