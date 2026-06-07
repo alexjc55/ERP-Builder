@@ -40,15 +40,17 @@ export type FormatOperator =
 
 /**
  * One conditional-formatting rule. When the cell value matches `operator`/`value`
- * the cell is painted `cellColor` and/or the whole row `rowColor` (hex strings).
- * Rules are evaluated in order; the first match wins per field. Cell colors take
- * precedence over row colors on the same cell.
+ * the cell is painted `cellColor` and/or the whole row `rowColor`, and the cell
+ * text is painted `textColor` (all hex strings). Rules are evaluated in order;
+ * the first match wins per field. Cell colors take precedence over row colors on
+ * the same cell.
  */
 export type FieldFormatRule = {
   operator: FormatOperator;
   value?: string;
   cellColor?: string;
   rowColor?: string;
+  textColor?: string;
 };
 
 /**

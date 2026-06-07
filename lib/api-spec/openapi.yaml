@@ -3415,7 +3415,8 @@ components:
       required: [operator]
       description: >-
         One conditional-formatting rule. When a cell value matches
-        operator/value, the cell is painted cellColor and/or the row rowColor.
+        operator/value, the cell is painted cellColor and/or the row rowColor,
+        and the cell text is painted textColor.
         Rules are evaluated in order; first match wins per field.
       properties:
         operator:
@@ -3425,6 +3426,8 @@ components:
         cellColor:
           type: string
         rowColor:
+          type: string
+        textColor:
           type: string
 
     FormulaFieldConfig:

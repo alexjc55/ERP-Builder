@@ -1758,6 +1758,24 @@
     "he": "ערך"
   },
   {
+    "key": "views.selectValue",
+    "ru": "выберите значение",
+    "en": "select value",
+    "he": "בחר ערך"
+  },
+  {
+    "key": "views.manualValue",
+    "ru": "вручную…",
+    "en": "manual…",
+    "he": "ידני…"
+  },
+  {
+    "key": "views.noOptions",
+    "ru": "Нет вариантов",
+    "en": "No options",
+    "he": "אין אפשרויות"
+  },
+  {
     "key": "views.field",
     "ru": "Поле",
     "en": "Field",

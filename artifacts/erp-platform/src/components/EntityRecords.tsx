@@ -173,8 +173,10 @@ function formToValues(fields: Field[], form: FormState): Record<string, unknown>
   return out;
 }
 
-function renderCellValue(field: Field, value: unknown, userNames?: Map<number, string>): React.ReactNode {
-  if (value === undefined || value === null || value === "") return <span className="text-slate-300">—</span>;
+function renderCellValue(field: Field, value: unknown, userNames?: Map<number, string>, textColor?: string): React.ReactNode {
+  const colorStyle = textColor ? { color: textColor } : undefined;
+  if (value === undefined || value === null || value === "")
+    return <span className="text-slate-300" style={colorStyle}>—</span>;
   if (field.fieldType === "boolean") {
     return value ? (
       <Badge className="bg-emerald-100 text-emerald-700 border-0 font-normal">Да</Badge>
@@ -185,16 +187,16 @@ function renderCellValue(field: Field, value: unknown, userNames?: Map<number, s
   if (field.fieldType === "user") {
     const id = typeof value === "number" ? value : Number(value);
     const name = userNames?.get(id);
-    return <span className="text-slate-700">{name ?? `#${value}`}</span>;
+    return <span className="text-slate-700" style={colorStyle}>{name ?? `#${value}`}</span>;
   }
   if (field.fieldType === "url") {
     return <UrlPreviewCell url={String(value)} />;
   }
   if (field.fieldType === "file") {
-    if (!isFileValue(value)) return <span className="text-slate-300">—</span>;
+    if (!isFileValue(value)) return <span className="text-slate-300" style={colorStyle}>—</span>;
     return <FileCell value={value} />;
   }
-  return <span className="text-slate-700">{String(value)}</span>;
+  return <span className="text-slate-700" style={colorStyle}>{String(value)}</span>;
 }
 
 /**
@@ -1731,6 +1733,8 @@ export function EntityRecords({
                           const isFunction = f.fieldType === "function";
                           const cellEditable = inlineEditEnabled && access === "edit" && !isFunction;
                           const cellBg = formatting.cellColors[f.fieldKey];
+                          const cellText = formatting.cellTextColors[f.fieldKey];
+                          const cellStyle = cellBg || cellText ? { backgroundColor: cellBg || undefined, color: cellText || undefined } : undefined;
                           const isEditingThis =
                             editingCell?.recordId === record.id && editingCell?.fieldKey === f.fieldKey;
                           if (isEditingThis) {
@@ -1748,7 +1752,7 @@ export function EntityRecords({
                           }
                           if (f.fieldType === "boolean" && cellEditable) {
                             return (
-                              <td key={f.id} className="px-4 py-3 max-w-[240px]" style={cellBg ? { backgroundColor: cellBg } : undefined}>
+                              <td key={f.id} className="px-4 py-3 max-w-[240px]" style={cellStyle}>
                                 <Switch
                                   checked={values[f.fieldKey] === true}
                                   onCheckedChange={(v) => commitCell(record, f, v)}
@@ -1759,13 +1763,13 @@ export function EntityRecords({
                           if (isFunction) {
                             const computed = formatFormulaResult(f.formulaConfigJson?.expression ?? "", allValues);
                             return (
-                              <td key={f.id} className="px-4 py-3 max-w-[240px] truncate" style={cellBg ? { backgroundColor: cellBg } : undefined}>
+                              <td key={f.id} className="px-4 py-3 max-w-[240px] truncate" style={cellStyle}>
                                 {computed.error ? (
                                   <span className="text-red-400 text-xs" title={computed.text}>{t("fields.formulaError", "Ошибка формулы")}</span>
                                 ) : computed.text === "" ? (
-                                  <span className="text-slate-300">—</span>
+                                  <span className="text-slate-300" style={cellText ? { color: cellText } : undefined}>—</span>
                                 ) : (
-                                  <span className="text-slate-700">{computed.text}</span>
+                                  <span className="text-slate-700" style={cellText ? { color: cellText } : undefined}>{computed.text}</span>
                                 )}
                               </td>
                             );
@@ -1775,10 +1779,10 @@ export function EntityRecords({
                               key={f.id}
                               onClick={cellEditable ? () => setEditingCell({ recordId: record.id, fieldKey: f.fieldKey }) : undefined}
                               className={`px-4 py-3 max-w-[240px] truncate ${cellEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
-                              style={cellBg ? { backgroundColor: cellBg } : undefined}
+                              style={cellStyle}
                               title={cellEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
                             >
-                              {renderCellValue(f, values[f.fieldKey], userNames)}
+                              {renderCellValue(f, values[f.fieldKey], userNames, cellText)}
                             </td>
                           );
                         })}
@@ -1786,6 +1790,8 @@ export function EntityRecords({
                           const isFunction = pf.fieldType === "function";
                           const cellEditable = inlineEditEnabled && !isFunction;
                           const cellBg = formatting.cellColors[pf.fieldKey];
+                          const cellText = formatting.cellTextColors[pf.fieldKey];
+                          const cellStyle = cellBg || cellText ? { backgroundColor: cellBg || undefined, color: cellText || undefined } : undefined;
                           const pfKey = `pf:${pf.fieldKey}`;
                           const isEditingThis =
                             editingCell?.recordId === record.id && editingCell?.fieldKey === pfKey;
@@ -1805,7 +1811,7 @@ export function EntityRecords({
                           }
                           if (pf.fieldType === "boolean" && cellEditable) {
                             return (
-                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={cellBg ? { backgroundColor: cellBg } : undefined}>
+                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={cellStyle}>
                                 <Switch
                                   checked={pageValues[pf.fieldKey] === true}
                                   onCheckedChange={(v) => commitPageCell(record, pf, v)}
@@ -1816,13 +1822,13 @@ export function EntityRecords({
                           if (isFunction) {
                             const computed = formatFormulaResult(pf.formulaConfigJson?.expression ?? "", allValues);
                             return (
-                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px] truncate" style={cellBg ? { backgroundColor: cellBg } : undefined}>
+                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px] truncate" style={cellStyle}>
                                 {computed.error ? (
                                   <span className="text-red-400 text-xs" title={computed.text}>{t("fields.formulaError", "Ошибка формулы")}</span>
                                 ) : computed.text === "" ? (
-                                  <span className="text-slate-300">—</span>
+                                  <span className="text-slate-300" style={cellText ? { color: cellText } : undefined}>—</span>
                                 ) : (
-                                  <span className="text-slate-700">{computed.text}</span>
+                                  <span className="text-slate-700" style={cellText ? { color: cellText } : undefined}>{computed.text}</span>
                                 )}
                               </td>
                             );
@@ -1832,10 +1838,10 @@ export function EntityRecords({
                               key={`pf-${pf.id}`}
                               onClick={cellEditable ? () => setEditingCell({ recordId: record.id, fieldKey: pfKey }) : undefined}
                               className={`px-4 py-3 max-w-[240px] truncate ${cellEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
-                              style={cellBg ? { backgroundColor: cellBg } : undefined}
+                              style={cellStyle}
                               title={cellEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
                             >
-                              {renderCellValue(pageFieldAsField, pageValues[pf.fieldKey], userNames)}
+                              {renderCellValue(pageFieldAsField, pageValues[pf.fieldKey], userNames, cellText)}
                             </td>
                           );
                         })}

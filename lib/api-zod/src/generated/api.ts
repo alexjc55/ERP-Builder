@@ -1483,8 +1483,9 @@ export const ListEntityFieldsResponseItem = zod.object({
   "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
   "value": zod.string().optional(),
   "cellColor": zod.string().optional(),
-  "rowColor": zod.string().optional()
-}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "rowColor": zod.string().optional(),
+  "textColor": zod.string().optional()
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional()
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
@@ -1539,8 +1540,9 @@ export const CreateEntityFieldBody = zod.object({
   "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
   "value": zod.string().optional(),
   "cellColor": zod.string().optional(),
-  "rowColor": zod.string().optional()
-}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "rowColor": zod.string().optional(),
+  "textColor": zod.string().optional()
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional()
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
@@ -1588,8 +1590,9 @@ export const GetFieldResponse = zod.object({
   "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
   "value": zod.string().optional(),
   "cellColor": zod.string().optional(),
-  "rowColor": zod.string().optional()
-}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "rowColor": zod.string().optional(),
+  "textColor": zod.string().optional()
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional()
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
@@ -1637,8 +1640,9 @@ export const UpdateFieldBody = zod.object({
   "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
   "value": zod.string().optional(),
   "cellColor": zod.string().optional(),
-  "rowColor": zod.string().optional()
-}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "rowColor": zod.string().optional(),
+  "textColor": zod.string().optional()
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional()
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
@@ -1678,8 +1682,9 @@ export const UpdateFieldResponse = zod.object({
   "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
   "value": zod.string().optional(),
   "cellColor": zod.string().optional(),
-  "rowColor": zod.string().optional()
-}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "rowColor": zod.string().optional(),
+  "textColor": zod.string().optional()
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional()
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
@@ -1752,8 +1757,9 @@ export const ListPageFieldsResponseItem = zod.object({
   "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
   "value": zod.string().optional(),
   "cellColor": zod.string().optional(),
-  "rowColor": zod.string().optional()
-}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "rowColor": zod.string().optional(),
+  "textColor": zod.string().optional()
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional()
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
@@ -1799,8 +1805,9 @@ export const CreatePageFieldBody = zod.object({
   "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
   "value": zod.string().optional(),
   "cellColor": zod.string().optional(),
-  "rowColor": zod.string().optional()
-}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "rowColor": zod.string().optional(),
+  "textColor": zod.string().optional()
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional()
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
@@ -1838,8 +1845,9 @@ export const UpdatePageFieldBody = zod.object({
   "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
   "value": zod.string().optional(),
   "cellColor": zod.string().optional(),
-  "rowColor": zod.string().optional()
-}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "rowColor": zod.string().optional(),
+  "textColor": zod.string().optional()
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional()
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
@@ -1871,8 +1879,9 @@ export const UpdatePageFieldResponse = zod.object({
   "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
   "value": zod.string().optional(),
   "cellColor": zod.string().optional(),
-  "rowColor": zod.string().optional()
-}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "rowColor": zod.string().optional(),
+  "textColor": zod.string().optional()
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional()
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),

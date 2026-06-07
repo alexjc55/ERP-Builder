@@ -262,6 +262,7 @@ export function FieldFormatRulesEditor({
             <div className="flex items-center gap-3 flex-wrap">
               {renderColorControl(t("fields.cellColor", "Ячейка"), rule.cellColor ?? "", (v) => update(idx, { cellColor: v }))}
               {renderColorControl(t("fields.rowColor", "Строка"), rule.rowColor ?? "", (v) => update(idx, { rowColor: v }))}
+              {renderColorControl(t("fields.textColor", "Текст"), rule.textColor ?? "", (v) => update(idx, { textColor: v }))}
               <Button
                 type="button"
                 variant="ghost"

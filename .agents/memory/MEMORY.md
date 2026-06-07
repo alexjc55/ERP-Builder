@@ -24,4 +24,5 @@
 - [Multi-source file field](multi-source-file-field.md) — file values are polymorphic (server/gdrive/link); legacy kind-less+path = server; Drive proxy must mirror records read boundary.
 - [App secret fail-fast](app-secret-fail-fast.md) — SESSION_SECRET has no default; import APP_SECRET from lib/secret for all JWT signing + at-rest encryption, never a fallback.
 - [Object/file fields](object-file-fields.md) — "file" field stores {path,name,...} JSONB; object serving must re-apply the records field/row/entity boundary (reference lookup), not auth-only or uploader ACL.
+- [Conditional formatting text color](conditional-formatting-text-color.md) — per-rule textColor must be applied inline on content spans (and into renderCellValue), not the <td>; Tailwind text-* classes beat inherited color.
 - [Dashboard page type](dashboard-page-type.md) — dashboard ⊥ mirror ⊥ bound-entity page types; admin-authoritative widget totals (bypass viewer RBAC) gated by page-access + per-widget role visibility before compute; exclusivity enforced on effective final state.

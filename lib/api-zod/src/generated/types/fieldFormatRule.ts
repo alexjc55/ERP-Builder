@@ -8,11 +8,12 @@
 import type { FormatOperator } from './formatOperator';
 
 /**
- * One conditional-formatting rule. When a cell value matches operator/value, the cell is painted cellColor and/or the row rowColor. Rules are evaluated in order; first match wins per field.
+ * One conditional-formatting rule. When a cell value matches operator/value, the cell is painted cellColor and/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.
  */
 export interface FieldFormatRule {
   operator: FormatOperator;
   value?: string;
   cellColor?: string;
   rowColor?: string;
+  textColor?: string;
 }

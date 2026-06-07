@@ -70,6 +70,7 @@ export interface FormatField {
 
 export interface RowFormatting {
   cellColors: Record<string, string>;
+  cellTextColors: Record<string, string>;
   rowColor?: string;
 }
 
@@ -79,6 +80,7 @@ export interface RowFormatting {
  */
 export function computeRowFormatting(fields: FormatField[], getValue: (fieldKey: string) => unknown): RowFormatting {
   const cellColors: Record<string, string> = {};
+  const cellTextColors: Record<string, string> = {};
   let rowColor: string | undefined;
   for (const field of fields) {
     const rules = field.formatRulesJson ?? [];
@@ -87,10 +89,11 @@ export function computeRowFormatting(fields: FormatField[], getValue: (fieldKey:
     for (const rule of rules) {
       if (ruleMatches(rule, value)) {
         if (rule.cellColor && !cellColors[field.fieldKey]) cellColors[field.fieldKey] = rule.cellColor;
+        if (rule.textColor && !cellTextColors[field.fieldKey]) cellTextColors[field.fieldKey] = rule.textColor;
         if (rule.rowColor && !rowColor) rowColor = rule.rowColor;
         break;
       }
     }
   }
-  return { cellColors, rowColor };
+  return { cellColors, cellTextColors, rowColor };
 }
