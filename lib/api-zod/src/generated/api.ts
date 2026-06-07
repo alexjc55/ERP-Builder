@@ -1003,6 +1003,7 @@ export const ListPagesResponseItem = zod.object({
   "parentPageId": zod.number().nullish(),
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
+  "isDashboard": zod.boolean().optional(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "children": zod.array(zod.unknown()).optional(),
@@ -1033,6 +1034,7 @@ export const CreatePageBody = zod.object({
   "parentPageId": zod.number().nullish(),
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
+  "isDashboard": zod.boolean().optional(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createPageBodyIsActiveDefault)
 })
@@ -1062,6 +1064,7 @@ export const GetPageResponse = zod.object({
   "parentPageId": zod.number().nullish(),
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
+  "isDashboard": zod.boolean().optional(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "children": zod.array(zod.unknown()).optional(),
@@ -1093,6 +1096,7 @@ export const UpdatePageBody = zod.object({
   "parentPageId": zod.number().nullish(),
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
+  "isDashboard": zod.boolean().optional(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
@@ -1114,6 +1118,7 @@ export const UpdatePageResponse = zod.object({
   "parentPageId": zod.number().nullish(),
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
+  "isDashboard": zod.boolean().optional(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "children": zod.array(zod.unknown()).optional(),
@@ -1146,6 +1151,211 @@ export const ReorderPagesBody = zod.object({
 })
 
 export const ReorderPagesResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
+ * @summary List dashboard widgets (full config, admin editing)
+ */
+export const ListDashboardWidgetsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListDashboardWidgetsResponseItem = zod.object({
+  "id": zod.number(),
+  "pageId": zod.number(),
+  "titleJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "config": zod.object({
+  "metrics": zod.array(zod.object({
+  "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
+  "entityId": zod.number(),
+  "aggregation": zod.enum(['count', 'sum']),
+  "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum)'),
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+})),
+  "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
+  "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish()
+}),
+  "visibleRoleIds": zod.array(zod.number()).nullish(),
+  "icon": zod.string(),
+  "color": zod.string(),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListDashboardWidgetsResponse = zod.array(ListDashboardWidgetsResponseItem)
+
+
+/**
+ * @summary Create a dashboard widget
+ */
+export const CreateDashboardWidgetParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const CreateDashboardWidgetBody = zod.object({
+  "titleJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "config": zod.object({
+  "metrics": zod.array(zod.object({
+  "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
+  "entityId": zod.number(),
+  "aggregation": zod.enum(['count', 'sum']),
+  "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum)'),
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+})),
+  "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
+  "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish()
+}),
+  "visibleRoleIds": zod.array(zod.number()).nullish(),
+  "icon": zod.string().optional(),
+  "color": zod.string().optional(),
+  "sortOrder": zod.number().optional()
+})
+
+export const CreateDashboardWidgetResponse = zod.object({
+  "id": zod.number(),
+  "pageId": zod.number(),
+  "titleJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "config": zod.object({
+  "metrics": zod.array(zod.object({
+  "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
+  "entityId": zod.number(),
+  "aggregation": zod.enum(['count', 'sum']),
+  "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum)'),
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+})),
+  "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
+  "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish()
+}),
+  "visibleRoleIds": zod.array(zod.number()).nullish(),
+  "icon": zod.string(),
+  "color": zod.string(),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get computed dashboard data (widgets visible to the caller's role)
+ */
+export const GetDashboardDataParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetDashboardDataResponseItem = zod.object({
+  "id": zod.number(),
+  "titleJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "icon": zod.string(),
+  "color": zod.string(),
+  "sortOrder": zod.number(),
+  "formula": zod.string().nullish(),
+  "format": zod.string().nullish(),
+  "metrics": zod.record(zod.string(), zod.number()).describe('Computed value per metric key (admin-authoritative real totals)')
+})
+export const GetDashboardDataResponse = zod.array(GetDashboardDataResponseItem)
+
+
+/**
+ * @summary Update a dashboard widget
+ */
+export const UpdateDashboardWidgetParams = zod.object({
+  "wid": zod.coerce.number()
+})
+
+export const UpdateDashboardWidgetBody = zod.object({
+  "titleJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "config": zod.object({
+  "metrics": zod.array(zod.object({
+  "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
+  "entityId": zod.number(),
+  "aggregation": zod.enum(['count', 'sum']),
+  "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum)'),
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+})),
+  "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
+  "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish()
+}),
+  "visibleRoleIds": zod.array(zod.number()).nullish(),
+  "icon": zod.string().optional(),
+  "color": zod.string().optional(),
+  "sortOrder": zod.number().optional()
+})
+
+export const UpdateDashboardWidgetResponse = zod.object({
+  "id": zod.number(),
+  "pageId": zod.number(),
+  "titleJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "config": zod.object({
+  "metrics": zod.array(zod.object({
+  "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
+  "entityId": zod.number(),
+  "aggregation": zod.enum(['count', 'sum']),
+  "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum)'),
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+})),
+  "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
+  "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish()
+}),
+  "visibleRoleIds": zod.array(zod.number()).nullish(),
+  "icon": zod.string(),
+  "color": zod.string(),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a dashboard widget
+ */
+export const DeleteDashboardWidgetParams = zod.object({
+  "wid": zod.coerce.number()
+})
+
+export const DeleteDashboardWidgetResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
+ * @summary Reorder dashboard widgets
+ */
+export const ReorderDashboardWidgetsBody = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "sortOrder": zod.number()
+}))
+})
+
+export const ReorderDashboardWidgetsResponse = zod.object({
   "success": zod.boolean(),
   "message": zod.string().optional()
 })

@@ -20,7 +20,7 @@ async function validatePageBinding(
   excludeEntityId: number | null,
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
   const [page] = await db
-    .select({ id: pagesTable.id, mirrorEntityId: pagesTable.mirrorEntityId })
+    .select({ id: pagesTable.id, mirrorEntityId: pagesTable.mirrorEntityId, isDashboard: pagesTable.isDashboard })
     .from(pagesTable)
     .where(eq(pagesTable.id, pageId));
   if (!page) {
@@ -32,6 +32,14 @@ async function validatePageBinding(
       ok: false,
       status: 409,
       error: "This page already mirrors an entity; it cannot also be bound to an entity",
+    };
+  }
+
+  if (page.isDashboard) {
+    return {
+      ok: false,
+      status: 409,
+      error: "This page is a dashboard; it cannot also be bound to an entity",
     };
   }
 

@@ -95,6 +95,11 @@ router.post("/pages", requireAuth, requireAdmin("pages"), async (req, res): Prom
     return;
   }
 
+  if (parsed.data.isDashboard && parsed.data.mirrorEntityId != null) {
+    res.status(400).json({ error: "A dashboard page cannot also mirror an entity" });
+    return;
+  }
+
   const [page] = await db.insert(pagesTable).values(parsed.data).returning();
   res.status(201).json({ ...page, children: [] });
 });
@@ -141,6 +146,7 @@ router.put("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): P
   if ("parentPageId" in body) updateData.parentPageId = body.parentPageId ?? null;
   if ("mirrorEntityId" in body) updateData.mirrorEntityId = body.mirrorEntityId ?? null;
   if ("mirrorFieldKeysJson" in body) updateData.mirrorFieldKeysJson = body.mirrorFieldKeysJson ?? null;
+  if ("isDashboard" in body) updateData.isDashboard = body.isDashboard ?? false;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
   if (body.isActive != null) updateData.isActive = body.isActive;
 
@@ -154,10 +160,36 @@ router.put("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): P
     return;
   }
 
-  if (body.mirrorEntityId != null && (await pageHasBoundEntity(params.data.id))) {
+  // Enforce the dashboard ⊥ mirror ⊥ bound-entity exclusivity against the
+  // EFFECTIVE final state (current row merged with this patch), not just the
+  // fields present in the request — otherwise e.g. flipping only isDashboard on a
+  // page that already mirrors an entity would slip through.
+  const [current] = await db
+    .select({ mirrorEntityId: pagesTable.mirrorEntityId, isDashboard: pagesTable.isDashboard })
+    .from(pagesTable)
+    .where(eq(pagesTable.id, params.data.id));
+  if (!current) {
+    res.status(404).json({ error: "Page not found" });
+    return;
+  }
+  const effMirrorEntityId =
+    "mirrorEntityId" in updateData ? (updateData.mirrorEntityId as number | null) : current.mirrorEntityId;
+  const effIsDashboard =
+    "isDashboard" in updateData ? (updateData.isDashboard as boolean) : current.isDashboard;
+  const hasBoundEntity = await pageHasBoundEntity(params.data.id);
+
+  if (effMirrorEntityId != null && hasBoundEntity) {
     res.status(409).json({
       error: "This page already has a bound entity; it cannot also mirror an entity",
     });
+    return;
+  }
+  if (effIsDashboard && effMirrorEntityId != null) {
+    res.status(409).json({ error: "A dashboard page cannot also mirror an entity" });
+    return;
+  }
+  if (effIsDashboard && hasBoundEntity) {
+    res.status(409).json({ error: "This page already has a bound entity; it cannot be a dashboard" });
     return;
   }
 

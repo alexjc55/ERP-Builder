@@ -20,6 +20,7 @@ export interface Page {
   mirrorEntityId?: number | null;
   /** @nullable */
   mirrorFieldKeysJson?: string[] | null;
+  isDashboard?: boolean;
   sortOrder: number;
   isActive: boolean;
   children?: Page[];

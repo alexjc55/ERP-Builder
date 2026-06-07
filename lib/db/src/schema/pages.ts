@@ -19,6 +19,11 @@ export const pagesTable = pgTable("pages", {
   // projection only — real security (row scope, field hiding) is enforced by RBAC
   // on the mirrored entity.
   mirrorFieldKeysJson: jsonb("mirror_field_keys_json").$type<string[]>(),
+  // Dashboard page: when true, this page renders admin-defined dashboard widgets
+  // instead of entity records. Mutually exclusive with a bound entity and with
+  // mirrorEntityId (enforced in the API and the pages editor). The renderer reads
+  // this flag to pick the dashboard view over the records view.
+  isDashboard: boolean("is_dashboard").notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

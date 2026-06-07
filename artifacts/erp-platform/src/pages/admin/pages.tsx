@@ -79,6 +79,7 @@ export default function PagesPage() {
   const [isActive, setIsActive] = useState(true);
   const [mirrorEntityId, setMirrorEntityId] = useState<string>("none");
   const [mirrorFieldKeys, setMirrorFieldKeys] = useState<string[]>([]);
+  const [pageType, setPageType] = useState<"normal" | "mirror" | "dashboard">("normal");
 
   const { data: pages = [], isLoading } = useListPages();
   const { data: entities = [] } = useListEntities();
@@ -142,6 +143,7 @@ export default function PagesPage() {
     setIsActive(true);
     setMirrorEntityId("none");
     setMirrorFieldKeys([]);
+    setPageType("normal");
     setDialogOpen(true);
   };
 
@@ -158,6 +160,7 @@ export default function PagesPage() {
     setIsActive(page.isActive);
     setMirrorEntityId(page.mirrorEntityId ? String(page.mirrorEntityId) : "none");
     setMirrorFieldKeys(page.mirrorFieldKeysJson ?? []);
+    setPageType(page.isDashboard ? "dashboard" : page.mirrorEntityId ? "mirror" : "normal");
     setDialogOpen(true);
   };
 
@@ -168,10 +171,18 @@ export default function PagesPage() {
   const boundEntity = editingPage ? entityForPage(editingPage.id) : undefined;
   const mirrorLockedByBinding = !!boundEntity;
   const normalizedPath = withSlash(path);
-  // Path is required whenever the page renders data (a mirror entity), otherwise
-  // navigating to it falls through to the dashboard.
-  const pathRequired = mirrorEntityId !== "none";
+  // Path is required whenever the page renders data (a mirror entity or a
+  // dashboard), otherwise navigating to it falls through to the home dashboard.
+  const pathRequired = pageType === "mirror" || pageType === "dashboard";
   const pathMissing = pathRequired && normalizedPath === "";
+
+  const handlePageTypeChange = (v: "normal" | "mirror" | "dashboard") => {
+    setPageType(v);
+    if (v !== "mirror") {
+      setMirrorEntityId("none");
+      setMirrorFieldKeys([]);
+    }
+  };
 
   const handleSubmit = () => {
     if (pathMissing) {
@@ -184,9 +195,10 @@ export default function PagesPage() {
       icon: icon || "",
       path: normalizedPath || null,
       parentPageId: parentPageId !== "none" ? Number(parentPageId) : null,
-      mirrorEntityId: mirrorEntityId !== "none" ? Number(mirrorEntityId) : null,
+      mirrorEntityId: pageType === "mirror" && mirrorEntityId !== "none" ? Number(mirrorEntityId) : null,
       mirrorFieldKeysJson:
-        mirrorEntityId !== "none" && mirrorFieldKeys.length > 0 ? mirrorFieldKeys : null,
+        pageType === "mirror" && mirrorEntityId !== "none" && mirrorFieldKeys.length > 0 ? mirrorFieldKeys : null,
+      isDashboard: pageType === "dashboard",
       sortOrder,
       isActive,
     };
@@ -385,49 +397,74 @@ export default function PagesPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5 rounded-md border border-slate-200 p-3">
-              <Label>{t("pages.mirrorEntity", "Связанная сущность (живые данные)")}</Label>
+            <div className="space-y-2 rounded-md border border-slate-200 p-3">
+              <Label>{t("pages.pageType", "Тип страницы")}</Label>
               {mirrorLockedByBinding && (
                 <p className="text-xs text-amber-600">
-                  {t("pages.mirrorLocked", "К этой странице уже привязана сущность. Зеркало недоступно — страница может быть либо привязанной, либо зеркалом.")}
+                  {t("pages.typeLocked", "К этой странице уже привязана сущность. Доступен только обычный тип — страница не может быть зеркалом или дашбордом.")}
                 </p>
               )}
               <Select
-                value={mirrorEntityId}
+                value={pageType}
                 disabled={mirrorLockedByBinding}
-                onValueChange={(v) => {
-                  setMirrorEntityId(v);
-                  setMirrorFieldKeys([]);
-                }}
+                onValueChange={(v) => handlePageTypeChange(v as "normal" | "mirror" | "dashboard")}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder={t("pages.mirrorNone", "— Обычная страница —")} />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">{t("pages.mirrorNone", "— Обычная страница —")}</SelectItem>
-                  {entities
-                    .filter((e: Entity) => e.isActive)
-                    .map((e: Entity) => (
-                      <SelectItem key={e.id} value={String(e.id)}>
-                        {ml(e.nameJson)}
-                      </SelectItem>
-                    ))}
+                  <SelectItem value="normal">{t("pages.typeNormal", "Обычная")}</SelectItem>
+                  <SelectItem value="mirror">{t("pages.typeMirror", "Зеркальная (живые данные сущности)")}</SelectItem>
+                  <SelectItem value="dashboard">{t("pages.typeDashboard", "Дашборд (виджеты)")}</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-slate-400">
-                {t(
-                  "pages.mirrorHint",
-                  "Страница покажет живые записи выбранной сущности. Изменения двусторонние; видимость строк и полей определяется правами роли.",
-                )}
-              </p>
-              {mirrorEntityId !== "none" && (
-                <MirrorFieldPicker
-                  entityId={Number(mirrorEntityId)}
-                  selected={mirrorFieldKeys}
-                  onChange={setMirrorFieldKeys}
-                  ml={ml}
-                  t={t}
-                />
+
+              {pageType === "mirror" && (
+                <>
+                  <Label>{t("pages.mirrorEntity", "Связанная сущность (живые данные)")}</Label>
+                  <Select
+                    value={mirrorEntityId}
+                    onValueChange={(v) => {
+                      setMirrorEntityId(v);
+                      setMirrorFieldKeys([]);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t("pages.mirrorSelect", "— Выберите сущность —")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">{t("pages.mirrorSelect", "— Выберите сущность —")}</SelectItem>
+                      {entities
+                        .filter((e: Entity) => e.isActive)
+                        .map((e: Entity) => (
+                          <SelectItem key={e.id} value={String(e.id)}>
+                            {ml(e.nameJson)}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-slate-400">
+                    {t(
+                      "pages.mirrorHint",
+                      "Страница покажет живые записи выбранной сущности. Изменения двусторонние; видимость строк и полей определяется правами роли.",
+                    )}
+                  </p>
+                  {mirrorEntityId !== "none" && (
+                    <MirrorFieldPicker
+                      entityId={Number(mirrorEntityId)}
+                      selected={mirrorFieldKeys}
+                      onChange={setMirrorFieldKeys}
+                      ml={ml}
+                      t={t}
+                    />
+                  )}
+                </>
+              )}
+
+              {pageType === "dashboard" && (
+                <p className="text-xs text-slate-400">
+                  {t("pages.dashboardHint", "Страница покажет панель виджетов. Виджеты настраиваются на самой странице кнопкой «Настроить».")}
+                </p>
               )}
             </div>
             <div className="flex items-center gap-2">

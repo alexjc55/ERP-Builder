@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Construction, Loader2, ShieldAlert } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import { EntityRecords } from "@/components/EntityRecords";
+import DashboardView from "@/components/DashboardView";
 import { useAuth } from "@/lib/auth";
 import { useML, useT } from "@/lib/i18n";
 
@@ -69,7 +70,9 @@ export default function DynamicPage() {
         )}
       </div>
 
-      {entity ? (
+      {page.isDashboard ? (
+        <DashboardView pageId={page.id} />
+      ) : entity ? (
         <EntityRecords
           entityId={entity.id}
           visibleFieldKeys={mirrorEntity ? page.mirrorFieldKeysJson ?? undefined : undefined}

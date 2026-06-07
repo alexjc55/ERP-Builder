@@ -2,6 +2,7 @@ export * from "./users";
 export * from "./guest_links";
 export * from "./roles";
 export * from "./pages";
+export * from "./dashboard_widgets";
 export * from "./page_fields";
 export * from "./page_record_values";
 export * from "./translations";

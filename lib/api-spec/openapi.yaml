@@ -840,6 +840,133 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  # DASHBOARD
+  /pages/{id}/dashboard/widgets:
+    get:
+      operationId: listDashboardWidgets
+      tags: [dashboard]
+      summary: List dashboard widgets (full config, admin editing)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of widgets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DashboardWidget"
+    post:
+      operationId: createDashboardWidget
+      tags: [dashboard]
+      summary: Create a dashboard widget
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DashboardWidgetInput"
+      responses:
+        "200":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardWidget"
+
+  /pages/{id}/dashboard/data:
+    get:
+      operationId: getDashboardData
+      tags: [dashboard]
+      summary: Get computed dashboard data (widgets visible to the caller's role)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Computed widget data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DashboardWidgetData"
+
+  /dashboard/widgets/{wid}:
+    put:
+      operationId: updateDashboardWidget
+      tags: [dashboard]
+      summary: Update a dashboard widget
+      parameters:
+        - name: wid
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DashboardWidgetInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardWidget"
+    delete:
+      operationId: deleteDashboardWidget
+      tags: [dashboard]
+      summary: Delete a dashboard widget
+      parameters:
+        - name: wid
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /dashboard/widgets/reorder:
+    post:
+      operationId: reorderDashboardWidgets
+      tags: [dashboard]
+      summary: Reorder dashboard widgets
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderInput"
+      responses:
+        "200":
+          description: Reordered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
   # FIELDS
   /entities/{entityId}/fields:
     get:
@@ -2915,6 +3042,8 @@ components:
           type: ["array", "null"]
           items:
             type: string
+        isDashboard:
+          type: boolean
         sortOrder:
           type: integer
         isActive:
@@ -2950,6 +3079,8 @@ components:
           type: ["array", "null"]
           items:
             type: string
+        isDashboard:
+          type: boolean
         sortOrder:
           type: integer
         isActive:
@@ -2975,6 +3106,8 @@ components:
           type: ["array", "null"]
           items:
             type: string
+        isDashboard:
+          type: boolean
         sortOrder:
           type: integer
         isActive:
@@ -2994,6 +3127,115 @@ components:
                 type: integer
               sortOrder:
                 type: integer
+
+    # DASHBOARD
+    WidgetMetric:
+      type: object
+      required: [key, entityId, aggregation]
+      properties:
+        key:
+          type: string
+          description: Identifier referenced from the widget formula as {key}
+        entityId:
+          type: integer
+        aggregation:
+          type: string
+          enum: [count, sum]
+        fieldKey:
+          type: ["string", "null"]
+          description: Numeric field to sum (required when aggregation = sum)
+        statusIds:
+          type: ["array", "null"]
+          items:
+            type: integer
+          description: Restrict to records in these statuses; empty/null = all statuses
+
+    WidgetConfig:
+      type: object
+      required: [metrics]
+      properties:
+        metrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/WidgetMetric"
+        formula:
+          type: ["string", "null"]
+          description: Optional expression combining metric keys as {key}
+        format:
+          type: ["string", "null"]
+          enum: [number, currency, percent, null]
+
+    DashboardWidget:
+      type: object
+      required: [id, pageId, titleJson, config, icon, color, sortOrder, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        pageId:
+          type: integer
+        titleJson:
+          $ref: "#/components/schemas/MultilingualText"
+        config:
+          $ref: "#/components/schemas/WidgetConfig"
+        visibleRoleIds:
+          type: ["array", "null"]
+          items:
+            type: integer
+        icon:
+          type: string
+        color:
+          type: string
+        sortOrder:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    DashboardWidgetInput:
+      type: object
+      required: [titleJson, config]
+      properties:
+        titleJson:
+          $ref: "#/components/schemas/MultilingualText"
+        config:
+          $ref: "#/components/schemas/WidgetConfig"
+        visibleRoleIds:
+          type: ["array", "null"]
+          items:
+            type: integer
+        icon:
+          type: string
+        color:
+          type: string
+        sortOrder:
+          type: integer
+
+    DashboardWidgetData:
+      type: object
+      required: [id, titleJson, icon, color, sortOrder, metrics]
+      properties:
+        id:
+          type: integer
+        titleJson:
+          $ref: "#/components/schemas/MultilingualText"
+        icon:
+          type: string
+        color:
+          type: string
+        sortOrder:
+          type: integer
+        formula:
+          type: ["string", "null"]
+        format:
+          type: ["string", "null"]
+        metrics:
+          type: object
+          additionalProperties:
+            type: number
+          description: Computed value per metric key (admin-authoritative real totals)
 
     # ENTITIES
     Entity:

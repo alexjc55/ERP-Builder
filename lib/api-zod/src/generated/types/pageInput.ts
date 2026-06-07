@@ -19,6 +19,7 @@ export interface PageInput {
   mirrorEntityId?: number | null;
   /** @nullable */
   mirrorFieldKeysJson?: string[] | null;
+  isDashboard?: boolean;
   sortOrder?: number;
   isActive?: boolean;
 }

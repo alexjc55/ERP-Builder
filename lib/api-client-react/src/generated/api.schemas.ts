@@ -509,6 +509,7 @@ export interface Page {
   mirrorEntityId?: number | null;
   /** @nullable */
   mirrorFieldKeysJson?: string[] | null;
+  isDashboard?: boolean;
   sortOrder: number;
   isActive: boolean;
   children?: Page[];
@@ -528,6 +529,7 @@ export interface PageInput {
   mirrorEntityId?: number | null;
   /** @nullable */
   mirrorFieldKeysJson?: string[] | null;
+  isDashboard?: boolean;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -544,6 +546,7 @@ export interface PageUpdate {
   mirrorEntityId?: number | null;
   /** @nullable */
   mirrorFieldKeysJson?: string[] | null;
+  isDashboard?: boolean;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -555,6 +558,97 @@ export type ReorderInputItemsItem = {
 
 export interface ReorderInput {
   items: ReorderInputItemsItem[];
+}
+
+export type WidgetMetricAggregation = typeof WidgetMetricAggregation[keyof typeof WidgetMetricAggregation];
+
+
+export const WidgetMetricAggregation = {
+  count: 'count',
+  sum: 'sum',
+} as const;
+
+export interface WidgetMetric {
+  /** Identifier referenced from the widget formula as {key} */
+  key: string;
+  entityId: number;
+  aggregation: WidgetMetricAggregation;
+  /**
+     * Numeric field to sum (required when aggregation = sum)
+     * @nullable
+     */
+  fieldKey?: string | null;
+  /**
+     * Restrict to records in these statuses; empty/null = all statuses
+     * @nullable
+     */
+  statusIds?: number[] | null;
+}
+
+/**
+ * @nullable
+ */
+export type WidgetConfigFormat = typeof WidgetConfigFormat[keyof typeof WidgetConfigFormat] | null;
+
+
+export const WidgetConfigFormat = {
+  number: 'number',
+  currency: 'currency',
+  percent: 'percent',
+} as const;
+
+export interface WidgetConfig {
+  metrics: WidgetMetric[];
+  /**
+     * Optional expression combining metric keys as {key}
+     * @nullable
+     */
+  formula?: string | null;
+  /** @nullable */
+  format?: WidgetConfigFormat;
+}
+
+export interface DashboardWidget {
+  id: number;
+  pageId: number;
+  titleJson: MultilingualText;
+  config: WidgetConfig;
+  /** @nullable */
+  visibleRoleIds?: number[] | null;
+  icon: string;
+  color: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DashboardWidgetInput {
+  titleJson: MultilingualText;
+  config: WidgetConfig;
+  /** @nullable */
+  visibleRoleIds?: number[] | null;
+  icon?: string;
+  color?: string;
+  sortOrder?: number;
+}
+
+/**
+ * Computed value per metric key (admin-authoritative real totals)
+ */
+export type DashboardWidgetDataMetrics = {[key: string]: number};
+
+export interface DashboardWidgetData {
+  id: number;
+  titleJson: MultilingualText;
+  icon: string;
+  color: string;
+  sortOrder: number;
+  /** @nullable */
+  formula?: string | null;
+  /** @nullable */
+  format?: string | null;
+  /** Computed value per metric key (admin-authoritative real totals) */
+  metrics: DashboardWidgetDataMetrics;
 }
 
 export interface Entity {

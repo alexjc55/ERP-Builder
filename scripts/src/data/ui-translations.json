@@ -4030,5 +4030,305 @@
     "ru": "Заполняется после создания записи",
     "en": "Filled after the record is created",
     "he": "ממולא לאחר יצירת הרשומה"
+  },
+  {
+    "key": "dash.created",
+    "ru": "Виджет создан",
+    "en": "Widget created",
+    "he": "וידג'ט נוצר"
+  },
+  {
+    "key": "dash.updated",
+    "ru": "Виджет обновлён",
+    "en": "Widget updated",
+    "he": "וידג'ט עודכן"
+  },
+  {
+    "key": "dash.deleted",
+    "ru": "Виджет удалён",
+    "en": "Widget deleted",
+    "he": "וידג'ט נמחק"
+  },
+  {
+    "key": "dash.saveError",
+    "ru": "Ошибка сохранения виджета",
+    "en": "Failed to save widget",
+    "he": "שמירת הווידג'ט נכשלה"
+  },
+  {
+    "key": "dash.addWidget",
+    "ru": "Добавить виджет",
+    "en": "Add widget",
+    "he": "הוסף וידג'ט"
+  },
+  {
+    "key": "dash.done",
+    "ru": "Готово",
+    "en": "Done",
+    "he": "סיום"
+  },
+  {
+    "key": "dash.configure",
+    "ru": "Настроить",
+    "en": "Configure",
+    "he": "הגדרה"
+  },
+  {
+    "key": "dash.empty",
+    "ru": "Виджеты ещё не добавлены",
+    "en": "No widgets yet",
+    "he": "אין עדיין וידג'טים"
+  },
+  {
+    "key": "dash.metricsCount",
+    "ru": "Метрик",
+    "en": "Metrics",
+    "he": "מדדים"
+  },
+  {
+    "key": "dash.hasFormula",
+    "ru": "формула",
+    "en": "formula",
+    "he": "נוסחה"
+  },
+  {
+    "key": "dash.roleLimited",
+    "ru": "ограничено ролями",
+    "en": "role-limited",
+    "he": "מוגבל לתפקידים"
+  },
+  {
+    "key": "dash.emptyViewer",
+    "ru": "На этой панели пока нет виджетов",
+    "en": "This dashboard has no widgets yet",
+    "he": "בלוח זה אין עדיין וידג'טים"
+  },
+  {
+    "key": "dash.deleteTitle",
+    "ru": "Удалить виджет?",
+    "en": "Delete widget?",
+    "he": "למחוק וידג'ט?"
+  },
+  {
+    "key": "dash.deleteConfirm",
+    "ru": "будет удалён безвозвратно.",
+    "en": "will be permanently deleted.",
+    "he": "יימחק לצמיתות."
+  },
+  {
+    "key": "dash.cancel",
+    "ru": "Отмена",
+    "en": "Cancel",
+    "he": "ביטול"
+  },
+  {
+    "key": "dash.delete",
+    "ru": "Удалить",
+    "en": "Delete",
+    "he": "מחק"
+  },
+  {
+    "key": "dash.editWidget",
+    "ru": "Редактировать виджет",
+    "en": "Edit widget",
+    "he": "עריכת וידג'ט"
+  },
+  {
+    "key": "dash.newWidget",
+    "ru": "Новый виджет",
+    "en": "New widget",
+    "he": "וידג'ט חדש"
+  },
+  {
+    "key": "dash.widgetTitle",
+    "ru": "Заголовок",
+    "en": "Title",
+    "he": "כותרת"
+  },
+  {
+    "key": "dash.icon",
+    "ru": "Иконка",
+    "en": "Icon",
+    "he": "סמל"
+  },
+  {
+    "key": "dash.format",
+    "ru": "Формат",
+    "en": "Format",
+    "he": "פורמט"
+  },
+  {
+    "key": "dash.formatNumber",
+    "ru": "Число",
+    "en": "Number",
+    "he": "מספר"
+  },
+  {
+    "key": "dash.formatCurrency",
+    "ru": "Валюта",
+    "en": "Currency",
+    "he": "מטבע"
+  },
+  {
+    "key": "dash.formatPercent",
+    "ru": "Процент",
+    "en": "Percent",
+    "he": "אחוז"
+  },
+  {
+    "key": "dash.color",
+    "ru": "Цвет",
+    "en": "Color",
+    "he": "צבע"
+  },
+  {
+    "key": "dash.metrics",
+    "ru": "Метрики",
+    "en": "Metrics",
+    "he": "מדדים"
+  },
+  {
+    "key": "dash.addMetric",
+    "ru": "Метрика",
+    "en": "Metric",
+    "he": "מדד"
+  },
+  {
+    "key": "dash.formula",
+    "ru": "Формула (необязательно)",
+    "en": "Formula (optional)",
+    "he": "נוסחה (אופציונלי)"
+  },
+  {
+    "key": "dash.formulaHint",
+    "ru": "Комбинируйте метрики по ключу: {m1}. Без формулы показывается первая метрика.",
+    "en": "Combine metrics by key: {m1}. Without a formula the first metric is shown.",
+    "he": "שלב מדדים לפי מפתח: {m1}. ללא נוסחה מוצג המדד הראשון."
+  },
+  {
+    "key": "dash.restrictRoles",
+    "ru": "Ограничить видимость по ролям",
+    "en": "Restrict visibility by role",
+    "he": "הגבל נראות לפי תפקיד"
+  },
+  {
+    "key": "dash.allRoles",
+    "ru": "Виден всем ролям с доступом к странице.",
+    "en": "Visible to all roles with page access.",
+    "he": "גלוי לכל התפקידים עם גישה לעמוד."
+  },
+  {
+    "key": "dash.save",
+    "ru": "Сохранить",
+    "en": "Save",
+    "he": "שמור"
+  },
+  {
+    "key": "dash.invalidKey",
+    "ru": "Некорректный ключ метрики (латиница/цифры/_)",
+    "en": "Invalid metric key (letters/digits/_)",
+    "he": "מפתח מדד לא תקין (אותיות/ספרות/_)"
+  },
+  {
+    "key": "dash.dupKey",
+    "ru": "Ключи метрик должны быть уникальны",
+    "en": "Metric keys must be unique",
+    "he": "מפתחות המדדים חייבים להיות ייחודיים"
+  },
+  {
+    "key": "dash.metricNeedsEntity",
+    "ru": "Выберите сущность для каждой метрики",
+    "en": "Select an entity for each metric",
+    "he": "בחר ישות לכל מדד"
+  },
+  {
+    "key": "dash.metricNeedsField",
+    "ru": "Для суммы выберите числовое поле",
+    "en": "Select a numeric field for sum",
+    "he": "בחר שדה מספרי לסכום"
+  },
+  {
+    "key": "dash.metricKey",
+    "ru": "ключ",
+    "en": "key",
+    "he": "מפתח"
+  },
+  {
+    "key": "dash.selectEntity",
+    "ru": "Сущность",
+    "en": "Entity",
+    "he": "ישות"
+  },
+  {
+    "key": "dash.aggCount",
+    "ru": "Количество",
+    "en": "Count",
+    "he": "ספירה"
+  },
+  {
+    "key": "dash.aggSum",
+    "ru": "Сумма",
+    "en": "Sum",
+    "he": "סכום"
+  },
+  {
+    "key": "dash.selectField",
+    "ru": "Числовое поле",
+    "en": "Numeric field",
+    "he": "שדה מספרי"
+  },
+  {
+    "key": "dash.noNumericFields",
+    "ru": "Нет числовых полей",
+    "en": "No numeric fields",
+    "he": "אין שדות מספריים"
+  },
+  {
+    "key": "dash.statusFilter",
+    "ru": "Статусы (пусто = все)",
+    "en": "Statuses (empty = all)",
+    "he": "סטטוסים (ריק = הכול)"
+  },
+  {
+    "key": "pages.pageType",
+    "ru": "Тип страницы",
+    "en": "Page type",
+    "he": "סוג עמוד"
+  },
+  {
+    "key": "pages.typeLocked",
+    "ru": "К этой странице уже привязана сущность. Доступен только обычный тип — страница не может быть зеркалом или дашбордом.",
+    "en": "This page already has a bound entity. Only the normal type is available — it cannot be a mirror or a dashboard.",
+    "he": "לעמוד זה כבר משויכת ישות. זמין רק הסוג הרגיל — הוא אינו יכול להיות מראה או לוח מחוונים."
+  },
+  {
+    "key": "pages.typeNormal",
+    "ru": "Обычная",
+    "en": "Normal",
+    "he": "רגיל"
+  },
+  {
+    "key": "pages.typeMirror",
+    "ru": "Зеркальная (живые данные сущности)",
+    "en": "Mirror (live entity data)",
+    "he": "מראה (נתוני ישות חיים)"
+  },
+  {
+    "key": "pages.typeDashboard",
+    "ru": "Дашборд (виджеты)",
+    "en": "Dashboard (widgets)",
+    "he": "לוח מחוונים (וידג'טים)"
+  },
+  {
+    "key": "pages.mirrorSelect",
+    "ru": "— Выберите сущность —",
+    "en": "— Select entity —",
+    "he": "— בחר ישות —"
+  },
+  {
+    "key": "pages.dashboardHint",
+    "ru": "Страница покажет панель виджетов. Виджеты настраиваются на самой странице кнопкой «Настроить».",
+    "en": "The page will show a widget dashboard. Widgets are configured on the page itself via the “Configure” button.",
+    "he": "העמוד יציג לוח וידג'טים. הווידג'טים מוגדרים בעמוד עצמו באמצעות כפתור «הגדרה»."
   }
 ]
