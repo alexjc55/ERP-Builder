@@ -55,6 +55,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Loader2, ArrowLeft, Columns3, KeyRound, ChevronUp, ChevronDown } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
+import { FIELD_KEY_RE, slugifyKey, uniqueKey } from "@/lib/keys";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
@@ -72,34 +73,6 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "user", label: "Пользователь" },
   { value: "file", label: "Файл" },
 ];
-
-const FIELD_KEY_RE = /^[a-z][a-z0-9_]*$/;
-
-const CYR_MAP: Record<string, string> = {
-  а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "e", ж: "zh", з: "z", и: "i",
-  й: "y", к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t",
-  у: "u", ф: "f", х: "h", ц: "ts", ч: "ch", ш: "sh", щ: "sch", ъ: "", ы: "y", ь: "",
-  э: "e", ю: "yu", я: "ya",
-};
-
-function slugifyKey(input: string): string {
-  let out = "";
-  for (const ch of input.toLowerCase()) {
-    if (ch in CYR_MAP) out += CYR_MAP[ch];
-    else if (/[a-z0-9]/.test(ch)) out += ch;
-    else out += "_";
-  }
-  out = out.replace(/_+/g, "_").replace(/^_+|_+$/g, "");
-  if (out !== "" && !/^[a-z]/.test(out)) out = `f_${out}`;
-  return out;
-}
-
-function uniqueKey(base: string, existing: Set<string>): string {
-  if (base === "" || !existing.has(base)) return base;
-  let i = 2;
-  while (existing.has(`${base}_${i}`)) i++;
-  return `${base}_${i}`;
-}
 
 const FILE_SOURCES: { value: FileSource; labelKey: string; label: string }[] = [
   { value: "server", labelKey: "fields.fileSource.server", label: "Загрузка на сервер" },
@@ -139,6 +112,8 @@ export default function EntityFieldsPage() {
   const [optionsText, setOptionsText] = useState("");
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
+  const [isFilterable, setIsFilterable] = useState(false);
+  const [showInTable, setShowInTable] = useState(true);
   const [permissions, setPermissions] = useState<FieldPermissions>({});
   const [allowedSources, setAllowedSources] = useState<FileSource[]>(["server"]);
   const [allowedRoleIds, setAllowedRoleIds] = useState<number[]>([]);
@@ -207,6 +182,8 @@ export default function EntityFieldsPage() {
     setOptionsText("");
     setSortOrder(fields.length + 1);
     setIsActive(true);
+    setIsFilterable(false);
+    setShowInTable(true);
     setPermissions({});
     setAllowedSources(["server"]);
     setAllowedRoleIds([]);
@@ -226,6 +203,8 @@ export default function EntityFieldsPage() {
     setOptionsText((field.optionsJson ?? []).join("\n"));
     setSortOrder(field.sortOrder);
     setIsActive(field.isActive);
+    setIsFilterable(field.isFilterable ?? false);
+    setShowInTable(field.showInTable ?? true);
     setPermissions(field.permissionsJson ?? {});
     setAllowedSources(
       field.fileConfigJson?.allowedSources && field.fileConfigJson.allowedSources.length > 0
@@ -255,6 +234,8 @@ export default function EntityFieldsPage() {
       permissionsJson: permissions,
       sortOrder,
       isActive,
+      isFilterable,
+      showInTable,
       fileConfigJson:
         fieldType === "file"
           ? { allowedSources: allowedSources.length > 0 ? allowedSources : (["server"] as FileSource[]) }
@@ -534,7 +515,7 @@ export default function EntityFieldsPage() {
                 placeholder="—"
               />
             </div>
-            <div className="flex items-center gap-6">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
               <div className="flex items-center gap-2">
                 <Switch checked={isRequired} onCheckedChange={setIsRequired} id="field-required" />
                 <Label htmlFor="field-required">{t("fields.required", "Обязательное")}</Label>
@@ -542,6 +523,14 @@ export default function EntityFieldsPage() {
               <div className="flex items-center gap-2">
                 <Switch checked={isActive} onCheckedChange={setIsActive} id="field-active" />
                 <Label htmlFor="field-active">{t("fields.active", "Активно")}</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={isFilterable} onCheckedChange={setIsFilterable} id="field-filterable" />
+                <Label htmlFor="field-filterable">{t("fields.filterable", "Участвует в фильтре")}</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={showInTable} onCheckedChange={setShowInTable} id="field-show-in-table" />
+                <Label htmlFor="field-show-in-table">{t("fields.showInTable", "Показывать в таблице")}</Label>
               </div>
             </div>
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useListEntities,
   useCreateEntity,
@@ -48,12 +48,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MultilingualInput } from "@/components/MultilingualInput";
-import { IconPicker } from "@/components/IconPicker";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Database, Loader2, Columns3, CircleDot, Share2, LayoutList, Workflow, Settings2, ChevronDown } from "lucide-react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useML, useT } from "@/lib/i18n";
+import { slugifyKey, uniqueKey } from "@/lib/keys";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
@@ -70,13 +70,13 @@ export default function EntitiesPage() {
   const [entityKey, setEntityKey] = useState("");
   const [nameJson, setNameJson] = useState<MLValue>({});
   const [descJson, setDescJson] = useState<MLValue>({});
-  const [icon, setIcon] = useState("");
   const [pageId, setPageId] = useState<string>("none");
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
 
   const { data: entities = [], isLoading } = useListEntities();
   const { data: pages = [] } = useListPages();
+  const search = useSearch();
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["/api/entities"] });
 
@@ -101,13 +101,12 @@ export default function EntitiesPage() {
     },
   });
 
-  const openCreate = () => {
+  const openCreate = (prefillPageId?: number) => {
     setEditingEntity(null);
     setEntityKey("");
     setNameJson({});
     setDescJson({});
-    setIcon("");
-    setPageId("none");
+    setPageId(prefillPageId ? String(prefillPageId) : "none");
     setSortOrder(entities.length + 1);
     setIsActive(true);
     setDialogOpen(true);
@@ -120,7 +119,6 @@ export default function EntitiesPage() {
     setEntityKey(entity.entityKey);
     setNameJson(typeof n === "object" && n ? { ru: n.ru, en: n.en, he: n.he } : {});
     setDescJson(typeof d === "object" && d ? { ru: d.ru, en: d.en, he: d.he } : {});
-    setIcon(entity.icon || "");
     setPageId(entity.pageId ? String(entity.pageId) : "none");
     setSortOrder(entity.sortOrder);
     setIsActive(entity.isActive);
@@ -128,11 +126,17 @@ export default function EntitiesPage() {
   };
 
   const handleSubmit = () => {
+    const existingKeys = new Set(
+      entities.filter((e: Entity) => e.id !== editingEntity?.id).map((e: Entity) => e.entityKey),
+    );
+    const nameForKey = (nameJson.en || nameJson.ru || nameJson.he || "").toString();
+    const autoBase = slugifyKey(nameForKey) || "entity";
+    const resolvedKey = entityKey.trim() || uniqueKey(autoBase, existingKeys);
     const payload = {
-      entityKey: entityKey.trim(),
+      entityKey: resolvedKey,
       nameJson: nameJson as MultilingualText,
       descriptionJson: descJson as MultilingualText,
-      icon: icon || "table",
+      icon: editingEntity?.icon || "table",
       pageId: pageId !== "none" ? Number(pageId) : null,
       sortOrder,
       isActive,
@@ -146,7 +150,25 @@ export default function EntitiesPage() {
 
   const isPending = createMutation.isPending || updateMutation.isPending;
   const sorted = [...entities].sort((a: Entity, b: Entity) => a.sortOrder - b.sortOrder);
-  const navPages = pages.filter((p: Page) => p.path);
+  const navPages = [...pages].sort((a: Page, b: Page) => a.sortOrder - b.sortOrder);
+
+  useEffect(() => {
+    if (!search) return;
+    const params = new URLSearchParams(search);
+    const createForPage = params.get("createForPage");
+    const editId = params.get("edit");
+    if (editId) {
+      const ent = entities.find((e: Entity) => e.id === Number(editId));
+      if (ent) {
+        openEdit(ent);
+        navigate("/admin/entities", { replace: true });
+      }
+    } else if (createForPage) {
+      openCreate(Number(createForPage));
+      navigate("/admin/entities", { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, entities]);
   const pageName = (id: number | null | undefined) => {
     if (!id) return null;
     const p = pages.find((pg: Page) => pg.id === id);
@@ -160,7 +182,7 @@ export default function EntitiesPage() {
           <h1 className="text-2xl font-bold text-slate-800">{t("entities.title", "Сущности")}</h1>
           <p className="text-sm text-slate-500 mt-0.5">{t("entities.subtitle", "Конструктор объектов данных вашей системы")}</p>
         </div>
-        <Button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 gap-2">
+        <Button onClick={() => openCreate()} className="bg-blue-600 hover:bg-blue-700 gap-2">
           <Plus className="w-4 h-4" />
           {t("entities.create", "Создать сущность")}
         </Button>
@@ -276,22 +298,16 @@ export default function EntitiesPage() {
               <Input
                 value={entityKey}
                 onChange={(e) => setEntityKey(e.target.value)}
-                placeholder="projects"
+                placeholder={t("entities.keyAutoPlaceholder", "Сгенерируется автоматически")}
                 className="font-mono"
               />
               <p className="text-xs text-slate-400">
-                {t("entities.keyHintBefore", "Только строчные латинские буквы, цифры и подчёркивания (например,")} <code>projects</code>{t("entities.keyHintAfter", "). Используется в хранилище данных.")}
+                {t("entities.keyHintAuto", "Необязательно. Если оставить пустым, ключ будет создан автоматически из названия. Только строчные латинские буквы, цифры и подчёркивания. Используется в хранилище данных.")}
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>{t("entities.fieldIcon", "Иконка")}</Label>
-                <IconPicker value={icon} onChange={setIcon} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>{t("entities.fieldOrder", "Порядок")}</Label>
-                <Input type="number" value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value))} />
-              </div>
+            <div className="space-y-1.5">
+              <Label>{t("entities.fieldOrder", "Порядок")}</Label>
+              <Input type="number" value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value))} />
             </div>
             <div className="space-y-1.5">
               <Label>{t("entities.fieldPage", "Страница отображения")}</Label>

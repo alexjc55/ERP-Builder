@@ -48,7 +48,8 @@ import { MultilingualInput } from "@/components/MultilingualInput";
 import { IconPicker } from "@/components/IconPicker";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Layout, Loader2, ChevronRight, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Pencil, Trash2, Layout, Loader2, ChevronRight, ChevronUp, ChevronDown, Link2, Unlink } from "lucide-react";
+import { useLocation } from "wouter";
 import { useML, useT } from "@/lib/i18n";
 
 type MLValue = { ru?: string; en?: string; he?: string };
@@ -74,6 +75,10 @@ export default function PagesPage() {
 
   const { data: pages = [], isLoading } = useListPages();
   const { data: entities = [] } = useListEntities();
+  const [, navigate] = useLocation();
+
+  const entityForPage = (pageId: number): Entity | undefined =>
+    entities.find((e: Entity) => e.pageId === pageId);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["/api/pages"] });
 
@@ -236,6 +241,15 @@ export default function PagesPage() {
                           <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" disabled={pi === sortedTop.length - 1 || reorderMutation.isPending} onClick={() => move(sortedTop, pi, 1)}>
                             <ChevronDown className="w-3.5 h-3.5" />
                           </Button>
+                          {entityForPage(page.id) ? (
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600" title={t("pages.editEntity", "Редактировать сущность")} onClick={() => navigate(`/admin/entities?edit=${entityForPage(page.id)!.id}`)}>
+                              <Link2 className="w-3.5 h-3.5" />
+                            </Button>
+                          ) : (
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" title={t("pages.bindEntity", "Привязать сущность")} onClick={() => navigate(`/admin/entities?createForPage=${page.id}`)}>
+                              <Unlink className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(page)}>
                             <Pencil className="w-3.5 h-3.5" />
                           </Button>
@@ -270,6 +284,15 @@ export default function PagesPage() {
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" disabled={ci === children.length - 1 || reorderMutation.isPending} onClick={() => move(children, ci, 1)}>
                               <ChevronDown className="w-3.5 h-3.5" />
                             </Button>
+                            {entityForPage(child.id) ? (
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600" title={t("pages.editEntity", "Редактировать сущность")} onClick={() => navigate(`/admin/entities?edit=${entityForPage(child.id)!.id}`)}>
+                                <Link2 className="w-3.5 h-3.5" />
+                              </Button>
+                            ) : (
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" title={t("pages.bindEntity", "Привязать сущность")} onClick={() => navigate(`/admin/entities?createForPage=${child.id}`)}>
+                                <Unlink className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(child)}>
                               <Pencil className="w-3.5 h-3.5" />
                             </Button>

@@ -228,6 +228,18 @@
     "he": "שגיאה בשינוי הסדר"
   },
   {
+    "key": "pages.editEntity",
+    "ru": "Редактировать сущность",
+    "en": "Edit entity",
+    "he": "ערוך ישות"
+  },
+  {
+    "key": "pages.bindEntity",
+    "ru": "Привязать сущность",
+    "en": "Bind entity",
+    "he": "קשר ישות"
+  },
+  {
     "key": "pages.title",
     "ru": "Страницы",
     "en": "Pages",
@@ -1272,16 +1284,16 @@
     "he": "מפתח מערכת"
   },
   {
-    "key": "entities.keyHintBefore",
-    "ru": "Только строчные латинские буквы, цифры и подчёркивания (например,",
-    "en": "Only lowercase latin letters, digits and underscores (e.g.",
-    "he": "רק אותיות לטיניות קטנות, ספרות וקו תחתון (לדוגמה,"
+    "key": "entities.keyAutoPlaceholder",
+    "ru": "Сгенерируется автоматически",
+    "en": "Generated automatically",
+    "he": "ייווצר אוטומטית"
   },
   {
-    "key": "entities.keyHintAfter",
-    "ru": "). Используется в хранилище данных.",
-    "en": "). Used in the data store.",
-    "he": "). משמש באחסון הנתונים."
+    "key": "entities.keyHintAuto",
+    "ru": "Необязательно. Если оставить пустым, ключ будет создан автоматически из названия. Только строчные латинские буквы, цифры и подчёркивания. Используется в хранилище данных.",
+    "en": "Optional. If left empty, the key is generated automatically from the name. Only lowercase latin letters, digits and underscores. Used in the data store.",
+    "he": "אופציונלי. אם יישאר ריק, המפתח ייווצר אוטומטית מהשם. רק אותיות לטיניות קטנות, ספרות וקו תחתון. משמש באחסון הנתונים."
   },
   {
     "key": "entities.fieldIcon",
