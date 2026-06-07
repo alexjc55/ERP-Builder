@@ -5,11 +5,12 @@ import { useListPages } from "@workspace/api-client-react";
 import type { Page } from "@workspace/api-client-react";
 import { useLocation, Link } from "wouter";
 import {
-  Building2, LayoutDashboard, Users, Shield, Layout as LayoutIcon,
-  Languages, Settings, LogOut, ChevronDown, ChevronRight,
-  Menu, X, Database, Table, Check, UserCog, Activity, Puzzle, Eye,
-  PanelLeftClose, PanelLeftOpen, HardDrive
+  Building2, Languages, Settings, LayoutDashboard,
+  LogOut, ChevronDown, ChevronRight,
+  Menu, X, Check, UserCog, Eye,
+  PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
+import { getIconComponent } from "@/lib/icons";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -22,20 +23,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-
-const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
-  "layout-dashboard": LayoutDashboard,
-  "users": Users,
-  "shield": Shield,
-  "layout": LayoutIcon,
-  "languages": Languages,
-  "settings": Settings,
-  "database": Database,
-  "table": Table,
-  "activity": Activity,
-  "puzzle": Puzzle,
-  "hard-drive": HardDrive,
-};
 
 function SidebarItem({
   name,
@@ -56,7 +43,7 @@ function SidebarItem({
   const [expanded, setExpanded] = useState(true);
   const hasChildren = !!children;
   const isActive = route ? (route === "/" ? location === route : location.startsWith(route)) : false;
-  const IconComp = icon ? (ICON_MAP[icon] || LayoutDashboard) : LayoutDashboard;
+  const IconComp = getIconComponent(icon, LayoutDashboard);
 
   // Collapsed (icon rail) — groups are flattened by the parent, so here we only
   // ever render leaf links as centered icons with a tooltip.

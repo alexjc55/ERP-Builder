@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MultilingualInput } from "@/components/MultilingualInput";
+import { IconPicker } from "@/components/IconPicker";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Layout, Loader2, ChevronRight, ChevronUp, ChevronDown } from "lucide-react";
@@ -283,7 +284,7 @@ export default function PagesPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>{t("pages.colIcon", "Иконка")}</Label>
-                <Input value={icon} onChange={(e) => setIcon(e.target.value)} placeholder="layout-dashboard" />
+                <IconPicker value={icon} onChange={setIcon} />
               </div>
               <div className="space-y-1.5">
                 <Label>{t("pages.colOrder", "Порядок")}</Label>

@@ -3718,5 +3718,35 @@
     "ru": "Скопируйте Client ID и Client Secret в поля ниже и сохраните.",
     "en": "Copy the Client ID and Client Secret into the fields below and save.",
     "he": "העתיקו את ה-Client ID וה-Client Secret לשדות למטה ושמרו."
+  },
+  {
+    "key": "entities.manage",
+    "ru": "Настройка",
+    "en": "Manage",
+    "he": "הגדרה"
+  },
+  {
+    "key": "iconPicker.placeholder",
+    "ru": "Выберите иконку",
+    "en": "Select an icon",
+    "he": "בחרו סמל"
+  },
+  {
+    "key": "iconPicker.search",
+    "ru": "Поиск иконки…",
+    "en": "Search icon…",
+    "he": "חיפוש סמל…"
+  },
+  {
+    "key": "iconPicker.clear",
+    "ru": "Очистить",
+    "en": "Clear",
+    "he": "נקה"
+  },
+  {
+    "key": "iconPicker.empty",
+    "ru": "Ничего не найдено",
+    "en": "Nothing found",
+    "he": "לא נמצא דבר"
   }
 ]

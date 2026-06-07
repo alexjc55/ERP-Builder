@@ -159,3 +159,12 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
 }
+
+@layer components {
+  /* Vertical cell separators for data tables (horizontal row borders are set
+     per-row in the markup; this adds the missing vertical grid lines). */
+  table th:not(:last-child),
+  table td:not(:last-child) {
+    border-right: 1px solid hsl(var(--border) / 0.7);
+  }
+}

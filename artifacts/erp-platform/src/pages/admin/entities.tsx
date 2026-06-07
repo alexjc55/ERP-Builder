@@ -40,11 +40,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MultilingualInput } from "@/components/MultilingualInput";
+import { IconPicker } from "@/components/IconPicker";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Database, Loader2, Columns3, CircleDot, Share2, LayoutList, Workflow } from "lucide-react";
+import { Plus, Pencil, Trash2, Database, Loader2, Columns3, CircleDot, Share2, LayoutList, Workflow, Settings2, ChevronDown } from "lucide-react";
 import { useLocation } from "wouter";
 import { useML, useT } from "@/lib/i18n";
 
@@ -202,60 +209,41 @@ export default function EntitiesPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 gap-1.5 text-slate-600"
-                          onClick={() => navigate(`/admin/entities/${entity.id}/fields`)}
-                        >
-                          <Columns3 className="w-3.5 h-3.5" />
-                          {t("entities.fields", "Поля")}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 gap-1.5 text-slate-600"
-                          onClick={() => navigate(`/admin/entities/${entity.id}/statuses`)}
-                        >
-                          <CircleDot className="w-3.5 h-3.5" />
-                          {t("entities.statuses", "Статусы")}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 gap-1.5 text-slate-600"
-                          onClick={() => navigate(`/admin/entities/${entity.id}/relations`)}
-                        >
-                          <Share2 className="w-3.5 h-3.5" />
-                          {t("entities.relations", "Связи")}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 gap-1.5 text-slate-600"
-                          onClick={() => navigate(`/admin/entities/${entity.id}/views`)}
-                        >
-                          <LayoutList className="w-3.5 h-3.5" />
-                          {t("entities.views", "Виды")}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 gap-1.5 text-slate-600"
-                          onClick={() => navigate(`/admin/entities/${entity.id}/workflow`)}
-                        >
-                          <Workflow className="w-3.5 h-3.5" />
-                          {t("entities.workflow", "Процессы")}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 gap-1.5 text-slate-600"
-                          onClick={() => navigate(`/admin/entities/${entity.id}/records`)}
-                        >
-                          <Database className="w-3.5 h-3.5" />
-                          {t("entities.records", "Данные")}
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-8 gap-1.5 text-slate-600">
+                              <Settings2 className="w-3.5 h-3.5" />
+                              {t("entities.manage", "Настройка")}
+                              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem onClick={() => navigate(`/admin/entities/${entity.id}/fields`)}>
+                              <Columns3 className="w-3.5 h-3.5 mr-2" />
+                              {t("entities.fields", "Поля")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => navigate(`/admin/entities/${entity.id}/statuses`)}>
+                              <CircleDot className="w-3.5 h-3.5 mr-2" />
+                              {t("entities.statuses", "Статусы")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => navigate(`/admin/entities/${entity.id}/relations`)}>
+                              <Share2 className="w-3.5 h-3.5 mr-2" />
+                              {t("entities.relations", "Связи")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => navigate(`/admin/entities/${entity.id}/views`)}>
+                              <LayoutList className="w-3.5 h-3.5 mr-2" />
+                              {t("entities.views", "Виды")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => navigate(`/admin/entities/${entity.id}/workflow`)}>
+                              <Workflow className="w-3.5 h-3.5 mr-2" />
+                              {t("entities.workflow", "Процессы")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => navigate(`/admin/entities/${entity.id}/records`)}>
+                              <Database className="w-3.5 h-3.5 mr-2" />
+                              {t("entities.records", "Данные")}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(entity)}>
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>
@@ -298,7 +286,7 @@ export default function EntitiesPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>{t("entities.fieldIcon", "Иконка")}</Label>
-                <Input value={icon} onChange={(e) => setIcon(e.target.value)} placeholder="table" />
+                <IconPicker value={icon} onChange={setIcon} />
               </div>
               <div className="space-y-1.5">
                 <Label>{t("entities.fieldOrder", "Порядок")}</Label>

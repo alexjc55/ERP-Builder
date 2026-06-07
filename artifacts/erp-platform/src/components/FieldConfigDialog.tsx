@@ -362,7 +362,7 @@ export function FieldConfigDialog({
               <Label>{t("fields.defaultValue", "Значение по умолчанию")}</Label>
               <Input value={defaultValue} onChange={(e) => setDefaultValue(e.target.value)} placeholder="—" />
             </div>
-            <div className="flex items-center gap-6">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
               <div className="flex items-center gap-2">
                 <Switch checked={isRequired} onCheckedChange={setIsRequired} id="fcd-required" />
                 <Label htmlFor="fcd-required">{t("fields.required", "Обязательное")}</Label>

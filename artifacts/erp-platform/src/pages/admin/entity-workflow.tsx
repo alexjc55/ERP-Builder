@@ -354,7 +354,7 @@ export default function EntityWorkflowPage() {
     <div className="p-6 space-y-6">
       <div>
         <button
-          onClick={() => navigate("/admin/entities")}
+          onClick={() => { if (window.history.length > 1) window.history.back(); else navigate("/admin/entities"); }}
           className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-3"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
