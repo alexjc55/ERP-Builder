@@ -24,6 +24,7 @@ import {
   getListPageFieldsQueryKey,
   getListPageRecordValuesQueryKey,
   useSetPageRecordValues,
+  useReorderPageFields,
   type PageField,
   type ArchiveFilter,
   type AuditLogEntry,
@@ -550,6 +551,7 @@ export function EntityRecords({
   // Inline "add row" draft state (an alternative to the modal create dialog).
   const [addingRow, setAddingRow] = useState(false);
   const [newRow, setNewRow] = useState<FormState>({});
+  const [newPageRow, setNewPageRow] = useState<FormState>({});
   const [newRowStatus, setNewRowStatus] = useState<string>(NO_STATUS);
   // Admin-only setup mode: clicking a column header configures it; "+" adds a column.
   const [setupMode, setSetupMode] = useState(false);
@@ -772,6 +774,32 @@ export function EntityRecords({
     });
   };
 
+  const reorderPageFieldsMutation = useReorderPageFields({
+    mutation: {
+      onSuccess: () => {
+        if (pageId != null) queryClient.invalidateQueries({ queryKey: getListPageFieldsQueryKey(pageId) });
+      },
+      onError: () => toast({ title: t("records.reorderColumnError", "Ошибка изменения порядка колонок"), variant: "destructive" }),
+    },
+  });
+
+  const movePageColumn = (list: PageField[], index: number, direction: -1 | 1) => {
+    if (pageId == null) return;
+    const target = index + direction;
+    if (target < 0 || target >= list.length) return;
+    const a = list[index];
+    const b = list[target];
+    reorderPageFieldsMutation.mutate({
+      data: {
+        pageId,
+        items: [
+          { id: a.id, sortOrder: b.sortOrder },
+          { id: b.id, sortOrder: a.sortOrder },
+        ],
+      },
+    });
+  };
+
   const handleViewChange = (value: string) => {
     setSelectedViewId(value);
     setPage(1);
@@ -921,10 +949,21 @@ export function EntityRecords({
     const initial: FormState = {};
     for (const f of fields) initial[f.fieldKey] = emptyForField(f);
     setNewRow(initial);
+    const pageInitial: FormState = {};
+    for (const pf of pageFields) {
+      pageInitial[pf.fieldKey] = emptyForField({ ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field);
+    }
+    setNewPageRow(pageInitial);
     const def = statuses.find((s: Status) => s.isDefault);
     setNewRowStatus(def ? String(def.id) : NO_STATUS);
     setEditingCell(null);
     setAddingRow(true);
+  };
+
+  const cancelAddRow = () => {
+    setAddingRow(false);
+    setNewRow({});
+    setNewPageRow({});
   };
 
   const commitNewRow = () => {
@@ -933,6 +972,26 @@ export function EntityRecords({
       newRow,
     );
     const statusValue = newRowStatus === NO_STATUS ? null : Number(newRowStatus);
+    if (isMirrorPage && pageId != null) {
+      const pageValuesJson: Record<string, unknown> = {};
+      for (const pf of pageFields) {
+        if (pf.fieldType === "function") continue;
+        const val = cellValueForPayload({ ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field, newPageRow[pf.fieldKey] as CellValue);
+        if (val !== "" && val !== undefined && val !== null) pageValuesJson[pf.fieldKey] = val;
+      }
+      void (async () => {
+        try {
+          const created = await createMutation.mutateAsync({ entityId, data: { valuesJson, statusId: statusValue } });
+          if (created?.id != null && Object.keys(pageValuesJson).length > 0) {
+            await setPageValuesMutation.mutateAsync({ pageId, recordId: created.id, data: { valuesJson: pageValuesJson } });
+          }
+          setNewPageRow({});
+        } catch {
+          // errors surfaced via mutation onError toasts
+        }
+      })();
+      return;
+    }
     createMutation.mutate({ entityId, data: { valuesJson, statusId: statusValue } });
   };
 
@@ -1257,23 +1316,42 @@ export function EntityRecords({
                         )}
                       </th>
                     ))}
-                    {displayedPageFields.map((pf: PageField) => (
-                      <th key={`pf-${pf.id}`} className="text-left px-4 py-3 font-medium text-purple-600 whitespace-nowrap">
+                    {displayedPageFields.map((pf: PageField, pi: number) => (
+                      <th key={`pf-${pf.id}`} className="text-left px-4 py-3 font-medium text-slate-600 whitespace-nowrap">
                         {setupMode ? (
-                          <button
-                            type="button"
-                            onClick={() => openPageColumnConfig(pf)}
-                            className="inline-flex items-center gap-1.5 rounded-md border border-purple-300 bg-white px-2 py-1 text-purple-700 hover:bg-purple-100 transition"
-                            title={t("pageFields.configureColumn", "Настроить поле страницы")}
-                          >
-                            {ml(pf.nameJson)}
-                            <Settings2 className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="inline-flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-slate-400"
+                              disabled={pi === 0 || reorderPageFieldsMutation.isPending}
+                              onClick={() => movePageColumn(displayedPageFields, pi, -1)}
+                              title={t("records.moveColumnLeft", "Левее")}
+                            >
+                              <ChevronLeft className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-slate-400"
+                              disabled={pi === displayedPageFields.length - 1 || reorderPageFieldsMutation.isPending}
+                              onClick={() => movePageColumn(displayedPageFields, pi, 1)}
+                              title={t("records.moveColumnRight", "Правее")}
+                            >
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </Button>
+                            <button
+                              type="button"
+                              onClick={() => openPageColumnConfig(pf)}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-2 py-1 text-amber-700 hover:bg-amber-100 transition"
+                              title={t("pageFields.configureColumn", "Настроить поле страницы")}
+                            >
+                              {ml(pf.nameJson)}
+                              <Settings2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         ) : (
-                          <span className="inline-flex items-center gap-1" title={t("pageFields.badge", "Поле страницы")}>
-                            {ml(pf.nameJson)}
-                            <Columns3 className="w-3 h-3 text-purple-300" />
-                          </span>
+                          ml(pf.nameJson)
                         )}
                       </th>
                     ))}
@@ -1286,7 +1364,7 @@ export function EntityRecords({
                           type="button"
                           size="sm"
                           onClick={() => (isMirrorPage ? openPageColumnConfig(null) : openColumnConfig(null))}
-                          className={`gap-1.5 h-8 ${isMirrorPage ? "bg-purple-500 hover:bg-purple-600" : "bg-amber-500 hover:bg-amber-600"}`}
+                          className="gap-1.5 h-8 bg-amber-500 hover:bg-amber-600"
                         >
                           <Plus className="w-3.5 h-3.5" />
                           {isMirrorPage ? t("pageFields.addColumn", "Поле страницы") : t("records.addColumn", "Колонка")}
@@ -1329,11 +1407,24 @@ export function EntityRecords({
                           </td>
                         );
                       })}
-                      {displayedPageFields.map((pf: PageField) => (
-                        <td key={`pf-${pf.id}`} className="px-2 py-1.5 align-top max-w-[260px]">
-                          <span className="text-slate-300 text-xs" title={t("pageFields.fillAfterCreate", "Заполняется после создания записи")}>—</span>
-                        </td>
-                      ))}
+                      {displayedPageFields.map((pf: PageField) => {
+                        const pageFieldAsField = { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
+                        const editable = pf.fieldType !== "function";
+                        return (
+                          <td key={`pf-${pf.id}`} className="px-2 py-1.5 align-top max-w-[260px]">
+                            {editable ? (
+                              <FieldInput
+                                field={pageFieldAsField}
+                                value={newPageRow[pf.fieldKey]}
+                                onChange={(v) => setNewPageRow((prev) => ({ ...prev, [pf.fieldKey]: v }))}
+                                userOptions={userOptions}
+                              />
+                            ) : (
+                              <span className="text-slate-300 text-xs">—</span>
+                            )}
+                          </td>
+                        );
+                      })}
                       {statuses.length > 0 && (
                         <td className="px-2 py-1.5 align-top">
                           <Select value={newRowStatus} onValueChange={setNewRowStatus}>
@@ -1353,17 +1444,17 @@ export function EntityRecords({
                             size="icon"
                             className="h-8 w-8 bg-blue-600 hover:bg-blue-700"
                             title={t("records.saveRow", "Сохранить строку")}
-                            disabled={createMutation.isPending}
+                            disabled={createMutation.isPending || setPageValuesMutation.isPending}
                             onClick={commitNewRow}
                           >
-                            {createMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                            {createMutation.isPending || setPageValuesMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-slate-500"
                             title={t("records.cancel", "Отмена")}
-                            onClick={() => setAddingRow(false)}
+                            onClick={cancelAddRow}
                           >
                             <X className="w-3.5 h-3.5" />
                           </Button>
@@ -1514,7 +1605,7 @@ export function EntityRecords({
                             <td
                               key={`pf-${pf.id}`}
                               onClick={cellEditable ? () => setEditingCell({ recordId: record.id, fieldKey: pfKey }) : undefined}
-                              className={`px-4 py-3 max-w-[240px] truncate ${cellEditable ? "cursor-text hover:bg-purple-50/60 rounded" : ""}`}
+                              className={`px-4 py-3 max-w-[240px] truncate ${cellEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
                               style={cellBg ? { backgroundColor: cellBg } : undefined}
                               title={cellEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
                             >

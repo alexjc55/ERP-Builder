@@ -16,6 +16,16 @@ JSONB value map, kept fully distinct from the mirrored entity's own field values
 - Page values are stored as a whole JSONB map per (page, record); inline edits
   must merge the existing map with the single edited key before writing (deleting
   the key when the new value is empty), not overwrite the map.
+- Page-local columns must look identical to entity columns (no distinct color or
+  badge icon); they get the same setup-mode reorder arrows as entity columns, but
+  driven by the page-fields reorder endpoint (swap sortOrder of the two neighbors).
+- Creating a row on a mirror page is inherently a TWO-step write: create the
+  entity record, then write its page values keyed by the new record id. There is
+  no single combined endpoint — page values always live in a separate table — so
+  this is non-atomic by design (same as inline page-cell edits). If step two
+  fails, the record exists with empty page fields and the user fills them inline;
+  surface the second-step error and keep the save control disabled while either
+  mutation is pending.
 
 **Why:** the user explicitly required page-local fields with *separate* value
 storage so a mirror page can extend a shared entity view without mutating the
