@@ -2094,6 +2094,18 @@
     "he": "המפתח המערכתי חייב להכיל רק אותיות לטיניות קטנות, ספרות וקווים תחתונים, ולהתחיל באות (לדוגמה, attachment)."
   },
   {
+    "key": "fields.keyTaken",
+    "ru": "Поле с таким системным ключом уже существует в этой сущности.",
+    "en": "A field with this system key already exists in this entity.",
+    "he": "שדה עם מפתח מערכתי זה כבר קיים בישות זו."
+  },
+  {
+    "key": "fields.keyAutoHint",
+    "ru": "Если оставить пустым, ключ будет сгенерирован автоматически из названия:",
+    "en": "If left empty, the key will be generated automatically from the name:",
+    "he": "אם יישאר ריק, המפתח ייווצר אוטומטית מהשם:"
+  },
+  {
     "key": "fields.fieldType",
     "ru": "Тип поля",
     "en": "Field type",

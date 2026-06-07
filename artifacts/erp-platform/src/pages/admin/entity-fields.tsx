@@ -75,6 +75,32 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
 
 const FIELD_KEY_RE = /^[a-z][a-z0-9_]*$/;
 
+const CYR_MAP: Record<string, string> = {
+  а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "e", ж: "zh", з: "z", и: "i",
+  й: "y", к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t",
+  у: "u", ф: "f", х: "h", ц: "ts", ч: "ch", ш: "sh", щ: "sch", ъ: "", ы: "y", ь: "",
+  э: "e", ю: "yu", я: "ya",
+};
+
+function slugifyKey(input: string): string {
+  let out = "";
+  for (const ch of input.toLowerCase()) {
+    if (ch in CYR_MAP) out += CYR_MAP[ch];
+    else if (/[a-z0-9]/.test(ch)) out += ch;
+    else out += "_";
+  }
+  out = out.replace(/_+/g, "_").replace(/^_+|_+$/g, "");
+  if (out !== "" && !/^[a-z]/.test(out)) out = `f_${out}`;
+  return out;
+}
+
+function uniqueKey(base: string, existing: Set<string>): string {
+  if (base === "" || !existing.has(base)) return base;
+  let i = 2;
+  while (existing.has(`${base}_${i}`)) i++;
+  return `${base}_${i}`;
+}
+
 const FILE_SOURCES: { value: FileSource; labelKey: string; label: string }[] = [
   { value: "server", labelKey: "fields.fileSource.server", label: "Загрузка на сервер" },
   { value: "gdrive", labelKey: "fields.fileSource.gdrive", label: "Загрузка в Google Drive" },
@@ -212,8 +238,9 @@ export default function EntityFieldsPage() {
       .split("\n")
       .map((o) => o.trim())
       .filter(Boolean);
+    const resolvedKey = fieldKey.trim() || uniqueKey(slugifyKey(nameForKey), existingKeys);
     const payload = {
-      fieldKey: fieldKey.trim(),
+      fieldKey: resolvedKey,
       nameJson: nameJson as MultilingualText,
       descriptionJson: descJson as MultilingualText,
       fieldType,
@@ -250,6 +277,17 @@ export default function EntityFieldsPage() {
   const isPending = createMutation.isPending || updateMutation.isPending;
   const sorted = [...fields].sort((a: Field, b: Field) => a.sortOrder - b.sortOrder);
   const assignableRoles = roles;
+
+  const existingKeys = new Set(
+    fields.filter((f: Field) => f.id !== editingField?.id).map((f: Field) => f.fieldKey),
+  );
+  const nameForKey = (nameJson.en || nameJson.ru || nameJson.he || "").toString();
+  const generatedKey = uniqueKey(slugifyKey(nameForKey), existingKeys);
+  const trimmedKey = fieldKey.trim();
+  const keyFormatInvalid = trimmedKey !== "" && !FIELD_KEY_RE.test(trimmedKey);
+  const manualKeyTaken = trimmedKey !== "" && existingKeys.has(trimmedKey);
+  const effectiveKey = trimmedKey || generatedKey;
+  const canSubmit = !isPending && FIELD_KEY_RE.test(effectiveKey) && !manualKeyTaken;
 
   return (
     <div className="p-6 space-y-6">
@@ -366,21 +404,33 @@ export default function EntityFieldsPage() {
             <MultilingualInput label={t("fields.name", "Название")} value={nameJson} onChange={setNameJson} required />
             <MultilingualInput label={t("fields.description", "Описание")} value={descJson} onChange={setDescJson} multiline />
             <div className="space-y-1.5">
-              <Label>{t("fields.systemKey", "Системный ключ")}</Label>
+              <Label>
+                {t("fields.systemKey", "Системный ключ")}
+                <span className="text-red-500 ml-1">*</span>
+              </Label>
               <Input
                 value={fieldKey}
                 onChange={(e) => setFieldKey(e.target.value)}
-                placeholder="title"
+                placeholder={generatedKey || "title"}
                 className="font-mono"
               />
               <p className="text-xs text-slate-400">
                 {t("fields.keyHintPre", "Только строчные латинские буквы, цифры и подчёркивания (например, ")}<code>start_date</code>{t("fields.keyHintPost", "). Уникален в пределах сущности.")}
               </p>
-              {fieldKey.trim() !== "" && !FIELD_KEY_RE.test(fieldKey.trim()) && (
+              {keyFormatInvalid ? (
                 <p className="text-xs text-red-500">
                   {t("fields.keyInvalid", "Системный ключ должен состоять только из строчных латинских букв, цифр и подчёркиваний и начинаться с буквы (например, attachment).")}
                 </p>
-              )}
+              ) : manualKeyTaken ? (
+                <p className="text-xs text-red-500">
+                  {t("fields.keyTaken", "Поле с таким системным ключом уже существует в этой сущности.")}
+                </p>
+              ) : trimmedKey === "" && generatedKey !== "" ? (
+                <p className="text-xs text-slate-400">
+                  {t("fields.keyAutoHint", "Если оставить пустым, ключ будет сгенерирован автоматически из названия:")}{" "}
+                  <code>{generatedKey}</code>
+                </p>
+              ) : null}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -490,7 +540,7 @@ export default function EntityFieldsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("fields.cancel", "Отмена")}</Button>
-            <Button onClick={handleSubmit} disabled={isPending || !FIELD_KEY_RE.test(fieldKey.trim())} className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={handleSubmit} disabled={!canSubmit} className="bg-blue-600 hover:bg-blue-700">
               {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editingField ? t("fields.save", "Сохранить") : t("fields.create", "Создать")}
             </Button>
           </DialogFooter>
