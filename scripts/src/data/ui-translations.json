@@ -3048,6 +3048,12 @@
     "he": "הגדרות"
   },
   {
+    "key": "modules.backToList",
+    "ru": "К списку модулей",
+    "en": "Back to modules",
+    "he": "חזרה למודולים"
+  },
+  {
     "key": "modules.col.name",
     "ru": "Название",
     "en": "Name",

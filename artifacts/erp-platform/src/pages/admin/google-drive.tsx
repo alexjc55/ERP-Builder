@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import {
   useGetGoogleDriveConnection,
   useUpdateGoogleDriveConnection,
@@ -34,6 +35,7 @@ import {
   Loader2,
   Link2Off,
   RefreshCw,
+  ArrowLeft,
 } from "lucide-react";
 
 type KeyMode = "builtin" | "own";
@@ -42,6 +44,7 @@ export default function GoogleDrivePage() {
   const t = useT();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
 
   const { data, isLoading } = useGetGoogleDriveConnection();
   const conn = data as GoogleDriveConnectionInfo | undefined;
@@ -133,6 +136,15 @@ export default function GoogleDrivePage() {
 
   return (
     <div className="space-y-5 max-w-3xl">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="-ml-2 text-slate-500 hover:text-slate-800"
+        onClick={() => setLocation("/admin/modules")}
+      >
+        <ArrowLeft className="w-4 h-4 mr-1.5" />
+        {t("modules.backToList", "К списку модулей")}
+      </Button>
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">

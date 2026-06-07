@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
-import { Puzzle, Plus, Pencil, Trash2, Settings2 } from "lucide-react";
+import { Puzzle, Pencil, Trash2, Settings2 } from "lucide-react";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
@@ -90,16 +90,6 @@ export default function ModulesPage() {
       onError: () => toast({ title: t("modules.deleteError", "Ошибка удаления модуля"), variant: "destructive" }),
     },
   });
-
-  const openCreate = () => {
-    setEditing(null);
-    setModuleKey("");
-    setNameJson({});
-    setVersion("1.0.0");
-    setIsEnabled(false);
-    setSettingsText("{}");
-    setDialogOpen(true);
-  };
 
   const openEdit = (m: Module) => {
     setEditing(m);
@@ -167,10 +157,6 @@ export default function ModulesPage() {
             {t("modules.subtitle", "Реестр модулей — инфраструктура для будущих плагинов")}
           </p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="w-4 h-4 mr-1.5" />
-          {t("modules.add", "Добавить модуль")}
-        </Button>
       </div>
 
       <Card className="border-slate-200 shadow-sm">
