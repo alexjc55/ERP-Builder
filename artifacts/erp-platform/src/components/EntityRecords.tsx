@@ -1471,33 +1471,27 @@ export function EntityRecords({
               <table className="w-full text-sm">
                 <thead>
                   {Object.keys(numericTotals).length > 0 && (
-                    <tr className="border-b border-slate-100 bg-slate-100/70">
+                    <tr>
                       {displayFields.map((f: Field) => (
-                        <th key={`tot-${f.id}`} className="text-left px-4 py-2 whitespace-nowrap">
+                        <th key={`tot-${f.id}`} className="px-4 py-1.5 align-bottom">
                           {numericTotals[f.fieldKey] !== undefined ? (
-                            <span className="text-xs text-slate-500">
-                              {t("records.columnTotal", "Сумма")}:{" "}
-                              <span className="font-semibold text-slate-700">
-                                {numericTotals[f.fieldKey].toLocaleString("ru-RU")}
-                              </span>
+                            <span className="inline-block rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 whitespace-nowrap">
+                              {numericTotals[f.fieldKey].toLocaleString("ru-RU")}
                             </span>
                           ) : null}
                         </th>
                       ))}
                       {displayedPageFields.map((pf: PageField) => (
-                        <th key={`tot-pf-${pf.id}`} className="text-left px-4 py-2 whitespace-nowrap">
+                        <th key={`tot-pf-${pf.id}`} className="px-4 py-1.5 align-bottom">
                           {numericTotals[pf.fieldKey] !== undefined ? (
-                            <span className="text-xs text-slate-500">
-                              {t("records.columnTotal", "Сумма")}:{" "}
-                              <span className="font-semibold text-slate-700">
-                                {numericTotals[pf.fieldKey].toLocaleString("ru-RU")}
-                              </span>
+                            <span className="inline-block rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 whitespace-nowrap">
+                              {numericTotals[pf.fieldKey].toLocaleString("ru-RU")}
                             </span>
                           ) : null}
                         </th>
                       ))}
-                      {statuses.length > 0 && <th className="px-4 py-2" />}
-                      <th className="px-4 py-2" />
+                      {statuses.length > 0 && <th className="px-4 py-1.5" />}
+                      <th className="px-4 py-1.5" />
                     </tr>
                   )}
                   <tr className="border-b border-slate-100 bg-slate-50">
