@@ -25,7 +25,7 @@ import GoogleDrivePage from "@/pages/admin/google-drive";
 import DynamicPage from "@/pages/dynamic";
 import SettingsPage from "@/pages/settings";
 import { Loader2, ShieldAlert } from "lucide-react";
-import type { RoleAdminCaps } from "@workspace/api-client-react";
+import { useListPages, type Page, type RoleAdminCaps } from "@workspace/api-client-react";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -95,6 +95,25 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// The home route ("/") shows the built-in static dashboard by default, but if
+// an admin has configured the home page as a metadata-driven dashboard
+// (pages.isDashboard for the page whose path is "/"), render the dynamic
+// dashboard instead so widgets + the "Настроить" edit mode appear.
+function HomeRoute() {
+  const { data: pages = [], isLoading } = useListPages();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  const homePage = pages.find((p: Page) => p.path === "/");
+  return homePage?.isDashboard ? <DynamicPage /> : <DashboardPage />;
+}
+
 function Router() {
   return (
     <Switch>
@@ -110,7 +129,7 @@ function Router() {
 
       <Route path="/">
         <ProtectedRoute>
-          <DashboardPage />
+          <HomeRoute />
         </ProtectedRoute>
       </Route>
 
