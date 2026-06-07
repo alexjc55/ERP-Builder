@@ -55,6 +55,22 @@ record data, so it must mirror the entity records' RBAC exactly:
 RBAC bypass + IDOR + bulk data overexposure. Any new page-data endpoint must
 re-derive the mirrored entity and apply the entity's record/own-scope rules.
 
+# Color pickers must be in-DOM, not native `<input type="color">`
+
+Conditional-formatting (and any) color pickers use react-colorful's
+`HexColorPicker` inside a popover, plus a hex text input — never a native
+`<input type="color">`.
+
+**Why:** the native color input delegates to the OS color dialog, which is
+unreliable/blocked inside the Replit preview iframe (and cross-origin embeds):
+the eyedropper is disabled and custom-color selection silently fails, leaving
+users stuck on preset swatches.
+
+**How to apply:** for any new color-picking UI in a web artifact, reach for
+react-colorful (tiny, dependency-free, auto-injects its own CSS) rendered in the
+DOM; keep a hex text field alongside for paste/type. Do not reintroduce
+`<input type="color">`.
+
 # Conditional formatting per field
 
 Each field (entity field and page field) can carry `formatRulesJson`: ordered

@@ -1,3 +1,4 @@
+import type { ChangeEvent, FocusEvent } from "react";
 import type { FieldFormatRule, FormatOperator, FieldType } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,8 +10,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useT } from "@/lib/i18n";
 import { Plus, Trash2 } from "lucide-react";
+import { HexColorPicker } from "react-colorful";
 
 const OPERATORS: { value: FormatOperator; label: string; needsValue: boolean }[] = [
   { value: "equals", label: "равно", needsValue: true },
@@ -45,6 +48,25 @@ function needsValue(op: FormatOperator): boolean {
 }
 
 /**
+ * Normalize a user-typed color into either "" (no color) or an uppercase
+ * #RRGGBB hex. Accepts shorthand #RGB and tolerates a missing leading "#".
+ * Returns null for values that are not (yet) valid hex so callers can keep the
+ * raw in-progress text instead of persisting malformed CSS.
+ */
+function normalizeHexColor(raw: string): string | null {
+  const v = raw.trim();
+  if (v === "") return "";
+  const body = (v.startsWith("#") ? v.slice(1) : v).toLowerCase();
+  if (/^[0-9a-f]{3}$/.test(body)) {
+    return `#${body[0]}${body[0]}${body[1]}${body[1]}${body[2]}${body[2]}`.toUpperCase();
+  }
+  if (/^[0-9a-f]{6}$/.test(body)) {
+    return `#${body}`.toUpperCase();
+  }
+  return null;
+}
+
+/**
  * Reusable editor for a field's conditional-formatting rules. Shared by the
  * entity field dialog and the page-local field dialog. The value input adapts to
  * the field type (select → option dropdown, boolean → да/нет, otherwise text).
@@ -72,32 +94,70 @@ export function FieldFormatRulesEditor({
     onChange([...rules, { operator: op, value: "", cellColor: "#fee2e2", rowColor: "" }]);
   };
 
-  const renderColorControl = (label: string, value: string, onColorChange: (v: string) => void) => (
-    <div className="flex items-center gap-1.5">
-      <span className="text-xs text-slate-500">{label}</span>
-      <input
-        type="color"
-        className="h-7 w-9 rounded border border-slate-200 bg-white p-0.5 cursor-pointer"
-        value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : "#ffffff"}
-        onChange={(e) => onColorChange(e.target.value)}
-      />
-      <Input
-        className="h-7 w-24 font-mono text-xs"
-        value={value}
-        onChange={(e) => {
-          const v = e.target.value.trim();
-          onColorChange(v === "" ? "" : v.startsWith("#") ? v : `#${v}`);
-        }}
-        placeholder="#RRGGBB"
-        spellCheck={false}
-      />
-      {value ? (
-        <button type="button" className="text-xs text-slate-400 hover:text-slate-600" onClick={() => onColorChange("")}>
-          ✕
-        </button>
-      ) : null}
-    </div>
-  );
+  const renderColorControl = (label: string, value: string, onColorChange: (v: string) => void) => {
+    const valid = /^#[0-9a-fA-F]{6}$/.test(value);
+    const swatch = valid ? value : "#ffffff";
+    // Allow free typing (so partial hex like "#1" is not rejected mid-edit), but
+    // snap to a normalized #RRGGBB on blur when the text forms a valid color.
+    const onTextChange = (e: ChangeEvent<HTMLInputElement>) => {
+      const v = e.target.value.trim();
+      onColorChange(v === "" ? "" : v.startsWith("#") ? v : `#${v}`);
+    };
+    const onTextBlur = (e: FocusEvent<HTMLInputElement>) => {
+      const normalized = normalizeHexColor(e.target.value);
+      if (normalized !== null && normalized !== value) onColorChange(normalized);
+    };
+    const checkerboard =
+      "linear-gradient(45deg,#eee 25%,transparent 25%,transparent 75%,#eee 75%),linear-gradient(45deg,#eee 25%,transparent 25%,transparent 75%,#eee 75%)";
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs text-slate-500">{label}</span>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="h-7 w-9 rounded border border-slate-200 cursor-pointer shrink-0"
+              style={{ backgroundColor: swatch, backgroundImage: valid ? undefined : checkerboard, backgroundSize: "8px 8px", backgroundPosition: "0 0,4px 4px" }}
+              aria-label={t("fields.pickColor", "Выбрать цвет")}
+              title={t("fields.pickColor", "Выбрать цвет")}
+            />
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-3" align="start">
+            <div className="format-color-picker">
+              <HexColorPicker color={swatch} onChange={onColorChange} />
+            </div>
+            <Input
+              className="h-7 w-[200px] mt-3 font-mono text-xs"
+              value={value}
+              onChange={onTextChange}
+              onBlur={onTextBlur}
+              placeholder="#RRGGBB"
+              spellCheck={false}
+            />
+          </PopoverContent>
+        </Popover>
+        <Input
+          className="h-7 w-24 font-mono text-xs"
+          value={value}
+          onChange={onTextChange}
+          onBlur={onTextBlur}
+          placeholder="#RRGGBB"
+          spellCheck={false}
+        />
+        {value ? (
+          <button
+            type="button"
+            className="text-xs text-slate-400 hover:text-slate-600"
+            aria-label={t("fields.clearColor", "Очистить цвет")}
+            title={t("fields.clearColor", "Очистить цвет")}
+            onClick={() => onColorChange("")}
+          >
+            ✕
+          </button>
+        ) : null}
+      </div>
+    );
+  };
 
   const renderValueInput = (rule: FieldFormatRule, idx: number) => {
     if (!needsValue(rule.operator)) return <div className="text-xs text-slate-400 self-center">—</div>;
