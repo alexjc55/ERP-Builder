@@ -44,6 +44,11 @@ Must be enforced on **every** path that can change page type, against the **effe
 - `records/query` returns `numericTotals` ({fieldKey → sum}) computed over the **full filtered set** (records are paginated, so totals must be server-side, never summed client-side from one page).
 - Only numeric fields flagged `showColumnTotal` AND present in the request's `visibleFields` are summed — this preserves the hidden-field boundary (a hidden numeric field must never leak via its total). Same regex-guarded `::numeric` cast as dashboard sums.
 
+## Widget icon is optional (empty = no icon)
+- A widget's `icon` may be an empty string, meaning "render no icon" — it is NOT required (irrelevant for chart/table widgets, and some admins want a bare metric card). The IconPicker has a "Очистить" (clear) action that sets `icon=""`.
+- **Display code must treat empty icon as "no icon", never fall back to a default.** Use `w.icon ? getIconComponent(w.icon) : null` and conditionally render the icon box. **Why:** the old `w.icon || DEFAULT_ICON` fallback (in card renders AND the editor `useState` init) coerced a cleared icon back to the default, so users couldn't actually save a widget without an icon — it always "reappeared".
+- Editor init must distinguish create vs edit: new widget → `DEFAULT_ICON`; existing widget → `widget.icon ?? ""` (use `??`, not `||`, so a stored empty string is preserved). Server already persists `""` correctly (`body.icon != null` is true for empty string; column is notNull with a default only for omitted icons).
+
 ## How to apply
 - Adding a new metric aggregation type: extend the server aggregation helper AND `validateConfig`, and keep the regex-guarded cast for any numeric coercion.
 - Any new endpoint returning widget data must re-apply both authorization gates before computing values.

@@ -379,7 +379,7 @@ function WidgetCard({ w, ml, currencySymbol, t }: { w: DashboardWidgetData; ml: 
     );
   }
 
-  const Icon = getIconComponent(w.icon || DEFAULT_ICON, LayoutDashboard);
+  const Icon = w.icon ? getIconComponent(w.icon, LayoutDashboard) : null;
   const value = resolveValue(w);
   return (
     <Card className="h-full border-slate-200 shadow-sm hover:shadow-md transition-shadow">
@@ -389,9 +389,11 @@ function WidgetCard({ w, ml, currencySymbol, t }: { w: DashboardWidgetData; ml: 
             <p className="text-sm font-medium text-slate-500 truncate">{ml(w.titleJson)}</p>
             <p className="text-3xl font-bold text-slate-800 mt-1">{formatValue(value, w.format, currencySymbol)}</p>
           </div>
-          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${w.color || DEFAULT_COLOR}`}>
-            <Icon className="w-6 h-6 text-white" />
-          </div>
+          {Icon && (
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${w.color || DEFAULT_COLOR}`}>
+              <Icon className="w-6 h-6 text-white" />
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -466,7 +468,7 @@ function EditWidgetCell({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const Icon = getIconComponent(w.icon || DEFAULT_ICON, LayoutDashboard);
+  const Icon = w.icon ? getIconComponent(w.icon, LayoutDashboard) : null;
   const widgetType = w.config.widgetType;
   const summary =
     widgetType === "chart"
@@ -485,9 +487,11 @@ function EditWidgetCell({
       <Card className="h-full border-dashed border-slate-300 shadow-sm">
         <CardContent className="flex h-full flex-col justify-between gap-1.5 p-3 overflow-hidden">
           <div className="flex items-center gap-2">
-            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${w.color || DEFAULT_COLOR}`}>
-              <Icon className="w-3.5 h-3.5 text-white" />
-            </div>
+            {Icon && (
+              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${w.color || DEFAULT_COLOR}`}>
+                <Icon className="w-3.5 h-3.5 text-white" />
+              </div>
+            )}
             <p className="flex-1 truncate text-sm font-medium text-slate-700">{ml(w.titleJson)}</p>
             <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400" disabled={index === 0 || busy} onClick={() => onMove(-1)} title={t("dash.moveBack", "Переместить назад")}>
               <ChevronLeft className="w-3.5 h-3.5" />
@@ -767,7 +771,7 @@ function WidgetEditorDialog({
         ? "table"
         : "metric",
   );
-  const [icon, setIcon] = useState(widget?.icon || DEFAULT_ICON);
+  const [icon, setIcon] = useState(widget ? (widget.icon ?? "") : DEFAULT_ICON);
   const [color, setColor] = useState(widget?.color || DEFAULT_COLOR);
   const [format, setFormat] = useState<string>(widget?.config.format || "number");
   const [formula, setFormula] = useState(widget?.config.formula || "");
