@@ -73,6 +73,8 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "file", label: "Файл" },
 ];
 
+const FIELD_KEY_RE = /^[a-z][a-z0-9_]*$/;
+
 const FILE_SOURCES: { value: FileSource; labelKey: string; label: string }[] = [
   { value: "server", labelKey: "fields.fileSource.server", label: "Загрузка на сервер" },
   { value: "gdrive", labelKey: "fields.fileSource.gdrive", label: "Загрузка в Google Drive" },
@@ -374,6 +376,11 @@ export default function EntityFieldsPage() {
               <p className="text-xs text-slate-400">
                 {t("fields.keyHintPre", "Только строчные латинские буквы, цифры и подчёркивания (например, ")}<code>start_date</code>{t("fields.keyHintPost", "). Уникален в пределах сущности.")}
               </p>
+              {fieldKey.trim() !== "" && !FIELD_KEY_RE.test(fieldKey.trim()) && (
+                <p className="text-xs text-red-500">
+                  {t("fields.keyInvalid", "Системный ключ должен состоять только из строчных латинских букв, цифр и подчёркиваний и начинаться с буквы (например, attachment).")}
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -483,7 +490,7 @@ export default function EntityFieldsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("fields.cancel", "Отмена")}</Button>
-            <Button onClick={handleSubmit} disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={handleSubmit} disabled={isPending || !FIELD_KEY_RE.test(fieldKey.trim())} className="bg-blue-600 hover:bg-blue-700">
               {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editingField ? t("fields.save", "Сохранить") : t("fields.create", "Создать")}
             </Button>
           </DialogFooter>

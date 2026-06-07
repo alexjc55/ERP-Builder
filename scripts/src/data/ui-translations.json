@@ -2088,6 +2088,12 @@
     "he": "). ייחודי בתוך הישות."
   },
   {
+    "key": "fields.keyInvalid",
+    "ru": "Системный ключ должен состоять только из строчных латинских букв, цифр и подчёркиваний и начинаться с буквы (например, attachment).",
+    "en": "The system key must contain only lowercase Latin letters, digits and underscores, and start with a letter (e.g. attachment).",
+    "he": "המפתח המערכתי חייב להכיל רק אותיות לטיניות קטנות, ספרות וקווים תחתונים, ולהתחיל באות (לדוגמה, attachment)."
+  },
+  {
     "key": "fields.fieldType",
     "ru": "Тип поля",
     "en": "Field type",
