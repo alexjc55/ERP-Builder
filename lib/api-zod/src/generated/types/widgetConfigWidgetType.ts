@@ -7,7 +7,7 @@
  */
 
 /**
- * metric (default) = number cards; chart = graph driven by chart.
+ * metric (default) = number cards; chart = graph; table = entity rows.
  * @nullable
  */
 export type WidgetConfigWidgetType = typeof WidgetConfigWidgetType[keyof typeof WidgetConfigWidgetType] | null;
@@ -16,4 +16,5 @@ export type WidgetConfigWidgetType = typeof WidgetConfigWidgetType[keyof typeof 
 export const WidgetConfigWidgetType = {
   metric: 'metric',
   chart: 'chart',
+  table: 'table',
 } as const;

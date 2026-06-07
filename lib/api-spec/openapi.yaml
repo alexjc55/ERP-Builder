@@ -3187,13 +3187,33 @@ components:
             type: integer
           description: Restrict to records in these statuses; empty/null = all statuses
 
+    TableConfig:
+      type: object
+      required: [entityId, fieldKeys]
+      properties:
+        entityId:
+          type: integer
+        fieldKeys:
+          type: array
+          items:
+            type: string
+          description: Field keys shown as table columns, in display order
+        statusIds:
+          type: ["array", "null"]
+          items:
+            type: integer
+          description: Restrict to records in these statuses; empty/null = all statuses
+        limit:
+          type: ["integer", "null"]
+          description: Max rows to show (clamped server-side); null = server default
+
     WidgetConfig:
       type: object
       properties:
         widgetType:
           type: ["string", "null"]
-          enum: [metric, chart, null]
-          description: metric (default) = number cards; chart = graph driven by chart.
+          enum: [metric, chart, table, null]
+          description: metric (default) = number cards; chart = graph; table = entity rows.
         metrics:
           type: array
           items:
@@ -3206,6 +3226,8 @@ components:
           enum: [number, currency, percent, null]
         chart:
           $ref: "#/components/schemas/ChartConfig"
+        table:
+          $ref: "#/components/schemas/TableConfig"
 
     DashboardWidget:
       type: object
@@ -3274,6 +3296,28 @@ components:
         color:
           type: ["string", "null"]
 
+    TableColumn:
+      type: object
+      required: [fieldKey, label, fieldType]
+      properties:
+        fieldKey:
+          type: string
+        label:
+          type: string
+        fieldType:
+          type: string
+
+    TableRow:
+      type: object
+      required: [id, values]
+      properties:
+        id:
+          type: integer
+        values:
+          type: object
+          additionalProperties: true
+          description: fieldKey to stored value map (only the widget's columns)
+
     DashboardWidgetData:
       type: object
       required: [id, titleJson, icon, color, gridW, gridH, sortOrder, metrics]
@@ -3294,7 +3338,7 @@ components:
           type: integer
         widgetType:
           type: ["string", "null"]
-          enum: [metric, chart, null]
+          enum: [metric, chart, table, null]
         chartType:
           type: ["string", "null"]
         series:
@@ -3302,6 +3346,16 @@ components:
           items:
             $ref: "#/components/schemas/ChartSeriesPoint"
           description: Grouped buckets for chart widgets (admin-authoritative real totals)
+        tableColumns:
+          type: array
+          items:
+            $ref: "#/components/schemas/TableColumn"
+          description: Column metadata for table widgets, in display order
+        tableRows:
+          type: array
+          items:
+            $ref: "#/components/schemas/TableRow"
+          description: Rows for table widgets (admin-authoritative, status-filtered, limited)
         formula:
           type: ["string", "null"]
         format:

@@ -1179,7 +1179,7 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph driven by chart.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph; table = entity rows.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -1199,6 +1199,12 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+}).optional(),
+  "table": zod.object({
+  "entityId": zod.number(),
+  "fieldKeys": zod.array(zod.string()).describe('Field keys shown as table columns, in display order'),
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional()
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
@@ -1227,7 +1233,7 @@ export const CreateDashboardWidgetBody = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph driven by chart.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph; table = entity rows.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -1247,6 +1253,12 @@ export const CreateDashboardWidgetBody = zod.object({
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+}).optional(),
+  "table": zod.object({
+  "entityId": zod.number(),
+  "fieldKeys": zod.array(zod.string()).describe('Field keys shown as table columns, in display order'),
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional()
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
@@ -1266,7 +1278,7 @@ export const CreateDashboardWidgetResponse = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph driven by chart.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph; table = entity rows.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -1286,6 +1298,12 @@ export const CreateDashboardWidgetResponse = zod.object({
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+}).optional(),
+  "table": zod.object({
+  "entityId": zod.number(),
+  "fieldKeys": zod.array(zod.string()).describe('Field keys shown as table columns, in display order'),
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional()
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
@@ -1318,13 +1336,22 @@ export const GetDashboardDataResponseItem = zod.object({
   "gridW": zod.number(),
   "gridH": zod.number(),
   "sortOrder": zod.number(),
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal(null)]).nullish(),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal(null)]).nullish(),
   "chartType": zod.string().nullish(),
   "series": zod.array(zod.object({
   "label": zod.string(),
   "value": zod.number(),
   "color": zod.string().nullish()
 })).optional().describe('Grouped buckets for chart widgets (admin-authoritative real totals)'),
+  "tableColumns": zod.array(zod.object({
+  "fieldKey": zod.string(),
+  "label": zod.string(),
+  "fieldType": zod.string()
+})).optional().describe('Column metadata for table widgets, in display order'),
+  "tableRows": zod.array(zod.object({
+  "id": zod.number(),
+  "values": zod.record(zod.string(), zod.unknown()).describe('fieldKey to stored value map (only the widget\'s columns)')
+})).optional().describe('Rows for table widgets (admin-authoritative, status-filtered, limited)'),
   "formula": zod.string().nullish(),
   "format": zod.string().nullish(),
   "metrics": zod.record(zod.string(), zod.number()).describe('Computed value per metric key (admin-authoritative real totals)')
@@ -1346,7 +1373,7 @@ export const UpdateDashboardWidgetBody = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph driven by chart.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph; table = entity rows.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -1366,6 +1393,12 @@ export const UpdateDashboardWidgetBody = zod.object({
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+}).optional(),
+  "table": zod.object({
+  "entityId": zod.number(),
+  "fieldKeys": zod.array(zod.string()).describe('Field keys shown as table columns, in display order'),
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional()
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
@@ -1385,7 +1418,7 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph driven by chart.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph; table = entity rows.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -1405,6 +1438,12 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+}).optional(),
+  "table": zod.object({
+  "entityId": zod.number(),
+  "fieldKeys": zod.array(zod.string()).describe('Field keys shown as table columns, in display order'),
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional()
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),

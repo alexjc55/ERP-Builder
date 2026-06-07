@@ -9,6 +9,8 @@ import type { ChartSeriesPoint } from './chartSeriesPoint';
 import type { DashboardWidgetDataMetrics } from './dashboardWidgetDataMetrics';
 import type { DashboardWidgetDataWidgetType } from './dashboardWidgetDataWidgetType';
 import type { MultilingualText } from './multilingualText';
+import type { TableColumn } from './tableColumn';
+import type { TableRow } from './tableRow';
 
 export interface DashboardWidgetData {
   id: number;
@@ -24,6 +26,10 @@ export interface DashboardWidgetData {
   chartType?: string | null;
   /** Grouped buckets for chart widgets (admin-authoritative real totals) */
   series?: ChartSeriesPoint[];
+  /** Column metadata for table widgets, in display order */
+  tableColumns?: TableColumn[];
+  /** Rows for table widgets (admin-authoritative, status-filtered, limited) */
+  tableRows?: TableRow[];
   /** @nullable */
   formula?: string | null;
   /** @nullable */

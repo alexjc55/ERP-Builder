@@ -15,4 +15,5 @@ export type DashboardWidgetDataWidgetType = typeof DashboardWidgetDataWidgetType
 export const DashboardWidgetDataWidgetType = {
   metric: 'metric',
   chart: 'chart',
+  table: 'table',
 } as const;

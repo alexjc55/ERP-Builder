@@ -642,8 +642,24 @@ export interface ChartConfig {
   statusIds?: number[] | null;
 }
 
+export interface TableConfig {
+  entityId: number;
+  /** Field keys shown as table columns, in display order */
+  fieldKeys: string[];
+  /**
+     * Restrict to records in these statuses; empty/null = all statuses
+     * @nullable
+     */
+  statusIds?: number[] | null;
+  /**
+     * Max rows to show (clamped server-side); null = server default
+     * @nullable
+     */
+  limit?: number | null;
+}
+
 /**
- * metric (default) = number cards; chart = graph driven by chart.
+ * metric (default) = number cards; chart = graph; table = entity rows.
  * @nullable
  */
 export type WidgetConfigWidgetType = typeof WidgetConfigWidgetType[keyof typeof WidgetConfigWidgetType] | null;
@@ -652,6 +668,7 @@ export type WidgetConfigWidgetType = typeof WidgetConfigWidgetType[keyof typeof 
 export const WidgetConfigWidgetType = {
   metric: 'metric',
   chart: 'chart',
+  table: 'table',
 } as const;
 
 /**
@@ -668,7 +685,7 @@ export const WidgetConfigFormat = {
 
 export interface WidgetConfig {
   /**
-     * metric (default) = number cards; chart = graph driven by chart.
+     * metric (default) = number cards; chart = graph; table = entity rows.
      * @nullable
      */
   widgetType?: WidgetConfigWidgetType;
@@ -681,6 +698,7 @@ export interface WidgetConfig {
   /** @nullable */
   format?: WidgetConfigFormat;
   chart?: ChartConfig;
+  table?: TableConfig;
 }
 
 export interface DashboardWidget {
@@ -718,6 +736,23 @@ export interface ChartSeriesPoint {
   color?: string | null;
 }
 
+export interface TableColumn {
+  fieldKey: string;
+  label: string;
+  fieldType: string;
+}
+
+/**
+ * fieldKey to stored value map (only the widget's columns)
+ */
+export type TableRowValues = { [key: string]: unknown };
+
+export interface TableRow {
+  id: number;
+  /** fieldKey to stored value map (only the widget's columns) */
+  values: TableRowValues;
+}
+
 /**
  * @nullable
  */
@@ -727,6 +762,7 @@ export type DashboardWidgetDataWidgetType = typeof DashboardWidgetDataWidgetType
 export const DashboardWidgetDataWidgetType = {
   metric: 'metric',
   chart: 'chart',
+  table: 'table',
 } as const;
 
 /**
@@ -748,6 +784,10 @@ export interface DashboardWidgetData {
   chartType?: string | null;
   /** Grouped buckets for chart widgets (admin-authoritative real totals) */
   series?: ChartSeriesPoint[];
+  /** Column metadata for table widgets, in display order */
+  tableColumns?: TableColumn[];
+  /** Rows for table widgets (admin-authoritative, status-filtered, limited) */
+  tableRows?: TableRow[];
   /** @nullable */
   formula?: string | null;
   /** @nullable */

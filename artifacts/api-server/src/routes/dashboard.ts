@@ -80,12 +80,29 @@ interface ChartSpec {
   statusIds?: number[] | null;
 }
 
+interface TableSpec {
+  entityId: number;
+  fieldKeys: string[];
+  statusIds?: number[] | null;
+  limit?: number | null;
+}
+
 interface WidgetConfigShape {
-  widgetType?: "metric" | "chart" | null;
+  widgetType?: "metric" | "chart" | "table" | null;
   metrics?: WidgetMetricSpec[];
   formula?: string | null;
   format?: string | null;
   chart?: ChartSpec | null;
+  table?: TableSpec | null;
+}
+
+// Bounds for a table widget's row count (admin-supplied limit is clamped here).
+const TABLE_DEFAULT_LIMIT = 10;
+const TABLE_MAX_LIMIT = 100;
+
+function clampTableLimit(limit: number | null | undefined): number {
+  if (limit == null || !Number.isFinite(limit)) return TABLE_DEFAULT_LIMIT;
+  return Math.min(Math.max(Math.trunc(limit), 1), TABLE_MAX_LIMIT);
 }
 
 /** Resolve a multilingual JSON value with the platform ru → en → he fallback. */
@@ -157,9 +174,52 @@ async function validateChartConfig(chart: ChartSpec | null | undefined): Promise
   return null;
 }
 
+/**
+ * Validate a table widget config: the entity must exist and every chosen column
+ * must be a real field of that entity. fieldKeys must be non-empty.
+ */
+async function validateTableConfig(table: TableSpec | null | undefined): Promise<string | null> {
+  if (!table) return "Table config is required";
+  if (!Array.isArray(table.fieldKeys) || table.fieldKeys.length === 0) {
+    return "At least one column is required";
+  }
+
+  const [entity] = await db
+    .select({ id: entitiesTable.id })
+    .from(entitiesTable)
+    .where(eq(entitiesTable.id, table.entityId))
+    .limit(1);
+  if (!entity) return `Entity ${table.entityId} not found`;
+
+  const fields = await db
+    .select({ fieldKey: entityFieldsTable.fieldKey })
+    .from(entityFieldsTable)
+    .where(eq(entityFieldsTable.entityId, table.entityId));
+  const known = new Set(fields.map((f) => f.fieldKey));
+  for (const key of table.fieldKeys) {
+    if (!known.has(key)) return `Field "${key}" not found on entity ${table.entityId}`;
+  }
+
+  const statusIds = Array.from(new Set((table.statusIds ?? []).filter((n) => Number.isInteger(n))));
+  if (statusIds.length > 0) {
+    const rows = await db
+      .select({ id: entityStatusesTable.id })
+      .from(entityStatusesTable)
+      .where(and(eq(entityStatusesTable.entityId, table.entityId), inArray(entityStatusesTable.id, statusIds)));
+    const valid = new Set(rows.map((r) => r.id));
+    for (const sid of statusIds) {
+      if (!valid.has(sid)) return `Status ${sid} not found on entity ${table.entityId}`;
+    }
+  }
+  return null;
+}
+
 async function validateConfig(config: WidgetConfigShape | undefined): Promise<string | null> {
   if (config?.widgetType === "chart") {
     return validateChartConfig(config.chart);
+  }
+  if (config?.widgetType === "table") {
+    return validateTableConfig(config.table);
   }
   const metrics = config?.metrics ?? [];
   if (metrics.length === 0) return "At least one metric is required";
@@ -278,6 +338,58 @@ async function computeChartSeries(
     .orderBy(sql`2 desc`)
     .limit(50);
   return rows.map((r) => ({ label: String(r.label ?? "—"), value: Number(r.v ?? 0), color: null }));
+}
+
+/**
+ * Compute a table widget's columns + rows. ADMIN-AUTHORITATIVE like computeMetric/
+ * computeChartSeries: real rows over the entity's non-archived records, independent
+ * of the viewing role's row/field data permissions (access is governed by per-widget
+ * role visibility). Columns are the admin-chosen fields (in their configured order);
+ * each row carries only those fields' stored values, newest records first.
+ */
+async function computeTableData(
+  t: TableSpec,
+): Promise<{
+  columns: Array<{ fieldKey: string; label: string; fieldType: string }>;
+  rows: Array<{ id: number; values: Record<string, unknown> }>;
+}> {
+  const fields = await db
+    .select({
+      fieldKey: entityFieldsTable.fieldKey,
+      nameJson: entityFieldsTable.nameJson,
+      fieldType: entityFieldsTable.fieldType,
+    })
+    .from(entityFieldsTable)
+    .where(eq(entityFieldsTable.entityId, t.entityId));
+  const byKey = new Map(fields.map((f) => [f.fieldKey, f]));
+
+  // Keep only valid keys, preserving the admin's configured column order.
+  const columns = t.fieldKeys
+    .filter((k) => byKey.has(k))
+    .map((k) => {
+      const f = byKey.get(k)!;
+      return { fieldKey: f.fieldKey, label: resolveML(f.nameJson) || f.fieldKey, fieldType: f.fieldType };
+    });
+
+  const conds = [eq(entityRecordsTable.entityId, t.entityId), isNull(entityRecordsTable.archivedAt)];
+  const statusIds = (t.statusIds ?? []).filter((n) => Number.isInteger(n));
+  if (statusIds.length > 0) conds.push(inArray(entityRecordsTable.statusId, statusIds));
+
+  const records = await db
+    .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
+    .from(entityRecordsTable)
+    .where(and(...conds))
+    .orderBy(sql`${entityRecordsTable.createdAt} desc`)
+    .limit(clampTableLimit(t.limit));
+
+  const rows = records.map((r) => {
+    const all = (r.valuesJson ?? {}) as Record<string, unknown>;
+    const values: Record<string, unknown> = {};
+    for (const c of columns) values[c.fieldKey] = all[c.fieldKey] ?? null;
+    return { id: r.id, values };
+  });
+
+  return { columns, rows };
 }
 
 /** True if the role may access (see) the given content page. */
@@ -471,6 +583,18 @@ router.get("/pages/:id/dashboard/data", requireAuth, async (req, res): Promise<v
           widgetType: "chart" as const,
           chartType: config.chart.type,
           series,
+          formula: null,
+          format: config.format ?? null,
+          metrics: {},
+        };
+      }
+      if (config.widgetType === "table" && config.table) {
+        const { columns, rows } = await computeTableData(config.table);
+        return {
+          ...base,
+          widgetType: "table" as const,
+          tableColumns: columns,
+          tableRows: rows,
           formula: null,
           format: config.format ?? null,
           metrics: {},

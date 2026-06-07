@@ -24,6 +24,8 @@ import {
   type ChartConfigType,
   type ChartConfigGroupByKind,
   type ChartConfigAggregation,
+  type TableColumn,
+  type TableRow,
   type Entity,
   type Field,
   type Status,
@@ -275,7 +277,86 @@ function WidgetChart({
   );
 }
 
+/** Render a stored record value as compact display text for a table widget cell. */
+function renderTableCell(value: unknown, fieldType: string): string {
+  if (value == null || value === "") return "—";
+  if (fieldType === "boolean") return value ? "✓" : "—";
+  if (Array.isArray(value)) return value.map((v) => renderTableCell(v, "text")).filter((s) => s !== "—").join(", ") || "—";
+  if (typeof value === "object") {
+    const o = value as Record<string, unknown>;
+    if (typeof o.name === "string") return o.name;
+    if (typeof o.label === "string") return o.label;
+    return JSON.stringify(value);
+  }
+  return String(value);
+}
+
+/** Render a table widget: admin-chosen columns and the entity's recent rows. */
+function WidgetTable({
+  columns,
+  rows,
+  t,
+}: {
+  columns: TableColumn[];
+  rows: TableRow[];
+  t: (key: string, fallback: string) => string;
+}) {
+  if (!columns || columns.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-slate-400">
+        {t("dash.noData", "Нет данных")}
+      </div>
+    );
+  }
+  return (
+    <div className="h-full overflow-auto">
+      <table className="w-full border-collapse text-sm">
+        <thead className="sticky top-0 bg-slate-50">
+          <tr>
+            {columns.map((c) => (
+              <th key={c.fieldKey} className="border-b border-slate-200 px-2 py-1.5 text-left font-medium text-slate-500 whitespace-nowrap">
+                {c.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={columns.length} className="px-2 py-6 text-center text-slate-400">
+                {t("dash.noData", "Нет данных")}
+              </td>
+            </tr>
+          ) : (
+            rows.map((r) => (
+              <tr key={r.id} className="hover:bg-slate-50/60">
+                {columns.map((c) => (
+                  <td key={c.fieldKey} className="border-b border-slate-100 px-2 py-1.5 text-slate-700 whitespace-nowrap">
+                    {renderTableCell((r.values ?? {})[c.fieldKey], c.fieldType)}
+                  </td>
+                ))}
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function WidgetCard({ w, ml, currencySymbol, t }: { w: DashboardWidgetData; ml: (v: unknown) => string; currencySymbol: string; t: (key: string, fallback: string) => string }) {
+  if (w.widgetType === "table") {
+    return (
+      <Card className="h-full border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+        <CardContent className="flex h-full flex-col p-4">
+          <p className="text-sm font-medium text-slate-500 truncate">{ml(w.titleJson)}</p>
+          <div className="flex-1 min-h-0 mt-2">
+            <WidgetTable columns={w.tableColumns ?? []} rows={w.tableRows ?? []} t={t} />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
   if (w.widgetType === "chart") {
     return (
       <Card className="h-full border-slate-200 shadow-sm hover:shadow-md transition-shadow">
@@ -377,10 +458,13 @@ function EditWidgetCell({
   onDelete: () => void;
 }) {
   const Icon = getIconComponent(w.icon || DEFAULT_ICON, LayoutDashboard);
-  const isChart = w.config.widgetType === "chart";
-  const summary = isChart
-    ? `${t("dash.chartWidget", "График")} · ${w.config.chart?.type ?? ""}`
-    : `${t("dash.metricsCount", "Метрик")}: ${w.config.metrics?.length ?? 0}${w.config.formula ? ` · ${t("dash.hasFormula", "формула")}` : ""}`;
+  const widgetType = w.config.widgetType;
+  const summary =
+    widgetType === "chart"
+      ? `${t("dash.chartWidget", "График")} · ${w.config.chart?.type ?? ""}`
+      : widgetType === "table"
+        ? `${t("dash.tableWidget", "Таблица")} · ${t("dash.columnsCount", "Колонок")}: ${w.config.table?.fieldKeys?.length ?? 0}`
+        : `${t("dash.metricsCount", "Метрик")}: ${w.config.metrics?.length ?? 0}${w.config.formula ? ` · ${t("dash.hasFormula", "формула")}` : ""}`;
   return (
     <div
       className="min-w-0"
@@ -628,6 +712,15 @@ type ChartDraft = {
   statusIds: number[];
 };
 
+type TableDraft = {
+  entityId: number | null;
+  fieldKeys: string[];
+  statusIds: number[];
+  limit: number;
+};
+
+type WidgetTypeChoice = "metric" | "chart" | "table";
+
 function WidgetEditorDialog({
   pageId: _pageId,
   widget,
@@ -657,8 +750,12 @@ function WidgetEditorDialog({
     const tj = widget?.titleJson;
     return typeof tj === "object" && tj ? { ru: tj.ru, en: tj.en, he: tj.he } : {};
   });
-  const [widgetType, setWidgetType] = useState<"metric" | "chart">(
-    widget?.config.widgetType === "chart" ? "chart" : "metric",
+  const [widgetType, setWidgetType] = useState<WidgetTypeChoice>(
+    widget?.config.widgetType === "chart"
+      ? "chart"
+      : widget?.config.widgetType === "table"
+        ? "table"
+        : "metric",
   );
   const [icon, setIcon] = useState(widget?.icon || DEFAULT_ICON);
   const [color, setColor] = useState(widget?.color || DEFAULT_COLOR);
@@ -689,6 +786,15 @@ function WidgetEditorDialog({
       aggregation: c?.aggregation ?? "count",
       fieldKey: c?.fieldKey ?? null,
       statusIds: c?.statusIds ?? [],
+    };
+  });
+  const [table, setTable] = useState<TableDraft>(() => {
+    const tb = widget?.config.table;
+    return {
+      entityId: tb?.entityId ?? null,
+      fieldKeys: tb?.fieldKeys ?? [],
+      statusIds: tb?.statusIds ?? [],
+      limit: tb?.limit ?? 10,
     };
   });
 
@@ -743,6 +849,29 @@ function WidgetEditorDialog({
             aggregation: chart.aggregation,
             fieldKey: chart.aggregation === "sum" ? chart.fieldKey : null,
             statusIds: chart.statusIds.length > 0 ? chart.statusIds : null,
+          },
+        },
+      };
+    }
+
+    if (widgetType === "table") {
+      if (table.entityId == null) {
+        toast({ title: t("dash.tableNeedsEntity", "Выберите сущность для таблицы"), variant: "destructive" });
+        return null;
+      }
+      if (table.fieldKeys.length === 0) {
+        toast({ title: t("dash.tableNeedsColumns", "Выберите хотя бы одну колонку"), variant: "destructive" });
+        return null;
+      }
+      return {
+        ...base,
+        config: {
+          widgetType: "table",
+          table: {
+            entityId: table.entityId,
+            fieldKeys: table.fieldKeys,
+            statusIds: table.statusIds.length > 0 ? table.statusIds : null,
+            limit: table.limit,
           },
         },
       };
@@ -804,11 +933,12 @@ function WidgetEditorDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>{t("dash.widgetType", "Тип виджета")}</Label>
-              <Select value={widgetType} onValueChange={(v) => setWidgetType(v as "metric" | "chart")}>
+              <Select value={widgetType} onValueChange={(v) => setWidgetType(v as WidgetTypeChoice)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="metric">{t("dash.typeMetric", "Показатель")}</SelectItem>
                   <SelectItem value="chart">{t("dash.typeChart", "График")}</SelectItem>
+                  <SelectItem value="table">{t("dash.typeTable", "Таблица")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -847,6 +977,8 @@ function WidgetEditorDialog({
 
           {widgetType === "chart" ? (
             <ChartEditor chart={chart} entities={entities} onChange={(patch) => setChart((prev) => ({ ...prev, ...patch }))} ml={ml} t={t} />
+          ) : widgetType === "table" ? (
+            <TableEditor table={table} entities={entities} onChange={(patch) => setTable((prev) => ({ ...prev, ...patch }))} ml={ml} t={t} />
           ) : (
             <>
               <div className="space-y-2 rounded-md border border-slate-200 p-3">
@@ -1060,6 +1192,115 @@ function ChartEditor({
                 type="button"
                 onClick={() => toggleStatus(s.id)}
                 className={chart.statusIds.includes(s.id) ? "" : "opacity-50"}
+              >
+                <Badge style={{ backgroundColor: s.color }} className="border-0 text-white font-normal cursor-pointer">
+                  {ml(s.nameJson)}
+                </Badge>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TableEditor({
+  table,
+  entities,
+  onChange,
+  ml,
+  t,
+}: {
+  table: TableDraft;
+  entities: Entity[];
+  onChange: (patch: Partial<TableDraft>) => void;
+  ml: (v: unknown) => string;
+  t: (key: string, fallback: string) => string;
+}) {
+  const { data: fields = [] } = useListEntityFields(table.entityId ?? 0, {
+    query: { enabled: table.entityId != null, queryKey: getListEntityFieldsQueryKey(table.entityId ?? 0) },
+  });
+  const { data: statuses = [] } = useListEntityStatuses(table.entityId ?? 0, {
+    query: { enabled: table.entityId != null, queryKey: getListEntityStatusesQueryKey(table.entityId ?? 0) },
+  });
+
+  const toggleColumn = (key: string) => {
+    const next = table.fieldKeys.includes(key)
+      ? table.fieldKeys.filter((k) => k !== key)
+      : [...table.fieldKeys, key];
+    onChange({ fieldKeys: next });
+  };
+
+  const toggleStatus = (sid: number) => {
+    const next = table.statusIds.includes(sid)
+      ? table.statusIds.filter((s) => s !== sid)
+      : [...table.statusIds, sid];
+    onChange({ statusIds: next });
+  };
+
+  return (
+    <div className="space-y-3 rounded-md border border-slate-200 p-3">
+      <Label>{t("dash.tableSettings", "Настройки таблицы")}</Label>
+
+      <div className="space-y-1.5">
+        <p className="text-xs text-slate-400">{t("dash.selectEntity", "Сущность")}</p>
+        <Select
+          value={table.entityId != null ? String(table.entityId) : ""}
+          onValueChange={(v) => onChange({ entityId: Number(v), fieldKeys: [], statusIds: [] })}
+        >
+          <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectEntity", "Сущность")} /></SelectTrigger>
+          <SelectContent>
+            {entities.filter((e) => e.isActive).map((e) => (
+              <SelectItem key={e.id} value={String(e.id)}>{ml(e.nameJson)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-1.5">
+        <p className="text-xs text-slate-400">{t("dash.tableColumns", "Колонки (порядок выбора)")}</p>
+        {table.entityId == null ? (
+          <p className="text-xs text-slate-400">{t("dash.tableSelectEntityFirst", "Сначала выберите сущность")}</p>
+        ) : fields.length === 0 ? (
+          <p className="text-xs text-slate-400">{t("dash.noFields", "Нет полей")}</p>
+        ) : (
+          <div className="space-y-1 max-h-44 overflow-auto rounded-md border border-slate-100 p-2">
+            {fields.map((f: Field) => (
+              <label key={f.fieldKey} className="flex items-center gap-2 text-sm">
+                <Checkbox checked={table.fieldKeys.includes(f.fieldKey)} onCheckedChange={() => toggleColumn(f.fieldKey)} />
+                {ml(f.nameJson)}
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        <p className="text-xs text-slate-400">{t("dash.rowLimit", "Кол-во строк (1–100)")}</p>
+        <Input
+          type="number"
+          min={1}
+          max={100}
+          value={table.limit}
+          onChange={(e) => {
+            const n = Number(e.target.value);
+            onChange({ limit: Number.isFinite(n) ? Math.min(Math.max(Math.trunc(n), 1), 100) : 10 });
+          }}
+          className="h-8 w-28"
+        />
+      </div>
+
+      {table.entityId != null && statuses.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-xs text-slate-400">{t("dash.statusFilter", "Статусы (пусто = все)")}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {statuses.map((s: Status) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => toggleStatus(s.id)}
+                className={table.statusIds.includes(s.id) ? "" : "opacity-50"}
               >
                 <Badge style={{ backgroundColor: s.color }} className="border-0 text-white font-normal cursor-pointer">
                   {ml(s.nameJson)}

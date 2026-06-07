@@ -6,13 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChartConfig } from './chartConfig';
+import type { TableConfig } from './tableConfig';
 import type { WidgetConfigFormat } from './widgetConfigFormat';
 import type { WidgetConfigWidgetType } from './widgetConfigWidgetType';
 import type { WidgetMetric } from './widgetMetric';
 
 export interface WidgetConfig {
   /**
-     * metric (default) = number cards; chart = graph driven by chart.
+     * metric (default) = number cards; chart = graph; table = entity rows.
      * @nullable
      */
   widgetType?: WidgetConfigWidgetType;
@@ -25,4 +26,5 @@ export interface WidgetConfig {
   /** @nullable */
   format?: WidgetConfigFormat;
   chart?: ChartConfig;
+  table?: TableConfig;
 }

@@ -4440,6 +4440,60 @@
     "he": "תרשים"
   },
   {
+    "key": "dash.typeTable",
+    "ru": "Таблица",
+    "en": "Table",
+    "he": "טבלה"
+  },
+  {
+    "key": "dash.tableWidget",
+    "ru": "Таблица",
+    "en": "Table",
+    "he": "טבלה"
+  },
+  {
+    "key": "dash.tableSettings",
+    "ru": "Настройки таблицы",
+    "en": "Table settings",
+    "he": "הגדרות טבלה"
+  },
+  {
+    "key": "dash.tableColumns",
+    "ru": "Колонки (порядок выбора)",
+    "en": "Columns (selection order)",
+    "he": "עמודות (סדר בחירה)"
+  },
+  {
+    "key": "dash.tableSelectEntityFirst",
+    "ru": "Сначала выберите сущность",
+    "en": "Select an entity first",
+    "he": "בחר תחילה ישות"
+  },
+  {
+    "key": "dash.rowLimit",
+    "ru": "Кол-во строк (1–100)",
+    "en": "Row count (1–100)",
+    "he": "מספר שורות (1–100)"
+  },
+  {
+    "key": "dash.columnsCount",
+    "ru": "Колонок",
+    "en": "Columns",
+    "he": "עמודות"
+  },
+  {
+    "key": "dash.tableNeedsEntity",
+    "ru": "Выберите сущность для таблицы",
+    "en": "Select an entity for the table",
+    "he": "בחר ישות עבור הטבלה"
+  },
+  {
+    "key": "dash.tableNeedsColumns",
+    "ru": "Выберите хотя бы одну колонку",
+    "en": "Select at least one column",
+    "he": "בחר לפחות עמודה אחת"
+  },
+  {
     "key": "dash.gridW",
     "ru": "Ширина (ячеек)",
     "en": "Width (cells)",
