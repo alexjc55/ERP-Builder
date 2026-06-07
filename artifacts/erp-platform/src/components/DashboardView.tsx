@@ -86,7 +86,7 @@ import { useAuth } from "@/lib/auth";
 import { useML, useT } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Settings2, Plus, Pencil, Trash2, Loader2, ChevronUp, ChevronDown, X, LayoutDashboard } from "lucide-react";
+import { Settings2, Plus, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight, Minus, X, LayoutDashboard } from "lucide-react";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
@@ -105,6 +105,23 @@ const DEFAULT_COLOR = "bg-blue-600";
 const DEFAULT_ICON = "TrendingUp";
 
 const GRID_COLS = 4;
+const GRID_ROWS_MAX = 4;
+
+/** Static sample data so admins can preview each chart type while choosing it. */
+const SAMPLE_CHART_SERIES: ChartSeriesPoint[] = [
+  { label: "A", value: 8, color: "#2563eb" },
+  { label: "B", value: 14, color: "#7c3aed" },
+  { label: "C", value: 6, color: "#059669" },
+  { label: "D", value: 11, color: "#f59e0b" },
+];
+
+const CHART_TYPE_OPTIONS: { value: ChartConfigType; labelKey: string; fallback: string }[] = [
+  { value: "bar", labelKey: "dash.chartBar", fallback: "Столбчатый" },
+  { value: "line", labelKey: "dash.chartLine", fallback: "Линейный" },
+  { value: "area", labelKey: "dash.chartArea", fallback: "Область" },
+  { value: "pie", labelKey: "dash.chartPie", fallback: "Круговой" },
+  { value: "donut", labelKey: "dash.chartDonut", fallback: "Кольцевой" },
+];
 
 /** Map a tailwind preset bg class to a concrete hex for chart fills/strokes. */
 const TAILWIND_HEX: Record<string, string> = {
@@ -291,6 +308,122 @@ function WidgetCard({ w, ml, currencySymbol, t }: { w: DashboardWidgetData; ml: 
   );
 }
 
+function widgetToInput(w: DashboardWidget, patch: Partial<DashboardWidgetInput>): DashboardWidgetInput {
+  return {
+    titleJson: w.titleJson,
+    config: w.config,
+    visibleRoleIds: w.visibleRoleIds ?? null,
+    icon: w.icon,
+    color: w.color,
+    gridW: w.gridW,
+    gridH: w.gridH,
+    sortOrder: w.sortOrder,
+    ...patch,
+  };
+}
+
+function SizeStepper({
+  short,
+  label,
+  value,
+  min,
+  max,
+  busy,
+  onChange,
+}: {
+  short: string;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  busy: boolean;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1" title={label}>
+      <span className="text-[10px] font-semibold text-slate-400">{short}</span>
+      <Button variant="outline" size="icon" className="h-6 w-6" disabled={busy || value <= min} onClick={() => onChange(value - 1)}>
+        <Minus className="w-3 h-3" />
+      </Button>
+      <span className="w-3 text-center text-xs font-medium text-slate-600">{value}</span>
+      <Button variant="outline" size="icon" className="h-6 w-6" disabled={busy || value >= max} onClick={() => onChange(value + 1)}>
+        <Plus className="w-3 h-3" />
+      </Button>
+    </div>
+  );
+}
+
+function EditWidgetCell({
+  w,
+  index,
+  total,
+  busy,
+  ml,
+  t,
+  onResize,
+  onMove,
+  onEdit,
+  onDelete,
+}: {
+  w: DashboardWidget;
+  index: number;
+  total: number;
+  busy: boolean;
+  ml: (v: unknown) => string;
+  t: (key: string, fallback: string) => string;
+  onResize: (patch: { gridW?: number; gridH?: number }) => void;
+  onMove: (dir: -1 | 1) => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const Icon = getIconComponent(w.icon || DEFAULT_ICON, LayoutDashboard);
+  const isChart = w.config.widgetType === "chart";
+  const summary = isChart
+    ? `${t("dash.chartWidget", "График")} · ${w.config.chart?.type ?? ""}`
+    : `${t("dash.metricsCount", "Метрик")}: ${w.config.metrics?.length ?? 0}${w.config.formula ? ` · ${t("dash.hasFormula", "формула")}` : ""}`;
+  return (
+    <div
+      className="min-w-0"
+      style={{
+        gridColumn: `span ${Math.min(Math.max(w.gridW || 1, 1), GRID_COLS)}`,
+        gridRow: `span ${Math.min(Math.max(w.gridH || 1, 1), GRID_ROWS_MAX)}`,
+      }}
+    >
+      <Card className="h-full border-dashed border-slate-300 shadow-sm">
+        <CardContent className="flex h-full flex-col justify-between gap-1.5 p-3 overflow-hidden">
+          <div className="flex items-center gap-2">
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${w.color || DEFAULT_COLOR}`}>
+              <Icon className="w-3.5 h-3.5 text-white" />
+            </div>
+            <p className="flex-1 truncate text-sm font-medium text-slate-700">{ml(w.titleJson)}</p>
+            <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400" disabled={index === 0 || busy} onClick={() => onMove(-1)} title={t("dash.moveBack", "Переместить назад")}>
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400" disabled={index === total - 1 || busy} onClick={() => onMove(1)} title={t("dash.moveForward", "Переместить вперёд")}>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+          <p className="truncate text-xs text-slate-400">
+            {summary}
+            {w.visibleRoleIds && w.visibleRoleIds.length > 0 ? ` · ${t("dash.roleLimited", "ограничено ролями")}` : ""}
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <SizeStepper short={t("dash.gridWShort", "Ш")} label={t("dash.gridW", "Ширина (ячеек)")} value={w.gridW} min={1} max={GRID_COLS} busy={busy} onChange={(v) => onResize({ gridW: v })} />
+            <SizeStepper short={t("dash.gridHShort", "В")} label={t("dash.gridH", "Высота (ячеек)")} value={w.gridH} min={1} max={GRID_ROWS_MAX} busy={busy} onChange={(v) => onResize({ gridH: v })} />
+            <div className="flex-1" />
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit} title={t("dash.editWidget", "Редактировать виджет")}>
+              <Pencil className="w-3.5 h-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={onDelete} title={t("dash.delete", "Удалить")}>
+              <Trash2 className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function DashboardView({ pageId }: { pageId: number }) {
   const ml = useML();
   const t = useT();
@@ -336,6 +469,19 @@ export default function DashboardView({ pageId }: { pageId: number }) {
   const reorderMutation = useReorderDashboardWidgets({
     mutation: { onSuccess: () => invalidate() },
   });
+  const resizeMutation = useUpdateDashboardWidget({
+    mutation: {
+      onSuccess: () => invalidate(),
+      onError: () => toast({ title: t("dash.saveError", "Ошибка сохранения виджета"), variant: "destructive" }),
+    },
+  });
+
+  const resize = (w: DashboardWidget, patch: { gridW?: number; gridH?: number }) => {
+    const gridW = Math.min(Math.max(patch.gridW ?? w.gridW, 1), GRID_COLS);
+    const gridH = Math.min(Math.max(patch.gridH ?? w.gridH, 1), GRID_ROWS_MAX);
+    if (gridW === w.gridW && gridH === w.gridH) return;
+    resizeMutation.mutate({ wid: w.id, data: widgetToInput(w, { gridW, gridH }) });
+  };
 
   const sortedEdit = [...editWidgets].sort((a, b) => a.sortOrder - b.sortOrder);
   const sortedData = [...widgetData].sort((a, b) => a.sortOrder - b.sortOrder);
@@ -380,51 +526,31 @@ export default function DashboardView({ pageId }: { pageId: number }) {
           {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 w-full" />)}
         </div>
       ) : editMode ? (
-        sortedEdit.length === 0 ? (
-          <Card className="border-slate-200 shadow-sm">
-            <CardContent className="text-center py-16 text-slate-400">
-              {t("dash.empty", "Виджеты ещё не добавлены")}
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-2">
-            {sortedEdit.map((w, i) => {
-              const Icon = getIconComponent(w.icon || DEFAULT_ICON, LayoutDashboard);
-              const isChart = w.config.widgetType === "chart";
-              return (
-                <Card key={w.id} className="border-slate-200 shadow-sm">
-                  <CardContent className="flex items-center gap-3 p-3">
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${w.color || DEFAULT_COLOR}`}>
-                      <Icon className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-slate-700 truncate">{ml(w.titleJson)}</p>
-                      <p className="text-xs text-slate-400">
-                        {isChart
-                          ? `${t("dash.chartWidget", "График")} · ${w.config.chart?.type ?? ""}`
-                          : `${t("dash.metricsCount", "Метрик")}: ${w.config.metrics?.length ?? 0}${w.config.formula ? ` · ${t("dash.hasFormula", "формула")}` : ""}`}
-                        {` · ${w.gridW}×${w.gridH}`}
-                        {w.visibleRoleIds && w.visibleRoleIds.length > 0 ? ` · ${t("dash.roleLimited", "ограничено ролями")}` : ""}
-                      </p>
-                    </div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" disabled={i === 0 || reorderMutation.isPending} onClick={() => move(i, -1)}>
-                      <ChevronUp className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" disabled={i === sortedEdit.length - 1 || reorderMutation.isPending} onClick={() => move(i, 1)}>
-                      <ChevronDown className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(w)}>
-                      <Pencil className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => setDeleteWidget(w)}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 auto-rows-[8rem]">
+          {sortedEdit.map((w, i) => (
+            <EditWidgetCell
+              key={w.id}
+              w={w}
+              index={i}
+              total={sortedEdit.length}
+              busy={resizeMutation.isPending || reorderMutation.isPending}
+              ml={ml}
+              t={t}
+              onResize={(patch) => resize(w, patch)}
+              onMove={(dir) => move(i, dir)}
+              onEdit={() => openEdit(w)}
+              onDelete={() => setDeleteWidget(w)}
+            />
+          ))}
+          <button
+            type="button"
+            onClick={openCreate}
+            className="flex h-full min-h-[8rem] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 text-slate-400 transition-colors hover:border-blue-400 hover:text-blue-500"
+          >
+            <Plus className="w-6 h-6" />
+            <span className="text-sm font-medium">{t("dash.addWidget", "Добавить виджет")}</span>
+          </button>
+        </div>
       ) : sortedData.length === 0 ? (
         <Card className="border-slate-200 shadow-sm">
           <CardContent className="text-center py-16 text-slate-400">
@@ -441,7 +567,7 @@ export default function DashboardView({ pageId }: { pageId: number }) {
               className="min-w-0"
               style={{
                 gridColumn: `span ${Math.min(Math.max(w.gridW || 1, 1), GRID_COLS)}`,
-                gridRow: `span ${Math.max(w.gridH || 1, 1)}`,
+                gridRow: `span ${Math.min(Math.max(w.gridH || 1, 1), GRID_ROWS_MAX)}`,
               }}
             >
               <WidgetCard w={w} ml={ml} currencySymbol={currencySymbol} t={t} />
@@ -538,8 +664,6 @@ function WidgetEditorDialog({
   const [color, setColor] = useState(widget?.color || DEFAULT_COLOR);
   const [format, setFormat] = useState<string>(widget?.config.format || "number");
   const [formula, setFormula] = useState(widget?.config.formula || "");
-  const [gridW, setGridW] = useState<number>(widget?.gridW ?? 1);
-  const [gridH, setGridH] = useState<number>(widget?.gridH ?? 1);
   const [restrictRoles, setRestrictRoles] = useState<boolean>(
     !!(widget?.visibleRoleIds && widget.visibleRoleIds.length > 0),
   );
@@ -585,9 +709,10 @@ function WidgetEditorDialog({
       visibleRoleIds: restrictRoles && visibleRoleIds.length > 0 ? visibleRoleIds : null,
       icon,
       color,
-      gridW: Math.min(Math.max(Math.round(gridW) || 1, 1), GRID_COLS),
-      gridH: Math.min(Math.max(Math.round(gridH) || 1, 1), 4),
       sortOrder: widget?.sortOrder ?? nextSortOrder,
+      // Size is controlled on the grid (inline resize), not in this dialog. New widgets default
+      // to 1×1; for edits we omit grid dims so an in-flight inline resize is never reverted.
+      ...(widget ? {} : { gridW: 1, gridH: 1 }),
     };
 
     if (widgetType === "chart") {
@@ -700,33 +825,10 @@ function WidgetEditorDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>{t("dash.icon", "Иконка")}</Label>
-              <IconPicker value={icon} onChange={setIcon} />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1.5">
-                <Label>{t("dash.gridW", "Ширина (ячеек)")}</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={GRID_COLS}
-                  value={gridW}
-                  onChange={(e) => setGridW(Number(e.target.value))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>{t("dash.gridH", "Высота (ячеек)")}</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={4}
-                  value={gridH}
-                  onChange={(e) => setGridH(Number(e.target.value))}
-                />
-              </div>
-            </div>
+          <div className="space-y-1.5">
+            <Label>{t("dash.icon", "Иконка")}</Label>
+            <IconPicker value={icon} onChange={setIcon} />
+            <p className="text-xs text-slate-400">{t("dash.sizeHint", "Размер виджета настраивается прямо на сетке в режиме настройки.")}</p>
           </div>
 
           <div className="space-y-1.5">
@@ -842,34 +944,42 @@ function ChartEditor({
   return (
     <div className="space-y-3 rounded-md border border-slate-200 p-3">
       <Label>{t("dash.chartSettings", "Настройки графика")}</Label>
-      <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-1.5">
-          <p className="text-xs text-slate-400">{t("dash.chartType", "Тип графика")}</p>
-          <Select value={chart.type} onValueChange={(v) => onChange({ type: v as ChartConfigType })}>
-            <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="bar">{t("dash.chartBar", "Столбчатый")}</SelectItem>
-              <SelectItem value="line">{t("dash.chartLine", "Линейный")}</SelectItem>
-              <SelectItem value="area">{t("dash.chartArea", "Область")}</SelectItem>
-              <SelectItem value="pie">{t("dash.chartPie", "Круговой")}</SelectItem>
-              <SelectItem value="donut">{t("dash.chartDonut", "Кольцевой")}</SelectItem>
-            </SelectContent>
-          </Select>
+      <div className="space-y-1.5">
+        <p className="text-xs text-slate-400">{t("dash.chartType", "Тип графика")}</p>
+        <div className="grid grid-cols-5 gap-2">
+          {CHART_TYPE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onChange({ type: opt.value })}
+              className={`flex flex-col items-center gap-1 rounded-md border p-1.5 transition-colors ${
+                chart.type === opt.value
+                  ? "border-blue-500 bg-blue-50/60 ring-1 ring-blue-500"
+                  : "border-slate-200 hover:border-slate-300"
+              }`}
+            >
+              <div className="pointer-events-none h-12 w-full">
+                <WidgetChart chartType={opt.value} series={SAMPLE_CHART_SERIES} color={DEFAULT_COLOR} t={t} />
+              </div>
+              <span className="text-center text-[10px] leading-tight text-slate-500">{t(opt.labelKey, opt.fallback)}</span>
+            </button>
+          ))}
         </div>
-        <div className="space-y-1.5">
-          <p className="text-xs text-slate-400">{t("dash.selectEntity", "Сущность")}</p>
-          <Select
-            value={chart.entityId != null ? String(chart.entityId) : ""}
-            onValueChange={(v) => onChange({ entityId: Number(v), fieldKey: null, groupByFieldKey: null, statusIds: [] })}
-          >
-            <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectEntity", "Сущность")} /></SelectTrigger>
-            <SelectContent>
-              {entities.filter((e) => e.isActive).map((e) => (
-                <SelectItem key={e.id} value={String(e.id)}>{ml(e.nameJson)}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <p className="text-xs text-slate-400">{t("dash.selectEntity", "Сущность")}</p>
+        <Select
+          value={chart.entityId != null ? String(chart.entityId) : ""}
+          onValueChange={(v) => onChange({ entityId: Number(v), fieldKey: null, groupByFieldKey: null, statusIds: [] })}
+        >
+          <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectEntity", "Сущность")} /></SelectTrigger>
+          <SelectContent>
+            {entities.filter((e) => e.isActive).map((e) => (
+              <SelectItem key={e.id} value={String(e.id)}>{ml(e.nameJson)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="grid grid-cols-2 gap-2">

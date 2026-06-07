@@ -37,7 +37,8 @@ Must be enforced on **every** path that can change page type, against the **effe
 - Frontend renders with **recharts**; widget `color` is a tailwind bg class, so charts map it to hex via a `TAILWIND_HEX` table (recharts needs real color values, not class names).
 
 ## Grid layout
-- Widgets carry `gridW`/`gridH` (cell spans, default 1×1) persisted in CRUD. The viewer grid is a fixed-column CSS grid; each widget wrapper sets inline `gridColumn: span W` / `gridRow: span H`. Use inline styles, NOT dynamic tailwind `col-span-N` classes (they'd be purged). Clamp W to the column count and H to a sane max.
+- Widgets carry `gridW`/`gridH` (cell spans, default 1×1) persisted in CRUD. The viewer grid is a fixed-column CSS grid; each widget wrapper sets inline `gridColumn: span W` / `gridRow: span H`. Use inline styles, NOT dynamic tailwind `col-span-N` classes (they'd be purged). Clamp W to the column count and H to a sane max **on both the viewer and edit-mode renders**.
+- Size is **grid-controlled** in admin edit mode (inline +/- steppers persist via a silent full-`config` PUT — PUT requires the whole `DashboardWidgetInput`, so resize reconstructs the full input). **The widget editor dialog must NOT send `gridW`/`gridH` on edit** (omit them so the server preserves current size); only set defaults (1×1) on create. **Why:** the dialog captures size at open time, so if it sent size on save it could revert an in-flight inline resize (last-write-wins race).
 
 ## Records column totals (related, not dashboard-specific)
 - `records/query` returns `numericTotals` ({fieldKey → sum}) computed over the **full filtered set** (records are paginated, so totals must be server-side, never summed client-side from one page).

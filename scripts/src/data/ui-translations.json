@@ -4434,6 +4434,36 @@
     "he": "גובה (תאים)"
   },
   {
+    "key": "dash.gridWShort",
+    "ru": "Ш",
+    "en": "W",
+    "he": "ר"
+  },
+  {
+    "key": "dash.gridHShort",
+    "ru": "В",
+    "en": "H",
+    "he": "ג"
+  },
+  {
+    "key": "dash.moveBack",
+    "ru": "Переместить назад",
+    "en": "Move back",
+    "he": "הזז אחורה"
+  },
+  {
+    "key": "dash.moveForward",
+    "ru": "Переместить вперёд",
+    "en": "Move forward",
+    "he": "הזז קדימה"
+  },
+  {
+    "key": "dash.sizeHint",
+    "ru": "Размер виджета настраивается прямо на сетке в режиме настройки.",
+    "en": "Widget size is adjusted directly on the grid in configure mode.",
+    "he": "גודל הווידג'ט מותאם ישירות ברשת במצב הגדרה."
+  },
+  {
     "key": "dash.chartSettings",
     "ru": "Настройки графика",
     "en": "Chart settings",
