@@ -163,6 +163,8 @@ router.put("/auth/me", requireAuth, async (req, res): Promise<void> => {
   }
 
   const updates: Record<string, unknown> = {};
+  if (parsed.data.firstName !== undefined) updates.firstName = parsed.data.firstName;
+  if (parsed.data.lastName !== undefined) updates.lastName = parsed.data.lastName;
   if (parsed.data.language !== undefined) updates.language = parsed.data.language;
   if (parsed.data.direction !== undefined) updates.direction = parsed.data.direction;
   if (parsed.data.startPageId !== undefined) updates.startPageId = parsed.data.startPageId;

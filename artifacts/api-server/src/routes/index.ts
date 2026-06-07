@@ -20,6 +20,7 @@ import eventsRouter from "./events";
 import modulesRouter from "./modules";
 import storageRouter from "./storage";
 import googleDriveRouter from "./google-drive";
+import settingsRouter from "./settings";
 
 const router: IRouter = Router();
 
@@ -44,5 +45,6 @@ router.use(eventsRouter);
 router.use(modulesRouter);
 router.use(storageRouter);
 router.use(googleDriveRouter);
+router.use(settingsRouter);
 
 export default router;

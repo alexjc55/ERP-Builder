@@ -9,6 +9,8 @@ import type { UpdateMeInputDirection } from './updateMeInputDirection';
 import type { UpdateMeInputLanguage } from './updateMeInputLanguage';
 
 export interface UpdateMeInput {
+  firstName?: string;
+  lastName?: string;
   language?: UpdateMeInputLanguage;
   direction?: UpdateMeInputDirection;
   /** @nullable */

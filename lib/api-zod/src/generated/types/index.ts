@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './appSettings';
+export * from './appSettingsUpdate';
 export * from './archiveFilter';
 export * from './auditLogEntry';
 export * from './authResult';

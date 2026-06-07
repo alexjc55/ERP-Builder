@@ -42,6 +42,58 @@ export const RequestUploadUrlResponse = zod.object({
 
 
 /**
+ * @summary Get platform branding settings (any authenticated user)
+ */
+export const GetSettingsResponse = zod.object({
+  "appNameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "subtitleJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "logoObjectPath": zod.string().nullable(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update platform branding settings (admin "settings" capability)
+ */
+export const UpdateSettingsBody = zod.object({
+  "appNameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "subtitleJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "logoObjectPath": zod.string().nullish()
+})
+
+export const UpdateSettingsResponse = zod.object({
+  "appNameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "subtitleJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "logoObjectPath": zod.string().nullable(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -84,7 +136,8 @@ export const LoginResponse = zod.object({
   "translations": zod.boolean(),
   "events": zod.boolean(),
   "modules": zod.boolean(),
-  "googleDrive": zod.boolean()
+  "googleDrive": zod.boolean(),
+  "settings": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -142,7 +195,8 @@ export const GetMeResponse = zod.object({
   "translations": zod.boolean(),
   "events": zod.boolean(),
   "modules": zod.boolean(),
-  "googleDrive": zod.boolean()
+  "googleDrive": zod.boolean(),
+  "settings": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -166,6 +220,8 @@ export const GetMeResponse = zod.object({
  * @summary Update own profile (language / text direction / start page)
  */
 export const UpdateMeBody = zod.object({
+  "firstName": zod.string().optional(),
+  "lastName": zod.string().optional(),
   "language": zod.enum(['ru', 'en', 'he']).optional(),
   "direction": zod.enum(['ltr', 'rtl']).optional(),
   "startPageId": zod.number().nullish()
@@ -196,7 +252,8 @@ export const UpdateMeResponse = zod.object({
   "translations": zod.boolean(),
   "events": zod.boolean(),
   "modules": zod.boolean(),
-  "googleDrive": zod.boolean()
+  "googleDrive": zod.boolean(),
+  "settings": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -250,7 +307,8 @@ export const ImpersonateResponse = zod.object({
   "translations": zod.boolean(),
   "events": zod.boolean(),
   "modules": zod.boolean(),
-  "googleDrive": zod.boolean()
+  "googleDrive": zod.boolean(),
+  "settings": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -301,7 +359,8 @@ export const StopImpersonationResponse = zod.object({
   "translations": zod.boolean(),
   "events": zod.boolean(),
   "modules": zod.boolean(),
-  "googleDrive": zod.boolean()
+  "googleDrive": zod.boolean(),
+  "settings": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -356,7 +415,8 @@ export const RedeemGuestLinkResponse = zod.object({
   "translations": zod.boolean(),
   "events": zod.boolean(),
   "modules": zod.boolean(),
-  "googleDrive": zod.boolean()
+  "googleDrive": zod.boolean(),
+  "settings": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -718,7 +778,8 @@ export const ListRolesResponseItem = zod.object({
   "translations": zod.boolean(),
   "events": zod.boolean(),
   "modules": zod.boolean(),
-  "googleDrive": zod.boolean()
+  "googleDrive": zod.boolean(),
+  "settings": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -761,7 +822,8 @@ export const CreateRoleBody = zod.object({
   "translations": zod.boolean(),
   "events": zod.boolean(),
   "modules": zod.boolean(),
-  "googleDrive": zod.boolean()
+  "googleDrive": zod.boolean(),
+  "settings": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -805,7 +867,8 @@ export const GetRoleResponse = zod.object({
   "translations": zod.boolean(),
   "events": zod.boolean(),
   "modules": zod.boolean(),
-  "googleDrive": zod.boolean()
+  "googleDrive": zod.boolean(),
+  "settings": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -851,7 +914,8 @@ export const UpdateRoleBody = zod.object({
   "translations": zod.boolean(),
   "events": zod.boolean(),
   "modules": zod.boolean(),
-  "googleDrive": zod.boolean()
+  "googleDrive": zod.boolean(),
+  "settings": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -887,7 +951,8 @@ export const UpdateRoleResponse = zod.object({
   "translations": zod.boolean(),
   "events": zod.boolean(),
   "modules": zod.boolean(),
-  "googleDrive": zod.boolean()
+  "googleDrive": zod.boolean(),
+  "settings": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({

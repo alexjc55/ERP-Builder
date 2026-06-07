@@ -63,6 +63,56 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  # GENERAL / BRANDING SETTINGS
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      summary: Get platform branding settings (any authenticated user)
+      responses:
+        "200":
+          description: Current platform settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSettings"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateSettings
+      tags: [settings]
+      summary: Update platform branding settings (admin "settings" capability)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppSettingsUpdate"
+      responses:
+        "200":
+          description: Updated platform settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSettings"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /healthz:
     get:
       operationId: healthCheck
@@ -2324,6 +2374,31 @@ components:
         he:
           type: string
 
+    # Platform branding / general settings (singleton row).
+    AppSettings:
+      type: object
+      required: [appNameJson, subtitleJson, logoObjectPath, updatedAt]
+      properties:
+        appNameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        subtitleJson:
+          $ref: "#/components/schemas/MultilingualText"
+        logoObjectPath:
+          type: ["string", "null"]
+        updatedAt:
+          type: string
+          format: date-time
+
+    AppSettingsUpdate:
+      type: object
+      properties:
+        appNameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        subtitleJson:
+          $ref: "#/components/schemas/MultilingualText"
+        logoObjectPath:
+          type: ["string", "null"]
+
     # AUTH
     LoginInput:
       type: object
@@ -2413,6 +2488,10 @@ components:
     UpdateMeInput:
       type: object
       properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
         language:
           type: string
           enum: [ru, en, he]
@@ -2733,7 +2812,7 @@ components:
 
     RoleAdminCaps:
       type: object
-      required: [pages, entities, roles, users, translations, events, modules, googleDrive]
+      required: [pages, entities, roles, users, translations, events, modules, googleDrive, settings]
       properties:
         pages:
           type: boolean
@@ -2750,6 +2829,8 @@ components:
         modules:
           type: boolean
         googleDrive:
+          type: boolean
+        settings:
           type: boolean
 
     RolePermissions:

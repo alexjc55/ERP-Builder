@@ -5,6 +5,7 @@ import {
   db,
   entityRecordsTable,
   entityFieldsTable,
+  appSettingsTable,
   type EntityField,
 } from "@workspace/db";
 import {
@@ -144,6 +145,49 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
   } catch (error) {
     req.log.error({ err: error }, "Error serving public object");
     res.status(500).json({ error: "Failed to serve public object" });
+  }
+});
+
+/**
+ * GET /storage/branding-logo
+ *
+ * Serve the platform branding logo. The object path comes from the singleton
+ * app_settings row (set by an admin), NOT from user input — so there is no IDOR
+ * risk and this is intentionally public (branding is shown in the sidebar and
+ * can appear pre-auth). Returns 404 when no logo is configured.
+ */
+router.get("/storage/branding-logo", async (req: Request, res: Response) => {
+  try {
+    const [row] = await db
+      .select({ logoObjectPath: appSettingsTable.logoObjectPath })
+      .from(appSettingsTable)
+      .where(eq(appSettingsTable.id, 1));
+
+    const objectPath = row?.logoObjectPath;
+    if (!objectPath) {
+      res.status(404).json({ error: "No logo configured" });
+      return;
+    }
+
+    const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+    const response = await objectStorageService.downloadObject(objectFile);
+
+    res.status(response.status);
+    response.headers.forEach((value, key) => res.setHeader(key, value));
+
+    if (response.body) {
+      const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
+      nodeStream.pipe(res);
+    } else {
+      res.end();
+    }
+  } catch (error) {
+    if (error instanceof ObjectNotFoundError) {
+      res.status(404).json({ error: "Logo not found" });
+      return;
+    }
+    req.log.error({ err: error }, "Error serving branding logo");
+    res.status(500).json({ error: "Failed to serve branding logo" });
   }
 });
 

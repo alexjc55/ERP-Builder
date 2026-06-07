@@ -103,6 +103,21 @@ export interface MultilingualText {
   he?: string;
 }
 
+export interface AppSettings {
+  appNameJson: MultilingualText;
+  subtitleJson: MultilingualText;
+  /** @nullable */
+  logoObjectPath: string | null;
+  updatedAt: string;
+}
+
+export interface AppSettingsUpdate {
+  appNameJson?: MultilingualText;
+  subtitleJson?: MultilingualText;
+  /** @nullable */
+  logoObjectPath?: string | null;
+}
+
 export interface LoginInput {
   email: string;
   password: string;
@@ -134,6 +149,7 @@ export interface RoleAdminCaps {
   events: boolean;
   modules: boolean;
   googleDrive: boolean;
+  settings: boolean;
 }
 
 export type RecordScope = typeof RecordScope[keyof typeof RecordScope];
@@ -227,6 +243,8 @@ export const UpdateMeInputDirection = {
 } as const;
 
 export interface UpdateMeInput {
+  firstName?: string;
+  lastName?: string;
   language?: UpdateMeInputLanguage;
   direction?: UpdateMeInputDirection;
   /** @nullable */

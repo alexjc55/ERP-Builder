@@ -57,7 +57,7 @@ type MLValue = { ru?: string; en?: string; he?: string };
 function emptyPerms(): RolePermissions {
   return {
     superAdmin: false,
-    admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, googleDrive: false },
+    admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, googleDrive: false, settings: false },
     pageIds: [],
     records: {},
   };
@@ -72,6 +72,7 @@ const ADMIN_CAP_LABELS: { key: keyof RoleAdminCaps; label: string }[] = [
   { key: "events", label: "События" },
   { key: "modules", label: "Модули" },
   { key: "googleDrive", label: "Google Drive" },
+  { key: "settings", label: "Настройки платформы (брендинг)" },
 ];
 
 const RECORD_ACTIONS: { key: keyof RecordPermission; label: string }[] = [

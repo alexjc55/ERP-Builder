@@ -1,7 +1,7 @@
 import { useAuth } from "@/lib/auth";
 import { useML, useT, useLang, LANGS } from "@/lib/i18n";
 import { adminCapForPath } from "@/lib/permissions";
-import { useListPages } from "@workspace/api-client-react";
+import { useListPages, useGetSettings } from "@workspace/api-client-react";
 import type { Page } from "@workspace/api-client-react";
 import { useLocation, Link } from "wouter";
 import {
@@ -131,6 +131,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       return next;
     });
   const { data: pagesData } = useListPages();
+  const { data: settings } = useGetSettings();
+
+  const brandName = (settings && ml(settings.appNameJson)) || "ERP Builder";
+  const brandSubtitle = (settings && ml(settings.subtitleJson)) || "Production Platform";
+  const brandLogoUrl = settings?.logoObjectPath
+    ? `/api/storage/branding-logo?v=${encodeURIComponent(settings.updatedAt)}`
+    : null;
 
   // A page is visible if: superAdmin (all), the home page ("/"), an admin builder
   // page whose capability is granted, or a content page whose id is granted.
@@ -172,13 +179,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           collapsed ? "flex-col gap-2 px-2 py-4" : "gap-3 px-4 py-5"
         )}
       >
-        <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
-          <Building2 className="w-5 h-5 text-white" />
+        <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
+          {brandLogoUrl ? (
+            <img src={brandLogoUrl} alt={brandName} className="w-full h-full object-contain" />
+          ) : (
+            <Building2 className="w-5 h-5 text-white" />
+          )}
         </div>
         {!collapsed && (
-          <div>
-            <div className="text-sm font-bold text-white leading-tight">ERP Builder</div>
-            <div className="text-xs text-slate-500">Production Platform</div>
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-white leading-tight truncate">{brandName}</div>
+            <div className="text-xs text-slate-500 truncate">{brandSubtitle}</div>
           </div>
         )}
         <button
@@ -292,9 +303,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
-            <DropdownMenuItem disabled>
-              <Settings className="w-4 h-4 mr-2" />
-              {t("layout.settings", "Настройки")}
+            <DropdownMenuItem asChild>
+              <Link href="/settings">
+                <a className="flex items-center w-full cursor-pointer">
+                  <Settings className="w-4 h-4 mr-2" />
+                  {t("layout.settings", "Настройки")}
+                </a>
+              </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={logout} className="text-red-500 focus:text-red-500">
@@ -350,9 +365,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)}>
             {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </Button>
-          <div className="flex items-center gap-2">
-            <Building2 className="w-5 h-5 text-blue-600" />
-            <span className="font-semibold text-slate-800">ERP Builder</span>
+          <div className="flex items-center gap-2 min-w-0">
+            {brandLogoUrl ? (
+              <img src={brandLogoUrl} alt={brandName} className="w-5 h-5 object-contain shrink-0" />
+            ) : (
+              <Building2 className="w-5 h-5 text-blue-600 shrink-0" />
+            )}
+            <span className="font-semibold text-slate-800 truncate">{brandName}</span>
           </div>
         </header>
 

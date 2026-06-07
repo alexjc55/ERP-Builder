@@ -17,6 +17,7 @@
 - [Passwordless guest access](guest-access.md) — shareable-link guest sessions: read-only is a hard guard at requireAuth (not RBAC), guest reads must be side-effect free, links bind to passwordless accounts only.
 - [Mirror pages](mirror-pages.md) — a page can show another entity's LIVE records (bidirectional, not a copy) via mirrorEntityId + display-only mirrorFieldKeys; RBAC on the source entity is the real boundary.
 - [ERP i18n](erp-i18n.md) — how erp-platform i18n is wired and how to keep translation seeding complete.
+- [Settings & branding](settings-branding.md) — /settings page (profile + admin-only branding); singleton app_settings; GET-public/PUT-admin boundary; public logo route is no-IDOR because path comes from DB.
 - [Orval param collision](orval-param-collision.md) — why adding a query param to a path-param GET breaks api-zod codegen, and how to avoid it.
 - [Drizzle pg error cause](drizzle-pg-error-cause.md) — pg SQLSTATE codes live on err.cause behind Drizzle; constraint-violation handlers must walk the cause chain, not check top-level .code.
 - [Field config JSONB persistence](field-config-json-persistence.md) — new per-field config JSONB cols must be added to BOTH create insert and the PUT updateData allowlist, or edits silently no-op.

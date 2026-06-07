@@ -23,6 +23,7 @@ import EventsPage from "@/pages/admin/events";
 import ModulesPage from "@/pages/admin/modules";
 import GoogleDrivePage from "@/pages/admin/google-drive";
 import DynamicPage from "@/pages/dynamic";
+import SettingsPage from "@/pages/settings";
 import { Loader2, ShieldAlert } from "lucide-react";
 import type { RoleAdminCaps } from "@workspace/api-client-react";
 
@@ -110,6 +111,12 @@ function Router() {
       <Route path="/">
         <ProtectedRoute>
           <DashboardPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/settings">
+        <ProtectedRoute>
+          <SettingsPage />
         </ProtectedRoute>
       </Route>
 

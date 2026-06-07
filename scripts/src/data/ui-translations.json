@@ -6,6 +6,174 @@
     "he": "שפה"
   },
   {
+    "key": "settings.title",
+    "ru": "Настройки",
+    "en": "Settings",
+    "he": "הגדרות"
+  },
+  {
+    "key": "settings.subtitle",
+    "ru": "Управление профилем и платформой",
+    "en": "Manage your profile and platform",
+    "he": "ניהול הפרופיל והפלטפורמה"
+  },
+  {
+    "key": "settings.profile",
+    "ru": "Профиль",
+    "en": "Profile",
+    "he": "פרופיל"
+  },
+  {
+    "key": "settings.firstName",
+    "ru": "Имя",
+    "en": "First name",
+    "he": "שם פרטי"
+  },
+  {
+    "key": "settings.lastName",
+    "ru": "Фамилия",
+    "en": "Last name",
+    "he": "שם משפחה"
+  },
+  {
+    "key": "settings.email",
+    "ru": "Email",
+    "en": "Email",
+    "he": "אימייל"
+  },
+  {
+    "key": "settings.save",
+    "ru": "Сохранить",
+    "en": "Save",
+    "he": "שמירה"
+  },
+  {
+    "key": "settings.profileSaved",
+    "ru": "Профиль обновлён",
+    "en": "Profile updated",
+    "he": "הפרופיל עודכן"
+  },
+  {
+    "key": "settings.saveError",
+    "ru": "Не удалось сохранить",
+    "en": "Failed to save",
+    "he": "השמירה נכשלה"
+  },
+  {
+    "key": "settings.changePassword",
+    "ru": "Смена пароля",
+    "en": "Change password",
+    "he": "שינוי סיסמה"
+  },
+  {
+    "key": "settings.currentPassword",
+    "ru": "Текущий пароль",
+    "en": "Current password",
+    "he": "סיסמה נוכחית"
+  },
+  {
+    "key": "settings.newPassword",
+    "ru": "Новый пароль",
+    "en": "New password",
+    "he": "סיסמה חדשה"
+  },
+  {
+    "key": "settings.confirmPassword",
+    "ru": "Подтвердите пароль",
+    "en": "Confirm password",
+    "he": "אישור סיסמה"
+  },
+  {
+    "key": "settings.passwordTooShort",
+    "ru": "Пароль должен быть не короче 6 символов",
+    "en": "Password must be at least 6 characters",
+    "he": "הסיסמה חייבת להכיל לפחות 6 תווים"
+  },
+  {
+    "key": "settings.passwordMismatch",
+    "ru": "Пароли не совпадают",
+    "en": "Passwords do not match",
+    "he": "הסיסמאות אינן תואמות"
+  },
+  {
+    "key": "settings.passwordChanged",
+    "ru": "Пароль изменён",
+    "en": "Password changed",
+    "he": "הסיסמה שונתה"
+  },
+  {
+    "key": "settings.passwordError",
+    "ru": "Не удалось изменить пароль. Проверьте текущий пароль.",
+    "en": "Failed to change password. Check your current password.",
+    "he": "שינוי הסיסמה נכשל. בדוק את הסיסמה הנוכחית."
+  },
+  {
+    "key": "settings.branding",
+    "ru": "Брендинг платформы",
+    "en": "Platform branding",
+    "he": "מיתוג הפלטפורמה"
+  },
+  {
+    "key": "settings.appName",
+    "ru": "Название компании",
+    "en": "Company name",
+    "he": "שם החברה"
+  },
+  {
+    "key": "settings.appSubtitle",
+    "ru": "Подзаголовок",
+    "en": "Subtitle",
+    "he": "כותרת משנה"
+  },
+  {
+    "key": "settings.logo",
+    "ru": "Логотип",
+    "en": "Logo",
+    "he": "לוגו"
+  },
+  {
+    "key": "settings.uploadLogo",
+    "ru": "Загрузить",
+    "en": "Upload",
+    "he": "העלאה"
+  },
+  {
+    "key": "settings.removeLogo",
+    "ru": "Удалить",
+    "en": "Remove",
+    "he": "הסרה"
+  },
+  {
+    "key": "settings.logoHint",
+    "ru": "PNG или SVG с прозрачным фоном смотрятся лучше всего.",
+    "en": "PNG or SVG with a transparent background works best.",
+    "he": "PNG או SVG עם רקע שקוף מתאים ביותר."
+  },
+  {
+    "key": "settings.logoMustBeImage",
+    "ru": "Логотип должен быть изображением",
+    "en": "The logo must be an image",
+    "he": "הלוגו חייב להיות תמונה"
+  },
+  {
+    "key": "settings.logoUploaded",
+    "ru": "Логотип загружен. Не забудьте сохранить.",
+    "en": "Logo uploaded. Don't forget to save.",
+    "he": "הלוגו הועלה. אל תשכח לשמור."
+  },
+  {
+    "key": "settings.logoUploadError",
+    "ru": "Не удалось загрузить логотип",
+    "en": "Failed to upload logo",
+    "he": "העלאת הלוגו נכשלה"
+  },
+  {
+    "key": "settings.brandingSaved",
+    "ru": "Настройки сохранены",
+    "en": "Settings saved",
+    "he": "ההגדרות נשמרו"
+  },
+  {
     "key": "layout.settings",
     "ru": "Настройки",
     "en": "Settings",

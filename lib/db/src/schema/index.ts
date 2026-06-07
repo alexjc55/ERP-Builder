@@ -17,3 +17,4 @@ export * from "./relations";
 export * from "./views";
 export * from "./transitions";
 export * from "./google_drive";
+export * from "./app_settings";
