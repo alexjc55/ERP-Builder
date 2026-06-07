@@ -12,4 +12,6 @@ export interface AppSettingsUpdate {
   subtitleJson?: MultilingualText;
   /** @nullable */
   logoObjectPath?: string | null;
+  /** @maxLength 8 */
+  currencySymbol?: string;
 }

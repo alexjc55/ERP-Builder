@@ -56,6 +56,7 @@ export const GetSettingsResponse = zod.object({
   "he": zod.string().optional()
 }),
   "logoObjectPath": zod.string().nullable(),
+  "currencySymbol": zod.string().describe('Free-text currency symbol\/suffix used wherever monetary values are rendered.'),
   "updatedAt": zod.coerce.date()
 })
 
@@ -63,6 +64,10 @@ export const GetSettingsResponse = zod.object({
 /**
  * @summary Update platform branding settings (admin "settings" capability)
  */
+export const updateSettingsBodyCurrencySymbolMax = 8;
+
+
+
 export const UpdateSettingsBody = zod.object({
   "appNameJson": zod.object({
   "ru": zod.string().optional(),
@@ -74,7 +79,8 @@ export const UpdateSettingsBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "logoObjectPath": zod.string().nullish()
+  "logoObjectPath": zod.string().nullish(),
+  "currencySymbol": zod.string().max(updateSettingsBodyCurrencySymbolMax).optional()
 })
 
 export const UpdateSettingsResponse = zod.object({
@@ -89,6 +95,7 @@ export const UpdateSettingsResponse = zod.object({
   "he": zod.string().optional()
 }),
   "logoObjectPath": zod.string().nullable(),
+  "currencySymbol": zod.string().describe('Free-text currency symbol\/suffix used wherever monetary values are rendered.'),
   "updatedAt": zod.coerce.date()
 })
 

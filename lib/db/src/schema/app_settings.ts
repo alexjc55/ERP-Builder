@@ -13,6 +13,9 @@ export const appSettingsTable = pgTable("app_settings", {
   appNameJson: jsonb("app_name_json").notNull().default({}),
   subtitleJson: jsonb("subtitle_json").notNull().default({}),
   logoObjectPath: text("logo_object_path"),
+  // Free-text currency symbol/suffix (e.g. "₽", "$", "€", "₸") used wherever a
+  // monetary value is rendered (e.g. dashboard "currency"-format widgets).
+  currencySymbol: text("currency_symbol").notNull().default("₽"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

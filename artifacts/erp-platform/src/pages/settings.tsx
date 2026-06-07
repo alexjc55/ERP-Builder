@@ -96,6 +96,7 @@ export default function SettingsPage() {
   const [appNameJson, setAppNameJson] = useState<MLValue>({});
   const [subtitleJson, setSubtitleJson] = useState<MLValue>({});
   const [logoObjectPath, setLogoObjectPath] = useState<string | null>(null);
+  const [currencySymbol, setCurrencySymbol] = useState<string>("₽");
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -108,6 +109,7 @@ export default function SettingsPage() {
     setAppNameJson(n ? { ru: n.ru, en: n.en, he: n.he } : {});
     setSubtitleJson(s ? { ru: s.ru, en: s.en, he: s.he } : {});
     setLogoObjectPath(settings.logoObjectPath ?? null);
+    setCurrencySymbol(settings.currencySymbol ?? "₽");
     if (settings.logoObjectPath) {
       setLogoPreview(`/api/storage/branding-logo?v=${encodeURIComponent(settings.updatedAt)}`);
     } else {
@@ -148,6 +150,7 @@ export default function SettingsPage() {
           appNameJson: appNameJson as MultilingualText,
           subtitleJson: subtitleJson as MultilingualText,
           logoObjectPath,
+          currencySymbol: currencySymbol.trim() || "₽",
         },
       });
       await queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
@@ -293,6 +296,17 @@ export default function SettingsPage() {
                 )}
               </div>
               <p className="text-xs text-slate-400">{t("settings.logoHint", "PNG или SVG с прозрачным фоном смотрятся лучше всего.")}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-slate-700">{t("settings.currency", "Символ валюты")}</Label>
+              <Input
+                value={currencySymbol}
+                onChange={(e) => setCurrencySymbol(e.target.value)}
+                placeholder="₽"
+                maxLength={8}
+                className="max-w-[140px]"
+              />
+              <p className="text-xs text-slate-400">{t("settings.currencyHint", "Используется везде, где отображается денежная сумма (например, виджеты дашборда). Например: ₽, $, €, ₸.")}</p>
             </div>
             <div className="flex justify-end">
               <Button onClick={saveBranding} disabled={updateSettings.isPending}>

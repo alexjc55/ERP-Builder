@@ -41,6 +41,7 @@ router.get("/settings", requireAuth, async (_req, res): Promise<void> => {
     appNameJson: row.appNameJson ?? {},
     subtitleJson: row.subtitleJson ?? {},
     logoObjectPath: row.logoObjectPath ?? null,
+    currencySymbol: row.currencySymbol ?? "₽",
     updatedAt: row.updatedAt,
   });
 });
@@ -64,6 +65,7 @@ router.put(
     if (parsed.data.appNameJson !== undefined) updates.appNameJson = parsed.data.appNameJson;
     if (parsed.data.subtitleJson !== undefined) updates.subtitleJson = parsed.data.subtitleJson;
     if (parsed.data.logoObjectPath !== undefined) updates.logoObjectPath = parsed.data.logoObjectPath;
+    if (parsed.data.currencySymbol !== undefined) updates.currencySymbol = parsed.data.currencySymbol;
 
     // Ensure the row exists, then apply any provided fields.
     await getOrCreateSettings();
@@ -83,6 +85,7 @@ router.put(
       appNameJson: row.appNameJson ?? {},
       subtitleJson: row.subtitleJson ?? {},
       logoObjectPath: row.logoObjectPath ?? null,
+      currencySymbol: row.currencySymbol ?? "₽",
       updatedAt: row.updatedAt,
     });
   },

@@ -2504,7 +2504,7 @@ components:
     # Platform branding / general settings (singleton row).
     AppSettings:
       type: object
-      required: [appNameJson, subtitleJson, logoObjectPath, updatedAt]
+      required: [appNameJson, subtitleJson, logoObjectPath, currencySymbol, updatedAt]
       properties:
         appNameJson:
           $ref: "#/components/schemas/MultilingualText"
@@ -2512,6 +2512,9 @@ components:
           $ref: "#/components/schemas/MultilingualText"
         logoObjectPath:
           type: ["string", "null"]
+        currencySymbol:
+          type: string
+          description: Free-text currency symbol/suffix used wherever monetary values are rendered.
         updatedAt:
           type: string
           format: date-time
@@ -2525,6 +2528,9 @@ components:
           $ref: "#/components/schemas/MultilingualText"
         logoObjectPath:
           type: ["string", "null"]
+        currencySymbol:
+          type: string
+          maxLength: 8
 
     # AUTH
     LoginInput:

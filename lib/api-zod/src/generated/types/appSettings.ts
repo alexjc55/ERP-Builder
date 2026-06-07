@@ -12,5 +12,7 @@ export interface AppSettings {
   subtitleJson: MultilingualText;
   /** @nullable */
   logoObjectPath: string | null;
+  /** Free-text currency symbol/suffix used wherever monetary values are rendered. */
+  currencySymbol: string;
   updatedAt: Date;
 }

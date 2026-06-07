@@ -156,6 +156,18 @@
     "he": "PNG או SVG עם רקע שקוף מתאים ביותר."
   },
   {
+    "key": "settings.currency",
+    "ru": "Символ валюты",
+    "en": "Currency symbol",
+    "he": "סמל מטבע"
+  },
+  {
+    "key": "settings.currencyHint",
+    "ru": "Используется везде, где отображается денежная сумма (например, виджеты дашборда). Например: ₽, $, €, ₸.",
+    "en": "Used everywhere a monetary amount is shown (e.g. dashboard widgets). For example: ₽, $, €, ₸.",
+    "he": "משמש בכל מקום שבו מוצג סכום כספי (למשל ווידג'טים בלוח המחוונים). לדוגמה: ₽, $, €, ₸."
+  },
+  {
     "key": "settings.logoMustBeImage",
     "ru": "Логотип должен быть изображением",
     "en": "The logo must be an image",

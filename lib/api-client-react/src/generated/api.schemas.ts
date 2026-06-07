@@ -108,6 +108,8 @@ export interface AppSettings {
   subtitleJson: MultilingualText;
   /** @nullable */
   logoObjectPath: string | null;
+  /** Free-text currency symbol/suffix used wherever monetary values are rendered. */
+  currencySymbol: string;
   updatedAt: string;
 }
 
@@ -116,6 +118,8 @@ export interface AppSettingsUpdate {
   subtitleJson?: MultilingualText;
   /** @nullable */
   logoObjectPath?: string | null;
+  /** @maxLength 8 */
+  currencySymbol?: string;
 }
 
 export interface LoginInput {

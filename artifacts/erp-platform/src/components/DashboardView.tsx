@@ -13,6 +13,8 @@ import {
   useListEntityFields,
   useListEntityStatuses,
   useListRoles,
+  useGetSettings,
+  getGetSettingsQueryKey,
   type DashboardWidget,
   type DashboardWidgetData,
   type WidgetMetric,
@@ -80,11 +82,15 @@ const COLOR_PRESETS = [
 const DEFAULT_COLOR = "bg-blue-600";
 const DEFAULT_ICON = "TrendingUp";
 
-/** Format a computed value for display per the widget's chosen format. */
-function formatValue(value: number, format: string | null | undefined): string {
+/**
+ * Format a computed value for display per the widget's chosen format. The
+ * currency symbol is admin-configurable (Settings → "Символ валюты") and passed
+ * in, so "currency" widgets render `<number> <symbol>` instead of a hardcoded ₽.
+ */
+function formatValue(value: number, format: string | null | undefined, currencySymbol: string): string {
   if (!Number.isFinite(value)) return "—";
   if (format === "currency") {
-    return new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 2 }).format(value);
+    return `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(value)} ${currencySymbol}`;
   }
   if (format === "percent") {
     return `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(value)}%`;
@@ -111,7 +117,7 @@ function resolveValue(w: DashboardWidgetData): number {
   return keys.length > 0 ? metrics[keys[0]] : 0;
 }
 
-function WidgetCard({ w, ml }: { w: DashboardWidgetData; ml: (v: unknown) => string }) {
+function WidgetCard({ w, ml, currencySymbol }: { w: DashboardWidgetData; ml: (v: unknown) => string; currencySymbol: string }) {
   const Icon = getIconComponent(w.icon || DEFAULT_ICON, LayoutDashboard);
   const value = resolveValue(w);
   return (
@@ -120,7 +126,7 @@ function WidgetCard({ w, ml }: { w: DashboardWidgetData; ml: (v: unknown) => str
         <div className="flex items-center justify-between">
           <div className="min-w-0">
             <p className="text-sm font-medium text-slate-500 truncate">{ml(w.titleJson)}</p>
-            <p className="text-3xl font-bold text-slate-800 mt-1">{formatValue(value, w.format)}</p>
+            <p className="text-3xl font-bold text-slate-800 mt-1">{formatValue(value, w.format, currencySymbol)}</p>
           </div>
           <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${w.color || DEFAULT_COLOR}`}>
             <Icon className="w-6 h-6 text-white" />
@@ -148,6 +154,8 @@ export default function DashboardView({ pageId }: { pageId: number }) {
   const { data: editWidgets = [] } = useListDashboardWidgets(pageId, {
     query: { enabled: isEditor && editMode, queryKey: getListDashboardWidgetsQueryKey(pageId) },
   });
+  const { data: settings } = useGetSettings({ query: { queryKey: getGetSettingsQueryKey() } });
+  const currencySymbol = settings?.currencySymbol || "₽";
 
   const invalidate = () =>
     queryClient.invalidateQueries({
@@ -268,7 +276,7 @@ export default function DashboardView({ pageId }: { pageId: number }) {
         </Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {sortedData.map((w) => <WidgetCard key={w.id} w={w} ml={ml} />)}
+          {sortedData.map((w) => <WidgetCard key={w.id} w={w} ml={ml} currencySymbol={currencySymbol} />)}
         </div>
       )}
 
