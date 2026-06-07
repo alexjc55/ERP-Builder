@@ -114,6 +114,7 @@ export * from './uploadUrlRequest';
 export * from './uploadUrlResponse';
 export * from './user';
 export * from './userDirection';
+export * from './userFieldConfig';
 export * from './userInput';
 export * from './userInputDirection';
 export * from './userInputLanguage';

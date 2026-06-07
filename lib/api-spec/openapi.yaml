@@ -2189,12 +2189,14 @@ components:
 
     UserOption:
       type: object
-      required: [id, name]
+      required: [id, name, roleId]
       properties:
         id:
           type: integer
         name:
           type: string
+        roleId:
+          type: integer
 
     UserProfile:
       type: object
@@ -2846,6 +2848,18 @@ components:
           items:
             $ref: "#/components/schemas/FileSource"
 
+    UserFieldConfig:
+      type: object
+      description: >-
+        Per-field configuration for a `user`-type field. `allowedRoleIds`
+        restricts selectable users to those roles. Empty or unset means any
+        user may be selected.
+      properties:
+        allowedRoleIds:
+          type: array
+          items:
+            type: integer
+
     Field:
       type: object
       required: [id, entityId, fieldKey, nameJson, fieldType, isRequired, optionsJson, sortOrder, isActive, createdAt, updatedAt]
@@ -2874,6 +2888,8 @@ components:
           $ref: "#/components/schemas/FieldPermissions"
         fileConfigJson:
           $ref: "#/components/schemas/FileFieldConfig"
+        userConfigJson:
+          $ref: "#/components/schemas/UserFieldConfig"
         isFilterable:
           type: boolean
         showInTable:
@@ -2914,6 +2930,8 @@ components:
           $ref: "#/components/schemas/FieldPermissions"
         fileConfigJson:
           $ref: "#/components/schemas/FileFieldConfig"
+        userConfigJson:
+          $ref: "#/components/schemas/UserFieldConfig"
         isFilterable:
           type: boolean
           default: false
@@ -2966,6 +2984,8 @@ components:
           $ref: "#/components/schemas/FieldPermissions"
         fileConfigJson:
           $ref: "#/components/schemas/FileFieldConfig"
+        userConfigJson:
+          $ref: "#/components/schemas/UserFieldConfig"
         isFilterable:
           type: boolean
         showInTable:

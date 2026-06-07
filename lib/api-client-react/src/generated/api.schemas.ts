@@ -196,6 +196,7 @@ export interface AuthResult {
 export interface UserOption {
   id: number;
   name: string;
+  roleId: number;
 }
 
 export interface ImpersonateInput {
@@ -610,6 +611,13 @@ export interface FileFieldConfig {
   allowedSources?: FileSource[];
 }
 
+/**
+ * Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected.
+ */
+export interface UserFieldConfig {
+  allowedRoleIds?: number[];
+}
+
 export interface Field {
   id: number;
   entityId: number;
@@ -623,6 +631,7 @@ export interface Field {
   optionsJson: string[];
   permissionsJson?: FieldPermissions;
   fileConfigJson?: FileFieldConfig;
+  userConfigJson?: UserFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
   sortOrder: number;
@@ -642,6 +651,7 @@ export interface FieldInput {
   optionsJson?: string[];
   permissionsJson?: FieldPermissions;
   fileConfigJson?: FileFieldConfig;
+  userConfigJson?: UserFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
   sortOrder?: number;
@@ -669,6 +679,7 @@ export interface FieldUpdate {
   optionsJson?: string[];
   permissionsJson?: FieldPermissions;
   fileConfigJson?: FileFieldConfig;
+  userConfigJson?: UserFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
   sortOrder?: number;

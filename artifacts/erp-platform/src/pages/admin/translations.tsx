@@ -19,7 +19,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Pencil, Loader2, Languages } from "lucide-react";
+import { Plus, Search, Pencil, Loader2, Languages, Filter } from "lucide-react";
 
 export default function TranslationsPage() {
   const { toast } = useToast();
@@ -32,17 +32,32 @@ export default function TranslationsPage() {
   const [en, setEn] = useState("");
   const [he, setHe] = useState("");
 
+  const [onlyUntranslated, setOnlyUntranslated] = useState(false);
+
   const { data: allTranslations = [], isLoading } = useListTranslations();
 
-  const translations = search
-    ? allTranslations.filter(
-        (t: Translation) =>
-          t.translationKey.toLowerCase().includes(search.toLowerCase()) ||
-          Object.values(t.translationsJson || {}).some((v) =>
-            (v as string).toLowerCase().includes(search.toLowerCase())
-          )
+  const isUntranslated = (t: Translation): boolean => {
+    const tj = (t.translationsJson || {}) as { ru?: string; en?: string; he?: string };
+    const ru = (tj.ru || "").trim();
+    const en = (tj.en || "").trim();
+    const he = (tj.he || "").trim();
+    if (en === "" || he === "") return true;
+    if (ru !== "" && (en === ru || he === ru)) return true;
+    return false;
+  };
+
+  const untranslatedCount = allTranslations.filter(isUntranslated).length;
+
+  const translations = allTranslations.filter((t: Translation) => {
+    if (onlyUntranslated && !isUntranslated(t)) return false;
+    if (!search) return true;
+    return (
+      t.translationKey.toLowerCase().includes(search.toLowerCase()) ||
+      Object.values(t.translationsJson || {}).some((v) =>
+        (v as string).toLowerCase().includes(search.toLowerCase()),
       )
-    : allTranslations;
+    );
+  });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["/api/translations"] });
 
@@ -103,14 +118,34 @@ export default function TranslationsPage() {
         </Button>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-        <Input
-          placeholder="Поиск по ключу или тексту..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative max-w-sm flex-1 min-w-[220px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Input
+            placeholder="Поиск по ключу или тексту..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Button
+          variant={onlyUntranslated ? "default" : "outline"}
+          onClick={() => setOnlyUntranslated((v) => !v)}
+          className={onlyUntranslated ? "bg-amber-500 hover:bg-amber-600 gap-2" : "gap-2"}
+        >
+          <Filter className="w-4 h-4" />
+          Только непереведённые
+          {untranslatedCount > 0 && (
+            <span
+              className={
+                "ml-1 rounded-full px-1.5 py-0.5 text-xs " +
+                (onlyUntranslated ? "bg-white/25 text-white" : "bg-amber-100 text-amber-700")
+              }
+            >
+              {untranslatedCount}
+            </span>
+          )}
+        </Button>
       </div>
 
       <Card className="border-slate-200 shadow-sm">

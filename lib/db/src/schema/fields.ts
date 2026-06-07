@@ -19,6 +19,12 @@ export type FileSource = "server" | "gdrive" | "link";
  */
 export type FileFieldConfig = { allowedSources?: FileSource[] };
 
+/**
+ * Per-field configuration for a `user`-type field. `allowedRoleIds` restricts the
+ * selectable users to those roles. Empty/unset means any user may be selected.
+ */
+export type UserFieldConfig = { allowedRoleIds?: number[] };
+
 export const entityFieldsTable = pgTable(
   "entity_fields",
   {
@@ -35,6 +41,7 @@ export const entityFieldsTable = pgTable(
     optionsJson: jsonb("options_json").notNull().default([]),
     permissionsJson: jsonb("permissions_json").$type<FieldPermissions>().notNull().default({}),
     fileConfigJson: jsonb("file_config_json").$type<FileFieldConfig>().notNull().default({}),
+    userConfigJson: jsonb("user_config_json").$type<UserFieldConfig>().notNull().default({}),
     isFilterable: boolean("is_filterable").notNull().default(false),
     showInTable: boolean("show_in_table").notNull().default(true),
     sortOrder: integer("sort_order").notNull().default(0),

@@ -66,6 +66,15 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -1639,6 +1648,88 @@ function RecordHistoryList({
   );
 }
 
+/** Restrict user options to a `user`-field's allowed roles (empty/unset = all). */
+function filterUserOptionsByRoles(field: Field, options: UserOption[]): UserOption[] {
+  const allowed = field.userConfigJson?.allowedRoleIds;
+  if (!Array.isArray(allowed) || allowed.length === 0) return options;
+  return options.filter((u) => allowed.includes(u.roleId));
+}
+
+/** Searchable single-select for `user`-type field values (Command + Popover). */
+function UserCombobox({
+  options,
+  value,
+  onChange,
+  placeholder,
+  triggerClassName,
+  autoOpen = false,
+  onClose,
+  disabled = false,
+}: {
+  options: UserOption[];
+  value: number | null;
+  onChange: (id: number) => void;
+  placeholder: string;
+  triggerClassName?: string;
+  autoOpen?: boolean;
+  onClose?: (committed: boolean) => void;
+  disabled?: boolean;
+}) {
+  const t = useT();
+  const [open, setOpen] = useState(autoOpen);
+  const committedRef = useRef(false);
+  const selected = options.find((u) => u.id === value) ?? null;
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) onClose?.(committedRef.current);
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          disabled={disabled}
+          className={cn("justify-between font-normal", triggerClassName)}
+        >
+          <span className={cn("truncate", !selected && "text-slate-400")}>
+            {selected ? selected.name : placeholder}
+          </span>
+          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-56 p-0">
+        <Command>
+          <CommandInput placeholder={t("records.userSearch", "Поиск пользователя...")} />
+          <CommandList>
+            <CommandEmpty>{t("records.userNotFound", "Пользователи не найдены")}</CommandEmpty>
+            <CommandGroup>
+              {options.map((u) => (
+                <CommandItem
+                  key={u.id}
+                  value={`${u.name} #${u.id}`}
+                  onSelect={() => {
+                    committedRef.current = true;
+                    onChange(u.id);
+                    setOpen(false);
+                  }}
+                >
+                  <Check className={cn("mr-2 h-4 w-4", value === u.id ? "opacity-100" : "opacity-0")} />
+                  <span className="truncate">{u.name}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 /**
  * Inline (in-cell) editor used by the Google-Sheets-style records table.
  * Text-like inputs commit on Enter/blur and cancel on Escape; select/user
@@ -1679,16 +1770,27 @@ function InlineCellEditor({
     );
   }
 
-  if (field.fieldType === "select" || field.fieldType === "user") {
-    const options =
-      field.fieldType === "user"
-        ? userOptions.map((u) => ({ value: String(u.id), label: u.name }))
-        : (Array.isArray(field.optionsJson) ? (field.optionsJson as string[]) : []).map((o) => ({ value: o, label: o }));
+  if (field.fieldType === "user") {
+    return (
+      <UserCombobox
+        options={filterUserOptionsByRoles(field, userOptions)}
+        value={draft != null && draft !== "" ? Number(draft) : null}
+        onChange={(id) => commitOnce(id)}
+        placeholder={t("records.selectUser", "Выберите пользователя")}
+        triggerClassName="h-8 w-full text-sm"
+        autoOpen
+        onClose={(committed) => { if (!committed && !committedRef.current) onCancel(); }}
+      />
+    );
+  }
+
+  if (field.fieldType === "select") {
+    const options = (Array.isArray(field.optionsJson) ? (field.optionsJson as string[]) : []).map((o) => ({ value: o, label: o }));
     return (
       <Select
         defaultOpen
         value={draft ? String(draft) : ""}
-        onValueChange={(v) => commitOnce(field.fieldType === "user" ? Number(v) : v)}
+        onValueChange={(v) => commitOnce(v)}
         onOpenChange={(o) => { if (!o && !committedRef.current) onCancel(); }}
       >
         <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t("records.selectValue", "Выберите значение")} /></SelectTrigger>
@@ -1794,20 +1896,14 @@ function FieldInput({
       return <Input type="tel" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} disabled={disabled} />;
     case "user": {
       return (
-        <Select
-          value={value ? String(value) : ""}
-          onValueChange={(v) => onChange(Number(v))}
+        <UserCombobox
+          options={filterUserOptionsByRoles(field, userOptions)}
+          value={value != null && value !== "" ? Number(value) : null}
+          onChange={(id) => onChange(id)}
+          placeholder={t("records.selectUser", "Выберите пользователя")}
+          triggerClassName="w-full"
           disabled={disabled}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder={t("records.selectUser", "Выберите пользователя")} />
-          </SelectTrigger>
-          <SelectContent>
-            {userOptions.map((u) => (
-              <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        />
       );
     }
     case "select": {

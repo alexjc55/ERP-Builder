@@ -518,7 +518,8 @@ export const CreateUserBody = zod.object({
  */
 export const ListUserOptionsResponseItem = zod.object({
   "id": zod.number(),
-  "name": zod.string()
+  "name": zod.string(),
+  "roleId": zod.number()
 })
 export const ListUserOptionsResponse = zod.array(ListUserOptionsResponseItem)
 
@@ -1104,6 +1105,9 @@ export const ListEntityFieldsResponseItem = zod.object({
   "fileConfigJson": zod.object({
   "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional()
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
+  "userConfigJson": zod.object({
+  "allowedRoleIds": zod.array(zod.number()).optional()
+}).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected.'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "sortOrder": zod.number(),
@@ -1146,6 +1150,9 @@ export const CreateEntityFieldBody = zod.object({
   "fileConfigJson": zod.object({
   "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional()
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
+  "userConfigJson": zod.object({
+  "allowedRoleIds": zod.array(zod.number()).optional()
+}).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected.'),
   "isFilterable": zod.boolean().default(createEntityFieldBodyIsFilterableDefault),
   "showInTable": zod.boolean().default(createEntityFieldBodyShowInTableDefault),
   "sortOrder": zod.number().optional(),
@@ -1182,6 +1189,9 @@ export const GetFieldResponse = zod.object({
   "fileConfigJson": zod.object({
   "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional()
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
+  "userConfigJson": zod.object({
+  "allowedRoleIds": zod.array(zod.number()).optional()
+}).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected.'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "sortOrder": zod.number(),
@@ -1218,6 +1228,9 @@ export const UpdateFieldBody = zod.object({
   "fileConfigJson": zod.object({
   "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional()
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
+  "userConfigJson": zod.object({
+  "allowedRoleIds": zod.array(zod.number()).optional()
+}).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected.'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "sortOrder": zod.number().optional(),
@@ -1246,6 +1259,9 @@ export const UpdateFieldResponse = zod.object({
   "fileConfigJson": zod.object({
   "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional()
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
+  "userConfigJson": zod.object({
+  "allowedRoleIds": zod.array(zod.number()).optional()
+}).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected.'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "sortOrder": zod.number(),

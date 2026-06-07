@@ -173,12 +173,13 @@ router.get("/users/options", requireAuth, async (_req, res): Promise<void> => {
       firstName: usersTable.firstName,
       lastName: usersTable.lastName,
       email: usersTable.email,
+      roleId: usersTable.roleId,
     })
     .from(usersTable)
     .orderBy(usersTable.firstName, usersTable.lastName);
   const options = rows.map((u) => {
     const name = [u.firstName, u.lastName].filter(Boolean).join(" ").trim();
-    return { id: u.id, name: name || u.email };
+    return { id: u.id, name: name || u.email, roleId: u.roleId };
   });
   res.json(options);
 });

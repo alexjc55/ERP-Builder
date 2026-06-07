@@ -1926,6 +1926,30 @@
     "he": "מחיקה"
   },
   {
+    "key": "fields.userRoles",
+    "ru": "Доступные роли пользователей",
+    "en": "Allowed user roles",
+    "he": "תפקידי משתמש מורשים"
+  },
+  {
+    "key": "fields.userRolesHint",
+    "ru": "Ограничьте выбор пользователями указанных ролей. Если ничего не выбрано — доступны все пользователи.",
+    "en": "Restrict selection to users with these roles. If none are selected, all users are available.",
+    "he": "הגבל את הבחירה למשתמשים עם תפקידים אלה. אם לא נבחר דבר — כל המשתמשים זמינים."
+  },
+  {
+    "key": "records.userSearch",
+    "ru": "Поиск пользователя...",
+    "en": "Search user...",
+    "he": "חיפוש משתמש..."
+  },
+  {
+    "key": "records.userNotFound",
+    "ru": "Пользователи не найдены",
+    "en": "No users found",
+    "he": "לא נמצאו משתמשים"
+  },
+  {
     "key": "fields.created",
     "ru": "Поле создано",
     "en": "Field created",

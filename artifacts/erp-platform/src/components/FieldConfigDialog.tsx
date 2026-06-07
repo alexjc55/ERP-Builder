@@ -122,6 +122,7 @@ export function FieldConfigDialog({
   const [showInTable, setShowInTable] = useState(true);
   const [permissions, setPermissions] = useState<FieldPermissions>({});
   const [allowedSources, setAllowedSources] = useState<FileSource[]>(["server"]);
+  const [allowedRoleIds, setAllowedRoleIds] = useState<number[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Sync form state whenever the dialog opens for a given field (or create).
@@ -146,6 +147,9 @@ export function FieldConfigDialog({
         const src = field.fileConfigJson?.allowedSources;
         setAllowedSources(Array.isArray(src) && src.length > 0 ? src : ["server"]);
       }
+      setAllowedRoleIds(
+        Array.isArray(field.userConfigJson?.allowedRoleIds) ? field.userConfigJson!.allowedRoleIds : [],
+      );
     } else {
       setFieldKey("");
       setNameJson({});
@@ -160,6 +164,7 @@ export function FieldConfigDialog({
       setShowInTable(true);
       setPermissions({});
       setAllowedSources(["server"]);
+      setAllowedRoleIds([]);
     }
   }, [open, field, nextSortOrder]);
 
@@ -230,6 +235,7 @@ export function FieldConfigDialog({
         fieldType === "file"
           ? { allowedSources: allowedSources.length > 0 ? allowedSources : (["server"] as FileSource[]) }
           : {},
+      userConfigJson: fieldType === "user" ? { allowedRoleIds } : {},
     };
     if (field) updateMutation.mutate({ id: field.id, data: payload });
     else createMutation.mutate({ entityId, data: payload });
@@ -319,6 +325,37 @@ export function FieldConfigDialog({
                     );
                   })}
                 </div>
+              </div>
+            )}
+            {fieldType === "user" && (
+              <div className="space-y-2">
+                <Label>{t("fields.userRoles", "Доступные роли пользователей")}</Label>
+                <p className="text-xs text-slate-400">
+                  {t("fields.userRolesHint", "Ограничьте выбор пользователями указанных ролей. Если ничего не выбрано — доступны все пользователи.")}
+                </p>
+                {roles.length === 0 ? (
+                  <p className="text-xs text-slate-400">{t("fields.noRoles", "Нет ролей для настройки.")}</p>
+                ) : (
+                  <div className="space-y-1.5 pt-1">
+                    {roles.map((role: Role) => {
+                      const checked = allowedRoleIds.includes(role.id);
+                      return (
+                        <div key={role.id} className="flex items-center gap-2">
+                          <Switch
+                            id={`fcd-role-${role.id}`}
+                            checked={checked}
+                            onCheckedChange={(on) =>
+                              setAllowedRoleIds((prev) =>
+                                on ? [...prev, role.id] : prev.filter((x) => x !== role.id),
+                              )
+                            }
+                          />
+                          <Label htmlFor={`fcd-role-${role.id}`}>{ml(role.nameJson)}</Label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
             <div className="space-y-1.5">

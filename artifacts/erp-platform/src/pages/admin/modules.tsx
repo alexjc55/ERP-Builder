@@ -42,6 +42,20 @@ type MLValue = { ru?: string; en?: string; he?: string };
 
 const MODULE_KEY_RE = /^[a-z][a-z0-9_]*$/;
 
+/** Official Google Drive mark, rendered for the `google_drive` module row. */
+function GoogleDriveLogo({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 87.3 78" className={className} aria-hidden="true">
+      <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da" />
+      <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44c-.8 1.4-1.2 2.95-1.2 4.5h27.5z" fill="#00ac47" />
+      <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335" />
+      <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d" />
+      <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc" />
+      <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00" />
+    </svg>
+  );
+}
+
 /**
  * Modules with a dedicated settings screen (vs. the generic JSON editor). These
  * are platform-managed system modules: toggle on/off here, configure via their
@@ -149,7 +163,7 @@ export default function ModulesPage() {
   const saving = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <div className="space-y-5">
+    <div className="p-6 space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">{t("modules.title", "Модули")}</h1>
@@ -191,7 +205,14 @@ export default function ModulesPage() {
                 ) : (
                   modules.map((m) => (
                     <tr key={m.id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="px-4 py-3 font-medium text-slate-700">{ml(m.nameJson) || m.moduleKey}</td>
+                      <td className="px-4 py-3 font-medium text-slate-700">
+                        <div className="flex items-center gap-2.5">
+                          {m.moduleKey === "google_drive" && (
+                            <GoogleDriveLogo className="w-5 h-5 shrink-0" />
+                          )}
+                          <span>{ml(m.nameJson) || m.moduleKey}</span>
+                        </div>
+                      </td>
                       <td className="px-4 py-3">
                         <code className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">{m.moduleKey}</code>
                       </td>

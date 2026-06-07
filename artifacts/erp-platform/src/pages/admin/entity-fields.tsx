@@ -141,6 +141,7 @@ export default function EntityFieldsPage() {
   const [isActive, setIsActive] = useState(true);
   const [permissions, setPermissions] = useState<FieldPermissions>({});
   const [allowedSources, setAllowedSources] = useState<FileSource[]>(["server"]);
+  const [allowedRoleIds, setAllowedRoleIds] = useState<number[]>([]);
 
   const { data: entities = [] } = useListEntities();
   const { data: roles = [] } = useListRoles();
@@ -208,6 +209,7 @@ export default function EntityFieldsPage() {
     setIsActive(true);
     setPermissions({});
     setAllowedSources(["server"]);
+    setAllowedRoleIds([]);
     setDialogOpen(true);
   };
 
@@ -229,6 +231,9 @@ export default function EntityFieldsPage() {
       field.fileConfigJson?.allowedSources && field.fileConfigJson.allowedSources.length > 0
         ? field.fileConfigJson.allowedSources
         : ["server"],
+    );
+    setAllowedRoleIds(
+      Array.isArray(field.userConfigJson?.allowedRoleIds) ? field.userConfigJson!.allowedRoleIds : [],
     );
     setDialogOpen(true);
   };
@@ -254,6 +259,7 @@ export default function EntityFieldsPage() {
         fieldType === "file"
           ? { allowedSources: allowedSources.length > 0 ? allowedSources : (["server"] as FileSource[]) }
           : {},
+      userConfigJson: fieldType === "user" ? { allowedRoleIds } : {},
     };
     if (editingField) {
       updateMutation.mutate({ id: editingField.id, data: payload });
@@ -487,6 +493,37 @@ export default function EntityFieldsPage() {
                     );
                   })}
                 </div>
+              </div>
+            )}
+            {fieldType === "user" && (
+              <div className="space-y-2">
+                <Label>{t("fields.userRoles", "Доступные роли пользователей")}</Label>
+                <p className="text-xs text-slate-400">
+                  {t("fields.userRolesHint", "Ограничьте выбор пользователями указанных ролей. Если ничего не выбрано — доступны все пользователи.")}
+                </p>
+                {roles.length === 0 ? (
+                  <p className="text-xs text-slate-400">{t("fields.noRoles", "Нет ролей для настройки.")}</p>
+                ) : (
+                  <div className="space-y-1.5 pt-1">
+                    {roles.map((role: Role) => {
+                      const checked = allowedRoleIds.includes(role.id);
+                      return (
+                        <div key={role.id} className="flex items-center gap-2">
+                          <Switch
+                            id={`field-role-${role.id}`}
+                            checked={checked}
+                            onCheckedChange={(on) =>
+                              setAllowedRoleIds((prev) =>
+                                on ? [...prev, role.id] : prev.filter((x) => x !== role.id),
+                              )
+                            }
+                          />
+                          <Label htmlFor={`field-role-${role.id}`}>{ml(role.nameJson)}</Label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
             <div className="space-y-1.5">

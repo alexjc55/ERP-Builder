@@ -9,6 +9,7 @@ import type { FieldPermissions } from './fieldPermissions';
 import type { FieldType } from './fieldType';
 import type { FileFieldConfig } from './fileFieldConfig';
 import type { MultilingualText } from './multilingualText';
+import type { UserFieldConfig } from './userFieldConfig';
 
 export interface FieldInput {
   fieldKey: string;
@@ -21,6 +22,7 @@ export interface FieldInput {
   optionsJson?: string[];
   permissionsJson?: FieldPermissions;
   fileConfigJson?: FileFieldConfig;
+  userConfigJson?: UserFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
   sortOrder?: number;
