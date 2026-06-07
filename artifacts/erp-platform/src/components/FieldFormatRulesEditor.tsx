@@ -1,4 +1,4 @@
-import type { ChangeEvent, FocusEvent } from "react";
+import { useState, type ChangeEvent, type FocusEvent } from "react";
 import type { FieldFormatRule, FormatOperator, FieldType } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useT } from "@/lib/i18n";
-import { Plus, Trash2 } from "lucide-react";
+import { addColorPreset, loadColorPresets, removeColorPreset } from "@/lib/colorPresets";
+import { Plus, Star, Trash2, X } from "lucide-react";
 import { HexColorPicker } from "react-colorful";
 
 const OPERATORS: { value: FormatOperator; label: string; needsValue: boolean }[] = [
@@ -84,6 +85,7 @@ export function FieldFormatRulesEditor({
 }) {
   const t = useT();
   const ops = operatorsForType(fieldType);
+  const [presets, setPresets] = useState<string[]>(() => loadColorPresets());
 
   const update = (idx: number, patch: Partial<FieldFormatRule>) => {
     onChange(rules.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
@@ -126,14 +128,56 @@ export function FieldFormatRulesEditor({
             <div className="format-color-picker">
               <HexColorPicker color={swatch} onChange={onColorChange} />
             </div>
-            <Input
-              className="h-7 w-[200px] mt-3 font-mono text-xs"
-              value={value}
-              onChange={onTextChange}
-              onBlur={onTextBlur}
-              placeholder="#RRGGBB"
-              spellCheck={false}
-            />
+            <div className="mt-3 flex items-center gap-2">
+              <Input
+                className="h-7 w-[150px] font-mono text-xs"
+                value={value}
+                onChange={onTextChange}
+                onBlur={onTextBlur}
+                placeholder="#RRGGBB"
+                spellCheck={false}
+              />
+              <button
+                type="button"
+                disabled={!valid}
+                onClick={() => setPresets((prev) => addColorPreset(prev, value))}
+                className="flex items-center gap-1 h-7 px-2 rounded border border-slate-200 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                title={t("fields.savePreset", "Сохранить цвет в палитру")}
+              >
+                <Star className="w-3.5 h-3.5" />
+                {t("fields.savePreset", "Сохранить")}
+              </button>
+            </div>
+            <div className="mt-3 w-[200px]">
+              <p className="text-xs text-slate-500 mb-1">{t("fields.savedColors", "Сохранённые цвета")}</p>
+              {presets.length === 0 ? (
+                <p className="text-xs text-slate-400">{t("fields.noSavedColors", "Пока пусто — сохраните цвет кнопкой ★")}</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {presets.map((p) => (
+                    <div key={p} className="relative group">
+                      <button
+                        type="button"
+                        onClick={() => onColorChange(p)}
+                        className="h-6 w-6 rounded border border-slate-200 shrink-0"
+                        style={{ backgroundColor: p }}
+                        title={p}
+                        aria-label={`${t("fields.useColor", "Использовать цвет")} ${p}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setPresets((prev) => removeColorPreset(prev, p))}
+                        className="absolute -top-1.5 -right-1.5 hidden group-hover:flex items-center justify-center h-3.5 w-3.5 rounded-full bg-slate-600 text-white"
+                        title={t("fields.removePreset", "Удалить из палитры")}
+                        aria-label={`${t("fields.removePreset", "Удалить из палитры")} ${p}`}
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </PopoverContent>
         </Popover>
         <Input

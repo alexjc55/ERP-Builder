@@ -88,3 +88,22 @@ non-editable (no inline edit, read-only placeholder in the add-row draft).
 **Deviation / known limitation:** formulas currently resolve same-record refs
 only (entity + page merged values of the same row). Cross-entity / cross-record
 references are deferred (tracked as a follow-up), not implemented.
+
+## Formula-helper chips must mirror the eval context exactly
+
+The formula editor's clickable field chips (insert `{key}` at caret) must offer
+EXACTLY the keys the evaluator can resolve, no more:
+
+- Entity-field dialog: the entity's own fields, excluding the field being edited
+  and any `function`-type fields.
+- Page-field dialog on a mirror page: the merged set the evaluator sees —
+  page-local non-function fields PLUS the mirrored source-entity fields — and it
+  must be de-duplicated by key with **page-local precedence**, matching the
+  values merge `{...source, ...page}` (a page-local key shadows a same-key source
+  field). Deduping also prevents duplicate React keys on the chip list.
+- Always exclude `function`-type fields from suggestions: their computed values
+  are never written into the values map, so a formula referencing one resolves to
+  empty.
+
+**Why:** suggesting a key the evaluator can't resolve (e.g. a function field, or
+a source key shadowed by a page-local one) produces silently-wrong formulas.

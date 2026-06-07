@@ -47,6 +47,7 @@ import {
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { FieldFormatRulesEditor } from "@/components/FieldFormatRulesEditor";
 import { useToast } from "@/hooks/use-toast";
+import { FormulaEditor, type FormulaFieldRef } from "@/components/FormulaEditor";
 import { useML, useT } from "@/lib/i18n";
 import { FIELD_KEY_RE, slugifyKey, uniqueKey } from "@/lib/keys";
 import { Loader2, Trash2 } from "lucide-react";
@@ -237,6 +238,11 @@ export function FieldConfigDialog({
   const manualKeyTaken = trimmedKey !== "" && existingKeys.has(trimmedKey);
   const effectiveKey = trimmedKey || generatedKey;
 
+  // Fields a formula can reference: this entity's other non-formula columns.
+  const formulaFields: FormulaFieldRef[] = existingFields
+    .filter((f: Field) => f.id !== field?.id && f.fieldType !== "function")
+    .map((f: Field) => ({ key: f.fieldKey, label: ml(f.nameJson) || f.fieldKey }));
+
   const handleSubmit = () => {
     const options = optionsText
       .split("\n")
@@ -391,22 +397,7 @@ export function FieldConfigDialog({
               </div>
             )}
             {fieldType === "function" && (
-              <div className="space-y-1.5">
-                <Label>{t("fields.formula", "Формула")}</Label>
-                <Textarea
-                  value={formula}
-                  onChange={(e) => setFormula(e.target.value)}
-                  placeholder={"{price} * {qty} * (1 + {vat} / 100)"}
-                  rows={3}
-                  className="font-mono text-sm"
-                />
-                <p className="text-xs text-slate-400">
-                  {t(
-                    "fields.formulaHint",
-                    "Ссылайтесь на другие поля этой записи через {ключ_поля}. Операторы: + - * / %, сравнения, && || !, тернарный ?:. Функции: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce. Вычисляется при показе и не хранится.",
-                  )}
-                </p>
-              </div>
+              <FormulaEditor value={formula} onChange={setFormula} fields={formulaFields} />
             )}
             {fieldType !== "function" && (
               <div className="space-y-1.5">

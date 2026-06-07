@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/select";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { FieldFormatRulesEditor } from "@/components/FieldFormatRulesEditor";
+import { FormulaEditor, type FormulaFieldRef } from "@/components/FormulaEditor";
 import { useToast } from "@/hooks/use-toast";
 import { useML, useT } from "@/lib/i18n";
 import { FIELD_KEY_RE, slugifyKey, uniqueKey } from "@/lib/keys";
@@ -82,6 +83,7 @@ export function PageFieldConfigDialog({
   pageId,
   field,
   nextSortOrder,
+  sourceFields = [],
   onSaved,
 }: {
   open: boolean;
@@ -89,6 +91,8 @@ export function PageFieldConfigDialog({
   pageId: number;
   field: PageField | null;
   nextSortOrder: number;
+  /** Source-entity fields a page formula may also reference (merged at read time). */
+  sourceFields?: FormulaFieldRef[];
   onSaved: () => void;
 }) {
   const ml = useML();
@@ -190,6 +194,20 @@ export function PageFieldConfigDialog({
   const effectiveKey = trimmedKey || generatedKey;
 
   const formatFieldType: FieldType = fieldType;
+
+  // A page formula can reference the mirrored entity's fields (passed in) plus
+  // this page's other non-formula local fields — all merged at read time. Values
+  // merge as {...source, ...page}, so a page-local field shadows a same-key source
+  // field; list page fields first and de-duplicate by key to match that precedence
+  // (and to avoid duplicate React keys among the chips).
+  const formulaFields: FormulaFieldRef[] = (() => {
+    const pageRefs = existingFields
+      .filter((f: PageField) => f.id !== field?.id && f.fieldType !== "function")
+      .map((f: PageField) => ({ key: f.fieldKey, label: ml(f.nameJson) || f.fieldKey }));
+    const seen = new Set(pageRefs.map((r) => r.key));
+    return [...pageRefs, ...sourceFields.filter((r) => !seen.has(r.key))];
+  })();
+
   const handleSubmit = () => {
     const options = optionsText
       .split("\n")
@@ -273,22 +291,7 @@ export function PageFieldConfigDialog({
               </div>
             )}
             {fieldType === "function" && (
-              <div className="space-y-1.5">
-                <Label>{t("fields.formula", "Формула")}</Label>
-                <Textarea
-                  value={formula}
-                  onChange={(e) => setFormula(e.target.value)}
-                  placeholder={"{price} * {qty} * (1 + {vat} / 100)"}
-                  rows={3}
-                  className="font-mono text-sm"
-                />
-                <p className="text-xs text-slate-400">
-                  {t(
-                    "fields.formulaHint",
-                    "Ссылайтесь на другие поля этой записи через {ключ_поля}. Операторы: + - * / %, сравнения, && || !, тернарный ?:. Функции: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce. Вычисляется при показе и не хранится.",
-                  )}
-                </p>
-              </div>
+              <FormulaEditor value={formula} onChange={setFormula} fields={formulaFields} />
             )}
             {fieldType !== "function" && (
               <div className="space-y-1.5">
