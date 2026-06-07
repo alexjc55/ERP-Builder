@@ -100,7 +100,8 @@ import { useML, useT } from "@/lib/i18n";
 import { useGoogleDriveReady } from "@/lib/googleDrive";
 import { FieldConfigDialog } from "@/components/FieldConfigDialog";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow } from "lucide-react";
+import { Link } from "wouter";
 
 const NO_STATUS = "__none__";
 const NO_VIEW = "__all__";
@@ -1054,9 +1055,28 @@ export function EntityRecords({ entityId }: { entityId: number }) {
       )}
 
       {setupMode && (
-        <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-          <Settings2 className="w-4 h-4" />
-          {t("records.setupHint", "Режим настройки включён. Нажмите на заголовок колонки, чтобы изменить её свойства и права, или «+», чтобы добавить новую колонку.")}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+            <Settings2 className="w-4 h-4" />
+            {t("records.setupHint", "Режим настройки включён. Нажмите на заголовок колонки, чтобы изменить её свойства и права, или «+», чтобы добавить новую колонку.")}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-slate-400 mr-1">{t("records.manageEntity", "Управление сущностью")}:</span>
+            {[
+              { to: `/admin/entities/${entityId}/fields`, icon: Columns3, label: t("records.manageFields", "Поля") },
+              { to: `/admin/entities/${entityId}/statuses`, icon: CircleDot, label: t("records.manageStatuses", "Статусы") },
+              { to: `/admin/entities/${entityId}/relations`, icon: Share2, label: t("records.manageRelations", "Связи") },
+              { to: `/admin/entities/${entityId}/views`, icon: LayoutList, label: t("records.manageViews", "Виды") },
+              { to: `/admin/entities/${entityId}/workflow`, icon: Workflow, label: t("records.manageProcesses", "Процессы") },
+            ].map(({ to, icon: Icon, label }) => (
+              <Button key={to} asChild variant="outline" size="sm" className="h-8 gap-1.5">
+                <Link href={to}>
+                  <Icon className="w-3.5 h-3.5" />
+                  {label}
+                </Link>
+              </Button>
+            ))}
+          </div>
         </div>
       )}
 

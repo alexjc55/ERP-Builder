@@ -143,7 +143,9 @@ router.post(
     }
     const body = parsed.data;
 
-    if (!(await statusesBelongToEntity(entityId, [body.fromStatusId, body.toStatusId]))) {
+    // fromStatusId may be null ("from any status"); only check non-null ids.
+    const statusIdsToCheck = [body.toStatusId, ...(body.fromStatusId != null ? [body.fromStatusId] : [])];
+    if (!(await statusesBelongToEntity(entityId, statusIdsToCheck))) {
       res.status(400).json({ error: "from/to status does not belong to this entity" });
       return;
     }
@@ -162,7 +164,7 @@ router.post(
         .insert(entityTransitionsTable)
         .values({
           entityId,
-          fromStatusId: body.fromStatusId,
+          fromStatusId: body.fromStatusId ?? null,
           toStatusId: body.toStatusId,
           nameJson: body.nameJson ?? {},
           allowedRoleIds: body.allowedRoleIds ?? [],
@@ -269,10 +271,13 @@ router.put("/transitions/:id", requireAuth, requireAdmin("entities"), async (req
   const body = parsed.data;
   const entityId = current.entityId;
 
-  const fromStatusId = body.fromStatusId ?? current.fromStatusId;
+  // Distinguish "field omitted" (keep current) from "field set to null" (any status).
+  const fromProvided = "fromStatusId" in body;
+  const fromStatusId = fromProvided ? (body.fromStatusId ?? null) : current.fromStatusId;
   const toStatusId = body.toStatusId ?? current.toStatusId;
-  if (body.fromStatusId != null || body.toStatusId != null) {
-    if (!(await statusesBelongToEntity(entityId, [fromStatusId, toStatusId]))) {
+  if (fromProvided || body.toStatusId != null) {
+    const statusIdsToCheck = [toStatusId, ...(fromStatusId != null ? [fromStatusId] : [])];
+    if (!(await statusesBelongToEntity(entityId, statusIdsToCheck))) {
       res.status(400).json({ error: "from/to status does not belong to this entity" });
       return;
     }
@@ -294,7 +299,7 @@ router.put("/transitions/:id", requireAuth, requireAdmin("entities"), async (req
   }
 
   const updateData: Record<string, unknown> = {};
-  if (body.fromStatusId != null) updateData.fromStatusId = body.fromStatusId;
+  if (fromProvided) updateData.fromStatusId = body.fromStatusId ?? null;
   if (body.toStatusId != null) updateData.toStatusId = body.toStatusId;
   if (body.nameJson != null) updateData.nameJson = body.nameJson;
   if (body.allowedRoleIds != null) updateData.allowedRoleIds = body.allowedRoleIds;

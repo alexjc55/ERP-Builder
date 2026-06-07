@@ -1,4 +1,5 @@
-import { pgTable, serial, jsonb, integer, timestamp, unique, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, jsonb, integer, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { entitiesTable } from "./entities";
@@ -19,9 +20,11 @@ export const entityTransitionsTable = pgTable(
     entityId: integer("entity_id")
       .notNull()
       .references(() => entitiesTable.id, { onDelete: "cascade" }),
-    fromStatusId: integer("from_status_id")
-      .notNull()
-      .references(() => entityStatusesTable.id, { onDelete: "cascade" }),
+    // Nullable: null means "from any status" — a wildcard transition into
+    // toStatus that applies regardless of the record's current status.
+    fromStatusId: integer("from_status_id").references(() => entityStatusesTable.id, {
+      onDelete: "cascade",
+    }),
     toStatusId: integer("to_status_id")
       .notNull()
       .references(() => entityStatusesTable.id, { onDelete: "cascade" }),
@@ -37,7 +40,14 @@ export const entityTransitionsTable = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
   },
   (t) => [
-    unique("entity_transition_pair_unique").on(t.entityId, t.fromStatusId, t.toStatusId),
+    // Specific from→to pairs are unique per entity.
+    uniqueIndex("entity_transition_specific_unique")
+      .on(t.entityId, t.fromStatusId, t.toStatusId)
+      .where(sql`${t.fromStatusId} is not null`),
+    // At most one wildcard (any→to) transition per target status per entity.
+    uniqueIndex("entity_transition_wildcard_unique")
+      .on(t.entityId, t.toStatusId)
+      .where(sql`${t.fromStatusId} is null`),
     index("entity_transition_entity_idx").on(t.entityId),
     index("entity_transition_from_idx").on(t.fromStatusId),
   ],
@@ -47,6 +57,9 @@ export const transitionActionSchema = z.object({
   type: z.literal("set_field"),
   fieldKey: z.string().min(1),
   value: z.unknown(),
+  /** Cosmetic: the value was typed manually rather than picked from the field's
+   * typed control. The server still validates the value against the field type. */
+  manual: z.boolean().optional(),
 });
 export type TransitionAction = z.infer<typeof transitionActionSchema>;
 

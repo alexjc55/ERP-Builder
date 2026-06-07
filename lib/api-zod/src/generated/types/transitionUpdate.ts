@@ -9,7 +9,8 @@ import type { MultilingualText } from './multilingualText';
 import type { TransitionAction } from './transitionAction';
 
 export interface TransitionUpdate {
-  fromStatusId?: number;
+  /** @nullable */
+  fromStatusId?: number | null;
   toStatusId?: number;
   nameJson?: MultilingualText;
   allowedRoleIds?: number[];

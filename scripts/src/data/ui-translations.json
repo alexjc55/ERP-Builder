@@ -1794,6 +1794,48 @@
     "he": "מסטטוס"
   },
   {
+    "key": "workflow.anyStatus",
+    "ru": "Любой статус",
+    "en": "Any status",
+    "he": "כל סטטוס"
+  },
+  {
+    "key": "workflow.valuePlaceholder",
+    "ru": "значение",
+    "en": "value",
+    "he": "ערך"
+  },
+  {
+    "key": "workflow.manual",
+    "ru": "Вручную",
+    "en": "Manual",
+    "he": "ידני"
+  },
+  {
+    "key": "workflow.manualHint",
+    "ru": "Ввести значение вручную",
+    "en": "Enter the value manually",
+    "he": "הזינו את הערך ידנית"
+  },
+  {
+    "key": "workflow.selectUser",
+    "ru": "Пользователь",
+    "en": "User",
+    "he": "משתמש"
+  },
+  {
+    "key": "workflow.yes",
+    "ru": "Да",
+    "en": "Yes",
+    "he": "כן"
+  },
+  {
+    "key": "workflow.no",
+    "ru": "Нет",
+    "en": "No",
+    "he": "לא"
+  },
+  {
     "key": "workflow.statusPlaceholder",
     "ru": "Статус",
     "en": "Status",
@@ -2902,6 +2944,48 @@
     "ru": "Нет",
     "en": "No",
     "he": "לא"
+  },
+  {
+    "key": "records.setupHint",
+    "ru": "Режим настройки включён. Нажмите на заголовок колонки, чтобы изменить её свойства и права, или «+», чтобы добавить новую колонку.",
+    "en": "Setup mode is on. Click a column header to edit its properties and permissions, or «+» to add a new column.",
+    "he": "מצב הגדרה פעיל. לחצו על כותרת עמודה כדי לערוך את מאפייניה והרשאותיה, או על «+» כדי להוסיף עמודה חדשה."
+  },
+  {
+    "key": "records.manageEntity",
+    "ru": "Управление сущностью",
+    "en": "Manage entity",
+    "he": "ניהול ישות"
+  },
+  {
+    "key": "records.manageFields",
+    "ru": "Поля",
+    "en": "Fields",
+    "he": "שדות"
+  },
+  {
+    "key": "records.manageStatuses",
+    "ru": "Статусы",
+    "en": "Statuses",
+    "he": "סטטוסים"
+  },
+  {
+    "key": "records.manageRelations",
+    "ru": "Связи",
+    "en": "Relations",
+    "he": "קשרים"
+  },
+  {
+    "key": "records.manageViews",
+    "ru": "Виды",
+    "en": "Views",
+    "he": "תצוגות"
+  },
+  {
+    "key": "records.manageProcesses",
+    "ru": "Процессы",
+    "en": "Processes",
+    "he": "תהליכים"
   },
   {
     "key": "records.historyEmpty",

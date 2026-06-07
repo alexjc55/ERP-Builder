@@ -1495,7 +1495,7 @@ export const ListEntityTransitionsParams = zod.object({
 export const ListEntityTransitionsResponseItem = zod.object({
   "id": zod.number(),
   "entityId": zod.number(),
-  "fromStatusId": zod.number(),
+  "fromStatusId": zod.number().nullable(),
   "toStatusId": zod.number(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
@@ -1507,7 +1507,8 @@ export const ListEntityTransitionsResponseItem = zod.object({
   "actionsJson": zod.array(zod.object({
   "type": zod.enum(['set_field']),
   "fieldKey": zod.string(),
-  "value": zod.unknown().optional()
+  "value": zod.unknown().optional(),
+  "manual": zod.boolean().optional().describe('When true, the value was entered manually (free text) instead of picked from the field\'s typed control. Cosmetic only — the server still validates the value against the field type.')
 })),
   "sortOrder": zod.number(),
   "createdAt": zod.coerce.date(),
@@ -1528,7 +1529,7 @@ export const createEntityTransitionBodyRequiredFieldKeysDefault = [];
 export const createEntityTransitionBodyActionsJsonDefault = [];
 
 export const CreateEntityTransitionBody = zod.object({
-  "fromStatusId": zod.number(),
+  "fromStatusId": zod.number().nullable(),
   "toStatusId": zod.number(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
@@ -1540,7 +1541,8 @@ export const CreateEntityTransitionBody = zod.object({
   "actionsJson": zod.array(zod.object({
   "type": zod.enum(['set_field']),
   "fieldKey": zod.string(),
-  "value": zod.unknown().optional()
+  "value": zod.unknown().optional(),
+  "manual": zod.boolean().optional().describe('When true, the value was entered manually (free text) instead of picked from the field\'s typed control. Cosmetic only — the server still validates the value against the field type.')
 })).default(createEntityTransitionBodyActionsJsonDefault),
   "sortOrder": zod.number().optional()
 })
@@ -1556,7 +1558,7 @@ export const GetTransitionParams = zod.object({
 export const GetTransitionResponse = zod.object({
   "id": zod.number(),
   "entityId": zod.number(),
-  "fromStatusId": zod.number(),
+  "fromStatusId": zod.number().nullable(),
   "toStatusId": zod.number(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
@@ -1568,7 +1570,8 @@ export const GetTransitionResponse = zod.object({
   "actionsJson": zod.array(zod.object({
   "type": zod.enum(['set_field']),
   "fieldKey": zod.string(),
-  "value": zod.unknown().optional()
+  "value": zod.unknown().optional(),
+  "manual": zod.boolean().optional().describe('When true, the value was entered manually (free text) instead of picked from the field\'s typed control. Cosmetic only — the server still validates the value against the field type.')
 })),
   "sortOrder": zod.number(),
   "createdAt": zod.coerce.date(),
@@ -1584,7 +1587,7 @@ export const UpdateTransitionParams = zod.object({
 })
 
 export const UpdateTransitionBody = zod.object({
-  "fromStatusId": zod.number().optional(),
+  "fromStatusId": zod.number().nullish(),
   "toStatusId": zod.number().optional(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
@@ -1596,7 +1599,8 @@ export const UpdateTransitionBody = zod.object({
   "actionsJson": zod.array(zod.object({
   "type": zod.enum(['set_field']),
   "fieldKey": zod.string(),
-  "value": zod.unknown().optional()
+  "value": zod.unknown().optional(),
+  "manual": zod.boolean().optional().describe('When true, the value was entered manually (free text) instead of picked from the field\'s typed control. Cosmetic only — the server still validates the value against the field type.')
 })).optional(),
   "sortOrder": zod.number().optional()
 })
@@ -1604,7 +1608,7 @@ export const UpdateTransitionBody = zod.object({
 export const UpdateTransitionResponse = zod.object({
   "id": zod.number(),
   "entityId": zod.number(),
-  "fromStatusId": zod.number(),
+  "fromStatusId": zod.number().nullable(),
   "toStatusId": zod.number(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
@@ -1616,7 +1620,8 @@ export const UpdateTransitionResponse = zod.object({
   "actionsJson": zod.array(zod.object({
   "type": zod.enum(['set_field']),
   "fieldKey": zod.string(),
-  "value": zod.unknown().optional()
+  "value": zod.unknown().optional(),
+  "manual": zod.boolean().optional().describe('When true, the value was entered manually (free text) instead of picked from the field\'s typed control. Cosmetic only — the server still validates the value against the field type.')
 })),
   "sortOrder": zod.number(),
   "createdAt": zod.coerce.date(),

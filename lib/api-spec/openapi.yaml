@@ -3125,6 +3125,12 @@ components:
         fieldKey:
           type: string
         value: {}
+        manual:
+          type: boolean
+          description: >-
+            When true, the value was entered manually (free text) instead of
+            picked from the field's typed control. Cosmetic only — the server
+            still validates the value against the field type.
 
     Transition:
       type: object
@@ -3135,7 +3141,7 @@ components:
         entityId:
           type: integer
         fromStatusId:
-          type: integer
+          type: ["integer", "null"]
         toStatusId:
           type: integer
         nameJson:
@@ -3166,7 +3172,7 @@ components:
       required: [fromStatusId, toStatusId]
       properties:
         fromStatusId:
-          type: integer
+          type: ["integer", "null"]
         toStatusId:
           type: integer
         nameJson:
@@ -3193,7 +3199,7 @@ components:
       type: object
       properties:
         fromStatusId:
-          type: integer
+          type: ["integer", "null"]
         toStatusId:
           type: integer
         nameJson:

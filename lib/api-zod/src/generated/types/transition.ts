@@ -11,7 +11,8 @@ import type { TransitionAction } from './transitionAction';
 export interface Transition {
   id: number;
   entityId: number;
-  fromStatusId: number;
+  /** @nullable */
+  fromStatusId: number | null;
   toStatusId: number;
   nameJson: MultilingualText;
   allowedRoleIds: number[];

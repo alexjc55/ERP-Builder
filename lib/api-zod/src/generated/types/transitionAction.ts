@@ -11,4 +11,6 @@ export interface TransitionAction {
   type: TransitionActionType;
   fieldKey: string;
   value?: unknown;
+  /** When true, the value was entered manually (free text) instead of picked from the field's typed control. Cosmetic only — the server still validates the value against the field type. */
+  manual?: boolean;
 }

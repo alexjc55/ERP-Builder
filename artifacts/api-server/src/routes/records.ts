@@ -816,9 +816,12 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
       .where(eq(entityTransitionsTable.entityId, existing.entityId));
     if (transitions.length > 0) {
       guardFromStatusId = existing.statusId;
-      const match = transitions.find(
-        (t) => t.fromStatusId === existing.statusId && t.toStatusId === update.statusId,
-      );
+      // A specific from→to transition takes precedence; otherwise fall back to a
+      // wildcard (fromStatusId === null, "from any status") into the target.
+      const match =
+        transitions.find(
+          (t) => t.fromStatusId === existing.statusId && t.toStatusId === update.statusId,
+        ) ?? transitions.find((t) => t.fromStatusId === null && t.toStatusId === update.statusId);
       if (!match) {
         res.status(422).json({ error: "This status change is not an allowed transition" });
         return;

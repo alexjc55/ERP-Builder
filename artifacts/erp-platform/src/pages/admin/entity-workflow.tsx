@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactElement } from "react";
 import { useParams, useLocation } from "wouter";
 import {
   useListEntityTransitions,
@@ -10,12 +10,14 @@ import {
   useListEntityFields,
   useListRoles,
   useListEntities,
+  useListUserOptions,
   type Transition,
   type TransitionAction,
   type Status,
   type Field,
   type Role,
   type Entity,
+  type UserOption,
   type MultilingualText,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -56,7 +58,10 @@ import { Plus, Pencil, Trash2, Loader2, ArrowLeft, Workflow, ArrowRight, X, Chev
 import { useML, useT } from "@/lib/i18n";
 
 type MLValue = { ru?: string; en?: string; he?: string };
-type ActionRow = { fieldKey: string; value: string };
+type ActionRow = { fieldKey: string; value: string; manual: boolean };
+
+/** Sentinel value for the "from any status" wildcard option in the from-status select. */
+const ANY_STATUS = "any";
 
 export default function EntityWorkflowPage() {
   const params = useParams();
@@ -86,6 +91,7 @@ export default function EntityWorkflowPage() {
   const { data: statuses = [] } = useListEntityStatuses(entityId);
   const { data: allFields = [] } = useListEntityFields(entityId);
   const { data: roles = [] } = useListRoles();
+  const { data: userOptions = [] } = useListUserOptions();
 
   const fields = [...allFields]
     .filter((f: Field) => f.isActive)
@@ -155,7 +161,7 @@ export default function EntityWorkflowPage() {
 
   const openEdit = (t: Transition) => {
     setEditing(t);
-    setFromStatusId(String(t.fromStatusId));
+    setFromStatusId(t.fromStatusId == null ? ANY_STATUS : String(t.fromStatusId));
     setToStatusId(String(t.toStatusId));
     const n = t.nameJson;
     setNameJson(typeof n === "object" && n ? { ru: n.ru, en: n.en, he: n.he } : {});
@@ -165,6 +171,7 @@ export default function EntityWorkflowPage() {
       (t.actionsJson ?? []).map((a: TransitionAction) => ({
         fieldKey: a.fieldKey,
         value: a.value == null ? "" : String(a.value),
+        manual: a.manual ?? false,
       })),
     );
     setSortOrder(t.sortOrder);
@@ -176,7 +183,7 @@ export default function EntityWorkflowPage() {
   const toggleField = (key: string) =>
     setRequiredFieldKeys((prev) => (prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]));
 
-  const addAction = () => setActions((prev) => [...prev, { fieldKey: fields[0]?.fieldKey ?? "", value: "" }]);
+  const addAction = () => setActions((prev) => [...prev, { fieldKey: fields[0]?.fieldKey ?? "", value: "", manual: false }]);
   const removeAction = (i: number) => setActions((prev) => prev.filter((_, idx) => idx !== i));
   const updateAction = (i: number, patch: Partial<ActionRow>) =>
     setActions((prev) => prev.map((a, idx) => (idx === i ? { ...a, ...patch } : a)));
@@ -191,6 +198,8 @@ export default function EntityWorkflowPage() {
         return Number(raw);
       case "boolean":
         return raw === "true";
+      case "user":
+        return Number(raw);
       default:
         return raw;
     }
@@ -203,9 +212,14 @@ export default function EntityWorkflowPage() {
     }
     const actionsJson: TransitionAction[] = actions
       .filter((a) => a.fieldKey)
-      .map((a) => ({ type: "set_field", fieldKey: a.fieldKey, value: coerceActionValue(a.fieldKey, a.value) }));
+      .map((a) => ({
+        type: "set_field",
+        fieldKey: a.fieldKey,
+        value: coerceActionValue(a.fieldKey, a.value),
+        ...(a.manual ? { manual: true } : {}),
+      }));
     const payload = {
-      fromStatusId: Number(fromStatusId),
+      fromStatusId: fromStatusId === ANY_STATUS ? null : Number(fromStatusId),
       toStatusId: Number(toStatusId),
       nameJson: nameJson as MultilingualText,
       allowedRoleIds,
@@ -220,10 +234,109 @@ export default function EntityWorkflowPage() {
     }
   };
 
+  /**
+   * Render the value control for a set-field action, typed by the target field
+   * (select dropdown, date/number picker, boolean/user select, text). The
+   * per-action "Вручную" toggle swaps the typed control for free-text entry.
+   * Called as a plain function (not a nested component) so inputs keep focus.
+   */
+  const renderActionValue = (action: ActionRow, index: number): ReactElement => {
+    const f = fieldByKey.get(action.fieldKey);
+    const type = f?.fieldType;
+    const set = (value: string) => updateAction(index, { value });
+    const hasPicker =
+      type === "select" ||
+      type === "boolean" ||
+      type === "date" ||
+      type === "datetime" ||
+      type === "number" ||
+      type === "user";
+    const manual = action.manual || !hasPicker;
+    const placeholder = t("workflow.valuePlaceholder", "значение");
+
+    const toggle = hasPicker ? (
+      <Button
+        type="button"
+        variant={action.manual ? "default" : "ghost"}
+        size="sm"
+        className={`h-8 px-2 text-xs shrink-0 ${action.manual ? "bg-blue-600 hover:bg-blue-700" : "text-slate-400"}`}
+        title={t("workflow.manualHint", "Ввести значение вручную")}
+        onClick={() => updateAction(index, { manual: !action.manual })}
+      >
+        {t("workflow.manual", "Вручную")}
+      </Button>
+    ) : null;
+
+    const wrap = (control: ReactElement): ReactElement => (
+      <div className="flex flex-1 items-center gap-1.5">
+        {control}
+        {toggle}
+      </div>
+    );
+
+    if (manual) {
+      return wrap(<Input className="flex-1" value={action.value} onChange={(e) => set(e.target.value)} placeholder={placeholder} />);
+    }
+    if (type === "select") {
+      const options = Array.isArray(f?.optionsJson) ? (f!.optionsJson as string[]) : [];
+      return wrap(
+        <Select value={action.value || ""} onValueChange={set}>
+          <SelectTrigger className="flex-1"><SelectValue placeholder={placeholder} /></SelectTrigger>
+          <SelectContent>
+            {options.map((opt) => (
+              <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>,
+      );
+    }
+    if (type === "boolean") {
+      return wrap(
+        <Select value={action.value || ""} onValueChange={set}>
+          <SelectTrigger className="flex-1"><SelectValue placeholder={placeholder} /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="true">{t("workflow.yes", "Да")}</SelectItem>
+            <SelectItem value="false">{t("workflow.no", "Нет")}</SelectItem>
+          </SelectContent>
+        </Select>,
+      );
+    }
+    if (type === "user") {
+      return wrap(
+        <Select value={action.value || ""} onValueChange={set}>
+          <SelectTrigger className="flex-1"><SelectValue placeholder={t("workflow.selectUser", "Пользователь")} /></SelectTrigger>
+          <SelectContent>
+            {userOptions.map((u: UserOption) => (
+              <SelectItem key={u.id} value={String(u.id)}>{u.name || `#${u.id}`}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>,
+      );
+    }
+    if (type === "number") {
+      return wrap(<Input type="number" className="flex-1" value={action.value} onChange={(e) => set(e.target.value)} placeholder={placeholder} />);
+    }
+    if (type === "date") {
+      return wrap(<Input type="date" className="flex-1" value={action.value} onChange={(e) => set(e.target.value)} />);
+    }
+    if (type === "datetime") {
+      return wrap(<Input type="datetime-local" className="flex-1" value={action.value} onChange={(e) => set(e.target.value)} />);
+    }
+    return wrap(<Input className="flex-1" value={action.value} onChange={(e) => set(e.target.value)} placeholder={placeholder} />);
+  };
+
   const isPending = createMutation.isPending || updateMutation.isPending;
   const sorted = [...transitions].sort((a: Transition, b: Transition) => a.sortOrder - b.sortOrder);
 
-  const StatusChip = ({ id }: { id: number }) => {
+  const StatusChip = ({ id }: { id: number | null }) => {
+    if (id == null) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">
+          <span className="w-2 h-2 rounded-full bg-slate-400" />
+          {t("workflow.anyStatus", "Любой статус")}
+        </span>
+      );
+    }
     const s = statusById.get(id);
     if (!s) return <span className="text-slate-400 text-xs">—</span>;
     return (
@@ -365,6 +478,7 @@ export default function EntityWorkflowPage() {
                 <Select value={fromStatusId} onValueChange={setFromStatusId}>
                   <SelectTrigger><SelectValue placeholder={t("workflow.statusPlaceholder", "Статус")} /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value={ANY_STATUS}>{t("workflow.anyStatus", "Любой статус")}</SelectItem>
                     {statuses.map((s: Status) => (
                       <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
                     ))}
@@ -442,8 +556,8 @@ export default function EntityWorkflowPage() {
                         </SelectContent>
                       </Select>
                       <span className="text-slate-400">=</span>
-                      <Input className="flex-1" value={a.value} onChange={(e) => updateAction(i, { value: e.target.value })} placeholder={t("workflow.valuePlaceholder", "значение")} />
-                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => removeAction(i)}>
+                      {renderActionValue(a, i)}
+                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-500 shrink-0" onClick={() => removeAction(i)}>
                         <X className="w-3.5 h-3.5" />
                       </Button>
                     </div>
@@ -471,7 +585,7 @@ export default function EntityWorkflowPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>{t("workflow.deleteTitle", "Удалить переход?")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t("workflow.deleteConfirmPrefix", "Переход")} {toDelete ? `${ml(statusById.get(toDelete.fromStatusId)?.nameJson)} → ${ml(statusById.get(toDelete.toStatusId)?.nameJson)}` : ""} {t("workflow.deleteConfirmSuffix", "будет удалён безвозвратно.")}
+              {t("workflow.deleteConfirmPrefix", "Переход")} {toDelete ? `${toDelete.fromStatusId == null ? t("workflow.anyStatus", "Любой статус") : ml(statusById.get(toDelete.fromStatusId)?.nameJson)} → ${ml(statusById.get(toDelete.toStatusId)?.nameJson)}` : ""} {t("workflow.deleteConfirmSuffix", "будет удалён безвозвратно.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

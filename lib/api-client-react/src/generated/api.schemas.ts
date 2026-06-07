@@ -759,12 +759,15 @@ export interface TransitionAction {
   type: TransitionActionType;
   fieldKey: string;
   value?: unknown;
+  /** When true, the value was entered manually (free text) instead of picked from the field's typed control. Cosmetic only — the server still validates the value against the field type. */
+  manual?: boolean;
 }
 
 export interface Transition {
   id: number;
   entityId: number;
-  fromStatusId: number;
+  /** @nullable */
+  fromStatusId: number | null;
   toStatusId: number;
   nameJson: MultilingualText;
   allowedRoleIds: number[];
@@ -776,7 +779,8 @@ export interface Transition {
 }
 
 export interface TransitionInput {
-  fromStatusId: number;
+  /** @nullable */
+  fromStatusId: number | null;
   toStatusId: number;
   nameJson?: MultilingualText;
   allowedRoleIds?: number[];
@@ -786,7 +790,8 @@ export interface TransitionInput {
 }
 
 export interface TransitionUpdate {
-  fromStatusId?: number;
+  /** @nullable */
+  fromStatusId?: number | null;
   toStatusId?: number;
   nameJson?: MultilingualText;
   allowedRoleIds?: number[];
