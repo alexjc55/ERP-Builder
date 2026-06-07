@@ -153,6 +153,28 @@ function validateValues(fields: EntityField[], values: Record<string, unknown>):
         cleaned[field.fieldKey] = num;
         break;
       }
+      case "file": {
+        // A file value is an object: { path, name, contentType?, size? }. The path
+        // must point into our private object dir (uploaded via the presigned flow);
+        // we never trust an arbitrary client-supplied path or external URL here.
+        if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+          return { error: `Field "${field.fieldKey}" must be a file` };
+        }
+        const obj = raw as Record<string, unknown>;
+        const path = obj.path;
+        const name = obj.name;
+        if (typeof path !== "string" || !path.startsWith("/objects/")) {
+          return { error: `Field "${field.fieldKey}" has an invalid file path` };
+        }
+        if (typeof name !== "string" || name.trim() === "") {
+          return { error: `Field "${field.fieldKey}" file must have a name` };
+        }
+        const cleanedFile: Record<string, unknown> = { path, name: name.trim() };
+        if (typeof obj.contentType === "string" && obj.contentType.length > 0) cleanedFile.contentType = obj.contentType;
+        if (typeof obj.size === "number" && Number.isFinite(obj.size)) cleanedFile.size = obj.size;
+        cleaned[field.fieldKey] = cleanedFile;
+        break;
+      }
       default: {
         // Unknown field type: store as-is to avoid blocking on future types.
         cleaned[field.fieldKey] = raw;

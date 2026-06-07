@@ -66,14 +66,24 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  uploadFile,
+  openObjectInNewTab,
+  fetchObjectBlobUrl,
+  detectUrlPreview,
+  contentTypeKind,
+  isFileValue,
+  type FileValue,
+} from "@/lib/storage";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useML, useT } from "@/lib/i18n";
 import { FieldConfigDialog } from "@/components/FieldConfigDialog";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion } from "lucide-react";
 
 const NO_STATUS = "__none__";
 const NO_VIEW = "__all__";
@@ -87,17 +97,19 @@ function extractError(err: unknown): string | undefined {
   return undefined;
 }
 
-type FormState = Record<string, string | number | boolean>;
+type CellValue = string | number | boolean | FileValue;
+type FormState = Record<string, CellValue>;
 
-function emptyForField(field: Field): string | number | boolean {
+function emptyForField(field: Field): CellValue {
   if (field.fieldType === "boolean") return false;
   if (field.fieldType === "number") return "";
   return "";
 }
 
-function valueToForm(field: Field, value: unknown): string | number | boolean {
+function valueToForm(field: Field, value: unknown): CellValue {
   if (field.fieldType === "boolean") return value === true;
   if (field.fieldType === "number") return typeof value === "number" ? value : "";
+  if (field.fieldType === "file") return isFileValue(value) ? value : "";
   return typeof value === "string" ? value : value == null ? "" : String(value);
 }
 
@@ -135,13 +147,121 @@ function renderCellValue(field: Field, value: unknown, userNames?: Map<number, s
     return <span className="text-slate-700">{name ?? `#${value}`}</span>;
   }
   if (field.fieldType === "url") {
-    return (
-      <a href={String(value)} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
-        {String(value)}
-      </a>
-    );
+    return <UrlPreviewCell url={String(value)} />;
+  }
+  if (field.fieldType === "file") {
+    if (!isFileValue(value)) return <span className="text-slate-300">—</span>;
+    return <FileCell value={value} />;
   }
   return <span className="text-slate-700">{String(value)}</span>;
+}
+
+/** Auth-gated preview of a stored object, fetched as a blob (image inline, pdf in an iframe). */
+function ObjectPreview({ path, contentType, name }: { path: string; contentType?: string; name: string }) {
+  const t = useT();
+  const kind = contentTypeKind(contentType, name);
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (kind === "other") return;
+    let active = true;
+    let made: string | null = null;
+    setUrl(null);
+    setError(false);
+    fetchObjectBlobUrl(path)
+      .then((u) => {
+        if (active) {
+          made = u;
+          setUrl(u);
+        } else {
+          URL.revokeObjectURL(u);
+        }
+      })
+      .catch(() => active && setError(true));
+    return () => {
+      active = false;
+      if (made) URL.revokeObjectURL(made);
+    };
+  }, [path, kind]);
+
+  if (kind === "other") {
+    return (
+      <div className="flex items-center gap-2 py-3 text-sm text-slate-600">
+        <FileQuestion className="h-4 w-4 shrink-0 text-slate-400" />
+        <span className="truncate">{name}</span>
+      </div>
+    );
+  }
+  if (error) {
+    return <div className="py-3 text-sm text-red-500">{t("records.filePreviewError", "Не удалось загрузить предпросмотр")}</div>;
+  }
+  if (!url) {
+    return (
+      <div className="flex h-40 items-center justify-center">
+        <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+  if (kind === "image") {
+    return <img src={url} alt={name} className="max-h-64 w-full rounded object-contain" />;
+  }
+  return <iframe src={url} title={name} className="h-64 w-full rounded border-0" />;
+}
+
+/** A filled file cell: a named link that opens the file, with a hover preview. */
+function FileCell({ value }: { value: FileValue }) {
+  return (
+    <HoverCard openDelay={200}>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            void openObjectInNewTab(value.path);
+          }}
+          className="inline-flex max-w-full items-center gap-1.5 text-blue-600 hover:underline"
+        >
+          <FileText className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">{value.name}</span>
+        </button>
+      </HoverCardTrigger>
+      <HoverCardContent className="w-80 p-2" onClick={(e) => e.stopPropagation()}>
+        <ObjectPreview path={value.path} contentType={value.contentType} name={value.name} />
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
+
+/** A url cell: a link, plus a hover preview when it points to an image, pdf, or Google Drive file. */
+function UrlPreviewCell({ url }: { url: string }) {
+  const preview = detectUrlPreview(url);
+  const link = (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      className="text-blue-600 hover:underline"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {url}
+    </a>
+  );
+  if (preview.kind === null) return link;
+  return (
+    <HoverCard openDelay={200}>
+      <HoverCardTrigger asChild>
+        <span className="inline-block max-w-full truncate align-bottom">{link}</span>
+      </HoverCardTrigger>
+      <HoverCardContent className="w-80 p-2" onClick={(e) => e.stopPropagation()}>
+        {preview.kind === "image" ? (
+          <img src={preview.src} alt={url} className="max-h-64 w-full rounded object-contain" />
+        ) : (
+          <iframe src={preview.src} title={url} className="h-64 w-full rounded border-0" />
+        )}
+      </HoverCardContent>
+    </HoverCard>
+  );
 }
 
 // A dependent-filter dropdown for one opt-in field. Options are fetched lazily on open
@@ -609,7 +729,7 @@ export function EntityRecords({ entityId }: { entityId: number }) {
 
   // Coerce a raw form value into the JSON shape the API expects for one field.
   // Empty string is sent verbatim to clear an optional field (server drops empties).
-  const cellValueForPayload = (field: Field, raw: string | number | boolean): unknown => {
+  const cellValueForPayload = (field: Field, raw: CellValue): unknown => {
     if (field.fieldType === "boolean") return Boolean(raw);
     if (raw === "" || raw === undefined || raw === null) return "";
     if (field.fieldType === "number") return Number(raw);
@@ -617,7 +737,7 @@ export function EntityRecords({ entityId }: { entityId: number }) {
     return raw;
   };
 
-  const commitCell = (record: EntityRecord, field: Field, raw: string | number | boolean) => {
+  const commitCell = (record: EntityRecord, field: Field, raw: CellValue) => {
     const stored = (record.valuesJson ?? {})[field.fieldKey];
     const next = cellValueForPayload(field, raw);
     const normalizedStored =
@@ -1495,21 +1615,25 @@ function InlineCellEditor({
   onCancel,
 }: {
   field: Field;
-  initial: string | number | boolean;
+  initial: CellValue;
   userOptions: UserOption[];
-  onCommit: (raw: string | number | boolean) => void;
+  onCommit: (raw: CellValue) => void;
   onCancel: () => void;
 }) {
   const t = useT();
-  const [draft, setDraft] = useState<string | number | boolean>(initial);
+  const [draft, setDraft] = useState<CellValue>(initial);
   const cancelRef = useRef(false);
   const committedRef = useRef(false);
 
-  const commitOnce = (raw: string | number | boolean) => {
+  const commitOnce = (raw: CellValue) => {
     if (committedRef.current) return;
     committedRef.current = true;
     onCommit(raw);
   };
+
+  if (field.fieldType === "file") {
+    return <InlineFileEditor initial={initial} onCommit={commitOnce} onCancel={onCancel} />;
+  }
 
   if (field.fieldType === "select" || field.fieldType === "user") {
     const options =
@@ -1580,13 +1704,15 @@ function FieldInput({
   userOptions = [],
 }: {
   field: Field;
-  value: string | number | boolean | undefined;
-  onChange: (v: string | number | boolean) => void;
+  value: CellValue | undefined;
+  onChange: (v: CellValue) => void;
   disabled?: boolean;
   userOptions?: UserOption[];
 }) {
   const t = useT();
   switch (field.fieldType) {
+    case "file":
+      return <FileFieldInput value={value} onChange={onChange} disabled={disabled} />;
     case "textarea":
       return <Textarea value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} disabled={disabled} />;
     case "boolean":
@@ -1651,6 +1777,120 @@ function FieldInput({
     default:
       return <Input value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} disabled={disabled} />;
   }
+}
+
+/**
+ * File picker for a `file`-type field: uploads via the presigned flow and keeps
+ * an editable display name. Used both in the record dialog/add-row (via FieldInput)
+ * and inside the inline editor.
+ */
+function FileFieldInput({
+  value,
+  onChange,
+  disabled = false,
+  compact = false,
+}: {
+  value: unknown;
+  onChange: (v: FileValue | "") => void;
+  disabled?: boolean;
+  compact?: boolean;
+}) {
+  const t = useT();
+  const { toast } = useToast();
+  const fileValue = isFileValue(value) ? value : null;
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handlePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    try {
+      const res = await uploadFile(file);
+      onChange({
+        path: res.path,
+        name: fileValue?.name?.trim() ? fileValue.name : file.name,
+        contentType: res.contentType,
+        size: res.size,
+      });
+    } catch {
+      toast({ title: t("records.fileUploadError", "Не удалось загрузить файл"), variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <input ref={inputRef} type="file" className="hidden" onChange={handlePick} disabled={disabled || uploading} />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={compact ? "h-8" : undefined}
+          disabled={disabled || uploading}
+          onClick={() => inputRef.current?.click()}
+        >
+          {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+          <span className="ml-1.5">
+            {fileValue ? t("records.fileReplace", "Заменить файл") : t("records.fileUpload", "Загрузить файл")}
+          </span>
+        </Button>
+        {fileValue && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-slate-500"
+            disabled={disabled}
+            title={t("records.fileRemove", "Удалить файл")}
+            onClick={() => onChange("")}
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        )}
+      </div>
+      {fileValue && (
+        <Input
+          value={fileValue.name}
+          onChange={(e) => onChange({ ...fileValue, name: e.target.value })}
+          placeholder={t("records.fileDisplayName", "Отображаемое имя")}
+          disabled={disabled}
+          className={compact ? "h-8 text-sm" : undefined}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Inline (in-cell) file editor with a draft + explicit Save, so renaming does not
+ *  commit on every keystroke. */
+function InlineFileEditor({
+  initial,
+  onCommit,
+  onCancel,
+}: {
+  initial: CellValue;
+  onCommit: (v: CellValue) => void;
+  onCancel: () => void;
+}) {
+  const t = useT();
+  const [draft, setDraft] = useState<FileValue | "">(isFileValue(initial) ? initial : "");
+  return (
+    <div className="min-w-[220px] space-y-2 rounded-md border border-blue-200 bg-white p-2 shadow-sm">
+      <FileFieldInput value={draft} onChange={setDraft} compact />
+      <div className="flex items-center gap-1">
+        <Button size="sm" className="h-7 bg-blue-600 hover:bg-blue-700" onClick={() => onCommit(draft)}>
+          {t("records.save", "Сохранить")}
+        </Button>
+        <Button size="sm" variant="ghost" className="h-7 text-slate-500" onClick={onCancel}>
+          {t("records.cancel", "Отмена")}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 /** Best-effort human label for a record: first non-empty field value, else `#id`. */

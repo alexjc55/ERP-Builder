@@ -17,3 +17,4 @@
 - [ERP i18n](erp-i18n.md) — how erp-platform i18n is wired and how to keep translation seeding complete.
 - [Orval param collision](orval-param-collision.md) — why adding a query param to a path-param GET breaks api-zod codegen, and how to avoid it.
 - [Drizzle pg error cause](drizzle-pg-error-cause.md) — pg SQLSTATE codes live on err.cause behind Drizzle; constraint-violation handlers must walk the cause chain, not check top-level .code.
+- [Object/file fields](object-file-fields.md) — "file" field stores {path,name,...} JSONB; object serving must re-apply the records field/row/entity boundary (reference lookup), not auth-only or uploader ACL.

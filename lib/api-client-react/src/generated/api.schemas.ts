@@ -13,6 +13,32 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface UploadUrlRequest {
+  /**
+     * Original file name.
+     * @minLength 1
+     */
+  name: string;
+  /**
+     * File size in bytes.
+     * @minimum 1
+     */
+  size: number;
+  /**
+     * MIME type of the file (e.g. `image/jpeg`).
+     * @minLength 1
+     */
+  contentType: string;
+}
+
+export interface UploadUrlResponse {
+  /** Presigned GCS URL for PUT upload. */
+  uploadURL: string;
+  /** Normalized object path (e.g. `/objects/uploads/uuid`). */
+  objectPath: string;
+  metadata?: UploadUrlRequest;
+}
+
 export interface SuccessResponse {
   success: boolean;
   message?: string;
@@ -497,6 +523,7 @@ export const FieldType = {
   url: 'url',
   phone: 'phone',
   user: 'user',
+  file: 'file',
 } as const;
 
 export type FieldAccess = typeof FieldAccess[keyof typeof FieldAccess];

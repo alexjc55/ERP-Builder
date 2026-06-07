@@ -17,6 +17,7 @@ import dashboardRouter from "./dashboard";
 import auditLogRouter from "./audit-log";
 import eventsRouter from "./events";
 import modulesRouter from "./modules";
+import storageRouter from "./storage";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use(dashboardRouter);
 router.use(auditLogRouter);
 router.use(eventsRouter);
 router.use(modulesRouter);
+router.use(storageRouter);
 
 export default router;

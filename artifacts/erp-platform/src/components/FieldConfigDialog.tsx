@@ -60,6 +60,7 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "url", label: "Ссылка (URL)" },
   { value: "phone", label: "Телефон" },
   { value: "user", label: "Пользователь" },
+  { value: "file", label: "Файл" },
 ];
 
 const FIELD_ACCESS_OPTIONS: { value: FieldAccess; label: string }[] = [

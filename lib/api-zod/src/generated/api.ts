@@ -9,6 +9,39 @@ import * as zod from 'zod';
 
 
 /**
+ * Returns a presigned GCS URL for direct upload. The client sends JSON
+metadata here, then uploads the file directly to the returned URL.
+
+ * @summary Request a presigned URL for file upload
+ */
+
+
+
+
+
+export const RequestUploadUrlBody = zod.object({
+  "name": zod.string().min(1).describe('Original file name.'),
+  "size": zod.number().min(1).describe('File size in bytes.'),
+  "contentType": zod.string().min(1).describe('MIME type of the file (e.g. `image\/jpeg`).')
+})
+
+
+
+
+
+
+export const RequestUploadUrlResponse = zod.object({
+  "uploadURL": zod.string().url().describe('Presigned GCS URL for PUT upload.'),
+  "objectPath": zod.string().describe('Normalized object path (e.g. `\/objects\/uploads\/uuid`).'),
+  "metadata": zod.object({
+  "name": zod.string().min(1).describe('Original file name.'),
+  "size": zod.number().min(1).describe('File size in bytes.'),
+  "contentType": zod.string().min(1).describe('MIME type of the file (e.g. `image\/jpeg`).')
+}).optional()
+})
+
+
+/**
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -1052,7 +1085,7 @@ export const ListEntityFieldsResponseItem = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
@@ -1091,7 +1124,7 @@ export const CreateEntityFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file']),
   "isRequired": zod.boolean().default(createEntityFieldBodyIsRequiredDefault),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()).optional(),
@@ -1124,7 +1157,7 @@ export const GetFieldResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
@@ -1157,7 +1190,7 @@ export const UpdateFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user']).optional(),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file']).optional(),
   "isRequired": zod.boolean().optional(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()).optional(),
@@ -1182,7 +1215,7 @@ export const UpdateFieldResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),

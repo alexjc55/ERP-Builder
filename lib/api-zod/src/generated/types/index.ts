@@ -102,6 +102,8 @@ export * from './translationUpdate';
 export * from './updateMeInput';
 export * from './updateMeInputDirection';
 export * from './updateMeInputLanguage';
+export * from './uploadUrlRequest';
+export * from './uploadUrlResponse';
 export * from './user';
 export * from './userDirection';
 export * from './userInput';
