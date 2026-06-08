@@ -41,6 +41,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Loader2, ArrowLeft, CircleDot, Star, Flag, Archive, ChevronUp, ChevronDown } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
+import { slugifyKey, uniqueKey } from "@/lib/keys";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
@@ -160,8 +161,13 @@ export default function EntityStatusesPage() {
   };
 
   const handleSubmit = () => {
+    const existingKeys = new Set(
+      statuses.filter((s: Status) => s.id !== editingStatus?.id).map((s: Status) => s.statusKey),
+    );
+    const nameForKey = (nameJson.en || nameJson.ru || nameJson.he || "").toString();
+    const resolvedKey = statusKey.trim() || uniqueKey(slugifyKey(nameForKey) || "status", existingKeys);
     const payload = {
-      statusKey: statusKey.trim(),
+      statusKey: resolvedKey,
       nameJson: nameJson as MultilingualText,
       color,
       isDefault,
@@ -311,11 +317,11 @@ export default function EntityStatusesPage() {
               <Input
                 value={statusKey}
                 onChange={(e) => setStatusKey(e.target.value)}
-                placeholder="in_progress"
+                placeholder={t("statuses.keyAutoPlaceholder", "Сгенерируется автоматически")}
                 className="font-mono"
               />
               <p className="text-xs text-slate-400">
-                {t("statuses.keyHintPre", "Только строчные латинские буквы, цифры и подчёркивания (например,")} <code>in_progress</code>{t("statuses.keyHintPost", "). Уникален в пределах сущности.")}
+                {t("statuses.keyHintAuto", "Необязательно. Если оставить пустым, ключ будет создан автоматически из названия. Только строчные латинские буквы, цифры и подчёркивания. Уникален в пределах сущности.")}
               </p>
             </div>
             <div className="space-y-1.5">

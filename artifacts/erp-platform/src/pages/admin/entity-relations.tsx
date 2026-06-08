@@ -47,6 +47,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Loader2, ArrowLeft, Share2, ArrowRight } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
+import { slugifyKey, uniqueKey } from "@/lib/keys";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
@@ -141,11 +142,16 @@ export default function EntityRelationsPage() {
   };
 
   const handleSubmit = () => {
+    const existingKeys = new Set(
+      relations.filter((r: Relation) => r.id !== editing?.id).map((r: Relation) => r.relationKey),
+    );
+    const nameForKey = (nameJson.en || nameJson.ru || nameJson.he || "").toString();
+    const resolvedKey = relationKey.trim() || uniqueKey(slugifyKey(nameForKey) || "relation", existingKeys);
     if (editing) {
       updateMutation.mutate({
         id: editing.id,
         data: {
-          relationKey: relationKey.trim(),
+          relationKey: resolvedKey,
           relationType,
           nameJson: nameJson as MultilingualText,
           inverseNameJson: inverseNameJson as MultilingualText,
@@ -160,7 +166,7 @@ export default function EntityRelationsPage() {
         entityId,
         data: {
           targetEntityId: Number(targetEntityId),
-          relationKey: relationKey.trim(),
+          relationKey: resolvedKey,
           relationType,
           nameJson: nameJson as MultilingualText,
           inverseNameJson: inverseNameJson as MultilingualText,
@@ -273,11 +279,11 @@ export default function EntityRelationsPage() {
               <Input
                 value={relationKey}
                 onChange={(e) => setRelationKey(e.target.value)}
-                placeholder="orders"
+                placeholder={t("relations.keyAutoPlaceholder", "Сгенерируется автоматически")}
                 className="font-mono"
               />
               <p className="text-xs text-slate-400">
-                {t("relations.keyHintPrefix", "Только строчные латинские буквы, цифры и подчёркивания (например, ")}<code>orders</code>{t("relations.keyHintSuffix", "). Уникален в пределах сущности.")}
+                {t("relations.keyHintAuto", "Необязательно. Если оставить пустым, ключ будет создан автоматически из названия. Только строчные латинские буквы, цифры и подчёркивания. Уникален в пределах сущности.")}
               </p>
             </div>
             <div className="space-y-1.5">

@@ -1494,6 +1494,54 @@
     "he": "אופציונלי. אם יישאר ריק, המפתח ייווצר אוטומטית מהשם. רק אותיות לטיניות קטנות, ספרות וקו תחתון. משמש באחסון הנתונים."
   },
   {
+    "key": "statuses.keyAutoPlaceholder",
+    "ru": "Сгенерируется автоматически",
+    "en": "Generated automatically",
+    "he": "ייווצר אוטומטית"
+  },
+  {
+    "key": "statuses.keyHintAuto",
+    "ru": "Необязательно. Если оставить пустым, ключ будет создан автоматически из названия. Только строчные латинские буквы, цифры и подчёркивания. Уникален в пределах сущности.",
+    "en": "Optional. If left empty, the key is generated automatically from the name. Only lowercase latin letters, digits and underscores. Unique within the entity.",
+    "he": "אופציונלי. אם יישאר ריק, המפתח ייווצר אוטומטית מהשם. רק אותיות לטיניות קטנות, ספרות וקו תחתון. ייחודי בתוך הישות."
+  },
+  {
+    "key": "views.keyAutoPlaceholder",
+    "ru": "Сгенерируется автоматически",
+    "en": "Generated automatically",
+    "he": "ייווצר אוטומטית"
+  },
+  {
+    "key": "views.keyHintAuto",
+    "ru": "Необязательно. Если оставить пустым, ключ будет создан автоматически из названия. Только строчные латинские буквы, цифры и подчёркивания. Уникален в пределах сущности.",
+    "en": "Optional. If left empty, the key is generated automatically from the name. Only lowercase latin letters, digits and underscores. Unique within the entity.",
+    "he": "אופציונלי. אם יישאר ריק, המפתח ייווצר אוטומטית מהשם. רק אותיות לטיניות קטנות, ספרות וקו תחתון. ייחודי בתוך הישות."
+  },
+  {
+    "key": "modules.keyAutoPlaceholder",
+    "ru": "Сгенерируется автоматически",
+    "en": "Generated automatically",
+    "he": "ייווצר אוטומטית"
+  },
+  {
+    "key": "modules.keyHintAuto",
+    "ru": "Необязательно. Если оставить пустым, ключ будет создан автоматически из названия. Только строчные латинские буквы, цифры и подчёркивания.",
+    "en": "Optional. If left empty, the key is generated automatically from the name. Only lowercase latin letters, digits and underscores.",
+    "he": "אופציונלי. אם יישאר ריק, המפתח ייווצר אוטומטית מהשם. רק אותיות לטיניות קטנות, ספרות וקו תחתון."
+  },
+  {
+    "key": "relations.keyAutoPlaceholder",
+    "ru": "Сгенерируется автоматически",
+    "en": "Generated automatically",
+    "he": "ייווצר אוטומטית"
+  },
+  {
+    "key": "relations.keyHintAuto",
+    "ru": "Необязательно. Если оставить пустым, ключ будет создан автоматически из названия. Только строчные латинские буквы, цифры и подчёркивания. Уникален в пределах сущности.",
+    "en": "Optional. If left empty, the key is generated automatically from the name. Only lowercase latin letters, digits and underscores. Unique within the entity.",
+    "he": "אופציונלי. אם יישאר ריק, המפתח ייווצר אוטומטית מהשם. רק אותיות לטיניות קטנות, ספרות וקו תחתון. ייחודי בתוך הישות."
+  },
+  {
     "key": "entities.fieldIcon",
     "ru": "Иконка",
     "en": "Icon",

@@ -56,6 +56,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Loader2, ArrowLeft, LayoutList, Star, Filter, ArrowDownUp, X, ChevronUp, ChevronDown, Check } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
+import { slugifyKey, uniqueKey } from "@/lib/keys";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
@@ -408,15 +409,20 @@ export default function EntityViewsPage() {
 
   const handleSubmit = () => {
     const configJson = buildConfig();
+    const existingKeys = new Set(
+      views.filter((v: View) => v.id !== editing?.id).map((v: View) => v.viewKey),
+    );
+    const nameForKey = (nameJson.en || nameJson.ru || nameJson.he || "").toString();
+    const resolvedKey = viewKey.trim() || uniqueKey(slugifyKey(nameForKey) || "view", existingKeys);
     if (editing) {
       updateMutation.mutate({
         id: editing.id,
-        data: { viewKey: viewKey.trim(), nameJson: nameJson as MultilingualText, configJson, isDefault },
+        data: { viewKey: resolvedKey, nameJson: nameJson as MultilingualText, configJson, isDefault },
       });
     } else {
       createMutation.mutate({
         entityId,
-        data: { viewKey: viewKey.trim(), nameJson: nameJson as MultilingualText, configJson, isDefault },
+        data: { viewKey: resolvedKey, nameJson: nameJson as MultilingualText, configJson, isDefault },
       });
     }
   };
@@ -540,11 +546,11 @@ export default function EntityViewsPage() {
               <Input
                 value={viewKey}
                 onChange={(e) => setViewKey(e.target.value)}
-                placeholder="active_orders"
+                placeholder={t("views.keyAutoPlaceholder", "Сгенерируется автоматически")}
                 className="font-mono"
               />
               <p className="text-xs text-slate-400">
-                {t("views.keyHint", "Только строчные латинские буквы, цифры и подчёркивания. Уникален в пределах сущности.")}
+                {t("views.keyHintAuto", "Необязательно. Если оставить пустым, ключ будет создан автоматически из названия. Только строчные латинские буквы, цифры и подчёркивания. Уникален в пределах сущности.")}
               </p>
             </div>
             <div className="flex items-center gap-2">

@@ -9,6 +9,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useML, useT } from "@/lib/i18n";
+import { slugifyKey, uniqueKey } from "@/lib/keys";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -145,7 +146,9 @@ export default function ModulesPage() {
         data: { nameJson, version, isEnabled, settingsJson: settings },
       });
     } else {
-      const key = moduleKey.trim();
+      const existingKeys = new Set(modules.map((m) => m.moduleKey));
+      const nameForKey = (nameJson.en || nameJson.ru || nameJson.he || "").toString();
+      const key = moduleKey.trim() || uniqueKey(slugifyKey(nameForKey) || "module", existingKeys);
       if (!MODULE_KEY_RE.test(key)) {
         toast({ title: t("modules.keyInvalid", "Ключ: строчные латинские буквы, цифры, _; начинается с буквы"), variant: "destructive" });
         return;
@@ -276,11 +279,13 @@ export default function ModulesPage() {
               <Input
                 value={moduleKey}
                 onChange={(e) => setModuleKey(e.target.value)}
-                placeholder="whatsapp"
+                placeholder={t("modules.keyAutoPlaceholder", "Сгенерируется автоматически")}
                 disabled={!!editing}
               />
-              {editing && (
+              {editing ? (
                 <p className="text-xs text-slate-400">{t("modules.keyImmutable", "Ключ нельзя изменить после создания")}</p>
+              ) : (
+                <p className="text-xs text-slate-400">{t("modules.keyHintAuto", "Необязательно. Если оставить пустым, ключ будет создан автоматически из названия. Только строчные латинские буквы, цифры и подчёркивания.")}</p>
               )}
             </div>
             <div className="space-y-1.5">
