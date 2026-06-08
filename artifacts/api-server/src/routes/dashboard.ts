@@ -141,6 +141,12 @@ interface WidgetConfigShape {
 // a stored field; computeTableData resolves a {name,color} value per row for it.
 const STATUS_COLUMN_KEY = "__status";
 
+// Bounds for a notes table widget grid (server-enforced so an admin can't submit
+// an arbitrarily large grid that drives heavy per-cell compute / oversized output).
+const NOTES_MAX_ROWS = 50;
+const NOTES_MAX_COLS = 20;
+const NOTES_MAX_CELLS = 400;
+
 // Bounds for a table widget's row count (admin-supplied limit is clamped here).
 const TABLE_DEFAULT_LIMIT = 10;
 const TABLE_MAX_LIMIT = 100;
@@ -434,12 +440,29 @@ async function validateNoteCellSource(s: NoteCellSourceSpec): Promise<string | n
   // metric source
   const aggregation = s.aggregation ?? "count";
   if (aggregation !== "count" && aggregation !== "sum") return "Invalid aggregation";
-  return validateMetricLike({
+  const metricErr = await validateMetricLike({
     entityId: s.entityId,
     aggregation,
     fieldKey: s.fieldKey ?? null,
     relationId: s.relationId ?? null,
   });
+  if (metricErr) return metricErr;
+
+  // statusIds (optional restriction) must belong to the source entity — mirrors
+  // table-widget status validation so a metric source can't reference foreign
+  // or non-existent statuses.
+  const statusIds = Array.from(new Set((s.statusIds ?? []).filter((n) => Number.isInteger(n))));
+  if (statusIds.length > 0) {
+    const rows = await db
+      .select({ id: entityStatusesTable.id })
+      .from(entityStatusesTable)
+      .where(and(eq(entityStatusesTable.entityId, s.entityId), inArray(entityStatusesTable.id, statusIds)));
+    const valid = new Set(rows.map((r) => r.id));
+    for (const sid of statusIds) {
+      if (!valid.has(sid)) return `Status ${sid} not found on entity ${s.entityId}`;
+    }
+  }
+  return null;
 }
 
 /**
@@ -454,8 +477,15 @@ async function validateNotesConfig(notes: NotesSpec | null | undefined): Promise
 
   const cells = notes.cells ?? [];
   if (!Array.isArray(cells)) return "Notes table cells must be a grid";
+  // Bound the grid so an admin can't submit an arbitrarily large payload that
+  // would drive heavy per-cell compute loops and oversized responses.
+  if (cells.length > NOTES_MAX_ROWS) return `Notes table exceeds ${NOTES_MAX_ROWS} rows`;
+  let totalCells = 0;
   for (const row of cells) {
     if (!Array.isArray(row)) return "Notes table row must be an array";
+    if (row.length > NOTES_MAX_COLS) return `Notes table exceeds ${NOTES_MAX_COLS} columns`;
+    totalCells += row.length;
+    if (totalCells > NOTES_MAX_CELLS) return `Notes table exceeds ${NOTES_MAX_CELLS} cells`;
     for (const cell of row) {
       if (cell.kind !== "static" && cell.kind !== "dynamic") return "Invalid cell kind";
       if (cell.kind !== "dynamic") continue;
