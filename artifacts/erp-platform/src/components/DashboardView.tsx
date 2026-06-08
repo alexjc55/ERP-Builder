@@ -6,6 +6,7 @@ import {
   useUpdateDashboardWidget,
   useDeleteDashboardWidget,
   useReorderDashboardWidgets,
+  useUpdateNotesContent,
   getListDashboardWidgetsQueryKey,
   getListEntityFieldsQueryKey,
   getListEntityStatusesQueryKey,
@@ -36,6 +37,7 @@ import {
   type NotesData,
   type NoteCellData,
   type NotesConfig,
+  type NotesContentInput,
   type NoteCell,
   type NoteCellSource,
   type NoteCellFormat,
@@ -297,6 +299,198 @@ function NotesTable({ cells, currencySymbol }: { cells: NoteCellData[][]; curren
   );
 }
 
+/** Notes content router: renders richtext or table, with inline editing when allowed. */
+function EditableNotesContent({
+  notes,
+  canEdit,
+  currencySymbol,
+  onSave,
+  saving,
+  t,
+}: {
+  notes: NotesData;
+  canEdit: boolean;
+  currencySymbol: string;
+  onSave: (data: NotesContentInput) => void;
+  saving: boolean;
+  t: (key: string, fallback: string) => string;
+}) {
+  if (notes.kind === "table") {
+    return (
+      <EditableNotesTable
+        cells={notes.cells ?? []}
+        canEdit={canEdit}
+        currencySymbol={currencySymbol}
+        onSave={onSave}
+        t={t}
+      />
+    );
+  }
+  return <EditableNotesRichText html={notes.html ?? ""} canEdit={canEdit} onSave={onSave} saving={saving} t={t} />;
+}
+
+/** Rich-text notes with hover-to-edit affordance and an inline editor. */
+function EditableNotesRichText({
+  html,
+  canEdit,
+  onSave,
+  saving,
+  t,
+}: {
+  html: string;
+  canEdit: boolean;
+  onSave: (data: NotesContentInput) => void;
+  saving: boolean;
+  t: (key: string, fallback: string) => string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(html);
+  useEffect(() => {
+    if (!editing) setDraft(html);
+  }, [html, editing]);
+
+  if (!canEdit) return <NotesRichText html={html} />;
+
+  if (editing) {
+    return (
+      <div className="flex h-full flex-col gap-2">
+        <div className="min-h-0 flex-1 overflow-auto">
+          <RichTextEditor html={draft} onChange={setDraft} t={t} />
+        </div>
+        <div className="flex shrink-0 justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setDraft(html);
+              setEditing(false);
+            }}
+          >
+            {t("dash.cancel", "Отмена")}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={saving}
+            onClick={() => {
+              onSave({ kind: "richtext", html: draft });
+              setEditing(false);
+            }}
+          >
+            {t("dash.save", "Сохранить")}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="group relative h-full">
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(html);
+          setEditing(true);
+        }}
+        title={t("dash.edit", "Редактировать")}
+        className="absolute right-0 top-0 z-10 rounded p-1 text-slate-400 opacity-0 transition hover:bg-slate-100 hover:text-slate-600 group-hover:opacity-100"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </button>
+      <NotesRichText html={html} />
+    </div>
+  );
+}
+
+/** Free-form notes table where static cells become editable inputs on click. */
+function EditableNotesTable({
+  cells,
+  canEdit,
+  currencySymbol,
+  onSave,
+  t,
+}: {
+  cells: NoteCellData[][];
+  canEdit: boolean;
+  currencySymbol: string;
+  onSave: (data: NotesContentInput) => void;
+  t: (key: string, fallback: string) => string;
+}) {
+  const [editing, setEditing] = useState<{ ri: number; ci: number } | null>(null);
+  const [draft, setDraft] = useState("");
+
+  if (!canEdit) return <NotesTable cells={cells} currencySymbol={currencySymbol} />;
+  if (!cells || cells.length === 0) {
+    return <div className="flex h-full items-center justify-center text-sm text-slate-400">{t("dash.noData", "Нет данных")}</div>;
+  }
+
+  const commit = (ri: number, ci: number, original: string) => {
+    setEditing(null);
+    if (draft !== original) onSave({ kind: "table", cells: [{ row: ri, col: ci, text: draft }] });
+  };
+
+  return (
+    <div className="h-full overflow-auto">
+      <table className="w-full border-collapse text-sm">
+        <tbody>
+          {cells.map((row, ri) => (
+            <tr key={ri}>
+              {row.map((cell, ci) => {
+                const editableCell = cell.kind === "static";
+                const isEditing = editing?.ri === ri && editing?.ci === ci;
+                if (isEditing) {
+                  return (
+                    <td key={ci} className="border border-slate-200 p-0 align-top">
+                      <textarea
+                        autoFocus
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        onBlur={() => commit(ri, ci, cell.text ?? "")}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            commit(ri, ci, cell.text ?? "");
+                          } else if (e.key === "Escape") {
+                            e.preventDefault();
+                            setEditing(null);
+                          }
+                        }}
+                        rows={1}
+                        className="w-full resize-none bg-blue-50/40 px-2 py-1.5 text-sm text-slate-700 outline-none focus:ring-1 focus:ring-blue-300"
+                      />
+                    </td>
+                  );
+                }
+                return (
+                  <td
+                    key={ci}
+                    onClick={
+                      editableCell
+                        ? () => {
+                            setDraft(cell.text ?? "");
+                            setEditing({ ri, ci });
+                          }
+                        : undefined
+                    }
+                    className={cn(
+                      "border border-slate-200 px-2 py-1.5 align-top",
+                      cell.kind === "dynamic" ? "font-medium text-slate-800 tabular-nums" : "whitespace-pre-wrap text-slate-600",
+                      editableCell && "cursor-text hover:bg-blue-50/40",
+                    )}
+                  >
+                    {renderNoteCellValue(cell, currencySymbol)}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 /** Render a chart widget's series with the chosen chart type. */
 function WidgetChart({
   chartType,
@@ -493,6 +687,8 @@ function WidgetCard({
   t,
   onOpenRecord,
   onViewAll,
+  onSaveNotesContent,
+  savingNotesContent,
 }: {
   w: DashboardWidgetData;
   ml: (v: unknown) => string;
@@ -500,6 +696,8 @@ function WidgetCard({
   t: (key: string, fallback: string) => string;
   onOpenRecord?: (id: number) => void;
   onViewAll?: () => void;
+  onSaveNotesContent?: (wid: number, data: NotesContentInput) => void;
+  savingNotesContent?: boolean;
 }) {
   if (w.widgetType === "table") {
     return (
@@ -545,10 +743,17 @@ function WidgetCard({
         <CardContent className="flex h-full flex-col p-4">
           {title && <p className="text-sm font-medium text-slate-500 truncate">{title}</p>}
           <div className={cn("flex-1 min-h-0", title && "mt-2")}>
-            {notes?.kind === "table" ? (
-              <NotesTable cells={notes.cells ?? []} currencySymbol={currencySymbol} />
+            {notes ? (
+              <EditableNotesContent
+                notes={notes}
+                canEdit={!!w.canEditNotes && !!onSaveNotesContent}
+                currencySymbol={currencySymbol}
+                onSave={(data) => onSaveNotesContent?.(w.id, data)}
+                saving={!!savingNotesContent}
+                t={t}
+              />
             ) : (
-              <NotesRichText html={notes?.html ?? ""} />
+              <NotesRichText html="" />
             )}
           </div>
         </CardContent>
@@ -879,6 +1084,13 @@ export default function DashboardView({ pageId, embedded = false }: { pageId: nu
       onError: () => toast({ title: t("dash.saveError", "Ошибка сохранения виджета"), variant: "destructive" }),
     },
   });
+  const notesContentMutation = useUpdateNotesContent({
+    mutation: {
+      onSuccess: () => invalidate(),
+      onError: () => toast({ title: t("dash.saveError", "Ошибка сохранения виджета"), variant: "destructive" }),
+    },
+  });
+  const saveNotesContent = (wid: number, data: NotesContentInput) => notesContentMutation.mutate({ wid, data });
 
   const resize = (w: DashboardWidget, patch: { gridW?: number; gridH?: number }) => {
     const gridW = Math.min(Math.max(patch.gridW ?? w.gridW, 1), GRID_COLS);
@@ -1050,6 +1262,8 @@ export default function DashboardView({ pageId, embedded = false }: { pageId: nu
                   t={t}
                   onOpenRecord={navPath ? (id) => setLocation(`${navPath}?record=${id}`) : undefined}
                   onViewAll={navPath ? () => setLocation(navPath) : undefined}
+                  onSaveNotesContent={saveNotesContent}
+                  savingNotesContent={notesContentMutation.isPending}
                 />
               </div>
             );
@@ -1148,6 +1362,7 @@ type NotesDraft = {
   html: string;
   cols: number;
   cells: NoteCellDraft[][];
+  editableRoleIds: number[];
 };
 
 function emptyStaticCell(): NoteCellDraft {
@@ -1260,9 +1475,21 @@ function WidgetEditorDialog({
         })),
       );
       const cols = nt.cols ?? (cells[0]?.length ?? 2);
-      return { mode: "table", html: "", cols, cells: cells.length > 0 ? cells : [[emptyStaticCell(), emptyStaticCell()]] };
+      return {
+        mode: "table",
+        html: "",
+        cols,
+        cells: cells.length > 0 ? cells : [[emptyStaticCell(), emptyStaticCell()]],
+        editableRoleIds: nt.editableRoleIds ?? [],
+      };
     }
-    return { mode: "richtext", html: nt?.html ?? "", cols: 2, cells: [[emptyStaticCell(), emptyStaticCell()]] };
+    return {
+      mode: "richtext",
+      html: nt?.html ?? "",
+      cols: 2,
+      cells: [[emptyStaticCell(), emptyStaticCell()]],
+      editableRoleIds: nt?.editableRoleIds ?? [],
+    };
   });
 
   const updateMetric = (i: number, patch: Partial<DraftMetric>) =>
@@ -1361,7 +1588,12 @@ function WidgetEditorDialog({
             widgetType: "notes",
             colorStyle,
             textColor,
-            notes: { kind: "table", cols: notes.cols, cells },
+            notes: {
+              kind: "table",
+              cols: notes.cols,
+              cells,
+              editableRoleIds: notes.editableRoleIds.length > 0 ? notes.editableRoleIds : null,
+            },
           },
         };
       }
@@ -1371,7 +1603,11 @@ function WidgetEditorDialog({
           widgetType: "notes",
           colorStyle,
           textColor,
-          notes: { kind: "richtext", html: notes.html },
+          notes: {
+            kind: "richtext",
+            html: notes.html,
+            editableRoleIds: notes.editableRoleIds.length > 0 ? notes.editableRoleIds : null,
+          },
         },
       };
     }
@@ -1598,7 +1834,7 @@ function WidgetEditorDialog({
           )}
 
           {widgetType === "notes" ? (
-            <NotesEditor notes={notes} entities={entities} onChange={setNotes} ml={ml} t={t} />
+            <NotesEditor notes={notes} entities={entities} roles={roles} onChange={setNotes} ml={ml} t={t} />
           ) : widgetType === "chart" ? (
             <ChartEditor chart={chart} entities={entities} onChange={(patch) => setChart((prev) => ({ ...prev, ...patch }))} ml={ml} t={t} />
           ) : widgetType === "table" ? (
@@ -2608,17 +2844,26 @@ function NoteCellDialog({
 function NotesEditor({
   notes,
   entities,
+  roles,
   onChange,
   ml,
   t,
 }: {
   notes: NotesDraft;
   entities: Entity[];
+  roles: Role[];
   onChange: (next: NotesDraft) => void;
   ml: (v: unknown) => string;
   t: (key: string, fallback: string) => string;
 }) {
   const [editing, setEditing] = useState<{ ri: number; ci: number } | null>(null);
+  const toggleEditableRole = (roleId: number) =>
+    onChange({
+      ...notes,
+      editableRoleIds: notes.editableRoleIds.includes(roleId)
+        ? notes.editableRoleIds.filter((r) => r !== roleId)
+        : [...notes.editableRoleIds, roleId],
+    });
 
   const addRow = () => {
     const row: NoteCellDraft[] = Array.from({ length: notes.cols }, () => emptyStaticCell());
@@ -2722,6 +2967,33 @@ function NotesEditor({
           )}
         </div>
       )}
+
+      <div className="space-y-1.5 rounded-md border border-slate-200 p-3">
+        <p className="text-sm font-medium text-slate-700">
+          {t("dash.notesEditableRoles", "Кто может редактировать содержимое")}
+        </p>
+        <p className="text-xs text-slate-400">
+          {t("dash.notesEditableRolesHint", "Администраторы могут редактировать всегда. Отметьте роли, которым тоже разрешено менять содержимое прямо на странице.")}
+        </p>
+        <div className="flex flex-wrap gap-2 pt-1">
+          {roles.length === 0 ? (
+            <span className="text-xs text-slate-400">{t("dash.noRoles", "Нет ролей")}</span>
+          ) : (
+            roles.map((r: Role) => (
+              <label
+                key={r.id}
+                className="flex cursor-pointer items-center gap-1.5 rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+              >
+                <Checkbox
+                  checked={notes.editableRoleIds.includes(r.id)}
+                  onCheckedChange={() => toggleEditableRole(r.id)}
+                />
+                {ml(r.nameJson)}
+              </label>
+            ))
+          )}
+        </div>
+      </div>
 
       {editing && (
         <NoteCellDialog

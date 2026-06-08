@@ -14,6 +14,7 @@ import {
   recordLinksTable,
   type DashboardWidget,
   type Relation,
+  type RolePermissions,
 } from "@workspace/db";
 import { eq, sql, gte, and, isNull, inArray, asc } from "drizzle-orm";
 import sanitizeHtml from "sanitize-html";
@@ -28,6 +29,8 @@ import {
   UpdateDashboardWidgetBody,
   DeleteDashboardWidgetParams,
   ReorderDashboardWidgetsBody,
+  UpdateNotesContentParams,
+  UpdateNotesContentBody,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -123,6 +126,7 @@ interface NotesSpec {
   html?: string | null;
   cols?: number | null;
   cells?: NoteCellSpec[][] | null;
+  editableRoleIds?: number[] | null;
 }
 
 interface WidgetConfigShape {
@@ -957,6 +961,25 @@ function widgetVisibleToRole(visibleRoleIds: number[] | null, roleId: number, su
   return visibleRoleIds.includes(roleId);
 }
 
+/**
+ * True if the requester may inline-edit a notes widget's content. Page-admins
+ * (superAdmin or the "pages" admin cap) always may. Otherwise the role must be
+ * able to access the page, the widget must be visible to it, AND its role id must
+ * be explicitly listed in the notes config's editableRoleIds (opt-in per widget).
+ */
+function canEditNotesContent(
+  perms: RolePermissions,
+  roleId: number,
+  pageId: number,
+  visibleRoleIds: number[] | null,
+  notes: NotesSpec,
+): boolean {
+  if (perms.superAdmin || perms.admin.pages) return true;
+  if (!canAccessPage(perms, pageId)) return false;
+  if (!widgetVisibleToRole(visibleRoleIds, roleId, perms.superAdmin)) return false;
+  return (notes.editableRoleIds ?? []).includes(roleId);
+}
+
 // Widgets may live on ANY page (dashboard pages render them as the whole body;
 // normal entity-bound and mirror pages render them as an analytics strip above
 // the records table). We only require that the target page exists so we never
@@ -1080,6 +1103,77 @@ router.delete("/dashboard/widgets/:wid", requireAuth, requireAdmin("pages"), asy
   res.json({ success: true, message: "Widget deleted" });
 });
 
+// Inline content edit for a notes widget. NOT gated by requireAdmin: any authed
+// user whose role is allowed (page-admin or listed in editableRoleIds) may edit.
+// The server stays the source of truth for STRUCTURE — richtext is re-sanitized
+// and a table edit can only change the text of EXISTING STATIC cells (it can never
+// add/remove cells, change the grid, or repoint a computed/dynamic cell at data).
+router.put("/dashboard/widgets/:wid/notes-content", requireAuth, async (req, res): Promise<void> => {
+  const params = UpdateNotesContentParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const parsed = UpdateNotesContentBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const [widget] = await db
+    .select()
+    .from(dashboardWidgetsTable)
+    .where(eq(dashboardWidgetsTable.id, params.data.wid))
+    .limit(1);
+  if (!widget) {
+    res.status(404).json({ error: "Widget not found" });
+    return;
+  }
+  const config = (widget.configJson ?? {}) as WidgetConfigShape;
+  if (config.widgetType !== "notes" || !config.notes) {
+    res.status(400).json({ error: "Not a notes widget" });
+    return;
+  }
+  const notes = config.notes;
+  const perms = await getPermissions(req);
+  const roleId = req.user!.roleId;
+  if (!canEditNotesContent(perms, roleId, widget.pageId, widget.visibleRoleIdsJson ?? null, notes)) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const body = parsed.data;
+  if (body.kind !== notes.kind) {
+    res.status(400).json({ error: "Edit kind does not match the widget's notes kind" });
+    return;
+  }
+
+  let nextNotes: NotesSpec;
+  if (body.kind === "richtext") {
+    nextNotes = { ...notes, html: sanitizeNotesHtml(body.html ?? "") };
+  } else {
+    const grid = (notes.cells ?? []).map((row) => row.map((c) => ({ ...c })));
+    for (const edit of body.cells ?? []) {
+      const cell = grid[edit.row]?.[edit.col];
+      if (!cell) {
+        res.status(400).json({ error: `Cell ${edit.row},${edit.col} does not exist` });
+        return;
+      }
+      if (cell.kind !== "static") {
+        res.status(400).json({ error: `Cell ${edit.row},${edit.col} is computed and cannot be edited` });
+        return;
+      }
+      cell.text = edit.text;
+    }
+    nextNotes = { ...notes, cells: grid };
+  }
+
+  await db
+    .update(dashboardWidgetsTable)
+    .set({ configJson: { ...config, notes: nextNotes } })
+    .where(eq(dashboardWidgetsTable.id, widget.id));
+  res.json({ success: true, message: "Notes content updated" });
+});
+
 router.post("/dashboard/widgets/reorder", requireAuth, requireAdmin("pages"), async (req, res): Promise<void> => {
   const parsed = ReorderDashboardWidgetsBody.safeParse(req.body);
   if (!parsed.success) {
@@ -1169,6 +1263,7 @@ router.get("/pages/:id/dashboard/data", requireAuth, async (req, res): Promise<v
           ...base,
           widgetType: "notes" as const,
           notes,
+          canEditNotes: canEditNotesContent(perms, roleId, w.pageId, w.visibleRoleIdsJson ?? null, config.notes),
           formula: null,
           format: config.format ?? null,
           metrics: {},

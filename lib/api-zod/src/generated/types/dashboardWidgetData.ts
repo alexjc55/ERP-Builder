@@ -54,4 +54,9 @@ export interface DashboardWidgetData {
   /** Computed value per metric key (admin-authoritative real totals) */
   metrics: DashboardWidgetDataMetrics;
   notes?: NotesData;
+  /**
+     * For notes widgets, whether the requesting viewer may inline-edit this widget's content (page-admin or a role in editableRoleIds).
+     * @nullable
+     */
+  canEditNotes?: boolean | null;
 }

@@ -1213,7 +1213,8 @@ export const ListDashboardWidgetsResponseItem = zod.object({
 }).describe('A live value referenced from a notes-table cell formula as {key}. Either an entity aggregate (sourceKind = metric) or a specific record\'s field value (sourceKind = record).')).nullish().describe('Live-value sources (kind = dynamic).'),
   "formula": zod.string().nullish().describe('Optional expression combining the cell\'s source keys as {key}; without it the first source value is shown.'),
   "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish().describe('Number formatting for the computed dynamic value.')
-}).describe('A single cell of a notes free-form table. Either static text or a dynamic live value.'))).nullish().describe('Row-major grid of cells (kind = table); each inner array is one row.')
+}).describe('A single cell of a notes free-form table. Either static text or a dynamic live value.'))).nullish().describe('Row-major grid of cells (kind = table); each inner array is one row.'),
+  "editableRoleIds": zod.array(zod.number()).nullish().describe('Roles (besides page-admins) whose members may inline-edit this notes widget\'s content. null\/empty = admins only.')
 }).optional(),
   "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
   "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish(),
@@ -1296,7 +1297,8 @@ export const CreateDashboardWidgetBody = zod.object({
 }).describe('A live value referenced from a notes-table cell formula as {key}. Either an entity aggregate (sourceKind = metric) or a specific record\'s field value (sourceKind = record).')).nullish().describe('Live-value sources (kind = dynamic).'),
   "formula": zod.string().nullish().describe('Optional expression combining the cell\'s source keys as {key}; without it the first source value is shown.'),
   "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish().describe('Number formatting for the computed dynamic value.')
-}).describe('A single cell of a notes free-form table. Either static text or a dynamic live value.'))).nullish().describe('Row-major grid of cells (kind = table); each inner array is one row.')
+}).describe('A single cell of a notes free-form table. Either static text or a dynamic live value.'))).nullish().describe('Row-major grid of cells (kind = table); each inner array is one row.'),
+  "editableRoleIds": zod.array(zod.number()).nullish().describe('Roles (besides page-admins) whose members may inline-edit this notes widget\'s content. null\/empty = admins only.')
 }).optional(),
   "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
   "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish(),
@@ -1370,7 +1372,8 @@ export const CreateDashboardWidgetResponse = zod.object({
 }).describe('A live value referenced from a notes-table cell formula as {key}. Either an entity aggregate (sourceKind = metric) or a specific record\'s field value (sourceKind = record).')).nullish().describe('Live-value sources (kind = dynamic).'),
   "formula": zod.string().nullish().describe('Optional expression combining the cell\'s source keys as {key}; without it the first source value is shown.'),
   "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish().describe('Number formatting for the computed dynamic value.')
-}).describe('A single cell of a notes free-form table. Either static text or a dynamic live value.'))).nullish().describe('Row-major grid of cells (kind = table); each inner array is one row.')
+}).describe('A single cell of a notes free-form table. Either static text or a dynamic live value.'))).nullish().describe('Row-major grid of cells (kind = table); each inner array is one row.'),
+  "editableRoleIds": zod.array(zod.number()).nullish().describe('Roles (besides page-admins) whose members may inline-edit this notes widget\'s content. null\/empty = admins only.')
 }).optional(),
   "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
   "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish(),
@@ -1463,7 +1466,8 @@ export const GetDashboardDataResponseItem = zod.object({
   "formula": zod.string().nullish(),
   "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish()
 }).describe('Computed view of a notes-table cell shipped to the viewer.'))).nullish()
-}).optional().describe('Computed view of a notes widget shipped to the viewer.')
+}).optional().describe('Computed view of a notes widget shipped to the viewer.'),
+  "canEditNotes": zod.boolean().nullish().describe('For notes widgets, whether the requesting viewer may inline-edit this widget\'s content (page-admin or a role in editableRoleIds).')
 })
 export const GetDashboardDataResponse = zod.array(GetDashboardDataResponseItem)
 
@@ -1510,7 +1514,8 @@ export const UpdateDashboardWidgetBody = zod.object({
 }).describe('A live value referenced from a notes-table cell formula as {key}. Either an entity aggregate (sourceKind = metric) or a specific record\'s field value (sourceKind = record).')).nullish().describe('Live-value sources (kind = dynamic).'),
   "formula": zod.string().nullish().describe('Optional expression combining the cell\'s source keys as {key}; without it the first source value is shown.'),
   "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish().describe('Number formatting for the computed dynamic value.')
-}).describe('A single cell of a notes free-form table. Either static text or a dynamic live value.'))).nullish().describe('Row-major grid of cells (kind = table); each inner array is one row.')
+}).describe('A single cell of a notes free-form table. Either static text or a dynamic live value.'))).nullish().describe('Row-major grid of cells (kind = table); each inner array is one row.'),
+  "editableRoleIds": zod.array(zod.number()).nullish().describe('Roles (besides page-admins) whose members may inline-edit this notes widget\'s content. null\/empty = admins only.')
 }).optional(),
   "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
   "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish(),
@@ -1584,7 +1589,8 @@ export const UpdateDashboardWidgetResponse = zod.object({
 }).describe('A live value referenced from a notes-table cell formula as {key}. Either an entity aggregate (sourceKind = metric) or a specific record\'s field value (sourceKind = record).')).nullish().describe('Live-value sources (kind = dynamic).'),
   "formula": zod.string().nullish().describe('Optional expression combining the cell\'s source keys as {key}; without it the first source value is shown.'),
   "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish().describe('Number formatting for the computed dynamic value.')
-}).describe('A single cell of a notes free-form table. Either static text or a dynamic live value.'))).nullish().describe('Row-major grid of cells (kind = table); each inner array is one row.')
+}).describe('A single cell of a notes free-form table. Either static text or a dynamic live value.'))).nullish().describe('Row-major grid of cells (kind = table); each inner array is one row.'),
+  "editableRoleIds": zod.array(zod.number()).nullish().describe('Roles (besides page-admins) whose members may inline-edit this notes widget\'s content. null\/empty = admins only.')
 }).optional(),
   "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
   "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish(),
@@ -1632,6 +1638,29 @@ export const DeleteDashboardWidgetParams = zod.object({
 })
 
 export const DeleteDashboardWidgetResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
+ * @summary Inline-edit a notes widget's content (admins + roles in editableRoleIds)
+ */
+export const UpdateNotesContentParams = zod.object({
+  "wid": zod.coerce.number()
+})
+
+export const UpdateNotesContentBody = zod.object({
+  "kind": zod.enum(['richtext', 'table']),
+  "html": zod.string().nullish().describe('New rich-text HTML (kind = richtext); re-sanitized server-side.'),
+  "cells": zod.array(zod.object({
+  "row": zod.number(),
+  "col": zod.number(),
+  "text": zod.string()
+})).nullish().describe('Static-cell text edits (kind = table).')
+}).describe('Inline content edit for a notes widget. richtext replaces the rich-text HTML; table updates the text of existing static cells only (computed cells and grid structure are immutable here).')
+
+export const UpdateNotesContentResponse = zod.object({
   "success": zod.boolean(),
   "message": zod.string().optional()
 })

@@ -4848,6 +4848,30 @@
     "he": "אין נתונים"
   },
   {
+    "key": "dash.edit",
+    "ru": "Редактировать",
+    "en": "Edit",
+    "he": "עריכה"
+  },
+  {
+    "key": "dash.noRoles",
+    "ru": "Нет ролей",
+    "en": "No roles",
+    "he": "אין תפקידים"
+  },
+  {
+    "key": "dash.notesEditableRoles",
+    "ru": "Кто может редактировать содержимое",
+    "en": "Who can edit the content",
+    "he": "מי יכול לערוך את התוכן"
+  },
+  {
+    "key": "dash.notesEditableRolesHint",
+    "ru": "Администраторы могут редактировать всегда. Отметьте роли, которым тоже разрешено менять содержимое прямо на странице.",
+    "en": "Admins can always edit. Check the roles that are also allowed to change the content directly on the page.",
+    "he": "מנהלים תמיד יכולים לערוך. סמן את התפקידים שמורשים גם הם לשנות את התוכן ישירות בדף."
+  },
+  {
     "key": "dash.chartNeedsEntity",
     "ru": "Выберите сущность для графика",
     "en": "Select an entity for the chart",

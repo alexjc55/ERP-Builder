@@ -62,6 +62,7 @@ import type {
   Module,
   ModuleInput,
   ModuleUpdate,
+  NotesContentInput,
   Page,
   PageField,
   PageFieldInput,
@@ -3132,6 +3133,78 @@ export const useDeleteDashboardWidget = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteDashboardWidgetMutationOptions(options));
+    }
+
+export const getUpdateNotesContentUrl = (wid: number,) => {
+
+
+
+
+  return `/api/dashboard/widgets/${wid}/notes-content`
+}
+
+/**
+ * @summary Inline-edit a notes widget's content (admins + roles in editableRoleIds)
+ */
+export const updateNotesContent = async (wid: number,
+    notesContentInput: NotesContentInput, options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getUpdateNotesContentUrl(wid),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      notesContentInput,)
+  }
+);}
+
+
+
+
+export const getUpdateNotesContentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateNotesContent>>, TError,{wid: number;data: BodyType<NotesContentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateNotesContent>>, TError,{wid: number;data: BodyType<NotesContentInput>}, TContext> => {
+
+const mutationKey = ['updateNotesContent'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateNotesContent>>, {wid: number;data: BodyType<NotesContentInput>}> = (props) => {
+          const {wid,data} = props ?? {};
+
+          return  updateNotesContent(wid,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateNotesContentMutationResult = NonNullable<Awaited<ReturnType<typeof updateNotesContent>>>
+    export type UpdateNotesContentMutationBody = BodyType<NotesContentInput>
+    export type UpdateNotesContentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Inline-edit a notes widget's content (admins + roles in editableRoleIds)
+ */
+export const useUpdateNotesContent = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateNotesContent>>, TError,{wid: number;data: BodyType<NotesContentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateNotesContent>>,
+        TError,
+        {wid: number;data: BodyType<NotesContentInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateNotesContentMutationOptions(options));
     }
 
 export const getReorderDashboardWidgetsUrl = () => {

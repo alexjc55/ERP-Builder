@@ -884,6 +884,11 @@ export interface NotesConfig {
      * @nullable
      */
   cells?: NoteCell[][] | null;
+  /**
+     * Roles (besides page-admins) whose members may inline-edit this notes widget's content. null/empty = admins only.
+     * @nullable
+     */
+  editableRoleIds?: number[] | null;
 }
 
 /**
@@ -1169,6 +1174,42 @@ export interface DashboardWidgetData {
   /** Computed value per metric key (admin-authoritative real totals) */
   metrics: DashboardWidgetDataMetrics;
   notes?: NotesData;
+  /**
+     * For notes widgets, whether the requesting viewer may inline-edit this widget's content (page-admin or a role in editableRoleIds).
+     * @nullable
+     */
+  canEditNotes?: boolean | null;
+}
+
+export type NotesContentInputKind = typeof NotesContentInputKind[keyof typeof NotesContentInputKind];
+
+
+export const NotesContentInputKind = {
+  richtext: 'richtext',
+  table: 'table',
+} as const;
+
+export type NotesContentInputCellsItem = {
+  row: number;
+  col: number;
+  text: string;
+};
+
+/**
+ * Inline content edit for a notes widget. richtext replaces the rich-text HTML; table updates the text of existing static cells only (computed cells and grid structure are immutable here).
+ */
+export interface NotesContentInput {
+  kind: NotesContentInputKind;
+  /**
+     * New rich-text HTML (kind = richtext); re-sanitized server-side.
+     * @nullable
+     */
+  html?: string | null;
+  /**
+     * Static-cell text edits (kind = table).
+     * @nullable
+     */
+  cells?: NotesContentInputCellsItem[] | null;
 }
 
 export interface Entity {

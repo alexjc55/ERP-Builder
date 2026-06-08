@@ -25,4 +25,9 @@ export interface NotesConfig {
      * @nullable
      */
   cells?: NoteCell[][] | null;
+  /**
+     * Roles (besides page-admins) whose members may inline-edit this notes widget's content. null/empty = admins only.
+     * @nullable
+     */
+  editableRoleIds?: number[] | null;
 }

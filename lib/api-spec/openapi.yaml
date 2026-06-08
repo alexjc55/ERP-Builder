@@ -950,6 +950,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  /dashboard/widgets/{wid}/notes-content:
+    put:
+      operationId: updateNotesContent
+      tags: [dashboard]
+      summary: Inline-edit a notes widget's content (admins + roles in editableRoleIds)
+      parameters:
+        - name: wid
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotesContentInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
   /dashboard/widgets/reorder:
     post:
       operationId: reorderDashboardWidgets
@@ -3662,6 +3687,11 @@ components:
             type: array
             items:
               $ref: "#/components/schemas/NoteCell"
+        editableRoleIds:
+          type: ["array", "null"]
+          items:
+            type: integer
+          description: Roles (besides page-admins) whose members may inline-edit this notes widget's content. null/empty = admins only.
 
     WidgetConfig:
       type: object
@@ -3886,6 +3916,34 @@ components:
           description: Computed value per metric key (admin-authoritative real totals)
         notes:
           $ref: "#/components/schemas/NotesData"
+        canEditNotes:
+          type: ["boolean", "null"]
+          description: For notes widgets, whether the requesting viewer may inline-edit this widget's content (page-admin or a role in editableRoleIds).
+
+    NotesContentInput:
+      type: object
+      required: [kind]
+      description: Inline content edit for a notes widget. richtext replaces the rich-text HTML; table updates the text of existing static cells only (computed cells and grid structure are immutable here).
+      properties:
+        kind:
+          type: string
+          enum: [richtext, table]
+        html:
+          type: ["string", "null"]
+          description: New rich-text HTML (kind = richtext); re-sanitized server-side.
+        cells:
+          type: ["array", "null"]
+          description: Static-cell text edits (kind = table).
+          items:
+            type: object
+            required: [row, col, text]
+            properties:
+              row:
+                type: integer
+              col:
+                type: integer
+              text:
+                type: string
 
     # ENTITIES
     Entity:
