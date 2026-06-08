@@ -112,7 +112,10 @@ import { useAuth } from "@/lib/auth";
 import { useML, useT } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Settings2, Plus, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ArrowRight, Minus, X, LayoutDashboard, GripVertical, Bold, Italic, Underline as UnderlineIcon, Strikethrough, List, ListOrdered, Link2, AlignLeft, AlignCenter, AlignRight, Heading1, Heading2, Heading3 } from "lucide-react";
+import { Settings2, Plus, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ArrowRight, Minus, X, LayoutDashboard, GripVertical, Bold, Italic, Underline as UnderlineIcon, Strikethrough, List, ListOrdered, Link2, AlignLeft, AlignCenter, AlignRight, Heading1, Heading2, Heading3, Star } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { HexColorPicker } from "react-colorful";
+import { addColorPreset, loadColorPresets, removeColorPreset } from "@/lib/colorPresets";
 import { useLocation } from "wouter";
 
 type MLValue = { ru?: string; en?: string; he?: string };
@@ -2379,7 +2382,96 @@ function MetricEditor({
   );
 }
 
-/** Toolbar button for the rich-text editor. */
+/**
+ * Toolbar text-color picker for the notes rich-text editor. Uses the same
+ * react-colorful picker + shared saved-colors palette as conditional formatting
+ * (NOT the native OS color dialog) so picked colors can be saved and reused.
+ */
+function NotesColorButton({
+  value,
+  onChange,
+  t,
+}: {
+  value: string;
+  onChange: (hex: string) => void;
+  t: (key: string, fallback: string) => string;
+}) {
+  const [presets, setPresets] = useState<string[]>(() => loadColorPresets());
+  const valid = /^#[0-9a-fA-F]{6}$/.test(value);
+  const current = valid ? value : "#111827";
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          title={t("dash.notesColor", "Цвет текста")}
+          onMouseDown={(e) => e.preventDefault()}
+          className="flex h-7 w-7 items-center justify-center rounded text-slate-600 hover:bg-slate-100"
+        >
+          <span className="h-3.5 w-3.5 rounded-sm border border-slate-300" style={{ backgroundColor: current }} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-3" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
+        <div className="format-color-picker">
+          <HexColorPicker color={current} onChange={onChange} />
+        </div>
+        <div className="mt-3 flex items-center gap-2">
+          <Input
+            className="h-7 w-[150px] font-mono text-xs"
+            value={value}
+            onChange={(e) => {
+              const v = e.target.value.trim();
+              onChange(v === "" ? "" : v.startsWith("#") ? v : `#${v}`);
+            }}
+            placeholder="#RRGGBB"
+            spellCheck={false}
+          />
+          <button
+            type="button"
+            disabled={!valid}
+            onClick={() => setPresets((prev) => addColorPreset(prev, value.toUpperCase()))}
+            className="flex h-7 items-center gap-1 rounded border border-slate-200 px-2 text-xs text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+            title={t("fields.savePreset", "Сохранить цвет в палитру")}
+          >
+            <Star className="h-3.5 w-3.5" />
+            {t("fields.savePreset", "Сохранить")}
+          </button>
+        </div>
+        <div className="mt-3 w-[200px]">
+          <p className="mb-1 text-xs text-slate-500">{t("fields.savedColors", "Сохранённые цвета")}</p>
+          {presets.length === 0 ? (
+            <p className="text-xs text-slate-400">{t("fields.noSavedColors", "Пока пусто — сохраните цвет кнопкой ★")}</p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {presets.map((p) => (
+                <div key={p} className="group relative">
+                  <button
+                    type="button"
+                    onClick={() => onChange(p)}
+                    className="h-6 w-6 shrink-0 rounded border border-slate-200"
+                    style={{ backgroundColor: p }}
+                    title={p}
+                    aria-label={`${t("fields.useColor", "Использовать цвет")} ${p}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPresets((prev) => removeColorPreset(prev, p))}
+                    className="absolute -right-1.5 -top-1.5 hidden h-3.5 w-3.5 items-center justify-center rounded-full bg-slate-600 text-white group-hover:flex"
+                    title={t("fields.removePreset", "Удалить из палитры")}
+                    aria-label={`${t("fields.removePreset", "Удалить из палитры")} ${p}`}
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function RtBtn({ active, onClick, title, children }: { active?: boolean; onClick: () => void; title: string; children: React.ReactNode }) {
   return (
     <button
@@ -2484,15 +2576,11 @@ function RichTextEditor({
         <RtBtn active={editor.isActive("link")} onClick={setLink} title={t("dash.notesLink", "Ссылка")}>
           <Link2 className="h-3.5 w-3.5" />
         </RtBtn>
-        <label className="flex h-7 w-7 cursor-pointer items-center justify-center rounded hover:bg-slate-100" title={t("dash.notesColor", "Цвет текста")}>
-          <span className="h-3.5 w-3.5 rounded-sm border border-slate-300" style={{ backgroundColor: (editor.getAttributes("textStyle").color as string) || "#111827" }} />
-          <input
-            type="color"
-            className="sr-only"
-            value={(editor.getAttributes("textStyle").color as string) || "#111827"}
-            onChange={(e) => editor.chain().focus().setColor(e.target.value).run()}
-          />
-        </label>
+        <NotesColorButton
+          value={(editor.getAttributes("textStyle").color as string) || ""}
+          onChange={(hex) => editor.chain().focus().setColor(hex).run()}
+          t={t}
+        />
         <RtBtn onClick={() => editor.chain().focus().unsetColor().run()} title={t("dash.notesColorReset", "Сбросить цвет")}>
           <span className="text-[10px] font-bold">A×</span>
         </RtBtn>
