@@ -118,7 +118,7 @@ import { PageFieldConfigDialog } from "@/components/PageFieldConfigDialog";
 import { formatFormulaResult, evaluateFormula } from "@/lib/formula";
 import { computeRowFormatting, type FormatField } from "@/lib/formatRules";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink } from "lucide-react";
 import { Link, useLocation, useSearch } from "wouter";
 import { Calendar } from "@/components/ui/calendar";
 import type { DateRange } from "react-day-picker";
@@ -286,26 +286,51 @@ function FileCell({ value }: { value: FileValue }) {
     isGDrive ? openGDriveInNewTab(value.fileId) : openObjectInNewTab(value.path);
   const loadKey = isGDrive ? `gdrive:${value.fileId}` : `server:${value.path}`;
   const load = () => (isGDrive ? fetchGDriveBlobUrl(value.fileId) : fetchObjectBlobUrl(value.path));
+  const driveLink = isGDrive ? value.webViewLink : undefined;
 
   return (
-    <HoverCard openDelay={200}>
-      <HoverCardTrigger asChild>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            void open();
-          }}
-          className="inline-flex max-w-full items-center gap-1.5 text-blue-600 hover:underline"
+    <span className="inline-flex max-w-full items-center gap-1">
+      <HoverCard openDelay={200}>
+        <HoverCardTrigger asChild>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              void open();
+            }}
+            className="inline-flex max-w-full items-center gap-1.5 text-blue-600 hover:underline"
+          >
+            {isGDrive ? (
+              <Cloud className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+            ) : (
+              <FileText className="h-3.5 w-3.5 shrink-0" />
+            )}
+            <span className="truncate">{value.name}</span>
+          </button>
+        </HoverCardTrigger>
+        <HoverCardContent className="w-80 p-2" onClick={(e) => e.stopPropagation()}>
+          {isGDrive && (
+            <div className="mb-1.5 inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
+              <Cloud className="h-3 w-3" />
+              Google Drive
+            </div>
+          )}
+          <BlobPreview load={load} loadKey={loadKey} contentType={value.contentType} name={value.name} />
+        </HoverCardContent>
+      </HoverCard>
+      {driveLink && (
+        <a
+          href={driveLink}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="shrink-0 text-slate-400 hover:text-emerald-600"
+          title="Открыть в Google Drive"
         >
-          <FileText className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{value.name}</span>
-        </button>
-      </HoverCardTrigger>
-      <HoverCardContent className="w-80 p-2" onClick={(e) => e.stopPropagation()}>
-        <BlobPreview load={load} loadKey={loadKey} contentType={value.contentType} name={value.name} />
-      </HoverCardContent>
-    </HoverCard>
+          <ExternalLink className="h-3 w-3" />
+        </a>
+      )}
+    </span>
   );
 }
 
