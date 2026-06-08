@@ -45,3 +45,15 @@ Metric/chart/table widget values are computed bypassing the viewer's row/field p
 
 ## related-values endpoint must not leak restricted linked-record ids
 `POST /pages/:pageId/related-values` re-applies the related-entity field access + related own-scope + per-page role visibility. **Only expose `linkedRecordId` when the linked row is actually visible** to the viewer. Returning the id while nulling `value` leaks existence/identity of restricted related rows (IDOR-adjacent). The id is only needed for cells the viewer can read (and, when editable, write back through), so gate it on the same `visible` flag as `value`.
+
+## relation columns ASSIGN the link, they do not edit the related value
+**Rule:** clicking a relation page-field cell opens a searchable picker that creates/changes/clears the single `record_links` row for the base record (endpoints `POST /pages/:pageId/related-candidates` + `PUT /pages/:pageId/related-link`). The column DISPLAYS the linked record's `relatedFieldKey` value read-only; it never writes back to the linked record's field. `editableColumn`/per-cell `editable` in related-values now means "assignable" and is column-wide (true even with NO link) so EMPTY cells are clickable to assign.
+
+**Why:** users expect a relation column to pick *which* record is linked, not to edit a foreign record's data through it. The old write-back behavior also made empty cells inert (could only edit an already-linked record).
+
+**How to apply:** assignability = `pagePerm === "edit" && relatedAccess !== "hidden" && canRecord(perms, baseEntityId, "update")`. The link mutation is a transactional relation-row-lock → delete existing single-link for `(relation, baseRecord, direction)` → insert (or just delete when clearing). Direction maps base↔linked onto source/target columns; cardinality unique-violation (`record_link_source_one/target_one/unique`) → 409. Use POST/PUT bodies (never GET+query) to avoid the Orval param-collision gotcha.
+
+## candidates + link endpoints must re-apply the related-field HIDDEN boundary, not just record-view + own-scope
+**Rule:** both `related-candidates` (label/search expose the field value) and `related-link` (mutation) must reject with 403 when `resolveFieldAccess(relatedField, perms, roleId, relatedEntityId) === "hidden"` — in addition to the entity record-view + own-scope checks. The UI hides the column via `editableColumn` (which already depends on non-hidden access), but a direct API call bypasses the UI.
+
+**Why:** a role with related-entity view but a HIDDEN specific related field could otherwise enumerate/search that field's values through candidates, or assign links it shouldn't, via direct API. Caught in code review. Mirror the same dual boundary (record-view gate + per-field hidden gate) that related-values applies to its column.

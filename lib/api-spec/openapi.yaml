@@ -1272,6 +1272,56 @@ paths:
               schema:
                 $ref: "#/components/schemas/PageRelatedValues"
 
+  /pages/{pageId}/related-candidates:
+    post:
+      operationId: getPageRelatedCandidates
+      tags: [pageFields]
+      summary: List linkable records of a relation page-field's related entity (RBAC-filtered, searchable)
+      parameters:
+        - name: pageId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PageRelatedCandidatesInput"
+      responses:
+        "200":
+          description: Candidate related records the viewer may link, each labelled by the related field value
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageRelatedCandidates"
+
+  /pages/{pageId}/related-link:
+    put:
+      operationId: setPageRelatedLink
+      tags: [pageFields]
+      summary: Assign, change, or clear the single link backing a relation page-field cell
+      parameters:
+        - name: pageId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PageRelatedLinkInput"
+      responses:
+        "200":
+          description: The resulting linked record id and the related field value after the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageRelatedLinkResult"
+
   /pages/{pageId}/relation-options:
     get:
       operationId: getPageRelationOptions
@@ -3876,6 +3926,61 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PageRelatedValue"
+
+    PageRelatedCandidatesInput:
+      type: object
+      required: [fieldKey]
+      properties:
+        fieldKey:
+          type: string
+          description: The relation page-field's own key (identifies which relation to list candidates for).
+        q:
+          type: string
+          description: Optional case-insensitive search over the candidate label (related field value).
+
+    PageRelatedCandidate:
+      type: object
+      required: [id, label]
+      properties:
+        id:
+          type: integer
+          description: The related entity record id (to link to).
+        label:
+          type: string
+          description: Display label (the related field value as text).
+
+    PageRelatedCandidates:
+      type: object
+      required: [candidates]
+      properties:
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/PageRelatedCandidate"
+
+    PageRelatedLinkInput:
+      type: object
+      required: [fieldKey, recordId]
+      properties:
+        fieldKey:
+          type: string
+          description: The relation page-field's own key.
+        recordId:
+          type: integer
+          description: The base (page) record whose link is being set.
+        linkedRecordId:
+          type: ["integer", "null"]
+          description: The related record to link to, or null to clear the existing link.
+
+    PageRelatedLinkResult:
+      type: object
+      required: [linkedRecordId]
+      properties:
+        linkedRecordId:
+          type: ["integer", "null"]
+          description: The linked record id after the change (null if cleared).
+        value:
+          description: The related field value after the change (null if cleared or hidden).
 
     PageRelationOptionField:
       type: object

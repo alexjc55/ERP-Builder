@@ -28,9 +28,12 @@ import {
   useSetPageRecordValues,
   useReorderPageFields,
   useGetPageRelatedValues,
+  useGetPageRelatedCandidates,
+  useSetPageRelatedLink,
   type PageField,
   type PageRelatedColumn,
   type PageRelatedValue,
+  type PageRelatedCandidate,
   type ArchiveFilter,
   type AuditLogEntry,
   type EntityRecord,
@@ -1235,25 +1238,6 @@ export function EntityRecords({
       entityId: 0,
     }) as unknown as Field;
 
-  // Inline commit for a relation cell: the edit writes back to the *linked*
-  // record (not the page record) via the standard records update path, which
-  // re-enforces the related entity's field/row workflow boundary server-side.
-  const commitRelationCell = (
-    pf: PageField,
-    meta: PageRelatedColumn,
-    rel: PageRelatedValue | undefined,
-    raw: CellValue,
-  ) => {
-    if (!rel || rel.linkedRecordId == null || !rel.editable) { setEditingCell(null); return; }
-    const synthetic = relationAsField(pf, meta);
-    const next = cellValueForPayload(synthetic, raw);
-    const stored = rel.value;
-    const normalizedStored =
-      synthetic.fieldType === "boolean" ? Boolean(stored) : stored === undefined || stored === null ? "" : stored;
-    if (next === normalizedStored) { setEditingCell(null); return; }
-    cellUpdateMutation.mutate({ id: rel.linkedRecordId, data: { valuesJson: { [meta.relatedFieldKey]: next } } });
-  };
-
   // Whether workflow enforcement applies to a given row (mirrors the server boundary).
   // When active the status cannot be cleared and only allowed transitions are offered.
   const workflowActiveForRecord = (record: EntityRecord): boolean =>
@@ -1966,43 +1950,31 @@ export function EntityRecords({
                             const meta = relatedColMeta.get(pf.fieldKey);
                             const rel = relatedByRecord.get(record.id)?.get(pf.fieldKey);
                             const relField = relationAsField(pf, meta);
-                            const relEditable =
-                              inlineEditEnabled && !!meta?.editableColumn && !!rel?.editable && rel?.linkedRecordId != null;
-                            if (isEditingThis && relEditable && meta) {
-                              return (
-                                <td key={`pf-${pf.id}`} className="px-2 py-1.5 max-w-[260px]">
-                                  <InlineCellEditor
-                                    field={relField}
-                                    initial={valueToForm(relField, rel?.value)}
-                                    userOptions={userOptions}
-                                    onCommit={(raw) => commitRelationCell(pf, meta, rel, raw)}
-                                    onCancel={() => setEditingCell(null)}
-                                  />
-                                </td>
+                            // The relation column now ASSIGNS the link: clicking a cell opens a
+                            // searchable picker of related-entity records. A cell is assignable
+                            // column-wide (server-reported editable) regardless of whether a link
+                            // already exists, so empty ("—") cells are clickable too.
+                            const relAssignable =
+                              inlineEditEnabled && !!meta?.editableColumn && !!rel?.editable;
+                            const display =
+                              rel?.linkedRecordId == null ? (
+                                <span className="text-slate-300">—</span>
+                              ) : (
+                                renderCellValue(relField, rel?.value, userNames, cellText)
                               );
-                            }
-                            if (relField.fieldType === "boolean" && relEditable && meta) {
-                              return (
-                                <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={cellStyle}>
-                                  <Switch
-                                    checked={rel?.value === true}
-                                    onCheckedChange={(v) => commitRelationCell(pf, meta, rel, v)}
-                                  />
-                                </td>
-                              );
-                            }
                             return (
-                              <td
-                                key={`pf-${pf.id}`}
-                                onClick={relEditable ? () => setEditingCell({ recordId: record.id, fieldKey: pfKey }) : undefined}
-                                className={`px-4 py-3 max-w-[240px] truncate ${relEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
-                                style={cellStyle}
-                                title={relEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
-                              >
-                                {rel?.linkedRecordId == null ? (
-                                  <span className="text-slate-300">—</span>
+                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={cellStyle}>
+                                {relAssignable && pageId != null ? (
+                                  <RelationLinkPicker
+                                    pageId={pageId}
+                                    fieldKey={pf.fieldKey}
+                                    recordId={record.id}
+                                    currentLinkedId={rel?.linkedRecordId ?? null}
+                                    display={display}
+                                    onChanged={() => setRefreshTick((x) => x + 1)}
+                                  />
                                 ) : (
-                                  renderCellValue(relField, rel?.value, userNames, cellText)
+                                  <div className="truncate">{display}</div>
                                 )}
                               </td>
                             );
@@ -2464,6 +2436,121 @@ function filterUserOptionsByRoles(field: Field, options: UserOption[]): UserOpti
   const allowed = field.userConfigJson?.allowedRoleIds;
   if (!Array.isArray(allowed) || allowed.length === 0) return options;
   return options.filter((u) => allowed.includes(u.roleId));
+}
+
+/**
+ * Searchable picker that ASSIGNS / CHANGES / CLEARS the single link backing a
+ * relation page-field cell. Opening it lazily fetches RBAC-filtered candidates
+ * from the related entity (server-side, debounced search); selecting one calls
+ * the related-link endpoint and bumps the caller's refresh tick. Server-side
+ * filtering means the cmdk client filter is disabled (`shouldFilter={false}`).
+ */
+function RelationLinkPicker({
+  pageId,
+  fieldKey,
+  recordId,
+  currentLinkedId,
+  display,
+  onChanged,
+}: {
+  pageId: number;
+  fieldKey: string;
+  recordId: number;
+  currentLinkedId: number | null;
+  display: React.ReactNode;
+  onChanged: () => void;
+}) {
+  const t = useT();
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [candidates, setCandidates] = useState<PageRelatedCandidate[]>([]);
+  const fetchCandidates = useGetPageRelatedCandidates().mutateAsync;
+  const linkMutation = useSetPageRelatedLink();
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const handle = setTimeout(() => {
+      fetchCandidates({ pageId, data: { fieldKey, q: search.trim() || undefined } })
+        .then((res) => {
+          if (!cancelled) setCandidates(res.candidates);
+        })
+        .catch(() => {
+          if (!cancelled) setCandidates([]);
+        });
+    }, 200);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [open, search, pageId, fieldKey, fetchCandidates]);
+
+  const choose = async (linkedRecordId: number | null) => {
+    try {
+      await linkMutation.mutateAsync({ pageId, data: { fieldKey, recordId, linkedRecordId } });
+      setOpen(false);
+      setSearch("");
+      onChanged();
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        title: t("records.linkFailed", "Не удалось изменить связь"),
+        description: e instanceof Error ? e.message : undefined,
+      });
+    }
+  };
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setSearch("");
+      }}
+    >
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-2 -mx-1 rounded px-1 text-left hover:bg-blue-50/60"
+          title={t("records.clickToAssign", "Нажмите, чтобы назначить связь")}
+        >
+          <span className="truncate">{display}</span>
+          <ChevronDown className="h-4 w-4 shrink-0 opacity-40" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-64 p-0">
+        <Command shouldFilter={false}>
+          <CommandInput
+            value={search}
+            onValueChange={setSearch}
+            placeholder={t("records.relatedSearch", "Поиск записи...")}
+          />
+          <CommandList>
+            <CommandEmpty>{t("records.relatedNotFound", "Записи не найдены")}</CommandEmpty>
+            {currentLinkedId != null && (
+              <CommandGroup>
+                <CommandItem value="__clear__" onSelect={() => choose(null)} className="text-rose-600">
+                  <X className="mr-2 h-4 w-4" />
+                  {t("records.clearLink", "Очистить связь")}
+                </CommandItem>
+              </CommandGroup>
+            )}
+            <CommandGroup>
+              {candidates.map((c) => (
+                <CommandItem key={c.id} value={`${c.label} #${c.id}`} onSelect={() => choose(c.id)}>
+                  <Check
+                    className={cn("mr-2 h-4 w-4", currentLinkedId === c.id ? "opacity-100" : "opacity-0")}
+                  />
+                  <span className="truncate">{c.label || `#${c.id}`}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 /** Searchable single-select for `user`-type field values (Command + Popover). */

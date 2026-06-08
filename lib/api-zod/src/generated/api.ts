@@ -2113,6 +2113,45 @@ export const GetPageRelatedValuesResponse = zod.object({
 
 
 /**
+ * @summary List linkable records of a relation page-field's related entity (RBAC-filtered, searchable)
+ */
+export const GetPageRelatedCandidatesParams = zod.object({
+  "pageId": zod.coerce.number()
+})
+
+export const GetPageRelatedCandidatesBody = zod.object({
+  "fieldKey": zod.string().describe('The relation page-field\'s own key (identifies which relation to list candidates for).'),
+  "q": zod.string().optional().describe('Optional case-insensitive search over the candidate label (related field value).')
+})
+
+export const GetPageRelatedCandidatesResponse = zod.object({
+  "candidates": zod.array(zod.object({
+  "id": zod.number().describe('The related entity record id (to link to).'),
+  "label": zod.string().describe('Display label (the related field value as text).')
+}))
+})
+
+
+/**
+ * @summary Assign, change, or clear the single link backing a relation page-field cell
+ */
+export const SetPageRelatedLinkParams = zod.object({
+  "pageId": zod.coerce.number()
+})
+
+export const SetPageRelatedLinkBody = zod.object({
+  "fieldKey": zod.string().describe('The relation page-field\'s own key.'),
+  "recordId": zod.number().describe('The base (page) record whose link is being set.'),
+  "linkedRecordId": zod.number().nullish().describe('The related record to link to, or null to clear the existing link.')
+})
+
+export const SetPageRelatedLinkResponse = zod.object({
+  "linkedRecordId": zod.number().nullable().describe('The linked record id after the change (null if cleared).'),
+  "value": zod.unknown().optional().describe('The related field value after the change (null if cleared or hidden).')
+})
+
+
+/**
  * @summary List relations (and their candidate related fields) usable as a single-link relation page-field for this page's entity
  */
 export const GetPageRelationOptionsParams = zod.object({

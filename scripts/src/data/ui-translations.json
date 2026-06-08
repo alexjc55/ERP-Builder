@@ -2250,6 +2250,36 @@
     "he": "לא נמצאו משתמשים"
   },
   {
+    "key": "records.clickToAssign",
+    "ru": "Нажмите, чтобы назначить связь",
+    "en": "Click to assign a link",
+    "he": "לחץ כדי לשייך קישור"
+  },
+  {
+    "key": "records.relatedSearch",
+    "ru": "Поиск записи...",
+    "en": "Search record...",
+    "he": "חיפוש רשומה..."
+  },
+  {
+    "key": "records.relatedNotFound",
+    "ru": "Записи не найдены",
+    "en": "No records found",
+    "he": "לא נמצאו רשומות"
+  },
+  {
+    "key": "records.clearLink",
+    "ru": "Очистить связь",
+    "en": "Clear link",
+    "he": "נקה קישור"
+  },
+  {
+    "key": "records.linkFailed",
+    "ru": "Не удалось изменить связь",
+    "en": "Failed to change the link",
+    "he": "שינוי הקישור נכשל"
+  },
+  {
     "key": "fields.created",
     "ru": "Поле создано",
     "en": "Field created",

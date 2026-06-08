@@ -1144,6 +1144,46 @@ export interface PageRelatedValues {
   values: PageRelatedValue[];
 }
 
+export interface PageRelatedCandidatesInput {
+  /** The relation page-field's own key (identifies which relation to list candidates for). */
+  fieldKey: string;
+  /** Optional case-insensitive search over the candidate label (related field value). */
+  q?: string;
+}
+
+export interface PageRelatedCandidate {
+  /** The related entity record id (to link to). */
+  id: number;
+  /** Display label (the related field value as text). */
+  label: string;
+}
+
+export interface PageRelatedCandidates {
+  candidates: PageRelatedCandidate[];
+}
+
+export interface PageRelatedLinkInput {
+  /** The relation page-field's own key. */
+  fieldKey: string;
+  /** The base (page) record whose link is being set. */
+  recordId: number;
+  /**
+     * The related record to link to, or null to clear the existing link.
+     * @nullable
+     */
+  linkedRecordId?: number | null;
+}
+
+export interface PageRelatedLinkResult {
+  /**
+     * The linked record id after the change (null if cleared).
+     * @nullable
+     */
+  linkedRecordId: number | null;
+  /** The related field value after the change (null if cleared or hidden). */
+  value?: unknown;
+}
+
 export interface PageRelationOptionField {
   key: string;
   label: MultilingualText;

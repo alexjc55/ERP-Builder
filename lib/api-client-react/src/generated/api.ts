@@ -67,6 +67,10 @@ import type {
   PageInput,
   PageRecordValue,
   PageRecordValueInput,
+  PageRelatedCandidates,
+  PageRelatedCandidatesInput,
+  PageRelatedLinkInput,
+  PageRelatedLinkResult,
   PageRelatedValues,
   PageRelatedValuesInput,
   PageRelationOptions,
@@ -4220,6 +4224,150 @@ export const useGetPageRelatedValues = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getGetPageRelatedValuesMutationOptions(options));
+    }
+
+export const getGetPageRelatedCandidatesUrl = (pageId: number,) => {
+
+
+
+
+  return `/api/pages/${pageId}/related-candidates`
+}
+
+/**
+ * @summary List linkable records of a relation page-field's related entity (RBAC-filtered, searchable)
+ */
+export const getPageRelatedCandidates = async (pageId: number,
+    pageRelatedCandidatesInput: PageRelatedCandidatesInput, options?: RequestInit): Promise<PageRelatedCandidates> => {
+
+  return customFetch<PageRelatedCandidates>(getGetPageRelatedCandidatesUrl(pageId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      pageRelatedCandidatesInput,)
+  }
+);}
+
+
+
+
+export const getGetPageRelatedCandidatesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getPageRelatedCandidates>>, TError,{pageId: number;data: BodyType<PageRelatedCandidatesInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof getPageRelatedCandidates>>, TError,{pageId: number;data: BodyType<PageRelatedCandidatesInput>}, TContext> => {
+
+const mutationKey = ['getPageRelatedCandidates'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getPageRelatedCandidates>>, {pageId: number;data: BodyType<PageRelatedCandidatesInput>}> = (props) => {
+          const {pageId,data} = props ?? {};
+
+          return  getPageRelatedCandidates(pageId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GetPageRelatedCandidatesMutationResult = NonNullable<Awaited<ReturnType<typeof getPageRelatedCandidates>>>
+    export type GetPageRelatedCandidatesMutationBody = BodyType<PageRelatedCandidatesInput>
+    export type GetPageRelatedCandidatesMutationError = ErrorType<unknown>
+
+    /**
+ * @summary List linkable records of a relation page-field's related entity (RBAC-filtered, searchable)
+ */
+export const useGetPageRelatedCandidates = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getPageRelatedCandidates>>, TError,{pageId: number;data: BodyType<PageRelatedCandidatesInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof getPageRelatedCandidates>>,
+        TError,
+        {pageId: number;data: BodyType<PageRelatedCandidatesInput>},
+        TContext
+      > => {
+      return useMutation(getGetPageRelatedCandidatesMutationOptions(options));
+    }
+
+export const getSetPageRelatedLinkUrl = (pageId: number,) => {
+
+
+
+
+  return `/api/pages/${pageId}/related-link`
+}
+
+/**
+ * @summary Assign, change, or clear the single link backing a relation page-field cell
+ */
+export const setPageRelatedLink = async (pageId: number,
+    pageRelatedLinkInput: PageRelatedLinkInput, options?: RequestInit): Promise<PageRelatedLinkResult> => {
+
+  return customFetch<PageRelatedLinkResult>(getSetPageRelatedLinkUrl(pageId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      pageRelatedLinkInput,)
+  }
+);}
+
+
+
+
+export const getSetPageRelatedLinkMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setPageRelatedLink>>, TError,{pageId: number;data: BodyType<PageRelatedLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setPageRelatedLink>>, TError,{pageId: number;data: BodyType<PageRelatedLinkInput>}, TContext> => {
+
+const mutationKey = ['setPageRelatedLink'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setPageRelatedLink>>, {pageId: number;data: BodyType<PageRelatedLinkInput>}> = (props) => {
+          const {pageId,data} = props ?? {};
+
+          return  setPageRelatedLink(pageId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetPageRelatedLinkMutationResult = NonNullable<Awaited<ReturnType<typeof setPageRelatedLink>>>
+    export type SetPageRelatedLinkMutationBody = BodyType<PageRelatedLinkInput>
+    export type SetPageRelatedLinkMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Assign, change, or clear the single link backing a relation page-field cell
+ */
+export const useSetPageRelatedLink = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setPageRelatedLink>>, TError,{pageId: number;data: BodyType<PageRelatedLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setPageRelatedLink>>,
+        TError,
+        {pageId: number;data: BodyType<PageRelatedLinkInput>},
+        TContext
+      > => {
+      return useMutation(getSetPageRelatedLinkMutationOptions(options));
     }
 
 export const getGetPageRelationOptionsUrl = (pageId: number,) => {

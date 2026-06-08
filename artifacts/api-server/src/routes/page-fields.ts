@@ -38,6 +38,10 @@ import {
   SetPageRecordValuesBody,
   GetPageRelatedValuesParams,
   GetPageRelatedValuesBody,
+  GetPageRelatedCandidatesParams,
+  GetPageRelatedCandidatesBody,
+  SetPageRelatedLinkParams,
+  SetPageRelatedLinkBody,
   GetPageRelationOptionsParams,
   GetEntityRelationOptionsParams,
 } from "@workspace/api-zod";
@@ -688,7 +692,14 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
       : "hidden";
     const pagePerm = (pf.permissionsJson as FieldPermissions | null)?.[String(roleId)] ?? "edit";
     const relScope = effectiveScope(perms, relatedEntityId);
-    const columnEditable = pagePerm === "edit" && access === "edit";
+    // The column now ASSIGNS the link (not edits the related value): a cell is
+    // assignable when the viewer may edit this page-field column, can update the
+    // base entity's records (links belong to the base record), and the related
+    // field is not hidden (so the chosen record's label is meaningful). This is
+    // column-wide, independent of whether a link currently exists, so EMPTY cells
+    // are assignable too.
+    const columnEditable =
+      pagePerm === "edit" && access !== "hidden" && canRecord(perms, entityId, "update");
 
     columns.push({
       fieldKey: pf.fieldKey,
@@ -726,7 +737,9 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
     for (const recordId of allowedIds) {
       const rawLinkedId = linkMap.get(recordId) ?? null;
       let value: unknown = null;
-      let editable = false;
+      // Assignability is column-wide and applies even when no link exists yet, so
+      // empty cells are clickable to assign a link.
+      const editable = columnEditable;
       let visible = false;
       if (rawLinkedId != null && access !== "hidden") {
         const linkedValues = linkedMap.get(rawLinkedId);
@@ -736,7 +749,6 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
         ) {
           visible = true;
           value = linkedValues[relatedFieldKey] ?? null;
-          editable = columnEditable;
         }
       }
       // Do not leak the linked record's identifier when its content is not
@@ -748,6 +760,283 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
   }
 
   res.json({ columns, values });
+});
+
+/** Map a record_links unique-constraint violation to a friendly cardinality message. */
+function recordLinkUniqueMessage(err: unknown): string | null {
+  if (!isUniqueViolation(err)) return null;
+  const cause = err && typeof err === "object" && "cause" in err ? (err as { cause?: unknown }).cause : undefined;
+  const constraint =
+    [err, cause]
+      .map((e) => (e && typeof e === "object" && "constraint" in e ? (e as { constraint?: string }).constraint : undefined))
+      .find((c): c is string => typeof c === "string") ?? "";
+  if (constraint === "record_link_source_one" || constraint === "record_link_target_one") {
+    return "Эта запись уже связана с другой";
+  }
+  if (constraint === "record_link_unique") return "Эти записи уже связаны";
+  return "Эти записи уже связаны";
+}
+
+/**
+ * Resolve a relation page-field for assignment endpoints: the page's effective
+ * entity, the named active relation page-field, its (qualifying single-link)
+ * relation, direction, related entity, and related field key. Centralises the
+ * lookups shared by the candidates and link-set endpoints. Returns an http
+ * status + error on any failure so callers can respond uniformly.
+ */
+async function resolveRelationPageField(
+  pageId: number,
+  fieldKey: string,
+): Promise<
+  | { ok: false; status: number; error: string }
+  | {
+      ok: true;
+      entityId: number;
+      pageField: PageField;
+      relation: Relation;
+      direction: LinkDirection;
+      relatedEntityId: number;
+      relatedFieldKey: string;
+      relatedField: typeof entityFieldsTable.$inferSelect;
+    }
+> {
+  const eff = await effectiveEntityForPage(pageId);
+  if (!eff.found) return { ok: false, status: 404, error: "Page not found" };
+  if (eff.entityId == null) return { ok: false, status: 400, error: "Page has no entity" };
+  const [pageField] = await db
+    .select()
+    .from(pageFieldsTable)
+    .where(
+      and(
+        eq(pageFieldsTable.pageId, pageId),
+        eq(pageFieldsTable.fieldKey, fieldKey),
+        eq(pageFieldsTable.isActive, true),
+        eq(pageFieldsTable.fieldType, "relation"),
+      ),
+    );
+  if (!pageField) return { ok: false, status: 404, error: "Relation field not found" };
+  const cfg = pageField.relationConfigJson as RelationFieldConfig | null;
+  const relationId = cfg?.relationId ?? null;
+  const relatedFieldKey = cfg?.relatedFieldKey ?? null;
+  if (relationId == null || !relatedFieldKey) return { ok: false, status: 400, error: "Relation field is not configured" };
+  const [relation] = await db.select().from(relationsTable).where(eq(relationsTable.id, relationId));
+  if (!relation) return { ok: false, status: 400, error: "Relation not found" };
+  const direction = relationDirection(relation, eff.entityId);
+  if (!direction) return { ok: false, status: 400, error: "Relation does not yield a single linked record" };
+  const relatedEntityId = relatedEntityIdFor(relation, direction);
+  const [relatedField] = await db
+    .select()
+    .from(entityFieldsTable)
+    .where(
+      and(
+        eq(entityFieldsTable.entityId, relatedEntityId),
+        eq(entityFieldsTable.fieldKey, relatedFieldKey),
+        eq(entityFieldsTable.isActive, true),
+      ),
+    );
+  if (!relatedField) return { ok: false, status: 400, error: "Related field not found" };
+  return {
+    ok: true,
+    entityId: eff.entityId,
+    pageField,
+    relation,
+    direction,
+    relatedEntityId,
+    relatedFieldKey,
+    relatedField,
+  };
+}
+
+/**
+ * List candidate related-entity records the viewer may link to a relation
+ * page-field cell, each labelled by the related field value. RBAC: the viewer
+ * must be able to view the page's entity and the related entity (record-level),
+ * the page-field column must not be hidden for their role, and the related
+ * entity's own-row scope is applied. Supports optional case-insensitive search
+ * over the label. Backs the searchable link picker.
+ */
+router.post("/pages/:pageId/related-candidates", requireAuth, async (req, res): Promise<void> => {
+  const params = GetPageRelatedCandidatesParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const body = GetPageRelatedCandidatesBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  const resolved = await resolveRelationPageField(params.data.pageId, body.data.fieldKey);
+  if (!resolved.ok) {
+    res.status(resolved.status).json({ error: resolved.error });
+    return;
+  }
+  const { entityId, pageField, relatedEntityId, relatedFieldKey, relatedField } = resolved;
+  if (!(await assertRecord(req, res, entityId, "view"))) return;
+
+  const perms = await getPermissions(req);
+  const roleId = req.user!.roleId;
+  const userId = req.user!.userId;
+  const pagePerm = (pageField.permissionsJson as FieldPermissions | null)?.[String(roleId)] ?? "edit";
+  // Mirror the related-values column boundary: the viewer must be able to view
+  // the related entity AND the specific related field must not be hidden for
+  // their role. The label/search expose that field's value, so a hidden related
+  // field must not be enumerable or searchable through this endpoint.
+  if (pagePerm === "hidden" || !canRecord(perms, relatedEntityId, "view")) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  if (resolveFieldAccess(relatedField, perms, roleId, relatedEntityId) === "hidden") {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const relScope = effectiveScope(perms, relatedEntityId);
+  const conds: SQL[] = [eq(entityRecordsTable.entityId, relatedEntityId)];
+  if (relScope.scope === "own") conds.push(ownScopeWhere(relScope.scopeFieldKeys, userId));
+  const q = body.data.q?.trim();
+  if (q) {
+    conds.push(sql`(${entityRecordsTable.valuesJson} ->> ${relatedFieldKey}) ILIKE ${`%${q}%`}`);
+  }
+  const rows = await db
+    .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
+    .from(entityRecordsTable)
+    .where(and(...conds))
+    .orderBy(asc(entityRecordsTable.id))
+    .limit(50);
+
+  const candidates = rows.map((r) => {
+    const v = ((r.valuesJson as Record<string, unknown>) ?? {})[relatedFieldKey];
+    return { id: r.id, label: v == null ? "" : String(v) };
+  });
+  res.json({ candidates });
+});
+
+/**
+ * Assign, change, or clear the single link backing a relation page-field cell.
+ * The link belongs to the BASE (page) record, so RBAC requires: the page-field
+ * column editable for the viewer's role, update on the base entity + base
+ * own-row scope, and (when linking) view on the related entity + related
+ * own-row scope. The change is a transactional delete-then-insert of the single
+ * link for (relation, base record, direction); a cardinality conflict on the
+ * other side maps to 409.
+ */
+router.put("/pages/:pageId/related-link", requireAuth, async (req, res): Promise<void> => {
+  const params = SetPageRelatedLinkParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const body = SetPageRelatedLinkBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  const resolved = await resolveRelationPageField(params.data.pageId, body.data.fieldKey);
+  if (!resolved.ok) {
+    res.status(resolved.status).json({ error: resolved.error });
+    return;
+  }
+  const { entityId, pageField, relation, direction, relatedEntityId, relatedFieldKey, relatedField } = resolved;
+  const baseRecordId = body.data.recordId;
+  const linkedRecordId = body.data.linkedRecordId ?? null;
+
+  const perms = await getPermissions(req);
+  const roleId = req.user!.roleId;
+  const userId = req.user!.userId;
+  const pagePerm = (pageField.permissionsJson as FieldPermissions | null)?.[String(roleId)] ?? "edit";
+  // Mirror the related-values assignability boundary: the column is only
+  // assignable when the page-field column is editable for the role, the viewer
+  // can update the base entity, AND the related field is not hidden for them.
+  // Enforced here too so a direct API call cannot bypass the hidden boundary.
+  const relatedAccess = canRecord(perms, relatedEntityId, "view")
+    ? resolveFieldAccess(relatedField, perms, roleId, relatedEntityId)
+    : "hidden";
+  if (pagePerm !== "edit" || !canRecord(perms, entityId, "update") || relatedAccess === "hidden") {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  // Base record must belong to this entity and pass the viewer's own-row scope.
+  const [baseRecord] = await db
+    .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
+    .from(entityRecordsTable)
+    .where(and(eq(entityRecordsTable.id, baseRecordId), eq(entityRecordsTable.entityId, entityId)));
+  if (!baseRecord) {
+    res.status(404).json({ error: "Record not found" });
+    return;
+  }
+  const baseScope = effectiveScope(perms, entityId);
+  if (
+    baseScope.scope === "own" &&
+    !recordOwnedBy((baseRecord.valuesJson as Record<string, unknown>) ?? {}, baseScope.scopeFieldKeys, userId)
+  ) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  // When linking (not clearing), the related record must exist, belong to the
+  // related entity, and be viewable by the viewer (record perm + own-row scope).
+  let linkedValues: Record<string, unknown> | null = null;
+  if (linkedRecordId != null) {
+    if (!canRecord(perms, relatedEntityId, "view")) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    const [linked] = await db
+      .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
+      .from(entityRecordsTable)
+      .where(and(eq(entityRecordsTable.id, linkedRecordId), eq(entityRecordsTable.entityId, relatedEntityId)));
+    if (!linked) {
+      res.status(400).json({ error: "Linked record not found" });
+      return;
+    }
+    const relScope = effectiveScope(perms, relatedEntityId);
+    const lv = (linked.valuesJson as Record<string, unknown>) ?? {};
+    if (relScope.scope === "own" && !recordOwnedBy(lv, relScope.scopeFieldKeys, userId)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    linkedValues = lv;
+  }
+
+  try {
+    await db.transaction(async (tx) => {
+      // Lock the relation so the relationType copied into record_links cannot
+      // drift from the parent under a concurrent type change.
+      const [locked] = await tx
+        .select()
+        .from(relationsTable)
+        .where(eq(relationsTable.id, relation.id))
+        .limit(1)
+        .for("update");
+      if (!locked) throw new Error("relation_gone");
+      // Remove the existing single link on the base record's side, then insert
+      // the new one (or leave it cleared when linkedRecordId is null).
+      const baseCol = direction === "source" ? recordLinksTable.sourceRecordId : recordLinksTable.targetRecordId;
+      await tx.delete(recordLinksTable).where(and(eq(recordLinksTable.relationId, relation.id), eq(baseCol, baseRecordId)));
+      if (linkedRecordId != null) {
+        await tx.insert(recordLinksTable).values({
+          relationId: relation.id,
+          relationType: locked.relationType,
+          sourceRecordId: direction === "source" ? baseRecordId : linkedRecordId,
+          targetRecordId: direction === "source" ? linkedRecordId : baseRecordId,
+        });
+      }
+    });
+  } catch (err) {
+    const msg = recordLinkUniqueMessage(err);
+    if (msg) {
+      res.status(409).json({ error: msg });
+      return;
+    }
+    throw err;
+  }
+
+  // Report the resulting value. The related field's hidden boundary was already
+  // enforced above (relatedAccess !== "hidden" is required to reach this point).
+  const value = linkedRecordId != null && linkedValues != null ? (linkedValues[relatedFieldKey] ?? null) : null;
+  res.json({ linkedRecordId, value });
 });
 
 /**
