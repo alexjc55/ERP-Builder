@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   useListEntityRecords,
+  useGetRecord,
+  getGetRecordQueryKey,
   useCreateEntityRecord,
   useUpdateRecord,
   useDeleteRecord,
@@ -111,7 +113,7 @@ import { formatFormulaResult, evaluateFormula } from "@/lib/formula";
 import { computeRowFormatting, type FormatField } from "@/lib/formatRules";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { Calendar } from "@/components/ui/calendar";
 import type { DateRange } from "react-day-picker";
 import {
@@ -1051,6 +1053,40 @@ export function EntityRecords({
     setStatusId(record.statusId != null ? String(record.statusId) : NO_STATUS);
     setDialogOpen(true);
   };
+
+  // Deep-link support: a `?record=<id>` query param (e.g. from a dashboard
+  // table widget) opens that record's edit dialog, then is stripped so a
+  // refresh/back doesn't reopen it.
+  const deepLinkSearch = useSearch();
+  const [location, navigate] = useLocation();
+  const deepLinkId = useMemo(() => {
+    const raw = new URLSearchParams(deepLinkSearch).get("record");
+    const n = raw ? Number(raw) : NaN;
+    return Number.isInteger(n) && n > 0 ? n : null;
+  }, [deepLinkSearch]);
+  const { data: deepLinkRecord } = useGetRecord(deepLinkId ?? 0, {
+    query: { enabled: deepLinkId != null && canView, queryKey: getGetRecordQueryKey(deepLinkId ?? 0) },
+  });
+  const handledDeepLinkRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (deepLinkId == null) {
+      handledDeepLinkRef.current = null;
+      return;
+    }
+    if (handledDeepLinkRef.current === deepLinkId) return;
+    // Wait for field metadata before opening: openEdit() seeds the form from
+    // `fields`, so opening too early would produce an empty/mis-initialized form.
+    if (fieldsLoading || fields.length === 0) return;
+    if (deepLinkRecord && deepLinkRecord.id === deepLinkId) {
+      handledDeepLinkRef.current = deepLinkId;
+      openEdit(deepLinkRecord);
+      // Strip only the `record` param, preserving any other query params.
+      const params = new URLSearchParams(deepLinkSearch);
+      params.delete("record");
+      const qs = params.toString();
+      navigate(qs ? `${location}?${qs}` : location, { replace: true });
+    }
+  }, [deepLinkId, deepLinkRecord, deepLinkSearch, fieldsLoading, fields, location, navigate]);
 
   const handleSubmit = () => {
     // Only send fields the user can see; hidden/view-only are preserved server-side.

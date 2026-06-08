@@ -514,6 +514,8 @@ export interface Page {
   /** @nullable */
   mirrorFieldKeysJson?: string[] | null;
   isDashboard?: boolean;
+  /** Default collapsed state of the analytics widgets block above a page's records table */
+  widgetsCollapsedDefault?: boolean;
   sortOrder: number;
   isActive: boolean;
   children?: Page[];
@@ -534,6 +536,8 @@ export interface PageInput {
   /** @nullable */
   mirrorFieldKeysJson?: string[] | null;
   isDashboard?: boolean;
+  /** Default collapsed state of the analytics widgets block above a page's records table */
+  widgetsCollapsedDefault?: boolean;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -551,6 +555,8 @@ export interface PageUpdate {
   /** @nullable */
   mirrorFieldKeysJson?: string[] | null;
   isDashboard?: boolean;
+  /** Default collapsed state of the analytics widgets block above a page's records table */
+  widgetsCollapsedDefault?: boolean;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -856,6 +862,11 @@ export interface DashboardWidgetData {
   tableColumns?: TableColumn[];
   /** Rows for table widgets (admin-authoritative, status-filtered, limited) */
   tableRows?: TableRow[];
+  /**
+     * For table widgets, the source entity id (lets the client link rows to the entity's page)
+     * @nullable
+     */
+  tableEntityId?: number | null;
   /** @nullable */
   formula?: string | null;
   /** @nullable */

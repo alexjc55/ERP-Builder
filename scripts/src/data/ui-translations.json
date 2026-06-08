@@ -4152,6 +4152,42 @@
     "he": "אנליטיקה"
   },
   {
+    "key": "dash.statusColumn",
+    "ru": "Статус",
+    "en": "Status",
+    "he": "סטטוס"
+  },
+  {
+    "key": "dash.viewAll",
+    "ru": "Смотреть все",
+    "en": "View all",
+    "he": "הצג הכול"
+  },
+  {
+    "key": "dash.collapse",
+    "ru": "Свернуть",
+    "en": "Collapse",
+    "he": "כווץ"
+  },
+  {
+    "key": "dash.expand",
+    "ru": "Развернуть",
+    "en": "Expand",
+    "he": "הרחב"
+  },
+  {
+    "key": "dash.collapsedDefault",
+    "ru": "Свёрнуто по умолчанию",
+    "en": "Collapsed by default",
+    "he": "מכווץ כברירת מחדל"
+  },
+  {
+    "key": "dash.saved",
+    "ru": "Сохранено",
+    "en": "Saved",
+    "he": "נשמר"
+  },
+  {
     "key": "dash.empty",
     "ru": "Виджеты ещё не добавлены",
     "en": "No widgets yet",

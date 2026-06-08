@@ -99,6 +99,10 @@ interface WidgetConfigShape {
   textColor?: "light" | "dark" | null;
 }
 
+// Synthetic table-widget column key for the record's lifecycle status. It is not
+// a stored field; computeTableData resolves a {name,color} value per row for it.
+const STATUS_COLUMN_KEY = "__status";
+
 // Bounds for a table widget's row count (admin-supplied limit is clamped here).
 const TABLE_DEFAULT_LIMIT = 10;
 const TABLE_MAX_LIMIT = 100;
@@ -200,6 +204,9 @@ async function validateTableConfig(table: TableSpec | null | undefined): Promise
     .where(eq(entityFieldsTable.entityId, table.entityId));
   const known = new Set(fields.map((f) => f.fieldKey));
   for (const key of table.fieldKeys) {
+    // STATUS_COLUMN_KEY is a synthetic column (the record's lifecycle status),
+    // not a stored field, so it is exempt from the field-existence check.
+    if (key === STATUS_COLUMN_KEY) continue;
     if (!known.has(key)) return `Field "${key}" not found on entity ${table.entityId}`;
   }
 
@@ -366,10 +373,16 @@ async function computeTableData(
     .where(eq(entityFieldsTable.entityId, t.entityId));
   const byKey = new Map(fields.map((f) => [f.fieldKey, f]));
 
-  // Keep only valid keys, preserving the admin's configured column order.
+  // Keep only valid keys (incl. the synthetic status column), preserving the
+  // admin's configured column order. The status column carries fieldType
+  // "status"; the client renders it as a colored badge with a localized header.
+  const wantsStatus = t.fieldKeys.includes(STATUS_COLUMN_KEY);
   const columns = t.fieldKeys
-    .filter((k) => byKey.has(k))
+    .filter((k) => k === STATUS_COLUMN_KEY || byKey.has(k))
     .map((k) => {
+      if (k === STATUS_COLUMN_KEY) {
+        return { fieldKey: STATUS_COLUMN_KEY, label: "Status", fieldType: "status" };
+      }
       const f = byKey.get(k)!;
       return { fieldKey: f.fieldKey, label: resolveML(f.nameJson) || f.fieldKey, fieldType: f.fieldType };
     });
@@ -379,16 +392,36 @@ async function computeTableData(
   if (statusIds.length > 0) conds.push(inArray(entityRecordsTable.statusId, statusIds));
 
   const records = await db
-    .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
+    .select({
+      id: entityRecordsTable.id,
+      valuesJson: entityRecordsTable.valuesJson,
+      statusId: entityRecordsTable.statusId,
+    })
     .from(entityRecordsTable)
     .where(and(...conds))
     .orderBy(sql`${entityRecordsTable.createdAt} desc`)
     .limit(clampTableLimit(t.limit));
 
+  // Resolve status name/color only when the status column is requested.
+  const statusById = new Map<number, { name: string; color: string }>();
+  if (wantsStatus) {
+    const sts = await db
+      .select({ id: entityStatusesTable.id, nameJson: entityStatusesTable.nameJson, color: entityStatusesTable.color })
+      .from(entityStatusesTable)
+      .where(eq(entityStatusesTable.entityId, t.entityId));
+    for (const s of sts) statusById.set(s.id, { name: resolveML(s.nameJson) || "—", color: s.color });
+  }
+
   const rows = records.map((r) => {
     const all = (r.valuesJson ?? {}) as Record<string, unknown>;
     const values: Record<string, unknown> = {};
-    for (const c of columns) values[c.fieldKey] = all[c.fieldKey] ?? null;
+    for (const c of columns) {
+      if (c.fieldKey === STATUS_COLUMN_KEY) {
+        values[STATUS_COLUMN_KEY] = r.statusId != null ? statusById.get(r.statusId) ?? null : null;
+      } else {
+        values[c.fieldKey] = all[c.fieldKey] ?? null;
+      }
+    }
     return { id: r.id, values };
   });
 
@@ -607,6 +640,7 @@ router.get("/pages/:id/dashboard/data", requireAuth, async (req, res): Promise<v
           widgetType: "table" as const,
           tableColumns: columns,
           tableRows: rows,
+          tableEntityId: config.table.entityId,
           formula: null,
           format: config.format ?? null,
           metrics: {},

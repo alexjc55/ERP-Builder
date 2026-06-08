@@ -3050,6 +3050,9 @@ components:
             type: string
         isDashboard:
           type: boolean
+        widgetsCollapsedDefault:
+          type: boolean
+          description: Default collapsed state of the analytics widgets block above a page's records table
         sortOrder:
           type: integer
         isActive:
@@ -3087,6 +3090,10 @@ components:
             type: string
         isDashboard:
           type: boolean
+        widgetsCollapsedDefault:
+          type: boolean
+          default: false
+          description: Default collapsed state of the analytics widgets block above a page's records table
         sortOrder:
           type: integer
         isActive:
@@ -3114,6 +3121,9 @@ components:
             type: string
         isDashboard:
           type: boolean
+        widgetsCollapsedDefault:
+          type: boolean
+          description: Default collapsed state of the analytics widgets block above a page's records table
         sortOrder:
           type: integer
         isActive:
@@ -3370,6 +3380,9 @@ components:
           items:
             $ref: "#/components/schemas/TableRow"
           description: Rows for table widgets (admin-authoritative, status-filtered, limited)
+        tableEntityId:
+          type: ["integer", "null"]
+          description: For table widgets, the source entity id (lets the client link rows to the entity's page)
         formula:
           type: ["string", "null"]
         format:

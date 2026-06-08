@@ -1011,6 +1011,7 @@ export const ListPagesResponseItem = zod.object({
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
   "isDashboard": zod.boolean().optional(),
+  "widgetsCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "children": zod.array(zod.unknown()).optional(),
@@ -1023,6 +1024,7 @@ export const ListPagesResponse = zod.array(ListPagesResponseItem)
 /**
  * @summary Create a new page/menu item
  */
+export const createPageBodyWidgetsCollapsedDefaultDefault = false;
 export const createPageBodyIsActiveDefault = true;
 
 export const CreatePageBody = zod.object({
@@ -1042,6 +1044,7 @@ export const CreatePageBody = zod.object({
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
   "isDashboard": zod.boolean().optional(),
+  "widgetsCollapsedDefault": zod.boolean().default(createPageBodyWidgetsCollapsedDefaultDefault).describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createPageBodyIsActiveDefault)
 })
@@ -1072,6 +1075,7 @@ export const GetPageResponse = zod.object({
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
   "isDashboard": zod.boolean().optional(),
+  "widgetsCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "children": zod.array(zod.unknown()).optional(),
@@ -1104,6 +1108,7 @@ export const UpdatePageBody = zod.object({
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
   "isDashboard": zod.boolean().optional(),
+  "widgetsCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
@@ -1126,6 +1131,7 @@ export const UpdatePageResponse = zod.object({
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
   "isDashboard": zod.boolean().optional(),
+  "widgetsCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "children": zod.array(zod.unknown()).optional(),
@@ -1362,6 +1368,7 @@ export const GetDashboardDataResponseItem = zod.object({
   "id": zod.number(),
   "values": zod.record(zod.string(), zod.unknown()).describe('fieldKey to stored value map (only the widget\'s columns)')
 })).optional().describe('Rows for table widgets (admin-authoritative, status-filtered, limited)'),
+  "tableEntityId": zod.number().nullish().describe('For table widgets, the source entity id (lets the client link rows to the entity\'s page)'),
   "formula": zod.string().nullish(),
   "format": zod.string().nullish(),
   "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish(),

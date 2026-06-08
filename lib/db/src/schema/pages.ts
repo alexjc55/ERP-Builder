@@ -24,6 +24,10 @@ export const pagesTable = pgTable("pages", {
   // mirrorEntityId (enforced in the API and the pages editor). The renderer reads
   // this flag to pick the dashboard view over the records view.
   isDashboard: boolean("is_dashboard").notNull().default(false),
+  // Default collapsed state of the analytics widgets block shown above a page's
+  // records table. Admin-configurable; each viewer's own toggle is remembered
+  // client-side (localStorage) and falls back to this default.
+  widgetsCollapsedDefault: boolean("widgets_collapsed_default").notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

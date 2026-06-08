@@ -37,6 +37,11 @@ export interface DashboardWidgetData {
   tableColumns?: TableColumn[];
   /** Rows for table widgets (admin-authoritative, status-filtered, limited) */
   tableRows?: TableRow[];
+  /**
+     * For table widgets, the source entity id (lets the client link rows to the entity's page)
+     * @nullable
+     */
+  tableEntityId?: number | null;
   /** @nullable */
   formula?: string | null;
   /** @nullable */

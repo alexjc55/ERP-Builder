@@ -62,6 +62,20 @@ Must be enforced on **every** path that can change page type, against the **effe
 - **Tailwind purge trap:** border mode needs a `border-*` class per preset — these are kept as a literal `COLOR_BORDER` map (bg-class → border-class), never derived by string-replacing `bg-`→`border-`, or Tailwind's content scanner purges them. **Why:** dynamically-built class names aren't seen by the scanner.
 - colorStyle/textColor are metric-only in the UI (chart `color` means series color; fill would make a chart unreadable). textColor is a deliberate manual admin choice — do NOT auto-override it for contrast; the user asked to control font color themselves.
 
+## Table widgets — status column, clickable rows, "Смотреть все"
+- A table widget's `config.table.fieldKeys` may include the sentinel `"__status"` (const `STATUS_COLUMN_KEY`, declared independently in BOTH `dashboard.ts` server and `DashboardView.tsx` client — keep in lockstep). It is a synthetic column, not a stored field: `validateTableConfig` exempts it, and `computeTableData` resolves a `{name,color}` per row from `entity_statuses` (selected via `records.statusId`) and emits a column `{fieldKey:"__status", fieldType:"status"}`. Client renders it as a colored Badge.
+- **The status column is admin-authoritative like all widget values** — it does NOT re-apply the entity's field-hidden boundary. Acceptable for the same reason as metric/chart values: data is only computed/shipped for widgets the viewer is authorized to see (page access + per-widget role visibility gates).
+- The dashboard-data endpoint ships `tableEntityId` on table widgets so the client can map entity → its bound records page (`entities.pageId` → `pages.path`). Rows deep-link to `${path}?record=<id>`; a "Смотреть все" footer links to `${path}`. Both render **only when the entity has a bound page**.
+
+## Deep-link to a record (`?record=<id>`)
+- `EntityRecords` reads `?record=<id>` (wouter `useSearch`), fetches via `useGetRecord` (server-gated by the records read boundary — the deep-link inherits real RBAC, not a bypass), opens the edit dialog, then strips only the `record` param (preserving other query params) via `navigate(..., {replace:true})`.
+- **Must wait for field metadata** (`!fieldsLoading && fields.length>0`) before opening — `openEdit` seeds the form from `fields`, so opening on a cold load yields an empty form. Guard with a `handledDeepLinkRef` so it fires once per id and never loops.
+
+## Embedded widgets collapse/expand
+- The embedded analytics strip has a per-viewer collapse toggle (chevron next to "Аналитика"), shown to ALL viewers (not just editors). State precedence: localStorage `erp.widgets.collapsed.<pageId>` ("1"/"0") overrides the admin default `pages.widgetsCollapsedDefault`.
+- `collapsed` state is `boolean | null`; null = no stored override → an effect applies the page's admin default once `thisPage` loads. **Rehydrate on `pageId` change** (effect keyed on pageId re-reads localStorage) so collapse state never leaks across pages. Collapse is **embedded-only** (`isCollapsed = embedded && collapsed === true`); admin edit mode force-shows the body even when collapsed.
+- Admins set the default via a "Свёрнуто по умолчанию" checkbox in edit mode → `PUT /pages/:id { widgetsCollapsedDefault }` (in the `pages` update allowlist; reuses the `pages` cap, no new cap).
+
 ## How to apply
 - Adding a new metric aggregation type: extend the server aggregation helper AND `validateConfig`, and keep the regex-guarded cast for any numeric coercion.
 - Any new endpoint returning widget data must re-apply both authorization gates before computing values.

@@ -20,6 +20,8 @@ export interface PageInput {
   /** @nullable */
   mirrorFieldKeysJson?: string[] | null;
   isDashboard?: boolean;
+  /** Default collapsed state of the analytics widgets block above a page's records table */
+  widgetsCollapsedDefault?: boolean;
   sortOrder?: number;
   isActive?: boolean;
 }

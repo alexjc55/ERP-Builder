@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useGetDashboardData,
   useListDashboardWidgets,
@@ -13,8 +13,12 @@ import {
   useListEntityFields,
   useListEntityStatuses,
   useListRoles,
+  useListPages,
+  useUpdatePage,
+  getListPagesQueryKey,
   useGetSettings,
   getGetSettingsQueryKey,
+  type Page,
   type DashboardWidget,
   type DashboardWidgetInput,
   type DashboardWidgetData,
@@ -90,7 +94,8 @@ import { useAuth } from "@/lib/auth";
 import { useML, useT } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Settings2, Plus, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight, Minus, X, LayoutDashboard } from "lucide-react";
+import { Settings2, Plus, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ArrowRight, Minus, X, LayoutDashboard } from "lucide-react";
+import { useLocation } from "wouter";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
@@ -107,6 +112,10 @@ const COLOR_PRESETS = [
 
 const DEFAULT_COLOR = "bg-blue-600";
 const DEFAULT_ICON = "TrendingUp";
+
+// Sentinel column key for the synthetic status column in table widgets. Must
+// match STATUS_COLUMN_KEY in artifacts/api-server/src/routes/dashboard.ts.
+const STATUS_COLUMN_KEY = "__status";
 
 /**
  * Border class per preset bg class, used by the "border" color style. Kept as
@@ -317,14 +326,28 @@ function renderTableCell(value: unknown, fieldType: string): string {
   return String(value);
 }
 
+/** Render a single status-column cell as a colored badge (value = {name,color}). */
+function StatusCell({ value }: { value: unknown }) {
+  if (value == null || typeof value !== "object") return <span className="text-slate-400">—</span>;
+  const s = value as { name?: string; color?: string };
+  if (!s.name) return <span className="text-slate-400">—</span>;
+  return (
+    <Badge style={{ backgroundColor: s.color || undefined }} className="border-0 text-white font-normal">
+      {s.name}
+    </Badge>
+  );
+}
+
 /** Render a table widget: admin-chosen columns and the entity's recent rows. */
 function WidgetTable({
   columns,
   rows,
+  onRowClick,
   t,
 }: {
   columns: TableColumn[];
   rows: TableRow[];
+  onRowClick?: (id: number) => void;
   t: (key: string, fallback: string) => string;
 }) {
   if (!columns || columns.length === 0) {
@@ -334,6 +357,7 @@ function WidgetTable({
       </div>
     );
   }
+  const clickable = typeof onRowClick === "function";
   return (
     <div className="h-full overflow-auto">
       <table className="w-full border-collapse text-sm">
@@ -341,7 +365,7 @@ function WidgetTable({
           <tr>
             {columns.map((c) => (
               <th key={c.fieldKey} className="border-b border-slate-200 px-2 py-1.5 text-left font-medium text-slate-500 whitespace-nowrap">
-                {c.label}
+                {c.fieldType === "status" ? t("dash.statusColumn", "Статус") : c.label}
               </th>
             ))}
           </tr>
@@ -355,10 +379,18 @@ function WidgetTable({
             </tr>
           ) : (
             rows.map((r) => (
-              <tr key={r.id} className="hover:bg-slate-50/60">
+              <tr
+                key={r.id}
+                className={cn("hover:bg-slate-50/60", clickable && "cursor-pointer")}
+                onClick={clickable ? () => onRowClick!(r.id) : undefined}
+              >
                 {columns.map((c) => (
                   <td key={c.fieldKey} className="border-b border-slate-100 px-2 py-1.5 text-slate-700 whitespace-nowrap">
-                    {renderTableCell((r.values ?? {})[c.fieldKey], c.fieldType)}
+                    {c.fieldType === "status" ? (
+                      <StatusCell value={(r.values ?? {})[c.fieldKey]} />
+                    ) : (
+                      renderTableCell((r.values ?? {})[c.fieldKey], c.fieldType)
+                    )}
                   </td>
                 ))}
               </tr>
@@ -370,14 +402,40 @@ function WidgetTable({
   );
 }
 
-function WidgetCard({ w, ml, currencySymbol, t }: { w: DashboardWidgetData; ml: (v: unknown) => string; currencySymbol: string; t: (key: string, fallback: string) => string }) {
+function WidgetCard({
+  w,
+  ml,
+  currencySymbol,
+  t,
+  onOpenRecord,
+  onViewAll,
+}: {
+  w: DashboardWidgetData;
+  ml: (v: unknown) => string;
+  currencySymbol: string;
+  t: (key: string, fallback: string) => string;
+  onOpenRecord?: (id: number) => void;
+  onViewAll?: () => void;
+}) {
   if (w.widgetType === "table") {
     return (
       <Card className="h-full border-slate-200 shadow-sm hover:shadow-md transition-shadow">
         <CardContent className="flex h-full flex-col p-4">
-          <p className="text-sm font-medium text-slate-500 truncate">{ml(w.titleJson)}</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-medium text-slate-500 truncate">{ml(w.titleJson)}</p>
+            {onViewAll && (
+              <button
+                type="button"
+                onClick={onViewAll}
+                className="flex shrink-0 items-center gap-0.5 text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
+              >
+                {t("dash.viewAll", "Смотреть все")}
+                <ArrowRight className="h-3 w-3" />
+              </button>
+            )}
+          </div>
           <div className="flex-1 min-h-0 mt-2">
-            <WidgetTable columns={w.tableColumns ?? []} rows={w.tableRows ?? []} t={t} />
+            <WidgetTable columns={w.tableColumns ?? []} rows={w.tableRows ?? []} onRowClick={onOpenRecord} t={t} />
           </div>
         </CardContent>
       </Card>
@@ -578,6 +636,69 @@ export default function DashboardView({ pageId, embedded = false }: { pageId: nu
   const { data: settings } = useGetSettings({ query: { queryKey: getGetSettingsQueryKey() } });
   const currencySymbol = settings?.currencySymbol || "₽";
 
+  const [, setLocation] = useLocation();
+  const { data: pages = [] } = useListPages();
+  const { data: navEntities = [] } = useListEntities();
+  const thisPage = pages.find((p) => p.id === pageId);
+
+  // Resolve the records page path bound to a table widget's entity (if any), so
+  // rows can deep-link to the record and the footer can link to the full table.
+  const tableNavPath = (w: DashboardWidgetData): string | null => {
+    if (w.widgetType !== "table" || w.tableEntityId == null) return null;
+    const ent = navEntities.find((e) => e.id === w.tableEntityId);
+    if (!ent || ent.pageId == null) return null;
+    const pg = pages.find((p) => p.id === ent.pageId);
+    return pg?.path ?? null;
+  };
+
+  // Collapse/expand for the embedded analytics block. null = no stored user
+  // preference yet; once the page loads we fall back to its admin default.
+  const collapseStorageKey = `erp.widgets.collapsed.${pageId}`;
+  const [collapsed, setCollapsed] = useState<boolean | null>(() => {
+    if (typeof window === "undefined") return null;
+    const raw = window.localStorage.getItem(`erp.widgets.collapsed.${pageId}`);
+    return raw === "1" ? true : raw === "0" ? false : null;
+  });
+  // Rehydrate per page: when pageId changes, reload this page's stored override
+  // (or null so the admin default is re-applied) instead of leaking prior state.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = window.localStorage.getItem(`erp.widgets.collapsed.${pageId}`);
+    setCollapsed(raw === "1" ? true : raw === "0" ? false : null);
+  }, [pageId]);
+  useEffect(() => {
+    if (collapsed === null && thisPage) {
+      setCollapsed(thisPage.widgetsCollapsedDefault ?? false);
+    }
+  }, [collapsed, thisPage]);
+  const isCollapsed = embedded && collapsed === true;
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const base = prev ?? (thisPage?.widgetsCollapsedDefault ?? false);
+      const next = !base;
+      try {
+        window.localStorage.setItem(collapseStorageKey, next ? "1" : "0");
+      } catch {
+        /* localStorage unavailable */
+      }
+      return next;
+    });
+  };
+
+  const updatePageMutation = useUpdatePage({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListPagesQueryKey() });
+        toast({ title: t("dash.saved", "Сохранено") });
+      },
+      onError: () => toast({ title: t("dash.saveError", "Ошибка сохранения"), variant: "destructive" }),
+    },
+  });
+  const setDefaultCollapsed = (v: boolean) => {
+    if (!thisPage) return;
+    updatePageMutation.mutate({ id: pageId, data: { widgetsCollapsedDefault: v } });
+  };
+
   const invalidate = () =>
     queryClient.invalidateQueries({
       predicate: (q) => JSON.stringify(q.queryKey).includes("/dashboard/"),
@@ -640,34 +761,53 @@ export default function DashboardView({ pageId, embedded = false }: { pageId: nu
 
   return (
     <div className="space-y-4">
-      {isEditor && (
+      {(isEditor || embedded) && (
         <div className={cn("flex items-center gap-2", embedded ? "justify-between" : "justify-end")}>
-          {embedded && (
-            <span className="text-sm font-semibold text-slate-600">
-              {t("dash.analyticsSection", "Аналитика")}
-            </span>
-          )}
-          <div className="flex items-center gap-2">
-            {editMode && (
-              <Button onClick={openCreate} size="sm" className="bg-blue-600 hover:bg-blue-700 gap-2">
-                <Plus className="w-4 h-4" />
-                {t("dash.addWidget", "Добавить виджет")}
-              </Button>
-            )}
-            <Button
-              onClick={() => setEditMode((v) => !v)}
-              size="sm"
-              variant={editMode ? "default" : "outline"}
-              className="gap-2"
+          {embedded ? (
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              className="flex items-center gap-1.5 text-sm font-semibold text-slate-600 hover:text-slate-800"
+              title={isCollapsed ? t("dash.expand", "Развернуть") : t("dash.collapse", "Свернуть")}
             >
-              <Settings2 className="w-4 h-4" />
-              {editMode ? t("dash.done", "Готово") : t("dash.configure", "Настроить")}
-            </Button>
-          </div>
+              {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+              {t("dash.analyticsSection", "Аналитика")}
+            </button>
+          ) : null}
+          {isEditor && (
+            <div className="flex items-center gap-2">
+              {editMode && embedded && (
+                <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
+                  <Checkbox
+                    checked={thisPage?.widgetsCollapsedDefault ?? false}
+                    onCheckedChange={(v) => setDefaultCollapsed(v === true)}
+                    disabled={updatePageMutation.isPending}
+                  />
+                  {t("dash.collapsedDefault", "Свёрнуто по умолчанию")}
+                </label>
+              )}
+              {editMode && (
+                <Button onClick={openCreate} size="sm" className="bg-blue-600 hover:bg-blue-700 gap-2">
+                  <Plus className="w-4 h-4" />
+                  {t("dash.addWidget", "Добавить виджет")}
+                </Button>
+              )}
+              <Button
+                onClick={() => setEditMode((v) => !v)}
+                size="sm"
+                variant={editMode ? "default" : "outline"}
+                className="gap-2"
+              >
+                <Settings2 className="w-4 h-4" />
+                {editMode ? t("dash.done", "Готово") : t("dash.configure", "Настроить")}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
-      {isLoading ? (
+      {(!isCollapsed || editMode) && (
+      isLoading ? (
         embedded ? null : (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
             {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 w-full" />)}
@@ -711,19 +851,30 @@ export default function DashboardView({ pageId, embedded = false }: { pageId: nu
         <div
           className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 auto-rows-[8rem]"
         >
-          {sortedData.map((w) => (
-            <div
-              key={w.id}
-              className="min-w-0"
-              style={{
-                gridColumn: `span ${Math.min(Math.max(w.gridW || 1, 1), GRID_COLS)}`,
-                gridRow: `span ${Math.min(Math.max(w.gridH || 1, 1), GRID_ROWS_MAX)}`,
-              }}
-            >
-              <WidgetCard w={w} ml={ml} currencySymbol={currencySymbol} t={t} />
-            </div>
-          ))}
+          {sortedData.map((w) => {
+            const navPath = tableNavPath(w);
+            return (
+              <div
+                key={w.id}
+                className="min-w-0"
+                style={{
+                  gridColumn: `span ${Math.min(Math.max(w.gridW || 1, 1), GRID_COLS)}`,
+                  gridRow: `span ${Math.min(Math.max(w.gridH || 1, 1), GRID_ROWS_MAX)}`,
+                }}
+              >
+                <WidgetCard
+                  w={w}
+                  ml={ml}
+                  currencySymbol={currencySymbol}
+                  t={t}
+                  onOpenRecord={navPath ? (id) => setLocation(`${navPath}?record=${id}`) : undefined}
+                  onViewAll={navPath ? () => setLocation(navPath) : undefined}
+                />
+              </div>
+            );
+          })}
         </div>
+      )
       )}
 
       {dialogOpen && (
@@ -824,7 +975,7 @@ function WidgetEditorDialog({
         ? "table"
         : "metric",
   );
-  const [icon, setIcon] = useState(widget ? (widget.icon ?? "") : DEFAULT_ICON);
+  const [icon, setIcon] = useState(widget ? (widget.icon ?? "") : "");
   const [color, setColor] = useState(widget?.color || DEFAULT_COLOR);
   const [colorStyle, setColorStyle] = useState<"icon" | "border" | "fill">(widget?.config.colorStyle ?? "icon");
   const [textColor, setTextColor] = useState<"light" | "dark">(widget?.config.textColor ?? "light");
@@ -1406,6 +1557,10 @@ function TableEditor({
                 {ml(f.nameJson)}
               </label>
             ))}
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-600">
+              <Checkbox checked={table.fieldKeys.includes(STATUS_COLUMN_KEY)} onCheckedChange={() => toggleColumn(STATUS_COLUMN_KEY)} />
+              {t("dash.statusColumn", "Статус")}
+            </label>
           </div>
         )}
       </div>
