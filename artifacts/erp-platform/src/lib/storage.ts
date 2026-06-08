@@ -140,6 +140,11 @@ export function gdriveContentUrl(fileId: string): string {
   return `/api/google-drive/files/${encodeURIComponent(fileId)}/content`;
 }
 
+/** API serving URL for a managed Google Drive file's thumbnail (fast preview). */
+export function gdriveThumbnailUrl(fileId: string): string {
+  return `/api/google-drive/files/${encodeURIComponent(fileId)}/thumbnail`;
+}
+
 /**
  * Fetch an auth-gated URL as a blob object URL using the stored bearer token.
  * `<img>`/`<iframe>` can't carry the Authorization header, so we fetch the bytes
@@ -160,6 +165,15 @@ async function fetchAuthedBlobUrl(url: string): Promise<string> {
 /** Fetch a managed Google Drive file's content as a blob object URL. */
 export function fetchGDriveBlobUrl(fileId: string): Promise<string> {
   return fetchAuthedBlobUrl(gdriveContentUrl(fileId));
+}
+
+/**
+ * Fetch a managed Google Drive file's Google-generated thumbnail as a blob
+ * object URL (fast hover preview). Rejects when no thumbnail exists, so callers
+ * can fall back to the full-content preview. The caller must revoke the URL.
+ */
+export function fetchGDriveThumbnailBlobUrl(fileId: string): Promise<string> {
+  return fetchAuthedBlobUrl(gdriveThumbnailUrl(fileId));
 }
 
 /** Open a managed Google Drive file (proxied bytes) in a new browser tab. */

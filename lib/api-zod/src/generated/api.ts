@@ -3632,7 +3632,8 @@ export const ListGoogleDriveFoldersResponseItem = zod.object({
   "id": zod.number().describe('Internal row id.'),
   "driveFolderId": zod.string().describe('Google Drive folder id (stored on a field\'s fileConfigJson.driveFolderId).'),
   "name": zod.string(),
-  "isDefault": zod.boolean().describe('The auto-created default upload folder; cannot be removed.')
+  "isDefault": zod.boolean().describe('The auto-created default upload folder; cannot be removed.'),
+  "parentId": zod.number().nullish().describe('Internal id of the parent folder for nested subfolders; null for top-level folders.')
 })
 export const ListGoogleDriveFoldersResponse = zod.array(ListGoogleDriveFoldersResponseItem)
 
@@ -3645,14 +3646,16 @@ export const createGoogleDriveFolderBodyNameMax = 100;
 
 
 export const CreateGoogleDriveFolderBody = zod.object({
-  "name": zod.string().min(1).max(createGoogleDriveFolderBodyNameMax)
+  "name": zod.string().min(1).max(createGoogleDriveFolderBodyNameMax),
+  "parentId": zod.number().nullish().describe('Optional parent folder (internal id) to create this folder as a subfolder.')
 })
 
 export const CreateGoogleDriveFolderResponse = zod.object({
   "id": zod.number().describe('Internal row id.'),
   "driveFolderId": zod.string().describe('Google Drive folder id (stored on a field\'s fileConfigJson.driveFolderId).'),
   "name": zod.string(),
-  "isDefault": zod.boolean().describe('The auto-created default upload folder; cannot be removed.')
+  "isDefault": zod.boolean().describe('The auto-created default upload folder; cannot be removed.'),
+  "parentId": zod.number().nullish().describe('Internal id of the parent folder for nested subfolders; null for top-level folders.')
 })
 
 

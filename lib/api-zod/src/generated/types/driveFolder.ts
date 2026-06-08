@@ -14,4 +14,6 @@ export interface DriveFolder {
   name: string;
   /** The auto-created default upload folder; cannot be removed. */
   isDefault: boolean;
+  /** Internal id of the parent folder for nested subfolders; null for top-level folders. */
+  parentId?: number | null;
 }

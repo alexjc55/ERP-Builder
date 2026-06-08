@@ -102,3 +102,25 @@ or a rotated Drive folder leaves two undeletable defaults (the delete route bloc
 removing a default). Deleting a managed folder only drops our DB row — the Drive
 folder is never deleted (consistent with "platform never deletes Drive content");
 fields bound to a removed folder fall back to default at upload time.
+
+**Subfolders (nesting):** managed folders form a tree via a nullable self-ref
+`parentId` (onDelete cascade). A subfolder is created with the *parent's* Drive id
+passed as `parents[]`, and the create route must validate that `parentId` resolves
+to an existing managed-folder row (never trust a raw Drive id from the client).
+Deleting a folder relies on the DB cascade to drop descendant rows too — the Drive
+folders themselves are still never deleted. Both the admin folder manager and the
+field-config folder dropdown render the same depth-flattened tree (DFS from null).
+
+## Fast gdrive hover previews (thumbnails)
+
+gdrive uploaded-file hover previews load Google's pre-rendered **thumbnail** (small,
+fast) before the full bytes. The thumbnail is served by its own auth-gated proxy
+route that re-applies the *same* `canReadDriveFile` boundary as the content proxy —
+the thumbnail is NOT a public share link (that approach was explicitly rejected),
+so the permission boundary is preserved. The route returns **404 when no thumbnail
+exists** so the client can fall back to the full-content preview.
+
+Client invariant: the thumbnail is always an **image** (even for PDFs), so render it
+as `<img>` regardless of file type, and fall back to the full `BlobPreview` on
+*both* fetch rejection AND `<img>` `onError` (a 200 with a broken payload must still
+fall back). Revoke the thumbnail blob URL on the error path before falling back.

@@ -2765,6 +2765,10 @@ components:
         isDefault:
           type: boolean
           description: The auto-created default upload folder; cannot be removed.
+        parentId:
+          type: integer
+          nullable: true
+          description: Internal id of the parent folder for nested subfolders; null for top-level folders.
 
     CreateDriveFolderBody:
       type: object
@@ -2774,6 +2778,10 @@ components:
           type: string
           minLength: 1
           maxLength: 100
+        parentId:
+          type: integer
+          nullable: true
+          description: Optional parent folder (internal id) to create this folder as a subfolder.
 
     HealthStatus:
       type: object

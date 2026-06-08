@@ -12,4 +12,6 @@ export interface CreateDriveFolderBody {
      * @maxLength 100
      */
   name: string;
+  /** Optional parent folder (internal id) to create this folder as a subfolder. */
+  parentId?: number | null;
 }

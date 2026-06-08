@@ -145,15 +145,21 @@ export async function ensureFolder(
   return { id: folder.id, name: folder.name };
 }
 
-/** Create a new app-owned Drive folder by name, returning its id. */
+/** Create a new app-owned Drive folder by name, returning its id. Pass
+ * `parentFolderId` (an app-created folder id) to nest it as a subfolder. */
 export async function createDriveFolder(
   accessToken: string,
   name: string,
+  parentFolderId?: string,
 ): Promise<{ id: string; name: string }> {
   const create = await fetch("https://www.googleapis.com/drive/v3/files?fields=id,name", {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ name, mimeType: "application/vnd.google-apps.folder" }),
+    body: JSON.stringify({
+      name,
+      mimeType: "application/vnd.google-apps.folder",
+      ...(parentFolderId ? { parents: [parentFolderId] } : {}),
+    }),
   });
   if (!create.ok) throw new Error(`Failed to create Drive folder (${create.status})`);
   const folder = (await create.json()) as { id: string; name: string };
@@ -227,6 +233,36 @@ export async function downloadDriveFile(
     body: resp.body as ReadableStream<Uint8Array> | null,
     contentType: resp.headers.get("content-type"),
     contentLength: resp.headers.get("content-length"),
+  };
+}
+
+/**
+ * Fetch a Drive file's Google-generated thumbnail (a small rendered preview
+ * image — fast to load for hover previews). Returns `null` when the file has no
+ * thumbnail (Google hasn't generated one / unsupported type), so callers can
+ * fall back to the full-content proxy. The thumbnailLink is short-lived and
+ * requires the OAuth token, so it is fetched server-side and piped through.
+ */
+export async function fetchDriveThumbnail(
+  accessToken: string,
+  fileId: string,
+  size = 400,
+): Promise<{ status: number; body: ReadableStream<Uint8Array> | null; contentType: string | null } | null> {
+  const meta = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=thumbnailLink`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!meta.ok) return { status: meta.status, body: null, contentType: null };
+  const data = (await meta.json()) as { thumbnailLink?: string };
+  if (!data.thumbnailLink) return null;
+  // Drive thumbnailLinks end with a size suffix like `=s220` (optionally `-c`);
+  // bump it to the requested size for a crisper hover preview.
+  const sized = data.thumbnailLink.replace(/=s\d+(-c)?$/, `=s${size}`);
+  const img = await fetch(sized, { headers: { Authorization: `Bearer ${accessToken}` } });
+  return {
+    status: img.status,
+    body: img.body as ReadableStream<Uint8Array> | null,
+    contentType: img.headers.get("content-type"),
   };
 }
 

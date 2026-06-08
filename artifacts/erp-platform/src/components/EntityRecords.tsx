@@ -99,6 +99,7 @@ import {
   openGDriveInNewTab,
   fetchObjectBlobUrl,
   fetchGDriveBlobUrl,
+  fetchGDriveThumbnailBlobUrl,
   detectUrlPreview,
   contentTypeKind,
   isFileValue,
@@ -275,6 +276,69 @@ function BlobPreview({
   return <iframe src={`${url}#toolbar=0&navpanes=0&view=FitH`} title={name} className="h-80 w-full rounded border-0" />;
 }
 
+/**
+ * Hover preview for a managed Google Drive file. Loads Google's fast thumbnail
+ * first (a small rendered image, even for PDFs); if the file has no thumbnail,
+ * falls back to the full-content proxy preview (image inline / pdf iframe).
+ */
+function GDrivePreview({ fileId, contentType, name }: { fileId: string; contentType?: string; name: string }) {
+  const kind = contentTypeKind(contentType, name);
+  const [thumbUrl, setThumbUrl] = useState<string | null>(null);
+  const [thumbFailed, setThumbFailed] = useState(false);
+
+  useEffect(() => {
+    if (kind === "other") return;
+    let active = true;
+    let made: string | null = null;
+    setThumbUrl(null);
+    setThumbFailed(false);
+    fetchGDriveThumbnailBlobUrl(fileId)
+      .then((u) => {
+        if (active) {
+          made = u;
+          setThumbUrl(u);
+        } else {
+          URL.revokeObjectURL(u);
+        }
+      })
+      .catch(() => active && setThumbFailed(true));
+    return () => {
+      active = false;
+      if (made) URL.revokeObjectURL(made);
+    };
+  }, [fileId, kind]);
+
+  if (kind === "other" || thumbFailed) {
+    return (
+      <BlobPreview
+        load={() => fetchGDriveBlobUrl(fileId)}
+        loadKey={`gdrive-full:${fileId}`}
+        contentType={contentType}
+        name={name}
+      />
+    );
+  }
+  if (!thumbUrl) {
+    return (
+      <div className="flex h-40 items-center justify-center">
+        <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+  return (
+    <img
+      src={thumbUrl}
+      alt={name}
+      className="max-h-64 w-full rounded object-contain"
+      onError={() => {
+        URL.revokeObjectURL(thumbUrl);
+        setThumbUrl(null);
+        setThumbFailed(true);
+      }}
+    />
+  );
+}
+
 /** A filled file cell, rendered per source (server / Google Drive / link). */
 function FileCell({ value }: { value: FileValue }) {
   if (isLinkFile(value)) {
@@ -284,8 +348,6 @@ function FileCell({ value }: { value: FileValue }) {
   const isGDrive = isGDriveFile(value);
   const open = () =>
     isGDrive ? openGDriveInNewTab(value.fileId) : openObjectInNewTab(value.path);
-  const loadKey = isGDrive ? `gdrive:${value.fileId}` : `server:${value.path}`;
-  const load = () => (isGDrive ? fetchGDriveBlobUrl(value.fileId) : fetchObjectBlobUrl(value.path));
   const driveLink = isGDrive ? value.webViewLink : undefined;
 
   return (
@@ -315,7 +377,16 @@ function FileCell({ value }: { value: FileValue }) {
               Google Drive
             </div>
           )}
-          <BlobPreview load={load} loadKey={loadKey} contentType={value.contentType} name={value.name} />
+          {isGDrive ? (
+            <GDrivePreview fileId={value.fileId} contentType={value.contentType} name={value.name} />
+          ) : (
+            <BlobPreview
+              load={() => fetchObjectBlobUrl(value.path)}
+              loadKey={`server:${value.path}`}
+              contentType={value.contentType}
+              name={value.name}
+            />
+          )}
         </HoverCardContent>
       </HoverCard>
       {driveLink && (

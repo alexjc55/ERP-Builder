@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, boolean, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 /** Which OAuth client credentials are used for the Drive connection. */
 export type GoogleDriveKeyMode = "builtin" | "own";
@@ -43,6 +43,12 @@ export const googleDriveFoldersTable = pgTable("google_drive_folders", {
   name: text("name").notNull(),
   sortOrder: integer("sort_order").notNull().default(0),
   isDefault: boolean("is_default").notNull().default(false),
+  // Optional parent for nested folders (subfolders). Self-referencing FK; when a
+  // folder is removed its descendant rows are removed too (the Drive folders
+  // themselves are never deleted). Null = top-level folder.
+  parentId: integer("parent_id").references((): AnyPgColumn => googleDriveFoldersTable.id, {
+    onDelete: "cascade",
+  }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

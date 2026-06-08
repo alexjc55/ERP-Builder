@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import {
   useGetGoogleDriveConnection,
@@ -45,6 +45,27 @@ import {
 } from "lucide-react";
 
 type KeyMode = "builtin" | "own";
+
+/** Flatten managed Drive folders into a depth-ordered list for indented display. */
+function flattenDriveFolders<T extends { id: number; parentId?: number | null }>(
+  folders: T[],
+): { folder: T; depth: number }[] {
+  const byParent = new Map<number | null, T[]>();
+  for (const f of folders) {
+    const key = f.parentId ?? null;
+    if (!byParent.has(key)) byParent.set(key, []);
+    byParent.get(key)!.push(f);
+  }
+  const out: { folder: T; depth: number }[] = [];
+  const walk = (parent: number | null, depth: number) => {
+    for (const f of byParent.get(parent) ?? []) {
+      out.push({ folder: f, depth });
+      walk(f.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return out;
+}
 
 export default function GoogleDrivePage() {
   const t = useT();
@@ -306,18 +327,20 @@ function FolderManager({ t }: { t: (key: string, fallback: string) => string }) 
   const deleteMutation = useDeleteGoogleDriveFolder();
   const [name, setName] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [addingParentId, setAddingParentId] = useState<number | null>(null);
+  const [subName, setSubName] = useState("");
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ["/api/google-drive/folders"] });
 
-  const addFolder = () => {
-    const trimmed = name.trim();
+  const addFolder = (parentId: number | null, value: string, onDone: () => void) => {
+    const trimmed = value.trim();
     if (!trimmed) return;
     createMutation.mutate(
-      { data: { name: trimmed } },
+      { data: { name: trimmed, ...(parentId != null ? { parentId } : {}) } },
       {
         onSuccess: () => {
-          setName("");
+          onDone();
           invalidate();
           toast({ title: t("gdrive.folderCreated", "Папка создана") });
         },
@@ -360,10 +383,10 @@ function FolderManager({ t }: { t: (key: string, fallback: string) => string }) 
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") addFolder(); }}
+            onKeyDown={(e) => { if (e.key === "Enter") addFolder(null, name, () => setName("")); }}
             placeholder={t("gdrive.folderNamePlaceholder", "Название новой папки")}
           />
-          <Button onClick={addFolder} disabled={!name.trim() || createMutation.isPending}>
+          <Button onClick={() => addFolder(null, name, () => setName(""))} disabled={!name.trim() || createMutation.isPending}>
             {createMutation.isPending ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <FolderPlus className="w-4 h-4 mr-1.5" />}
             {t("gdrive.folderAdd", "Создать")}
           </Button>
@@ -374,31 +397,70 @@ function FolderManager({ t }: { t: (key: string, fallback: string) => string }) 
           <p className="text-sm text-slate-400">{t("gdrive.noFolders", "Папок пока нет.")}</p>
         ) : (
           <div className="space-y-1.5">
-            {folders.map((f) => (
-              <div
-                key={f.driveFolderId}
-                className="flex items-center justify-between gap-3 rounded-md border border-slate-100 px-3 py-2"
-              >
-                <span className="flex items-center gap-2 text-sm text-slate-700 truncate">
-                  <Folder className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span className="truncate">{f.name}</span>
-                  {f.isDefault && (
-                    <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
-                      {t("gdrive.folderDefault", "По умолчанию")}
-                    </Badge>
-                  )}
-                </span>
-                {!f.isDefault && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-red-600 hover:text-red-700"
-                    onClick={() => setDeleteId(f.id)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+            {flattenDriveFolders(folders).map(({ folder: f, depth }) => (
+              <Fragment key={f.id}>
+                <div
+                  className="flex items-center justify-between gap-3 rounded-md border border-slate-100 px-3 py-2"
+                  style={{ marginLeft: depth * 20 }}
+                >
+                  <span className="flex items-center gap-2 text-sm text-slate-700 truncate">
+                    <Folder className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span className="truncate">{f.name}</span>
+                    {f.isDefault && (
+                      <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
+                        {t("gdrive.folderDefault", "По умолчанию")}
+                      </Badge>
+                    )}
+                  </span>
+                  <span className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-slate-500 hover:text-slate-700"
+                      title={t("gdrive.subfolderAdd", "Создать подпапку")}
+                      onClick={() => {
+                        setAddingParentId(addingParentId === f.id ? null : f.id);
+                        setSubName("");
+                      }}
+                    >
+                      <FolderPlus className="w-4 h-4" />
+                    </Button>
+                    {!f.isDefault && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700"
+                        onClick={() => setDeleteId(f.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </span>
+                </div>
+                {addingParentId === f.id && (
+                  <div className="flex gap-2" style={{ marginLeft: (depth + 1) * 20 }}>
+                    <Input
+                      autoFocus
+                      value={subName}
+                      onChange={(e) => setSubName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") addFolder(f.id, subName, () => { setAddingParentId(null); setSubName(""); });
+                        if (e.key === "Escape") setAddingParentId(null);
+                      }}
+                      placeholder={t("gdrive.subfolderPlaceholder", "Название подпапки")}
+                    />
+                    <Button
+                      onClick={() => addFolder(f.id, subName, () => { setAddingParentId(null); setSubName(""); })}
+                      disabled={!subName.trim() || createMutation.isPending}
+                    >
+                      {t("gdrive.folderAdd", "Создать")}
+                    </Button>
+                    <Button variant="ghost" onClick={() => setAddingParentId(null)}>
+                      {t("common.cancel", "Отмена")}
+                    </Button>
+                  </div>
                 )}
-              </div>
+              </Fragment>
             ))}
           </div>
         )}
@@ -411,7 +473,7 @@ function FolderManager({ t }: { t: (key: string, fallback: string) => string }) 
             <AlertDialogDescription>
               {t(
                 "gdrive.folderDeleteConfirm",
-                "Папка перестанет быть доступной для новых загрузок. Сама папка и файлы в Google Drive не удаляются. Поля, привязанные к ней, начнут использовать папку по умолчанию.",
+                "Папка и все её подпапки перестанут быть доступными для новых загрузок. Сами папки и файлы в Google Drive не удаляются. Поля, привязанные к ним, начнут использовать папку по умолчанию.",
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>

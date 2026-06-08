@@ -15,6 +15,27 @@ import {
   type FileSource,
   type FieldFormatRule,
 } from "@workspace/api-client-react";
+
+/** Flatten managed Drive folders into a depth-ordered list for indented display. */
+function flattenDriveFolders<T extends { id: number; parentId?: number | null }>(
+  folders: T[],
+): { folder: T; depth: number }[] {
+  const byParent = new Map<number | null, T[]>();
+  for (const f of folders) {
+    const key = f.parentId ?? null;
+    if (!byParent.has(key)) byParent.set(key, []);
+    byParent.get(key)!.push(f);
+  }
+  const out: { folder: T; depth: number }[] = [];
+  const walk = (parent: number | null, depth: number) => {
+    for (const f of byParent.get(parent) ?? []) {
+      out.push({ folder: f, depth });
+      walk(f.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return out;
+}
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -404,9 +425,10 @@ export function FieldConfigDialog({
                         <SelectItem value="__default__">
                           {t("fields.driveFolderDefault", "По умолчанию (ERP Uploads)")}
                         </SelectItem>
-                        {driveFolders.map((f) => (
-                          <SelectItem key={f.driveFolderId} value={f.driveFolderId}>
-                            {f.name}
+                        {flattenDriveFolders(driveFolders).map(({ folder, depth }) => (
+                          <SelectItem key={folder.driveFolderId} value={folder.driveFolderId}>
+                            {depth > 0 ? "\u00A0".repeat(depth * 3) + "└ " : ""}
+                            {folder.name}
                           </SelectItem>
                         ))}
                       </SelectContent>

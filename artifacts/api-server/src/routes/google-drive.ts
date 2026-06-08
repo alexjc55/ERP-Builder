@@ -38,6 +38,7 @@ import {
   createDriveFolder,
   uploadToFolder,
   downloadDriveFile,
+  fetchDriveThumbnail,
   saveConnectionTokens,
   isGoogleDriveModuleEnabled,
 } from "../lib/googleDrive";
@@ -206,7 +207,7 @@ router.post("/google-drive/disconnect", requireAuth, requireAdmin("googleDrive")
 
 /** Public-facing managed folder shape. */
 function folderInfo(f: GoogleDriveFolder) {
-  return { id: f.id, driveFolderId: f.driveFolderId, name: f.name, isDefault: f.isDefault };
+  return { id: f.id, driveFolderId: f.driveFolderId, name: f.name, isDefault: f.isDefault, parentId: f.parentId };
 }
 
 /** GET /google-drive/folders — list managed upload folders (admin). */
@@ -230,20 +231,35 @@ router.post("/google-drive/folders", requireAuth, requireAdmin("googleDrive"), a
     res.status(400).json({ error: "Folder name is required" });
     return;
   }
+  const parentId = parsed.data.parentId ?? null;
   const conn = await getConnection();
   if (!conn?.refreshTokenEnc) {
     res.status(409).json({ error: "Google Drive is not connected" });
     return;
   }
   try {
+    // A subfolder must nest under an existing managed folder (never trust an
+    // arbitrary Drive folder id from the client).
+    let parentDriveFolderId: string | undefined;
+    if (parentId != null) {
+      const [parent] = await db
+        .select({ driveFolderId: googleDriveFoldersTable.driveFolderId })
+        .from(googleDriveFoldersTable)
+        .where(eq(googleDriveFoldersTable.id, parentId));
+      if (!parent) {
+        res.status(400).json({ error: "Parent folder not found" });
+        return;
+      }
+      parentDriveFolderId = parent.driveFolderId;
+    }
     const accessToken = await getAccessToken(conn);
-    const folder = await createDriveFolder(accessToken, name);
+    const folder = await createDriveFolder(accessToken, name, parentDriveFolderId);
     const [maxRow] = await db
       .select({ max: sql<number>`coalesce(max(${googleDriveFoldersTable.sortOrder}), 0)` })
       .from(googleDriveFoldersTable);
     const [row] = await db
       .insert(googleDriveFoldersTable)
-      .values({ driveFolderId: folder.id, name: folder.name, sortOrder: (maxRow?.max ?? 0) + 1 })
+      .values({ driveFolderId: folder.id, name: folder.name, sortOrder: (maxRow?.max ?? 0) + 1, parentId })
       .returning();
     res.json(folderInfo(row));
   } catch (err) {
@@ -409,6 +425,39 @@ router.get("/google-drive/files/:id/content", requireAuth, async (req: Request, 
   } catch (err) {
     req.log.error({ err }, "Google Drive file proxy failed");
     res.status(500).json({ error: "Failed to fetch Drive file" });
+  }
+});
+
+/**
+ * GET /google-drive/files/:id/thumbnail — auth-gated proxy that streams a
+ * Google-generated thumbnail (small, fast) for hover previews, re-applying the
+ * same records permission boundary as the content route. Returns 404 when the
+ * file has no thumbnail so the client falls back to the full-content preview.
+ */
+router.get("/google-drive/files/:id/thumbnail", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const fileId = String(req.params.id);
+    if (!(await canReadDriveFile(req, fileId))) {
+      res.status(404).json({ error: "File not found" });
+      return;
+    }
+    const conn = await getConnection();
+    if (!conn?.refreshTokenEnc) {
+      res.status(404).json({ error: "File not found" });
+      return;
+    }
+    const accessToken = await getAccessToken(conn);
+    const thumb = await fetchDriveThumbnail(accessToken, fileId);
+    if (!thumb || thumb.status !== 200 || !thumb.body) {
+      res.status(404).json({ error: "No thumbnail" });
+      return;
+    }
+    if (thumb.contentType) res.setHeader("Content-Type", thumb.contentType);
+    res.setHeader("Cache-Control", "private, max-age=300");
+    Readable.fromWeb(thumb.body).pipe(res);
+  } catch (err) {
+    req.log.error({ err }, "Google Drive thumbnail proxy failed");
+    res.status(500).json({ error: "Failed to fetch thumbnail" });
   }
 });
 
