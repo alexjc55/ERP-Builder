@@ -4188,6 +4188,12 @@
     "he": "הגדרה"
   },
   {
+    "key": "dash.dragHint",
+    "ru": "Перетащите, чтобы изменить порядок",
+    "en": "Drag to reorder",
+    "he": "גרור כדי לשנות את הסדר"
+  },
+  {
     "key": "dash.analyticsSection",
     "ru": "Аналитика",
     "en": "Analytics",

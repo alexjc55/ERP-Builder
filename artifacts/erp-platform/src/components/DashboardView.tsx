@@ -96,7 +96,7 @@ import { useAuth } from "@/lib/auth";
 import { useML, useT } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Settings2, Plus, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ArrowRight, Minus, X, LayoutDashboard } from "lucide-react";
+import { Settings2, Plus, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ArrowRight, Minus, X, LayoutDashboard, GripVertical } from "lucide-react";
 import { useLocation } from "wouter";
 
 type MLValue = { ru?: string; en?: string; he?: string };
@@ -547,24 +547,37 @@ function EditWidgetCell({
   index,
   total,
   busy,
+  isDragSource,
+  isDropTarget,
   ml,
   t,
   onResize,
   onMove,
   onEdit,
   onDelete,
+  onDragStartCell,
+  onDragEnterCell,
+  onDropCell,
+  onDragEndCell,
 }: {
   w: DashboardWidget;
   index: number;
   total: number;
   busy: boolean;
+  isDragSource: boolean;
+  isDropTarget: boolean;
   ml: (v: unknown) => string;
   t: (key: string, fallback: string) => string;
   onResize: (patch: { gridW?: number; gridH?: number }) => void;
   onMove: (dir: -1 | 1) => void;
   onEdit: () => void;
   onDelete: () => void;
+  onDragStartCell: () => void;
+  onDragEnterCell: () => void;
+  onDropCell: () => void;
+  onDragEndCell: () => void;
 }) {
+  const [armed, setArmed] = useState(false);
   const Icon = w.icon ? getIconComponent(w.icon, LayoutDashboard) : null;
   const widgetType = w.config.widgetType;
   const summary =
@@ -575,15 +588,47 @@ function EditWidgetCell({
         : `${t("dash.metricsCount", "Метрик")}: ${w.config.metrics?.length ?? 0}${w.config.formula ? ` · ${t("dash.hasFormula", "формула")}` : ""}`;
   return (
     <div
-      className="min-w-0"
+      className={cn("min-w-0", isDragSource && "opacity-40")}
       style={{
         gridColumn: `span ${Math.min(Math.max(w.gridW || 1, 1), GRID_COLS)}`,
         gridRow: `span ${Math.min(Math.max(w.gridH || 1, 1), GRID_ROWS_MAX)}`,
       }}
+      draggable={armed}
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = "move";
+        onDragStartCell();
+      }}
+      onDragEnter={onDragEnterCell}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        onDropCell();
+        setArmed(false);
+      }}
+      onDragEnd={() => {
+        setArmed(false);
+        onDragEndCell();
+      }}
     >
-      <Card className="h-full border-dashed border-slate-300 shadow-sm">
+      <Card
+        className={cn(
+          "h-full border-dashed border-slate-300 shadow-sm transition-colors",
+          isDropTarget && "border-solid border-blue-500 ring-2 ring-blue-400",
+        )}
+      >
         <CardContent className="flex h-full flex-col justify-between gap-1.5 p-3 overflow-hidden">
           <div className="flex items-center gap-2">
+            <span
+              className="shrink-0 cursor-grab text-slate-300 hover:text-slate-500 active:cursor-grabbing"
+              title={t("dash.dragHint", "Перетащите, чтобы изменить порядок")}
+              onMouseDown={() => setArmed(true)}
+              onMouseUp={() => setArmed(false)}
+            >
+              <GripVertical className="w-4 h-4" />
+            </span>
             {Icon && (
               <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${w.color || DEFAULT_COLOR}`}>
                 <Icon className="w-3.5 h-3.5 text-white" />
@@ -630,6 +675,8 @@ export default function DashboardView({ pageId, embedded = false }: { pageId: nu
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingWidget, setEditingWidget] = useState<DashboardWidget | null>(null);
   const [deleteWidget, setDeleteWidget] = useState<DashboardWidget | null>(null);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
 
   const { data: widgetData = [], isLoading } = useGetDashboardData(pageId);
   const { data: editWidgets = [] } = useListDashboardWidgets(pageId, {
@@ -753,6 +800,32 @@ export default function DashboardView({ pageId, embedded = false }: { pageId: nu
     });
   };
 
+  // Drag-to-reorder: splice the dragged widget into its drop position, then
+  // re-assign the existing sortOrder pool (sorted ascending) to the new
+  // sequence so only the affected widgets change. Persists via the same
+  // transactional reorder endpoint the arrows use — no parallel ordering field.
+  const reorderByDrag = (from: number, to: number) => {
+    if (from === to) return;
+    const arr = [...sortedEdit];
+    const [moved] = arr.splice(from, 1);
+    arr.splice(to, 0, moved);
+    const orders = sortedEdit.map((w) => w.sortOrder).sort((a, b) => a - b);
+    const items = arr
+      .map((w, i) => ({ id: w.id, sortOrder: orders[i], prev: w.sortOrder }))
+      .filter((it) => it.sortOrder !== it.prev)
+      .map(({ id, sortOrder }) => ({ id, sortOrder }));
+    if (items.length === 0) return;
+    reorderMutation.mutate({ data: { items } });
+  };
+
+  const handleDrop = (to: number) => {
+    const from = dragIndex;
+    setDragIndex(null);
+    setOverIndex(null);
+    if (from == null) return;
+    reorderByDrag(from, to);
+  };
+
   const openCreate = () => { setEditingWidget(null); setDialogOpen(true); };
   const openEdit = (w: DashboardWidget) => { setEditingWidget(w); setDialogOpen(true); };
 
@@ -824,12 +897,18 @@ export default function DashboardView({ pageId, embedded = false }: { pageId: nu
               index={i}
               total={sortedEdit.length}
               busy={resizeMutation.isPending || reorderMutation.isPending}
+              isDragSource={dragIndex === i}
+              isDropTarget={overIndex === i && dragIndex !== null && dragIndex !== i}
               ml={ml}
               t={t}
               onResize={(patch) => resize(w, patch)}
               onMove={(dir) => move(i, dir)}
               onEdit={() => openEdit(w)}
               onDelete={() => setDeleteWidget(w)}
+              onDragStartCell={() => setDragIndex(i)}
+              onDragEnterCell={() => setOverIndex(i)}
+              onDropCell={() => handleDrop(i)}
+              onDragEndCell={() => { setDragIndex(null); setOverIndex(null); }}
             />
           ))}
           <button
