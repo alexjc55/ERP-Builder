@@ -43,6 +43,7 @@ Must be enforced on **every** path that can change page type, against the **effe
 ## Records column totals (related, not dashboard-specific)
 - `records/query` returns `numericTotals` ({fieldKey → sum}) computed over the **full filtered set** (records are paginated, so totals must be server-side, never summed client-side from one page).
 - Only numeric fields flagged `showColumnTotal` AND present in the request's `visibleFields` are summed — this preserves the hidden-field boundary (a hidden numeric field must never leak via its total). Same regex-guarded `::numeric` cast as dashboard sums.
+- A field opting into `showColumnTotal` may also set freeform hex `totalFillColor`/`totalTextColor` (nullable text cols on BOTH `fields` and `page_fields`); the totals cell applies them via inline `style`, falling back to the emerald tailwind classes when null. Hex → inline style, never tailwind classes (no purge concern). **Why:** the two dialogs (FieldConfigDialog / PageFieldConfigDialog) and two schemas must stay in lockstep, and PUT allowlists are easy to miss — `showColumnTotal` itself was silently absent from the page-fields update allowlist, so any new dependent setting must verify the toggle persists too.
 
 ## Widget icon is optional (empty = no icon)
 - A widget's `icon` may be an empty string, meaning "render no icon" — it is NOT required (irrelevant for chart/table widgets, and some admins want a bare metric card). The IconPicker has a "Очистить" (clear) action that sets `icon=""`.

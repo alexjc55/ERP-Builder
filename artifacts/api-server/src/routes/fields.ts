@@ -254,6 +254,8 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   if (body.isFilterable != null) updateData.isFilterable = body.isFilterable;
   if (body.showInTable != null) updateData.showInTable = body.showInTable;
   if (body.showColumnTotal != null) updateData.showColumnTotal = body.showColumnTotal;
+  if ("totalFillColor" in body) updateData.totalFillColor = body.totalFillColor ?? null;
+  if ("totalTextColor" in body) updateData.totalTextColor = body.totalTextColor ?? null;
   if ("fileConfigJson" in body) updateData.fileConfigJson = body.fileConfigJson ?? null;
   if ("userConfigJson" in body) updateData.userConfigJson = body.userConfigJson ?? {};
 

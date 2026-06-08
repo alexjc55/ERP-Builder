@@ -4452,6 +4452,24 @@
     "he": "הצג סכום עמודה"
   },
   {
+    "key": "fields.totalColorsHint",
+    "ru": "Цвета ячейки итога столбца (необязательно)",
+    "en": "Column total cell colors (optional)",
+    "he": "צבעי תא סכום העמודה (אופציונלי)"
+  },
+  {
+    "key": "fields.totalFillColor",
+    "ru": "Цвет заливки",
+    "en": "Fill color",
+    "he": "צבע מילוי"
+  },
+  {
+    "key": "fields.totalTextColor",
+    "ru": "Цвет текста",
+    "en": "Text color",
+    "he": "צבע טקסט"
+  },
+  {
     "key": "records.columnTotal",
     "ru": "Сумма",
     "en": "Total",

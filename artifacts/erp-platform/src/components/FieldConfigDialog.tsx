@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/select";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { FieldFormatRulesEditor } from "@/components/FieldFormatRulesEditor";
+import { ColorPickerControl } from "@/components/ColorPickerControl";
 import { useToast } from "@/hooks/use-toast";
 import { FormulaEditor, type FormulaFieldRef } from "@/components/FormulaEditor";
 import { useML, useT } from "@/lib/i18n";
@@ -128,6 +129,8 @@ export function FieldConfigDialog({
   const [isFilterable, setIsFilterable] = useState(false);
   const [showInTable, setShowInTable] = useState(true);
   const [showColumnTotal, setShowColumnTotal] = useState(false);
+  const [totalFillColor, setTotalFillColor] = useState("");
+  const [totalTextColor, setTotalTextColor] = useState("");
   const [permissions, setPermissions] = useState<FieldPermissions>({});
   const [allowedSources, setAllowedSources] = useState<FileSource[]>(["server"]);
   const [allowedRoleIds, setAllowedRoleIds] = useState<number[]>([]);
@@ -153,6 +156,8 @@ export function FieldConfigDialog({
       setIsFilterable(field.isFilterable ?? false);
       setShowInTable(field.showInTable ?? true);
       setShowColumnTotal(field.showColumnTotal ?? false);
+      setTotalFillColor(field.totalFillColor ?? "");
+      setTotalTextColor(field.totalTextColor ?? "");
       setPermissions(field.permissionsJson ?? {});
       {
         const src = field.fileConfigJson?.allowedSources;
@@ -176,6 +181,8 @@ export function FieldConfigDialog({
       setIsFilterable(false);
       setShowInTable(true);
       setShowColumnTotal(false);
+      setTotalFillColor("");
+      setTotalTextColor("");
       setPermissions({});
       setAllowedSources(["server"]);
       setAllowedRoleIds([]);
@@ -265,6 +272,8 @@ export function FieldConfigDialog({
       isFilterable,
       showInTable,
       showColumnTotal: fieldType === "number" ? showColumnTotal : false,
+      totalFillColor: fieldType === "number" && showColumnTotal && totalFillColor ? totalFillColor : null,
+      totalTextColor: fieldType === "number" && showColumnTotal && totalTextColor ? totalTextColor : null,
       fileConfigJson:
         fieldType === "file"
           ? { allowedSources: allowedSources.length > 0 ? allowedSources : (["server"] as FileSource[]) }
@@ -433,6 +442,24 @@ export function FieldConfigDialog({
                 </div>
               )}
             </div>
+
+            {fieldType === "number" && showColumnTotal && (
+              <div className="rounded-md border border-slate-100 bg-slate-50/50 p-3 space-y-2">
+                <p className="text-xs text-slate-500">
+                  {t("fields.totalColorsHint", "Цвета ячейки итога столбца (необязательно)")}
+                </p>
+                <ColorPickerControl
+                  label={t("fields.totalFillColor", "Цвет заливки")}
+                  value={totalFillColor}
+                  onChange={setTotalFillColor}
+                />
+                <ColorPickerControl
+                  label={t("fields.totalTextColor", "Цвет текста")}
+                  value={totalTextColor}
+                  onChange={setTotalTextColor}
+                />
+              </div>
+            )}
 
             <div className="border-t border-slate-100 pt-4">
               <FieldFormatRulesEditor

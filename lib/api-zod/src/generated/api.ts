@@ -1549,6 +1549,8 @@ export const ListEntityFieldsResponseItem = zod.object({
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
+  "totalFillColor": zod.string().nullish(),
+  "totalTextColor": zod.string().nullish(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -1606,6 +1608,8 @@ export const CreateEntityFieldBody = zod.object({
   "isFilterable": zod.boolean().default(createEntityFieldBodyIsFilterableDefault),
   "showInTable": zod.boolean().default(createEntityFieldBodyShowInTableDefault),
   "showColumnTotal": zod.boolean().default(createEntityFieldBodyShowColumnTotalDefault),
+  "totalFillColor": zod.string().nullish(),
+  "totalTextColor": zod.string().nullish(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createEntityFieldBodyIsActiveDefault)
 })
@@ -1656,6 +1660,8 @@ export const GetFieldResponse = zod.object({
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
+  "totalFillColor": zod.string().nullish(),
+  "totalTextColor": zod.string().nullish(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -1706,6 +1712,8 @@ export const UpdateFieldBody = zod.object({
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
+  "totalFillColor": zod.string().nullish(),
+  "totalTextColor": zod.string().nullish(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
@@ -1748,6 +1756,8 @@ export const UpdateFieldResponse = zod.object({
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
+  "totalFillColor": zod.string().nullish(),
+  "totalTextColor": zod.string().nullish(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -1822,6 +1832,8 @@ export const ListPageFieldsResponseItem = zod.object({
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
   "showInTable": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
+  "totalFillColor": zod.string().nullish(),
+  "totalTextColor": zod.string().nullish(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -1870,6 +1882,8 @@ export const CreatePageFieldBody = zod.object({
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
   "showInTable": zod.boolean().default(createPageFieldBodyShowInTableDefault),
   "showColumnTotal": zod.boolean().default(createPageFieldBodyShowColumnTotalDefault),
+  "totalFillColor": zod.string().nullish(),
+  "totalTextColor": zod.string().nullish(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createPageFieldBodyIsActiveDefault)
 })
@@ -1910,6 +1924,8 @@ export const UpdatePageFieldBody = zod.object({
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
   "showInTable": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
+  "totalFillColor": zod.string().nullish(),
+  "totalTextColor": zod.string().nullish(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
@@ -1944,6 +1960,8 @@ export const UpdatePageFieldResponse = zod.object({
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
   "showInTable": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
+  "totalFillColor": zod.string().nullish(),
+  "totalTextColor": zod.string().nullish(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),

@@ -1472,36 +1472,44 @@ export function EntityRecords({
                 <thead>
                   {Object.keys(numericTotals).length > 0 && (
                     <tr>
-                      {displayFields.map((f: Field) => (
-                        <th
-                          key={`tot-${f.id}`}
-                          className={cn(
-                            "px-4 py-3 text-left",
-                            numericTotals[f.fieldKey] !== undefined && "bg-emerald-50",
-                          )}
-                        >
-                          {numericTotals[f.fieldKey] !== undefined ? (
-                            <span className="text-sm font-bold text-emerald-700 whitespace-nowrap">
-                              {numericTotals[f.fieldKey].toLocaleString("ru-RU")}
-                            </span>
-                          ) : null}
-                        </th>
-                      ))}
-                      {displayedPageFields.map((pf: PageField) => (
-                        <th
-                          key={`tot-pf-${pf.id}`}
-                          className={cn(
-                            "px-4 py-3 text-left",
-                            numericTotals[pf.fieldKey] !== undefined && "bg-emerald-50",
-                          )}
-                        >
-                          {numericTotals[pf.fieldKey] !== undefined ? (
-                            <span className="text-sm font-bold text-emerald-700 whitespace-nowrap">
-                              {numericTotals[pf.fieldKey].toLocaleString("ru-RU")}
-                            </span>
-                          ) : null}
-                        </th>
-                      ))}
+                      {displayFields.map((f: Field) => {
+                        const hasTotal = numericTotals[f.fieldKey] !== undefined;
+                        return (
+                          <th
+                            key={`tot-${f.id}`}
+                            className={cn("px-4 py-3 text-left", hasTotal && !f.totalFillColor && "bg-emerald-50")}
+                            style={hasTotal && f.totalFillColor ? { backgroundColor: f.totalFillColor } : undefined}
+                          >
+                            {hasTotal ? (
+                              <span
+                                className={cn("text-sm font-bold whitespace-nowrap", !f.totalTextColor && "text-emerald-700")}
+                                style={f.totalTextColor ? { color: f.totalTextColor } : undefined}
+                              >
+                                {numericTotals[f.fieldKey].toLocaleString("ru-RU")}
+                              </span>
+                            ) : null}
+                          </th>
+                        );
+                      })}
+                      {displayedPageFields.map((pf: PageField) => {
+                        const hasTotal = numericTotals[pf.fieldKey] !== undefined;
+                        return (
+                          <th
+                            key={`tot-pf-${pf.id}`}
+                            className={cn("px-4 py-3 text-left", hasTotal && !pf.totalFillColor && "bg-emerald-50")}
+                            style={hasTotal && pf.totalFillColor ? { backgroundColor: pf.totalFillColor } : undefined}
+                          >
+                            {hasTotal ? (
+                              <span
+                                className={cn("text-sm font-bold whitespace-nowrap", !pf.totalTextColor && "text-emerald-700")}
+                                style={pf.totalTextColor ? { color: pf.totalTextColor } : undefined}
+                              >
+                                {numericTotals[pf.fieldKey].toLocaleString("ru-RU")}
+                              </span>
+                            ) : null}
+                          </th>
+                        );
+                      })}
                       {statuses.length > 0 && <th className="px-4 py-1.5" />}
                       <th className="px-4 py-1.5" />
                     </tr>

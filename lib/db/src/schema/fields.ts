@@ -82,6 +82,8 @@ export const entityFieldsTable = pgTable(
     isFilterable: boolean("is_filterable").notNull().default(false),
     showInTable: boolean("show_in_table").notNull().default(true),
     showColumnTotal: boolean("show_column_total").notNull().default(false),
+    totalFillColor: text("total_fill_color"),
+    totalTextColor: text("total_text_color"),
     sortOrder: integer("sort_order").notNull().default(0),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

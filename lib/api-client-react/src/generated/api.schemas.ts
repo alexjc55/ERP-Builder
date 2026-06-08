@@ -1013,6 +1013,10 @@ export interface Field {
   isFilterable?: boolean;
   showInTable?: boolean;
   showColumnTotal?: boolean;
+  /** @nullable */
+  totalFillColor?: string | null;
+  /** @nullable */
+  totalTextColor?: string | null;
   sortOrder: number;
   isActive: boolean;
   createdAt: string;
@@ -1036,6 +1040,10 @@ export interface FieldInput {
   isFilterable?: boolean;
   showInTable?: boolean;
   showColumnTotal?: boolean;
+  /** @nullable */
+  totalFillColor?: string | null;
+  /** @nullable */
+  totalTextColor?: string | null;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -1067,6 +1075,10 @@ export interface FieldUpdate {
   isFilterable?: boolean;
   showInTable?: boolean;
   showColumnTotal?: boolean;
+  /** @nullable */
+  totalFillColor?: string | null;
+  /** @nullable */
+  totalTextColor?: string | null;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -1086,6 +1098,10 @@ export interface PageField {
   formulaConfigJson?: FormulaFieldConfig;
   showInTable?: boolean;
   showColumnTotal?: boolean;
+  /** @nullable */
+  totalFillColor?: string | null;
+  /** @nullable */
+  totalTextColor?: string | null;
   sortOrder: number;
   isActive: boolean;
   createdAt: string;
@@ -1105,6 +1121,10 @@ export interface PageFieldInput {
   formulaConfigJson?: FormulaFieldConfig;
   showInTable?: boolean;
   showColumnTotal?: boolean;
+  /** @nullable */
+  totalFillColor?: string | null;
+  /** @nullable */
+  totalTextColor?: string | null;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -1122,6 +1142,10 @@ export interface PageFieldUpdate {
   formulaConfigJson?: FormulaFieldConfig;
   showInTable?: boolean;
   showColumnTotal?: boolean;
+  /** @nullable */
+  totalFillColor?: string | null;
+  /** @nullable */
+  totalTextColor?: string | null;
   sortOrder?: number;
   isActive?: boolean;
 }

@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/select";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { FieldFormatRulesEditor } from "@/components/FieldFormatRulesEditor";
+import { ColorPickerControl } from "@/components/ColorPickerControl";
 import { FormulaEditor, type FormulaFieldRef } from "@/components/FormulaEditor";
 import { useToast } from "@/hooks/use-toast";
 import { useML, useT } from "@/lib/i18n";
@@ -111,6 +112,8 @@ export function PageFieldConfigDialog({
   const [isActive, setIsActive] = useState(true);
   const [showInTable, setShowInTable] = useState(true);
   const [showColumnTotal, setShowColumnTotal] = useState(false);
+  const [totalFillColor, setTotalFillColor] = useState("");
+  const [totalTextColor, setTotalTextColor] = useState("");
   const [formatRules, setFormatRules] = useState<FieldFormatRule[]>([]);
   const [formula, setFormula] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -131,6 +134,8 @@ export function PageFieldConfigDialog({
       setIsActive(field.isActive);
       setShowInTable(field.showInTable ?? true);
       setShowColumnTotal(field.showColumnTotal ?? false);
+      setTotalFillColor(field.totalFillColor ?? "");
+      setTotalTextColor(field.totalTextColor ?? "");
       setFormatRules(Array.isArray(field.formatRulesJson) ? field.formatRulesJson : []);
       setFormula(field.formulaConfigJson?.expression ?? "");
     } else {
@@ -145,6 +150,8 @@ export function PageFieldConfigDialog({
       setIsActive(true);
       setShowInTable(true);
       setShowColumnTotal(false);
+      setTotalFillColor("");
+      setTotalTextColor("");
       setFormatRules([]);
       setFormula("");
     }
@@ -228,6 +235,8 @@ export function PageFieldConfigDialog({
       isActive,
       showInTable,
       showColumnTotal: fieldType === "number" ? showColumnTotal : false,
+      totalFillColor: fieldType === "number" && showColumnTotal && totalFillColor ? totalFillColor : null,
+      totalTextColor: fieldType === "number" && showColumnTotal && totalTextColor ? totalTextColor : null,
       formatRulesJson: formatRules,
       formulaConfigJson: fieldType === "function" ? { expression: formula.trim() } : {},
     };
@@ -323,6 +332,24 @@ export function PageFieldConfigDialog({
                 </div>
               )}
             </div>
+
+            {fieldType === "number" && showColumnTotal && (
+              <div className="rounded-md border border-slate-100 bg-slate-50/50 p-3 space-y-2">
+                <p className="text-xs text-slate-500">
+                  {t("fields.totalColorsHint", "Цвета ячейки итога столбца (необязательно)")}
+                </p>
+                <ColorPickerControl
+                  label={t("fields.totalFillColor", "Цвет заливки")}
+                  value={totalFillColor}
+                  onChange={setTotalFillColor}
+                />
+                <ColorPickerControl
+                  label={t("fields.totalTextColor", "Цвет текста")}
+                  value={totalTextColor}
+                  onChange={setTotalTextColor}
+                />
+              </div>
+            )}
 
             <div className="border-t border-slate-100 pt-4">
               <FieldFormatRulesEditor

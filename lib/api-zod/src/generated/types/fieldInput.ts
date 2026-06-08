@@ -30,6 +30,10 @@ export interface FieldInput {
   isFilterable?: boolean;
   showInTable?: boolean;
   showColumnTotal?: boolean;
+  /** @nullable */
+  totalFillColor?: string | null;
+  /** @nullable */
+  totalTextColor?: string | null;
   sortOrder?: number;
   isActive?: boolean;
 }

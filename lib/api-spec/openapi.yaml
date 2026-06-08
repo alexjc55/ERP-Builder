@@ -3594,6 +3594,10 @@ components:
           type: boolean
         showColumnTotal:
           type: boolean
+        totalFillColor:
+          type: ["string", "null"]
+        totalTextColor:
+          type: ["string", "null"]
         sortOrder:
           type: integer
         isActive:
@@ -3647,6 +3651,10 @@ components:
         showColumnTotal:
           type: boolean
           default: false
+        totalFillColor:
+          type: ["string", "null"]
+        totalTextColor:
+          type: ["string", "null"]
         sortOrder:
           type: integer
         isActive:
@@ -3707,6 +3715,10 @@ components:
           type: boolean
         showColumnTotal:
           type: boolean
+        totalFillColor:
+          type: ["string", "null"]
+        totalTextColor:
+          type: ["string", "null"]
         sortOrder:
           type: integer
         isActive:
@@ -3747,6 +3759,10 @@ components:
           type: boolean
         showColumnTotal:
           type: boolean
+        totalFillColor:
+          type: ["string", "null"]
+        totalTextColor:
+          type: ["string", "null"]
         sortOrder:
           type: integer
         isActive:
@@ -3791,6 +3807,10 @@ components:
         showColumnTotal:
           type: boolean
           default: false
+        totalFillColor:
+          type: ["string", "null"]
+        totalTextColor:
+          type: ["string", "null"]
         sortOrder:
           type: integer
         isActive:
@@ -3826,6 +3846,10 @@ components:
           type: boolean
         showColumnTotal:
           type: boolean
+        totalFillColor:
+          type: ["string", "null"]
+        totalTextColor:
+          type: ["string", "null"]
         sortOrder:
           type: integer
         isActive:
