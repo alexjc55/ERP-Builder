@@ -197,7 +197,44 @@ async function main() {
       })
       .returning({ id: pagesTable.id });
 
+    // ── 2b. Administration menu (builder pages) ─────────────────────────────
+    // These rows make the admin constructor reachable from the sidebar. The
+    // sidebar is built entirely from the `pages` table, so the wipe above also
+    // removed the admin menu — it must be recreated. Visibility is driven by
+    // RBAC caps (adminCapForPath) + superAdmin, not by role.pageIds, so simply
+    // having the rows restores the full administration section for admins.
+    const [adminGroup] = await tx
+      .insert(pagesTable)
+      .values({
+        nameJson: ml("Администрирование", "Administration", "ניהול"),
+        icon: "settings",
+        path: null,
+        sortOrder: 100,
+      })
+      .returning({ id: pagesTable.id });
+
+    const ADMIN_PAGES: { name: ML; icon: string; path: string }[] = [
+      { name: ml("Страницы", "Pages", "דפים"), icon: "files", path: "/admin/pages" },
+      { name: ml("Сущности", "Entities", "ישויות"), icon: "database", path: "/admin/entities" },
+      { name: ml("Пользователи", "Users", "משתמשים"), icon: "users", path: "/admin/users" },
+      { name: ml("Роли и права", "Roles & Permissions", "תפקידים והרשאות"), icon: "shield", path: "/admin/roles" },
+      { name: ml("Переводы", "Translations", "תרגומים"), icon: "languages", path: "/admin/translations" },
+      { name: ml("События", "Events", "אירועים"), icon: "activity", path: "/admin/events" },
+      { name: ml("Модули", "Modules", "מודולים"), icon: "puzzle", path: "/admin/modules" },
+      { name: ml("Корзина файлов", "File Trash", "סל קבצים"), icon: "trash", path: "/admin/file-trash" },
+    ];
+    await tx.insert(pagesTable).values(
+      ADMIN_PAGES.map((p, i) => ({
+        nameJson: p.name,
+        icon: p.icon,
+        path: p.path,
+        parentPageId: adminGroup.id,
+        sortOrder: 101 + i,
+      })),
+    );
+
     console.log(`Created pages (main=${mainPage.id}, logistics=${logisticsPage.id}, production=${productionPage.id}) and entity Items=${items.id}.`);
+    console.log(`Created administration menu group (${adminGroup.id}) with ${ADMIN_PAGES.length} builder pages.`);
 
     // ── 3. Fields ───────────────────────────────────────────────────────────
     await tx.insert(entityFieldsTable).values(
