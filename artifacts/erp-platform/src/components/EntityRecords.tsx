@@ -1473,18 +1473,30 @@ export function EntityRecords({
                   {Object.keys(numericTotals).length > 0 && (
                     <tr>
                       {displayFields.map((f: Field) => (
-                        <th key={`tot-${f.id}`} className="px-4 py-1.5 align-bottom">
+                        <th
+                          key={`tot-${f.id}`}
+                          className={cn(
+                            "px-4 py-3 text-left",
+                            numericTotals[f.fieldKey] !== undefined && "bg-emerald-50",
+                          )}
+                        >
                           {numericTotals[f.fieldKey] !== undefined ? (
-                            <span className="inline-block rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 whitespace-nowrap">
+                            <span className="text-sm font-bold text-emerald-700 whitespace-nowrap">
                               {numericTotals[f.fieldKey].toLocaleString("ru-RU")}
                             </span>
                           ) : null}
                         </th>
                       ))}
                       {displayedPageFields.map((pf: PageField) => (
-                        <th key={`tot-pf-${pf.id}`} className="px-4 py-1.5 align-bottom">
+                        <th
+                          key={`tot-pf-${pf.id}`}
+                          className={cn(
+                            "px-4 py-3 text-left",
+                            numericTotals[pf.fieldKey] !== undefined && "bg-emerald-50",
+                          )}
+                        >
                           {numericTotals[pf.fieldKey] !== undefined ? (
-                            <span className="inline-block rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 whitespace-nowrap">
+                            <span className="text-sm font-bold text-emerald-700 whitespace-nowrap">
                               {numericTotals[pf.fieldKey].toLocaleString("ru-RU")}
                             </span>
                           ) : null}
