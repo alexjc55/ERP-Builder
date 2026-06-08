@@ -25,5 +25,12 @@ Page-fields of type `relation` (config `{relationId, relatedFieldKey}` in `relat
 ## Widgets are admin-authoritative but visibility-gated
 Metric/chart/table widget values are computed bypassing the viewer's row/field perms (real totals), but only after page access + per-widget role visibility pass. Related columns/metrics inherit this — do not re-filter widget values by viewer perms.
 
+## related-values must re-apply the related entity's RECORD-VIEW boundary first
+**Rule:** before exposing any related column metadata/value, check `canRecord(perms, relatedEntityId, "view")`. If the viewer cannot view the related entity at all, force `access = "hidden"` (no type, no value, no linkedRecordId).
+
+**Why:** `resolveFieldAccess` defaults to `"view"` when no explicit field perm exists, so relying on it alone leaks values from an entity the viewer has zero record-view permission on. Field/own-scope checks are NOT a substitute for the entity-level view gate.
+
+**How to apply:** this gate is only for VIEWER-scoped reads (the records-table related-values endpoint). Dashboard widget compute paths are admin-authoritative by design (bypass viewer perms, gated by per-widget role visibility) and must NOT add this check.
+
 ## related-values endpoint must not leak restricted linked-record ids
 `POST /pages/:pageId/related-values` re-applies the related-entity field access + related own-scope + per-page role visibility. **Only expose `linkedRecordId` when the linked row is actually visible** to the viewer. Returning the id while nulling `value` leaks existence/identity of restricted related rows (IDOR-adjacent). The id is only needed for cells the viewer can read (and, when editable, write back through), so gate it on the same `visible` flag as `value`.

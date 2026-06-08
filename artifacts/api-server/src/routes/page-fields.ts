@@ -19,6 +19,7 @@ import { requireAuth } from "../middlewares/auth";
 import {
   requireAdmin,
   assertRecord,
+  canRecord,
   getPermissions,
   effectiveScope,
   recordOwnedBy,
@@ -677,7 +678,14 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
       );
     if (!relatedField) continue;
 
-    const access = resolveFieldAccess(relatedField, perms, roleId, relatedEntityId);
+    // Re-apply the related entity's RECORD-VIEW boundary first: a viewer with no
+    // view permission on the related entity must get nothing from it, even though
+    // resolveFieldAccess defaults to "view" when no explicit field perm exists.
+    // Treat lack of related-entity view as hidden (no type, no value, no id).
+    const canViewRelated = canRecord(perms, relatedEntityId, "view");
+    const access = canViewRelated
+      ? resolveFieldAccess(relatedField, perms, roleId, relatedEntityId)
+      : "hidden";
     const pagePerm = (pf.permissionsJson as FieldPermissions | null)?.[String(roleId)] ?? "edit";
     const relScope = effectiveScope(perms, relatedEntityId);
     const columnEditable = pagePerm === "edit" && access === "edit";
