@@ -392,8 +392,28 @@ async function computeMetric(m: WidgetMetricSpec): Promise<number> {
   // Related metric: walk single-link relation from each (filtered) base record to
   // its linked record, then count those linked records or sum the related field.
   if (m.relationId != null) {
-    const resolved = await resolveRelationField(m.entityId, m.relationId, m.fieldKey ?? "");
-    if ("error" in resolved) return 0;
+    // Sum needs the related field (and its entity); count only needs a valid
+    // single-link direction — for count m.fieldKey is null, so do NOT resolve a
+    // related field (that would error and yield 0). Resolve direction directly.
+    let direction: LinkDirection;
+    let relatedEntityId: number;
+    if (m.aggregation === "sum" && m.fieldKey) {
+      const resolved = await resolveRelationField(m.entityId, m.relationId, m.fieldKey);
+      if ("error" in resolved) return 0;
+      direction = resolved.direction;
+      relatedEntityId = resolved.relatedEntityId;
+    } else {
+      const [relation] = await db
+        .select()
+        .from(relationsTable)
+        .where(eq(relationsTable.id, m.relationId))
+        .limit(1);
+      if (!relation) return 0;
+      const dir = relationDirection(relation, m.entityId);
+      if (!dir) return 0;
+      direction = dir;
+      relatedEntityId = relatedEntityIdFor(relation, dir);
+    }
     const baseRows = await db
       .select({ id: entityRecordsTable.id })
       .from(entityRecordsTable)
@@ -404,7 +424,7 @@ async function computeMetric(m: WidgetMetricSpec): Promise<number> {
     // many-to-one / one-to-many several base records can point to the same linked
     // record and each link must contribute. count = number of links; sum = the
     // linked field summed once per linking base record.
-    const map = await linkedRecordMap(m.relationId, resolved.direction, baseIds);
+    const map = await linkedRecordMap(m.relationId, direction, baseIds);
     if (m.aggregation === "sum" && m.fieldKey) {
       const uniqueLinkedIds = Array.from(new Set(map.values()));
       if (uniqueLinkedIds.length === 0) return 0;
@@ -415,7 +435,7 @@ async function computeMetric(m: WidgetMetricSpec): Promise<number> {
           v: sql<number>`CASE WHEN (${entityRecordsTable.valuesJson} ->> ${key}) ~ ${NUMERIC_RE} THEN (${entityRecordsTable.valuesJson} ->> ${key})::numeric ELSE 0 END`,
         })
         .from(entityRecordsTable)
-        .where(and(eq(entityRecordsTable.entityId, resolved.relatedEntityId), inArray(entityRecordsTable.id, uniqueLinkedIds)));
+        .where(and(eq(entityRecordsTable.entityId, relatedEntityId), inArray(entityRecordsTable.id, uniqueLinkedIds)));
       const valueById = new Map<number, number>();
       for (const r of rows) valueById.set(r.id, Number(r.v ?? 0));
       let total = 0;

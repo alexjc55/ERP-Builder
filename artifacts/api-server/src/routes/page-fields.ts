@@ -246,7 +246,20 @@ router.get("/pages/:pageId/fields", requireAuth, async (req, res): Promise<void>
     .from(pageFieldsTable)
     .where(eq(pageFieldsTable.pageId, params.data.pageId))
     .orderBy(asc(pageFieldsTable.sortOrder));
-  res.json(fields);
+  // Per-page role visibility is a hard server boundary: a page-field whose
+  // permissionsJson marks the viewer's role "hidden" must not be returned at all
+  // (not even its metadata/label/config). Admins who can edit pages still receive
+  // every field so the column setup mode can configure hidden columns.
+  const perms = await getPermissions(req);
+  if (perms.superAdmin || perms.admin.pages) {
+    res.json(fields);
+    return;
+  }
+  const roleId = req.user!.roleId;
+  const visible = fields.filter(
+    (f) => (f.permissionsJson as FieldPermissions | null)?.[String(roleId)] !== "hidden",
+  );
+  res.json(visible);
 });
 
 router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (req, res): Promise<void> => {

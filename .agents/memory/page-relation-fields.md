@@ -14,6 +14,14 @@ Page-fields of type `relation` (config `{relationId, relatedFieldKey}` in `relat
 
 **How to apply:** in `dashboard.ts` `computeMetric` related branch, fetch the related field value into a `Map<linkedId, value>` over the *unique* linked ids (one query), then accumulate by iterating `map.values()` (the per-base-record linked ids, with duplicates). Never return `Set(map.values()).length`.
 
+## Count metric must NOT resolve a related field
+**Rule:** for a related metric, `count` sends `fieldKey: null` by design (it counts links, no field needed). The compute path must resolve only the relation *direction* (via `relationDirection`) for count; calling `resolveRelationField(..., fieldKey ?? "")` errors (field "" not found) → silently returns 0. Only `sum` resolves the related field. Validation already allows count-without-field; the bug was compute-side.
+
+## Per-page role visibility is a SERVER boundary, not a client filter
+**Rule:** `GET /pages/:pageId/fields` must drop page-fields whose `permissionsJson[roleId] === "hidden"` for non-admin viewers — the column metadata/label/config must never reach a hidden role, not just its values. Admins who can edit pages (superAdmin || admin.pages) still receive every field so column setup mode can configure hidden columns.
+
+**Why:** the frontend derives displayed columns straight from this endpoint; filtering only on the client leaks restricted column existence/labels/config. The related-values endpoint already filters values by role, but metadata must be gated at its own source.
+
 ## Widgets are admin-authoritative but visibility-gated
 Metric/chart/table widget values are computed bypassing the viewer's row/field perms (real totals), but only after page access + per-widget role visibility pass. Related columns/metrics inherit this — do not re-filter widget values by viewer perms.
 
