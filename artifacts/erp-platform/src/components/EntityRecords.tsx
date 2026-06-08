@@ -1740,7 +1740,7 @@ export function EntityRecords({
                     {displayFields.map((f: Field, ci: number) => (
                       <th
                         key={f.id}
-                        className="relative text-left px-4 py-3 font-medium text-slate-600 whitespace-nowrap"
+                        className="relative align-top text-left px-4 py-3 font-medium text-slate-600 break-words"
                         style={colWidthStyle(`f:${f.id}`)}
                       >
                         {setupMode && !isMirror ? (
@@ -1784,7 +1784,7 @@ export function EntityRecords({
                     {displayedPageFields.map((pf: PageField, pi: number) => (
                       <th
                         key={`pf-${pf.id}`}
-                        className="relative text-left px-4 py-3 font-medium text-slate-600 whitespace-nowrap"
+                        className="relative align-top text-left px-4 py-3 font-medium text-slate-600 break-words"
                         style={colWidthStyle(`pf:${pf.id}`)}
                       >
                         {setupMode ? (
