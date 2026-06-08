@@ -3001,6 +3001,7 @@ function FileFieldInput({
     allowedSources.includes(currentKind) ? currentKind : allowedSources[0] ?? "server",
   );
   const [uploading, setUploading] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const showName = source === fileValueSourceOf(fileValue);
@@ -3092,7 +3093,7 @@ function FileFieldInput({
               className="h-7 w-7 text-slate-500"
               disabled={disabled}
               title={t("records.fileRemove", "Удалить файл")}
-              onClick={() => onChange("")}
+              onClick={() => setConfirmRemove(true)}
             >
               <X className="h-3.5 w-3.5" />
             </Button>
@@ -3124,7 +3125,7 @@ function FileFieldInput({
               className="h-7 w-7 text-slate-500"
               disabled={disabled}
               title={t("records.fileRemove", "Удалить файл")}
-              onClick={() => onChange("")}
+              onClick={() => setConfirmRemove(true)}
             >
               <X className="h-3.5 w-3.5" />
             </Button>
@@ -3166,6 +3167,37 @@ function FileFieldInput({
           className={compact ? "h-8 text-sm" : undefined}
         />
       )}
+
+      <AlertDialog open={confirmRemove} onOpenChange={setConfirmRemove}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("records.fileRemoveConfirmTitle", "Удалить файл из поля?")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {fileValue && isGDriveFile(fileValue)
+                ? t(
+                    "records.fileRemoveConfirmGdrive",
+                    "Ссылка на файл будет удалена из этого поля. Сам файл в Google Drive останется без изменений.",
+                  )
+                : t(
+                    "records.fileRemoveConfirmServer",
+                    "Файл будет откреплён от этого поля и перемещён в корзину файлов — его можно будет восстановить.",
+                  )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("records.cancel", "Отмена")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                onChange("");
+                setConfirmRemove(false);
+              }}
+            >
+              {t("records.fileRemove", "Удалить файл")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

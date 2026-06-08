@@ -22,6 +22,7 @@ import TranslationsPage from "@/pages/admin/translations";
 import EventsPage from "@/pages/admin/events";
 import ModulesPage from "@/pages/admin/modules";
 import GoogleDrivePage from "@/pages/admin/google-drive";
+import FileTrashPage from "@/pages/admin/file-trash";
 import DynamicPage from "@/pages/dynamic";
 import SettingsPage from "@/pages/settings";
 import { Loader2, ShieldAlert } from "lucide-react";
@@ -52,11 +53,13 @@ function NoAccess() {
 function ProtectedRoute({
   children,
   adminCap,
+  superAdminOnly,
 }: {
   children: React.ReactNode;
   adminCap?: keyof RoleAdminCaps;
+  superAdminOnly?: boolean;
 }) {
-  const { user, isLoading, canAdmin } = useAuth();
+  const { user, isLoading, canAdmin, isSuperAdmin } = useAuth();
 
   if (isLoading) {
     return (
@@ -68,6 +71,10 @@ function ProtectedRoute({
 
   if (!user) {
     return <Redirect to="/login" />;
+  }
+
+  if (superAdminOnly && !isSuperAdmin) {
+    return <Layout><NoAccess /></Layout>;
   }
 
   if (adminCap && !canAdmin(adminCap)) {
@@ -172,6 +179,12 @@ function Router() {
       <Route path="/admin/google-drive">
         <ProtectedRoute adminCap="googleDrive">
           <GoogleDrivePage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/file-trash">
+        <ProtectedRoute superAdminOnly>
+          <FileTrashPage />
         </ProtectedRoute>
       </Route>
 

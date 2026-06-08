@@ -5,6 +5,56 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+/**
+ * Multilingual name snapshot of the source entity.
+ * @nullable
+ */
+export type DeletedFileEntityName = { [key: string]: unknown } | null;
+
+/**
+ * Multilingual name snapshot of the source field.
+ * @nullable
+ */
+export type DeletedFileFieldName = { [key: string]: unknown } | null;
+
+export type DeletedFileReason = typeof DeletedFileReason[keyof typeof DeletedFileReason];
+
+
+export const DeletedFileReason = {
+  record_deleted: 'record_deleted',
+  field_cleared: 'field_cleared',
+  field_replaced: 'field_replaced',
+} as const;
+
+export interface DeletedFile {
+  id: number;
+  /** @nullable */
+  entityId?: number | null;
+  /**
+     * Multilingual name snapshot of the source entity.
+     * @nullable
+     */
+  entityName?: DeletedFileEntityName;
+  /** @nullable */
+  recordId?: number | null;
+  fieldKey: string;
+  /**
+     * Multilingual name snapshot of the source field.
+     * @nullable
+     */
+  fieldName?: DeletedFileFieldName;
+  fileName: string;
+  filePath: string;
+  /** @nullable */
+  fileSize?: number | null;
+  /** @nullable */
+  contentType?: string | null;
+  reason: DeletedFileReason;
+  /** @nullable */
+  deletedBy?: number | null;
+  deletedAt: string;
+}
+
 export interface GoogleDriveStatus {
   /** A refresh token is stored. */
   connected: boolean;

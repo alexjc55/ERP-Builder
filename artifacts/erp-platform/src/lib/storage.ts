@@ -185,6 +185,22 @@ export async function openObjectInNewTab(path: string): Promise<void> {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
+/**
+ * Download a trashed (recycle-bin) file by its deleted-files row id. The bytes
+ * are served behind an auth + superAdmin gate, so we fetch with the bearer token
+ * and trigger a browser download under the original file name.
+ */
+export async function downloadTrashedFile(id: number, fileName: string): Promise<void> {
+  const url = await fetchAuthedBlobUrl(`/api/deleted-files/${id}/content`);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName || `file-${id}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 export type PreviewKind = "image" | "pdf" | "other";
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|avif)(\?|#|$)/i;

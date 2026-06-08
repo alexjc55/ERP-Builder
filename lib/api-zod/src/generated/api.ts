@@ -3620,3 +3620,46 @@ export const DisconnectGoogleDriveResponse = zod.object({
 })
 
 
+/**
+ * @summary List local files in the recycle bin (superAdmin)
+ */
+export const ListDeletedFilesResponseItem = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number().nullish(),
+  "entityName": zod.record(zod.string(), zod.unknown()).nullish().describe('Multilingual name snapshot of the source entity.'),
+  "recordId": zod.number().nullish(),
+  "fieldKey": zod.string(),
+  "fieldName": zod.record(zod.string(), zod.unknown()).nullish().describe('Multilingual name snapshot of the source field.'),
+  "fileName": zod.string(),
+  "filePath": zod.string(),
+  "fileSize": zod.number().nullish(),
+  "contentType": zod.string().nullish(),
+  "reason": zod.enum(['record_deleted', 'field_cleared', 'field_replaced']),
+  "deletedBy": zod.number().nullish(),
+  "deletedAt": zod.coerce.date()
+})
+export const ListDeletedFilesResponse = zod.array(ListDeletedFilesResponseItem)
+
+
+/**
+ * @summary Permanently delete every file in the recycle bin (superAdmin)
+ */
+export const PurgeDeletedFilesResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
+ * @summary Permanently delete one trashed file from storage (superAdmin)
+ */
+export const DeleteDeletedFileParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteDeletedFileResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+

@@ -44,6 +44,18 @@ export function requireAdmin(area: keyof RoleAdminCaps) {
   };
 }
 
+/** Guard a route to superAdmin only. Use after requireAuth. */
+export function requireSuperAdmin() {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const perms = await getPermissions(req);
+    if (perms.superAdmin) {
+      next();
+      return;
+    }
+    res.status(403).json({ error: "Forbidden" });
+  };
+}
+
 /** True if the permissions grant the given record action for the entity. */
 export function canRecord(perms: RolePermissions, entityId: number, action: keyof RecordPermission): boolean {
   if (perms.superAdmin) return true;

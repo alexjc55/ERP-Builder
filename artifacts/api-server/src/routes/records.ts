@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable } from "@workspace/db";
+import { db, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable } from "@workspace/db";
 import { eq, asc, desc, and, or, sql, inArray, type SQL } from "drizzle-orm";
 import type { Request } from "express";
 import { requireAuth } from "../middlewares/auth";
@@ -727,6 +727,99 @@ router.get("/records/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(stripHidden(record, hidden));
 });
 
+type TrashReason = "record_deleted" | "field_cleared" | "field_replaced";
+
+/**
+ * Recognize a LOCAL (object-storage) file value. Server files are the only kind
+ * we ever physically delete; Google Drive (`fileId`) and link (`url`) values are
+ * deliberately ignored. Legacy values without a `kind` but with an `/objects/`
+ * path are treated as server files.
+ */
+function asServerFile(
+  v: unknown,
+): { path: string; name: string; size: number | null; contentType: string | null } | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const o = v as Record<string, unknown>;
+  const isServer = o.kind === "server" || (o.kind == null && o.url == null && o.fileId == null);
+  if (!isServer) return null;
+  const path = o.path;
+  if (typeof path !== "string" || !path.startsWith("/objects/")) return null;
+  const name =
+    typeof o.name === "string" && o.name.trim() ? o.name.trim() : path.split("/").pop() || "file";
+  return {
+    path,
+    name,
+    size: typeof o.size === "number" && Number.isFinite(o.size) ? o.size : null,
+    contentType: typeof o.contentType === "string" && o.contentType ? o.contentType : null,
+  };
+}
+
+/**
+ * Move LOCAL files that were removed from a record into the file trash (recycle
+ * bin). The physical objects are kept until the trash is purged, so an accidental
+ * delete is recoverable. `newValues === null` means the whole record was deleted.
+ * Best-effort: a failure here never blocks the record op. Drive/link values are
+ * left untouched.
+ */
+async function trashRemovedServerFiles(
+  req: Request,
+  entityId: number,
+  recordId: number,
+  oldValues: Record<string, unknown>,
+  newValues: Record<string, unknown> | null,
+): Promise<void> {
+  const toTrash: {
+    fieldKey: string;
+    file: NonNullable<ReturnType<typeof asServerFile>>;
+    reason: TrashReason;
+  }[] = [];
+  for (const [key, oldVal] of Object.entries(oldValues)) {
+    const oldFile = asServerFile(oldVal);
+    if (!oldFile) continue;
+    if (newValues === null) {
+      toTrash.push({ fieldKey: key, file: oldFile, reason: "record_deleted" });
+      continue;
+    }
+    const newRaw = newValues[key];
+    const newFile = asServerFile(newRaw);
+    if (newFile && newFile.path === oldFile.path) continue; // unchanged
+    const hasNew = newRaw != null && newRaw !== "";
+    toTrash.push({ fieldKey: key, file: oldFile, reason: hasNew ? "field_replaced" : "field_cleared" });
+  }
+  if (toTrash.length === 0) return;
+
+  try {
+    const [entity] = await db
+      .select({ nameJson: entitiesTable.nameJson })
+      .from(entitiesTable)
+      .where(eq(entitiesTable.id, entityId))
+      .limit(1);
+    const fieldRows = await db
+      .select({ fieldKey: entityFieldsTable.fieldKey, nameJson: entityFieldsTable.nameJson })
+      .from(entityFieldsTable)
+      .where(eq(entityFieldsTable.entityId, entityId));
+    const fieldName = new Map(fieldRows.map((f) => [f.fieldKey, f.nameJson]));
+
+    await db.insert(deletedFilesTable).values(
+      toTrash.map((t) => ({
+        entityId,
+        entityNameJson: entity?.nameJson ?? null,
+        recordId,
+        fieldKey: t.fieldKey,
+        fieldNameJson: fieldName.get(t.fieldKey) ?? null,
+        fileName: t.file.name,
+        filePath: t.file.path,
+        fileSize: t.file.size,
+        contentType: t.file.contentType,
+        reason: t.reason,
+        deletedBy: req.user!.userId,
+      })),
+    );
+  } catch (err) {
+    req.log.error({ err }, "Failed to record removed files in the file trash");
+  }
+}
+
 router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
   const params = UpdateRecordParams.safeParse(req.params);
   if (!params.success) {
@@ -947,6 +1040,18 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
   }
   await writeAudit(updateEntries, req.log);
 
+  // Move any local files that were cleared or replaced by this update into the
+  // file trash (Drive/link values untouched). Best-effort; does not block.
+  if (update.valuesJson !== undefined) {
+    await trashRemovedServerFiles(
+      req,
+      existing.entityId,
+      record.id,
+      existingValues,
+      record.valuesJson as Record<string, unknown>,
+    );
+  }
+
   const events: Parameters<typeof emitEvent>[0] = [
     {
       eventName: EVENT_RECORD_UPDATED,
@@ -998,6 +1103,10 @@ router.delete("/records/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   await db.delete(entityRecordsTable).where(eq(entityRecordsTable.id, params.data.id));
+
+  // Move the record's local files into the file trash so a mistaken delete is
+  // recoverable (Drive/link values untouched). Best-effort; does not block.
+  await trashRemovedServerFiles(req, existing.entityId, params.data.id, values, null);
 
   // Audit: one deletion marker carrying a snapshot of the record's data so the
   // trail preserves what was removed even though the row is gone.

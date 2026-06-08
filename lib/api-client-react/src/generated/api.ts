@@ -29,6 +29,7 @@ import type {
   DashboardWidget,
   DashboardWidgetData,
   DashboardWidgetInput,
+  DeletedFile,
   Entity,
   EntityInput,
   EntityRecord,
@@ -8636,5 +8637,222 @@ export const useDisconnectGoogleDrive = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDisconnectGoogleDriveMutationOptions(options));
+    }
+
+export const getListDeletedFilesUrl = () => {
+
+
+
+
+  return `/api/deleted-files`
+}
+
+/**
+ * @summary List local files in the recycle bin (superAdmin)
+ */
+export const listDeletedFiles = async ( options?: RequestInit): Promise<DeletedFile[]> => {
+
+  return customFetch<DeletedFile[]>(getListDeletedFilesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListDeletedFilesQueryKey = () => {
+    return [
+    `/api/deleted-files`
+    ] as const;
+    }
+
+
+export const getListDeletedFilesQueryOptions = <TData = Awaited<ReturnType<typeof listDeletedFiles>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDeletedFiles>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListDeletedFilesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDeletedFiles>>> = ({ signal }) => listDeletedFiles({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDeletedFiles>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListDeletedFilesQueryResult = NonNullable<Awaited<ReturnType<typeof listDeletedFiles>>>
+export type ListDeletedFilesQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary List local files in the recycle bin (superAdmin)
+ */
+
+export function useListDeletedFiles<TData = Awaited<ReturnType<typeof listDeletedFiles>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDeletedFiles>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListDeletedFilesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getPurgeDeletedFilesUrl = () => {
+
+
+
+
+  return `/api/deleted-files/purge-all`
+}
+
+/**
+ * @summary Permanently delete every file in the recycle bin (superAdmin)
+ */
+export const purgeDeletedFiles = async ( options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getPurgeDeletedFilesUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getPurgeDeletedFilesMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof purgeDeletedFiles>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof purgeDeletedFiles>>, TError,void, TContext> => {
+
+const mutationKey = ['purgeDeletedFiles'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof purgeDeletedFiles>>, void> = () => {
+
+
+          return  purgeDeletedFiles(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PurgeDeletedFilesMutationResult = NonNullable<Awaited<ReturnType<typeof purgeDeletedFiles>>>
+
+    export type PurgeDeletedFilesMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Permanently delete every file in the recycle bin (superAdmin)
+ */
+export const usePurgeDeletedFiles = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof purgeDeletedFiles>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof purgeDeletedFiles>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getPurgeDeletedFilesMutationOptions(options));
+    }
+
+export const getDeleteDeletedFileUrl = (id: number,) => {
+
+
+
+
+  return `/api/deleted-files/${id}`
+}
+
+/**
+ * @summary Permanently delete one trashed file from storage (superAdmin)
+ */
+export const deleteDeletedFile = async (id: number, options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getDeleteDeletedFileUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteDeletedFileMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDeletedFile>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteDeletedFile>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteDeletedFile'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteDeletedFile>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteDeletedFile(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteDeletedFileMutationResult = NonNullable<Awaited<ReturnType<typeof deleteDeletedFile>>>
+
+    export type DeleteDeletedFileMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Permanently delete one trashed file from storage (superAdmin)
+ */
+export const useDeleteDeletedFile = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDeletedFile>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteDeletedFile>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteDeletedFileMutationOptions(options));
     }
 

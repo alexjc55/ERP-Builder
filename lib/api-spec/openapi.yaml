@@ -28,6 +28,8 @@ tags:
     description: Object storage upload and serving endpoints
   - name: googleDrive
     description: Google Drive connection used by file fields
+  - name: fileTrash
+    description: Recycle bin for local files removed from records (superAdmin)
 
 paths:
   /storage/uploads/request-url:
@@ -2481,8 +2483,116 @@ paths:
               schema:
                 $ref: "#/components/schemas/GoogleDriveConnectionInfo"
 
+  /deleted-files:
+    get:
+      operationId: listDeletedFiles
+      tags: [fileTrash]
+      summary: List local files in the recycle bin (superAdmin)
+      responses:
+        "200":
+          description: Trashed files, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DeletedFile"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /deleted-files/purge-all:
+    post:
+      operationId: purgeDeletedFiles
+      tags: [fileTrash]
+      summary: Permanently delete every file in the recycle bin (superAdmin)
+      responses:
+        "200":
+          description: Trash emptied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /deleted-files/{id}:
+    delete:
+      operationId: deleteDeletedFile
+      tags: [fileTrash]
+      summary: Permanently delete one trashed file from storage (superAdmin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Trashed file not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
+    DeletedFile:
+      type: object
+      required: [id, fieldKey, fileName, filePath, reason, deletedAt]
+      properties:
+        id:
+          type: integer
+        entityId:
+          type: ["integer", "null"]
+        entityName:
+          type: ["object", "null"]
+          additionalProperties: true
+          description: Multilingual name snapshot of the source entity.
+        recordId:
+          type: ["integer", "null"]
+        fieldKey:
+          type: string
+        fieldName:
+          type: ["object", "null"]
+          additionalProperties: true
+          description: Multilingual name snapshot of the source field.
+        fileName:
+          type: string
+        filePath:
+          type: string
+        fileSize:
+          type: ["integer", "null"]
+        contentType:
+          type: ["string", "null"]
+        reason:
+          type: string
+          enum: [record_deleted, field_cleared, field_replaced]
+        deletedBy:
+          type: ["integer", "null"]
+        deletedAt:
+          type: string
+          format: date-time
+
     GoogleDriveStatus:
       type: object
       required: [connected, folderConfigured, enabled]

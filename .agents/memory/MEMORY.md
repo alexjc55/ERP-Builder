@@ -27,3 +27,4 @@
 - [Page related fields](page-relation-fields.md) — relation page-fields/metrics surface one linked record's field; metrics aggregate PER LINK not per unique linked record; related-values must not leak linkedRecordId of restricted rows.
 - [Conditional formatting text color](conditional-formatting-text-color.md) — per-rule textColor must be applied inline on content spans (and into renderCellValue), not the <td>; Tailwind text-* classes beat inherited color.
 - [Dashboard page type](dashboard-page-type.md) — dashboard ⊥ mirror ⊥ bound-entity page types; admin-authoritative widget totals (bypass viewer RBAC) gated by page-access + per-widget role visibility before compute; exclusivity enforced on effective final state.
+- [File trash](file-trash.md) — recycle bin for LOCAL record files only (never gdrive/link); best-effort trash never blocks the record op; superAdmin-only; restore=download; purge drops row only after physical delete.
