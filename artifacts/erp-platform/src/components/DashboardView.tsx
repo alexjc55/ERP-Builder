@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import {
   useGetDashboardData,
   useListDashboardWidgets,
@@ -272,8 +272,103 @@ function NotesRichText({ html }: { html: string }) {
   );
 }
 
+/**
+ * Per-user, per-widget column widths for a notes table, persisted in localStorage
+ * (mirrors the records table's resize behavior). The notes table has no header
+ * keys, so columns are positional and widths are keyed by column index.
+ */
+function useNotesColResize(widgetId: number) {
+  const storageKey = `erp:notescolwidths:${widgetId}`;
+  const [widths, setWidths] = useState<Record<number, number>>({});
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      setWidths(raw ? (JSON.parse(raw) as Record<number, number>) : {});
+    } catch {
+      setWidths({});
+    }
+  }, [storageKey]);
+  // Forcibly tear down an in-flight drag on unmount so a drag that never sees
+  // pointerup can't leak window listeners or leave body cursor/userSelect stuck.
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => dragCleanupRef.current?.(), []);
+  const startResize = (ci: number) => (e: ReactPointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCleanupRef.current?.();
+    const cell = (e.currentTarget as HTMLElement).closest("td,th") as HTMLElement | null;
+    const startW = widths[ci] ?? cell?.offsetWidth ?? 120;
+    const startX = e.clientX;
+    let latest = widths;
+    const onMove = (ev: PointerEvent) => {
+      const w = Math.max(48, Math.round(startW + (ev.clientX - startX)));
+      latest = { ...widths, [ci]: w };
+      setWidths(latest);
+    };
+    const cleanup = (persist: boolean) => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("blur", onAbort);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+      dragCleanupRef.current = null;
+      if (persist) {
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(latest));
+        } catch {
+          /* ignore quota / disabled storage */
+        }
+      }
+    };
+    const onUp = () => cleanup(true);
+    const onAbort = () => cleanup(true);
+    dragCleanupRef.current = () => cleanup(false);
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("blur", onAbort);
+  };
+  const reset = (ci: number) => {
+    setWidths((prev) => {
+      const next = { ...prev };
+      delete next[ci];
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+  return { widths, startResize, reset };
+}
+
+/** Fixed width for a resized notes-table column (auto-layout needs min+max to honour it). */
+function notesColStyle(widths: Record<number, number>, ci: number): CSSProperties | undefined {
+  const w = widths[ci];
+  return w ? { width: w, minWidth: w, maxWidth: w } : undefined;
+}
+
+/** Drag handle pinned to a notes-table column's right edge; double-click resets the width. */
+function NotesResizeGrip({ onResizeStart, onReset }: { onResizeStart: (e: ReactPointerEvent) => void; onReset: () => void }) {
+  return (
+    <span
+      onPointerDown={onResizeStart}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        onReset();
+      }}
+      title="Потяните, чтобы изменить ширину колонки (двойной клик — сбросить)"
+      className="absolute -right-px top-0 z-10 h-full w-1.5 cursor-col-resize touch-none select-none hover:bg-blue-400/70"
+    />
+  );
+}
+
 /** Render a free-form notes table: each cell is static text or a computed value. */
-function NotesTable({ cells, currencySymbol }: { cells: NoteCellData[][]; currencySymbol: string }) {
+function NotesTable({ cells, currencySymbol, widgetId }: { cells: NoteCellData[][]; currencySymbol: string; widgetId: number }) {
+  const { widths, startResize, reset } = useNotesColResize(widgetId);
   if (!cells || cells.length === 0) {
     return <div className="flex h-full items-center justify-center text-sm text-slate-400">Нет данных</div>;
   }
@@ -286,12 +381,14 @@ function NotesTable({ cells, currencySymbol }: { cells: NoteCellData[][]; curren
               {row.map((cell, ci) => (
                 <td
                   key={ci}
+                  style={notesColStyle(widths, ci)}
                   className={cn(
-                    "border border-slate-200 px-2 py-1.5 align-top",
+                    "relative border border-slate-200 px-2 py-1.5 align-top",
                     cell.kind === "dynamic" ? "font-medium text-slate-800 tabular-nums" : "text-slate-600 whitespace-pre-wrap",
                   )}
                 >
                   {renderNoteCellValue(cell, currencySymbol)}
+                  {ri === 0 && <NotesResizeGrip onResizeStart={startResize(ci)} onReset={() => reset(ci)} />}
                 </td>
               ))}
             </tr>
@@ -307,6 +404,7 @@ function EditableNotesContent({
   notes,
   canEdit,
   currencySymbol,
+  widgetId,
   onSave,
   saving,
   t,
@@ -314,6 +412,7 @@ function EditableNotesContent({
   notes: NotesData;
   canEdit: boolean;
   currencySymbol: string;
+  widgetId: number;
   onSave: (data: NotesContentInput) => void;
   saving: boolean;
   t: (key: string, fallback: string) => string;
@@ -324,6 +423,7 @@ function EditableNotesContent({
         cells={notes.cells ?? []}
         canEdit={canEdit}
         currencySymbol={currencySymbol}
+        widgetId={widgetId}
         onSave={onSave}
         t={t}
       />
@@ -411,19 +511,22 @@ function EditableNotesTable({
   cells,
   canEdit,
   currencySymbol,
+  widgetId,
   onSave,
   t,
 }: {
   cells: NoteCellData[][];
   canEdit: boolean;
   currencySymbol: string;
+  widgetId: number;
   onSave: (data: NotesContentInput) => void;
   t: (key: string, fallback: string) => string;
 }) {
   const [editing, setEditing] = useState<{ ri: number; ci: number } | null>(null);
   const [draft, setDraft] = useState("");
+  const { widths, startResize, reset } = useNotesColResize(widgetId);
 
-  if (!canEdit) return <NotesTable cells={cells} currencySymbol={currencySymbol} />;
+  if (!canEdit) return <NotesTable cells={cells} currencySymbol={currencySymbol} widgetId={widgetId} />;
   if (!cells || cells.length === 0) {
     return <div className="flex h-full items-center justify-center text-sm text-slate-400">{t("dash.noData", "Нет данных")}</div>;
   }
@@ -444,7 +547,7 @@ function EditableNotesTable({
                 const isEditing = editing?.ri === ri && editing?.ci === ci;
                 if (isEditing) {
                   return (
-                    <td key={ci} className="border border-slate-200 p-0 align-top">
+                    <td key={ci} style={notesColStyle(widths, ci)} className="relative border border-slate-200 p-0 align-top">
                       <textarea
                         autoFocus
                         value={draft}
@@ -468,6 +571,7 @@ function EditableNotesTable({
                 return (
                   <td
                     key={ci}
+                    style={notesColStyle(widths, ci)}
                     onClick={
                       editableCell
                         ? () => {
@@ -477,12 +581,13 @@ function EditableNotesTable({
                         : undefined
                     }
                     className={cn(
-                      "border border-slate-200 px-2 py-1.5 align-top",
+                      "relative border border-slate-200 px-2 py-1.5 align-top",
                       cell.kind === "dynamic" ? "font-medium text-slate-800 tabular-nums" : "whitespace-pre-wrap text-slate-600",
                       editableCell && "cursor-text hover:bg-blue-50/40",
                     )}
                   >
                     {renderNoteCellValue(cell, currencySymbol)}
+                    {ri === 0 && <NotesResizeGrip onResizeStart={startResize(ci)} onReset={() => reset(ci)} />}
                   </td>
                 );
               })}
@@ -751,6 +856,7 @@ function WidgetCard({
                 notes={notes}
                 canEdit={!!w.canEditNotes && !!onSaveNotesContent}
                 currencySymbol={currencySymbol}
+                widgetId={w.id}
                 onSave={(data) => onSaveNotesContent?.(w.id, data)}
                 saving={!!savingNotesContent}
                 t={t}
