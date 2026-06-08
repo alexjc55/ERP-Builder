@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "HcHGOzqn_NRd-KEQF4ufk"
+uri = "file://docs/PLATFORM_TECHNICAL_GUIDE.md"
+type = "text"
+title = "Production ERP Builder — техническое описание и инструкция"
