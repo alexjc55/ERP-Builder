@@ -20,3 +20,8 @@ A component that does one-time bootstrap (e.g. auto-selecting the entity's defau
 
 ## Schema naming
 FilterCondition/SortSpec use `field` + `operator`/`direction` (NOT `fieldKey`). Field keys in filters/sorts are whitelist-validated server-side against the entity's active fields (400 on unknown); values are Drizzle bound params. configJson holds `{filters, filterConjunction, sorts, search, visibleFields}`.
+
+## Views do NOT control which columns show — per-field "Показывать в таблице" does
+A view's `configJson.visibleFields` is **no longer used to choose/limit the records-table columns**. Columns are governed solely by each field's per-page `showInTable` flag (plus field-level role perms via `tableFields`); column order follows field `sortOrder`. A view carries only sort/filter/search.
+**Why:** the views admin UI never exposed a column picker, yet seeded default views had `visibleFields` populated — so selecting the default view silently hid columns the field settings said to show, with no way for the user to fix it. The user's model: column visibility is a per-page/per-field decision (independently per page, even for related/mirror columns), not a view concern.
+**How to apply:** if per-view column sets are ever wanted again, add an explicit column picker to the views UI AND re-introduce the `visibleFields` branch in `EntityRecords` `displayFields` — don't silently resurrect the old behavior. `visibleFields` stays in the ViewConfig type for backward compat but is display-inert.

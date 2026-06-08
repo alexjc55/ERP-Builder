@@ -1246,18 +1246,14 @@ export function EntityRecords({
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
-  const visibleFields = selectedConfig.visibleFields;
-  const hasCustomColumnOrder = Boolean(visibleFields && visibleFields.length > 0);
-  // In setup mode the admin manages every column (including ones hidden from the
-  // table), so show all role-visible fields. Otherwise: a selected view dictates
-  // the columns; with no view, show all fields opted-in via "Показывать в таблице".
+  // Columns are governed solely by each field's per-page "Показывать в таблице"
+  // flag (and field-level role perms, already applied in `tableFields`) — NOT by
+  // the selected view. A view carries only sort/filter/search; it must never hide
+  // a column the field settings say should appear. Column order follows field
+  // sortOrder. In setup mode the admin manages every column (incl. table-hidden).
   const displayFields = setupMode
     ? tableFields
-    : hasCustomColumnOrder
-      ? (visibleFields!
-          .map((key) => tableFields.find((f: Field) => f.fieldKey === key))
-          .filter((f): f is Field => Boolean(f)))
-      : tableFields.filter((f: Field) => f.showInTable !== false);
+    : tableFields.filter((f: Field) => f.showInTable !== false);
   // Page-local columns are appended after the entity columns. In setup mode the
   // admin sees them all; otherwise only those opted-in via "Показывать в таблице".
   const displayedPageFields = setupMode
@@ -1555,30 +1551,26 @@ export function EntityRecords({
                       <th key={f.id} className="text-left px-4 py-3 font-medium text-slate-600 whitespace-nowrap">
                         {setupMode && !isMirrorPage ? (
                           <div className="inline-flex items-center gap-1">
-                            {!hasCustomColumnOrder && (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-slate-400"
-                                  disabled={ci === 0 || reorderFieldsMutation.isPending}
-                                  onClick={() => moveColumn(displayFields, ci, -1)}
-                                  title={t("records.moveColumnLeft", "Левее")}
-                                >
-                                  <ChevronLeft className="w-3.5 h-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-slate-400"
-                                  disabled={ci === displayFields.length - 1 || reorderFieldsMutation.isPending}
-                                  onClick={() => moveColumn(displayFields, ci, 1)}
-                                  title={t("records.moveColumnRight", "Правее")}
-                                >
-                                  <ChevronRight className="w-3.5 h-3.5" />
-                                </Button>
-                              </>
-                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-slate-400"
+                              disabled={ci === 0 || reorderFieldsMutation.isPending}
+                              onClick={() => moveColumn(displayFields, ci, -1)}
+                              title={t("records.moveColumnLeft", "Левее")}
+                            >
+                              <ChevronLeft className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-slate-400"
+                              disabled={ci === displayFields.length - 1 || reorderFieldsMutation.isPending}
+                              onClick={() => moveColumn(displayFields, ci, 1)}
+                              title={t("records.moveColumnRight", "Правее")}
+                            >
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </Button>
                             <button
                               type="button"
                               onClick={() => openColumnConfig(f)}
