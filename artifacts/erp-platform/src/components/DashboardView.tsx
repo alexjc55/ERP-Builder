@@ -14,6 +14,7 @@ import {
   useListEntityStatuses,
   useGetEntityRelationOptions,
   getGetEntityRelationOptionsQueryKey,
+  useQueryEntityRecords,
   useListRoles,
   useListPages,
   useUpdatePage,
@@ -32,6 +33,13 @@ import {
   type ChartConfigAggregation,
   type TableColumn,
   type TableRow,
+  type NotesData,
+  type NoteCellData,
+  type NotesConfig,
+  type NoteCell,
+  type NoteCellSource,
+  type NoteCellFormat,
+  type EntityRecord,
   type Entity,
   type Field,
   type Status,
@@ -59,6 +67,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -92,11 +101,16 @@ import { IconPicker } from "@/components/IconPicker";
 import { getIconComponent } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 import { evaluateFormula } from "@/lib/formula";
+import DOMPurify from "dompurify";
+import { useEditor, EditorContent, type Editor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import { TextStyle, Color } from "@tiptap/extension-text-style";
+import { TextAlign } from "@tiptap/extension-text-align";
 import { useAuth } from "@/lib/auth";
 import { useML, useT } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Settings2, Plus, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ArrowRight, Minus, X, LayoutDashboard, GripVertical } from "lucide-react";
+import { Settings2, Plus, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ArrowRight, Minus, X, LayoutDashboard, GripVertical, Bold, Italic, Underline as UnderlineIcon, Strikethrough, List, ListOrdered, Link2, AlignLeft, AlignCenter, AlignRight, Heading1, Heading2, Heading3 } from "lucide-react";
 import { useLocation } from "wouter";
 
 type MLValue = { ru?: string; en?: string; he?: string };
@@ -213,6 +227,74 @@ function resolveValue(w: DashboardWidgetData): number {
   }
   const keys = Object.keys(metrics);
   return keys.length > 0 ? metrics[keys[0]] : 0;
+}
+
+/**
+ * Resolve a notes-table dynamic cell to display text. The server ships per-source
+ * values (admin-authoritative); the formula (if any) is evaluated client-side
+ * against them as {key}, consistent with metric widgets. Numeric results honor
+ * the cell's number/currency/percent format.
+ */
+function renderNoteCellValue(cell: NoteCellData, currencySymbol: string): string {
+  if (cell.kind === "static") return cell.text ?? "";
+  const values = (cell.values ?? {}) as Record<string, unknown>;
+  let result: unknown;
+  if (cell.formula && cell.formula.trim()) {
+    try {
+      result = evaluateFormula(cell.formula, values);
+    } catch {
+      return "Ошибка формулы";
+    }
+  } else {
+    const keys = Object.keys(values);
+    result = keys.length > 0 ? values[keys[0]] : null;
+  }
+  if (result == null || result === "") return "—";
+  if (typeof result === "number" && Number.isFinite(result)) {
+    return formatValue(result, cell.format, currencySymbol);
+  }
+  return String(result);
+}
+
+/** Render a rich-text notes widget: server-sanitized HTML, re-sanitized client-side. */
+function NotesRichText({ html }: { html: string }) {
+  const clean = DOMPurify.sanitize(html ?? "", { USE_PROFILES: { html: true } });
+  return (
+    <div
+      className="notes-prose h-full overflow-auto text-sm text-slate-700 [&_h1]:text-xl [&_h1]:font-bold [&_h1]:mt-2 [&_h1]:mb-1 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mt-2 [&_h2]:mb-1 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mt-1.5 [&_h3]:mb-1 [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_a]:text-blue-600 [&_a]:underline [&_strong]:font-semibold"
+      dangerouslySetInnerHTML={{ __html: clean }}
+    />
+  );
+}
+
+/** Render a free-form notes table: each cell is static text or a computed value. */
+function NotesTable({ cells, currencySymbol }: { cells: NoteCellData[][]; currencySymbol: string }) {
+  if (!cells || cells.length === 0) {
+    return <div className="flex h-full items-center justify-center text-sm text-slate-400">Нет данных</div>;
+  }
+  return (
+    <div className="h-full overflow-auto">
+      <table className="w-full border-collapse text-sm">
+        <tbody>
+          {cells.map((row, ri) => (
+            <tr key={ri}>
+              {row.map((cell, ci) => (
+                <td
+                  key={ci}
+                  className={cn(
+                    "border border-slate-200 px-2 py-1.5 align-top",
+                    cell.kind === "dynamic" ? "font-medium text-slate-800 tabular-nums" : "text-slate-600 whitespace-pre-wrap",
+                  )}
+                >
+                  {renderNoteCellValue(cell, currencySymbol)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 /** Render a chart widget's series with the chosen chart type. */
@@ -450,6 +532,24 @@ function WidgetCard({
           <p className="text-sm font-medium text-slate-500 truncate">{ml(w.titleJson)}</p>
           <div className="flex-1 min-h-0 mt-2">
             <WidgetChart chartType={w.chartType ?? "bar"} series={w.series ?? []} color={w.color} showValues={w.showValues ?? false} t={t} />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+  if (w.widgetType === "notes") {
+    const notes = w.notes;
+    const title = ml(w.titleJson);
+    return (
+      <Card className="h-full border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+        <CardContent className="flex h-full flex-col p-4">
+          {title && <p className="text-sm font-medium text-slate-500 truncate">{title}</p>}
+          <div className={cn("flex-1 min-h-0", title && "mt-2")}>
+            {notes?.kind === "table" ? (
+              <NotesTable cells={notes.cells ?? []} currencySymbol={currencySymbol} />
+            ) : (
+              <NotesRichText html={notes?.html ?? ""} />
+            )}
           </div>
         </CardContent>
       </Card>
@@ -1022,7 +1122,37 @@ type TableDraft = {
   relatedColumns: TableRelatedColumnDraft[];
 };
 
-type WidgetTypeChoice = "metric" | "chart" | "table";
+type WidgetTypeChoice = "metric" | "chart" | "table" | "notes";
+
+type NoteSourceDraft = {
+  key: string;
+  sourceKind: "metric" | "record";
+  entityId: number | null;
+  aggregation: "count" | "sum";
+  fieldKey: string | null;
+  relationId: number | null;
+  statusIds: number[];
+  recordId: number | null;
+};
+
+type NoteCellDraft = {
+  kind: "static" | "dynamic";
+  text: string;
+  sources: NoteSourceDraft[];
+  formula: string;
+  format: string;
+};
+
+type NotesDraft = {
+  mode: "richtext" | "table";
+  html: string;
+  cols: number;
+  cells: NoteCellDraft[][];
+};
+
+function emptyStaticCell(): NoteCellDraft {
+  return { kind: "static", text: "", sources: [], formula: "", format: "number" };
+}
 
 function WidgetEditorDialog({
   pageId: _pageId,
@@ -1058,7 +1188,9 @@ function WidgetEditorDialog({
       ? "chart"
       : widget?.config.widgetType === "table"
         ? "table"
-        : "metric",
+        : widget?.config.widgetType === "notes"
+          ? "notes"
+          : "metric",
   );
   const [icon, setIcon] = useState(widget ? (widget.icon ?? "") : "");
   const [color, setColor] = useState(widget?.color || DEFAULT_COLOR);
@@ -1106,6 +1238,33 @@ function WidgetEditorDialog({
     };
   });
 
+  const [notes, setNotes] = useState<NotesDraft>(() => {
+    const nt = widget?.config.notes;
+    if (nt?.kind === "table") {
+      const cells: NoteCellDraft[][] = (nt.cells ?? []).map((row) =>
+        (row ?? []).map((c): NoteCellDraft => ({
+          kind: c.kind === "dynamic" ? "dynamic" : "static",
+          text: c.text ?? "",
+          formula: c.formula ?? "",
+          format: c.format ?? "number",
+          sources: (c.sources ?? []).map((s, si): NoteSourceDraft => ({
+            key: s.key || `s${si + 1}`,
+            sourceKind: s.sourceKind === "record" ? "record" : "metric",
+            entityId: s.entityId ?? null,
+            aggregation: s.aggregation === "sum" ? "sum" : "count",
+            fieldKey: s.fieldKey ?? null,
+            relationId: s.relationId ?? null,
+            statusIds: s.statusIds ?? [],
+            recordId: s.recordId ?? null,
+          })),
+        })),
+      );
+      const cols = nt.cols ?? (cells[0]?.length ?? 2);
+      return { mode: "table", html: "", cols, cells: cells.length > 0 ? cells : [[emptyStaticCell(), emptyStaticCell()]] };
+    }
+    return { mode: "richtext", html: nt?.html ?? "", cols: 2, cells: [[emptyStaticCell(), emptyStaticCell()]] };
+  });
+
   const updateMetric = (i: number, patch: Partial<DraftMetric>) =>
     setMetrics((prev) => prev.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
 
@@ -1128,6 +1287,94 @@ function WidgetEditorDialog({
       // to 1×1; for edits we omit grid dims so an in-flight inline resize is never reverted.
       ...(widget ? {} : { gridW: 1, gridH: 1 }),
     };
+
+    if (widgetType === "notes") {
+      if (notes.mode === "table") {
+        const cells: NoteCell[][] = [];
+        for (const row of notes.cells) {
+          const outRow: NoteCell[] = [];
+          for (const cell of row) {
+            if (cell.kind === "static") {
+              outRow.push({ kind: "static", text: cell.text });
+              continue;
+            }
+            const keys = new Set<string>();
+            const sources: NoteCellSource[] = [];
+            for (const s of cell.sources) {
+              if (!s.key || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(s.key)) {
+                toast({ title: t("dash.invalidKey", "Некорректный ключ метрики (латиница/цифры/_)"), variant: "destructive" });
+                return null;
+              }
+              if (keys.has(s.key)) {
+                toast({ title: t("dash.dupKey", "Ключи метрик должны быть уникальны"), variant: "destructive" });
+                return null;
+              }
+              keys.add(s.key);
+              if (s.entityId == null) {
+                toast({ title: t("dash.notesSourceNeedsEntity", "Выберите сущность для значения"), variant: "destructive" });
+                return null;
+              }
+              if (s.sourceKind === "record") {
+                if (s.recordId == null || !s.fieldKey) {
+                  toast({ title: t("dash.notesRecordNeedsField", "Выберите запись и поле"), variant: "destructive" });
+                  return null;
+                }
+                sources.push({
+                  key: s.key,
+                  sourceKind: "record",
+                  entityId: s.entityId,
+                  recordId: s.recordId,
+                  fieldKey: s.fieldKey,
+                });
+              } else {
+                if (s.aggregation === "sum" && !s.fieldKey) {
+                  toast({ title: t("dash.metricNeedsField", "Для суммы выберите числовое поле"), variant: "destructive" });
+                  return null;
+                }
+                sources.push({
+                  key: s.key,
+                  sourceKind: "metric",
+                  entityId: s.entityId,
+                  aggregation: s.aggregation,
+                  fieldKey: s.aggregation === "sum" ? s.fieldKey : null,
+                  relationId: s.relationId,
+                  statusIds: s.statusIds.length > 0 ? s.statusIds : null,
+                });
+              }
+            }
+            if (sources.length === 0) {
+              toast({ title: t("dash.notesCellNeedsSource", "Добавьте хотя бы одно значение в ячейку"), variant: "destructive" });
+              return null;
+            }
+            outRow.push({
+              kind: "dynamic",
+              sources,
+              formula: cell.formula.trim() || null,
+              format: cell.format as NoteCellFormat,
+            });
+          }
+          cells.push(outRow);
+        }
+        return {
+          ...base,
+          config: {
+            widgetType: "notes",
+            colorStyle,
+            textColor,
+            notes: { kind: "table", cols: notes.cols, cells },
+          },
+        };
+      }
+      return {
+        ...base,
+        config: {
+          widgetType: "notes",
+          colorStyle,
+          textColor,
+          notes: { kind: "richtext", html: notes.html },
+        },
+      };
+    }
 
     if (widgetType === "chart") {
       if (chart.entityId == null) {
@@ -1259,20 +1506,23 @@ function WidgetEditorDialog({
                   <SelectItem value="metric">{t("dash.typeMetric", "Показатель")}</SelectItem>
                   <SelectItem value="chart">{t("dash.typeChart", "График")}</SelectItem>
                   <SelectItem value="table">{t("dash.typeTable", "Таблица")}</SelectItem>
+                  <SelectItem value="notes">{t("dash.typeNotes", "Заметки")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label>{t("dash.format", "Формат")}</Label>
-              <Select value={format} onValueChange={setFormat}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="number">{t("dash.formatNumber", "Число")}</SelectItem>
-                  <SelectItem value="currency">{t("dash.formatCurrency", "Валюта")}</SelectItem>
-                  <SelectItem value="percent">{t("dash.formatPercent", "Процент")}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {widgetType !== "notes" && (
+              <div className="space-y-1.5">
+                <Label>{t("dash.format", "Формат")}</Label>
+                <Select value={format} onValueChange={setFormat}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="number">{t("dash.formatNumber", "Число")}</SelectItem>
+                    <SelectItem value="currency">{t("dash.formatCurrency", "Валюта")}</SelectItem>
+                    <SelectItem value="percent">{t("dash.formatPercent", "Процент")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -1347,7 +1597,9 @@ function WidgetEditorDialog({
             </div>
           )}
 
-          {widgetType === "chart" ? (
+          {widgetType === "notes" ? (
+            <NotesEditor notes={notes} entities={entities} onChange={setNotes} ml={ml} t={t} />
+          ) : widgetType === "chart" ? (
             <ChartEditor chart={chart} entities={entities} onChange={(patch) => setChart((prev) => ({ ...prev, ...patch }))} ml={ml} t={t} />
           ) : widgetType === "table" ? (
             <TableEditor table={table} entities={entities} onChange={(patch) => setTable((prev) => ({ ...prev, ...patch }))} ml={ml} t={t} />
@@ -1886,6 +2138,603 @@ function MetricEditor({
             ))}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+/** Toolbar button for the rich-text editor. */
+function RtBtn({ active, onClick, title, children }: { active?: boolean; onClick: () => void; title: string; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onClick}
+      className={cn(
+        "flex h-7 w-7 items-center justify-center rounded text-slate-600 hover:bg-slate-100",
+        active && "bg-blue-100 text-blue-700",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Tiptap-based rich-text editor with an extended formatting toolbar. */
+function RichTextEditor({
+  html,
+  onChange,
+  t,
+}: {
+  html: string;
+  onChange: (html: string) => void;
+  t: (key: string, fallback: string) => string;
+}) {
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({ link: { openOnClick: false, autolink: true } }),
+      TextStyle,
+      Color,
+      TextAlign.configure({ types: ["heading", "paragraph"] }),
+    ],
+    content: html || "",
+    immediatelyRender: false,
+    editorProps: {
+      attributes: {
+        class:
+          "notes-prose min-h-[140px] max-h-[300px] overflow-auto rounded-b-md border border-t-0 border-slate-200 px-3 py-2 text-sm focus:outline-none [&_h1]:text-xl [&_h1]:font-bold [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:text-base [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_a]:text-blue-600 [&_a]:underline",
+      },
+    },
+    onUpdate: ({ editor: ed }) => onChange(ed.getHTML()),
+  });
+
+  if (!editor) return null;
+
+  const setLink = () => {
+    const prev = editor.getAttributes("link").href as string | undefined;
+    const url = window.prompt(t("dash.notesLinkPrompt", "Адрес ссылки (пусто — убрать)"), prev ?? "");
+    if (url === null) return;
+    if (url === "") {
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+      return;
+    }
+    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-0.5 rounded-t-md border border-slate-200 bg-slate-50 p-1">
+        <RtBtn active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()} title={t("dash.notesBold", "Жирный")}>
+          <Bold className="h-3.5 w-3.5" />
+        </RtBtn>
+        <RtBtn active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()} title={t("dash.notesItalic", "Курсив")}>
+          <Italic className="h-3.5 w-3.5" />
+        </RtBtn>
+        <RtBtn active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()} title={t("dash.notesUnderline", "Подчёркнутый")}>
+          <UnderlineIcon className="h-3.5 w-3.5" />
+        </RtBtn>
+        <RtBtn active={editor.isActive("strike")} onClick={() => editor.chain().focus().toggleStrike().run()} title={t("dash.notesStrike", "Зачёркнутый")}>
+          <Strikethrough className="h-3.5 w-3.5" />
+        </RtBtn>
+        <div className="mx-1 h-5 w-px bg-slate-200" />
+        <RtBtn active={editor.isActive("heading", { level: 1 })} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} title="H1">
+          <Heading1 className="h-3.5 w-3.5" />
+        </RtBtn>
+        <RtBtn active={editor.isActive("heading", { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="H2">
+          <Heading2 className="h-3.5 w-3.5" />
+        </RtBtn>
+        <RtBtn active={editor.isActive("heading", { level: 3 })} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} title="H3">
+          <Heading3 className="h-3.5 w-3.5" />
+        </RtBtn>
+        <div className="mx-1 h-5 w-px bg-slate-200" />
+        <RtBtn active={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()} title={t("dash.notesBullet", "Маркированный список")}>
+          <List className="h-3.5 w-3.5" />
+        </RtBtn>
+        <RtBtn active={editor.isActive("orderedList")} onClick={() => editor.chain().focus().toggleOrderedList().run()} title={t("dash.notesOrdered", "Нумерованный список")}>
+          <ListOrdered className="h-3.5 w-3.5" />
+        </RtBtn>
+        <div className="mx-1 h-5 w-px bg-slate-200" />
+        <RtBtn active={editor.isActive({ textAlign: "left" })} onClick={() => editor.chain().focus().setTextAlign("left").run()} title={t("dash.notesAlignLeft", "По левому краю")}>
+          <AlignLeft className="h-3.5 w-3.5" />
+        </RtBtn>
+        <RtBtn active={editor.isActive({ textAlign: "center" })} onClick={() => editor.chain().focus().setTextAlign("center").run()} title={t("dash.notesAlignCenter", "По центру")}>
+          <AlignCenter className="h-3.5 w-3.5" />
+        </RtBtn>
+        <RtBtn active={editor.isActive({ textAlign: "right" })} onClick={() => editor.chain().focus().setTextAlign("right").run()} title={t("dash.notesAlignRight", "По правому краю")}>
+          <AlignRight className="h-3.5 w-3.5" />
+        </RtBtn>
+        <div className="mx-1 h-5 w-px bg-slate-200" />
+        <RtBtn active={editor.isActive("link")} onClick={setLink} title={t("dash.notesLink", "Ссылка")}>
+          <Link2 className="h-3.5 w-3.5" />
+        </RtBtn>
+        <label className="flex h-7 w-7 cursor-pointer items-center justify-center rounded hover:bg-slate-100" title={t("dash.notesColor", "Цвет текста")}>
+          <span className="h-3.5 w-3.5 rounded-sm border border-slate-300" style={{ backgroundColor: (editor.getAttributes("textStyle").color as string) || "#111827" }} />
+          <input
+            type="color"
+            className="sr-only"
+            value={(editor.getAttributes("textStyle").color as string) || "#111827"}
+            onChange={(e) => editor.chain().focus().setColor(e.target.value).run()}
+          />
+        </label>
+        <RtBtn onClick={() => editor.chain().focus().unsetColor().run()} title={t("dash.notesColorReset", "Сбросить цвет")}>
+          <span className="text-[10px] font-bold">A×</span>
+        </RtBtn>
+      </div>
+      <EditorContent editor={editor} />
+    </div>
+  );
+}
+
+/** Loads records for an entity and lets the user pick one (for record-source cells). */
+function RecordPicker({
+  entityId,
+  value,
+  onChange,
+  ml,
+  t,
+}: {
+  entityId: number;
+  value: number | null;
+  onChange: (recordId: number | null) => void;
+  ml: (v: unknown) => string;
+  t: (key: string, fallback: string) => string;
+}) {
+  const [records, setRecords] = useState<EntityRecord[]>([]);
+  const [loading, setLoading] = useState(false);
+  const queryRecords = useQueryEntityRecords();
+  const { data: fields = [] } = useListEntityFields(entityId, {
+    query: { enabled: entityId > 0, queryKey: getListEntityFieldsQueryKey(entityId) },
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    queryRecords
+      .mutateAsync({ entityId, data: { pageSize: 200, page: 1 } })
+      .then((res) => {
+        if (!cancelled) setRecords(res.data ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setRecords([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entityId]);
+
+  const labelFor = (rec: EntityRecord): string => {
+    const vals = (rec.valuesJson ?? {}) as Record<string, unknown>;
+    for (const f of fields) {
+      const v = vals[f.fieldKey];
+      if (typeof v === "string" && v.trim()) return v;
+      if (typeof v === "number") return String(v);
+    }
+    return `#${rec.id}`;
+  };
+
+  return (
+    <Select
+      value={value != null ? String(value) : ""}
+      onValueChange={(v) => onChange(Number(v))}
+      disabled={loading}
+    >
+      <SelectTrigger className="h-8">
+        <SelectValue placeholder={loading ? t("dash.loading", "Загрузка…") : t("dash.notesSelectRecord", "Запись")} />
+      </SelectTrigger>
+      <SelectContent>
+        {records.length === 0 ? (
+          <div className="px-2 py-1.5 text-xs text-slate-400">{t("dash.notesNoRecords", "Нет записей")}</div>
+        ) : (
+          records.map((r) => (
+            <SelectItem key={r.id} value={String(r.id)}>
+              {labelFor(r)}
+            </SelectItem>
+          ))
+        )}
+      </SelectContent>
+    </Select>
+  );
+}
+
+/** Editor for a single live-value source inside a dynamic notes cell. */
+function NoteSourceEditor({
+  source,
+  index,
+  entities,
+  canRemove,
+  onChange,
+  onRemove,
+  ml,
+  t,
+}: {
+  source: NoteSourceDraft;
+  index: number;
+  entities: Entity[];
+  canRemove: boolean;
+  onChange: (patch: Partial<NoteSourceDraft>) => void;
+  onRemove: () => void;
+  ml: (v: unknown) => string;
+  t: (key: string, fallback: string) => string;
+}) {
+  const { data: fields = [] } = useListEntityFields(source.entityId ?? 0, {
+    query: { enabled: source.entityId != null, queryKey: getListEntityFieldsQueryKey(source.entityId ?? 0) },
+  });
+  const { data: statuses = [] } = useListEntityStatuses(source.entityId ?? 0, {
+    query: { enabled: source.entityId != null, queryKey: getListEntityStatusesQueryKey(source.entityId ?? 0) },
+  });
+  const { data: relationOptions } = useGetEntityRelationOptions(source.entityId ?? 0, {
+    query: { enabled: source.entityId != null && source.sourceKind === "metric", queryKey: getGetEntityRelationOptionsQueryKey(source.entityId ?? 0) },
+  });
+  const relations = relationOptions?.options ?? [];
+  const selectedRelation = relations.find((r) => r.relationId === source.relationId);
+  const numericFields: { key: string; label: unknown }[] =
+    source.relationId != null
+      ? (selectedRelation?.fields ?? []).filter((f) => f.fieldType === "number").map((f) => ({ key: f.key, label: f.label }))
+      : fields.filter((f: Field) => f.fieldType === "number").map((f: Field) => ({ key: f.fieldKey, label: f.nameJson }));
+  const allFields = fields.map((f: Field) => ({ key: f.fieldKey, label: f.nameJson }));
+
+  const toggleStatus = (sid: number) => {
+    const next = source.statusIds.includes(sid) ? source.statusIds.filter((s) => s !== sid) : [...source.statusIds, sid];
+    onChange({ statusIds: next });
+  };
+
+  return (
+    <div className="rounded-md bg-slate-50 p-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-slate-500">#{index + 1}</span>
+        <Input
+          value={source.key}
+          onChange={(e) => onChange({ key: e.target.value })}
+          placeholder={t("dash.metricKey", "ключ")}
+          className="h-8 w-24 font-mono text-xs"
+        />
+        <Select value={source.sourceKind} onValueChange={(v) => onChange({ sourceKind: v as "metric" | "record", fieldKey: null, recordId: null, relationId: null, statusIds: [] })}>
+          <SelectTrigger className="h-8 flex-1"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="metric">{t("dash.notesSourceMetric", "Агрегат сущности")}</SelectItem>
+            <SelectItem value="record">{t("dash.notesSourceRecord", "Значение записи")}</SelectItem>
+          </SelectContent>
+        </Select>
+        {canRemove && (
+          <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-red-400" onClick={onRemove}>
+            <X className="w-3.5 h-3.5" />
+          </Button>
+        )}
+      </div>
+      <Select
+        value={source.entityId != null ? String(source.entityId) : ""}
+        onValueChange={(v) => onChange({ entityId: Number(v), fieldKey: null, recordId: null, relationId: null, statusIds: [] })}
+      >
+        <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectEntity", "Сущность")} /></SelectTrigger>
+        <SelectContent>
+          {entities.filter((e) => e.isActive).map((e) => (
+            <SelectItem key={e.id} value={String(e.id)}>{ml(e.nameJson)}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {source.sourceKind === "record" ? (
+        source.entityId != null && (
+          <div className="grid grid-cols-2 gap-2">
+            <RecordPicker entityId={source.entityId} value={source.recordId} onChange={(rid) => onChange({ recordId: rid })} ml={ml} t={t} />
+            <Select value={source.fieldKey ?? ""} onValueChange={(v) => onChange({ fieldKey: v })}>
+              <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectField", "Поле")} /></SelectTrigger>
+              <SelectContent>
+                {allFields.map((f) => (
+                  <SelectItem key={f.key} value={f.key}>{ml(f.label)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <Select value={source.aggregation} onValueChange={(v) => onChange({ aggregation: v as "count" | "sum", fieldKey: null })}>
+              <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="count">{t("dash.aggCount", "Количество")}</SelectItem>
+                <SelectItem value="sum">{t("dash.aggSum", "Сумма")}</SelectItem>
+              </SelectContent>
+            </Select>
+            {relations.length > 0 && (
+              <Select
+                value={source.relationId != null ? String(source.relationId) : "__none__"}
+                onValueChange={(v) => onChange({ relationId: v === "__none__" ? null : Number(v), fieldKey: null })}
+              >
+                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">{t("dash.metricNoRelation", "Без связи (по самой сущности)")}</SelectItem>
+                  {relations.map((r) => (
+                    <SelectItem key={r.relationId} value={String(r.relationId)}>{ml(r.label)} → {ml(r.relatedEntityLabel)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          {source.aggregation === "sum" && (
+            <Select value={source.fieldKey ?? ""} onValueChange={(v) => onChange({ fieldKey: v })} disabled={source.entityId == null || (source.relationId != null && !selectedRelation)}>
+              <SelectTrigger className="h-8">
+                <SelectValue placeholder={source.relationId != null ? t("dash.selectRelatedField", "Поле связанной записи") : t("dash.selectField", "Числовое поле")} />
+              </SelectTrigger>
+              <SelectContent>
+                {numericFields.length === 0 ? (
+                  <div className="px-2 py-1.5 text-xs text-slate-400">{t("dash.noNumericFields", "Нет числовых полей")}</div>
+                ) : (
+                  numericFields.map((f) => (
+                    <SelectItem key={f.key} value={f.key}>{ml(f.label)}</SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          )}
+          {source.entityId != null && statuses.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs text-slate-400">{t("dash.statusFilter", "Статусы (пусто = все)")}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {statuses.map((s: Status) => (
+                  <button key={s.id} type="button" onClick={() => toggleStatus(s.id)} className={source.statusIds.includes(s.id) ? "" : "opacity-50"}>
+                    <Badge style={{ backgroundColor: s.color }} className="border-0 text-white font-normal cursor-pointer">{ml(s.nameJson)}</Badge>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Dialog to edit a single notes-table cell (static text or dynamic live value). */
+function NoteCellDialog({
+  cell,
+  entities,
+  onSave,
+  onClose,
+  ml,
+  t,
+}: {
+  cell: NoteCellDraft;
+  entities: Entity[];
+  onSave: (cell: NoteCellDraft) => void;
+  onClose: () => void;
+  ml: (v: unknown) => string;
+  t: (key: string, fallback: string) => string;
+}) {
+  const [draft, setDraft] = useState<NoteCellDraft>(cell);
+
+  const addSource = () =>
+    setDraft((p) => ({
+      ...p,
+      sources: [...p.sources, { key: `s${p.sources.length + 1}`, sourceKind: "metric", entityId: null, aggregation: "count", fieldKey: null, relationId: null, statusIds: [], recordId: null }],
+    }));
+  const updateSource = (i: number, patch: Partial<NoteSourceDraft>) =>
+    setDraft((p) => ({ ...p, sources: p.sources.map((s, idx) => (idx === i ? { ...s, ...patch } : s)) }));
+  const removeSource = (i: number) => setDraft((p) => ({ ...p, sources: p.sources.filter((_, idx) => idx !== i) }));
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{t("dash.notesEditCell", "Ячейка")}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="grid grid-cols-2 gap-2">
+            {([
+              ["static", t("dash.notesCellStatic", "Текст")],
+              ["dynamic", t("dash.notesCellDynamic", "Живое значение")],
+            ] as const).map(([val, label]) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => setDraft((p) => ({ ...p, kind: val }))}
+                className={cn(
+                  "rounded-md border px-2 py-1.5 text-sm transition-colors",
+                  draft.kind === val ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-600 hover:bg-slate-50",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {draft.kind === "static" ? (
+            <div className="space-y-1.5">
+              <Label>{t("dash.notesCellText", "Текст ячейки")}</Label>
+              <Textarea value={draft.text} onChange={(e) => setDraft((p) => ({ ...p, text: e.target.value }))} rows={3} />
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2 rounded-md border border-slate-200 p-3">
+                <div className="flex items-center justify-between">
+                  <Label>{t("dash.notesSources", "Значения")}</Label>
+                  <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={addSource}>
+                    <Plus className="w-3.5 h-3.5" />
+                    {t("dash.notesAddSource", "Значение")}
+                  </Button>
+                </div>
+                {draft.sources.length === 0 && (
+                  <p className="text-xs text-slate-400">{t("dash.notesCellNeedsSource", "Добавьте хотя бы одно значение в ячейку")}</p>
+                )}
+                {draft.sources.map((s, i) => (
+                  <NoteSourceEditor
+                    key={i}
+                    source={s}
+                    index={i}
+                    entities={entities}
+                    canRemove
+                    onChange={(patch) => updateSource(i, patch)}
+                    onRemove={() => removeSource(i)}
+                    ml={ml}
+                    t={t}
+                  />
+                ))}
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t("dash.formula", "Формула (необязательно)")}</Label>
+                <Input value={draft.formula} onChange={(e) => setDraft((p) => ({ ...p, formula: e.target.value }))} placeholder="{s1} / {s2} * 100" />
+                <p className="text-xs text-slate-400">{t("dash.notesFormulaHint", "Комбинируйте значения по ключу: {s1}. Без формулы показывается первое значение.")}</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t("dash.format", "Формат")}</Label>
+                <Select value={draft.format} onValueChange={(v) => setDraft((p) => ({ ...p, format: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="number">{t("dash.formatNumber", "Число")}</SelectItem>
+                    <SelectItem value="currency">{t("dash.formatCurrency", "Валюта")}</SelectItem>
+                    <SelectItem value="percent">{t("dash.formatPercent", "Процент")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>{t("dash.cancel", "Отмена")}</Button>
+          <Button onClick={() => onSave(draft)} className="bg-blue-600 hover:bg-blue-700">{t("dash.save", "Сохранить")}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Editor for the notes widget: mode toggle (rich-text vs free-form table). */
+function NotesEditor({
+  notes,
+  entities,
+  onChange,
+  ml,
+  t,
+}: {
+  notes: NotesDraft;
+  entities: Entity[];
+  onChange: (next: NotesDraft) => void;
+  ml: (v: unknown) => string;
+  t: (key: string, fallback: string) => string;
+}) {
+  const [editing, setEditing] = useState<{ ri: number; ci: number } | null>(null);
+
+  const addRow = () => {
+    const row: NoteCellDraft[] = Array.from({ length: notes.cols }, () => emptyStaticCell());
+    onChange({ ...notes, cells: [...notes.cells, row] });
+  };
+  const removeRow = (ri: number) => onChange({ ...notes, cells: notes.cells.filter((_, idx) => idx !== ri) });
+  const addCol = () =>
+    onChange({ ...notes, cols: notes.cols + 1, cells: notes.cells.map((r) => [...r, emptyStaticCell()]) });
+  const removeCol = (ci: number) => {
+    if (notes.cols <= 1) return;
+    onChange({ ...notes, cols: notes.cols - 1, cells: notes.cells.map((r) => r.filter((_, idx) => idx !== ci)) });
+  };
+  const updateCell = (ri: number, ci: number, cell: NoteCellDraft) =>
+    onChange({ ...notes, cells: notes.cells.map((r, rIdx) => (rIdx === ri ? r.map((c, cIdx) => (cIdx === ci ? cell : c)) : r)) });
+
+  const cellPreview = (c: NoteCellDraft): string => {
+    if (c.kind === "static") return c.text?.trim() || t("dash.notesEmptyCell", "(пусто)");
+    if (c.sources.length === 0) return t("dash.notesCellNeedsSourceShort", "значение…");
+    return c.formula?.trim() ? c.formula : `{${c.sources[0].key}}`;
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        {([
+          ["richtext", t("dash.notesModeRich", "Форматированный текст")],
+          ["table", t("dash.notesModeTable", "Таблица значений")],
+        ] as const).map(([val, label]) => (
+          <button
+            key={val}
+            type="button"
+            onClick={() => onChange({ ...notes, mode: val })}
+            className={cn(
+              "rounded-md border px-2 py-1.5 text-sm transition-colors",
+              notes.mode === val ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-600 hover:bg-slate-50",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {notes.mode === "richtext" ? (
+        <RichTextEditor html={notes.html} onChange={(html) => onChange({ ...notes, html })} t={t} />
+      ) : (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={addRow}>
+              <Plus className="w-3.5 h-3.5" />
+              {t("dash.notesAddRow", "Строка")}
+            </Button>
+            <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={addCol}>
+              <Plus className="w-3.5 h-3.5" />
+              {t("dash.notesAddCol", "Колонка")}
+            </Button>
+          </div>
+          <div className="overflow-x-auto rounded-md border border-slate-200">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr>
+                  {Array.from({ length: notes.cols }, (_, ci) => (
+                    <th key={ci} className="border-b border-r border-slate-200 bg-slate-50 p-1 last:border-r-0">
+                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-red-400" onClick={() => removeCol(ci)} disabled={notes.cols <= 1} title={t("dash.notesRemoveCol", "Удалить колонку")}>
+                        <Minus className="w-3.5 h-3.5" />
+                      </Button>
+                    </th>
+                  ))}
+                  <th className="border-b border-slate-200 bg-slate-50 p-1 w-8" />
+                </tr>
+              </thead>
+              <tbody>
+                {notes.cells.map((row, ri) => (
+                  <tr key={ri}>
+                    {row.map((c, ci) => (
+                      <td key={ci} className="border-b border-r border-slate-200 p-1 last:border-r-0 align-top">
+                        <button
+                          type="button"
+                          onClick={() => setEditing({ ri, ci })}
+                          className={cn(
+                            "w-full truncate rounded px-2 py-1.5 text-left text-xs hover:bg-slate-50",
+                            c.kind === "dynamic" ? "font-mono text-blue-700" : "text-slate-600",
+                          )}
+                          title={cellPreview(c)}
+                        >
+                          {cellPreview(c)}
+                        </button>
+                      </td>
+                    ))}
+                    <td className="border-b border-slate-200 p-1 text-center align-middle">
+                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-red-400" onClick={() => removeRow(ri)} title={t("dash.notesRemoveRow", "Удалить строку")}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {notes.cells.length === 0 && (
+            <p className="text-xs text-slate-400">{t("dash.notesTableEmpty", "Добавьте строки и колонки, затем нажмите на ячейку для настройки.")}</p>
+          )}
+        </div>
+      )}
+
+      {editing && (
+        <NoteCellDialog
+          cell={notes.cells[editing.ri][editing.ci]}
+          entities={entities}
+          onSave={(cell) => {
+            updateCell(editing.ri, editing.ci, cell);
+            setEditing(null);
+          }}
+          onClose={() => setEditing(null)}
+          ml={ml}
+          t={t}
+        />
       )}
     </div>
   );

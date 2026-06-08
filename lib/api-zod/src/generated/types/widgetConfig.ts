@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChartConfig } from './chartConfig';
+import type { NotesConfig } from './notesConfig';
 import type { TableConfig } from './tableConfig';
 import type { WidgetConfigColorStyle } from './widgetConfigColorStyle';
 import type { WidgetConfigFormat } from './widgetConfigFormat';
@@ -15,11 +16,12 @@ import type { WidgetMetric } from './widgetMetric';
 
 export interface WidgetConfig {
   /**
-     * metric (default) = number cards; chart = graph; table = entity rows.
+     * metric (default) = number cards; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.
      * @nullable
      */
   widgetType?: WidgetConfigWidgetType;
   metrics?: WidgetMetric[];
+  notes?: NotesConfig;
   /**
      * Optional expression combining metric keys as {key}
      * @nullable

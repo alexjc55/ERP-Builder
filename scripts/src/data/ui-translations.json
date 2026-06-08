@@ -4858,5 +4858,227 @@
     "ru": "Выберите поле для группировки",
     "en": "Select a field to group by",
     "he": "בחר שדה לקיבוץ"
+  },
+  {
+    "key": "dash.typeNotes",
+    "ru": "Заметки",
+    "en": "Notes",
+    "he": "הערות"
+  },
+  {
+    "key": "dash.notesModeRich",
+    "ru": "Форматированный текст",
+    "en": "Rich text",
+    "he": "טקסט מעוצב"
+  },
+  {
+    "key": "dash.notesModeTable",
+    "ru": "Таблица значений",
+    "en": "Value table",
+    "he": "טבלת ערכים"
+  },
+  {
+    "key": "dash.notesBold",
+    "ru": "Жирный",
+    "en": "Bold",
+    "he": "מודגש"
+  },
+  {
+    "key": "dash.notesItalic",
+    "ru": "Курсив",
+    "en": "Italic",
+    "he": "נטוי"
+  },
+  {
+    "key": "dash.notesUnderline",
+    "ru": "Подчёркнутый",
+    "en": "Underline",
+    "he": "קו תחתון"
+  },
+  {
+    "key": "dash.notesStrike",
+    "ru": "Зачёркнутый",
+    "en": "Strikethrough",
+    "he": "קו חוצה"
+  },
+  {
+    "key": "dash.notesBullet",
+    "ru": "Маркированный список",
+    "en": "Bullet list",
+    "he": "רשימת תבליטים"
+  },
+  {
+    "key": "dash.notesOrdered",
+    "ru": "Нумерованный список",
+    "en": "Numbered list",
+    "he": "רשימה ממוספרת"
+  },
+  {
+    "key": "dash.notesAlignLeft",
+    "ru": "По левому краю",
+    "en": "Align left",
+    "he": "יישור לשמאל"
+  },
+  {
+    "key": "dash.notesAlignCenter",
+    "ru": "По центру",
+    "en": "Align center",
+    "he": "יישור למרכז"
+  },
+  {
+    "key": "dash.notesAlignRight",
+    "ru": "По правому краю",
+    "en": "Align right",
+    "he": "יישור לימין"
+  },
+  {
+    "key": "dash.notesLink",
+    "ru": "Ссылка",
+    "en": "Link",
+    "he": "קישור"
+  },
+  {
+    "key": "dash.notesLinkPrompt",
+    "ru": "Адрес ссылки (пусто — убрать)",
+    "en": "Link URL (empty to remove)",
+    "he": "כתובת קישור (ריק להסרה)"
+  },
+  {
+    "key": "dash.notesColor",
+    "ru": "Цвет текста",
+    "en": "Text color",
+    "he": "צבע טקסט"
+  },
+  {
+    "key": "dash.notesColorReset",
+    "ru": "Сбросить цвет",
+    "en": "Reset color",
+    "he": "איפוס צבע"
+  },
+  {
+    "key": "dash.notesEditCell",
+    "ru": "Ячейка",
+    "en": "Cell",
+    "he": "תא"
+  },
+  {
+    "key": "dash.notesCellStatic",
+    "ru": "Текст",
+    "en": "Text",
+    "he": "טקסט"
+  },
+  {
+    "key": "dash.notesCellDynamic",
+    "ru": "Живое значение",
+    "en": "Live value",
+    "he": "ערך חי"
+  },
+  {
+    "key": "dash.notesCellText",
+    "ru": "Текст ячейки",
+    "en": "Cell text",
+    "he": "טקסט התא"
+  },
+  {
+    "key": "dash.notesSources",
+    "ru": "Значения",
+    "en": "Values",
+    "he": "ערכים"
+  },
+  {
+    "key": "dash.notesAddSource",
+    "ru": "Значение",
+    "en": "Value",
+    "he": "ערך"
+  },
+  {
+    "key": "dash.notesSourceMetric",
+    "ru": "Агрегат сущности",
+    "en": "Entity aggregate",
+    "he": "צבירת ישות"
+  },
+  {
+    "key": "dash.notesSourceRecord",
+    "ru": "Значение записи",
+    "en": "Record value",
+    "he": "ערך רשומה"
+  },
+  {
+    "key": "dash.notesSelectRecord",
+    "ru": "Запись",
+    "en": "Record",
+    "he": "רשומה"
+  },
+  {
+    "key": "dash.notesNoRecords",
+    "ru": "Нет записей",
+    "en": "No records",
+    "he": "אין רשומות"
+  },
+  {
+    "key": "dash.notesCellNeedsSource",
+    "ru": "Добавьте хотя бы одно значение в ячейку",
+    "en": "Add at least one value to the cell",
+    "he": "הוסף לפחות ערך אחד לתא"
+  },
+  {
+    "key": "dash.notesCellNeedsSourceShort",
+    "ru": "значение…",
+    "en": "value…",
+    "he": "ערך…"
+  },
+  {
+    "key": "dash.notesSourceNeedsEntity",
+    "ru": "Выберите сущность для значения",
+    "en": "Select an entity for the value",
+    "he": "בחר ישות עבור הערך"
+  },
+  {
+    "key": "dash.notesRecordNeedsField",
+    "ru": "Выберите запись и поле",
+    "en": "Select a record and field",
+    "he": "בחר רשומה ושדה"
+  },
+  {
+    "key": "dash.notesFormulaHint",
+    "ru": "Комбинируйте значения по ключу: {s1}. Без формулы показывается первое значение.",
+    "en": "Combine values by key: {s1}. Without a formula the first value is shown.",
+    "he": "שלב ערכים לפי מפתח: {s1}. ללא נוסחה מוצג הערך הראשון."
+  },
+  {
+    "key": "dash.notesAddRow",
+    "ru": "Строка",
+    "en": "Row",
+    "he": "שורה"
+  },
+  {
+    "key": "dash.notesAddCol",
+    "ru": "Колонка",
+    "en": "Column",
+    "he": "עמודה"
+  },
+  {
+    "key": "dash.notesRemoveRow",
+    "ru": "Удалить строку",
+    "en": "Delete row",
+    "he": "מחק שורה"
+  },
+  {
+    "key": "dash.notesRemoveCol",
+    "ru": "Удалить колонку",
+    "en": "Delete column",
+    "he": "מחק עמודה"
+  },
+  {
+    "key": "dash.notesEmptyCell",
+    "ru": "(пусто)",
+    "en": "(empty)",
+    "he": "(ריק)"
+  },
+  {
+    "key": "dash.notesTableEmpty",
+    "ru": "Добавьте строки и колонки, затем нажмите на ячейку для настройки.",
+    "en": "Add rows and columns, then click a cell to configure it.",
+    "he": "הוסף שורות ועמודות, ואז לחץ על תא כדי להגדיר אותו."
   }
 ]

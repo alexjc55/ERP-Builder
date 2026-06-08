@@ -1185,7 +1185,7 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph; table = entity rows.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -1194,6 +1194,27 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "relationId": zod.number().nullish().describe('When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
 })).optional(),
+  "notes": zod.object({
+  "kind": zod.enum(['richtext', 'table']),
+  "html": zod.string().nullish().describe('Sanitized rich-text HTML (kind = richtext).'),
+  "cols": zod.number().nullish().describe('Number of columns in the free-form table (kind = table).'),
+  "cells": zod.array(zod.array(zod.object({
+  "kind": zod.enum(['static', 'dynamic']),
+  "text": zod.string().nullish().describe('Static cell text (kind = static).'),
+  "sources": zod.array(zod.object({
+  "key": zod.string().describe('Identifier referenced from the cell formula as {key}'),
+  "sourceKind": zod.enum(['metric', 'record']),
+  "entityId": zod.number(),
+  "aggregation": zod.union([zod.literal('count'),zod.literal('sum'),zod.literal(null)]).nullish().describe('For sourceKind = metric — count of records or sum of a numeric field.'),
+  "fieldKey": zod.string().nullish().describe('For metric sum — the numeric field (related entity\'s field when relationId is set). For record source — the field whose stored value is shown.'),
+  "relationId": zod.number().nullish().describe('For sourceKind = metric — compute over a related entity through this qualifying single-link relation.'),
+  "statusIds": zod.array(zod.number()).nullish().describe('For sourceKind = metric — restrict to records in these statuses; empty\/null = all statuses.'),
+  "recordId": zod.number().nullish().describe('For sourceKind = record — the specific record whose field value is shown.')
+}).describe('A live value referenced from a notes-table cell formula as {key}. Either an entity aggregate (sourceKind = metric) or a specific record\'s field value (sourceKind = record).')).nullish().describe('Live-value sources (kind = dynamic).'),
+  "formula": zod.string().nullish().describe('Optional expression combining the cell\'s source keys as {key}; without it the first source value is shown.'),
+  "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish().describe('Number formatting for the computed dynamic value.')
+}).describe('A single cell of a notes free-form table. Either static text or a dynamic live value.'))).nullish().describe('Row-major grid of cells (kind = table); each inner array is one row.')
+}).optional(),
   "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
   "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish(),
   "chart": zod.object({
@@ -1247,7 +1268,7 @@ export const CreateDashboardWidgetBody = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph; table = entity rows.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -1256,6 +1277,27 @@ export const CreateDashboardWidgetBody = zod.object({
   "relationId": zod.number().nullish().describe('When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
 })).optional(),
+  "notes": zod.object({
+  "kind": zod.enum(['richtext', 'table']),
+  "html": zod.string().nullish().describe('Sanitized rich-text HTML (kind = richtext).'),
+  "cols": zod.number().nullish().describe('Number of columns in the free-form table (kind = table).'),
+  "cells": zod.array(zod.array(zod.object({
+  "kind": zod.enum(['static', 'dynamic']),
+  "text": zod.string().nullish().describe('Static cell text (kind = static).'),
+  "sources": zod.array(zod.object({
+  "key": zod.string().describe('Identifier referenced from the cell formula as {key}'),
+  "sourceKind": zod.enum(['metric', 'record']),
+  "entityId": zod.number(),
+  "aggregation": zod.union([zod.literal('count'),zod.literal('sum'),zod.literal(null)]).nullish().describe('For sourceKind = metric — count of records or sum of a numeric field.'),
+  "fieldKey": zod.string().nullish().describe('For metric sum — the numeric field (related entity\'s field when relationId is set). For record source — the field whose stored value is shown.'),
+  "relationId": zod.number().nullish().describe('For sourceKind = metric — compute over a related entity through this qualifying single-link relation.'),
+  "statusIds": zod.array(zod.number()).nullish().describe('For sourceKind = metric — restrict to records in these statuses; empty\/null = all statuses.'),
+  "recordId": zod.number().nullish().describe('For sourceKind = record — the specific record whose field value is shown.')
+}).describe('A live value referenced from a notes-table cell formula as {key}. Either an entity aggregate (sourceKind = metric) or a specific record\'s field value (sourceKind = record).')).nullish().describe('Live-value sources (kind = dynamic).'),
+  "formula": zod.string().nullish().describe('Optional expression combining the cell\'s source keys as {key}; without it the first source value is shown.'),
+  "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish().describe('Number formatting for the computed dynamic value.')
+}).describe('A single cell of a notes free-form table. Either static text or a dynamic live value.'))).nullish().describe('Row-major grid of cells (kind = table); each inner array is one row.')
+}).optional(),
   "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
   "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish(),
   "chart": zod.object({
@@ -1300,7 +1342,7 @@ export const CreateDashboardWidgetResponse = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph; table = entity rows.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -1309,6 +1351,27 @@ export const CreateDashboardWidgetResponse = zod.object({
   "relationId": zod.number().nullish().describe('When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
 })).optional(),
+  "notes": zod.object({
+  "kind": zod.enum(['richtext', 'table']),
+  "html": zod.string().nullish().describe('Sanitized rich-text HTML (kind = richtext).'),
+  "cols": zod.number().nullish().describe('Number of columns in the free-form table (kind = table).'),
+  "cells": zod.array(zod.array(zod.object({
+  "kind": zod.enum(['static', 'dynamic']),
+  "text": zod.string().nullish().describe('Static cell text (kind = static).'),
+  "sources": zod.array(zod.object({
+  "key": zod.string().describe('Identifier referenced from the cell formula as {key}'),
+  "sourceKind": zod.enum(['metric', 'record']),
+  "entityId": zod.number(),
+  "aggregation": zod.union([zod.literal('count'),zod.literal('sum'),zod.literal(null)]).nullish().describe('For sourceKind = metric — count of records or sum of a numeric field.'),
+  "fieldKey": zod.string().nullish().describe('For metric sum — the numeric field (related entity\'s field when relationId is set). For record source — the field whose stored value is shown.'),
+  "relationId": zod.number().nullish().describe('For sourceKind = metric — compute over a related entity through this qualifying single-link relation.'),
+  "statusIds": zod.array(zod.number()).nullish().describe('For sourceKind = metric — restrict to records in these statuses; empty\/null = all statuses.'),
+  "recordId": zod.number().nullish().describe('For sourceKind = record — the specific record whose field value is shown.')
+}).describe('A live value referenced from a notes-table cell formula as {key}. Either an entity aggregate (sourceKind = metric) or a specific record\'s field value (sourceKind = record).')).nullish().describe('Live-value sources (kind = dynamic).'),
+  "formula": zod.string().nullish().describe('Optional expression combining the cell\'s source keys as {key}; without it the first source value is shown.'),
+  "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish().describe('Number formatting for the computed dynamic value.')
+}).describe('A single cell of a notes free-form table. Either static text or a dynamic live value.'))).nullish().describe('Row-major grid of cells (kind = table); each inner array is one row.')
+}).optional(),
   "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
   "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish(),
   "chart": zod.object({
@@ -1366,7 +1429,7 @@ export const GetDashboardDataResponseItem = zod.object({
   "gridW": zod.number(),
   "gridH": zod.number(),
   "sortOrder": zod.number(),
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal(null)]).nullish(),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish(),
   "chartType": zod.string().nullish(),
   "showValues": zod.boolean().nullish().describe('When true, the chart widget renders numeric value labels directly on the chart'),
   "series": zod.array(zod.object({
@@ -1388,7 +1451,19 @@ export const GetDashboardDataResponseItem = zod.object({
   "format": zod.string().nullish(),
   "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish(),
   "textColor": zod.union([zod.literal('light'),zod.literal('dark'),zod.literal(null)]).nullish(),
-  "metrics": zod.record(zod.string(), zod.number()).describe('Computed value per metric key (admin-authoritative real totals)')
+  "metrics": zod.record(zod.string(), zod.number()).describe('Computed value per metric key (admin-authoritative real totals)'),
+  "notes": zod.object({
+  "kind": zod.enum(['richtext', 'table']),
+  "html": zod.string().nullish().describe('Sanitized rich-text HTML (kind = richtext).'),
+  "cols": zod.number().nullish(),
+  "cells": zod.array(zod.array(zod.object({
+  "kind": zod.enum(['static', 'dynamic']),
+  "text": zod.string().nullish().describe('Static cell text (kind = static).'),
+  "values": zod.record(zod.string(), zod.unknown()).nullish().describe('Computed value per source key (kind = dynamic); each value is a number or string (admin-authoritative).'),
+  "formula": zod.string().nullish(),
+  "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish()
+}).describe('Computed view of a notes-table cell shipped to the viewer.'))).nullish()
+}).optional().describe('Computed view of a notes widget shipped to the viewer.')
 })
 export const GetDashboardDataResponse = zod.array(GetDashboardDataResponseItem)
 
@@ -1407,7 +1482,7 @@ export const UpdateDashboardWidgetBody = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph; table = entity rows.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -1416,6 +1491,27 @@ export const UpdateDashboardWidgetBody = zod.object({
   "relationId": zod.number().nullish().describe('When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
 })).optional(),
+  "notes": zod.object({
+  "kind": zod.enum(['richtext', 'table']),
+  "html": zod.string().nullish().describe('Sanitized rich-text HTML (kind = richtext).'),
+  "cols": zod.number().nullish().describe('Number of columns in the free-form table (kind = table).'),
+  "cells": zod.array(zod.array(zod.object({
+  "kind": zod.enum(['static', 'dynamic']),
+  "text": zod.string().nullish().describe('Static cell text (kind = static).'),
+  "sources": zod.array(zod.object({
+  "key": zod.string().describe('Identifier referenced from the cell formula as {key}'),
+  "sourceKind": zod.enum(['metric', 'record']),
+  "entityId": zod.number(),
+  "aggregation": zod.union([zod.literal('count'),zod.literal('sum'),zod.literal(null)]).nullish().describe('For sourceKind = metric — count of records or sum of a numeric field.'),
+  "fieldKey": zod.string().nullish().describe('For metric sum — the numeric field (related entity\'s field when relationId is set). For record source — the field whose stored value is shown.'),
+  "relationId": zod.number().nullish().describe('For sourceKind = metric — compute over a related entity through this qualifying single-link relation.'),
+  "statusIds": zod.array(zod.number()).nullish().describe('For sourceKind = metric — restrict to records in these statuses; empty\/null = all statuses.'),
+  "recordId": zod.number().nullish().describe('For sourceKind = record — the specific record whose field value is shown.')
+}).describe('A live value referenced from a notes-table cell formula as {key}. Either an entity aggregate (sourceKind = metric) or a specific record\'s field value (sourceKind = record).')).nullish().describe('Live-value sources (kind = dynamic).'),
+  "formula": zod.string().nullish().describe('Optional expression combining the cell\'s source keys as {key}; without it the first source value is shown.'),
+  "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish().describe('Number formatting for the computed dynamic value.')
+}).describe('A single cell of a notes free-form table. Either static text or a dynamic live value.'))).nullish().describe('Row-major grid of cells (kind = table); each inner array is one row.')
+}).optional(),
   "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
   "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish(),
   "chart": zod.object({
@@ -1460,7 +1556,7 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph; table = entity rows.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -1469,6 +1565,27 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "relationId": zod.number().nullish().describe('When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
 })).optional(),
+  "notes": zod.object({
+  "kind": zod.enum(['richtext', 'table']),
+  "html": zod.string().nullish().describe('Sanitized rich-text HTML (kind = richtext).'),
+  "cols": zod.number().nullish().describe('Number of columns in the free-form table (kind = table).'),
+  "cells": zod.array(zod.array(zod.object({
+  "kind": zod.enum(['static', 'dynamic']),
+  "text": zod.string().nullish().describe('Static cell text (kind = static).'),
+  "sources": zod.array(zod.object({
+  "key": zod.string().describe('Identifier referenced from the cell formula as {key}'),
+  "sourceKind": zod.enum(['metric', 'record']),
+  "entityId": zod.number(),
+  "aggregation": zod.union([zod.literal('count'),zod.literal('sum'),zod.literal(null)]).nullish().describe('For sourceKind = metric — count of records or sum of a numeric field.'),
+  "fieldKey": zod.string().nullish().describe('For metric sum — the numeric field (related entity\'s field when relationId is set). For record source — the field whose stored value is shown.'),
+  "relationId": zod.number().nullish().describe('For sourceKind = metric — compute over a related entity through this qualifying single-link relation.'),
+  "statusIds": zod.array(zod.number()).nullish().describe('For sourceKind = metric — restrict to records in these statuses; empty\/null = all statuses.'),
+  "recordId": zod.number().nullish().describe('For sourceKind = record — the specific record whose field value is shown.')
+}).describe('A live value referenced from a notes-table cell formula as {key}. Either an entity aggregate (sourceKind = metric) or a specific record\'s field value (sourceKind = record).')).nullish().describe('Live-value sources (kind = dynamic).'),
+  "formula": zod.string().nullish().describe('Optional expression combining the cell\'s source keys as {key}; without it the first source value is shown.'),
+  "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish().describe('Number formatting for the computed dynamic value.')
+}).describe('A single cell of a notes free-form table. Either static text or a dynamic live value.'))).nullish().describe('Row-major grid of cells (kind = table); each inner array is one row.')
+}).optional(),
   "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
   "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish(),
   "chart": zod.object({

@@ -16,4 +16,5 @@ export const DashboardWidgetDataWidgetType = {
   metric: 'metric',
   chart: 'chart',
   table: 'table',
+  notes: 'notes',
 } as const;

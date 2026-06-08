@@ -11,6 +11,7 @@ import type { DashboardWidgetDataMetrics } from './dashboardWidgetDataMetrics';
 import type { DashboardWidgetDataTextColor } from './dashboardWidgetDataTextColor';
 import type { DashboardWidgetDataWidgetType } from './dashboardWidgetDataWidgetType';
 import type { MultilingualText } from './multilingualText';
+import type { NotesData } from './notesData';
 import type { TableColumn } from './tableColumn';
 import type { TableRow } from './tableRow';
 
@@ -52,4 +53,5 @@ export interface DashboardWidgetData {
   textColor?: DashboardWidgetDataTextColor;
   /** Computed value per metric key (admin-authoritative real totals) */
   metrics: DashboardWidgetDataMetrics;
+  notes?: NotesData;
 }

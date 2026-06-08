@@ -7,7 +7,7 @@
  */
 
 /**
- * metric (default) = number cards; chart = graph; table = entity rows.
+ * metric (default) = number cards; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.
  * @nullable
  */
 export type WidgetConfigWidgetType = typeof WidgetConfigWidgetType[keyof typeof WidgetConfigWidgetType] | null;
@@ -17,4 +17,5 @@ export const WidgetConfigWidgetType = {
   metric: 'metric',
   chart: 'chart',
   table: 'table',
+  notes: 'notes',
 } as const;

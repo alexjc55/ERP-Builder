@@ -16,6 +16,7 @@ import {
   type Relation,
 } from "@workspace/db";
 import { eq, sql, gte, and, isNull, inArray, asc } from "drizzle-orm";
+import sanitizeHtml from "sanitize-html";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin, getPermissions } from "../middlewares/permissions";
 import {
@@ -98,13 +99,40 @@ interface TableSpec {
   limit?: number | null;
 }
 
+interface NoteCellSourceSpec {
+  key: string;
+  sourceKind: "metric" | "record";
+  entityId: number;
+  aggregation?: "count" | "sum" | null;
+  fieldKey?: string | null;
+  relationId?: number | null;
+  statusIds?: number[] | null;
+  recordId?: number | null;
+}
+
+interface NoteCellSpec {
+  kind: "static" | "dynamic";
+  text?: string | null;
+  sources?: NoteCellSourceSpec[] | null;
+  formula?: string | null;
+  format?: string | null;
+}
+
+interface NotesSpec {
+  kind: "richtext" | "table";
+  html?: string | null;
+  cols?: number | null;
+  cells?: NoteCellSpec[][] | null;
+}
+
 interface WidgetConfigShape {
-  widgetType?: "metric" | "chart" | "table" | null;
+  widgetType?: "metric" | "chart" | "table" | "notes" | null;
   metrics?: WidgetMetricSpec[];
   formula?: string | null;
   format?: string | null;
   chart?: ChartSpec | null;
   table?: TableSpec | null;
+  notes?: NotesSpec | null;
   colorStyle?: "icon" | "border" | "fill" | null;
   textColor?: "light" | "dark" | null;
 }
@@ -202,6 +230,54 @@ async function linkedRecordMap(
           .where(and(eq(recordLinksTable.relationId, relationId), inArray(recordLinksTable.targetRecordId, recordIds)));
   for (const r of rows) map.set(r.from, r.to);
   return map;
+}
+
+/**
+ * Sanitize notes rich-text HTML before it is stored. Whitelists only the tags and
+ * inline styles the editor produces (text formatting, headings, lists, links,
+ * color, text-align), stripping scripts/handlers/unknown markup so a viewer never
+ * renders attacker-controlled HTML. Links are forced to safe schemes + noopener.
+ */
+function sanitizeNotesHtml(html: string): string {
+  return sanitizeHtml(html, {
+    allowedTags: [
+      "p", "br", "span", "strong", "b", "em", "i", "u", "s", "strike", "del",
+      "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote", "a",
+    ],
+    allowedAttributes: {
+      a: ["href", "target", "rel"],
+      span: ["style"],
+      p: ["style"],
+      h1: ["style"], h2: ["style"], h3: ["style"],
+      h4: ["style"], h5: ["style"], h6: ["style"],
+      li: ["style"], ul: ["style"], ol: ["style"], blockquote: ["style"],
+    },
+    allowedStyles: {
+      "*": {
+        color: [/^#(0x)?[0-9a-f]+$/i, /^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/],
+        "background-color": [/^#(0x)?[0-9a-f]+$/i, /^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/],
+        "text-align": [/^(left|right|center|justify)$/],
+      },
+    },
+    allowedSchemes: ["http", "https", "mailto", "tel"],
+    transformTags: {
+      a: sanitizeHtml.simpleTransform("a", { rel: "noopener noreferrer nofollow", target: "_blank" }),
+    },
+  });
+}
+
+/**
+ * Return a copy of the widget config with any notes rich-text HTML sanitized.
+ * Applied on every write so stored HTML is always safe to render.
+ */
+function sanitizeWidgetConfig(config: WidgetConfigShape): WidgetConfigShape {
+  if (config?.widgetType === "notes" && config.notes?.kind === "richtext") {
+    return {
+      ...config,
+      notes: { ...config.notes, html: sanitizeNotesHtml(config.notes.html ?? "") },
+    };
+  }
+  return config;
 }
 
 /** Serialize a stored widget row into the API shape (config/visibleRoleIds). */
@@ -321,12 +397,144 @@ async function validateTableConfig(table: TableSpec | null | undefined): Promise
   return null;
 }
 
+/**
+ * Validate a single live-value source of a notes-table cell. A "metric" source
+ * mirrors the WidgetMetric rules (entity/relation/numeric-field); a "record"
+ * source must reference an existing record of the entity and an existing field.
+ */
+async function validateNoteCellSource(s: NoteCellSourceSpec): Promise<string | null> {
+  if (!s.key || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(s.key)) return `Invalid source key: ${s.key}`;
+  if (s.sourceKind !== "metric" && s.sourceKind !== "record") return "Invalid source kind";
+
+  const [entity] = await db
+    .select({ id: entitiesTable.id })
+    .from(entitiesTable)
+    .where(eq(entitiesTable.id, s.entityId))
+    .limit(1);
+  if (!entity) return `Entity ${s.entityId} not found`;
+
+  if (s.sourceKind === "record") {
+    if (s.recordId == null) return "Record source requires a record";
+    if (!s.fieldKey) return "Record source requires a field";
+    const [rec] = await db
+      .select({ id: entityRecordsTable.id })
+      .from(entityRecordsTable)
+      .where(and(eq(entityRecordsTable.id, s.recordId), eq(entityRecordsTable.entityId, s.entityId)))
+      .limit(1);
+    if (!rec) return `Record ${s.recordId} not found on entity ${s.entityId}`;
+    const [field] = await db
+      .select({ id: entityFieldsTable.id })
+      .from(entityFieldsTable)
+      .where(and(eq(entityFieldsTable.entityId, s.entityId), eq(entityFieldsTable.fieldKey, s.fieldKey)))
+      .limit(1);
+    if (!field) return `Field "${s.fieldKey}" not found on entity ${s.entityId}`;
+    return null;
+  }
+
+  // metric source
+  const aggregation = s.aggregation ?? "count";
+  if (aggregation !== "count" && aggregation !== "sum") return "Invalid aggregation";
+  return validateMetricLike({
+    entityId: s.entityId,
+    aggregation,
+    fieldKey: s.fieldKey ?? null,
+    relationId: s.relationId ?? null,
+  });
+}
+
+/**
+ * Validate a notes widget config. richtext needs nothing beyond the kind; table
+ * validates the cell grid: every dynamic cell's sources must resolve and source
+ * keys must be unique within the cell (so the cell formula can reference them).
+ */
+async function validateNotesConfig(notes: NotesSpec | null | undefined): Promise<string | null> {
+  if (!notes) return "Notes config is required";
+  if (notes.kind === "richtext") return null;
+  if (notes.kind !== "table") return "Invalid notes kind";
+
+  const cells = notes.cells ?? [];
+  if (!Array.isArray(cells)) return "Notes table cells must be a grid";
+  for (const row of cells) {
+    if (!Array.isArray(row)) return "Notes table row must be an array";
+    for (const cell of row) {
+      if (cell.kind !== "static" && cell.kind !== "dynamic") return "Invalid cell kind";
+      if (cell.kind !== "dynamic") continue;
+      const sources = cell.sources ?? [];
+      if (sources.length === 0) return "Dynamic cell requires at least one source";
+      const seen = new Set<string>();
+      for (const s of sources) {
+        if (seen.has(s.key)) return `Duplicate source key in cell: ${s.key}`;
+        seen.add(s.key);
+        const err = await validateNoteCellSource(s);
+        if (err) return err;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Validate the metric-shaped part of a spec (entity existence, related single-link
+ * relation, numeric sum field). Shared by widget metrics and notes metric sources;
+ * key validity/uniqueness is the caller's responsibility.
+ */
+async function validateMetricLike(m: {
+  entityId: number;
+  aggregation: "count" | "sum";
+  fieldKey?: string | null;
+  relationId?: number | null;
+}): Promise<string | null> {
+  const [entity] = await db
+    .select({ id: entitiesTable.id })
+    .from(entitiesTable)
+    .where(eq(entitiesTable.id, m.entityId))
+    .limit(1);
+  if (!entity) return `Entity ${m.entityId} not found`;
+
+  // Related metric: aggregate over a single-link related entity. count = number
+  // of linked records; sum = sum of the related (numeric) field over them.
+  if (m.relationId != null) {
+    if (m.aggregation === "sum" && !m.fieldKey) return "Sum metric requires a related numeric field";
+    const resolved = await resolveRelationField(m.entityId, m.relationId, m.fieldKey ?? "");
+    if (m.aggregation === "sum") {
+      if ("error" in resolved) return resolved.error;
+      if (resolved.relatedFieldType !== "number") return `Related field "${m.fieldKey}" is not numeric`;
+    } else if (m.fieldKey) {
+      // count over links: a related field is optional, but if given it must exist.
+      if ("error" in resolved) return resolved.error;
+    } else {
+      // count with no related field still needs a valid single-link relation.
+      const [relation] = await db.select().from(relationsTable).where(eq(relationsTable.id, m.relationId)).limit(1);
+      if (!relation) return `Relation ${m.relationId} not found`;
+      if (!relationDirection(relation, m.entityId)) {
+        return `Relation ${m.relationId} does not yield a single linked record for entity ${m.entityId}`;
+      }
+    }
+    return null;
+  }
+
+  if (m.aggregation === "sum") {
+    if (!m.fieldKey) return "Sum metric requires a numeric field";
+    const [field] = await db
+      .select({ fieldType: entityFieldsTable.fieldType })
+      .from(entityFieldsTable)
+      .where(and(eq(entityFieldsTable.entityId, m.entityId), eq(entityFieldsTable.fieldKey, m.fieldKey)))
+      .limit(1);
+    if (!field) return `Field "${m.fieldKey}" not found on entity ${m.entityId}`;
+    if (field.fieldType !== "number") return `Field "${m.fieldKey}" is not numeric`;
+  }
+  return null;
+}
+
 async function validateConfig(config: WidgetConfigShape | undefined): Promise<string | null> {
   if (config?.widgetType === "chart") {
     return validateChartConfig(config.chart);
   }
   if (config?.widgetType === "table") {
     return validateTableConfig(config.table);
+  }
+  if (config?.widgetType === "notes") {
+    return validateNotesConfig(config.notes);
   }
   const metrics = config?.metrics ?? [];
   if (metrics.length === 0) return "At least one metric is required";
@@ -337,46 +545,8 @@ async function validateConfig(config: WidgetConfigShape | undefined): Promise<st
     }
     if (seen.has(m.key)) return `Duplicate metric key: ${m.key}`;
     seen.add(m.key);
-
-    const [entity] = await db
-      .select({ id: entitiesTable.id })
-      .from(entitiesTable)
-      .where(eq(entitiesTable.id, m.entityId))
-      .limit(1);
-    if (!entity) return `Entity ${m.entityId} not found`;
-
-    // Related metric: aggregate over a single-link related entity. count = number
-    // of linked records; sum = sum of the related (numeric) field over them.
-    if (m.relationId != null) {
-      if (m.aggregation === "sum" && !m.fieldKey) return "Sum metric requires a related numeric field";
-      const resolved = await resolveRelationField(m.entityId, m.relationId, m.fieldKey ?? "");
-      if (m.aggregation === "sum") {
-        if ("error" in resolved) return resolved.error;
-        if (resolved.relatedFieldType !== "number") return `Related field "${m.fieldKey}" is not numeric`;
-      } else if (m.fieldKey) {
-        // count over links: a related field is optional, but if given it must exist.
-        if ("error" in resolved) return resolved.error;
-      } else {
-        // count with no related field still needs a valid single-link relation.
-        const [relation] = await db.select().from(relationsTable).where(eq(relationsTable.id, m.relationId)).limit(1);
-        if (!relation) return `Relation ${m.relationId} not found`;
-        if (!relationDirection(relation, m.entityId)) {
-          return `Relation ${m.relationId} does not yield a single linked record for entity ${m.entityId}`;
-        }
-      }
-      continue;
-    }
-
-    if (m.aggregation === "sum") {
-      if (!m.fieldKey) return "Sum metric requires a numeric field";
-      const [field] = await db
-        .select({ fieldType: entityFieldsTable.fieldType })
-        .from(entityFieldsTable)
-        .where(and(eq(entityFieldsTable.entityId, m.entityId), eq(entityFieldsTable.fieldKey, m.fieldKey)))
-        .limit(1);
-      if (!field) return `Field "${m.fieldKey}" not found on entity ${m.entityId}`;
-      if (field.fieldType !== "number") return `Field "${m.fieldKey}" is not numeric`;
-    }
+    const err = await validateMetricLike(m);
+    if (err) return err;
   }
   return null;
 }
@@ -655,6 +825,96 @@ async function computeTableData(
   return { columns: allColumns, rows };
 }
 
+/**
+ * Resolve a specific record's stored field value for a notes "record" source.
+ * ADMIN-AUTHORITATIVE: returns the raw stored value regardless of the viewing
+ * role's data permissions (access is governed by per-widget role visibility).
+ * Objects (e.g. file/link fields) collapse to their name; missing → null.
+ */
+async function computeRecordField(
+  entityId: number,
+  recordId: number,
+  fieldKey: string,
+): Promise<number | string | null> {
+  const [rec] = await db
+    .select({ valuesJson: entityRecordsTable.valuesJson })
+    .from(entityRecordsTable)
+    .where(and(eq(entityRecordsTable.id, recordId), eq(entityRecordsTable.entityId, entityId)))
+    .limit(1);
+  if (!rec) return null;
+  const v = ((rec.valuesJson ?? {}) as Record<string, unknown>)[fieldKey];
+  if (v == null) return null;
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    if (typeof o.name === "string") return o.name;
+    return JSON.stringify(v);
+  }
+  if (typeof v === "number" || typeof v === "string") return v;
+  return String(v);
+}
+
+type NoteCellData =
+  | { kind: "static"; text: string; values: null; formula: null; format: null }
+  | {
+      kind: "dynamic";
+      text: null;
+      values: Record<string, number | string>;
+      formula: string | null;
+      format: string | null;
+    };
+
+/**
+ * Compute a notes widget's viewer-facing data. richtext passes the sanitized HTML
+ * through; table computes each dynamic cell's source values (metric aggregates or
+ * a record's field value) — admin-authoritative — and ships them with the cell's
+ * formula/format for client-side evaluation (consistent with metric widgets).
+ */
+async function computeNotesData(notes: NotesSpec): Promise<{
+  kind: "richtext" | "table";
+  html: string | null;
+  cols: number | null;
+  cells: NoteCellData[][] | null;
+}> {
+  if (notes.kind === "richtext") {
+    return { kind: "richtext", html: notes.html ?? "", cols: null, cells: null };
+  }
+  const cells = notes.cells ?? [];
+  const computed: NoteCellData[][] = await Promise.all(
+    cells.map((row) =>
+      Promise.all(
+        row.map(async (cell): Promise<NoteCellData> => {
+          if (cell.kind === "static") {
+            return { kind: "static", text: cell.text ?? "", values: null, formula: null, format: null };
+          }
+          const values: Record<string, number | string> = {};
+          for (const s of cell.sources ?? []) {
+            if (s.sourceKind === "record" && s.recordId != null && s.fieldKey) {
+              const v = await computeRecordField(s.entityId, s.recordId, s.fieldKey);
+              values[s.key] = v == null ? "" : v;
+            } else {
+              values[s.key] = await computeMetric({
+                key: s.key,
+                entityId: s.entityId,
+                aggregation: s.aggregation ?? "count",
+                fieldKey: s.fieldKey ?? null,
+                relationId: s.relationId ?? null,
+                statusIds: s.statusIds ?? null,
+              });
+            }
+          }
+          return { kind: "dynamic", text: null, values, formula: cell.formula ?? null, format: cell.format ?? null };
+        }),
+      ),
+    ),
+  );
+  return {
+    kind: "table",
+    html: null,
+    cols: notes.cols ?? (cells[0]?.length ?? 0),
+    cells: computed,
+  };
+}
+
 /** True if the role may access (see) the given content page. */
 function canAccessPage(perms: { superAdmin: boolean; pageIds: number[] }, pageId: number): boolean {
   return perms.superAdmin || perms.pageIds.includes(pageId);
@@ -721,7 +981,7 @@ router.post("/pages/:id/dashboard/widgets", requireAuth, requireAdmin("pages"), 
     .values({
       pageId: params.data.id,
       titleJson: body.titleJson,
-      configJson: body.config,
+      configJson: sanitizeWidgetConfig(body.config as WidgetConfigShape),
       visibleRoleIdsJson: body.visibleRoleIds ?? null,
       ...(body.icon != null ? { icon: body.icon } : {}),
       ...(body.color != null ? { color: body.color } : {}),
@@ -752,7 +1012,7 @@ router.put("/dashboard/widgets/:wid", requireAuth, requireAdmin("pages"), async 
   const body = parsed.data;
   const updateData: Record<string, unknown> = {
     titleJson: body.titleJson,
-    configJson: body.config,
+    configJson: sanitizeWidgetConfig(body.config as WidgetConfigShape),
     visibleRoleIdsJson: body.visibleRoleIds ?? null,
   };
   if (body.icon != null) updateData.icon = body.icon;
@@ -868,6 +1128,17 @@ router.get("/pages/:id/dashboard/data", requireAuth, async (req, res): Promise<v
           tableColumns: columns,
           tableRows: rows,
           tableEntityId: config.table.entityId,
+          formula: null,
+          format: config.format ?? null,
+          metrics: {},
+        };
+      }
+      if (config.widgetType === "notes" && config.notes) {
+        const notes = await computeNotesData(config.notes);
+        return {
+          ...base,
+          widgetType: "notes" as const,
+          notes,
           formula: null,
           format: config.format ?? null,
           metrics: {},

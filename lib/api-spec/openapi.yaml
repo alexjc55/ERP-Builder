@@ -3586,17 +3586,96 @@ components:
         relatedFieldKey:
           type: string
 
+    NoteCellSource:
+      type: object
+      required: [key, sourceKind, entityId]
+      description: A live value referenced from a notes-table cell formula as {key}. Either an entity aggregate (sourceKind = metric) or a specific record's field value (sourceKind = record).
+      properties:
+        key:
+          type: string
+          description: Identifier referenced from the cell formula as {key}
+        sourceKind:
+          type: string
+          enum: [metric, record]
+        entityId:
+          type: integer
+        aggregation:
+          type: ["string", "null"]
+          enum: [count, sum, null]
+          description: For sourceKind = metric — count of records or sum of a numeric field.
+        fieldKey:
+          type: ["string", "null"]
+          description: For metric sum — the numeric field (related entity's field when relationId is set). For record source — the field whose stored value is shown.
+        relationId:
+          type: ["integer", "null"]
+          description: For sourceKind = metric — compute over a related entity through this qualifying single-link relation.
+        statusIds:
+          type: ["array", "null"]
+          items:
+            type: integer
+          description: For sourceKind = metric — restrict to records in these statuses; empty/null = all statuses.
+        recordId:
+          type: ["integer", "null"]
+          description: For sourceKind = record — the specific record whose field value is shown.
+
+    NoteCell:
+      type: object
+      required: [kind]
+      description: A single cell of a notes free-form table. Either static text or a dynamic live value.
+      properties:
+        kind:
+          type: string
+          enum: [static, dynamic]
+        text:
+          type: ["string", "null"]
+          description: Static cell text (kind = static).
+        sources:
+          type: ["array", "null"]
+          items:
+            $ref: "#/components/schemas/NoteCellSource"
+          description: Live-value sources (kind = dynamic).
+        formula:
+          type: ["string", "null"]
+          description: Optional expression combining the cell's source keys as {key}; without it the first source value is shown.
+        format:
+          type: ["string", "null"]
+          enum: [number, currency, percent, null]
+          description: Number formatting for the computed dynamic value.
+
+    NotesConfig:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [richtext, table]
+        html:
+          type: ["string", "null"]
+          description: Sanitized rich-text HTML (kind = richtext).
+        cols:
+          type: ["integer", "null"]
+          description: Number of columns in the free-form table (kind = table).
+        cells:
+          type: ["array", "null"]
+          description: Row-major grid of cells (kind = table); each inner array is one row.
+          items:
+            type: array
+            items:
+              $ref: "#/components/schemas/NoteCell"
+
     WidgetConfig:
       type: object
       properties:
         widgetType:
           type: ["string", "null"]
-          enum: [metric, chart, table, null]
-          description: metric (default) = number cards; chart = graph; table = entity rows.
+          enum: [metric, chart, table, notes, null]
+          description: metric (default) = number cards; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.
         metrics:
           type: array
           items:
             $ref: "#/components/schemas/WidgetMetric"
+        notes:
+          $ref: "#/components/schemas/NotesConfig"
         formula:
           type: ["string", "null"]
           description: Optional expression combining metric keys as {key}
@@ -3705,6 +3784,47 @@ components:
           additionalProperties: true
           description: fieldKey to stored value map (only the widget's columns)
 
+    NoteCellData:
+      type: object
+      required: [kind]
+      description: Computed view of a notes-table cell shipped to the viewer.
+      properties:
+        kind:
+          type: string
+          enum: [static, dynamic]
+        text:
+          type: ["string", "null"]
+          description: Static cell text (kind = static).
+        values:
+          type: ["object", "null"]
+          additionalProperties: true
+          description: Computed value per source key (kind = dynamic); each value is a number or string (admin-authoritative).
+        formula:
+          type: ["string", "null"]
+        format:
+          type: ["string", "null"]
+          enum: [number, currency, percent, null]
+
+    NotesData:
+      type: object
+      required: [kind]
+      description: Computed view of a notes widget shipped to the viewer.
+      properties:
+        kind:
+          type: string
+          enum: [richtext, table]
+        html:
+          type: ["string", "null"]
+          description: Sanitized rich-text HTML (kind = richtext).
+        cols:
+          type: ["integer", "null"]
+        cells:
+          type: ["array", "null"]
+          items:
+            type: array
+            items:
+              $ref: "#/components/schemas/NoteCellData"
+
     DashboardWidgetData:
       type: object
       required: [id, titleJson, icon, color, gridW, gridH, sortOrder, metrics]
@@ -3725,7 +3845,7 @@ components:
           type: integer
         widgetType:
           type: ["string", "null"]
-          enum: [metric, chart, table, null]
+          enum: [metric, chart, table, notes, null]
         chartType:
           type: ["string", "null"]
         showValues:
@@ -3764,6 +3884,8 @@ components:
           additionalProperties:
             type: number
           description: Computed value per metric key (admin-authoritative real totals)
+        notes:
+          $ref: "#/components/schemas/NotesData"
 
     # ENTITIES
     Entity:

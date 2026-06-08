@@ -756,8 +756,138 @@ export interface TableConfig {
   limit?: number | null;
 }
 
+export type NoteCellSourceSourceKind = typeof NoteCellSourceSourceKind[keyof typeof NoteCellSourceSourceKind];
+
+
+export const NoteCellSourceSourceKind = {
+  metric: 'metric',
+  record: 'record',
+} as const;
+
 /**
- * metric (default) = number cards; chart = graph; table = entity rows.
+ * For sourceKind = metric — count of records or sum of a numeric field.
+ * @nullable
+ */
+export type NoteCellSourceAggregation = typeof NoteCellSourceAggregation[keyof typeof NoteCellSourceAggregation] | null;
+
+
+export const NoteCellSourceAggregation = {
+  count: 'count',
+  sum: 'sum',
+} as const;
+
+/**
+ * A live value referenced from a notes-table cell formula as {key}. Either an entity aggregate (sourceKind = metric) or a specific record's field value (sourceKind = record).
+ */
+export interface NoteCellSource {
+  /** Identifier referenced from the cell formula as {key} */
+  key: string;
+  sourceKind: NoteCellSourceSourceKind;
+  entityId: number;
+  /**
+     * For sourceKind = metric — count of records or sum of a numeric field.
+     * @nullable
+     */
+  aggregation?: NoteCellSourceAggregation;
+  /**
+     * For metric sum — the numeric field (related entity's field when relationId is set). For record source — the field whose stored value is shown.
+     * @nullable
+     */
+  fieldKey?: string | null;
+  /**
+     * For sourceKind = metric — compute over a related entity through this qualifying single-link relation.
+     * @nullable
+     */
+  relationId?: number | null;
+  /**
+     * For sourceKind = metric — restrict to records in these statuses; empty/null = all statuses.
+     * @nullable
+     */
+  statusIds?: number[] | null;
+  /**
+     * For sourceKind = record — the specific record whose field value is shown.
+     * @nullable
+     */
+  recordId?: number | null;
+}
+
+export type NoteCellKind = typeof NoteCellKind[keyof typeof NoteCellKind];
+
+
+export const NoteCellKind = {
+  static: 'static',
+  dynamic: 'dynamic',
+} as const;
+
+/**
+ * Number formatting for the computed dynamic value.
+ * @nullable
+ */
+export type NoteCellFormat = typeof NoteCellFormat[keyof typeof NoteCellFormat] | null;
+
+
+export const NoteCellFormat = {
+  number: 'number',
+  currency: 'currency',
+  percent: 'percent',
+} as const;
+
+/**
+ * A single cell of a notes free-form table. Either static text or a dynamic live value.
+ */
+export interface NoteCell {
+  kind: NoteCellKind;
+  /**
+     * Static cell text (kind = static).
+     * @nullable
+     */
+  text?: string | null;
+  /**
+     * Live-value sources (kind = dynamic).
+     * @nullable
+     */
+  sources?: NoteCellSource[] | null;
+  /**
+     * Optional expression combining the cell's source keys as {key}; without it the first source value is shown.
+     * @nullable
+     */
+  formula?: string | null;
+  /**
+     * Number formatting for the computed dynamic value.
+     * @nullable
+     */
+  format?: NoteCellFormat;
+}
+
+export type NotesConfigKind = typeof NotesConfigKind[keyof typeof NotesConfigKind];
+
+
+export const NotesConfigKind = {
+  richtext: 'richtext',
+  table: 'table',
+} as const;
+
+export interface NotesConfig {
+  kind: NotesConfigKind;
+  /**
+     * Sanitized rich-text HTML (kind = richtext).
+     * @nullable
+     */
+  html?: string | null;
+  /**
+     * Number of columns in the free-form table (kind = table).
+     * @nullable
+     */
+  cols?: number | null;
+  /**
+     * Row-major grid of cells (kind = table); each inner array is one row.
+     * @nullable
+     */
+  cells?: NoteCell[][] | null;
+}
+
+/**
+ * metric (default) = number cards; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.
  * @nullable
  */
 export type WidgetConfigWidgetType = typeof WidgetConfigWidgetType[keyof typeof WidgetConfigWidgetType] | null;
@@ -767,6 +897,7 @@ export const WidgetConfigWidgetType = {
   metric: 'metric',
   chart: 'chart',
   table: 'table',
+  notes: 'notes',
 } as const;
 
 /**
@@ -808,11 +939,12 @@ export const WidgetConfigTextColor = {
 
 export interface WidgetConfig {
   /**
-     * metric (default) = number cards; chart = graph; table = entity rows.
+     * metric (default) = number cards; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.
      * @nullable
      */
   widgetType?: WidgetConfigWidgetType;
   metrics?: WidgetMetric[];
+  notes?: NotesConfig;
   /**
      * Optional expression combining metric keys as {key}
      * @nullable
@@ -886,6 +1018,77 @@ export interface TableRow {
   values: TableRowValues;
 }
 
+export type NoteCellDataKind = typeof NoteCellDataKind[keyof typeof NoteCellDataKind];
+
+
+export const NoteCellDataKind = {
+  static: 'static',
+  dynamic: 'dynamic',
+} as const;
+
+/**
+ * Computed value per source key (kind = dynamic); each value is a number or string (admin-authoritative).
+ * @nullable
+ */
+export type NoteCellDataValues = { [key: string]: unknown } | null;
+
+/**
+ * @nullable
+ */
+export type NoteCellDataFormat = typeof NoteCellDataFormat[keyof typeof NoteCellDataFormat] | null;
+
+
+export const NoteCellDataFormat = {
+  number: 'number',
+  currency: 'currency',
+  percent: 'percent',
+} as const;
+
+/**
+ * Computed view of a notes-table cell shipped to the viewer.
+ */
+export interface NoteCellData {
+  kind: NoteCellDataKind;
+  /**
+     * Static cell text (kind = static).
+     * @nullable
+     */
+  text?: string | null;
+  /**
+     * Computed value per source key (kind = dynamic); each value is a number or string (admin-authoritative).
+     * @nullable
+     */
+  values?: NoteCellDataValues;
+  /** @nullable */
+  formula?: string | null;
+  /** @nullable */
+  format?: NoteCellDataFormat;
+}
+
+export type NotesDataKind = typeof NotesDataKind[keyof typeof NotesDataKind];
+
+
+export const NotesDataKind = {
+  richtext: 'richtext',
+  table: 'table',
+} as const;
+
+/**
+ * Computed view of a notes widget shipped to the viewer.
+ */
+export interface NotesData {
+  kind: NotesDataKind;
+  /**
+     * Sanitized rich-text HTML (kind = richtext).
+     * @nullable
+     */
+  html?: string | null;
+  /** @nullable */
+  cols?: number | null;
+  /** @nullable */
+  cells?: NoteCellData[][] | null;
+}
+
 /**
  * @nullable
  */
@@ -896,6 +1099,7 @@ export const DashboardWidgetDataWidgetType = {
   metric: 'metric',
   chart: 'chart',
   table: 'table',
+  notes: 'notes',
 } as const;
 
 /**
@@ -964,6 +1168,7 @@ export interface DashboardWidgetData {
   textColor?: DashboardWidgetDataTextColor;
   /** Computed value per metric key (admin-authoritative real totals) */
   metrics: DashboardWidgetDataMetrics;
+  notes?: NotesData;
 }
 
 export interface Entity {
