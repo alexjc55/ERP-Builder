@@ -111,12 +111,13 @@ export interface GDriveUploadResult {
  * holds the Drive credentials — they are never exposed to the client). Returns
  * the created Drive file's metadata to store as a `gdrive` file value.
  */
-export async function uploadToGoogleDrive(file: File): Promise<GDriveUploadResult> {
+export async function uploadToGoogleDrive(file: File, driveFolderId?: string): Promise<GDriveUploadResult> {
   const token = localStorage.getItem("erp_token");
   const headers: Record<string, string> = {
     "Content-Type": file.type || "application/octet-stream",
     "X-File-Name": encodeURIComponent(file.name),
   };
+  if (driveFolderId) headers["X-Drive-Folder-Id"] = driveFolderId;
   if (token) headers.Authorization = `Bearer ${token}`;
   const resp = await fetch("/api/google-drive/upload", {
     method: "POST",

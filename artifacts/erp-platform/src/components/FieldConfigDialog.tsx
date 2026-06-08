@@ -5,6 +5,7 @@ import {
   useDeleteField,
   useListRoles,
   useListEntityFields,
+  useListGoogleDriveFolders,
   type Field,
   type FieldType,
   type FieldAccess,
@@ -116,6 +117,7 @@ export function FieldConfigDialog({
   const { toast } = useToast();
   const { data: roles = [] } = useListRoles();
   const { data: existingFields = [] } = useListEntityFields(entityId);
+  const { data: driveFolders = [] } = useListGoogleDriveFolders();
 
   const [fieldKey, setFieldKey] = useState("");
   const [nameJson, setNameJson] = useState<MLValue>({});
@@ -133,6 +135,7 @@ export function FieldConfigDialog({
   const [totalTextColor, setTotalTextColor] = useState("");
   const [permissions, setPermissions] = useState<FieldPermissions>({});
   const [allowedSources, setAllowedSources] = useState<FileSource[]>(["server"]);
+  const [driveFolderId, setDriveFolderId] = useState<string>("");
   const [allowedRoleIds, setAllowedRoleIds] = useState<number[]>([]);
   const [formatRules, setFormatRules] = useState<FieldFormatRule[]>([]);
   const [formula, setFormula] = useState("");
@@ -162,6 +165,7 @@ export function FieldConfigDialog({
       {
         const src = field.fileConfigJson?.allowedSources;
         setAllowedSources(Array.isArray(src) && src.length > 0 ? src : ["server"]);
+        setDriveFolderId(field.fileConfigJson?.driveFolderId ?? "");
       }
       setAllowedRoleIds(
         Array.isArray(field.userConfigJson?.allowedRoleIds) ? field.userConfigJson!.allowedRoleIds : [],
@@ -185,6 +189,7 @@ export function FieldConfigDialog({
       setTotalTextColor("");
       setPermissions({});
       setAllowedSources(["server"]);
+      setDriveFolderId("");
       setAllowedRoleIds([]);
       setFormatRules([]);
       setFormula("");
@@ -276,7 +281,10 @@ export function FieldConfigDialog({
       totalTextColor: fieldType === "number" && showColumnTotal && totalTextColor ? totalTextColor : null,
       fileConfigJson:
         fieldType === "file"
-          ? { allowedSources: allowedSources.length > 0 ? allowedSources : (["server"] as FileSource[]) }
+          ? {
+              allowedSources: allowedSources.length > 0 ? allowedSources : (["server"] as FileSource[]),
+              ...(allowedSources.includes("gdrive") && driveFolderId ? { driveFolderId } : {}),
+            }
           : {},
       userConfigJson: fieldType === "user" ? { allowedRoleIds } : {},
       formatRulesJson: formatRules,
@@ -376,6 +384,35 @@ export function FieldConfigDialog({
                     );
                   })}
                 </div>
+                {allowedSources.includes("gdrive") && (
+                  <div className="space-y-1.5 pt-2">
+                    <Label>{t("fields.driveFolder", "Папка Google Drive")}</Label>
+                    <p className="text-xs text-slate-400">
+                      {t(
+                        "fields.driveFolderHint",
+                        "Куда загружать файлы этого поля. По умолчанию — основная папка «ERP Uploads».",
+                      )}
+                    </p>
+                    <Select
+                      value={driveFolderId || "__default__"}
+                      onValueChange={(v) => setDriveFolderId(v === "__default__" ? "" : v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__default__">
+                          {t("fields.driveFolderDefault", "По умолчанию (ERP Uploads)")}
+                        </SelectItem>
+                        {driveFolders.map((f) => (
+                          <SelectItem key={f.driveFolderId} value={f.driveFolderId}>
+                            {f.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             )}
             {fieldType === "user" && (

@@ -2,16 +2,18 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import express from "express";
 import { Readable } from "stream";
 import jwt from "jsonwebtoken";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import {
   db,
   googleDriveConnectionTable,
+  googleDriveFoldersTable,
   entityRecordsTable,
   entityFieldsTable,
   type GoogleDriveConnection,
+  type GoogleDriveFolder,
   type EntityField,
 } from "@workspace/db";
-import { UpdateGoogleDriveConnectionBody } from "@workspace/api-zod";
+import { UpdateGoogleDriveConnectionBody, CreateGoogleDriveFolderBody } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/auth";
 import {
   requireAdmin,
@@ -33,6 +35,7 @@ import {
   exchangeCode,
   getAccessToken,
   ensureFolder,
+  createDriveFolder,
   uploadToFolder,
   downloadDriveFile,
   saveConnectionTokens,
@@ -166,6 +169,20 @@ router.get("/google-drive/oauth/callback", async (req: Request, res: Response): 
       .update(googleDriveConnectionTable)
       .set({ folderId: folder.id, folderName: folder.name })
       .where(eq(googleDriveConnectionTable.id, DRIVE_CONNECTION_ID));
+    // Register the default upload folder in the managed-folders list (idempotent).
+    // Demote any stale default first so exactly one row stays isDefault=true even
+    // if the underlying Drive folder rotated between connects.
+    await db
+      .update(googleDriveFoldersTable)
+      .set({ isDefault: false })
+      .where(eq(googleDriveFoldersTable.isDefault, true));
+    await db
+      .insert(googleDriveFoldersTable)
+      .values({ driveFolderId: folder.id, name: folder.name, isDefault: true, sortOrder: 0 })
+      .onConflictDoUpdate({
+        target: googleDriveFoldersTable.driveFolderId,
+        set: { name: folder.name, isDefault: true },
+      });
     redirectBack("connected");
   } catch (err) {
     req.log.error({ err }, "Google Drive OAuth callback failed");
@@ -181,7 +198,82 @@ router.post("/google-drive/disconnect", requireAuth, requireAdmin("googleDrive")
     .set({ refreshTokenEnc: null, accountEmail: null, folderId: null, folderName: null })
     .where(eq(googleDriveConnectionTable.id, DRIVE_CONNECTION_ID))
     .returning();
+  // Drop the managed-folder list too; the Drive folders themselves are left
+  // untouched (the platform never deletes Drive content).
+  await db.delete(googleDriveFoldersTable);
   res.json(connectionInfo(row));
+});
+
+/** Public-facing managed folder shape. */
+function folderInfo(f: GoogleDriveFolder) {
+  return { id: f.id, driveFolderId: f.driveFolderId, name: f.name, isDefault: f.isDefault };
+}
+
+/** GET /google-drive/folders — list managed upload folders (admin). */
+router.get("/google-drive/folders", requireAuth, requireAdmin("googleDrive"), async (_req, res): Promise<void> => {
+  const rows = await db
+    .select()
+    .from(googleDriveFoldersTable)
+    .orderBy(desc(googleDriveFoldersTable.isDefault), googleDriveFoldersTable.sortOrder, googleDriveFoldersTable.id);
+  res.json(rows.map(folderInfo));
+});
+
+/** POST /google-drive/folders — create a new managed Drive folder (admin). */
+router.post("/google-drive/folders", requireAuth, requireAdmin("googleDrive"), async (req, res): Promise<void> => {
+  const parsed = CreateGoogleDriveFolderBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const name = parsed.data.name.trim();
+  if (!name) {
+    res.status(400).json({ error: "Folder name is required" });
+    return;
+  }
+  const conn = await getConnection();
+  if (!conn?.refreshTokenEnc) {
+    res.status(409).json({ error: "Google Drive is not connected" });
+    return;
+  }
+  try {
+    const accessToken = await getAccessToken(conn);
+    const folder = await createDriveFolder(accessToken, name);
+    const [maxRow] = await db
+      .select({ max: sql<number>`coalesce(max(${googleDriveFoldersTable.sortOrder}), 0)` })
+      .from(googleDriveFoldersTable);
+    const [row] = await db
+      .insert(googleDriveFoldersTable)
+      .values({ driveFolderId: folder.id, name: folder.name, sortOrder: (maxRow?.max ?? 0) + 1 })
+      .returning();
+    res.json(folderInfo(row));
+  } catch (err) {
+    req.log.error({ err }, "Failed to create Google Drive folder");
+    res.status(502).json({ error: "Failed to create Google Drive folder" });
+  }
+});
+
+/**
+ * DELETE /google-drive/folders/:id — remove a managed folder from the list
+ * (admin). The default folder cannot be removed. The Drive folder itself is left
+ * in place; any field still bound to it falls back to the default at upload time.
+ */
+router.delete("/google-drive/folders/:id", requireAuth, requireAdmin("googleDrive"), async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    res.status(404).json({ error: "Folder not found" });
+    return;
+  }
+  const [row] = await db.select().from(googleDriveFoldersTable).where(eq(googleDriveFoldersTable.id, id));
+  if (!row) {
+    res.status(404).json({ error: "Folder not found" });
+    return;
+  }
+  if (row.isDefault) {
+    res.status(400).json({ error: "Cannot remove the default folder" });
+    return;
+  }
+  await db.delete(googleDriveFoldersTable).where(eq(googleDriveFoldersTable.id, id));
+  res.json({ success: true });
 });
 
 /**
@@ -214,8 +306,20 @@ router.post(
       const rawName = req.header("x-file-name");
       const name = rawName ? decodeURIComponent(rawName) : "upload";
       const contentType = req.header("content-type") || "application/octet-stream";
+      // A field may target a specific managed folder. Validate the requested id
+      // is one of our managed folders (never trust an arbitrary folder id from
+      // the client); otherwise fall back to the connection's default folder.
+      let targetFolderId = conn.folderId;
+      const requestedFolderId = req.header("x-drive-folder-id");
+      if (requestedFolderId) {
+        const [managed] = await db
+          .select({ driveFolderId: googleDriveFoldersTable.driveFolderId })
+          .from(googleDriveFoldersTable)
+          .where(eq(googleDriveFoldersTable.driveFolderId, requestedFolderId));
+        if (managed) targetFolderId = managed.driveFolderId;
+      }
       const accessToken = await getAccessToken(conn);
-      const file = await uploadToFolder(accessToken, conn.folderId, name, contentType, body);
+      const file = await uploadToFolder(accessToken, targetFolderId, name, contentType, body);
       res.json(file);
     } catch (err) {
       req.log.error({ err }, "Google Drive upload failed");

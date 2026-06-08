@@ -145,6 +145,21 @@ export async function ensureFolder(
   return { id: folder.id, name: folder.name };
 }
 
+/** Create a new app-owned Drive folder by name, returning its id. */
+export async function createDriveFolder(
+  accessToken: string,
+  name: string,
+): Promise<{ id: string; name: string }> {
+  const create = await fetch("https://www.googleapis.com/drive/v3/files?fields=id,name", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ name, mimeType: "application/vnd.google-apps.folder" }),
+  });
+  if (!create.ok) throw new Error(`Failed to create Drive folder (${create.status})`);
+  const folder = (await create.json()) as { id: string; name: string };
+  return { id: folder.id, name: folder.name };
+}
+
 export interface DriveUploadedFile {
   fileId: string;
   name: string;

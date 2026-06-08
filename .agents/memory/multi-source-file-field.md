@@ -79,3 +79,26 @@ a small hover card and covers adjacent UI. Always append
 renders. Do NOT add these params to the Google Drive embed preview (link cells) —
 that uses Google's own clean embed and is unaffected; gate the params on the
 preview kind being `pdf`.
+
+## Managed Drive folders (per-field upload target)
+
+gdrive uploads can target one of several admin-managed folders (`google_drive_folders`),
+each app-created so the narrow `drive.file` scope is preserved (the app only ever
+sees folders it created). A file field binds to one via `fileConfigJson.driveFolderId`;
+the client sends it as the `X-Drive-Folder-Id` upload header; the server validates
+the header against the managed-folders table and otherwise falls back to the
+connection's default folder (`conn.folderId`).
+
+**Folder choice is organizational UX, not an access boundary.** All managed folders
+live in the *same* connected admin Drive account, so a tampered header can only
+move a file between admin folders — no IDOR (header is validated against the managed
+list) and no data exposure. Do not over-engineer this into server-resolved-from-field
+unless folder choice ever becomes a real policy.
+
+**Single-default invariant:** exactly one row is `isDefault=true` (the auto-created
+"ERP Uploads"). The OAuth connect path must demote any existing default
+(`set isDefault=false where isDefault=true`) *before* upserting the new default,
+or a rotated Drive folder leaves two undeletable defaults (the delete route blocks
+removing a default). Deleting a managed folder only drops our DB row — the Drive
+folder is never deleted (consistent with "platform never deletes Drive content");
+fields bound to a removed folder fall back to default at upload time.

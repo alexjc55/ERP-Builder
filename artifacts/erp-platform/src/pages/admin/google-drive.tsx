@@ -5,6 +5,9 @@ import {
   useUpdateGoogleDriveConnection,
   useStartGoogleDriveOauth,
   useDisconnectGoogleDrive,
+  useListGoogleDriveFolders,
+  useCreateGoogleDriveFolder,
+  useDeleteGoogleDriveFolder,
   type GoogleDriveConnectionInfo,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -36,6 +39,9 @@ import {
   Link2Off,
   RefreshCw,
   ArrowLeft,
+  Folder,
+  FolderPlus,
+  Trash2,
 } from "lucide-react";
 
 type KeyMode = "builtin" | "own";
@@ -214,6 +220,8 @@ export default function GoogleDrivePage() {
             </CardContent>
           </Card>
 
+          {connected && <FolderManager t={t} />}
+
           {/* Key mode + own creds */}
           <Card className="border-slate-200 shadow-sm">
             <CardHeader><CardTitle className="text-base">{t("gdrive.credsTitle", "Ключи OAuth")}</CardTitle></CardHeader>
@@ -287,6 +295,138 @@ export default function GoogleDrivePage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function FolderManager({ t }: { t: (key: string, fallback: string) => string }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: folders = [], isLoading } = useListGoogleDriveFolders();
+  const createMutation = useCreateGoogleDriveFolder();
+  const deleteMutation = useDeleteGoogleDriveFolder();
+  const [name, setName] = useState("");
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ["/api/google-drive/folders"] });
+
+  const addFolder = () => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    createMutation.mutate(
+      { data: { name: trimmed } },
+      {
+        onSuccess: () => {
+          setName("");
+          invalidate();
+          toast({ title: t("gdrive.folderCreated", "Папка создана") });
+        },
+        onError: () =>
+          toast({ title: t("gdrive.folderCreateError", "Не удалось создать папку"), variant: "destructive" }),
+      },
+    );
+  };
+
+  const removeFolder = (id: number) => {
+    deleteMutation.mutate(
+      { id },
+      {
+        onSuccess: () => {
+          setDeleteId(null);
+          invalidate();
+          toast({ title: t("gdrive.folderDeleted", "Папка удалена из списка") });
+        },
+        onError: () => {
+          setDeleteId(null);
+          toast({ title: t("gdrive.folderDeleteError", "Не удалось удалить папку"), variant: "destructive" });
+        },
+      },
+    );
+  };
+
+  return (
+    <Card className="border-slate-200 shadow-sm">
+      <CardHeader>
+        <CardTitle className="text-base">{t("gdrive.foldersTitle", "Папки загрузок")}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-slate-500">
+          {t(
+            "gdrive.foldersHint",
+            "Создавайте папки в Google Drive, между которыми распределяются загрузки. Каждое поле-файл можно привязать к своей папке. Удаление убирает папку из списка, но сама папка в Google Drive остаётся.",
+          )}
+        </p>
+        <div className="flex gap-2">
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") addFolder(); }}
+            placeholder={t("gdrive.folderNamePlaceholder", "Название новой папки")}
+          />
+          <Button onClick={addFolder} disabled={!name.trim() || createMutation.isPending}>
+            {createMutation.isPending ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <FolderPlus className="w-4 h-4 mr-1.5" />}
+            {t("gdrive.folderAdd", "Создать")}
+          </Button>
+        </div>
+        {isLoading ? (
+          <Skeleton className="h-10 w-full" />
+        ) : folders.length === 0 ? (
+          <p className="text-sm text-slate-400">{t("gdrive.noFolders", "Папок пока нет.")}</p>
+        ) : (
+          <div className="space-y-1.5">
+            {folders.map((f) => (
+              <div
+                key={f.driveFolderId}
+                className="flex items-center justify-between gap-3 rounded-md border border-slate-100 px-3 py-2"
+              >
+                <span className="flex items-center gap-2 text-sm text-slate-700 truncate">
+                  <Folder className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span className="truncate">{f.name}</span>
+                  {f.isDefault && (
+                    <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
+                      {t("gdrive.folderDefault", "По умолчанию")}
+                    </Badge>
+                  )}
+                </span>
+                {!f.isDefault && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-600 hover:text-red-700"
+                    onClick={() => setDeleteId(f.id)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+
+      <AlertDialog open={deleteId !== null} onOpenChange={(o) => !o && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("gdrive.folderDeleteTitle", "Удалить папку из списка?")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t(
+                "gdrive.folderDeleteConfirm",
+                "Папка перестанет быть доступной для новых загрузок. Сама папка и файлы в Google Drive не удаляются. Поля, привязанные к ней, начнут использовать папку по умолчанию.",
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel", "Отмена")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => deleteId && removeFolder(deleteId)}
+            >
+              {t("gdrive.folderDeleteAction", "Удалить")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
   );
 }
 

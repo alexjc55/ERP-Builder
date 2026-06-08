@@ -12,4 +12,6 @@ import type { FileSource } from './fileSource';
  */
 export interface FileFieldConfig {
   allowedSources?: FileSource[];
+  /** Google Drive folder id this field's uploads land in (one of the admin-managed folders). Unset means the default upload folder. */
+  driveFolderId?: string;
 }

@@ -25,11 +25,13 @@ import type {
   AuditLogEntry,
   AuthResult,
   ChangePasswordInput,
+  CreateDriveFolderBody,
   DashboardStats,
   DashboardWidget,
   DashboardWidgetData,
   DashboardWidgetInput,
   DeletedFile,
+  DriveFolder,
   Entity,
   EntityInput,
   EntityRecord,
@@ -8637,6 +8639,224 @@ export const useDisconnectGoogleDrive = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDisconnectGoogleDriveMutationOptions(options));
+    }
+
+export const getListGoogleDriveFoldersUrl = () => {
+
+
+
+
+  return `/api/google-drive/folders`
+}
+
+/**
+ * @summary List managed Drive upload folders (admin)
+ */
+export const listGoogleDriveFolders = async ( options?: RequestInit): Promise<DriveFolder[]> => {
+
+  return customFetch<DriveFolder[]>(getListGoogleDriveFoldersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListGoogleDriveFoldersQueryKey = () => {
+    return [
+    `/api/google-drive/folders`
+    ] as const;
+    }
+
+
+export const getListGoogleDriveFoldersQueryOptions = <TData = Awaited<ReturnType<typeof listGoogleDriveFolders>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGoogleDriveFolders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListGoogleDriveFoldersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGoogleDriveFolders>>> = ({ signal }) => listGoogleDriveFolders({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGoogleDriveFolders>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListGoogleDriveFoldersQueryResult = NonNullable<Awaited<ReturnType<typeof listGoogleDriveFolders>>>
+export type ListGoogleDriveFoldersQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary List managed Drive upload folders (admin)
+ */
+
+export function useListGoogleDriveFolders<TData = Awaited<ReturnType<typeof listGoogleDriveFolders>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGoogleDriveFolders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListGoogleDriveFoldersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateGoogleDriveFolderUrl = () => {
+
+
+
+
+  return `/api/google-drive/folders`
+}
+
+/**
+ * @summary Create a new managed Drive folder (admin)
+ */
+export const createGoogleDriveFolder = async (createDriveFolderBody: CreateDriveFolderBody, options?: RequestInit): Promise<DriveFolder> => {
+
+  return customFetch<DriveFolder>(getCreateGoogleDriveFolderUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createDriveFolderBody,)
+  }
+);}
+
+
+
+
+export const getCreateGoogleDriveFolderMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGoogleDriveFolder>>, TError,{data: BodyType<CreateDriveFolderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createGoogleDriveFolder>>, TError,{data: BodyType<CreateDriveFolderBody>}, TContext> => {
+
+const mutationKey = ['createGoogleDriveFolder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createGoogleDriveFolder>>, {data: BodyType<CreateDriveFolderBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createGoogleDriveFolder(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateGoogleDriveFolderMutationResult = NonNullable<Awaited<ReturnType<typeof createGoogleDriveFolder>>>
+    export type CreateGoogleDriveFolderMutationBody = BodyType<CreateDriveFolderBody>
+    export type CreateGoogleDriveFolderMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Create a new managed Drive folder (admin)
+ */
+export const useCreateGoogleDriveFolder = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGoogleDriveFolder>>, TError,{data: BodyType<CreateDriveFolderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createGoogleDriveFolder>>,
+        TError,
+        {data: BodyType<CreateDriveFolderBody>},
+        TContext
+      > => {
+      return useMutation(getCreateGoogleDriveFolderMutationOptions(options));
+    }
+
+export const getDeleteGoogleDriveFolderUrl = (id: number,) => {
+
+
+
+
+  return `/api/google-drive/folders/${id}`
+}
+
+/**
+ * @summary Remove a managed Drive folder from the list (admin)
+ */
+export const deleteGoogleDriveFolder = async (id: number, options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getDeleteGoogleDriveFolderUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteGoogleDriveFolderMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGoogleDriveFolder>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteGoogleDriveFolder>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteGoogleDriveFolder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteGoogleDriveFolder>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteGoogleDriveFolder(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteGoogleDriveFolderMutationResult = NonNullable<Awaited<ReturnType<typeof deleteGoogleDriveFolder>>>
+
+    export type DeleteGoogleDriveFolderMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Remove a managed Drive folder from the list (admin)
+ */
+export const useDeleteGoogleDriveFolder = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGoogleDriveFolder>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteGoogleDriveFolder>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteGoogleDriveFolderMutationOptions(options));
     }
 
 export const getListDeletedFilesUrl = () => {

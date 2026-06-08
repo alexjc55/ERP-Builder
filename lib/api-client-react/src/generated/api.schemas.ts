@@ -108,6 +108,24 @@ export interface GoogleDriveAuthUrl {
   authUrl: string;
 }
 
+export interface DriveFolder {
+  /** Internal row id. */
+  id: number;
+  /** Google Drive folder id (stored on a field's fileConfigJson.driveFolderId). */
+  driveFolderId: string;
+  name: string;
+  /** The auto-created default upload folder; cannot be removed. */
+  isDefault: boolean;
+}
+
+export interface CreateDriveFolderBody {
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  name: string;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -1062,6 +1080,8 @@ export const FileSource = {
  */
 export interface FileFieldConfig {
   allowedSources?: FileSource[];
+  /** Google Drive folder id this field's uploads land in (one of the admin-managed folders). Unset means the default upload folder. */
+  driveFolderId?: string;
 }
 
 /**

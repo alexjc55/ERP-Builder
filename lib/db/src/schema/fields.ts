@@ -15,9 +15,11 @@ export type FileSource = "server" | "gdrive" | "link";
 /**
  * Per-field configuration for a `file`-type field. `allowedSources` lists which
  * fill-time sources are offered/accepted. Empty/unset means the legacy default
- * (server upload only).
+ * (server upload only). `driveFolderId` is the Google Drive folder id (one of
+ * the managed folders) that `gdrive` uploads for this field land in; unset means
+ * the connection's default folder.
  */
-export type FileFieldConfig = { allowedSources?: FileSource[] };
+export type FileFieldConfig = { allowedSources?: FileSource[]; driveFolderId?: string };
 
 /**
  * Per-field configuration for a `user`-type field. `allowedRoleIds` restricts the
