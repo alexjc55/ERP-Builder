@@ -1247,6 +1247,69 @@ paths:
               schema:
                 $ref: "#/components/schemas/PageRecordValue"
 
+  /pages/{pageId}/related-values:
+    post:
+      operationId: getPageRelatedValues
+      tags: [pageFields]
+      summary: Resolve relation-type page-field values (derived from linked records) for the given records
+      parameters:
+        - name: pageId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PageRelatedValuesInput"
+      responses:
+        "200":
+          description: Related column metadata and per-record values (RBAC-filtered for the viewer)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageRelatedValues"
+
+  /pages/{pageId}/relation-options:
+    get:
+      operationId: getPageRelationOptions
+      tags: [pageFields]
+      summary: List relations (and their candidate related fields) usable as a single-link relation page-field for this page's entity
+      parameters:
+        - name: pageId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Qualifying single-link relations with their related entity fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageRelationOptions"
+
+  /entities/{entityId}/relation-options:
+    get:
+      operationId: getEntityRelationOptions
+      tags: [pageFields]
+      summary: List relations (and their candidate related fields) usable as a single-link related column for this entity (both directions)
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Qualifying single-link relations with their related entity fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageRelationOptions"
+
   # STATUSES
   /entities/{entityId}/statuses:
     get:
@@ -3159,7 +3222,10 @@ components:
           enum: [count, sum]
         fieldKey:
           type: ["string", "null"]
-          description: Numeric field to sum (required when aggregation = sum)
+          description: Numeric field to sum (required when aggregation = sum). For related metrics this is the related entity's field key.
+        relationId:
+          type: ["integer", "null"]
+          description: When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).
         statusIds:
           type: ["array", "null"]
           items:
@@ -3211,6 +3277,11 @@ components:
           items:
             type: string
           description: Field keys shown as table columns, in display order
+        relatedColumns:
+          type: ["array", "null"]
+          items:
+            $ref: "#/components/schemas/TableRelatedColumn"
+          description: Related-entity columns, each surfacing one field of a linked record through a qualifying single-link relation. Appended after the entity columns.
         statusIds:
           type: ["array", "null"]
           items:
@@ -3219,6 +3290,15 @@ components:
         limit:
           type: ["integer", "null"]
           description: Max rows to show (clamped server-side); null = server default
+
+    TableRelatedColumn:
+      type: object
+      required: [relationId, relatedFieldKey]
+      properties:
+        relationId:
+          type: integer
+        relatedFieldKey:
+          type: string
 
     WidgetConfig:
       type: object
@@ -3482,6 +3562,7 @@ components:
         - user
         - file
         - function
+        - relation
 
     FormatOperator:
       type: string
@@ -3738,6 +3819,110 @@ components:
           type: boolean
 
     # PAGE-LOCAL FIELDS (mirror pages)
+    PageRelatedValuesInput:
+      type: object
+      required: [recordIds]
+      properties:
+        recordIds:
+          type: array
+          items:
+            type: integer
+
+    PageRelatedColumn:
+      type: object
+      required: [fieldKey, relatedFieldKey, editableColumn]
+      properties:
+        fieldKey:
+          type: string
+          description: The relation page-field's own key (column identity).
+        relatedFieldKey:
+          type: string
+        relatedFieldType:
+          type: ["string", "null"]
+          description: Field type of the related entity field (drives rendering/editing).
+        optionsJson:
+          type: array
+          items:
+            type: string
+          description: Select options of the related field (for inline editing).
+        editableColumn:
+          type: boolean
+          description: Whether the viewer's role may edit the related field at all (before per-row scope).
+
+    PageRelatedValue:
+      type: object
+      required: [recordId, fieldKey, editable]
+      properties:
+        recordId:
+          type: integer
+        fieldKey:
+          type: string
+        value:
+          description: The related field's value (null if hidden for the viewer or no linked record).
+        linkedRecordId:
+          type: ["integer", "null"]
+        editable:
+          type: boolean
+
+    PageRelatedValues:
+      type: object
+      required: [columns, values]
+      properties:
+        columns:
+          type: array
+          items:
+            $ref: "#/components/schemas/PageRelatedColumn"
+        values:
+          type: array
+          items:
+            $ref: "#/components/schemas/PageRelatedValue"
+
+    PageRelationOptionField:
+      type: object
+      required: [key, label, fieldType]
+      properties:
+        key:
+          type: string
+        label:
+          $ref: "#/components/schemas/MultilingualText"
+        fieldType:
+          type: string
+
+    PageRelationOption:
+      type: object
+      required: [relationId, label, relatedEntityId, relatedEntityLabel, fields]
+      properties:
+        relationId:
+          type: integer
+        label:
+          $ref: "#/components/schemas/MultilingualText"
+        relatedEntityId:
+          type: integer
+        relatedEntityLabel:
+          $ref: "#/components/schemas/MultilingualText"
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/PageRelationOptionField"
+
+    PageRelationOptions:
+      type: object
+      required: [options]
+      properties:
+        options:
+          type: array
+          items:
+            $ref: "#/components/schemas/PageRelationOption"
+
+    RelationFieldConfig:
+      type: object
+      description: Config for a relation-type page field (surfaces one field of a linked related record).
+      properties:
+        relationId:
+          type: ["integer", "null"]
+        relatedFieldKey:
+          type: ["string", "null"]
+
     PageField:
       type: object
       required: [id, pageId, fieldKey, nameJson, fieldType, isRequired, optionsJson, sortOrder, isActive, createdAt, updatedAt]
@@ -3768,6 +3953,10 @@ components:
             $ref: "#/components/schemas/FieldFormatRule"
         formulaConfigJson:
           $ref: "#/components/schemas/FormulaFieldConfig"
+        relationConfigJson:
+          $ref: "#/components/schemas/RelationFieldConfig"
+        permissionsJson:
+          $ref: "#/components/schemas/FieldPermissions"
         showInTable:
           type: boolean
         showColumnTotal:
@@ -3814,6 +4003,10 @@ components:
             $ref: "#/components/schemas/FieldFormatRule"
         formulaConfigJson:
           $ref: "#/components/schemas/FormulaFieldConfig"
+        relationConfigJson:
+          $ref: "#/components/schemas/RelationFieldConfig"
+        permissionsJson:
+          $ref: "#/components/schemas/FieldPermissions"
         showInTable:
           type: boolean
           default: true
@@ -3855,6 +4048,10 @@ components:
             $ref: "#/components/schemas/FieldFormatRule"
         formulaConfigJson:
           $ref: "#/components/schemas/FormulaFieldConfig"
+        relationConfigJson:
+          $ref: "#/components/schemas/RelationFieldConfig"
+        permissionsJson:
+          $ref: "#/components/schemas/FieldPermissions"
         showInTable:
           type: boolean
         showColumnTotal:

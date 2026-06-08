@@ -584,10 +584,15 @@ export interface WidgetMetric {
   entityId: number;
   aggregation: WidgetMetricAggregation;
   /**
-     * Numeric field to sum (required when aggregation = sum)
+     * Numeric field to sum (required when aggregation = sum). For related metrics this is the related entity's field key.
      * @nullable
      */
   fieldKey?: string | null;
+  /**
+     * When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).
+     * @nullable
+     */
+  relationId?: number | null;
   /**
      * Restrict to records in these statuses; empty/null = all statuses
      * @nullable
@@ -653,10 +658,20 @@ export interface ChartConfig {
   showValues?: boolean | null;
 }
 
+export interface TableRelatedColumn {
+  relationId: number;
+  relatedFieldKey: string;
+}
+
 export interface TableConfig {
   entityId: number;
   /** Field keys shown as table columns, in display order */
   fieldKeys: string[];
+  /**
+     * Related-entity columns, each surfacing one field of a linked record through a qualifying single-link relation. Appended after the entity columns.
+     * @nullable
+     */
+  relatedColumns?: TableRelatedColumn[] | null;
   /**
      * Restrict to records in these statuses; empty/null = all statuses
      * @nullable
@@ -932,6 +947,7 @@ export const FieldType = {
   user: 'user',
   file: 'file',
   function: 'function',
+  relation: 'relation',
 } as const;
 
 export type FormatOperator = typeof FormatOperator[keyof typeof FormatOperator];
@@ -1094,6 +1110,68 @@ export interface FieldUpdate {
   isActive?: boolean;
 }
 
+export interface PageRelatedValuesInput {
+  recordIds: number[];
+}
+
+export interface PageRelatedColumn {
+  /** The relation page-field's own key (column identity). */
+  fieldKey: string;
+  relatedFieldKey: string;
+  /**
+     * Field type of the related entity field (drives rendering/editing).
+     * @nullable
+     */
+  relatedFieldType?: string | null;
+  /** Select options of the related field (for inline editing). */
+  optionsJson?: string[];
+  /** Whether the viewer's role may edit the related field at all (before per-row scope). */
+  editableColumn: boolean;
+}
+
+export interface PageRelatedValue {
+  recordId: number;
+  fieldKey: string;
+  /** The related field's value (null if hidden for the viewer or no linked record). */
+  value?: unknown;
+  /** @nullable */
+  linkedRecordId?: number | null;
+  editable: boolean;
+}
+
+export interface PageRelatedValues {
+  columns: PageRelatedColumn[];
+  values: PageRelatedValue[];
+}
+
+export interface PageRelationOptionField {
+  key: string;
+  label: MultilingualText;
+  fieldType: string;
+}
+
+export interface PageRelationOption {
+  relationId: number;
+  label: MultilingualText;
+  relatedEntityId: number;
+  relatedEntityLabel: MultilingualText;
+  fields: PageRelationOptionField[];
+}
+
+export interface PageRelationOptions {
+  options: PageRelationOption[];
+}
+
+/**
+ * Config for a relation-type page field (surfaces one field of a linked related record).
+ */
+export interface RelationFieldConfig {
+  /** @nullable */
+  relationId?: number | null;
+  /** @nullable */
+  relatedFieldKey?: string | null;
+}
+
 export interface PageField {
   id: number;
   pageId: number;
@@ -1107,6 +1185,8 @@ export interface PageField {
   optionsJson: string[];
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
+  relationConfigJson?: RelationFieldConfig;
+  permissionsJson?: FieldPermissions;
   showInTable?: boolean;
   showColumnTotal?: boolean;
   /** @nullable */
@@ -1130,6 +1210,8 @@ export interface PageFieldInput {
   optionsJson?: string[];
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
+  relationConfigJson?: RelationFieldConfig;
+  permissionsJson?: FieldPermissions;
   showInTable?: boolean;
   showColumnTotal?: boolean;
   /** @nullable */
@@ -1151,6 +1233,8 @@ export interface PageFieldUpdate {
   optionsJson?: string[];
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
+  relationConfigJson?: RelationFieldConfig;
+  permissionsJson?: FieldPermissions;
   showInTable?: boolean;
   showColumnTotal?: boolean;
   /** @nullable */

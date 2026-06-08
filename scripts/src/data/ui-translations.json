@@ -4104,6 +4104,48 @@
     "he": "ממולא לאחר יצירת הרשומה"
   },
   {
+    "key": "pageFields.relationHint",
+    "ru": "Связанное поле показывает значение из единственной связанной записи. Доступны связи «один к одному» и «многие к одному» (а также обратная сторона «один ко многим»).",
+    "en": "A related field shows a value from the single linked record. One-to-one and many-to-one relations are available (as well as the one-to-many inverse side).",
+    "he": "שדה מקושר מציג ערך מהרשומה המקושרת היחידה. זמינים קשרי אחד-לאחד ורבים-לאחד (וגם הצד ההפוך של אחד-לרבים)."
+  },
+  {
+    "key": "pageFields.relation",
+    "ru": "Связь",
+    "en": "Relation",
+    "he": "קשר"
+  },
+  {
+    "key": "pageFields.relationPlaceholder",
+    "ru": "Выберите связь",
+    "en": "Select a relation",
+    "he": "בחרו קשר"
+  },
+  {
+    "key": "pageFields.noRelations",
+    "ru": "Нет подходящих связей для этой сущности.",
+    "en": "No suitable relations for this entity.",
+    "he": "אין קשרים מתאימים לישות זו."
+  },
+  {
+    "key": "pageFields.relatedField",
+    "ru": "Поле связанной сущности",
+    "en": "Related entity field",
+    "he": "שדה של הישות המקושרת"
+  },
+  {
+    "key": "pageFields.relatedFieldPlaceholder",
+    "ru": "Выберите поле",
+    "en": "Select a field",
+    "he": "בחרו שדה"
+  },
+  {
+    "key": "pageFields.relationAccessHint",
+    "ru": "«По умолчанию» — столбец наследует права роли на связанное поле. Доступ ограничивается правами роли на связанную сущность.",
+    "en": "\"Default\" means the column inherits the role's access to the related field. Access is constrained by the role's permissions on the related entity.",
+    "he": "«ברירת מחדל» — העמודה יורשת את הרשאות התפקיד לשדה המקושר. הגישה מוגבלת על ידי הרשאות התפקיד לישות המקושרת."
+  },
+  {
     "key": "dash.created",
     "ru": "Виджет создан",
     "en": "Widget created",
@@ -4438,6 +4480,42 @@
     "ru": "Нет числовых полей",
     "en": "No numeric fields",
     "he": "אין שדות מספריים"
+  },
+  {
+    "key": "dash.metricRelation",
+    "ru": "Связь (необязательно)",
+    "en": "Relation (optional)",
+    "he": "קשר (אופציונלי)"
+  },
+  {
+    "key": "dash.metricNoRelation",
+    "ru": "Без связи (по самой сущности)",
+    "en": "No relation (on the entity itself)",
+    "he": "ללא קשר (על הישות עצמה)"
+  },
+  {
+    "key": "dash.metricRelationCountHint",
+    "ru": "Считает связанные записи",
+    "en": "Counts linked records",
+    "he": "סופר רשומות מקושרות"
+  },
+  {
+    "key": "dash.metricRelationSumHint",
+    "ru": "Суммирует поле связанной записи",
+    "en": "Sums a linked record's field",
+    "he": "מסכם שדה של רשומה מקושרת"
+  },
+  {
+    "key": "dash.selectRelatedField",
+    "ru": "Поле связанной записи",
+    "en": "Linked record field",
+    "he": "שדה של רשומה מקושרת"
+  },
+  {
+    "key": "dash.tableRelatedColumns",
+    "ru": "Связанные колонки",
+    "en": "Related columns",
+    "he": "עמודות מקושרות"
   },
   {
     "key": "dash.statusFilter",

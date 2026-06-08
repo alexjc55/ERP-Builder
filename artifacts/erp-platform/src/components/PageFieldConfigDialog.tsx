@@ -4,10 +4,16 @@ import {
   useUpdatePageField,
   useDeletePageField,
   useListPageFields,
+  useGetPageRelationOptions,
+  getGetPageRelationOptionsQueryKey,
+  useListRoles,
   type PageField,
   type FieldType,
   type MultilingualText,
   type FieldFormatRule,
+  type FieldPermissions,
+  type FieldAccess,
+  type Role,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +68,13 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "url", label: "Ссылка (URL)" },
   { value: "phone", label: "Телефон" },
   { value: "function", label: "Формула (вычисляемое)" },
+  { value: "relation", label: "Связанное поле" },
+];
+
+const FIELD_ACCESS_OPTIONS: { value: FieldAccess; label: string }[] = [
+  { value: "edit", label: "Редактирование" },
+  { value: "view", label: "Просмотр" },
+  { value: "hidden", label: "Скрыто" },
 ];
 
 function extractError(err: unknown): string | undefined {
@@ -82,6 +95,7 @@ export function PageFieldConfigDialog({
   open,
   onOpenChange,
   pageId,
+  entityId,
   field,
   nextSortOrder,
   sourceFields = [],
@@ -90,6 +104,8 @@ export function PageFieldConfigDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   pageId: number;
+  /** The page's effective entity (drives the relation picker). */
+  entityId: number;
   field: PageField | null;
   nextSortOrder: number;
   /** Source-entity fields a page formula may also reference (merged at read time). */
@@ -100,6 +116,11 @@ export function PageFieldConfigDialog({
   const t = useT();
   const { toast } = useToast();
   const { data: existingFields = [] } = useListPageFields(pageId);
+  const { data: relationOptionsData } = useGetPageRelationOptions(pageId, {
+    query: { enabled: open, queryKey: getGetPageRelationOptionsQueryKey(pageId) },
+  });
+  const relationOptions = relationOptionsData?.options ?? [];
+  const { data: roles = [] } = useListRoles();
 
   const [fieldKey, setFieldKey] = useState("");
   const [nameJson, setNameJson] = useState<MLValue>({});
@@ -116,6 +137,9 @@ export function PageFieldConfigDialog({
   const [totalTextColor, setTotalTextColor] = useState("");
   const [formatRules, setFormatRules] = useState<FieldFormatRule[]>([]);
   const [formula, setFormula] = useState("");
+  const [relationId, setRelationId] = useState<number | null>(null);
+  const [relatedFieldKey, setRelatedFieldKey] = useState("");
+  const [permissions, setPermissions] = useState<FieldPermissions>({});
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
@@ -138,6 +162,9 @@ export function PageFieldConfigDialog({
       setTotalTextColor(field.totalTextColor ?? "");
       setFormatRules(Array.isArray(field.formatRulesJson) ? field.formatRulesJson : []);
       setFormula(field.formulaConfigJson?.expression ?? "");
+      setRelationId(field.relationConfigJson?.relationId ?? null);
+      setRelatedFieldKey(field.relationConfigJson?.relatedFieldKey ?? "");
+      setPermissions(field.permissionsJson ? { ...field.permissionsJson } : {});
     } else {
       setFieldKey("");
       setNameJson({});
@@ -154,6 +181,9 @@ export function PageFieldConfigDialog({
       setTotalTextColor("");
       setFormatRules([]);
       setFormula("");
+      setRelationId(null);
+      setRelatedFieldKey("");
+      setPermissions({});
     }
   }, [open, field, nextSortOrder]);
 
@@ -218,6 +248,18 @@ export function PageFieldConfigDialog({
     return [...pageRefs, ...sourceFields.filter((r) => !seen.has(r.key))];
   })();
 
+  const selectedRelation = relationOptions.find((o) => o.relationId === relationId);
+  const relatedFieldOptions = selectedRelation?.fields ?? [];
+
+  const setRoleAccess = (roleId: number, access: FieldAccess | "inherit") => {
+    setPermissions((prev) => {
+      const next = { ...prev };
+      if (access === "inherit") delete next[String(roleId)];
+      else next[String(roleId)] = access;
+      return next;
+    });
+  };
+
   const handleSubmit = () => {
     const options = optionsText
       .split("\n")
@@ -239,13 +281,18 @@ export function PageFieldConfigDialog({
       totalTextColor: fieldType === "number" && showColumnTotal && totalTextColor ? totalTextColor : null,
       formatRulesJson: formatRules,
       formulaConfigJson: fieldType === "function" ? { expression: formula.trim() } : {},
+      relationConfigJson:
+        fieldType === "relation" ? { relationId, relatedFieldKey: relatedFieldKey || null } : {},
+      permissionsJson: fieldType === "relation" ? permissions : {},
     };
     if (field) updateMutation.mutate({ id: field.id, data: payload });
     else createMutation.mutate({ pageId, data: payload });
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
-  const canSubmit = !isPending && FIELD_KEY_RE.test(effectiveKey) && !manualKeyTaken && !keyFormatInvalid;
+  const relationIncomplete = fieldType === "relation" && (relationId == null || !relatedFieldKey);
+  const canSubmit =
+    !isPending && FIELD_KEY_RE.test(effectiveKey) && !manualKeyTaken && !keyFormatInvalid && !relationIncomplete;
 
   return (
     <>
@@ -306,7 +353,55 @@ export function PageFieldConfigDialog({
             {fieldType === "function" && (
               <FormulaEditor value={formula} onChange={setFormula} fields={formulaFields} />
             )}
-            {fieldType !== "function" && (
+            {fieldType === "relation" && (
+              <div className="rounded-md border border-slate-100 bg-slate-50/50 p-3 space-y-3">
+                <p className="text-xs text-slate-500">
+                  {t(
+                    "pageFields.relationHint",
+                    "Связанное поле показывает значение из единственной связанной записи. Доступны связи «один к одному» и «многие к одному» (а также обратная сторона «один ко многим»).",
+                  )}
+                </p>
+                <div className="space-y-1.5">
+                  <Label>{t("pageFields.relation", "Связь")}</Label>
+                  <Select
+                    value={relationId != null ? String(relationId) : ""}
+                    onValueChange={(v) => {
+                      setRelationId(Number(v));
+                      setRelatedFieldKey("");
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder={t("pageFields.relationPlaceholder", "Выберите связь")} /></SelectTrigger>
+                    <SelectContent>
+                      {relationOptions.length === 0 ? (
+                        <div className="px-2 py-1.5 text-xs text-slate-400">
+                          {t("pageFields.noRelations", "Нет подходящих связей для этой сущности.")}
+                        </div>
+                      ) : (
+                        relationOptions.map((o) => (
+                          <SelectItem key={o.relationId} value={String(o.relationId)}>
+                            {ml(o.label)} → {ml(o.relatedEntityLabel)}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {relationId != null && (
+                  <div className="space-y-1.5">
+                    <Label>{t("pageFields.relatedField", "Поле связанной сущности")}</Label>
+                    <Select value={relatedFieldKey} onValueChange={setRelatedFieldKey}>
+                      <SelectTrigger><SelectValue placeholder={t("pageFields.relatedFieldPlaceholder", "Выберите поле")} /></SelectTrigger>
+                      <SelectContent>
+                        {relatedFieldOptions.map((f) => (
+                          <SelectItem key={f.key} value={f.key}>{ml(f.label) || f.key}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            )}
+            {fieldType !== "function" && fieldType !== "relation" && (
               <div className="space-y-1.5">
                 <Label>{t("fields.defaultValue", "Значение по умолчанию")}</Label>
                 <Input value={defaultValue} onChange={(e) => setDefaultValue(e.target.value)} placeholder="—" />
@@ -348,6 +443,41 @@ export function PageFieldConfigDialog({
                   value={totalTextColor}
                   onChange={setTotalTextColor}
                 />
+              </div>
+            )}
+
+            {fieldType === "relation" && (
+              <div className="border-t border-slate-100 pt-4 space-y-2">
+                <Label>{t("fields.accessByRoles", "Доступ к полю по ролям")}</Label>
+                <p className="text-xs text-slate-400">
+                  {t(
+                    "pageFields.relationAccessHint",
+                    "«По умолчанию» — столбец наследует права роли на связанное поле. Доступ ограничивается правами роли на связанную сущность.",
+                  )}
+                </p>
+                {roles.length === 0 ? (
+                  <p className="text-xs text-slate-400">{t("fields.noRoles", "Нет ролей для настройки.")}</p>
+                ) : (
+                  <div className="space-y-2 pt-1">
+                    {roles.map((role: Role) => (
+                      <div key={role.id} className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-slate-700 truncate">{ml(role.nameJson)}</span>
+                        <Select
+                          value={permissions[String(role.id)] ?? "inherit"}
+                          onValueChange={(v) => setRoleAccess(role.id, v as FieldAccess | "inherit")}
+                        >
+                          <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="inherit">{t("fields.inherit", "По умолчанию")}</SelectItem>
+                            {FIELD_ACCESS_OPTIONS.map((o) => (
+                              <SelectItem key={o.value} value={o.value}>{t(`fields.access.${o.value}`, o.label)}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

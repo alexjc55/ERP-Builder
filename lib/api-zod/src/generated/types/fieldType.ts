@@ -23,4 +23,5 @@ export const FieldType = {
   user: 'user',
   file: 'file',
   function: 'function',
+  relation: 'relation',
 } as const;

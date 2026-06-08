@@ -10,7 +10,10 @@ import {
   entityRecordsTable,
   entityStatusesTable,
   dashboardWidgetsTable,
+  relationsTable,
+  recordLinksTable,
   type DashboardWidget,
+  type Relation,
 } from "@workspace/db";
 import { eq, sql, gte, and, isNull, inArray, asc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
@@ -68,7 +71,13 @@ interface WidgetMetricSpec {
   entityId: number;
   aggregation: "count" | "sum";
   fieldKey?: string | null;
+  relationId?: number | null;
   statusIds?: number[] | null;
+}
+
+interface TableRelatedColumnSpec {
+  relationId: number;
+  relatedFieldKey: string;
 }
 
 interface ChartSpec {
@@ -84,6 +93,7 @@ interface ChartSpec {
 interface TableSpec {
   entityId: number;
   fieldKeys: string[];
+  relatedColumns?: TableRelatedColumnSpec[] | null;
   statusIds?: number[] | null;
   limit?: number | null;
 }
@@ -116,6 +126,82 @@ function clampTableLimit(limit: number | null | undefined): number {
 function resolveML(j: unknown): string {
   const m = (j ?? {}) as Record<string, string>;
   return m.ru || m.en || m.he || "";
+}
+
+/**
+ * Direction of a qualifying *single-link* relation relative to an entity (mirrors
+ * the page-fields rule): "source" means the entity's record is the relation
+ * source and the single linked record is its target (1:1 or N:1); "target" is
+ * the inverse (1:1 or 1:N). Any other shape (N:N, or the many side) yields null.
+ */
+type LinkDirection = "source" | "target";
+function relationDirection(relation: Relation, entityId: number): LinkDirection | null {
+  const t = relation.relationType;
+  if (relation.sourceEntityId === entityId && (t === "one_to_one" || t === "many_to_one")) return "source";
+  if (relation.targetEntityId === entityId && (t === "one_to_one" || t === "one_to_many")) return "target";
+  return null;
+}
+function relatedEntityIdFor(relation: Relation, direction: LinkDirection): number {
+  return direction === "source" ? relation.targetEntityId : relation.sourceEntityId;
+}
+
+/**
+ * Resolve a qualifying single-link relation for an entity and a related field,
+ * returning the relation, its direction, and the related entity id. Returns an
+ * error string if the relation is missing, not single-link for this entity, or
+ * the related field does not exist / is inactive on the other side.
+ */
+async function resolveRelationField(
+  entityId: number,
+  relationId: number,
+  relatedFieldKey: string,
+): Promise<
+  | { ok: true; relation: Relation; direction: LinkDirection; relatedEntityId: number; relatedFieldType: string }
+  | { error: string }
+> {
+  const [relation] = await db.select().from(relationsTable).where(eq(relationsTable.id, relationId)).limit(1);
+  if (!relation) return { error: `Relation ${relationId} not found` };
+  const direction = relationDirection(relation, entityId);
+  if (!direction) return { error: `Relation ${relationId} does not yield a single linked record for entity ${entityId}` };
+  const relatedEntityId = relatedEntityIdFor(relation, direction);
+  const [rf] = await db
+    .select({ fieldType: entityFieldsTable.fieldType })
+    .from(entityFieldsTable)
+    .where(
+      and(
+        eq(entityFieldsTable.entityId, relatedEntityId),
+        eq(entityFieldsTable.fieldKey, relatedFieldKey),
+        eq(entityFieldsTable.isActive, true),
+      ),
+    )
+    .limit(1);
+  if (!rf) return { error: `Related field "${relatedFieldKey}" not found on entity ${relatedEntityId}` };
+  return { ok: true, relation, direction, relatedEntityId, relatedFieldType: rf.fieldType };
+}
+
+/**
+ * Map a set of an entity's record ids to their single linked record id through a
+ * qualifying single-link relation (direction relative to that entity).
+ */
+async function linkedRecordMap(
+  relationId: number,
+  direction: LinkDirection,
+  recordIds: number[],
+): Promise<Map<number, number>> {
+  const map = new Map<number, number>();
+  if (recordIds.length === 0) return map;
+  const rows =
+    direction === "source"
+      ? await db
+          .select({ from: recordLinksTable.sourceRecordId, to: recordLinksTable.targetRecordId })
+          .from(recordLinksTable)
+          .where(and(eq(recordLinksTable.relationId, relationId), inArray(recordLinksTable.sourceRecordId, recordIds)))
+      : await db
+          .select({ from: recordLinksTable.targetRecordId, to: recordLinksTable.sourceRecordId })
+          .from(recordLinksTable)
+          .where(and(eq(recordLinksTable.relationId, relationId), inArray(recordLinksTable.targetRecordId, recordIds)));
+  for (const r of rows) map.set(r.from, r.to);
+  return map;
 }
 
 /** Serialize a stored widget row into the API shape (config/visibleRoleIds). */
@@ -210,6 +296,14 @@ async function validateTableConfig(table: TableSpec | null | undefined): Promise
     if (!known.has(key)) return `Field "${key}" not found on entity ${table.entityId}`;
   }
 
+  for (const rc of table.relatedColumns ?? []) {
+    if (!rc || typeof rc.relationId !== "number" || !rc.relatedFieldKey) {
+      return "Related column requires relationId and relatedFieldKey";
+    }
+    const resolved = await resolveRelationField(table.entityId, rc.relationId, rc.relatedFieldKey);
+    if ("error" in resolved) return resolved.error;
+  }
+
   const statusIds = Array.from(new Set((table.statusIds ?? []).filter((n) => Number.isInteger(n))));
   if (statusIds.length > 0) {
     const rows = await db
@@ -248,6 +342,28 @@ async function validateConfig(config: WidgetConfigShape | undefined): Promise<st
       .limit(1);
     if (!entity) return `Entity ${m.entityId} not found`;
 
+    // Related metric: aggregate over a single-link related entity. count = number
+    // of linked records; sum = sum of the related (numeric) field over them.
+    if (m.relationId != null) {
+      if (m.aggregation === "sum" && !m.fieldKey) return "Sum metric requires a related numeric field";
+      const resolved = await resolveRelationField(m.entityId, m.relationId, m.fieldKey ?? "");
+      if (m.aggregation === "sum") {
+        if ("error" in resolved) return resolved.error;
+        if (resolved.relatedFieldType !== "number") return `Related field "${m.fieldKey}" is not numeric`;
+      } else if (m.fieldKey) {
+        // count over links: a related field is optional, but if given it must exist.
+        if ("error" in resolved) return resolved.error;
+      } else {
+        // count with no related field still needs a valid single-link relation.
+        const [relation] = await db.select().from(relationsTable).where(eq(relationsTable.id, m.relationId)).limit(1);
+        if (!relation) return `Relation ${m.relationId} not found`;
+        if (!relationDirection(relation, m.entityId)) {
+          return `Relation ${m.relationId} does not yield a single linked record for entity ${m.entityId}`;
+        }
+      }
+      continue;
+    }
+
     if (m.aggregation === "sum") {
       if (!m.fieldKey) return "Sum metric requires a numeric field";
       const [field] = await db
@@ -272,6 +388,42 @@ async function computeMetric(m: WidgetMetricSpec): Promise<number> {
   const conds = [eq(entityRecordsTable.entityId, m.entityId), isNull(entityRecordsTable.archivedAt)];
   const statusIds = (m.statusIds ?? []).filter((n) => Number.isInteger(n));
   if (statusIds.length > 0) conds.push(inArray(entityRecordsTable.statusId, statusIds));
+
+  // Related metric: walk single-link relation from each (filtered) base record to
+  // its linked record, then count those linked records or sum the related field.
+  if (m.relationId != null) {
+    const resolved = await resolveRelationField(m.entityId, m.relationId, m.fieldKey ?? "");
+    if ("error" in resolved) return 0;
+    const baseRows = await db
+      .select({ id: entityRecordsTable.id })
+      .from(entityRecordsTable)
+      .where(and(...conds));
+    const baseIds = baseRows.map((r) => r.id);
+    // map: baseRecordId -> linkedRecordId (only base records that have a link).
+    // Aggregate PER LINK (per base record), not per unique linked record: under
+    // many-to-one / one-to-many several base records can point to the same linked
+    // record and each link must contribute. count = number of links; sum = the
+    // linked field summed once per linking base record.
+    const map = await linkedRecordMap(m.relationId, resolved.direction, baseIds);
+    if (m.aggregation === "sum" && m.fieldKey) {
+      const uniqueLinkedIds = Array.from(new Set(map.values()));
+      if (uniqueLinkedIds.length === 0) return 0;
+      const key = m.fieldKey;
+      const rows = await db
+        .select({
+          id: entityRecordsTable.id,
+          v: sql<number>`CASE WHEN (${entityRecordsTable.valuesJson} ->> ${key}) ~ ${NUMERIC_RE} THEN (${entityRecordsTable.valuesJson} ->> ${key})::numeric ELSE 0 END`,
+        })
+        .from(entityRecordsTable)
+        .where(and(eq(entityRecordsTable.entityId, resolved.relatedEntityId), inArray(entityRecordsTable.id, uniqueLinkedIds)));
+      const valueById = new Map<number, number>();
+      for (const r of rows) valueById.set(r.id, Number(r.v ?? 0));
+      let total = 0;
+      for (const linkedId of map.values()) total += valueById.get(linkedId) ?? 0;
+      return total;
+    }
+    return map.size;
+  }
 
   if (m.aggregation === "sum" && m.fieldKey) {
     const key = m.fieldKey;
@@ -412,6 +564,53 @@ async function computeTableData(
     for (const s of sts) statusById.set(s.id, { name: resolveML(s.nameJson) || "—", color: s.color });
   }
 
+  // Related columns: each surfaces one field of the single linked record through a
+  // qualifying relation. Synthetic column key avoids collisions with real fields.
+  // ADMIN-AUTHORITATIVE: linked values are the real stored values, like the rest.
+  const baseIds = records.map((r) => r.id);
+  const relCols: Array<{
+    fieldKey: string;
+    label: string;
+    fieldType: string;
+    linkMap: Map<number, number>;
+    relatedFieldKey: string;
+    linkedValues: Map<number, Record<string, unknown>>;
+  }> = [];
+  for (const rc of t.relatedColumns ?? []) {
+    const resolved = await resolveRelationField(t.entityId, rc.relationId, rc.relatedFieldKey);
+    if ("error" in resolved) continue;
+    const [relName] = await db
+      .select({ nameJson: entityFieldsTable.nameJson })
+      .from(entityFieldsTable)
+      .where(
+        and(
+          eq(entityFieldsTable.entityId, resolved.relatedEntityId),
+          eq(entityFieldsTable.fieldKey, rc.relatedFieldKey),
+        ),
+      )
+      .limit(1);
+    const linkMap = await linkedRecordMap(rc.relationId, resolved.direction, baseIds);
+    const linkedIds = Array.from(new Set(linkMap.values()));
+    const linkedValues = new Map<number, Record<string, unknown>>();
+    if (linkedIds.length > 0) {
+      const lrs = await db
+        .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
+        .from(entityRecordsTable)
+        .where(and(eq(entityRecordsTable.entityId, resolved.relatedEntityId), inArray(entityRecordsTable.id, linkedIds)));
+      for (const lr of lrs) linkedValues.set(lr.id, (lr.valuesJson as Record<string, unknown>) ?? {});
+    }
+    relCols.push({
+      fieldKey: `__rel_${rc.relationId}_${rc.relatedFieldKey}`,
+      label: resolveML(relName?.nameJson) || rc.relatedFieldKey,
+      fieldType: resolved.relatedFieldType,
+      linkMap,
+      relatedFieldKey: rc.relatedFieldKey,
+      linkedValues,
+    });
+  }
+
+  const allColumns = [...columns, ...relCols.map((rc) => ({ fieldKey: rc.fieldKey, label: rc.label, fieldType: rc.fieldType }))];
+
   const rows = records.map((r) => {
     const all = (r.valuesJson ?? {}) as Record<string, unknown>;
     const values: Record<string, unknown> = {};
@@ -422,10 +621,15 @@ async function computeTableData(
         values[c.fieldKey] = all[c.fieldKey] ?? null;
       }
     }
+    for (const rc of relCols) {
+      const linkedId = rc.linkMap.get(r.id);
+      const lv = linkedId != null ? rc.linkedValues.get(linkedId) : undefined;
+      values[rc.fieldKey] = lv ? lv[rc.relatedFieldKey] ?? null : null;
+    }
     return { id: r.id, values };
   });
 
-  return { columns, rows };
+  return { columns: allColumns, rows };
 }
 
 /** True if the role may access (see) the given content page. */

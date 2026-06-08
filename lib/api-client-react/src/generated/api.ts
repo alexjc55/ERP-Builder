@@ -67,6 +67,9 @@ import type {
   PageInput,
   PageRecordValue,
   PageRecordValueInput,
+  PageRelatedValues,
+  PageRelatedValuesInput,
+  PageRelationOptions,
   PageUpdate,
   RecordInput,
   RecordLink,
@@ -4146,6 +4149,232 @@ export const useSetPageRecordValues = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getSetPageRecordValuesMutationOptions(options));
     }
+
+export const getGetPageRelatedValuesUrl = (pageId: number,) => {
+
+
+
+
+  return `/api/pages/${pageId}/related-values`
+}
+
+/**
+ * @summary Resolve relation-type page-field values (derived from linked records) for the given records
+ */
+export const getPageRelatedValues = async (pageId: number,
+    pageRelatedValuesInput: PageRelatedValuesInput, options?: RequestInit): Promise<PageRelatedValues> => {
+
+  return customFetch<PageRelatedValues>(getGetPageRelatedValuesUrl(pageId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      pageRelatedValuesInput,)
+  }
+);}
+
+
+
+
+export const getGetPageRelatedValuesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getPageRelatedValues>>, TError,{pageId: number;data: BodyType<PageRelatedValuesInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof getPageRelatedValues>>, TError,{pageId: number;data: BodyType<PageRelatedValuesInput>}, TContext> => {
+
+const mutationKey = ['getPageRelatedValues'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getPageRelatedValues>>, {pageId: number;data: BodyType<PageRelatedValuesInput>}> = (props) => {
+          const {pageId,data} = props ?? {};
+
+          return  getPageRelatedValues(pageId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GetPageRelatedValuesMutationResult = NonNullable<Awaited<ReturnType<typeof getPageRelatedValues>>>
+    export type GetPageRelatedValuesMutationBody = BodyType<PageRelatedValuesInput>
+    export type GetPageRelatedValuesMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Resolve relation-type page-field values (derived from linked records) for the given records
+ */
+export const useGetPageRelatedValues = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getPageRelatedValues>>, TError,{pageId: number;data: BodyType<PageRelatedValuesInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof getPageRelatedValues>>,
+        TError,
+        {pageId: number;data: BodyType<PageRelatedValuesInput>},
+        TContext
+      > => {
+      return useMutation(getGetPageRelatedValuesMutationOptions(options));
+    }
+
+export const getGetPageRelationOptionsUrl = (pageId: number,) => {
+
+
+
+
+  return `/api/pages/${pageId}/relation-options`
+}
+
+/**
+ * @summary List relations (and their candidate related fields) usable as a single-link relation page-field for this page's entity
+ */
+export const getPageRelationOptions = async (pageId: number, options?: RequestInit): Promise<PageRelationOptions> => {
+
+  return customFetch<PageRelationOptions>(getGetPageRelationOptionsUrl(pageId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPageRelationOptionsQueryKey = (pageId: number,) => {
+    return [
+    `/api/pages/${pageId}/relation-options`
+    ] as const;
+    }
+
+
+export const getGetPageRelationOptionsQueryOptions = <TData = Awaited<ReturnType<typeof getPageRelationOptions>>, TError = ErrorType<unknown>>(pageId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPageRelationOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPageRelationOptionsQueryKey(pageId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPageRelationOptions>>> = ({ signal }) => getPageRelationOptions(pageId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(pageId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPageRelationOptions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPageRelationOptionsQueryResult = NonNullable<Awaited<ReturnType<typeof getPageRelationOptions>>>
+export type GetPageRelationOptionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List relations (and their candidate related fields) usable as a single-link relation page-field for this page's entity
+ */
+
+export function useGetPageRelationOptions<TData = Awaited<ReturnType<typeof getPageRelationOptions>>, TError = ErrorType<unknown>>(
+ pageId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPageRelationOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPageRelationOptionsQueryOptions(pageId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetEntityRelationOptionsUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/relation-options`
+}
+
+/**
+ * @summary List relations (and their candidate related fields) usable as a single-link related column for this entity (both directions)
+ */
+export const getEntityRelationOptions = async (entityId: number, options?: RequestInit): Promise<PageRelationOptions> => {
+
+  return customFetch<PageRelationOptions>(getGetEntityRelationOptionsUrl(entityId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetEntityRelationOptionsQueryKey = (entityId: number,) => {
+    return [
+    `/api/entities/${entityId}/relation-options`
+    ] as const;
+    }
+
+
+export const getGetEntityRelationOptionsQueryOptions = <TData = Awaited<ReturnType<typeof getEntityRelationOptions>>, TError = ErrorType<unknown>>(entityId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEntityRelationOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetEntityRelationOptionsQueryKey(entityId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getEntityRelationOptions>>> = ({ signal }) => getEntityRelationOptions(entityId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(entityId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getEntityRelationOptions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetEntityRelationOptionsQueryResult = NonNullable<Awaited<ReturnType<typeof getEntityRelationOptions>>>
+export type GetEntityRelationOptionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List relations (and their candidate related fields) usable as a single-link related column for this entity (both directions)
+ */
+
+export function useGetEntityRelationOptions<TData = Awaited<ReturnType<typeof getEntityRelationOptions>>, TError = ErrorType<unknown>>(
+ entityId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEntityRelationOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetEntityRelationOptionsQueryOptions(entityId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getListEntityStatusesUrl = (entityId: number,) => {
 

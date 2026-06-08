@@ -27,7 +27,10 @@ import {
   getListPageRecordValuesQueryKey,
   useSetPageRecordValues,
   useReorderPageFields,
+  useGetPageRelatedValues,
   type PageField,
+  type PageRelatedColumn,
+  type PageRelatedValue,
   type ArchiveFilter,
   type AuditLogEntry,
   type EntityRecord,
@@ -592,6 +595,7 @@ export function EntityRecords({
   entityId,
   visibleFieldKeys,
   pageId,
+  isMirror = false,
 }: {
   entityId: number;
   /**
@@ -602,12 +606,19 @@ export function EntityRecords({
    */
   visibleFieldKeys?: string[];
   /**
-   * Mirror-page id. When set, this records table is rendered inside a mirror
-   * page and may carry page-local fields: extra columns whose definitions and
-   * per-record values live on the page (not on the source entity). Adding a
-   * column in setup mode here creates a page-local field, never an entity field.
+   * Page id. When set, this records table is rendered inside a page (regular or
+   * mirror) and may carry page-local fields and related columns: extra columns
+   * whose definitions live on the page (not on the source entity). Adding a
+   * column via "+ Поле страницы" in setup mode here creates a page field.
    */
   pageId?: number;
+  /**
+   * Whether this is a true mirror page (showing another entity's live records).
+   * Mirror pages suppress entity-column management (the columns belong to the
+   * source entity); regular entity pages keep it. Decoupled from {@link pageId}
+   * so a regular entity page can still own page fields and related columns.
+   */
+  isMirror?: boolean;
 }) {
   const ml = useML();
   const t = useT();
@@ -633,14 +644,15 @@ export function EntityRecords({
     [userOptions],
   );
 
-  // Page-local fields: extra columns that live on a mirror page rather than on
-  // the source entity. Loaded only when this table is rendered inside a page.
-  const isMirrorPage = pageId != null;
+  // Page fields: extra columns that live on a page rather than on the source
+  // entity. Available on any page (regular or mirror), loaded only when this
+  // table is rendered inside a page (pageId set).
+  const hasPage = pageId != null;
   const { data: allPageFields = [] } = useListPageFields(pageId ?? 0, {
-    query: { enabled: isMirrorPage, queryKey: getListPageFieldsQueryKey(pageId ?? 0) },
+    query: { enabled: hasPage, queryKey: getListPageFieldsQueryKey(pageId ?? 0) },
   });
   const { data: pageRecordValues = [] } = useListPageRecordValues(pageId ?? 0, {
-    query: { enabled: isMirrorPage, queryKey: getListPageRecordValuesQueryKey(pageId ?? 0) },
+    query: { enabled: hasPage, queryKey: getListPageRecordValuesQueryKey(pageId ?? 0) },
   });
   const pageFields = useMemo(
     () =>
@@ -668,6 +680,23 @@ export function EntityRecords({
         toast({ title: t("records.saveError", "Не удалось сохранить значение"), variant: "destructive" }),
     },
   });
+
+  // Relation page-fields surface one field of a single linked record. Their
+  // values are NOT stored on the page (unlike page-local fields) — they are
+  // resolved live from the linked record via a dedicated endpoint that re-applies
+  // the related entity's field/row boundary plus this page's per-field role perms.
+  const hasRelationFields = pageFields.some((pf: PageField) => pf.fieldType === "relation");
+  const [relatedColumns, setRelatedColumns] = useState<PageRelatedColumn[]>([]);
+  const [relatedByRecord, setRelatedByRecord] = useState<Map<number, Map<string, PageRelatedValue>>>(
+    new Map(),
+  );
+  const relatedColMeta = useMemo(() => {
+    const m = new Map<string, PageRelatedColumn>();
+    for (const c of relatedColumns) m.set(c.fieldKey, c);
+    return m;
+  }, [relatedColumns]);
+  const relatedValuesMutation = useGetPageRelatedValues();
+  const fetchRelatedValues = relatedValuesMutation.mutateAsync;
 
   // Optional mirror-page projection: restrict to a chosen subset of field keys.
   const mirrorKeySet =
@@ -940,6 +969,54 @@ export function EntityRecords({
     }
   };
 
+  // Resolve related-column values for the currently visible records. Re-runs when
+  // the visible record set, the relation field config, or a write (refreshTick)
+  // changes. The server applies the full RBAC boundary, so values here are safe
+  // to render as-is.
+  const recordIdsKey = records.map((r: EntityRecord) => r.id).join(",");
+  const relationFieldsKey = useMemo(
+    () =>
+      JSON.stringify(
+        pageFields
+          .filter((pf: PageField) => pf.fieldType === "relation")
+          .map((pf: PageField) => [pf.fieldKey, pf.relationConfigJson?.relationId, pf.relationConfigJson?.relatedFieldKey]),
+      ),
+    [pageFields],
+  );
+  useEffect(() => {
+    if (pageId == null || !hasRelationFields || records.length === 0) {
+      setRelatedColumns([]);
+      setRelatedByRecord(new Map());
+      return;
+    }
+    let cancelled = false;
+    const recordIds = records.map((r: EntityRecord) => r.id);
+    fetchRelatedValues({ pageId, data: { recordIds } })
+      .then((res) => {
+        if (cancelled) return;
+        setRelatedColumns(res.columns);
+        const m = new Map<number, Map<string, PageRelatedValue>>();
+        for (const v of res.values) {
+          let inner = m.get(v.recordId);
+          if (!inner) {
+            inner = new Map();
+            m.set(v.recordId, inner);
+          }
+          inner.set(v.fieldKey, v);
+        }
+        setRelatedByRecord(m);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRelatedColumns([]);
+        setRelatedByRecord(new Map());
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageId, hasRelationFields, recordIdsKey, relationFieldsKey, refreshTick]);
+
   const reorderFieldsMutation = useReorderFields({
     mutation: {
       onSuccess: () => invalidateFields(),
@@ -1145,6 +1222,38 @@ export function EntityRecords({
     setPageValuesMutation.mutate({ pageId, recordId: record.id, data: { valuesJson: merged } });
   };
 
+  // Build a synthetic Field for a relation page-field so it can reuse the same
+  // cell renderers/editors. The render type and select options come from the
+  // related entity field (resolved server-side); a hidden related field reports
+  // a null type and renders as plain (uneditable) text.
+  const relationAsField = (pf: PageField, meta?: PageRelatedColumn): Field =>
+    ({
+      ...pf,
+      fieldType: (meta?.relatedFieldType ?? "text") as Field["fieldType"],
+      optionsJson: meta?.optionsJson ?? [],
+      permissionsJson: {},
+      entityId: 0,
+    }) as unknown as Field;
+
+  // Inline commit for a relation cell: the edit writes back to the *linked*
+  // record (not the page record) via the standard records update path, which
+  // re-enforces the related entity's field/row workflow boundary server-side.
+  const commitRelationCell = (
+    pf: PageField,
+    meta: PageRelatedColumn,
+    rel: PageRelatedValue | undefined,
+    raw: CellValue,
+  ) => {
+    if (!rel || rel.linkedRecordId == null || !rel.editable) { setEditingCell(null); return; }
+    const synthetic = relationAsField(pf, meta);
+    const next = cellValueForPayload(synthetic, raw);
+    const stored = rel.value;
+    const normalizedStored =
+      synthetic.fieldType === "boolean" ? Boolean(stored) : stored === undefined || stored === null ? "" : stored;
+    if (next === normalizedStored) { setEditingCell(null); return; }
+    cellUpdateMutation.mutate({ id: rel.linkedRecordId, data: { valuesJson: { [meta.relatedFieldKey]: next } } });
+  };
+
   // Whether workflow enforcement applies to a given row (mirrors the server boundary).
   // When active the status cannot be cleared and only allowed transitions are offered.
   const workflowActiveForRecord = (record: EntityRecord): boolean =>
@@ -1174,6 +1283,7 @@ export function EntityRecords({
     setNewRow(initial);
     const pageInitial: FormState = {};
     for (const pf of pageFields) {
+      if (pf.fieldType === "relation") continue;
       pageInitial[pf.fieldKey] = emptyForField({ ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field);
     }
     setNewPageRow(pageInitial);
@@ -1195,10 +1305,10 @@ export function EntityRecords({
       newRow,
     );
     const statusValue = newRowStatus === NO_STATUS ? null : Number(newRowStatus);
-    if (isMirrorPage && pageId != null) {
+    if (hasPage && pageId != null) {
       const pageValuesJson: Record<string, unknown> = {};
       for (const pf of pageFields) {
-        if (pf.fieldType === "function") continue;
+        if (pf.fieldType === "function" || pf.fieldType === "relation") continue;
         const val = cellValueForPayload({ ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field, newPageRow[pf.fieldKey] as CellValue);
         if (val !== "" && val !== undefined && val !== null) pageValuesJson[pf.fieldKey] = val;
       }
@@ -1549,7 +1659,7 @@ export function EntityRecords({
                   <tr className="border-b border-slate-100 bg-slate-50">
                     {displayFields.map((f: Field, ci: number) => (
                       <th key={f.id} className="text-left px-4 py-3 font-medium text-slate-600 whitespace-nowrap">
-                        {setupMode && !isMirrorPage ? (
+                        {setupMode && !isMirror ? (
                           <div className="inline-flex items-center gap-1">
                             <Button
                               variant="ghost"
@@ -1630,15 +1740,31 @@ export function EntityRecords({
                     )}
                     {setupMode ? (
                       <th className="text-right px-4 py-3 font-medium text-slate-600">
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => (isMirrorPage ? openPageColumnConfig(null) : openColumnConfig(null))}
-                          className="gap-1.5 h-8 bg-amber-500 hover:bg-amber-600"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          {isMirrorPage ? t("pageFields.addColumn", "Поле страницы") : t("records.addColumn", "Колонка")}
-                        </Button>
+                        <div className="inline-flex items-center gap-2">
+                          {!isMirror && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => openColumnConfig(null)}
+                              className="gap-1.5 h-8 bg-amber-500 hover:bg-amber-600"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              {t("records.addColumn", "Колонка")}
+                            </Button>
+                          )}
+                          {hasPage && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openPageColumnConfig(null)}
+                              className="gap-1.5 h-8 border-amber-300 text-amber-700 hover:bg-amber-50"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              {t("pageFields.addColumn", "Поле страницы")}
+                            </Button>
+                          )}
+                        </div>
                       </th>
                     ) : (
                       <th className="text-right px-4 py-3 font-medium text-slate-600">{t("records.actions", "Действия")}</th>
@@ -1679,7 +1805,7 @@ export function EntityRecords({
                       })}
                       {displayedPageFields.map((pf: PageField) => {
                         const pageFieldAsField = { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
-                        const editable = pf.fieldType !== "function";
+                        const editable = pf.fieldType !== "function" && pf.fieldType !== "relation";
                         return (
                           <td key={`pf-${pf.id}`} className="px-2 py-1.5 align-top max-w-[260px]">
                             {editable ? (
@@ -1830,13 +1956,58 @@ export function EntityRecords({
                         })}
                         {displayedPageFields.map((pf: PageField) => {
                           const isFunction = pf.fieldType === "function";
-                          const cellEditable = inlineEditEnabled && !isFunction;
                           const cellBg = formatting.cellColors[pf.fieldKey];
                           const cellText = formatting.cellTextColors[pf.fieldKey];
                           const cellStyle = cellBg || cellText ? { backgroundColor: cellBg || undefined, color: cellText || undefined } : undefined;
                           const pfKey = `pf:${pf.fieldKey}`;
                           const isEditingThis =
                             editingCell?.recordId === record.id && editingCell?.fieldKey === pfKey;
+                          if (pf.fieldType === "relation") {
+                            const meta = relatedColMeta.get(pf.fieldKey);
+                            const rel = relatedByRecord.get(record.id)?.get(pf.fieldKey);
+                            const relField = relationAsField(pf, meta);
+                            const relEditable =
+                              inlineEditEnabled && !!meta?.editableColumn && !!rel?.editable && rel?.linkedRecordId != null;
+                            if (isEditingThis && relEditable && meta) {
+                              return (
+                                <td key={`pf-${pf.id}`} className="px-2 py-1.5 max-w-[260px]">
+                                  <InlineCellEditor
+                                    field={relField}
+                                    initial={valueToForm(relField, rel?.value)}
+                                    userOptions={userOptions}
+                                    onCommit={(raw) => commitRelationCell(pf, meta, rel, raw)}
+                                    onCancel={() => setEditingCell(null)}
+                                  />
+                                </td>
+                              );
+                            }
+                            if (relField.fieldType === "boolean" && relEditable && meta) {
+                              return (
+                                <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={cellStyle}>
+                                  <Switch
+                                    checked={rel?.value === true}
+                                    onCheckedChange={(v) => commitRelationCell(pf, meta, rel, v)}
+                                  />
+                                </td>
+                              );
+                            }
+                            return (
+                              <td
+                                key={`pf-${pf.id}`}
+                                onClick={relEditable ? () => setEditingCell({ recordId: record.id, fieldKey: pfKey }) : undefined}
+                                className={`px-4 py-3 max-w-[240px] truncate ${relEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
+                                style={cellStyle}
+                                title={relEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
+                              >
+                                {rel?.linkedRecordId == null ? (
+                                  <span className="text-slate-300">—</span>
+                                ) : (
+                                  renderCellValue(relField, rel?.value, userNames, cellText)
+                                )}
+                              </td>
+                            );
+                          }
+                          const cellEditable = inlineEditEnabled && !isFunction;
                           const pageFieldAsField = { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
                           if (isEditingThis) {
                             return (
@@ -2148,11 +2319,12 @@ export function EntityRecords({
           onSaved={() => { invalidateFields(); }}
         />
       )}
-      {canConfigureColumns && isMirrorPage && pageId != null && (
+      {canConfigureColumns && hasPage && pageId != null && (
         <PageFieldConfigDialog
           open={pageColumnDialogOpen}
           onOpenChange={setPageColumnDialogOpen}
           pageId={pageId}
+          entityId={entityId}
           field={pageColumnField}
           nextSortOrder={allPageFields.length + 1}
           sourceFields={allFields

@@ -83,7 +83,8 @@ export default function DynamicPage() {
           <EntityRecords
             entityId={entity.id}
             visibleFieldKeys={mirrorEntity ? page.mirrorFieldKeysJson ?? undefined : undefined}
-            pageId={mirrorEntity ? page.id : undefined}
+            pageId={page.id}
+            isMirror={Boolean(mirrorEntity)}
           />
         </>
       ) : (

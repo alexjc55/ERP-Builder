@@ -4,8 +4,15 @@ import {
   pageFieldsTable,
   pageRecordValuesTable,
   pagesTable,
+  entitiesTable,
+  entityFieldsTable,
   entityRecordsTable,
+  relationsTable,
+  recordLinksTable,
   type PageField,
+  type Relation,
+  type RelationFieldConfig,
+  type FieldPermissions,
 } from "@workspace/db";
 import { eq, asc, and, ne, inArray, or, sql, type SQL } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
@@ -15,6 +22,7 @@ import {
   getPermissions,
   effectiveScope,
   recordOwnedBy,
+  resolveFieldAccess,
 } from "../middlewares/permissions";
 import {
   ListPageFieldsParams,
@@ -27,6 +35,10 @@ import {
   ListPageRecordValuesParams,
   SetPageRecordValuesParams,
   SetPageRecordValuesBody,
+  GetPageRelatedValuesParams,
+  GetPageRelatedValuesBody,
+  GetPageRelationOptionsParams,
+  GetEntityRelationOptionsParams,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -44,16 +56,78 @@ async function pageExists(pageId: number): Promise<boolean> {
 }
 
 /**
- * Resolve a page's mirrored entity id. Page-local record values only exist on
- * mirror pages, so a null result means the caller targeted a non-mirror page.
+ * Resolve a page's *effective* entity: the entity whose records this page shows.
+ * For a mirror page that is the mirrored entity; for a regular page it is the
+ * entity bound to the page (`entities.page_id`). `entityId === null` means the
+ * page shows no records (neither mirror nor bound), so page-record values and
+ * relation columns do not apply.
  */
-async function mirrorEntityIdForPage(pageId: number): Promise<{ found: boolean; mirrorEntityId: number | null }> {
+async function effectiveEntityForPage(
+  pageId: number,
+): Promise<{ found: boolean; entityId: number | null; isMirror: boolean }> {
   const [p] = await db
     .select({ id: pagesTable.id, mirrorEntityId: pagesTable.mirrorEntityId })
     .from(pagesTable)
     .where(eq(pagesTable.id, pageId));
-  if (!p) return { found: false, mirrorEntityId: null };
-  return { found: true, mirrorEntityId: p.mirrorEntityId };
+  if (!p) return { found: false, entityId: null, isMirror: false };
+  if (p.mirrorEntityId != null) return { found: true, entityId: p.mirrorEntityId, isMirror: true };
+  const [e] = await db
+    .select({ id: entitiesTable.id })
+    .from(entitiesTable)
+    .where(eq(entitiesTable.pageId, pageId));
+  return { found: true, entityId: e ? e.id : null, isMirror: false };
+}
+
+/**
+ * Direction of a qualifying *single-link* relation relative to a page's entity.
+ * "source" means the page record is the relation's source and the single linked
+ * record is its target (cardinality 1:1 or N:1). "target" is the inverse side
+ * (1:1 or 1:N). Any other shape (N:N, or the many side) is not single-link and
+ * returns null — those cannot back a single derived column value.
+ */
+type LinkDirection = "source" | "target";
+function relationDirection(relation: Relation, entityId: number): LinkDirection | null {
+  const t = relation.relationType;
+  if (relation.sourceEntityId === entityId && (t === "one_to_one" || t === "many_to_one")) return "source";
+  if (relation.targetEntityId === entityId && (t === "one_to_one" || t === "one_to_many")) return "target";
+  return null;
+}
+function relatedEntityIdFor(relation: Relation, direction: LinkDirection): number {
+  return direction === "source" ? relation.targetEntityId : relation.sourceEntityId;
+}
+
+/**
+ * Validate a relation page-field's config against the page's effective entity:
+ * the relation must exist, qualify as single-link for this entity, and the
+ * related field must exist and be active on the other side.
+ */
+async function validateRelationFieldConfig(
+  pageId: number,
+  cfg: RelationFieldConfig | undefined | null,
+): Promise<{ ok: true } | { error: string }> {
+  const eff = await effectiveEntityForPage(pageId);
+  if (!eff.found) return { error: "Page not found" };
+  if (eff.entityId == null) return { error: "Relation fields require the page to be bound to an entity" };
+  const relationId = cfg?.relationId ?? null;
+  const relatedFieldKey = cfg?.relatedFieldKey ?? null;
+  if (relationId == null || !relatedFieldKey) return { error: "Relation field requires relationId and relatedFieldKey" };
+  const [relation] = await db.select().from(relationsTable).where(eq(relationsTable.id, relationId));
+  if (!relation) return { error: "Relation not found" };
+  const direction = relationDirection(relation, eff.entityId);
+  if (!direction) return { error: "Relation does not yield a single linked record for this page's entity" };
+  const relatedEntityId = relatedEntityIdFor(relation, direction);
+  const [rf] = await db
+    .select({ id: entityFieldsTable.id })
+    .from(entityFieldsTable)
+    .where(
+      and(
+        eq(entityFieldsTable.entityId, relatedEntityId),
+        eq(entityFieldsTable.fieldKey, relatedFieldKey),
+        eq(entityFieldsTable.isActive, true),
+      ),
+    );
+  if (!rf) return { error: "Related field not found on the related entity" };
+  return { ok: true };
 }
 
 /** SQL predicate restricting entity_records rows to those owned by `userId`. */
@@ -93,7 +167,9 @@ function validatePageValues(
   }
   const cleaned: Record<string, unknown> = {};
   for (const field of fields) {
-    if (field.fieldType === "function") continue;
+    // `function` (computed) and `relation` (derived from a linked record and
+    // written back to that record, never stored here) are never persisted.
+    if (field.fieldType === "function" || field.fieldType === "relation") continue;
     const raw = values[field.fieldKey];
     if (isEmpty(raw)) {
       if (field.isRequired) return { error: `Field "${field.fieldKey}" is required` };
@@ -157,14 +233,14 @@ router.get("/pages/:pageId/fields", requireAuth, async (req, res): Promise<void>
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const { found, mirrorEntityId } = await mirrorEntityIdForPage(params.data.pageId);
-  if (!found) {
+  const eff = await effectiveEntityForPage(params.data.pageId);
+  if (!eff.found) {
     res.status(404).json({ error: "Page not found" });
     return;
   }
-  // Page-local field metadata mirrors record visibility: only callers who can
-  // view the mirrored entity may read its page-local column definitions.
-  if (mirrorEntityId != null && !(await assertRecord(req, res, mirrorEntityId, "view"))) return;
+  // Page-field metadata mirrors record visibility: only callers who can view the
+  // page's effective entity (mirrored or bound) may read its column definitions.
+  if (eff.entityId != null && !(await assertRecord(req, res, eff.entityId, "view"))) return;
   const fields = await db
     .select()
     .from(pageFieldsTable)
@@ -196,6 +272,13 @@ router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (
   if (parsed.data.fieldType === "select" && (!parsed.data.optionsJson || parsed.data.optionsJson.length === 0)) {
     res.status(400).json({ error: "Select fields require at least one option" });
     return;
+  }
+  if (parsed.data.fieldType === "relation") {
+    const check = await validateRelationFieldConfig(params.data.pageId, parsed.data.relationConfigJson);
+    if ("error" in check) {
+      res.status(400).json({ error: check.error });
+      return;
+    }
   }
   if (await pageFieldKeyTaken(params.data.pageId, key, null)) {
     res.status(409).json({ error: "A page field with this key already exists on this page" });
@@ -295,6 +378,17 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
       return;
     }
   }
+  if (nextType === "relation") {
+    const nextCfg =
+      "relationConfigJson" in body
+        ? body.relationConfigJson
+        : (current.relationConfigJson as RelationFieldConfig | null);
+    const check = await validateRelationFieldConfig(current.pageId, nextCfg);
+    if ("error" in check) {
+      res.status(400).json({ error: check.error });
+      return;
+    }
+  }
   if (body.nameJson != null) updateData.nameJson = body.nameJson;
   if (body.descriptionJson != null) updateData.descriptionJson = body.descriptionJson;
   if (body.fieldType != null) updateData.fieldType = body.fieldType;
@@ -303,6 +397,8 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
   if (body.optionsJson != null) updateData.optionsJson = body.optionsJson;
   if (body.formatRulesJson != null) updateData.formatRulesJson = body.formatRulesJson;
   if (body.formulaConfigJson != null) updateData.formulaConfigJson = body.formulaConfigJson;
+  if ("relationConfigJson" in body) updateData.relationConfigJson = body.relationConfigJson ?? null;
+  if ("permissionsJson" in body) updateData.permissionsJson = body.permissionsJson ?? null;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
   if (body.isActive != null) updateData.isActive = body.isActive;
   if (body.showInTable != null) updateData.showInTable = body.showInTable;
@@ -352,24 +448,25 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const { found, mirrorEntityId } = await mirrorEntityIdForPage(params.data.pageId);
-  if (!found) {
+  const eff = await effectiveEntityForPage(params.data.pageId);
+  if (!eff.found) {
     res.status(404).json({ error: "Page not found" });
     return;
   }
-  if (mirrorEntityId == null) {
-    res.status(400).json({ error: "Page is not a mirror page" });
+  if (eff.entityId == null) {
+    res.status(400).json({ error: "Page has no entity" });
     return;
   }
-  // Record-level view permission on the mirrored entity is required.
-  if (!(await assertRecord(req, res, mirrorEntityId, "view"))) return;
+  const entityId = eff.entityId;
+  // Record-level view permission on the page's effective entity is required.
+  if (!(await assertRecord(req, res, entityId, "view"))) return;
   // Restrict the returned values to records the caller is actually allowed to
-  // see: only rows of the mirrored entity, and only own rows under "own" scope.
+  // see: only rows of that entity, and only own rows under "own" scope.
   const perms = await getPermissions(req);
-  const { scope, scopeFieldKeys } = effectiveScope(perms, mirrorEntityId);
+  const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
   const where: SQL[] = [
     eq(pageRecordValuesTable.pageId, params.data.pageId),
-    eq(entityRecordsTable.entityId, mirrorEntityId),
+    eq(entityRecordsTable.entityId, entityId),
   ];
   if (scope === "own") where.push(ownScopeWhere(scopeFieldKeys, req.user!.userId));
   const rows = await db
@@ -392,15 +489,16 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
     return;
   }
   const { pageId, recordId } = params.data;
-  const { found, mirrorEntityId } = await mirrorEntityIdForPage(pageId);
-  if (!found) {
+  const eff = await effectiveEntityForPage(pageId);
+  if (!eff.found) {
     res.status(404).json({ error: "Page not found" });
     return;
   }
-  if (mirrorEntityId == null) {
-    res.status(400).json({ error: "Page is not a mirror page" });
+  if (eff.entityId == null) {
+    res.status(400).json({ error: "Page has no entity" });
     return;
   }
+  const entityId = eff.entityId;
   const [record] = await db
     .select({ id: entityRecordsTable.id, entityId: entityRecordsTable.entityId, valuesJson: entityRecordsTable.valuesJson })
     .from(entityRecordsTable)
@@ -409,16 +507,16 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
     res.status(404).json({ error: "Record not found" });
     return;
   }
-  // The record must belong to this page's mirrored entity (no cross-entity writes).
-  if (record.entityId !== mirrorEntityId) {
+  // The record must belong to this page's effective entity (no cross-entity writes).
+  if (record.entityId !== entityId) {
     res.status(400).json({ error: "Record does not belong to this page" });
     return;
   }
-  // Record-level update permission on the mirrored entity is required.
-  if (!(await assertRecord(req, res, mirrorEntityId, "update"))) return;
+  // Record-level update permission on the effective entity is required.
+  if (!(await assertRecord(req, res, entityId, "update"))) return;
   // Under "own" scope, the caller may only write to records they own.
   const perms = await getPermissions(req);
-  const { scope, scopeFieldKeys } = effectiveScope(perms, mirrorEntityId);
+  const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
   if (scope === "own" && !recordOwnedBy((record.valuesJson as Record<string, unknown>) ?? {}, scopeFieldKeys, req.user!.userId)) {
     res.status(404).json({ error: "Record not found" });
     return;
@@ -446,6 +544,292 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
     await db.insert(pageRecordValuesTable).values({ pageId, recordId, valuesJson: result.values });
   }
   res.json({ recordId, valuesJson: result.values });
+});
+
+/**
+ * Resolve relation-type page-field values for a set of the page's records.
+ *
+ * Each relation page-field surfaces one field of a single linked record (via a
+ * qualifying single-link relation). Values are RBAC-filtered for the viewer on
+ * BOTH sides:
+ *  - the page's effective entity (record-level view + own-row scope on the rows
+ *    we read links from), and
+ *  - the *related* entity (the linked field's hidden/edit access and the related
+ *    entity's own-row scope), plus the per-page-field role visibility.
+ * Editing is reported per-cell but the actual write goes through the normal
+ * records update path on the linked record, which re-enforces every boundary.
+ */
+router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Promise<void> => {
+  const params = GetPageRelatedValuesParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const parsed = GetPageRelatedValuesBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const eff = await effectiveEntityForPage(params.data.pageId);
+  if (!eff.found) {
+    res.status(404).json({ error: "Page not found" });
+    return;
+  }
+  if (eff.entityId == null) {
+    res.status(400).json({ error: "Page has no entity" });
+    return;
+  }
+  const entityId = eff.entityId;
+  if (!(await assertRecord(req, res, entityId, "view"))) return;
+
+  const perms = await getPermissions(req);
+  const roleId = req.user!.roleId;
+  const userId = req.user!.userId;
+
+  const relationFields = (
+    await db
+      .select()
+      .from(pageFieldsTable)
+      .where(
+        and(
+          eq(pageFieldsTable.pageId, params.data.pageId),
+          eq(pageFieldsTable.isActive, true),
+          eq(pageFieldsTable.fieldType, "relation"),
+        ),
+      )
+      .orderBy(asc(pageFieldsTable.sortOrder))
+  ).filter((pf) => {
+    // Per-page role visibility: a "hidden" page-field is dropped entirely.
+    const pagePerm = (pf.permissionsJson as FieldPermissions | null)?.[String(roleId)];
+    return pagePerm !== "hidden";
+  });
+
+  if (relationFields.length === 0 || parsed.data.recordIds.length === 0) {
+    res.json({ columns: [], values: [] });
+    return;
+  }
+
+  // Restrict to records of THIS entity the viewer is allowed to see (own scope).
+  const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
+  const requested = Array.from(new Set(parsed.data.recordIds));
+  const pageRecords = await db
+    .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
+    .from(entityRecordsTable)
+    .where(and(eq(entityRecordsTable.entityId, entityId), inArray(entityRecordsTable.id, requested)));
+  const allowedIds = pageRecords
+    .filter((r) => scope !== "own" || recordOwnedBy((r.valuesJson as Record<string, unknown>) ?? {}, scopeFieldKeys, userId))
+    .map((r) => r.id);
+
+  if (allowedIds.length === 0) {
+    res.json({ columns: [], values: [] });
+    return;
+  }
+
+  const columns: {
+    fieldKey: string;
+    relatedFieldKey: string;
+    relatedFieldType: string | null;
+    optionsJson: string[];
+    editableColumn: boolean;
+  }[] = [];
+  const values: {
+    recordId: number;
+    fieldKey: string;
+    value: unknown;
+    linkedRecordId: number | null;
+    editable: boolean;
+  }[] = [];
+
+  for (const pf of relationFields) {
+    const cfg = pf.relationConfigJson as RelationFieldConfig | null;
+    const relationId = cfg?.relationId ?? null;
+    const relatedFieldKey = cfg?.relatedFieldKey ?? null;
+    if (relationId == null || !relatedFieldKey) continue;
+
+    const [relation] = await db.select().from(relationsTable).where(eq(relationsTable.id, relationId));
+    if (!relation) continue;
+    const direction = relationDirection(relation, entityId);
+    if (!direction) continue;
+    const relatedEntityId = relatedEntityIdFor(relation, direction);
+
+    const [relatedField] = await db
+      .select()
+      .from(entityFieldsTable)
+      .where(
+        and(
+          eq(entityFieldsTable.entityId, relatedEntityId),
+          eq(entityFieldsTable.fieldKey, relatedFieldKey),
+          eq(entityFieldsTable.isActive, true),
+        ),
+      );
+    if (!relatedField) continue;
+
+    const access = resolveFieldAccess(relatedField, perms, roleId, relatedEntityId);
+    const pagePerm = (pf.permissionsJson as FieldPermissions | null)?.[String(roleId)] ?? "edit";
+    const relScope = effectiveScope(perms, relatedEntityId);
+    const columnEditable = pagePerm === "edit" && access === "edit";
+
+    columns.push({
+      fieldKey: pf.fieldKey,
+      relatedFieldKey,
+      relatedFieldType: access === "hidden" ? null : relatedField.fieldType,
+      optionsJson: access === "hidden" ? [] : ((relatedField.optionsJson as string[]) ?? []),
+      editableColumn: columnEditable,
+    });
+
+    // Map each allowed page record to its single linked record id.
+    const linkRows =
+      direction === "source"
+        ? await db
+            .select({ from: recordLinksTable.sourceRecordId, to: recordLinksTable.targetRecordId })
+            .from(recordLinksTable)
+            .where(and(eq(recordLinksTable.relationId, relationId), inArray(recordLinksTable.sourceRecordId, allowedIds)))
+        : await db
+            .select({ from: recordLinksTable.targetRecordId, to: recordLinksTable.sourceRecordId })
+            .from(recordLinksTable)
+            .where(and(eq(recordLinksTable.relationId, relationId), inArray(recordLinksTable.targetRecordId, allowedIds)));
+    const linkMap = new Map<number, number>();
+    for (const l of linkRows) linkMap.set(l.from, l.to);
+
+    // Load the linked records once for value + related own-scope checks.
+    const linkedIds = Array.from(new Set(linkRows.map((l) => l.to)));
+    const linkedMap = new Map<number, Record<string, unknown>>();
+    if (linkedIds.length > 0 && access !== "hidden") {
+      const linkedRecords = await db
+        .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
+        .from(entityRecordsTable)
+        .where(and(eq(entityRecordsTable.entityId, relatedEntityId), inArray(entityRecordsTable.id, linkedIds)));
+      for (const lr of linkedRecords) linkedMap.set(lr.id, (lr.valuesJson as Record<string, unknown>) ?? {});
+    }
+
+    for (const recordId of allowedIds) {
+      const rawLinkedId = linkMap.get(recordId) ?? null;
+      let value: unknown = null;
+      let editable = false;
+      let visible = false;
+      if (rawLinkedId != null && access !== "hidden") {
+        const linkedValues = linkedMap.get(rawLinkedId);
+        if (
+          linkedValues != null &&
+          (relScope.scope !== "own" || recordOwnedBy(linkedValues, relScope.scopeFieldKeys, userId))
+        ) {
+          visible = true;
+          value = linkedValues[relatedFieldKey] ?? null;
+          editable = columnEditable;
+        }
+      }
+      // Do not leak the linked record's identifier when its content is not
+      // visible (hidden field access or related own-scope): the id is only
+      // exposed for cells the viewer can actually read (and, when editable,
+      // write back through). Existence of restricted related rows stays hidden.
+      values.push({ recordId, fieldKey: pf.fieldKey, value, linkedRecordId: visible ? rawLinkedId : null, editable });
+    }
+  }
+
+  res.json({ columns, values });
+});
+
+/**
+ * List the relations whose cardinality yields a single linked record for this
+ * page's effective entity (source side 1:1/N:1, or target side 1:1/1:N), along
+ * with the candidate related-entity fields a relation page-field can surface.
+ * Admin-only (it backs the page-field config dialog). Both directions are
+ * considered, so relations where the page entity is the relation *target* are
+ * included too (these are not returned by the source-only entity-relations list).
+ */
+router.get("/pages/:pageId/relation-options", requireAuth, requireAdmin("pages"), async (req, res): Promise<void> => {
+  const params = GetPageRelationOptionsParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const eff = await effectiveEntityForPage(params.data.pageId);
+  if (!eff.found) {
+    res.status(404).json({ error: "Page not found" });
+    return;
+  }
+  if (eff.entityId == null) {
+    res.json({ options: [] });
+    return;
+  }
+  res.json({ options: await buildRelationOptions(eff.entityId) });
+});
+
+/**
+ * Build the qualifying single-link relation options for an entity (both
+ * directions), each with its related entity's active fields. Shared by the
+ * page- and entity-keyed relation-options endpoints.
+ */
+async function buildRelationOptions(entityId: number): Promise<
+  {
+    relationId: number;
+    label: unknown;
+    relatedEntityId: number;
+    relatedEntityLabel: unknown;
+    fields: { key: string; label: unknown; fieldType: string }[];
+  }[]
+> {
+  const relations = await db
+    .select()
+    .from(relationsTable)
+    .where(or(eq(relationsTable.sourceEntityId, entityId), eq(relationsTable.targetEntityId, entityId)));
+
+  const options: {
+    relationId: number;
+    label: unknown;
+    relatedEntityId: number;
+    relatedEntityLabel: unknown;
+    fields: { key: string; label: unknown; fieldType: string }[];
+  }[] = [];
+
+  for (const relation of relations) {
+    const direction = relationDirection(relation, entityId);
+    if (!direction) continue;
+    const relatedEntityId = relatedEntityIdFor(relation, direction);
+    const [relatedEntity] = await db
+      .select({ id: entitiesTable.id, nameJson: entitiesTable.nameJson })
+      .from(entitiesTable)
+      .where(eq(entitiesTable.id, relatedEntityId));
+    if (!relatedEntity) continue;
+    const fields = await db
+      .select({ fieldKey: entityFieldsTable.fieldKey, nameJson: entityFieldsTable.nameJson, fieldType: entityFieldsTable.fieldType })
+      .from(entityFieldsTable)
+      .where(and(eq(entityFieldsTable.entityId, relatedEntityId), eq(entityFieldsTable.isActive, true)))
+      .orderBy(asc(entityFieldsTable.sortOrder));
+    options.push({
+      relationId: relation.id,
+      // For the target side show the inverse name so the label reads from the
+      // referencing entity's perspective.
+      label: direction === "target" ? relation.inverseNameJson : relation.nameJson,
+      relatedEntityId,
+      relatedEntityLabel: relatedEntity.nameJson,
+      fields: fields.map((f) => ({ key: f.fieldKey, label: f.nameJson, fieldType: f.fieldType })),
+    });
+  }
+  return options;
+}
+
+/**
+ * Entity-keyed variant of relation-options: used by the dashboard widget editors
+ * (metric related fields, table related columns) where the entity is chosen
+ * freely rather than derived from a page. Admin-only (backs admin config UIs).
+ */
+router.get("/entities/:entityId/relation-options", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
+  const params = GetEntityRelationOptionsParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [entity] = await db
+    .select({ id: entitiesTable.id })
+    .from(entitiesTable)
+    .where(eq(entitiesTable.id, params.data.entityId))
+    .limit(1);
+  if (!entity) {
+    res.status(404).json({ error: "Entity not found" });
+    return;
+  }
+  res.json({ options: await buildRelationOptions(params.data.entityId) });
 });
 
 export default router;

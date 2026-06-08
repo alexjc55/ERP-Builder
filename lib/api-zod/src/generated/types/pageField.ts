@@ -6,9 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { FieldFormatRule } from './fieldFormatRule';
+import type { FieldPermissions } from './fieldPermissions';
 import type { FieldType } from './fieldType';
 import type { FormulaFieldConfig } from './formulaFieldConfig';
 import type { MultilingualText } from './multilingualText';
+import type { RelationFieldConfig } from './relationFieldConfig';
 
 export interface PageField {
   id: number;
@@ -23,6 +25,8 @@ export interface PageField {
   optionsJson: string[];
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
+  relationConfigJson?: RelationFieldConfig;
+  permissionsJson?: FieldPermissions;
   showInTable?: boolean;
   showColumnTotal?: boolean;
   /** @nullable */

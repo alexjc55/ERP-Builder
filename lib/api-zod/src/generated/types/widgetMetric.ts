@@ -13,10 +13,15 @@ export interface WidgetMetric {
   entityId: number;
   aggregation: WidgetMetricAggregation;
   /**
-     * Numeric field to sum (required when aggregation = sum)
+     * Numeric field to sum (required when aggregation = sum). For related metrics this is the related entity's field key.
      * @nullable
      */
   fieldKey?: string | null;
+  /**
+     * When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).
+     * @nullable
+     */
+  relationId?: number | null;
   /**
      * Restrict to records in these statuses; empty/null = all statuses
      * @nullable

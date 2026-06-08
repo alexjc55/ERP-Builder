@@ -1190,7 +1190,8 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
   "aggregation": zod.enum(['count', 'sum']),
-  "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum)'),
+  "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum). For related metrics this is the related entity\'s field key.'),
+  "relationId": zod.number().nullish().describe('When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
 })).optional(),
   "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
@@ -1210,6 +1211,10 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "table": zod.object({
   "entityId": zod.number(),
   "fieldKeys": zod.array(zod.string()).describe('Field keys shown as table columns, in display order'),
+  "relatedColumns": zod.array(zod.object({
+  "relationId": zod.number(),
+  "relatedFieldKey": zod.string()
+})).nullish().describe('Related-entity columns, each surfacing one field of a linked record through a qualifying single-link relation. Appended after the entity columns.'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional(),
@@ -1247,7 +1252,8 @@ export const CreateDashboardWidgetBody = zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
   "aggregation": zod.enum(['count', 'sum']),
-  "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum)'),
+  "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum). For related metrics this is the related entity\'s field key.'),
+  "relationId": zod.number().nullish().describe('When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
 })).optional(),
   "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
@@ -1267,6 +1273,10 @@ export const CreateDashboardWidgetBody = zod.object({
   "table": zod.object({
   "entityId": zod.number(),
   "fieldKeys": zod.array(zod.string()).describe('Field keys shown as table columns, in display order'),
+  "relatedColumns": zod.array(zod.object({
+  "relationId": zod.number(),
+  "relatedFieldKey": zod.string()
+})).nullish().describe('Related-entity columns, each surfacing one field of a linked record through a qualifying single-link relation. Appended after the entity columns.'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional(),
@@ -1295,7 +1305,8 @@ export const CreateDashboardWidgetResponse = zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
   "aggregation": zod.enum(['count', 'sum']),
-  "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum)'),
+  "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum). For related metrics this is the related entity\'s field key.'),
+  "relationId": zod.number().nullish().describe('When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
 })).optional(),
   "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
@@ -1315,6 +1326,10 @@ export const CreateDashboardWidgetResponse = zod.object({
   "table": zod.object({
   "entityId": zod.number(),
   "fieldKeys": zod.array(zod.string()).describe('Field keys shown as table columns, in display order'),
+  "relatedColumns": zod.array(zod.object({
+  "relationId": zod.number(),
+  "relatedFieldKey": zod.string()
+})).nullish().describe('Related-entity columns, each surfacing one field of a linked record through a qualifying single-link relation. Appended after the entity columns.'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional(),
@@ -1397,7 +1412,8 @@ export const UpdateDashboardWidgetBody = zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
   "aggregation": zod.enum(['count', 'sum']),
-  "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum)'),
+  "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum). For related metrics this is the related entity\'s field key.'),
+  "relationId": zod.number().nullish().describe('When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
 })).optional(),
   "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
@@ -1417,6 +1433,10 @@ export const UpdateDashboardWidgetBody = zod.object({
   "table": zod.object({
   "entityId": zod.number(),
   "fieldKeys": zod.array(zod.string()).describe('Field keys shown as table columns, in display order'),
+  "relatedColumns": zod.array(zod.object({
+  "relationId": zod.number(),
+  "relatedFieldKey": zod.string()
+})).nullish().describe('Related-entity columns, each surfacing one field of a linked record through a qualifying single-link relation. Appended after the entity columns.'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional(),
@@ -1445,7 +1465,8 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
   "aggregation": zod.enum(['count', 'sum']),
-  "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum)'),
+  "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum). For related metrics this is the related entity\'s field key.'),
+  "relationId": zod.number().nullish().describe('When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
 })).optional(),
   "formula": zod.string().nullish().describe('Optional expression combining metric keys as {key}'),
@@ -1465,6 +1486,10 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "table": zod.object({
   "entityId": zod.number(),
   "fieldKeys": zod.array(zod.string()).describe('Field keys shown as table columns, in display order'),
+  "relatedColumns": zod.array(zod.object({
+  "relationId": zod.number(),
+  "relatedFieldKey": zod.string()
+})).nullish().describe('Related-entity columns, each surfacing one field of a linked record through a qualifying single-link relation. Appended after the entity columns.'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional(),
@@ -1532,7 +1557,7 @@ export const ListEntityFieldsResponseItem = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
@@ -1591,7 +1616,7 @@ export const CreateEntityFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation']),
   "isRequired": zod.boolean().default(createEntityFieldBodyIsRequiredDefault),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()).optional(),
@@ -1643,7 +1668,7 @@ export const GetFieldResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
@@ -1695,7 +1720,7 @@ export const UpdateFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function']).optional(),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation']).optional(),
   "isRequired": zod.boolean().optional(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()).optional(),
@@ -1739,7 +1764,7 @@ export const UpdateFieldResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
@@ -1823,7 +1848,7 @@ export const ListPageFieldsResponseItem = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
@@ -1837,6 +1862,11 @@ export const ListPageFieldsResponseItem = zod.object({
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional()
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
+  "relationConfigJson": zod.object({
+  "relationId": zod.number().nullish(),
+  "relatedFieldKey": zod.string().nullish()
+}).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
+  "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
@@ -1873,7 +1903,7 @@ export const CreatePageFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation']),
   "isRequired": zod.boolean().default(createPageFieldBodyIsRequiredDefault),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()).optional(),
@@ -1887,6 +1917,11 @@ export const CreatePageFieldBody = zod.object({
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional()
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
+  "relationConfigJson": zod.object({
+  "relationId": zod.number().nullish(),
+  "relatedFieldKey": zod.string().nullish()
+}).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
+  "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().default(createPageFieldBodyShowInTableDefault),
   "showColumnTotal": zod.boolean().default(createPageFieldBodyShowColumnTotalDefault),
   "totalFillColor": zod.string().nullish(),
@@ -1915,7 +1950,7 @@ export const UpdatePageFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function']).optional(),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation']).optional(),
   "isRequired": zod.boolean().optional(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()).optional(),
@@ -1929,6 +1964,11 @@ export const UpdatePageFieldBody = zod.object({
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional()
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
+  "relationConfigJson": zod.object({
+  "relationId": zod.number().nullish(),
+  "relatedFieldKey": zod.string().nullish()
+}).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
+  "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
@@ -1951,7 +1991,7 @@ export const UpdatePageFieldResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
@@ -1965,6 +2005,11 @@ export const UpdatePageFieldResponse = zod.object({
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional()
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
+  "relationConfigJson": zod.object({
+  "relationId": zod.number().nullish(),
+  "relatedFieldKey": zod.string().nullish()
+}).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
+  "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
@@ -2036,6 +2081,103 @@ export const SetPageRecordValuesResponse = zod.object({
   "recordId": zod.number(),
   "valuesJson": zod.record(zod.string(), zod.unknown())
 }).describe('Page-local field values for one mirrored record.')
+
+
+/**
+ * @summary Resolve relation-type page-field values (derived from linked records) for the given records
+ */
+export const GetPageRelatedValuesParams = zod.object({
+  "pageId": zod.coerce.number()
+})
+
+export const GetPageRelatedValuesBody = zod.object({
+  "recordIds": zod.array(zod.number())
+})
+
+export const GetPageRelatedValuesResponse = zod.object({
+  "columns": zod.array(zod.object({
+  "fieldKey": zod.string().describe('The relation page-field\'s own key (column identity).'),
+  "relatedFieldKey": zod.string(),
+  "relatedFieldType": zod.string().nullish().describe('Field type of the related entity field (drives rendering\/editing).'),
+  "optionsJson": zod.array(zod.string()).optional().describe('Select options of the related field (for inline editing).'),
+  "editableColumn": zod.boolean().describe('Whether the viewer\'s role may edit the related field at all (before per-row scope).')
+})),
+  "values": zod.array(zod.object({
+  "recordId": zod.number(),
+  "fieldKey": zod.string(),
+  "value": zod.unknown().optional().describe('The related field\'s value (null if hidden for the viewer or no linked record).'),
+  "linkedRecordId": zod.number().nullish(),
+  "editable": zod.boolean()
+}))
+})
+
+
+/**
+ * @summary List relations (and their candidate related fields) usable as a single-link relation page-field for this page's entity
+ */
+export const GetPageRelationOptionsParams = zod.object({
+  "pageId": zod.coerce.number()
+})
+
+export const GetPageRelationOptionsResponse = zod.object({
+  "options": zod.array(zod.object({
+  "relationId": zod.number(),
+  "label": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "relatedEntityId": zod.number(),
+  "relatedEntityLabel": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "fields": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "fieldType": zod.string()
+}))
+}))
+})
+
+
+/**
+ * @summary List relations (and their candidate related fields) usable as a single-link related column for this entity (both directions)
+ */
+export const GetEntityRelationOptionsParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const GetEntityRelationOptionsResponse = zod.object({
+  "options": zod.array(zod.object({
+  "relationId": zod.number(),
+  "label": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "relatedEntityId": zod.number(),
+  "relatedEntityLabel": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "fields": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "fieldType": zod.string()
+}))
+}))
+})
 
 
 /**

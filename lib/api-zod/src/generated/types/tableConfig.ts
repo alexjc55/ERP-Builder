@@ -5,11 +5,17 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { TableRelatedColumn } from './tableRelatedColumn';
 
 export interface TableConfig {
   entityId: number;
   /** Field keys shown as table columns, in display order */
   fieldKeys: string[];
+  /**
+     * Related-entity columns, each surfacing one field of a linked record through a qualifying single-link relation. Appended after the entity columns.
+     * @nullable
+     */
+  relatedColumns?: TableRelatedColumn[] | null;
   /**
      * Restrict to records in these statuses; empty/null = all statuses
      * @nullable

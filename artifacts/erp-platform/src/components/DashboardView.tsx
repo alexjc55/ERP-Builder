@@ -12,6 +12,8 @@ import {
   useListEntities,
   useListEntityFields,
   useListEntityStatuses,
+  useGetEntityRelationOptions,
+  getGetEntityRelationOptionsQueryKey,
   useListRoles,
   useListPages,
   useUpdatePage,
@@ -917,6 +919,7 @@ type DraftMetric = {
   aggregation: "count" | "sum";
   fieldKey: string | null;
   statusIds: number[];
+  relationId: number | null;
 };
 
 type ChartDraft = {
@@ -930,11 +933,14 @@ type ChartDraft = {
   showValues: boolean;
 };
 
+type TableRelatedColumnDraft = { relationId: number; relatedFieldKey: string };
+
 type TableDraft = {
   entityId: number | null;
   fieldKeys: string[];
   statusIds: number[];
   limit: number;
+  relatedColumns: TableRelatedColumnDraft[];
 };
 
 type WidgetTypeChoice = "metric" | "chart" | "table";
@@ -993,8 +999,9 @@ function WidgetEditorDialog({
           aggregation: m.aggregation,
           fieldKey: m.fieldKey ?? null,
           statusIds: m.statusIds ?? [],
+          relationId: m.relationId ?? null,
         }))
-      : [{ key: "m1", entityId: null, aggregation: "count", fieldKey: null, statusIds: [] }],
+      : [{ key: "m1", entityId: null, aggregation: "count", fieldKey: null, statusIds: [], relationId: null }],
   );
   const [chart, setChart] = useState<ChartDraft>(() => {
     const c = widget?.config.chart;
@@ -1016,6 +1023,7 @@ function WidgetEditorDialog({
       fieldKeys: tb?.fieldKeys ?? [],
       statusIds: tb?.statusIds ?? [],
       limit: tb?.limit ?? 10,
+      relatedColumns: (tb?.relatedColumns ?? []).map((rc) => ({ relationId: rc.relationId, relatedFieldKey: rc.relatedFieldKey })),
     };
   });
 
@@ -1023,7 +1031,7 @@ function WidgetEditorDialog({
     setMetrics((prev) => prev.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
 
   const addMetric = () =>
-    setMetrics((prev) => [...prev, { key: `m${prev.length + 1}`, entityId: null, aggregation: "count", fieldKey: null, statusIds: [] }]);
+    setMetrics((prev) => [...prev, { key: `m${prev.length + 1}`, entityId: null, aggregation: "count", fieldKey: null, statusIds: [], relationId: null }]);
 
   const removeMetric = (i: number) => setMetrics((prev) => prev.filter((_, idx) => idx !== i));
 
@@ -1083,7 +1091,7 @@ function WidgetEditorDialog({
         toast({ title: t("dash.tableNeedsEntity", "Выберите сущность для таблицы"), variant: "destructive" });
         return null;
       }
-      if (table.fieldKeys.length === 0) {
+      if (table.fieldKeys.length === 0 && table.relatedColumns.length === 0) {
         toast({ title: t("dash.tableNeedsColumns", "Выберите хотя бы одну колонку"), variant: "destructive" });
         return null;
       }
@@ -1098,6 +1106,7 @@ function WidgetEditorDialog({
             fieldKeys: table.fieldKeys,
             statusIds: table.statusIds.length > 0 ? table.statusIds : null,
             limit: table.limit,
+            relatedColumns: table.relatedColumns.length > 0 ? table.relatedColumns : null,
           },
         },
       };
@@ -1133,8 +1142,12 @@ function WidgetEditorDialog({
           key: m.key,
           entityId: m.entityId as number,
           aggregation: m.aggregation,
+          // For related metrics, fieldKey targets the related entity's numeric
+          // field (sum); count keeps no fieldKey. For direct metrics it is the
+          // base entity's numeric field on sum only.
           fieldKey: m.aggregation === "sum" ? m.fieldKey : null,
           statusIds: m.statusIds.length > 0 ? m.statusIds : null,
+          relationId: m.relationId ?? null,
         })),
         formula: formula.trim() ? formula.trim() : null,
         format: format as WidgetConfigFormat,
@@ -1509,12 +1522,26 @@ function TableEditor({
   const { data: statuses = [] } = useListEntityStatuses(table.entityId ?? 0, {
     query: { enabled: table.entityId != null, queryKey: getListEntityStatusesQueryKey(table.entityId ?? 0) },
   });
+  const { data: relationOptions } = useGetEntityRelationOptions(table.entityId ?? 0, {
+    query: { enabled: table.entityId != null, queryKey: getGetEntityRelationOptionsQueryKey(table.entityId ?? 0) },
+  });
+  const relations = relationOptions?.options ?? [];
 
   const toggleColumn = (key: string) => {
     const next = table.fieldKeys.includes(key)
       ? table.fieldKeys.filter((k) => k !== key)
       : [...table.fieldKeys, key];
     onChange({ fieldKeys: next });
+  };
+
+  const isRelatedSelected = (relationId: number, relatedFieldKey: string) =>
+    table.relatedColumns.some((rc) => rc.relationId === relationId && rc.relatedFieldKey === relatedFieldKey);
+
+  const toggleRelatedColumn = (relationId: number, relatedFieldKey: string) => {
+    const next = isRelatedSelected(relationId, relatedFieldKey)
+      ? table.relatedColumns.filter((rc) => !(rc.relationId === relationId && rc.relatedFieldKey === relatedFieldKey))
+      : [...table.relatedColumns, { relationId, relatedFieldKey }];
+    onChange({ relatedColumns: next });
   };
 
   const toggleStatus = (sid: number) => {
@@ -1532,7 +1559,7 @@ function TableEditor({
         <p className="text-xs text-slate-400">{t("dash.selectEntity", "Сущность")}</p>
         <Select
           value={table.entityId != null ? String(table.entityId) : ""}
-          onValueChange={(v) => onChange({ entityId: Number(v), fieldKeys: [], statusIds: [] })}
+          onValueChange={(v) => onChange({ entityId: Number(v), fieldKeys: [], statusIds: [], relatedColumns: [] })}
         >
           <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectEntity", "Сущность")} /></SelectTrigger>
           <SelectContent>
@@ -1564,6 +1591,32 @@ function TableEditor({
           </div>
         )}
       </div>
+
+      {table.entityId != null && relations.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-xs text-slate-400">{t("dash.tableRelatedColumns", "Связанные колонки")}</p>
+          <div className="space-y-2 max-h-44 overflow-auto rounded-md border border-slate-100 p-2">
+            {relations.map((r) => (
+              <div key={r.relationId} className="space-y-1">
+                <p className="text-xs font-medium text-slate-500">{ml(r.label)} → {ml(r.relatedEntityLabel)}</p>
+                {r.fields.length === 0 ? (
+                  <p className="pl-2 text-[11px] text-slate-400">{t("dash.noFields", "Нет полей")}</p>
+                ) : (
+                  r.fields.map((f) => (
+                    <label key={`${r.relationId}_${f.key}`} className="flex items-center gap-2 pl-2 text-sm">
+                      <Checkbox
+                        checked={isRelatedSelected(r.relationId, f.key)}
+                        onCheckedChange={() => toggleRelatedColumn(r.relationId, f.key)}
+                      />
+                      {ml(f.label)}
+                    </label>
+                  ))
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="space-y-1.5">
         <p className="text-xs text-slate-400">{t("dash.rowLimit", "Кол-во строк (1–100)")}</p>
@@ -1628,7 +1681,21 @@ function MetricEditor({
   const { data: statuses = [] } = useListEntityStatuses(metric.entityId ?? 0, {
     query: { enabled: metric.entityId != null, queryKey: getListEntityStatusesQueryKey(metric.entityId ?? 0) },
   });
-  const numericFields = fields.filter((f: Field) => f.fieldType === "number");
+  const { data: relationOptions } = useGetEntityRelationOptions(metric.entityId ?? 0, {
+    query: { enabled: metric.entityId != null, queryKey: getGetEntityRelationOptionsQueryKey(metric.entityId ?? 0) },
+  });
+  const relations = relationOptions?.options ?? [];
+  const selectedRelation = relations.find((r) => r.relationId === metric.relationId);
+  // For sum: when a relation is chosen, numeric fields come from the related
+  // entity; otherwise from the base entity. Normalize both to {key,label}.
+  const numericFields: { key: string; label: unknown }[] =
+    metric.relationId != null
+      ? (selectedRelation?.fields ?? [])
+          .filter((f) => f.fieldType === "number")
+          .map((f) => ({ key: f.key, label: f.label }))
+      : fields
+          .filter((f: Field) => f.fieldType === "number")
+          .map((f: Field) => ({ key: f.fieldKey, label: f.nameJson }));
 
   const toggleStatus = (sid: number) => {
     const next = metric.statusIds.includes(sid)
@@ -1657,7 +1724,7 @@ function MetricEditor({
       <div className="grid grid-cols-2 gap-2">
         <Select
           value={metric.entityId != null ? String(metric.entityId) : ""}
-          onValueChange={(v) => onChange({ entityId: Number(v), fieldKey: null, statusIds: [] })}
+          onValueChange={(v) => onChange({ entityId: Number(v), fieldKey: null, statusIds: [], relationId: null })}
         >
           <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectEntity", "Сущность")} /></SelectTrigger>
           <SelectContent>
@@ -1666,7 +1733,7 @@ function MetricEditor({
             ))}
           </SelectContent>
         </Select>
-        <Select value={metric.aggregation} onValueChange={(v) => onChange({ aggregation: v as "count" | "sum" })}>
+        <Select value={metric.aggregation} onValueChange={(v) => onChange({ aggregation: v as "count" | "sum", fieldKey: null })}>
           <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="count">{t("dash.aggCount", "Количество")}</SelectItem>
@@ -1674,19 +1741,49 @@ function MetricEditor({
           </SelectContent>
         </Select>
       </div>
+      {metric.entityId != null && relations.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-xs text-slate-400">{t("dash.metricRelation", "Связь (необязательно)")}</p>
+          <Select
+            value={metric.relationId != null ? String(metric.relationId) : "__none__"}
+            onValueChange={(v) => onChange({ relationId: v === "__none__" ? null : Number(v), fieldKey: null })}
+          >
+            <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">{t("dash.metricNoRelation", "Без связи (по самой сущности)")}</SelectItem>
+              {relations.map((r) => (
+                <SelectItem key={r.relationId} value={String(r.relationId)}>
+                  {ml(r.label)} → {ml(r.relatedEntityLabel)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {metric.relationId != null && (
+            <p className="text-[11px] text-slate-400">
+              {metric.aggregation === "count"
+                ? t("dash.metricRelationCountHint", "Считает связанные записи")
+                : t("dash.metricRelationSumHint", "Суммирует поле связанной записи")}
+            </p>
+          )}
+        </div>
+      )}
       {metric.aggregation === "sum" && (
         <Select
           value={metric.fieldKey ?? ""}
           onValueChange={(v) => onChange({ fieldKey: v })}
-          disabled={metric.entityId == null}
+          disabled={metric.entityId == null || (metric.relationId != null && !selectedRelation)}
         >
-          <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectField", "Числовое поле")} /></SelectTrigger>
+          <SelectTrigger className="h-8">
+            <SelectValue placeholder={metric.relationId != null ? t("dash.selectRelatedField", "Поле связанной записи") : t("dash.selectField", "Числовое поле")} />
+          </SelectTrigger>
           <SelectContent>
             {numericFields.length === 0 ? (
               <div className="px-2 py-1.5 text-xs text-slate-400">{t("dash.noNumericFields", "Нет числовых полей")}</div>
             ) : (
-              numericFields.map((f: Field) => (
-                <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson)}</SelectItem>
+              numericFields.map((f) => (
+                <SelectItem key={f.key} value={f.key}>
+                  {ml(f.label)}
+                </SelectItem>
               ))
             )}
           </SelectContent>
