@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, type CSSProperties } from "react";
 import {
   useListEntityRecords,
   useGetRecord,
@@ -753,6 +753,96 @@ export function EntityRecords({
     setAddingRow(false);
     setSetupMode(false);
   }, [entityId]);
+
+  // ── Resizable table columns ──────────────────────────────────────────────
+  // Per-column widths are a viewer-local preference (no server contract): we
+  // persist them in localStorage keyed by entity+page so each table remembers
+  // its layout. Columns without a stored width keep their natural auto width.
+  const widthsStorageKey = `erp:colwidths:${entityId}:${pageId ?? 0}`;
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(widthsStorageKey);
+      setColumnWidths(raw ? (JSON.parse(raw) as Record<string, number>) : {});
+    } catch {
+      setColumnWidths({});
+    }
+  }, [widthsStorageKey]);
+  // A fixed width on a cell must also clamp min/max so an auto-layout table
+  // actually honours it (the widest unconstrained cell would otherwise win).
+  const colWidthStyle = (key: string): CSSProperties | undefined => {
+    const w = columnWidths[key];
+    return w ? { width: w, minWidth: w, maxWidth: w } : undefined;
+  };
+  // Holds the teardown for an in-flight drag so it can be forcibly run on
+  // unmount / entity switch (a drag that never sees pointerup must not leak
+  // window listeners or leave body cursor/userSelect stuck).
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => dragCleanupRef.current?.(), []);
+  const startResize = (key: string) => (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // A previous drag should never still be live, but be defensive.
+    dragCleanupRef.current?.();
+    const th = (e.currentTarget.closest("th") as HTMLElement | null) ?? null;
+    const startW = columnWidths[key] ?? th?.offsetWidth ?? 160;
+    const startX = e.clientX;
+    let latest: Record<string, number> = columnWidths;
+    const onMove = (ev: PointerEvent) => {
+      const w = Math.max(60, Math.round(startW + (ev.clientX - startX)));
+      latest = { ...columnWidths, [key]: w };
+      setColumnWidths(latest);
+    };
+    // Idempotent teardown: removes listeners and restores body styles. Persists
+    // only on a real pointerup (persist=true), not on an unmount-forced abort.
+    const cleanup = (persist: boolean) => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("blur", onAbort);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+      dragCleanupRef.current = null;
+      if (persist) {
+        try {
+          localStorage.setItem(widthsStorageKey, JSON.stringify(latest));
+        } catch {
+          /* ignore quota / disabled storage */
+        }
+      }
+    };
+    const onUp = () => cleanup(true);
+    const onAbort = () => cleanup(true);
+    dragCleanupRef.current = () => cleanup(false);
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    // Fail-safe: if focus leaves the window mid-drag we may never get pointerup.
+    window.addEventListener("blur", onAbort);
+  };
+  // Drag handle pinned to a header cell's right edge. Double-click resets the
+  // column back to its natural (auto) width.
+  const ResizeHandle = ({ colKey }: { colKey: string }) => (
+    <div
+      onPointerDown={startResize(colKey)}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        setColumnWidths((prev) => {
+          const next = { ...prev };
+          delete next[colKey];
+          try {
+            localStorage.setItem(widthsStorageKey, JSON.stringify(next));
+          } catch {
+            /* ignore */
+          }
+          return next;
+        });
+      }}
+      title={t("records.resizeColumn", "Потяните, чтобы изменить ширину (двойной клик — сбросить)")}
+      className="absolute top-0 right-0 z-10 h-full w-1.5 cursor-col-resize touch-none select-none bg-transparent hover:bg-blue-400/60"
+    />
+  );
 
   // Statuses the user may move the record to, mirroring the server's workflow boundary.
   // Free choice when: creating, no transitions defined, current status is null, or superAdmin.
@@ -1604,7 +1694,10 @@ export function EntityRecords({
                           <th
                             key={`tot-${f.id}`}
                             className={cn("px-4 py-3 text-left", hasTotal && !f.totalFillColor && "bg-emerald-50")}
-                            style={hasTotal && f.totalFillColor ? { backgroundColor: f.totalFillColor } : undefined}
+                            style={{
+                              ...(hasTotal && f.totalFillColor ? { backgroundColor: f.totalFillColor } : undefined),
+                              ...colWidthStyle(`f:${f.id}`),
+                            }}
                           >
                             {hasTotal ? (
                               <span
@@ -1623,7 +1716,10 @@ export function EntityRecords({
                           <th
                             key={`tot-pf-${pf.id}`}
                             className={cn("px-4 py-3 text-left", hasTotal && !pf.totalFillColor && "bg-emerald-50")}
-                            style={hasTotal && pf.totalFillColor ? { backgroundColor: pf.totalFillColor } : undefined}
+                            style={{
+                              ...(hasTotal && pf.totalFillColor ? { backgroundColor: pf.totalFillColor } : undefined),
+                              ...colWidthStyle(`pf:${pf.id}`),
+                            }}
                           >
                             {hasTotal ? (
                               <span
@@ -1636,13 +1732,17 @@ export function EntityRecords({
                           </th>
                         );
                       })}
-                      {statuses.length > 0 && <th className="px-4 py-1.5" />}
+                      {statuses.length > 0 && <th className="px-4 py-1.5" style={colWidthStyle("__status__")} />}
                       <th className="px-4 py-1.5" />
                     </tr>
                   )}
                   <tr className="border-b border-slate-100 bg-slate-50">
                     {displayFields.map((f: Field, ci: number) => (
-                      <th key={f.id} className="text-left px-4 py-3 font-medium text-slate-600 whitespace-nowrap">
+                      <th
+                        key={f.id}
+                        className="relative text-left px-4 py-3 font-medium text-slate-600 whitespace-nowrap"
+                        style={colWidthStyle(`f:${f.id}`)}
+                      >
                         {setupMode && !isMirror ? (
                           <div className="inline-flex items-center gap-1">
                             <Button
@@ -1678,10 +1778,15 @@ export function EntityRecords({
                         ) : (
                           ml(f.nameJson)
                         )}
+                        <ResizeHandle colKey={`f:${f.id}`} />
                       </th>
                     ))}
                     {displayedPageFields.map((pf: PageField, pi: number) => (
-                      <th key={`pf-${pf.id}`} className="text-left px-4 py-3 font-medium text-slate-600 whitespace-nowrap">
+                      <th
+                        key={`pf-${pf.id}`}
+                        className="relative text-left px-4 py-3 font-medium text-slate-600 whitespace-nowrap"
+                        style={colWidthStyle(`pf:${pf.id}`)}
+                      >
                         {setupMode ? (
                           <div className="inline-flex items-center gap-1">
                             <Button
@@ -1717,10 +1822,17 @@ export function EntityRecords({
                         ) : (
                           ml(pf.nameJson)
                         )}
+                        <ResizeHandle colKey={`pf:${pf.id}`} />
                       </th>
                     ))}
                     {statuses.length > 0 && (
-                      <th className="text-left px-4 py-3 font-medium text-slate-600">{t("records.status", "Статус")}</th>
+                      <th
+                        className="relative text-left px-4 py-3 font-medium text-slate-600"
+                        style={colWidthStyle("__status__")}
+                      >
+                        {t("records.status", "Статус")}
+                        <ResizeHandle colKey="__status__" />
+                      </th>
                     )}
                     {setupMode ? (
                       <th className="text-right px-4 py-3 font-medium text-slate-600">
@@ -1773,7 +1885,7 @@ export function EntityRecords({
                       {displayFields.map((f: Field) => {
                         const editable = fieldAccess(f, entityId) === "edit" && f.fieldType !== "function";
                         return (
-                          <td key={f.id} className="px-2 py-1.5 align-top max-w-[260px]">
+                          <td key={f.id} className="px-2 py-1.5 align-top max-w-[260px]" style={colWidthStyle(`f:${f.id}`)}>
                             {editable ? (
                               <FieldInput
                                 field={f}
@@ -1791,7 +1903,7 @@ export function EntityRecords({
                         const pageFieldAsField = { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
                         const editable = pf.fieldType !== "function" && pf.fieldType !== "relation";
                         return (
-                          <td key={`pf-${pf.id}`} className="px-2 py-1.5 align-top max-w-[260px]">
+                          <td key={`pf-${pf.id}`} className="px-2 py-1.5 align-top max-w-[260px]" style={colWidthStyle(`pf:${pf.id}`)}>
                             {editable ? (
                               <FieldInput
                                 field={pageFieldAsField}
@@ -1806,7 +1918,7 @@ export function EntityRecords({
                         );
                       })}
                       {statuses.length > 0 && (
-                        <td className="px-2 py-1.5 align-top">
+                        <td className="px-2 py-1.5 align-top" style={colWidthStyle("__status__")}>
                           <Select value={newRowStatus} onValueChange={setNewRowStatus}>
                             <SelectTrigger className="h-8 w-44 text-sm"><SelectValue /></SelectTrigger>
                             <SelectContent>
@@ -1891,7 +2003,7 @@ export function EntityRecords({
                             editingCell?.recordId === record.id && editingCell?.fieldKey === f.fieldKey;
                           if (isEditingThis) {
                             return (
-                              <td key={f.id} className="px-2 py-1.5 max-w-[260px]">
+                              <td key={f.id} className="px-2 py-1.5 max-w-[260px]" style={colWidthStyle(`f:${f.id}`)}>
                                 <InlineCellEditor
                                   field={f}
                                   initial={valueToForm(f, values[f.fieldKey])}
@@ -1904,7 +2016,7 @@ export function EntityRecords({
                           }
                           if (f.fieldType === "boolean" && cellEditable) {
                             return (
-                              <td key={f.id} className="px-4 py-3 max-w-[240px]" style={cellStyle}>
+                              <td key={f.id} className="px-4 py-3 max-w-[240px]" style={{ ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
                                 <Switch
                                   checked={values[f.fieldKey] === true}
                                   onCheckedChange={(v) => commitCell(record, f, v)}
@@ -1915,7 +2027,7 @@ export function EntityRecords({
                           if (isFunction) {
                             const computed = formatFormulaResult(f.formulaConfigJson?.expression ?? "", allValues);
                             return (
-                              <td key={f.id} className="px-4 py-3 max-w-[240px] truncate" style={cellStyle}>
+                              <td key={f.id} className="px-4 py-3 max-w-[240px] truncate" style={{ ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
                                 {computed.error ? (
                                   <span className="text-red-400 text-xs" title={computed.text}>{t("fields.formulaError", "Ошибка формулы")}</span>
                                 ) : computed.text === "" ? (
@@ -1931,7 +2043,7 @@ export function EntityRecords({
                               key={f.id}
                               onClick={cellEditable ? () => setEditingCell({ recordId: record.id, fieldKey: f.fieldKey }) : undefined}
                               className={`px-4 py-3 max-w-[240px] truncate ${cellEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
-                              style={cellStyle}
+                              style={{ ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}
                               title={cellEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
                             >
                               {renderCellValue(f, values[f.fieldKey], userNames, cellText)}
@@ -1963,7 +2075,7 @@ export function EntityRecords({
                                 renderCellValue(relField, rel?.value, userNames, cellText)
                               );
                             return (
-                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={cellStyle}>
+                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px] truncate" style={{ ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
                                 {relAssignable && pageId != null ? (
                                   <RelationLinkPicker
                                     pageId={pageId}
@@ -1983,7 +2095,7 @@ export function EntityRecords({
                           const pageFieldAsField = { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
                           if (isEditingThis) {
                             return (
-                              <td key={`pf-${pf.id}`} className="px-2 py-1.5 max-w-[260px]">
+                              <td key={`pf-${pf.id}`} className="px-2 py-1.5 max-w-[260px]" style={colWidthStyle(`pf:${pf.id}`)}>
                                 <InlineCellEditor
                                   field={pageFieldAsField}
                                   initial={valueToForm(pageFieldAsField, pageValues[pf.fieldKey])}
@@ -1996,7 +2108,7 @@ export function EntityRecords({
                           }
                           if (pf.fieldType === "boolean" && cellEditable) {
                             return (
-                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={cellStyle}>
+                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={{ ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
                                 <Switch
                                   checked={pageValues[pf.fieldKey] === true}
                                   onCheckedChange={(v) => commitPageCell(record, pf, v)}
@@ -2007,7 +2119,7 @@ export function EntityRecords({
                           if (isFunction) {
                             const computed = formatFormulaResult(pf.formulaConfigJson?.expression ?? "", allValues);
                             return (
-                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px] truncate" style={cellStyle}>
+                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px] truncate" style={{ ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
                                 {computed.error ? (
                                   <span className="text-red-400 text-xs" title={computed.text}>{t("fields.formulaError", "Ошибка формулы")}</span>
                                 ) : computed.text === "" ? (
@@ -2023,7 +2135,7 @@ export function EntityRecords({
                               key={`pf-${pf.id}`}
                               onClick={cellEditable ? () => setEditingCell({ recordId: record.id, fieldKey: pfKey }) : undefined}
                               className={`px-4 py-3 max-w-[240px] truncate ${cellEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
-                              style={cellStyle}
+                              style={{ ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}
                               title={cellEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
                             >
                               {renderCellValue(pageFieldAsField, pageValues[pf.fieldKey], userNames, cellText)}
@@ -2031,7 +2143,7 @@ export function EntityRecords({
                           );
                         })}
                         {statuses.length > 0 && (
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3" style={colWidthStyle("__status__")}>
                             {editingCell?.recordId === record.id && editingCell?.fieldKey === "__status__" ? (
                               <Select
                                 defaultOpen

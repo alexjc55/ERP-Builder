@@ -2280,6 +2280,12 @@
     "he": "שינוי הקישור נכשל"
   },
   {
+    "key": "records.resizeColumn",
+    "ru": "Потяните, чтобы изменить ширину (двойной клик — сбросить)",
+    "en": "Drag to resize (double-click to reset)",
+    "he": "גרור לשינוי רוחב (לחיצה כפולה לאיפוס)"
+  },
+  {
     "key": "fields.created",
     "ru": "Поле создано",
     "en": "Field created",

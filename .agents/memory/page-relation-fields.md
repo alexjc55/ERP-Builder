@@ -57,3 +57,10 @@ Metric/chart/table widget values are computed bypassing the viewer's row/field p
 **Rule:** both `related-candidates` (label/search expose the field value) and `related-link` (mutation) must reject with 403 when `resolveFieldAccess(relatedField, perms, roleId, relatedEntityId) === "hidden"` — in addition to the entity record-view + own-scope checks. The UI hides the column via `editableColumn` (which already depends on non-hidden access), but a direct API call bypasses the UI.
 
 **Why:** a role with related-entity view but a HIDDEN specific related field could otherwise enumerate/search that field's values through candidates, or assign links it shouldn't, via direct API. Caught in code review. Mirror the same dual boundary (record-view gate + per-field hidden gate) that related-values applies to its column.
+
+## Resizable records-table columns (viewer-local, auto-layout clamp)
+**Rule:** column widths in the records table are a per-viewer localStorage preference (key `erp:colwidths:{entityId}:{pageId}`), NOT a server contract. To make the `table-layout: auto` table actually honour a width, EVERY cell in that column (totals header, main header, add-row, and all body td variants — entity + page incl. relation/boolean/function/inline-editor) must carry `width+minWidth+maxWidth` of the same value; otherwise the widest unconstrained cell wins and the width is ignored.
+
+**Why:** applying the width only to the header (or via a single `<col>`) does not constrain auto-layout — content-driven cells override it, and per-cell `max-w-[240px]` keeps truncating even in a wider column.
+
+**How to apply:** column keys are `f:{id}` / `pf:{id}` / `__status__`. A window-level pointer drag from a header-edge handle updates width live and persists on pointerup; an in-flight drag MUST be torn down on unmount and on window `blur` (ref-held idempotent cleanup that also restores `document.body` cursor/userSelect), or listeners/body styles leak across navigation. Double-click the handle deletes the stored width (reset to natural).
