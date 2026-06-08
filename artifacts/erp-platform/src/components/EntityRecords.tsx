@@ -2099,7 +2099,7 @@ export function EntityRecords({
                             editingCell?.recordId === record.id && editingCell?.fieldKey === f.fieldKey;
                           if (isEditingThis) {
                             return (
-                              <td key={f.id} className="px-2 py-1.5 max-w-[260px]" style={colWidthStyle(`f:${f.id}`)}>
+                              <td key={f.id} className="px-4 py-3 max-w-[240px]" style={colWidthStyle(`f:${f.id}`)}>
                                 <InlineCellEditor
                                   field={f}
                                   initial={valueToForm(f, values[f.fieldKey])}
@@ -2191,7 +2191,7 @@ export function EntityRecords({
                           const pageFieldAsField = { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
                           if (isEditingThis) {
                             return (
-                              <td key={`pf-${pf.id}`} className="px-2 py-1.5 max-w-[260px]" style={colWidthStyle(`pf:${pf.id}`)}>
+                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={colWidthStyle(`pf:${pf.id}`)}>
                                 <InlineCellEditor
                                   field={pageFieldAsField}
                                   initial={valueToForm(pageFieldAsField, pageValues[pf.fieldKey])}
@@ -2915,7 +2915,7 @@ function InlineCellEditor({
       <Textarea
         autoFocus
         rows={2}
-        className="text-sm"
+        className="min-h-0 w-full resize-none rounded-sm border-0 bg-transparent p-0 text-sm leading-snug shadow-none focus-visible:ring-1 focus-visible:ring-blue-400"
         value={String(draft ?? "")}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Escape") { cancelRef.current = true; (e.target as HTMLTextAreaElement).blur(); } }}
@@ -2937,7 +2937,7 @@ function InlineCellEditor({
     <Input
       autoFocus
       type={inputType}
-      className="h-8 text-sm"
+      className="h-auto w-full rounded-sm border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-1 focus-visible:ring-blue-400"
       value={draft === "" || draft === undefined ? "" : String(draft)}
       onChange={(e) => setDraft(e.target.value)}
       onKeyDown={(e) => {
