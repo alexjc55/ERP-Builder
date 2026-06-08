@@ -22,6 +22,17 @@ Page-fields of type `relation` (config `{relationId, relatedFieldKey}` in `relat
 
 **Why:** the frontend derives displayed columns straight from this endpoint; filtering only on the client leaks restricted column existence/labels/config. The related-values endpoint already filters values by role, but metadata must be gated at its own source.
 
+## relation-options for widget editors is gated by `pages`, not `entities`
+**Rule:** the entity-keyed `GET /entities/:entityId/relation-options` backs the dashboard widget editors (metric related fields, table related columns), so it must be gated by the SAME cap as widget editing (`requireAdmin("pages")`), not `requireAdmin("entities")`. The page-keyed variant is also `pages`.
+
+**Why:** a role that can build dashboards but lacks the entities-builder cap was locked out of configuring related metrics/columns — a capability regression. Gate config-helper endpoints by the cap of the screen that consumes them.
+
+## Table widget needs ≥1 column across direct OR related
+`validateTableConfig` must accept a config where `fieldKeys` is empty as long as `relatedColumns` has at least one entry (related-only tables are valid). Requiring non-empty `fieldKeys` breaks the related-only UX the frontend allows.
+
+## `relation` is a PAGE-FIELD-only type sharing the entity FieldType enum
+The `relation` value lives in the shared `FieldType` OpenAPI enum (used by BOTH entity-field and page-field create/update bodies), but it is only valid for page-fields (it needs relationConfigJson). Entity-field create/update must reject `fieldType === "relation"` server-side, and the entity-field type picker must not offer it. **Why:** shared contract enums leak new values to every consumer; constrain invalid ones at each server boundary.
+
 ## Widgets are admin-authoritative but visibility-gated
 Metric/chart/table widget values are computed bypassing the viewer's row/field perms (real totals), but only after page access + per-widget role visibility pass. Related columns/metrics inherit this — do not re-filter widget values by viewer perms.
 

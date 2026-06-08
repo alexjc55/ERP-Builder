@@ -273,7 +273,10 @@ async function validateChartConfig(chart: ChartSpec | null | undefined): Promise
  */
 async function validateTableConfig(table: TableSpec | null | undefined): Promise<string | null> {
   if (!table) return "Table config is required";
-  if (!Array.isArray(table.fieldKeys) || table.fieldKeys.length === 0) {
+  const fieldKeys = Array.isArray(table.fieldKeys) ? table.fieldKeys : [];
+  const relatedColumns = table.relatedColumns ?? [];
+  // A table widget needs at least one column overall — direct OR related.
+  if (fieldKeys.length === 0 && relatedColumns.length === 0) {
     return "At least one column is required";
   }
 
@@ -289,14 +292,14 @@ async function validateTableConfig(table: TableSpec | null | undefined): Promise
     .from(entityFieldsTable)
     .where(eq(entityFieldsTable.entityId, table.entityId));
   const known = new Set(fields.map((f) => f.fieldKey));
-  for (const key of table.fieldKeys) {
+  for (const key of fieldKeys) {
     // STATUS_COLUMN_KEY is a synthetic column (the record's lifecycle status),
     // not a stored field, so it is exempt from the field-existence check.
     if (key === STATUS_COLUMN_KEY) continue;
     if (!known.has(key)) return `Field "${key}" not found on entity ${table.entityId}`;
   }
 
-  for (const rc of table.relatedColumns ?? []) {
+  for (const rc of relatedColumns) {
     if (!rc || typeof rc.relationId !== "number" || !rc.relatedFieldKey) {
       return "Related column requires relationId and relatedFieldKey";
     }

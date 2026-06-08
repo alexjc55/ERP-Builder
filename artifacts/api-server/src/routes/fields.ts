@@ -97,6 +97,14 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
     return;
   }
 
+  // "relation" is a PAGE-FIELD-only type (it derives values from a linked record
+  // via relationConfigJson). Entity fields share the FieldType enum but must not
+  // accept it — reject so the shared contract cannot create an invalid column.
+  if (parsed.data.fieldType === "relation") {
+    res.status(400).json({ error: 'Field type "relation" is not valid for entity fields' });
+    return;
+  }
+
   if (parsed.data.fieldType === "select" && (!parsed.data.optionsJson || parsed.data.optionsJson.length === 0)) {
     res.status(400).json({ error: "Select fields require at least one option" });
     return;
@@ -229,6 +237,11 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
       return;
     }
     updateData.fieldKey = key;
+  }
+
+  if (body.fieldType === "relation") {
+    res.status(400).json({ error: 'Field type "relation" is not valid for entity fields' });
+    return;
   }
 
   const nextType = body.fieldType ?? current.fieldType;

@@ -833,9 +833,11 @@ async function buildRelationOptions(entityId: number): Promise<
 /**
  * Entity-keyed variant of relation-options: used by the dashboard widget editors
  * (metric related fields, table related columns) where the entity is chosen
- * freely rather than derived from a page. Admin-only (backs admin config UIs).
+ * freely rather than derived from a page. Gated by the SAME capability as widget
+ * editing (`pages`), so a role that can configure dashboards but lacks the
+ * entities builder cap can still pick related fields/columns.
  */
-router.get("/entities/:entityId/relation-options", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
+router.get("/entities/:entityId/relation-options", requireAuth, requireAdmin("pages"), async (req, res): Promise<void> => {
   const params = GetEntityRelationOptionsParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
