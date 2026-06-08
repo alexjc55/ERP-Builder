@@ -4146,6 +4146,12 @@
     "he": "הגדרה"
   },
   {
+    "key": "dash.analyticsSection",
+    "ru": "Аналитика",
+    "en": "Analytics",
+    "he": "אנליטיקה"
+  },
+  {
     "key": "dash.empty",
     "ru": "Виджеты ещё не добавлены",
     "en": "No widgets yet",

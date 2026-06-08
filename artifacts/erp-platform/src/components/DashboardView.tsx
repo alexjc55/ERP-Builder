@@ -558,7 +558,7 @@ function EditWidgetCell({
   );
 }
 
-export default function DashboardView({ pageId }: { pageId: number }) {
+export default function DashboardView({ pageId, embedded = false }: { pageId: number; embedded?: boolean }) {
   const ml = useML();
   const t = useT();
   const { toast } = useToast();
@@ -633,32 +633,46 @@ export default function DashboardView({ pageId }: { pageId: number }) {
   const openCreate = () => { setEditingWidget(null); setDialogOpen(true); };
   const openEdit = (w: DashboardWidget) => { setEditingWidget(w); setDialogOpen(true); };
 
+  // Embedded above a records table: stay invisible (no empty card, no skeleton
+  // flash) for viewers without widgets. Editors still see the toggle so they can
+  // add the first widget.
+  if (embedded && !isEditor && sortedData.length === 0) return null;
+
   return (
     <div className="space-y-4">
       {isEditor && (
-        <div className="flex items-center justify-end gap-2">
-          {editMode && (
-            <Button onClick={openCreate} size="sm" className="bg-blue-600 hover:bg-blue-700 gap-2">
-              <Plus className="w-4 h-4" />
-              {t("dash.addWidget", "Добавить виджет")}
-            </Button>
+        <div className={cn("flex items-center gap-2", embedded ? "justify-between" : "justify-end")}>
+          {embedded && (
+            <span className="text-sm font-semibold text-slate-600">
+              {t("dash.analyticsSection", "Аналитика")}
+            </span>
           )}
-          <Button
-            onClick={() => setEditMode((v) => !v)}
-            size="sm"
-            variant={editMode ? "default" : "outline"}
-            className="gap-2"
-          >
-            <Settings2 className="w-4 h-4" />
-            {editMode ? t("dash.done", "Готово") : t("dash.configure", "Настроить")}
-          </Button>
+          <div className="flex items-center gap-2">
+            {editMode && (
+              <Button onClick={openCreate} size="sm" className="bg-blue-600 hover:bg-blue-700 gap-2">
+                <Plus className="w-4 h-4" />
+                {t("dash.addWidget", "Добавить виджет")}
+              </Button>
+            )}
+            <Button
+              onClick={() => setEditMode((v) => !v)}
+              size="sm"
+              variant={editMode ? "default" : "outline"}
+              className="gap-2"
+            >
+              <Settings2 className="w-4 h-4" />
+              {editMode ? t("dash.done", "Готово") : t("dash.configure", "Настроить")}
+            </Button>
+          </div>
         </div>
       )}
 
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 w-full" />)}
-        </div>
+        embedded ? null : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 w-full" />)}
+          </div>
+        )
       ) : editMode ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 auto-rows-[8rem]">
           {sortedEdit.map((w, i) => (
@@ -686,11 +700,13 @@ export default function DashboardView({ pageId }: { pageId: number }) {
           </button>
         </div>
       ) : sortedData.length === 0 ? (
-        <Card className="border-slate-200 shadow-sm">
-          <CardContent className="text-center py-16 text-slate-400">
-            {t("dash.emptyViewer", "На этой панели пока нет виджетов")}
-          </CardContent>
-        </Card>
+        embedded ? null : (
+          <Card className="border-slate-200 shadow-sm">
+            <CardContent className="text-center py-16 text-slate-400">
+              {t("dash.emptyViewer", "На этой панели пока нет виджетов")}
+            </CardContent>
+          </Card>
+        )
       ) : (
         <div
           className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 auto-rows-[8rem]"

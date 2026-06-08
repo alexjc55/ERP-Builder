@@ -25,7 +25,14 @@ A page can be one of three mutually exclusive types: **normal (optionally entity
 Must be enforced on **every** path that can change page type, against the **effective final state** (current DB row merged with the patch), not just the fields present in a request:
 - `PUT /pages/:id`: load current `{mirrorEntityId, isDashboard}`, compute effective values, reject conflicts. **Why:** flipping only `isDashboard` on a page that already mirrors, or setting `mirrorEntityId` while omitting `isDashboard`, would otherwise slip through.
 - `routes/entities.ts validatePageBinding`: reject binding an entity to a page that is a dashboard (or mirror).
-- Widget create requires the target page to actually be a dashboard (`isDashboardPage`).
+- Widget create only requires the target page to **exist** (`pageExists`), NOT to be a dashboard — see "Widgets are page-scoped, not dashboard-scoped" below. Attaching widgets does not change page type, so it never threatens this invariant.
+
+## Widgets are page-scoped, not dashboard-scoped (analytics strip on records pages)
+- `dashboard_widgets` may live on ANY page. A dashboard page renders them as its whole body; a **normal entity-bound or mirror page renders them as an analytics strip above the records table**. **Why:** the user wanted dashboard-style widgets above ordinary record tables, and any FUTURE widget variant must appear there automatically.
+- Reuse is achieved by **embedding the same `DashboardView` component** (an optional `embedded` prop), NOT by duplicating widget rendering. So new widget variants added to the dashboard are automatically available on records pages — do not fork the widget UI.
+- `embedded` mode: returns `null` for non-editor viewers with no widgets (no empty card / no skeleton flash on every records page); still shows the editor toggle (gated by `canAdmin("pages")`) so admins can add the first widget; section labeled `dash.analyticsSection` ("Аналитика").
+- The embedded strip is rendered in `dynamic.tsx` as a **sibling ABOVE `EntityRecords`**, NOT inside it. **Why:** `EntityRecords` early-returns on `!canView` (no entity record:view) and on no-fields, both of which would hide the widgets. But widget role-visibility AND the `pages` admin cap (widget edit mode) are **independent** of entity `record:view`, so a page-admin or widget-authorized viewer who lacks record:view must still see/manage widgets. Keeping the strip outside `EntityRecords` bypasses that gating.
+- Server data endpoint (`GET /pages/:id/dashboard/data`) was already page-type-agnostic (only `canAccessPage` + per-widget role visibility). The admin-authoritative totals are safe on records pages for the same reason as dashboards: values are computed only for widgets the viewer is authorized to see (the two gates), independent of the records table's own row/field RBAC.
 
 ## RBAC
 - Widget CRUD/reorder is gated by the existing **`pages`** admin cap — managing dashboards == managing pages. No new RBAC cap was added.

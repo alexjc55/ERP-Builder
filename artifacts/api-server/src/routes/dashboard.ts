@@ -407,13 +407,17 @@ function widgetVisibleToRole(visibleRoleIds: number[] | null, roleId: number, su
   return visibleRoleIds.includes(roleId);
 }
 
-async function isDashboardPage(pageId: number): Promise<boolean> {
+// Widgets may live on ANY page (dashboard pages render them as the whole body;
+// normal entity-bound and mirror pages render them as an analytics strip above
+// the records table). We only require that the target page exists so we never
+// create orphan widgets.
+async function pageExists(pageId: number): Promise<boolean> {
   const [p] = await db
-    .select({ isDashboard: pagesTable.isDashboard })
+    .select({ id: pagesTable.id })
     .from(pagesTable)
     .where(eq(pagesTable.id, pageId))
     .limit(1);
-  return Boolean(p?.isDashboard);
+  return Boolean(p);
 }
 
 // GET full widget configs for editing (admin "pages").
@@ -442,8 +446,8 @@ router.post("/pages/:id/dashboard/widgets", requireAuth, requireAdmin("pages"), 
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  if (!(await isDashboardPage(params.data.id))) {
-    res.status(404).json({ error: "Dashboard page not found" });
+  if (!(await pageExists(params.data.id))) {
+    res.status(404).json({ error: "Page not found" });
     return;
   }
   const configError = await validateConfig(parsed.data.config as WidgetConfigShape);

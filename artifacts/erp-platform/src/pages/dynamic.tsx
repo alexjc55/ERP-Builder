@@ -73,11 +73,19 @@ export default function DynamicPage() {
       {page.isDashboard ? (
         <DashboardView pageId={page.id} />
       ) : entity ? (
-        <EntityRecords
-          entityId={entity.id}
-          visibleFieldKeys={mirrorEntity ? page.mirrorFieldKeysJson ?? undefined : undefined}
-          pageId={mirrorEntity ? page.id : undefined}
-        />
+        <>
+          {/* Analytics widgets (same engine as dashboards) above the records
+              table. Rendered as a sibling here — NOT inside EntityRecords —
+              so it bypasses EntityRecords' record-view/no-fields gating:
+              widget role-visibility and the "pages" admin cap are independent
+              of entity record:view. */}
+          <DashboardView pageId={page.id} embedded />
+          <EntityRecords
+            entityId={entity.id}
+            visibleFieldKeys={mirrorEntity ? page.mirrorFieldKeysJson ?? undefined : undefined}
+            pageId={mirrorEntity ? page.id : undefined}
+          />
+        </>
       ) : (
         <Card className="border-slate-200 shadow-sm">
           <CardContent className="flex flex-col items-center justify-center text-center py-20 gap-3">
