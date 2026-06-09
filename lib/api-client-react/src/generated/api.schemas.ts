@@ -294,6 +294,7 @@ export interface UserOption {
   id: number;
   name: string;
   roleId: number;
+  roleIds: number[];
 }
 
 export interface ImpersonateInput {

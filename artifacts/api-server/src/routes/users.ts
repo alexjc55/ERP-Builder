@@ -217,9 +217,31 @@ router.get("/users/options", requireAuth, async (_req, res): Promise<void> => {
     })
     .from(usersTable)
     .orderBy(usersTable.firstName, usersTable.lastName);
+  // A user can hold additional roles beyond their primary one. Resolve the full
+  // role set per user so `user`-field role restrictions match on ANY of the
+  // user's roles, not just the primary role (otherwise a manager added as a
+  // secondary role would be invisible in the picker).
+  const userIds = rows.map((u) => u.id);
+  const rolesByUser = new Map<number, number[]>();
+  if (userIds.length > 0) {
+    const extraRoles = await db
+      .select({ userId: userRolesTable.userId, roleId: userRolesTable.roleId })
+      .from(userRolesTable)
+      .where(inArray(userRolesTable.userId, userIds));
+    for (const r of extraRoles) {
+      const arr = rolesByUser.get(r.userId) ?? [];
+      arr.push(r.roleId);
+      rolesByUser.set(r.userId, arr);
+    }
+  }
   const options = rows.map((u) => {
     const name = [u.firstName, u.lastName].filter(Boolean).join(" ").trim();
-    return { id: u.id, name: name || u.email, roleId: u.roleId };
+    return {
+      id: u.id,
+      name: name || u.email,
+      roleId: u.roleId,
+      roleIds: [...new Set([u.roleId, ...(rolesByUser.get(u.id) ?? [])])],
+    };
   });
   res.json(options);
 });

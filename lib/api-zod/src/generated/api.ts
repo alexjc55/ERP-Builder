@@ -606,7 +606,8 @@ export const CreateUserBody = zod.object({
 export const ListUserOptionsResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "roleId": zod.number()
+  "roleId": zod.number(),
+  "roleIds": zod.array(zod.number())
 })
 export const ListUserOptionsResponse = zod.array(ListUserOptionsResponseItem)
 

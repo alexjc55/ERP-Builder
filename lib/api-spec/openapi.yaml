@@ -2934,7 +2934,7 @@ components:
 
     UserOption:
       type: object
-      required: [id, name, roleId]
+      required: [id, name, roleId, roleIds]
       properties:
         id:
           type: integer
@@ -2942,6 +2942,10 @@ components:
           type: string
         roleId:
           type: integer
+        roleIds:
+          type: array
+          items:
+            type: integer
 
     UserProfile:
       type: object

@@ -2708,11 +2708,17 @@ function RecordHistoryList({
   );
 }
 
-/** Restrict user options to a `user`-field's allowed roles (empty/unset = all). */
+/** Restrict user options to a `user`-field's allowed roles (empty/unset = all).
+ * Matches on the user's FULL role set (primary + additional), so a user who
+ * holds the required role as a secondary role still appears in the picker. */
 function filterUserOptionsByRoles(field: Field, options: UserOption[]): UserOption[] {
   const allowed = field.userConfigJson?.allowedRoleIds;
   if (!Array.isArray(allowed) || allowed.length === 0) return options;
-  return options.filter((u) => allowed.includes(u.roleId));
+  const allowedSet = new Set(allowed);
+  return options.filter((u) => {
+    const userRoles = u.roleIds && u.roleIds.length > 0 ? u.roleIds : [u.roleId];
+    return userRoles.some((rid) => allowedSet.has(rid));
+  });
 }
 
 /**
