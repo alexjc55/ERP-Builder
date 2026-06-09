@@ -4,7 +4,7 @@ import { db, usersTable, rolesTable, guestLinksTable, loginHistoryTable } from "
 import { eq, desc, and, isNull } from "drizzle-orm";
 import { signToken } from "../lib/jwt";
 import { requireAuth } from "../middlewares/auth";
-import { requireAdmin, loadPermissions } from "../middlewares/permissions";
+import { requireAdmin, loadRoleContext } from "../middlewares/permissions";
 import {
   RedeemGuestLinkBody,
   CreateGuestLinkBody,
@@ -108,7 +108,7 @@ router.post("/guest/redeem", async (req, res): Promise<void> => {
     .from(rolesTable)
     .where(eq(rolesTable.id, user.roleId));
 
-  const permissions = await loadPermissions(user.roleId);
+  const { roleIds, permissions } = await loadRoleContext(user.id, user.roleId);
 
   res.json({
     token,
@@ -118,6 +118,7 @@ router.post("/guest/redeem", async (req, res): Promise<void> => {
       firstName: user.firstName,
       lastName: user.lastName,
       roleId: user.roleId,
+      roleIds,
       roleName: role?.nameJson ?? {},
       language: user.language,
       direction: user.direction,

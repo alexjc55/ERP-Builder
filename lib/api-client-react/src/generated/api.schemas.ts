@@ -269,7 +269,10 @@ export interface UserProfile {
   email: string;
   firstName: string;
   lastName: string;
+  /** Primary role (used by JWT, display, impersonation, guest flows). */
   roleId: number;
+  /** All roles assigned to the user (includes the primary). Effective permissions are the most-permissive union across these roles. */
+  roleIds: number[];
   roleName?: MultilingualText;
   language: UserProfileLanguage;
   direction: UserProfileDirection;
@@ -394,7 +397,10 @@ export interface User {
   email: string;
   firstName: string;
   lastName: string;
+  /** Primary role (used by JWT, display, impersonation, guest flows). */
   roleId: number;
+  /** All roles assigned to the user (includes the primary). */
+  roleIds: number[];
   roleName?: MultilingualText;
   language: UserLanguage;
   direction: UserDirection;
@@ -438,6 +444,8 @@ export interface UserInput {
   firstName: string;
   lastName: string;
   roleId: number;
+  /** All roles to assign. If omitted, defaults to [roleId]. The primary role (roleId) is always included. */
+  roleIds?: number[];
   language?: UserInputLanguage;
   direction?: UserInputDirection;
   /** @nullable */
@@ -466,6 +474,8 @@ export interface UserUpdate {
   firstName?: string;
   lastName?: string;
   roleId?: number;
+  /** Replaces the full set of assigned roles. The primary role (roleId) is always included. */
+  roleIds?: number[];
   language?: UserUpdateLanguage;
   direction?: UserUpdateDirection;
   /** @nullable */

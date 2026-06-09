@@ -19,7 +19,7 @@ import {
 import { eq, sql, gte, and, isNull, inArray, asc } from "drizzle-orm";
 import sanitizeHtml from "sanitize-html";
 import { requireAuth } from "../middlewares/auth";
-import { requireAdmin, getPermissions } from "../middlewares/permissions";
+import { requireAdmin, getPermissions, getUserRoleIds } from "../middlewares/permissions";
 import {
   ListDashboardWidgetsParams,
   CreateDashboardWidgetParams,
@@ -954,11 +954,14 @@ function canAccessPage(perms: { superAdmin: boolean; pageIds: number[] }, pageId
   return perms.superAdmin || perms.pageIds.includes(pageId);
 }
 
-/** True if a widget is visible to the role (null/empty visibility = all roles on the page). */
-function widgetVisibleToRole(visibleRoleIds: number[] | null, roleId: number, superAdmin: boolean): boolean {
+/**
+ * True if a widget is visible to the user (null/empty visibility = all roles on
+ * the page). With multiple roles, visibility is granted if ANY role qualifies.
+ */
+function widgetVisibleToRole(visibleRoleIds: number[] | null, roleIds: number[], superAdmin: boolean): boolean {
   if (superAdmin) return true;
   if (!visibleRoleIds || visibleRoleIds.length === 0) return true;
-  return visibleRoleIds.includes(roleId);
+  return visibleRoleIds.some((id) => roleIds.includes(id));
 }
 
 /**
@@ -969,15 +972,16 @@ function widgetVisibleToRole(visibleRoleIds: number[] | null, roleId: number, su
  */
 function canEditNotesContent(
   perms: RolePermissions,
-  roleId: number,
+  roleIds: number[],
   pageId: number,
   visibleRoleIds: number[] | null,
   notes: NotesSpec,
 ): boolean {
   if (perms.superAdmin || perms.admin.pages) return true;
   if (!canAccessPage(perms, pageId)) return false;
-  if (!widgetVisibleToRole(visibleRoleIds, roleId, perms.superAdmin)) return false;
-  return (notes.editableRoleIds ?? []).includes(roleId);
+  if (!widgetVisibleToRole(visibleRoleIds, roleIds, perms.superAdmin)) return false;
+  const editable = notes.editableRoleIds ?? [];
+  return roleIds.some((id) => editable.includes(id));
 }
 
 // Widgets may live on ANY page (dashboard pages render them as the whole body;
@@ -1135,8 +1139,8 @@ router.put("/dashboard/widgets/:wid/notes-content", requireAuth, async (req, res
   }
   const notes = config.notes;
   const perms = await getPermissions(req);
-  const roleId = req.user!.roleId;
-  if (!canEditNotesContent(perms, roleId, widget.pageId, widget.visibleRoleIdsJson ?? null, notes)) {
+  const roleIds = await getUserRoleIds(req);
+  if (!canEditNotesContent(perms, roleIds, widget.pageId, widget.visibleRoleIdsJson ?? null, notes)) {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
@@ -1203,7 +1207,7 @@ router.get("/pages/:id/dashboard/data", requireAuth, async (req, res): Promise<v
     res.status(403).json({ error: "Forbidden" });
     return;
   }
-  const roleId = req.user!.roleId;
+  const roleIds = await getUserRoleIds(req);
 
   const widgets = await db
     .select()
@@ -1212,7 +1216,7 @@ router.get("/pages/:id/dashboard/data", requireAuth, async (req, res): Promise<v
     .orderBy(asc(dashboardWidgetsTable.sortOrder));
 
   const visible = widgets.filter((w) =>
-    widgetVisibleToRole(w.visibleRoleIdsJson ?? null, roleId, perms.superAdmin),
+    widgetVisibleToRole(w.visibleRoleIdsJson ?? null, roleIds, perms.superAdmin),
   );
 
   const data = await Promise.all(
@@ -1263,7 +1267,7 @@ router.get("/pages/:id/dashboard/data", requireAuth, async (req, res): Promise<v
           ...base,
           widgetType: "notes" as const,
           notes,
-          canEditNotes: canEditNotesContent(perms, roleId, w.pageId, w.visibleRoleIdsJson ?? null, config.notes),
+          canEditNotes: canEditNotesContent(perms, roleIds, w.pageId, w.visibleRoleIdsJson ?? null, config.notes),
           formula: null,
           format: config.format ?? null,
           metrics: {},

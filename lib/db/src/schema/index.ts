@@ -1,4 +1,5 @@
 export * from "./users";
+export * from "./user_roles";
 export * from "./guest_links";
 export * from "./roles";
 export * from "./pages";

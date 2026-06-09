@@ -7,6 +7,7 @@ import {
   requireRecordParam,
   assertRecord,
   getPermissions,
+  getUserRoleIds,
   effectiveScope,
   effectiveStatusVisibility,
   effectiveRecordPerm,
@@ -315,14 +316,14 @@ async function fieldAccessContext(
   pageId?: number,
 ): Promise<{ hidden: Set<string>; editable: Set<string> }> {
   const perms = await getPermissions(req);
-  const roleId = req.user!.roleId;
+  const roleIds = await getUserRoleIds(req);
   // Resolve the effective record perm once (honoring a mirror-page override) so
   // write-derived field access matches the action gate for this page context.
   const rp = await effectiveRecordPerm(req, perms, entityId, pageId);
   const hidden = new Set<string>();
   const editable = new Set<string>();
   for (const f of fields) {
-    const access = resolveFieldAccess(f, perms, roleId, entityId, rp);
+    const access = resolveFieldAccess(f, perms, roleIds, entityId, rp);
     if (access === "hidden") hidden.add(f.fieldKey);
     if (access === "edit") editable.add(f.fieldKey);
   }
@@ -1004,7 +1005,8 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
         return;
       }
       const allowedRoleIds = (match.allowedRoleIds as number[]) ?? [];
-      if (allowedRoleIds.length > 0 && !allowedRoleIds.includes(req.user!.roleId)) {
+      const userRoleIds = await getUserRoleIds(req);
+      if (allowedRoleIds.length > 0 && !allowedRoleIds.some((id) => userRoleIds.includes(id))) {
         res.status(403).json({ error: "Your role is not allowed to perform this transition" });
         return;
       }

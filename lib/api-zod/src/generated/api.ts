@@ -123,7 +123,8 @@ export const LoginResponse = zod.object({
   "email": zod.string(),
   "firstName": zod.string(),
   "lastName": zod.string(),
-  "roleId": zod.number(),
+  "roleId": zod.number().describe('Primary role (used by JWT, display, impersonation, guest flows).'),
+  "roleIds": zod.array(zod.number()).describe('All roles assigned to the user (includes the primary). Effective permissions are the most-permissive union across these roles.'),
   "roleName": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -184,7 +185,8 @@ export const GetMeResponse = zod.object({
   "email": zod.string(),
   "firstName": zod.string(),
   "lastName": zod.string(),
-  "roleId": zod.number(),
+  "roleId": zod.number().describe('Primary role (used by JWT, display, impersonation, guest flows).'),
+  "roleIds": zod.array(zod.number()).describe('All roles assigned to the user (includes the primary). Effective permissions are the most-permissive union across these roles.'),
   "roleName": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -243,7 +245,8 @@ export const UpdateMeResponse = zod.object({
   "email": zod.string(),
   "firstName": zod.string(),
   "lastName": zod.string(),
-  "roleId": zod.number(),
+  "roleId": zod.number().describe('Primary role (used by JWT, display, impersonation, guest flows).'),
+  "roleIds": zod.array(zod.number()).describe('All roles assigned to the user (includes the primary). Effective permissions are the most-permissive union across these roles.'),
   "roleName": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -300,7 +303,8 @@ export const ImpersonateResponse = zod.object({
   "email": zod.string(),
   "firstName": zod.string(),
   "lastName": zod.string(),
-  "roleId": zod.number(),
+  "roleId": zod.number().describe('Primary role (used by JWT, display, impersonation, guest flows).'),
+  "roleIds": zod.array(zod.number()).describe('All roles assigned to the user (includes the primary). Effective permissions are the most-permissive union across these roles.'),
   "roleName": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -354,7 +358,8 @@ export const StopImpersonationResponse = zod.object({
   "email": zod.string(),
   "firstName": zod.string(),
   "lastName": zod.string(),
-  "roleId": zod.number(),
+  "roleId": zod.number().describe('Primary role (used by JWT, display, impersonation, guest flows).'),
+  "roleIds": zod.array(zod.number()).describe('All roles assigned to the user (includes the primary). Effective permissions are the most-permissive union across these roles.'),
   "roleName": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -412,7 +417,8 @@ export const RedeemGuestLinkResponse = zod.object({
   "email": zod.string(),
   "firstName": zod.string(),
   "lastName": zod.string(),
-  "roleId": zod.number(),
+  "roleId": zod.number().describe('Primary role (used by JWT, display, impersonation, guest flows).'),
+  "roleIds": zod.array(zod.number()).describe('All roles assigned to the user (includes the primary). Effective permissions are the most-permissive union across these roles.'),
   "roleName": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -555,7 +561,8 @@ export const ListUsersResponse = zod.object({
   "email": zod.string(),
   "firstName": zod.string(),
   "lastName": zod.string(),
-  "roleId": zod.number(),
+  "roleId": zod.number().describe('Primary role (used by JWT, display, impersonation, guest flows).'),
+  "roleIds": zod.array(zod.number()).describe('All roles assigned to the user (includes the primary).'),
   "roleName": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -586,6 +593,7 @@ export const CreateUserBody = zod.object({
   "firstName": zod.string(),
   "lastName": zod.string(),
   "roleId": zod.number(),
+  "roleIds": zod.array(zod.number()).optional().describe('All roles to assign. If omitted, defaults to [roleId]. The primary role (roleId) is always included.'),
   "language": zod.enum(['ru', 'en', 'he']).default(createUserBodyLanguageDefault),
   "direction": zod.enum(['ltr', 'rtl']).default(createUserBodyDirectionDefault),
   "startPageId": zod.number().nullish()
@@ -615,7 +623,8 @@ export const GetUserResponse = zod.object({
   "email": zod.string(),
   "firstName": zod.string(),
   "lastName": zod.string(),
-  "roleId": zod.number(),
+  "roleId": zod.number().describe('Primary role (used by JWT, display, impersonation, guest flows).'),
+  "roleIds": zod.array(zod.number()).describe('All roles assigned to the user (includes the primary).'),
   "roleName": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -642,6 +651,7 @@ export const UpdateUserBody = zod.object({
   "firstName": zod.string().optional(),
   "lastName": zod.string().optional(),
   "roleId": zod.number().optional(),
+  "roleIds": zod.array(zod.number()).optional().describe('Replaces the full set of assigned roles. The primary role (roleId) is always included.'),
   "language": zod.enum(['ru', 'en', 'he']).optional(),
   "direction": zod.enum(['ltr', 'rtl']).optional(),
   "startPageId": zod.number().nullish()
@@ -652,7 +662,8 @@ export const UpdateUserResponse = zod.object({
   "email": zod.string(),
   "firstName": zod.string(),
   "lastName": zod.string(),
-  "roleId": zod.number(),
+  "roleId": zod.number().describe('Primary role (used by JWT, display, impersonation, guest flows).'),
+  "roleIds": zod.array(zod.number()).describe('All roles assigned to the user (includes the primary).'),
   "roleName": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -692,7 +703,8 @@ export const BlockUserResponse = zod.object({
   "email": zod.string(),
   "firstName": zod.string(),
   "lastName": zod.string(),
-  "roleId": zod.number(),
+  "roleId": zod.number().describe('Primary role (used by JWT, display, impersonation, guest flows).'),
+  "roleIds": zod.array(zod.number()).describe('All roles assigned to the user (includes the primary).'),
   "roleName": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -719,7 +731,8 @@ export const UnblockUserResponse = zod.object({
   "email": zod.string(),
   "firstName": zod.string(),
   "lastName": zod.string(),
-  "roleId": zod.number(),
+  "roleId": zod.number().describe('Primary role (used by JWT, display, impersonation, guest flows).'),
+  "roleIds": zod.array(zod.number()).describe('All roles assigned to the user (includes the primary).'),
   "roleName": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),

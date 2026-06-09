@@ -16,6 +16,7 @@ import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage"
 import { requireAuth } from "../middlewares/auth";
 import {
   getPermissions,
+  getUserRoleIds,
   canRecord,
   effectiveScope,
   resolveFieldAccess,
@@ -54,7 +55,7 @@ async function canReadObjectPath(req: Request, objectPath: string): Promise<bool
   if (candidates.length === 0) return false;
 
   const perms = await getPermissions(req);
-  const roleId = req.user.roleId;
+  const roleIds = await getUserRoleIds(req);
   const userId = req.user.userId;
   const fieldsByEntity = new Map<number, EntityField[]>();
 
@@ -73,7 +74,7 @@ async function canReadObjectPath(req: Request, objectPath: string): Promise<bool
       (f) => f.fieldType === "file" && fileValueRefersTo(values[f.fieldKey], objectPath),
     );
     if (!holder) continue;
-    if (resolveFieldAccess(holder, perms, roleId, rec.entityId) === "hidden") continue;
+    if (resolveFieldAccess(holder, perms, roleIds, rec.entityId) === "hidden") continue;
     const { scope, scopeFieldKeys } = effectiveScope(perms, rec.entityId);
     if (scope === "own" && !recordOwnedBy(values, scopeFieldKeys, userId)) continue;
     return true;

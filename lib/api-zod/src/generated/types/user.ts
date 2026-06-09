@@ -14,7 +14,10 @@ export interface User {
   email: string;
   firstName: string;
   lastName: string;
+  /** Primary role (used by JWT, display, impersonation, guest flows). */
   roleId: number;
+  /** All roles assigned to the user (includes the primary). */
+  roleIds: number[];
   roleName?: MultilingualText;
   language: UserLanguage;
   direction: UserDirection;

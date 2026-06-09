@@ -5,6 +5,7 @@ import { requireAuth } from "../middlewares/auth";
 import {
   assertRecord,
   getPermissions,
+  getUserRoleIds,
   effectiveScope,
   recordOwnedBy,
   resolveFieldAccess,
@@ -102,10 +103,10 @@ router.get("/records/:id/audit", requireAuth, async (req, res): Promise<void> =>
     .from(entityFieldsTable)
     .where(and(eq(entityFieldsTable.entityId, record.entityId), eq(entityFieldsTable.isActive, true)))
     .orderBy(asc(entityFieldsTable.sortOrder));
-  const roleId = req.user!.roleId;
+  const roleIds = await getUserRoleIds(req);
   const hidden = new Set<string>();
   for (const f of fields) {
-    if (resolveFieldAccess(f, perms, roleId, record.entityId) === "hidden") hidden.add(f.fieldKey);
+    if (resolveFieldAccess(f, perms, roleIds, record.entityId) === "hidden") hidden.add(f.fieldKey);
   }
 
   /** Redact hidden keys from a stored JSON values snapshot (e.g. __deleted__). */

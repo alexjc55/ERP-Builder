@@ -20,6 +20,22 @@ Each role row carries a structured `permissionsJson` (JSONB) shape:
 - `/me` and login responses include the effective `permissions`; the web auth context derives `isSuperAdmin`, `canAdmin(area)`, `canRecord(entityId,action)`, `canPage(pageId)`.
 - Admin builder paths map to capabilities via `adminCapForPath()` (`/admin/users`→users, `/roles`→roles, `/pages`→pages, `/translations`→translations, `/entities*`→entities). Keep that map and the route `adminCap` props in sync when adding admin pages.
 
+## Multiple roles per user (most-permissive union)
+
+A user can hold MORE THAN ONE role via a `user_roles` join table (userId+roleId composite PK, FK cascade). `users.roleId` stays the PRIMARY role: it is what the JWT carries, what `roleName` displays, and what impersonation/escalation checks key off. The join table is the full set; the primary is always treated as a member even if a backfill gap drops its row.
+
+Effective permissions = the most-permissive union across ALL of a user's roles, computed fresh per request and merged by `mergePermissions`/`mergeRecordPerms`. A user with exactly one role returns that role's `permissionsJson` UNCHANGED (early `return list[0]`), so single-role behavior is byte-for-byte identical to before.
+
+**Why:** stacking roles must only ever ADD access, never silently weaken a restriction a granting role imposes.
+
+**How to apply:**
+- Merge rules: superAdmin / admin caps / CRUD booleans are OR'd; `pageIds` and `scopeFieldKeys` unioned; row `scope` "all" wins over "own"; hidden-status arrays are INTERSECTED (a status stays hidden only if EVERY granting role hides it).
+- **Read-boundary gate (critical):** `scope`, `scopeFieldKeys`, and the hidden-status/hidden-row arrays may only be folded from roles where `view === true`. A role that does not grant view must never widen `scope` to "all" or un-hide a status (intersecting its empty hidden list would). A non-granting/empty role must be incapable of relaxing another role's restriction.
+- Resolve role ids once per request via `getUserRoleIds(req)` (cached on `req._roleIds`, always includes the JWT primary); never re-query per check. Any code that gated on a single `roleId` (e.g. transition `allowedRoleIds`, widget role visibility, notes-edit) must use ANY-match against the role-id set.
+- Auth/guest payloads must include `roleIds` (OpenAPI `User`/`UserProfile` require it). Use `loadRoleContext(userId, primaryRoleId)` — it returns `{ roleIds, permissions }` in one pass so the join table isn't queried twice.
+- `resolveFieldAccess` / `mostPermissiveFieldPerm` take `roleIds: number[]` and pick the most-permissive field access (hidden < view < edit) across the set.
+- Users CRUD writes `user_roles` transactionally and always keeps the primary in the set. The UI's primary-role Select swaps the OLD primary out of the set (so changing a single-role user's role stays single-role); the additional-roles checkbox list is the rest of the set.
+
 ## Per-entity status visibility
 
 `records[entityId]` may carry two sparse arrays: `hiddenStatusIds` (picker/write boundary) and `hiddenRowStatusIds` (row read boundary). Stored sparsely — only OFF exceptions, so new statuses default to visible; absent config = all visible; superAdmin bypasses all.

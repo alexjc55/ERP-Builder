@@ -5298,6 +5298,30 @@
     "he": "תפקיד"
   },
   {
+    "key": "users.primaryRole",
+    "ru": "Основная роль",
+    "en": "Primary role",
+    "he": "תפקיד ראשי"
+  },
+  {
+    "key": "users.additionalRoles",
+    "ru": "Дополнительные роли",
+    "en": "Additional roles",
+    "he": "תפקידים נוספים"
+  },
+  {
+    "key": "users.additionalRolesHint",
+    "ru": "Права суммируются по всем ролям (выбирается наиболее разрешающий доступ).",
+    "en": "Permissions are combined across all roles (the most permissive access wins).",
+    "he": "ההרשאות משולבות מכל התפקידים (הגישה המתירנית ביותר גוברת)."
+  },
+  {
+    "key": "users.primaryRoleTag",
+    "ru": "основная",
+    "en": "primary",
+    "he": "ראשי"
+  },
+  {
     "key": "users.colStatus",
     "ru": "Статус",
     "en": "Status",

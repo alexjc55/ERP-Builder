@@ -16,7 +16,10 @@ export interface UserProfile {
   email: string;
   firstName: string;
   lastName: string;
+  /** Primary role (used by JWT, display, impersonation, guest flows). */
   roleId: number;
+  /** All roles assigned to the user (includes the primary). Effective permissions are the most-permissive union across these roles. */
+  roleIds: number[];
   roleName?: MultilingualText;
   language: UserProfileLanguage;
   direction: UserProfileDirection;

@@ -70,6 +70,7 @@ interface FormState {
   firstName: string;
   lastName: string;
   roleId: number;
+  roleIds: number[];
   language: UserInputLanguage;
   direction: UserInputDirection;
   isGuest: boolean;
@@ -98,6 +99,7 @@ export default function UsersPage() {
     firstName: "",
     lastName: "",
     roleId: 0,
+    roleIds: [],
     language: UserInputLanguage.ru,
     direction: UserInputDirection.ltr,
     isGuest: false,
@@ -110,6 +112,10 @@ export default function UsersPage() {
   const { data: roles = [] } = useListRoles();
 
   const superRoleIds = new Set(roles.filter((r) => r.permissionsJson?.superAdmin).map((r) => r.id));
+  const roleNameById = (id: number): string => {
+    const r = roles.find((x) => x.id === id);
+    return (r && ml(r.nameJson)) || "—";
+  };
   const canImpersonateUser = (u: User) =>
     canImpersonate && u.id !== currentUser?.id && (isSuperAdmin || !superRoleIds.has(u.roleId));
 
@@ -152,7 +158,8 @@ export default function UsersPage() {
 
   const openCreate = () => {
     setEditingUser(null);
-    setForm({ email: "", password: "", firstName: "", lastName: "", roleId: roles[0]?.id || 0, language: UserInputLanguage.ru, direction: UserInputDirection.ltr, isGuest: false });
+    const firstRole = roles[0]?.id || 0;
+    setForm({ email: "", password: "", firstName: "", lastName: "", roleId: firstRole, roleIds: firstRole ? [firstRole] : [], language: UserInputLanguage.ru, direction: UserInputDirection.ltr, isGuest: false });
     setDialogOpen(true);
   };
 
@@ -164,6 +171,7 @@ export default function UsersPage() {
       firstName: user.firstName,
       lastName: user.lastName,
       roleId: user.roleId,
+      roleIds: [...new Set([user.roleId, ...(user.roleIds ?? [])])],
       language: (user.language as unknown as UserInputLanguage) || UserInputLanguage.ru,
       direction: (user.direction as unknown as UserInputDirection) || UserInputDirection.ltr,
       isGuest: false,
@@ -178,6 +186,7 @@ export default function UsersPage() {
         firstName: form.firstName,
         lastName: form.lastName,
         roleId: form.roleId,
+        roleIds: [...new Set([form.roleId, ...form.roleIds])],
         language: form.language as unknown as import("@workspace/api-client-react").UserUpdateLanguage,
         direction: form.direction as unknown as import("@workspace/api-client-react").UserUpdateDirection,
       };
@@ -202,6 +211,7 @@ export default function UsersPage() {
         firstName: form.firstName,
         lastName: form.lastName,
         roleId: form.roleId,
+        roleIds: [...new Set([form.roleId, ...form.roleIds])],
         language: form.language,
         direction: form.direction,
       };
@@ -295,9 +305,18 @@ export default function UsersPage() {
                       </td>
                       <td className="px-4 py-3 text-slate-500">{user.email}</td>
                       <td className="px-4 py-3">
-                        <Badge variant="secondary" className="font-normal">
-                          {ml(user.roleName) || "—"}
-                        </Badge>
+                        <div className="flex flex-wrap items-center gap-1">
+                          <Badge variant="secondary" className="font-normal">
+                            {ml(user.roleName) || "—"}
+                          </Badge>
+                          {(user.roleIds ?? [])
+                            .filter((id) => id !== user.roleId)
+                            .map((id) => (
+                              <Badge key={id} variant="outline" className="font-normal text-slate-500">
+                                {roleNameById(id)}
+                              </Badge>
+                            ))}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-slate-500">
                         {LANG_LABELS[user.language] || user.language}
@@ -412,8 +431,21 @@ export default function UsersPage() {
               </div>
             )}
             <div className="space-y-1.5">
-              <Label>{t("users.colRole", "Роль")} *</Label>
-              <Select value={String(form.roleId)} onValueChange={(v) => setForm({ ...form, roleId: Number(v) })}>
+              <Label>{t("users.primaryRole", "Основная роль")} *</Label>
+              <Select
+                value={String(form.roleId)}
+                onValueChange={(v) => {
+                  const id = Number(v);
+                  setForm((f) => ({
+                    ...f,
+                    roleId: id,
+                    // Swap the previous primary out for the new one so changing
+                    // the role of a single-role user stays single-role. Any
+                    // explicitly added extra roles are preserved.
+                    roleIds: [...new Set([id, ...f.roleIds.filter((x) => x !== f.roleId)])],
+                  }));
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder={t("users.selectRole", "Выберите роль")} />
                 </SelectTrigger>
@@ -425,6 +457,42 @@ export default function UsersPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("users.additionalRoles", "Дополнительные роли")}</Label>
+              <div className="rounded-md border border-slate-200 divide-y divide-slate-100 max-h-44 overflow-y-auto">
+                {roles.map((r) => {
+                  const checked = form.roleIds.includes(r.id);
+                  const isPrimary = r.id === form.roleId;
+                  return (
+                    <label
+                      key={r.id}
+                      className={`flex items-center gap-2 px-3 py-2 text-sm ${isPrimary ? "opacity-70" : "cursor-pointer hover:bg-slate-50"}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={isPrimary}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            roleIds: e.target.checked
+                              ? [...new Set([...f.roleIds, r.id])]
+                              : f.roleIds.filter((x) => x !== r.id),
+                          }))
+                        }
+                      />
+                      <span className="text-slate-700">{ml(r.nameJson) || "—"}</span>
+                      {isPrimary && (
+                        <span className="text-xs text-slate-400">({t("users.primaryRoleTag", "основная")})</span>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-slate-400">
+                {t("users.additionalRolesHint", "Права суммируются по всем ролям (выбирается наиболее разрешающий доступ).")}
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">

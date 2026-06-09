@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
-import { db, usersTable, rolesTable, loginHistoryTable } from "@workspace/db";
-import { eq, ilike, and, sql, desc } from "drizzle-orm";
+import { db, usersTable, rolesTable, userRolesTable, loginHistoryTable } from "@workspace/db";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
 import { emitEvent, EVENT_USER_CREATED } from "../lib/events";
@@ -51,7 +51,29 @@ async function getUserWithRole(id: number) {
     .from(rolesTable)
     .where(eq(rolesTable.id, user.roleId));
 
-  return { ...user, roleName: role?.nameJson ?? {} };
+  const roleRows = await db
+    .select({ roleId: userRolesTable.roleId })
+    .from(userRolesTable)
+    .where(eq(userRolesTable.userId, id));
+  // The primary role is always part of the effective set, even if a legacy user
+  // somehow has no user_roles rows yet.
+  const roleIds = [...new Set([user.roleId, ...roleRows.map((r) => r.roleId)])];
+
+  return { ...user, roleName: role?.nameJson ?? {}, roleIds };
+}
+
+/**
+ * Resolve the full, validated role set for a write. The primary `roleId` is
+ * always included. Returns null when any provided role id does not exist.
+ */
+async function resolveRoleSet(primaryRoleId: number, roleIds?: number[]): Promise<number[] | null> {
+  const set = [...new Set([primaryRoleId, ...(roleIds ?? [])])];
+  const existing = await db
+    .select({ id: rolesTable.id })
+    .from(rolesTable)
+    .where(inArray(rolesTable.id, set));
+  if (existing.length !== set.length) return null;
+  return set;
 }
 
 router.get("/users", requireAuth, requireAdmin("users"), async (req, res): Promise<void> => {
@@ -100,16 +122,35 @@ router.get("/users", requireAuth, requireAdmin("users"), async (req, res): Promi
       .where(where),
   ]);
 
-  const roleIds = [...new Set(users.map((u) => u.roleId))];
+  const primaryRoleIds = [...new Set(users.map((u) => u.roleId))];
   let roleMap: Record<number, unknown> = {};
-  if (roleIds.length > 0) {
+  if (primaryRoleIds.length > 0) {
     const roles = await db
       .select({ id: rolesTable.id, nameJson: rolesTable.nameJson })
       .from(rolesTable);
     roleMap = Object.fromEntries(roles.map((r) => [r.id, r.nameJson]));
   }
 
-  const data = users.map((u) => ({ ...u, roleName: roleMap[u.roleId] ?? {} }));
+  // Batch-load the full role set per user so the list mirrors the detail view.
+  const userIds = users.map((u) => u.id);
+  const rolesByUser = new Map<number, number[]>();
+  if (userIds.length > 0) {
+    const rows = await db
+      .select({ userId: userRolesTable.userId, roleId: userRolesTable.roleId })
+      .from(userRolesTable)
+      .where(inArray(userRolesTable.userId, userIds));
+    for (const r of rows) {
+      const arr = rolesByUser.get(r.userId) ?? [];
+      arr.push(r.roleId);
+      rolesByUser.set(r.userId, arr);
+    }
+  }
+
+  const data = users.map((u) => ({
+    ...u,
+    roleName: roleMap[u.roleId] ?? {},
+    roleIds: [...new Set([u.roleId, ...(rolesByUser.get(u.id) ?? [])])],
+  }));
 
   res.json({ data, total: countResult[0]?.count ?? 0 });
 });
@@ -121,10 +162,17 @@ router.post("/users", requireAuth, requireAdmin("users"), async (req, res): Prom
     return;
   }
 
-  const { password, email, ...rest } = parsed.data;
+  const { password, email, roleIds, ...rest } = parsed.data;
   // A null/omitted password creates a passwordless guest user: they can never log
   // in with a password, only via a guest link (which issues a read-only token).
   const passwordHash = password ? await bcrypt.hash(password, 10) : null;
+
+  // The primary role (rest.roleId) is always part of the effective set.
+  const roleSet = await resolveRoleSet(rest.roleId, roleIds ?? undefined);
+  if (!roleSet) {
+    res.status(400).json({ error: "One or more roles do not exist" });
+    return;
+  }
 
   const [existing] = await db
     .select({ id: usersTable.id })
@@ -136,22 +184,14 @@ router.post("/users", requireAuth, requireAdmin("users"), async (req, res): Prom
     return;
   }
 
-  const [user] = await db
-    .insert(usersTable)
-    .values({ ...rest, email: email.toLowerCase(), passwordHash })
-    .returning({
-      id: usersTable.id,
-      email: usersTable.email,
-      firstName: usersTable.firstName,
-      lastName: usersTable.lastName,
-      roleId: usersTable.roleId,
-      language: usersTable.language,
-      direction: usersTable.direction,
-      startPageId: usersTable.startPageId,
-      isActive: usersTable.isActive,
-      createdAt: usersTable.createdAt,
-      updatedAt: usersTable.updatedAt,
-    });
+  const user = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(usersTable)
+      .values({ ...rest, email: email.toLowerCase(), passwordHash })
+      .returning({ id: usersTable.id, roleId: usersTable.roleId });
+    await tx.insert(userRolesTable).values(roleSet.map((rid) => ({ userId: created.id, roleId: rid })));
+    return created;
+  });
 
   await emitEvent(
     {
@@ -223,25 +263,55 @@ router.put("/users/:id", requireAuth, requireAdmin("users"), async (req, res): P
   if (body.direction != null) updateData.direction = body.direction;
   if ("startPageId" in body) updateData.startPageId = body.startPageId;
 
-  if (Object.keys(updateData).length === 0) {
+  const rolesProvided = body.roleIds != null;
+
+  if (Object.keys(updateData).length === 0 && !rolesProvided) {
     const user = await getUserWithRole(params.data.id);
     if (!user) { res.status(404).json({ error: "User not found" }); return; }
     res.json(user);
     return;
   }
 
-  const [updated] = await db
-    .update(usersTable)
-    .set(updateData)
-    .where(eq(usersTable.id, params.data.id))
-    .returning({ id: usersTable.id });
-
-  if (!updated) {
+  // Load the existing user so we can resolve the effective primary role when the
+  // request changes roleIds without changing roleId (or vice versa).
+  const [current] = await db
+    .select({ id: usersTable.id, roleId: usersTable.roleId })
+    .from(usersTable)
+    .where(eq(usersTable.id, params.data.id));
+  if (!current) {
     res.status(404).json({ error: "User not found" });
     return;
   }
 
-  const user = await getUserWithRole(updated.id);
+  const newPrimary = body.roleId ?? current.roleId;
+  // The primary role is always part of the effective set.
+  const roleSet = rolesProvided
+    ? await resolveRoleSet(newPrimary, body.roleIds ?? undefined)
+    : null;
+  if (rolesProvided && !roleSet) {
+    res.status(400).json({ error: "One or more roles do not exist" });
+    return;
+  }
+
+  await db.transaction(async (tx) => {
+    if (Object.keys(updateData).length > 0) {
+      await tx.update(usersTable).set(updateData).where(eq(usersTable.id, params.data.id));
+    }
+    if (roleSet) {
+      // Replace the full role set with the requested one.
+      await tx.delete(userRolesTable).where(eq(userRolesTable.userId, params.data.id));
+      await tx.insert(userRolesTable).values(roleSet.map((rid) => ({ userId: params.data.id, roleId: rid })));
+    } else if (body.roleId != null) {
+      // Changing only the primary role: ensure it is present in the role set
+      // without disturbing the other assigned roles.
+      await tx
+        .insert(userRolesTable)
+        .values({ userId: params.data.id, roleId: body.roleId })
+        .onConflictDoNothing();
+    }
+  });
+
+  const user = await getUserWithRole(params.data.id);
   res.json(user);
 });
 

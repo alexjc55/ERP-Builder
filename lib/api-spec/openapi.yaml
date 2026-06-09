@@ -2945,7 +2945,7 @@ components:
 
     UserProfile:
       type: object
-      required: [id, email, firstName, lastName, roleId, language, direction, isActive]
+      required: [id, email, firstName, lastName, roleId, roleIds, language, direction, isActive]
       properties:
         id:
           type: integer
@@ -2957,6 +2957,12 @@ components:
           type: string
         roleId:
           type: integer
+          description: Primary role (used by JWT, display, impersonation, guest flows).
+        roleIds:
+          type: array
+          items:
+            type: integer
+          description: All roles assigned to the user (includes the primary). Effective permissions are the most-permissive union across these roles.
         roleName:
           $ref: "#/components/schemas/MultilingualText"
         language:
@@ -3081,7 +3087,7 @@ components:
     # USERS
     User:
       type: object
-      required: [id, email, firstName, lastName, roleId, language, direction, isActive, createdAt, updatedAt]
+      required: [id, email, firstName, lastName, roleId, roleIds, language, direction, isActive, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -3093,6 +3099,12 @@ components:
           type: string
         roleId:
           type: integer
+          description: Primary role (used by JWT, display, impersonation, guest flows).
+        roleIds:
+          type: array
+          items:
+            type: integer
+          description: All roles assigned to the user (includes the primary).
         roleName:
           $ref: "#/components/schemas/MultilingualText"
         language:
@@ -3140,6 +3152,11 @@ components:
           type: string
         roleId:
           type: integer
+        roleIds:
+          type: array
+          items:
+            type: integer
+          description: All roles to assign. If omitted, defaults to [roleId]. The primary role (roleId) is always included.
         language:
           type: string
           enum: [ru, en, he]
@@ -3163,6 +3180,11 @@ components:
           type: string
         roleId:
           type: integer
+        roleIds:
+          type: array
+          items:
+            type: integer
+          description: Replaces the full set of assigned roles. The primary role (roleId) is always included.
         language:
           type: string
           enum: [ru, en, he]

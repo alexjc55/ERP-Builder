@@ -1,18 +1,126 @@
 import { Request, Response, NextFunction } from "express";
-import { db, rolesTable, pagesTable, mirrorPermKey, NO_ACCESS_PERMS, type RolePermissions, type RoleAdminCaps, type RecordPermission, type RecordScope, type EntityField, type FieldAccess, type FieldPermissions } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, rolesTable, userRolesTable, pagesTable, mirrorPermKey, NO_ACCESS_PERMS, type RolePermissions, type RoleAdminCaps, type RecordPermission, type RecordScope, type EntityField, type FieldAccess, type FieldPermissions } from "@workspace/db";
+import { eq, inArray } from "drizzle-orm";
 
 declare global {
   namespace Express {
     interface Request {
       permissions?: RolePermissions;
+      /** Per-request cache of the requester's full set of role ids (primary + extras). */
+      _roleIds?: number[];
       /** Per-request cache of page id → mirrorEntityId (null = not a mirror / unknown). */
       _pageMirror?: Map<number, number | null>;
     }
   }
 }
 
-/** Load a role's effective permissions from the DB (fresh per request). */
+/** Order field-access levels by permissiveness so we can take the maximum. */
+const ACCESS_RANK: Record<FieldAccess, number> = { hidden: 0, view: 1, edit: 2 };
+
+/** Return the more permissive of two field-access levels (edit > view > hidden). */
+export function maxAccess(a: FieldAccess | null, b: FieldAccess): FieldAccess {
+  if (a === null) return b;
+  return ACCESS_RANK[a] >= ACCESS_RANK[b] ? a : b;
+}
+
+const intIds = (v: unknown): number[] =>
+  Array.isArray(v) ? v.filter((n): n is number => Number.isInteger(n)) : [];
+
+/** Intersection of two integer-id arrays (preserves order of the first). */
+function intersectIds(a: number[], b: number[]): number[] {
+  const set = new Set(b);
+  return a.filter((n) => set.has(n));
+}
+
+/**
+ * Merge several roles' record-permission entries for a SINGLE entity (or mirror
+ * key) into one most-permissive entry. CRUD booleans are OR'd; row scope "all"
+ * wins over "own"; scopeFieldKeys are unioned; hidden status arrays are
+ * INTERSECTED across the granting roles (a status stays hidden only if EVERY
+ * granting role hides it — so any role that can see it makes it visible).
+ */
+function mergeRecordPerms(rps: RecordPermission[]): RecordPermission {
+  const out: RecordPermission = { view: false, create: false, update: false, delete: false };
+  let anyAllScope = false;
+  const scopeKeys = new Set<string>();
+  let hiddenStatus: number[] | null = null;
+  let hiddenRow: number[] | null = null;
+  for (const rp of rps) {
+    out.view ||= rp.view === true;
+    out.create ||= rp.create === true;
+    out.update ||= rp.update === true;
+    out.delete ||= rp.delete === true;
+  }
+  // Row scope and hidden-status lists are READ boundaries: only roles that
+  // actually grant `view` may relax them. A role that does not grant view must
+  // never widen row visibility to "all" or un-hide a status (which intersecting
+  // its empty hidden list would do), so it cannot weaken another role's
+  // restriction. If no role grants view there is nothing to read anyway.
+  for (const rp of rps) {
+    if (rp.view !== true) continue;
+    // Missing/`"all"` scope means full visibility for that role.
+    if (rp.scope !== "own") anyAllScope = true;
+    for (const k of rp.scopeFieldKeys ?? []) scopeKeys.add(k);
+    const hs = intIds(rp.hiddenStatusIds);
+    hiddenStatus = hiddenStatus === null ? hs : intersectIds(hiddenStatus, hs);
+    const hr = intIds(rp.hiddenRowStatusIds);
+    hiddenRow = hiddenRow === null ? hr : intersectIds(hiddenRow, hr);
+  }
+  out.scope = anyAllScope ? "all" : "own";
+  if (out.scope === "own" && scopeKeys.size > 0) out.scopeFieldKeys = [...scopeKeys];
+  if (hiddenStatus && hiddenStatus.length > 0) out.hiddenStatusIds = hiddenStatus;
+  if (hiddenRow && hiddenRow.length > 0) out.hiddenRowStatusIds = hiddenRow;
+  return out;
+}
+
+/**
+ * Merge a set of roles' permissions into one most-permissive RolePermissions.
+ * superAdmin / admin caps are OR'd, pageIds unioned, and each record key is
+ * merged via {@link mergeRecordPerms}. A single role is returned unchanged so
+ * single-role behavior is byte-for-byte identical to before multi-role support.
+ */
+export function mergePermissions(list: RolePermissions[]): RolePermissions {
+  if (list.length === 0) return NO_ACCESS_PERMS;
+  if (list.length === 1) return list[0];
+  const admin: RoleAdminCaps = {
+    pages: false, entities: false, roles: false, users: false, translations: false,
+    events: false, modules: false, googleDrive: false, settings: false,
+  };
+  const merged: RolePermissions = { superAdmin: false, admin, pageIds: [], records: {} };
+  const pageIdSet = new Set<number>();
+  for (const p of list) {
+    if (p.superAdmin) merged.superAdmin = true;
+    if (p.admin) {
+      for (const k of Object.keys(admin) as (keyof RoleAdminCaps)[]) {
+        if (p.admin[k]) admin[k] = true;
+      }
+    }
+    for (const id of p.pageIds ?? []) pageIdSet.add(id);
+  }
+  merged.pageIds = [...pageIdSet];
+  const keys = new Set<string>();
+  for (const p of list) for (const k of Object.keys(p.records ?? {})) keys.add(k);
+  for (const key of keys) {
+    const rps = list
+      .map((p) => p.records?.[key])
+      .filter((rp): rp is RecordPermission => rp != null);
+    merged.records[key] = mergeRecordPerms(rps);
+  }
+  return merged;
+}
+
+/** Load the permission specs for a set of role ids (order not guaranteed). */
+export async function loadPermissionsForRoles(roleIds: number[]): Promise<RolePermissions[]> {
+  const ids = [...new Set(roleIds)];
+  if (ids.length === 0) return [];
+  const rows = await db
+    .select({ permissionsJson: rolesTable.permissionsJson })
+    .from(rolesTable)
+    .where(inArray(rolesTable.id, ids));
+  return rows.map((r) => r.permissionsJson ?? NO_ACCESS_PERMS);
+}
+
+/** Load a single role's effective permissions from the DB (fresh per request). */
 export async function loadPermissions(roleId: number): Promise<RolePermissions> {
   const [role] = await db
     .select({ permissionsJson: rolesTable.permissionsJson })
@@ -22,14 +130,67 @@ export async function loadPermissions(roleId: number): Promise<RolePermissions> 
   return role?.permissionsJson ?? NO_ACCESS_PERMS;
 }
 
+/** All role ids assigned to a user (from the join table), excluding duplicates. */
+export async function loadUserRoleIds(userId: number): Promise<number[]> {
+  const rows = await db
+    .select({ roleId: userRolesTable.roleId })
+    .from(userRolesTable)
+    .where(eq(userRolesTable.userId, userId));
+  return rows.map((r) => r.roleId);
+}
+
+/**
+ * Effective merged permissions for a user, by id. Loads ALL of the user's roles
+ * (always including the primary `roleId` as a safety net for any backfill gap)
+ * and merges them most-permissively. Used by auth/guest flows that build the
+ * client-facing `permissions` payload outside of a request context.
+ */
+export async function loadPermissionsForUser(userId: number, primaryRoleId: number): Promise<RolePermissions> {
+  return (await loadRoleContext(userId, primaryRoleId)).permissions;
+}
+
+/**
+ * Like {@link loadPermissionsForUser} but also returns the resolved role id set
+ * (primary first) in a single pass. Auth/guest payloads need both the merged
+ * permissions and `roleIds` for the client-facing user object, so this avoids
+ * querying the join table twice.
+ */
+export async function loadRoleContext(
+  userId: number,
+  primaryRoleId: number,
+): Promise<{ roleIds: number[]; permissions: RolePermissions }> {
+  let ids = await loadUserRoleIds(userId);
+  if (!ids.includes(primaryRoleId)) ids = [primaryRoleId, ...ids];
+  if (ids.length === 0) ids = [primaryRoleId];
+  ids = [...new Set(ids)];
+  return { roleIds: ids, permissions: mergePermissions(await loadPermissionsForRoles(ids)) };
+}
+
+/**
+ * Resolve and cache the requester's full set of role ids on the request. Always
+ * includes the JWT's primary `roleId` so a missing join-table backfill can never
+ * silently drop access. Returns [] only for unauthenticated requests.
+ */
+export async function getUserRoleIds(req: Request): Promise<number[]> {
+  if (req._roleIds) return req._roleIds;
+  if (!req.user) return [];
+  let ids = await loadUserRoleIds(req.user.userId);
+  if (!ids.includes(req.user.roleId)) ids = [req.user.roleId, ...ids];
+  if (ids.length === 0) ids = [req.user.roleId];
+  req._roleIds = ids;
+  return ids;
+}
+
 /**
  * Resolve and cache the requesting user's permissions on the request object.
- * Returns NO_ACCESS for unauthenticated requests (should be preceded by requireAuth).
+ * Loads and merges ALL of the user's roles (most-permissive union). Returns
+ * NO_ACCESS for unauthenticated requests (should be preceded by requireAuth).
  */
 export async function getPermissions(req: Request): Promise<RolePermissions> {
   if (req.permissions) return req.permissions;
   if (!req.user) return NO_ACCESS_PERMS;
-  const perms = await loadPermissions(req.user.roleId);
+  const roleIds = await getUserRoleIds(req);
+  const perms = mergePermissions(await loadPermissionsForRoles(roleIds));
   req.permissions = perms;
   return perms;
 }
@@ -184,8 +345,6 @@ export function effectiveStatusVisibility(
 ): { hiddenStatusIds: number[]; hiddenRowStatusIds: number[] } {
   if (perms.superAdmin) return { hiddenStatusIds: [], hiddenRowStatusIds: [] };
   const rp = perms.records[String(entityId)];
-  const intIds = (v: unknown): number[] =>
-    Array.isArray(v) ? v.filter((n): n is number => Number.isInteger(n)) : [];
   return { hiddenStatusIds: intIds(rp?.hiddenStatusIds), hiddenRowStatusIds: intIds(rp?.hiddenRowStatusIds) };
 }
 
@@ -205,15 +364,50 @@ export function recordOwnedBy(values: Record<string, unknown>, scopeFieldKeys: s
 export function resolveFieldAccess(
   field: EntityField,
   perms: RolePermissions,
-  roleId: number,
+  roleIds: number[],
   entityId: number,
   rpOverride?: RecordPermission,
 ): FieldAccess {
   if (perms.superAdmin) return "edit";
-  const explicit = (field.permissionsJson as FieldPermissions | undefined)?.[String(roleId)];
-  if (explicit) return explicit;
   // When a mirror-page override is supplied it replaces the entity-level record
   // perm for write-derived field access; otherwise fall back to the entity entry.
   const rp = rpOverride ?? perms.records[String(entityId)];
-  return rp?.create || rp?.update ? "edit" : "view";
+  const inherited: FieldAccess = rp?.create || rp?.update ? "edit" : "view";
+  const permsJson = field.permissionsJson as FieldPermissions | undefined;
+  const explicits = roleIds
+    .map((rid) => permsJson?.[String(rid)])
+    .filter((v): v is FieldAccess => v != null);
+  // Single-role / all-roles-explicit: explicit governs (most permissive among
+  // them) — preserves the original "explicit wins, even hidden" behavior.
+  if (roleIds.length > 0 && explicits.length === roleIds.length) {
+    return explicits.reduce<FieldAccess | null>((acc, v) => maxAccess(acc, v), null) ?? inherited;
+  }
+  // No role has an explicit entry → inherit from (merged) record write perms.
+  if (explicits.length === 0) return inherited;
+  // Mixed: some roles explicit, others inherit → take the most permissive.
+  const maxExplicit = explicits.reduce<FieldAccess | null>((acc, v) => maxAccess(acc, v), null);
+  return maxAccess(maxExplicit, inherited);
+}
+
+/**
+ * Most-permissive access level for a generic field-permission map (e.g. page
+ * fields, which default to `fallback` when a role has no explicit entry) across
+ * all of a user's roles. With a single role this equals the legacy
+ * `permsJson?.[roleId] ?? fallback` lookup.
+ */
+export function mostPermissiveFieldPerm(
+  permsJson: FieldPermissions | null | undefined,
+  roleIds: number[],
+  fallback: FieldAccess,
+): FieldAccess {
+  let best: FieldAccess | null = null;
+  let anyMissing = false;
+  for (const rid of roleIds) {
+    const v = permsJson?.[String(rid)];
+    if (v) best = maxAccess(best, v);
+    else anyMissing = true;
+  }
+  if (best === null) return fallback;
+  // Roles without an explicit entry contribute the fallback level.
+  return anyMissing ? maxAccess(best, fallback) : best;
 }

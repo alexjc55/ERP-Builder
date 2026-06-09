@@ -13,6 +13,8 @@ export interface UserUpdate {
   firstName?: string;
   lastName?: string;
   roleId?: number;
+  /** Replaces the full set of assigned roles. The primary role (roleId) is always included. */
+  roleIds?: number[];
   language?: UserUpdateLanguage;
   direction?: UserUpdateDirection;
   /** @nullable */

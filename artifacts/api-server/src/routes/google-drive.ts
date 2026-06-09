@@ -18,6 +18,7 @@ import { requireAuth } from "../middlewares/auth";
 import {
   requireAdmin,
   getPermissions,
+  getUserRoleIds,
   canRecord,
   effectiveScope,
   resolveFieldAccess,
@@ -369,7 +370,7 @@ async function canReadDriveFile(req: Request, fileId: string): Promise<boolean> 
   if (candidates.length === 0) return false;
 
   const perms = await getPermissions(req);
-  const roleId = req.user.roleId;
+  const roleIds = await getUserRoleIds(req);
   const userId = req.user.userId;
   const fieldsByEntity = new Map<number, EntityField[]>();
 
@@ -388,7 +389,7 @@ async function canReadDriveFile(req: Request, fileId: string): Promise<boolean> 
       (f) => f.fieldType === "file" && gdriveValueRefersTo(values[f.fieldKey], fileId),
     );
     if (!holder) continue;
-    if (resolveFieldAccess(holder, perms, roleId, rec.entityId) === "hidden") continue;
+    if (resolveFieldAccess(holder, perms, roleIds, rec.entityId) === "hidden") continue;
     const { scope, scopeFieldKeys } = effectiveScope(perms, rec.entityId);
     if (scope === "own" && !recordOwnedBy(values, scopeFieldKeys, userId)) continue;
     return true;

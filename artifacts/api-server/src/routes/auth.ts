@@ -4,7 +4,7 @@ import { db, usersTable, rolesTable, loginHistoryTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { signToken } from "../lib/jwt";
 import { requireAuth } from "../middlewares/auth";
-import { loadPermissions, getPermissions } from "../middlewares/permissions";
+import { loadRoleContext, getPermissions } from "../middlewares/permissions";
 import {
   LoginBody,
   ChangePasswordBody,
@@ -85,7 +85,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     .from(rolesTable)
     .where(eq(rolesTable.id, user.roleId));
 
-  const permissions = await loadPermissions(user.roleId);
+  const { roleIds, permissions } = await loadRoleContext(user.id, user.roleId);
 
   res.json({
     token,
@@ -95,6 +95,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
       firstName: user.firstName,
       lastName: user.lastName,
       roleId: user.roleId,
+      roleIds,
       roleName: role?.nameJson ?? {},
       language: user.language,
       direction: user.direction,
@@ -135,7 +136,7 @@ router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
     .from(rolesTable)
     .where(eq(rolesTable.id, user.roleId));
 
-  const permissions = await loadPermissions(user.roleId);
+  const { roleIds, permissions } = await loadRoleContext(user.id, user.roleId);
   const impersonator = await resolveImpersonator(req.user!.impersonatorId);
 
   res.json({
@@ -144,6 +145,7 @@ router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
     firstName: user.firstName,
     lastName: user.lastName,
     roleId: user.roleId,
+    roleIds,
     roleName: role?.nameJson ?? {},
     language: user.language,
     direction: user.direction,
@@ -201,7 +203,7 @@ router.put("/auth/me", requireAuth, async (req, res): Promise<void> => {
     .from(rolesTable)
     .where(eq(rolesTable.id, user.roleId));
 
-  const permissions = await loadPermissions(user.roleId);
+  const { roleIds, permissions } = await loadRoleContext(user.id, user.roleId);
   const impersonator = await resolveImpersonator(req.user!.impersonatorId);
 
   res.json({
@@ -210,6 +212,7 @@ router.put("/auth/me", requireAuth, async (req, res): Promise<void> => {
     firstName: user.firstName,
     lastName: user.lastName,
     roleId: user.roleId,
+    roleIds,
     roleName: role?.nameJson ?? {},
     language: user.language,
     direction: user.direction,
@@ -291,7 +294,7 @@ router.post("/auth/impersonate", requireAuth, async (req, res): Promise<void> =>
     return;
   }
 
-  const targetPerms = await loadPermissions(target.roleId);
+  const { roleIds: targetRoleIds, permissions: targetPerms } = await loadRoleContext(target.id, target.roleId);
   // No privilege escalation: a non-super admin cannot impersonate a superAdmin.
   if (!actorPerms.superAdmin && targetPerms.superAdmin) {
     res.status(403).json({ error: "Forbidden" });
@@ -323,6 +326,7 @@ router.post("/auth/impersonate", requireAuth, async (req, res): Promise<void> =>
       firstName: target.firstName,
       lastName: target.lastName,
       roleId: target.roleId,
+      roleIds: targetRoleIds,
       roleName: role?.nameJson ?? {},
       language: target.language,
       direction: target.direction,
@@ -368,7 +372,7 @@ router.post("/auth/stop-impersonation", requireAuth, async (req, res): Promise<v
     .from(rolesTable)
     .where(eq(rolesTable.id, admin.roleId));
 
-  const permissions = await loadPermissions(admin.roleId);
+  const { roleIds, permissions } = await loadRoleContext(admin.id, admin.roleId);
 
   res.json({
     token,
@@ -378,6 +382,7 @@ router.post("/auth/stop-impersonation", requireAuth, async (req, res): Promise<v
       firstName: admin.firstName,
       lastName: admin.lastName,
       roleId: admin.roleId,
+      roleIds,
       roleName: role?.nameJson ?? {},
       language: admin.language,
       direction: admin.direction,

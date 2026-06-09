@@ -19,6 +19,8 @@ export interface UserInput {
   firstName: string;
   lastName: string;
   roleId: number;
+  /** All roles to assign. If omitted, defaults to [roleId]. The primary role (roleId) is always included. */
+  roleIds?: number[];
   language?: UserInputLanguage;
   direction?: UserInputDirection;
   /** @nullable */
