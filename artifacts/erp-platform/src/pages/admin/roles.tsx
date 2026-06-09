@@ -448,21 +448,23 @@ export default function RolesPage() {
                                 return (
                                   <tr key={`m-${page.id}`} className="border-b border-slate-100 bg-slate-50/40">
                                     <td className="px-3 py-2">
-                                      <div className="flex items-center gap-2 pl-4 text-slate-600">
-                                        <CornerDownRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                        <span className="truncate">
-                                          {ml(entity.nameJson) || entity.entityKey}{" "}
-                                          <span className="text-slate-400">({ml(page.nameJson) || page.path})</span>
-                                        </span>
-                                        <div className="flex items-center gap-1.5 ml-2">
+                                      <div className="pl-4 text-slate-600 min-w-0">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <CornerDownRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                          <span className="truncate">
+                                            {ml(entity.nameJson) || entity.entityKey}{" "}
+                                            <span className="text-slate-400">({ml(page.nameJson) || page.path})</span>
+                                          </span>
+                                        </div>
+                                        <label className="flex items-center gap-1.5 mt-1 pl-5 cursor-pointer">
                                           <Switch
                                             checked={overridden}
                                             onCheckedChange={(v) => toggleMirrorOverride(entity.id, page.id, v === true)}
                                           />
-                                          <span className="text-xs text-slate-400 whitespace-nowrap">
+                                          <span className="text-xs text-slate-400">
                                             {t("roles.overrideRights", "Переопределить права")}
                                           </span>
-                                        </div>
+                                        </label>
                                       </div>
                                     </td>
                                     {RECORD_ACTIONS.map((a) => (
