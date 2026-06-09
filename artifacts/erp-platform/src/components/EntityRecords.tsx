@@ -1689,21 +1689,21 @@ export function EntityRecords({
             ))}
           </div>
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
           {canConfigureColumns && (
             <Button
               type="button"
               variant={setupMode ? "default" : "outline"}
               onClick={() => { setSetupMode((s) => !s); setEditingCell(null); setAddingRow(false); }}
-              className={`flex-1 sm:flex-none ${setupMode ? "bg-amber-500 hover:bg-amber-600 gap-2" : "gap-2"}`}
+              className={`w-full sm:w-auto justify-center gap-2 ${setupMode ? "bg-amber-500 hover:bg-amber-600" : ""}`}
             >
-              <Settings2 className="w-4 h-4" />
+              <Settings2 className="w-4 h-4 shrink-0" />
               {t("records.setupMode", "Режим настройки")}
             </Button>
           )}
           {canCreate && !setupMode && (
-            <Button onClick={openCreate} className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 gap-2">
-              <Plus className="w-4 h-4" />
+            <Button onClick={openCreate} className="w-full sm:w-auto justify-center gap-2 bg-blue-600 hover:bg-blue-700">
+              <Plus className="w-4 h-4 shrink-0" />
               {t("records.add", "Добавить запись")}
             </Button>
           )}
