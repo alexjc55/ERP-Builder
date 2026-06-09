@@ -158,8 +158,10 @@ export default function UsersPage() {
 
   const openCreate = () => {
     setEditingUser(null);
-    const firstRole = roles[0]?.id || 0;
-    setForm({ email: "", password: "", firstName: "", lastName: "", roleId: firstRole, roleIds: firstRole ? [firstRole] : [], language: UserInputLanguage.ru, direction: UserInputDirection.ltr, isGuest: false });
+    // Do not pre-select a primary role: leave it empty (roleId 0) so the admin
+    // makes a deliberate choice. With no primary role selected, nothing is
+    // locked in the "additional roles" list. The field is required on submit.
+    setForm({ email: "", password: "", firstName: "", lastName: "", roleId: 0, roleIds: [], language: UserInputLanguage.ru, direction: UserInputDirection.ltr, isGuest: false });
     setDialogOpen(true);
   };
 
@@ -199,6 +201,14 @@ export default function UsersPage() {
         toast({
           title: t("users.error", "Ошибка"),
           description: t("users.passwordTooShort", "Пароль должен содержать минимум 6 символов"),
+          variant: "destructive",
+        });
+        return;
+      }
+      if (!form.roleId) {
+        toast({
+          title: t("users.error", "Ошибка"),
+          description: t("users.roleRequired", "Выберите основную роль"),
           variant: "destructive",
         });
         return;

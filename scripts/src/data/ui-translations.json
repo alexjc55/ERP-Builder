@@ -5604,6 +5604,12 @@
     "he": "בחר תפקיד"
   },
   {
+    "key": "users.roleRequired",
+    "ru": "Выберите основную роль",
+    "en": "Select a primary role",
+    "he": "בחר תפקיד ראשי"
+  },
+  {
     "key": "users.subtitle",
     "ru": "Управление учётными записями",
     "en": "Account management",
