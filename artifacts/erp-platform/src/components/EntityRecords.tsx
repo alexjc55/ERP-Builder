@@ -451,6 +451,7 @@ function FieldFilterPopover({
   ml,
   t,
   userNames,
+  triggerClassName,
 }: {
   field: Field;
   selected: string[];
@@ -459,6 +460,7 @@ function FieldFilterPopover({
   ml: (v: unknown) => string;
   t: (key: string, def: string) => string;
   userNames: Map<number, string>;
+  triggerClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [options, setOptions] = useState<string[]>([]);
@@ -495,13 +497,13 @@ function FieldFilterPopover({
           type="button"
           variant="outline"
           size="sm"
-          className={`h-9 gap-1.5 text-sm ${selected.length > 0 ? "border-blue-400 text-blue-700" : ""}`}
+          className={`h-9 gap-1.5 text-sm ${triggerClassName ?? ""} ${selected.length > 0 ? "border-blue-400 text-blue-700" : ""}`}
         >
-          {ml(field.nameJson)}
+          <span className="truncate">{ml(field.nameJson)}</span>
           {selected.length > 0 && (
             <Badge variant="secondary" className="ml-0.5 px-1.5">{selected.length}</Badge>
           )}
-          <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+          <ChevronDown className="w-3.5 h-3.5 opacity-60 shrink-0 sm:ml-0 ml-auto" />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-0">
@@ -569,12 +571,14 @@ function DateFilterPopover({
   onChange,
   ml,
   t,
+  triggerClassName,
 }: {
   field: Field;
   value: DateRangeFilter | undefined;
   onChange: (value: DateRangeFilter | undefined) => void;
   ml: (v: unknown) => string;
   t: (key: string, def: string) => string;
+  triggerClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   // Local in-progress range so the user can build a range across two calendar clicks before it
@@ -639,14 +643,14 @@ function DateFilterPopover({
           type="button"
           variant="outline"
           size="sm"
-          className={`h-9 gap-1.5 text-sm ${value ? "border-blue-400 text-blue-700" : ""}`}
+          className={`h-9 gap-1.5 text-sm ${triggerClassName ?? ""} ${value ? "border-blue-400 text-blue-700" : ""}`}
         >
-          <CalendarIcon className="w-3.5 h-3.5 opacity-70" />
-          {ml(field.nameJson)}
+          <CalendarIcon className="w-3.5 h-3.5 opacity-70 shrink-0" />
+          <span className="truncate">{ml(field.nameJson)}</span>
           {buttonLabel && (
             <Badge variant="secondary" className="ml-0.5 px-1.5 font-normal">{buttonLabel}</Badge>
           )}
-          <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+          <ChevronDown className="w-3.5 h-3.5 opacity-60 shrink-0 sm:ml-0 ml-auto" />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-auto p-0">
@@ -1633,12 +1637,12 @@ export function EntityRecords({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {views.length > 0 && (
-            <div className="flex items-center gap-1.5">
-              <LayoutList className="w-4 h-4 text-slate-400" />
+            <div className="flex items-center gap-1.5 w-full sm:w-auto">
+              <LayoutList className="w-4 h-4 text-slate-400 shrink-0" />
               <Select value={selectedViewId} onValueChange={handleViewChange}>
-                <SelectTrigger className="h-9 w-56 text-sm">
+                <SelectTrigger className="h-9 w-full sm:w-56 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1655,16 +1659,16 @@ export function EntityRecords({
               </Select>
             </div>
           )}
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <Input
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               placeholder={t("records.searchPlaceholder", "Поиск…")}
-              className="h-9 w-56 pl-8 text-sm"
+              className="h-9 w-full sm:w-56 pl-8 text-sm"
             />
           </div>
-          <div className="flex items-center rounded-md border border-slate-200 p-0.5 bg-white">
+          <div className="flex items-center justify-center w-full sm:w-auto rounded-md border border-slate-200 p-0.5 bg-white">
             {([
               ["active", t("records.filterActive", "Активные")],
               ["archived", t("records.filterArchived", "Архив")],
@@ -1685,20 +1689,20 @@ export function EntityRecords({
             ))}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           {canConfigureColumns && (
             <Button
               type="button"
               variant={setupMode ? "default" : "outline"}
               onClick={() => { setSetupMode((s) => !s); setEditingCell(null); setAddingRow(false); }}
-              className={setupMode ? "bg-amber-500 hover:bg-amber-600 gap-2" : "gap-2"}
+              className={`flex-1 sm:flex-none ${setupMode ? "bg-amber-500 hover:bg-amber-600 gap-2" : "gap-2"}`}
             >
               <Settings2 className="w-4 h-4" />
               {t("records.setupMode", "Режим настройки")}
             </Button>
           )}
           {canCreate && !setupMode && (
-            <Button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 gap-2">
+            <Button onClick={openCreate} className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 gap-2">
               <Plus className="w-4 h-4" />
               {t("records.add", "Добавить запись")}
             </Button>
@@ -1707,8 +1711,8 @@ export function EntityRecords({
       </div>
 
       {!setupMode && (statuses.length > 0 || filterableFields.length > 0) && (
-        <div className="flex flex-wrap items-center gap-2">
-          <Filter className="w-4 h-4 text-slate-400 shrink-0" />
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+          <Filter className="hidden sm:block w-4 h-4 text-slate-400 shrink-0" />
           {filterableStatuses.length > 0 && (
             <Popover>
               <PopoverTrigger asChild>
@@ -1716,13 +1720,13 @@ export function EntityRecords({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className={`h-9 gap-1.5 text-sm ${statusFilter.length > 0 ? "border-blue-400 text-blue-700" : ""}`}
+                  className={`h-9 gap-1.5 text-sm w-full justify-between sm:w-auto sm:justify-center ${statusFilter.length > 0 ? "border-blue-400 text-blue-700" : ""}`}
                 >
-                  {t("records.status", "Статус")}
+                  <span className="truncate">{t("records.status", "Статус")}</span>
                   {statusFilter.length > 0 && (
                     <Badge variant="secondary" className="ml-0.5 px-1.5">{statusFilter.length}</Badge>
                   )}
-                  <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+                  <ChevronDown className="w-3.5 h-3.5 opacity-60 shrink-0 ml-auto sm:ml-0" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="start" className="w-56 p-0">
@@ -1765,6 +1769,7 @@ export function EntityRecords({
                 onChange={(range) => setDateFilter(f.fieldKey, range)}
                 ml={ml}
                 t={t}
+                triggerClassName="w-full justify-start sm:w-auto sm:justify-center"
               />
             ) : (
               <FieldFilterPopover
@@ -1776,6 +1781,7 @@ export function EntityRecords({
                 ml={ml}
                 t={t}
                 userNames={userNames}
+                triggerClassName="w-full justify-between sm:w-auto sm:justify-center"
               />
             ),
           )}
@@ -1784,7 +1790,7 @@ export function EntityRecords({
               type="button"
               variant="ghost"
               size="sm"
-              className="h-9 gap-1 text-slate-500"
+              className="h-9 gap-1 text-slate-500 col-span-2 w-full justify-center sm:col-span-1 sm:w-auto"
               onClick={resetFilters}
             >
               <X className="w-3.5 h-3.5" />
