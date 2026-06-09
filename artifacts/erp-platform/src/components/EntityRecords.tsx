@@ -1977,7 +1977,7 @@ export function EntityRecords({
                     ))}
                     {statuses.length > 0 && (
                       <th
-                        className="relative text-center px-4 py-3 font-medium text-slate-600"
+                        className="relative align-top text-center px-4 py-3 font-medium text-slate-600"
                         style={colWidthStyle("__status__")}
                       >
                         {t("records.status", "Статус")}
@@ -1985,7 +1985,7 @@ export function EntityRecords({
                       </th>
                     )}
                     {setupMode ? (
-                      <th className="text-center px-4 py-3 font-medium text-slate-600">
+                      <th className="align-top text-center px-4 py-3 font-medium text-slate-600">
                         <div className="inline-flex items-center gap-2">
                           {!isMirror && (
                             <Button
@@ -2013,7 +2013,7 @@ export function EntityRecords({
                         </div>
                       </th>
                     ) : (
-                      <th className="text-center px-4 py-3 font-medium text-slate-600">{t("records.actions", "Действия")}</th>
+                      <th className="align-top text-center px-4 py-3 font-medium text-slate-600">{t("records.actions", "Действия")}</th>
                     )}
                   </tr>
                 </thead>
