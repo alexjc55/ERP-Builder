@@ -15,6 +15,7 @@ import { uploadFile } from "@/lib/storage";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -223,16 +224,16 @@ export default function SettingsPage() {
         <CardContent className="space-y-4">
           <div className="space-y-1.5">
             <Label className="text-sm font-medium text-slate-700">{t("settings.currentPassword", "Текущий пароль")}</Label>
-            <Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} autoComplete="current-password" />
+            <PasswordInput value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} autoComplete="current-password" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label className="text-sm font-medium text-slate-700">{t("settings.newPassword", "Новый пароль")}</Label>
-              <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" />
+              <PasswordInput value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" />
             </div>
             <div className="space-y-1.5">
               <Label className="text-sm font-medium text-slate-700">{t("settings.confirmPassword", "Подтвердите пароль")}</Label>
-              <Input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" />
+              <PasswordInput value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" />
             </div>
           </div>
           <div className="flex justify-end">

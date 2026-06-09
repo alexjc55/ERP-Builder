@@ -20,6 +20,7 @@ import {
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -407,7 +408,7 @@ export default function UsersPage() {
             {!editingUser && !form.isGuest && (
               <div className="space-y-1.5">
                 <Label>{t("users.password", "Пароль")} *</Label>
-                <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+                <PasswordInput value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
               </div>
             )}
             <div className="space-y-1.5">
@@ -487,8 +488,7 @@ export default function UsersPage() {
             <p className="text-sm text-slate-500">
               {t("users.resetPwPrompt", "Введите новый пароль для")} {resetPwUser?.firstName} {resetPwUser?.lastName}
             </p>
-            <Input
-              type="password"
+            <PasswordInput
               placeholder={t("users.newPasswordPlaceholder", "Новый пароль")}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}

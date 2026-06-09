@@ -6,6 +6,18 @@
     "he": "ביטול"
   },
   {
+    "key": "common.showPassword",
+    "ru": "Показать пароль",
+    "en": "Show password",
+    "he": "הצג סיסמה"
+  },
+  {
+    "key": "common.hidePassword",
+    "ru": "Скрыть пароль",
+    "en": "Hide password",
+    "he": "הסתר סיסמה"
+  },
+  {
     "key": "common.delete",
     "ru": "Удалить",
     "en": "Delete",
