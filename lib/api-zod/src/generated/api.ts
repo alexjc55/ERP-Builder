@@ -153,7 +153,9 @@ export const LoginResponse = zod.object({
   "update": zod.boolean(),
   "delete": zod.boolean(),
   "scope": zod.enum(['all', 'own']).optional(),
-  "scopeFieldKeys": zod.array(zod.string()).optional()
+  "scopeFieldKeys": zod.array(zod.string()).optional(),
+  "hiddenStatusIds": zod.array(zod.number()).optional(),
+  "hiddenRowStatusIds": zod.array(zod.number()).optional()
 }))
 }).optional(),
   "isGuest": zod.boolean().optional(),
@@ -212,7 +214,9 @@ export const GetMeResponse = zod.object({
   "update": zod.boolean(),
   "delete": zod.boolean(),
   "scope": zod.enum(['all', 'own']).optional(),
-  "scopeFieldKeys": zod.array(zod.string()).optional()
+  "scopeFieldKeys": zod.array(zod.string()).optional(),
+  "hiddenStatusIds": zod.array(zod.number()).optional(),
+  "hiddenRowStatusIds": zod.array(zod.number()).optional()
 }))
 }).optional(),
   "isGuest": zod.boolean().optional(),
@@ -269,7 +273,9 @@ export const UpdateMeResponse = zod.object({
   "update": zod.boolean(),
   "delete": zod.boolean(),
   "scope": zod.enum(['all', 'own']).optional(),
-  "scopeFieldKeys": zod.array(zod.string()).optional()
+  "scopeFieldKeys": zod.array(zod.string()).optional(),
+  "hiddenStatusIds": zod.array(zod.number()).optional(),
+  "hiddenRowStatusIds": zod.array(zod.number()).optional()
 }))
 }).optional(),
   "isGuest": zod.boolean().optional(),
@@ -324,7 +330,9 @@ export const ImpersonateResponse = zod.object({
   "update": zod.boolean(),
   "delete": zod.boolean(),
   "scope": zod.enum(['all', 'own']).optional(),
-  "scopeFieldKeys": zod.array(zod.string()).optional()
+  "scopeFieldKeys": zod.array(zod.string()).optional(),
+  "hiddenStatusIds": zod.array(zod.number()).optional(),
+  "hiddenRowStatusIds": zod.array(zod.number()).optional()
 }))
 }).optional(),
   "isGuest": zod.boolean().optional(),
@@ -376,7 +384,9 @@ export const StopImpersonationResponse = zod.object({
   "update": zod.boolean(),
   "delete": zod.boolean(),
   "scope": zod.enum(['all', 'own']).optional(),
-  "scopeFieldKeys": zod.array(zod.string()).optional()
+  "scopeFieldKeys": zod.array(zod.string()).optional(),
+  "hiddenStatusIds": zod.array(zod.number()).optional(),
+  "hiddenRowStatusIds": zod.array(zod.number()).optional()
 }))
 }).optional(),
   "isGuest": zod.boolean().optional(),
@@ -432,7 +442,9 @@ export const RedeemGuestLinkResponse = zod.object({
   "update": zod.boolean(),
   "delete": zod.boolean(),
   "scope": zod.enum(['all', 'own']).optional(),
-  "scopeFieldKeys": zod.array(zod.string()).optional()
+  "scopeFieldKeys": zod.array(zod.string()).optional(),
+  "hiddenStatusIds": zod.array(zod.number()).optional(),
+  "hiddenRowStatusIds": zod.array(zod.number()).optional()
 }))
 }).optional(),
   "isGuest": zod.boolean().optional(),
@@ -795,7 +807,9 @@ export const ListRolesResponseItem = zod.object({
   "update": zod.boolean(),
   "delete": zod.boolean(),
   "scope": zod.enum(['all', 'own']).optional(),
-  "scopeFieldKeys": zod.array(zod.string()).optional()
+  "scopeFieldKeys": zod.array(zod.string()).optional(),
+  "hiddenStatusIds": zod.array(zod.number()).optional(),
+  "hiddenRowStatusIds": zod.array(zod.number()).optional()
 }))
 }),
   "userCount": zod.number().optional(),
@@ -839,7 +853,9 @@ export const CreateRoleBody = zod.object({
   "update": zod.boolean(),
   "delete": zod.boolean(),
   "scope": zod.enum(['all', 'own']).optional(),
-  "scopeFieldKeys": zod.array(zod.string()).optional()
+  "scopeFieldKeys": zod.array(zod.string()).optional(),
+  "hiddenStatusIds": zod.array(zod.number()).optional(),
+  "hiddenRowStatusIds": zod.array(zod.number()).optional()
 }))
 }).optional()
 })
@@ -884,7 +900,9 @@ export const GetRoleResponse = zod.object({
   "update": zod.boolean(),
   "delete": zod.boolean(),
   "scope": zod.enum(['all', 'own']).optional(),
-  "scopeFieldKeys": zod.array(zod.string()).optional()
+  "scopeFieldKeys": zod.array(zod.string()).optional(),
+  "hiddenStatusIds": zod.array(zod.number()).optional(),
+  "hiddenRowStatusIds": zod.array(zod.number()).optional()
 }))
 }),
   "userCount": zod.number().optional(),
@@ -931,7 +949,9 @@ export const UpdateRoleBody = zod.object({
   "update": zod.boolean(),
   "delete": zod.boolean(),
   "scope": zod.enum(['all', 'own']).optional(),
-  "scopeFieldKeys": zod.array(zod.string()).optional()
+  "scopeFieldKeys": zod.array(zod.string()).optional(),
+  "hiddenStatusIds": zod.array(zod.number()).optional(),
+  "hiddenRowStatusIds": zod.array(zod.number()).optional()
 }))
 }).optional()
 })
@@ -968,7 +988,9 @@ export const UpdateRoleResponse = zod.object({
   "update": zod.boolean(),
   "delete": zod.boolean(),
   "scope": zod.enum(['all', 'own']).optional(),
-  "scopeFieldKeys": zod.array(zod.string()).optional()
+  "scopeFieldKeys": zod.array(zod.string()).optional(),
+  "hiddenStatusIds": zod.array(zod.number()).optional(),
+  "hiddenRowStatusIds": zod.array(zod.number()).optional()
 }))
 }),
   "userCount": zod.number().optional(),

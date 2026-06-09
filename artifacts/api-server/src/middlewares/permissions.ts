@@ -168,6 +168,27 @@ export function effectiveScope(perms: RolePermissions, entityId: number): { scop
   return { scope: rp?.scope === "own" ? "own" : "all", scopeFieldKeys: rp?.scopeFieldKeys ?? [] };
 }
 
+/**
+ * Effective status visibility for the requester on an entity. superAdmin (and
+ * roles with no configured exceptions) see every status and every row. Both
+ * arrays are SPARSE — they list only the hidden statuses, so statuses added
+ * later default to visible.
+ * - hiddenStatusIds: not offered in the picker/quick-filter; writes setting a
+ *   record to one are rejected.
+ * - hiddenRowStatusIds: rows in these statuses are excluded from list/query
+ *   results (hard boundary; null-status rows are never excluded).
+ */
+export function effectiveStatusVisibility(
+  perms: RolePermissions,
+  entityId: number,
+): { hiddenStatusIds: number[]; hiddenRowStatusIds: number[] } {
+  if (perms.superAdmin) return { hiddenStatusIds: [], hiddenRowStatusIds: [] };
+  const rp = perms.records[String(entityId)];
+  const intIds = (v: unknown): number[] =>
+    Array.isArray(v) ? v.filter((n): n is number => Number.isInteger(n)) : [];
+  return { hiddenStatusIds: intIds(rp?.hiddenStatusIds), hiddenRowStatusIds: intIds(rp?.hiddenRowStatusIds) };
+}
+
 /** True if the record (its values) is owned by `userId` via any scope field key. */
 export function recordOwnedBy(values: Record<string, unknown>, scopeFieldKeys: string[], userId: number): boolean {
   return scopeFieldKeys.some((k) => Number(values[k]) === userId);

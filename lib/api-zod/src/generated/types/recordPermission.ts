@@ -14,4 +14,6 @@ export interface RecordPermission {
   delete: boolean;
   scope?: RecordScope;
   scopeFieldKeys?: string[];
+  hiddenStatusIds?: number[];
+  hiddenRowStatusIds?: number[];
 }

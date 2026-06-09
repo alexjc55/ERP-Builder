@@ -22,6 +22,7 @@ import {
   canRecord,
   getPermissions,
   effectiveScope,
+  effectiveStatusVisibility,
   recordOwnedBy,
   resolveFieldAccess,
 } from "../middlewares/permissions";
@@ -142,6 +143,21 @@ function ownScopeWhere(scopeFieldKeys: string[], userId: number): SQL {
     (k) => sql`(${entityRecordsTable.valuesJson} ->> ${k}) = ${String(userId)}`,
   );
   return or(...clauses)!;
+}
+
+/**
+ * WHERE fragment excluding entity_records rows whose status is hidden-for-rows
+ * for this role (mirrors the records list/query boundary). Null-status rows are
+ * always kept. Returns undefined when nothing is hidden (no-op). The hard row
+ * boundary must hold across page record/related read paths too, not just the
+ * records endpoints, or hidden-status rows leak through pages.
+ */
+function hiddenRowStatusWhere(hiddenRowStatusIds: number[]): SQL | undefined {
+  if (hiddenRowStatusIds.length === 0) return undefined;
+  return sql`(${entityRecordsTable.statusId} IS NULL OR ${entityRecordsTable.statusId} NOT IN (${sql.join(
+    hiddenRowStatusIds.map((id) => sql`${id}`),
+    sql`, `,
+  )}))`;
 }
 
 async function pageFieldKeyTaken(pageId: number, fieldKey: string, excludeId: number | null): Promise<boolean> {
@@ -489,6 +505,8 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
     eq(entityRecordsTable.entityId, entityId),
   ];
   if (scope === "own") where.push(ownScopeWhere(scopeFieldKeys, req.user!.userId));
+  const rvHiddenRowWhere = hiddenRowStatusWhere(effectiveStatusVisibility(perms, entityId).hiddenRowStatusIds);
+  if (rvHiddenRowWhere) where.push(rvHiddenRowWhere);
   const rows = await db
     .select({ recordId: pageRecordValuesTable.recordId, valuesJson: pageRecordValuesTable.valuesJson })
     .from(pageRecordValuesTable)
@@ -633,10 +651,18 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
   // Restrict to records of THIS entity the viewer is allowed to see (own scope).
   const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
   const requested = Array.from(new Set(parsed.data.recordIds));
+  // Hard boundary: base records sitting in a row-hidden status (for the page's
+  // entity) must not be returned even when their ids are passed in explicitly.
+  const baseConds: SQL[] = [
+    eq(entityRecordsTable.entityId, entityId),
+    inArray(entityRecordsTable.id, requested),
+  ];
+  const baseHiddenRowWhere = hiddenRowStatusWhere(effectiveStatusVisibility(perms, entityId).hiddenRowStatusIds);
+  if (baseHiddenRowWhere) baseConds.push(baseHiddenRowWhere);
   const pageRecords = await db
     .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
     .from(entityRecordsTable)
-    .where(and(eq(entityRecordsTable.entityId, entityId), inArray(entityRecordsTable.id, requested)));
+    .where(and(...baseConds));
   const allowedIds = pageRecords
     .filter((r) => scope !== "own" || recordOwnedBy((r.valuesJson as Record<string, unknown>) ?? {}, scopeFieldKeys, userId))
     .map((r) => r.id);
@@ -730,10 +756,20 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
     const linkedIds = Array.from(new Set(linkRows.map((l) => l.to)));
     const linkedMap = new Map<number, Record<string, unknown>>();
     if (linkedIds.length > 0 && access !== "hidden") {
+      // Hard boundary: a linked record sitting in a row-hidden status (for the
+      // related entity) must not surface its value here either.
+      const relHiddenRowWhere = hiddenRowStatusWhere(
+        effectiveStatusVisibility(perms, relatedEntityId).hiddenRowStatusIds,
+      );
+      const linkedConds: SQL[] = [
+        eq(entityRecordsTable.entityId, relatedEntityId),
+        inArray(entityRecordsTable.id, linkedIds),
+      ];
+      if (relHiddenRowWhere) linkedConds.push(relHiddenRowWhere);
       const linkedRecords = await db
         .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
         .from(entityRecordsTable)
-        .where(and(eq(entityRecordsTable.entityId, relatedEntityId), inArray(entityRecordsTable.id, linkedIds)));
+        .where(and(...linkedConds));
       for (const lr of linkedRecords) linkedMap.set(lr.id, (lr.valuesJson as Record<string, unknown>) ?? {});
     }
 
@@ -897,6 +933,12 @@ router.post("/pages/:pageId/related-candidates", requireAuth, async (req, res): 
   const relScope = effectiveScope(perms, relatedEntityId);
   const conds: SQL[] = [eq(entityRecordsTable.entityId, relatedEntityId)];
   if (relScope.scope === "own") conds.push(ownScopeWhere(relScope.scopeFieldKeys, userId));
+  // Hard boundary: row-hidden-status records of the related entity must not be
+  // offered as link candidates (mirrors the records list/query exclusion).
+  const candHiddenRowWhere = hiddenRowStatusWhere(
+    effectiveStatusVisibility(perms, relatedEntityId).hiddenRowStatusIds,
+  );
+  if (candHiddenRowWhere) conds.push(candHiddenRowWhere);
   const q = body.data.q?.trim();
   if (q) {
     conds.push(sql`(${entityRecordsTable.valuesJson} ->> ${relatedFieldKey}) ILIKE ${`%${q}%`}`);

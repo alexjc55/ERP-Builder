@@ -3322,6 +3322,14 @@ components:
           type: array
           items:
             type: string
+        hiddenStatusIds:
+          type: array
+          items:
+            type: integer
+        hiddenRowStatusIds:
+          type: array
+          items:
+            type: integer
 
     RoleAdminCaps:
       type: object

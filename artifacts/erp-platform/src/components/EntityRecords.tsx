@@ -829,6 +829,38 @@ export function EntityRecords({
   const statusById = new Map(statuses.map((s: Status) => [s.id, s]));
   const isSuperAdmin = user?.permissions?.superAdmin === true;
 
+  // Cosmetic mirror of the server's per-role status visibility (entity-level, like
+  // row scope). superAdmin sees everything. `hidden` = not offered in picker/quick
+  // filter; `hiddenRows` = rows never shown (also drops the quick-filter chip).
+  // Badge rendering still uses the full `statuses` list so labels always resolve.
+  const toIdSet = (v: unknown): Set<number> =>
+    new Set<number>(Array.isArray(v) ? v.filter((n): n is number => Number.isInteger(n)) : []);
+  const statusEntityPerm = isSuperAdmin ? undefined : user?.permissions?.records?.[String(entityId)];
+  const hiddenStatusIds = toIdSet(statusEntityPerm?.hiddenStatusIds);
+  const hiddenRowStatusIds = toIdSet(statusEntityPerm?.hiddenRowStatusIds);
+  // Drop hidden-picker statuses but always keep `keepId` (a record's current
+  // status) so its Select still renders the value it's actually set to.
+  const dropHidden = (list: Status[], keepId?: number | null): Status[] =>
+    list.filter((s: Status) => !hiddenStatusIds.has(s.id) || s.id === keepId);
+  // Quick-filter chips: a role can neither filter by hidden-picker statuses nor by
+  // hidden-row statuses (the latter have no rows to surface anyway).
+  const filterableStatuses = statuses.filter(
+    (s: Status) => !hiddenStatusIds.has(s.id) && !hiddenRowStatusIds.has(s.id),
+  );
+  // When the entity's default status is hidden from this role's picker, the create
+  // form falls back to NO_STATUS. The server only assigns the (hidden) default
+  // when statusId is OMITTED — a null value is stored as an explicit no-status —
+  // so in that case the create payload must drop statusId entirely.
+  const defaultStatusObj = statuses.find((s: Status) => s.isDefault);
+  const defaultStatusHidden = defaultStatusObj != null && hiddenStatusIds.has(defaultStatusObj.id);
+  const buildCreateData = (
+    valuesJson: Record<string, unknown>,
+    statusValue: number | null,
+  ): { valuesJson: Record<string, unknown>; statusId?: number | null; pageId?: number } =>
+    statusValue === null && defaultStatusHidden
+      ? { valuesJson, pageId: permPageId }
+      : { valuesJson, statusId: statusValue, pageId: permPageId };
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<EntityRecord | null>(null);
   const [toDelete, setToDelete] = useState<EntityRecord | null>(null);
@@ -967,9 +999,10 @@ export function EntityRecords({
           .map((t: Transition) => t.toStatusId),
       ])
     : null;
-  const selectableStatuses = allowedStatusIds
-    ? statuses.filter((s: Status) => allowedStatusIds.has(s.id))
-    : statuses;
+  const selectableStatuses = dropHidden(
+    allowedStatusIds ? statuses.filter((s: Status) => allowedStatusIds.has(s.id)) : statuses,
+    currentEditStatusId,
+  );
 
   // View / filter / search / pagination state for the server-side query endpoint.
   const [selectedViewId, setSelectedViewId] = useState<string>(NO_VIEW);
@@ -1314,8 +1347,11 @@ export function EntityRecords({
     const initial: FormState = {};
     for (const f of fields) initial[f.fieldKey] = emptyForField(f);
     setForm(initial);
+    // Preselect the default status — but if it is hidden from this role's picker,
+    // leave it unset so the server assigns the (hidden) default itself instead of
+    // rejecting an explicit forbidden statusId.
     const def = statuses.find((s: Status) => s.isDefault);
-    setStatusId(def ? String(def.id) : NO_STATUS);
+    setStatusId(def && !hiddenStatusIds.has(def.id) ? String(def.id) : NO_STATUS);
     setDialogOpen(true);
   };
 
@@ -1370,7 +1406,7 @@ export function EntityRecords({
     if (editing) {
       updateMutation.mutate({ id: editing.id, data: { valuesJson, statusId: statusValue, pageId: permPageId } });
     } else {
-      createMutation.mutate({ entityId, data: { valuesJson, statusId: statusValue, pageId: permPageId } });
+      createMutation.mutate({ entityId, data: buildCreateData(valuesJson, statusValue) });
     }
   };
 
@@ -1440,8 +1476,8 @@ export function EntityRecords({
 
   // Statuses a given row may move to, mirroring the server workflow boundary (per-row).
   const allowedStatusesForRecord = (record: EntityRecord): Status[] => {
-    if (!workflowActiveForRecord(record)) return statuses;
     const cur = record.statusId ?? null;
+    if (!workflowActiveForRecord(record)) return dropHidden(statuses, cur);
     const ids = new Set<number>([
       cur as number,
       ...transitions
@@ -1453,7 +1489,7 @@ export function EntityRecords({
         )
         .map((tr: Transition) => tr.toStatusId),
     ]);
-    return statuses.filter((s: Status) => ids.has(s.id));
+    return dropHidden(statuses.filter((s: Status) => ids.has(s.id)), cur);
   };
 
   const startAddRow = () => {
@@ -1466,8 +1502,11 @@ export function EntityRecords({
       pageInitial[pf.fieldKey] = emptyForField({ ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field);
     }
     setNewPageRow(pageInitial);
+    // Preselect the default status — but if it is hidden from this role's picker,
+    // leave it unset so the server assigns the (hidden) default itself instead of
+    // rejecting an explicit forbidden statusId.
     const def = statuses.find((s: Status) => s.isDefault);
-    setNewRowStatus(def ? String(def.id) : NO_STATUS);
+    setNewRowStatus(def && !hiddenStatusIds.has(def.id) ? String(def.id) : NO_STATUS);
     setEditingCell(null);
     setAddingRow(true);
   };
@@ -1493,7 +1532,7 @@ export function EntityRecords({
       }
       void (async () => {
         try {
-          const created = await createMutation.mutateAsync({ entityId, data: { valuesJson, statusId: statusValue, pageId: permPageId } });
+          const created = await createMutation.mutateAsync({ entityId, data: buildCreateData(valuesJson, statusValue) });
           if (created?.id != null && Object.keys(pageValuesJson).length > 0) {
             await setPageValuesMutation.mutateAsync({ pageId, recordId: created.id, data: { valuesJson: pageValuesJson } });
           }
@@ -1504,7 +1543,7 @@ export function EntityRecords({
       })();
       return;
     }
-    createMutation.mutate({ entityId, data: { valuesJson, statusId: statusValue, pageId: permPageId } });
+    createMutation.mutate({ entityId, data: buildCreateData(valuesJson, statusValue) });
   };
 
   const openColumnConfig = (field: Field | null) => {
@@ -1670,7 +1709,7 @@ export function EntityRecords({
       {!setupMode && (statuses.length > 0 || filterableFields.length > 0) && (
         <div className="flex flex-wrap items-center gap-2">
           <Filter className="w-4 h-4 text-slate-400 shrink-0" />
-          {statuses.length > 0 && (
+          {filterableStatuses.length > 0 && (
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -1689,7 +1728,7 @@ export function EntityRecords({
               <PopoverContent align="start" className="w-56 p-0">
                 <ScrollArea className="max-h-64">
                   <div className="p-1">
-                    {statuses.map((s: Status) => (
+                    {filterableStatuses.map((s: Status) => (
                       <label
                         key={s.id}
                         className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 cursor-pointer text-sm"
@@ -2028,7 +2067,7 @@ export function EntityRecords({
                             <SelectTrigger className="h-8 w-44 text-sm"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
-                              {statuses.map((s: Status) => (
+                              {dropHidden(statuses).map((s: Status) => (
                                 <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
                               ))}
                             </SelectContent>

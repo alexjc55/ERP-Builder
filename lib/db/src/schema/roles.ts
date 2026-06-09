@@ -19,6 +19,15 @@ export interface RecordPermission {
   scope?: RecordScope;
   /** User-type field keys that designate ownership when scope === "own". */
   scopeFieldKeys?: string[];
+  /**
+   * Per-entity status visibility for this role (records UI). Both arrays are
+   * SPARSE — they list only the exceptions, so any status not listed (including
+   * statuses added later) defaults to fully visible. superAdmin ignores both.
+   */
+  /** Status ids hidden from the status picker/quick-filter: the role can neither filter by nor switch a record to them. */
+  hiddenStatusIds?: number[];
+  /** Status ids whose ROWS are excluded from list/query results for this role (hard boundary — also removes them from filters). */
+  hiddenRowStatusIds?: number[];
 }
 
 /** Admin-builder capability areas. */

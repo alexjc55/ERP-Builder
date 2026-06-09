@@ -8,6 +8,7 @@ import {
   assertRecord,
   getPermissions,
   effectiveScope,
+  effectiveStatusVisibility,
   effectiveRecordPerm,
   recordOwnedBy,
   resolveFieldAccess,
@@ -377,6 +378,19 @@ function archivedWhere(filter: ArchiveFilterValue): SQL | undefined {
 }
 
 /**
+ * WHERE fragment excluding rows whose status is hidden-for-rows for this role.
+ * Null-status rows are always kept (a status visibility rule cannot target the
+ * absence of a status). Returns undefined when nothing is hidden (no-op).
+ */
+function hiddenRowStatusWhere(hiddenRowStatusIds: number[]): SQL | undefined {
+  if (hiddenRowStatusIds.length === 0) return undefined;
+  return sql`(${entityRecordsTable.statusId} IS NULL OR ${entityRecordsTable.statusId} NOT IN (${sql.join(
+    hiddenRowStatusIds.map((id) => sql`${id}`),
+    sql`, `,
+  )}))`;
+}
+
+/**
  * Auto-archive (metadata-driven): any record sitting in an archive-trigger status
  * past that status's day threshold gets `archivedAt` stamped. Records are never
  * moved — only flagged — so "archive is not a separate table". Runs lazily before
@@ -433,6 +447,7 @@ router.get("/entities/:entityId/records", requireAuth, requireRecordParam("view"
   const { hidden } = await fieldAccessContext(req, entityId, fields);
   const perms = await getPermissions(req);
   const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
+  const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, entityId);
 
   // Apply auto-archival, then hide archived rows from this normal list (display rule).
   // Guests are strictly read-only: never let a guest read trigger the archival write
@@ -442,6 +457,8 @@ router.get("/entities/:entityId/records", requireAuth, requireRecordParam("view"
   if (scope === "own") {
     where = and(where, ownScopeWhere(scopeFieldKeys, req.user!.userId))!;
   }
+  const listHiddenRowWhere = hiddenRowStatusWhere(hiddenRowStatusIds);
+  if (listHiddenRowWhere) where = and(where, listHiddenRowWhere)!;
 
   const records = await db
     .select()
@@ -482,6 +499,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
 
   const perms = await getPermissions(req);
   const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
+  const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, entityId);
 
   // Guests are strictly read-only: skip the archival write sweep for guest sessions.
   if (!req.user?.guest) await runAutoArchiveSweep(entityId);
@@ -492,6 +510,10 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   const archWhere = archivedWhere(archived);
   if (archWhere) clauses.push(archWhere);
   if (scope === "own") clauses.push(ownScopeWhere(scopeFieldKeys, req.user!.userId));
+  // Hard boundary: rows in a status hidden-for-rows for this role are never
+  // returned, so the role cannot surface them via any filter/status pick either.
+  const queryHiddenRowWhere = hiddenRowStatusWhere(hiddenRowStatusIds);
+  if (queryHiddenRowWhere) clauses.push(queryHiddenRowWhere);
   const where = and(...clauses)!;
 
   const { page, pageSize } = body.data;
@@ -584,6 +606,7 @@ router.post(
 
     const perms = await getPermissions(req);
     const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
+    const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, entityId);
     const archived = (body.data.archived ?? "active") as ArchiveFilterValue;
 
     const clauses: SQL[] = [eq(entityRecordsTable.entityId, entityId)];
@@ -591,6 +614,10 @@ router.post(
     const archWhere = archivedWhere(archived);
     if (archWhere) clauses.push(archWhere);
     if (scope === "own") clauses.push(ownScopeWhere(scopeFieldKeys, req.user!.userId));
+    // Same hard boundary as the records query: dependent-filter options must not
+    // leak values that only exist on rows hidden-for-rows for this role.
+    const fvHiddenRowWhere = hiddenRowStatusWhere(hiddenRowStatusIds);
+    if (fvHiddenRowWhere) clauses.push(fvHiddenRowWhere);
     const valueExpr = sql<string | null>`(${entityRecordsTable.valuesJson} ->> ${body.data.field})`;
     clauses.push(sql`${valueExpr} IS NOT NULL AND ${valueExpr} <> ''`);
     const where = and(...clauses)!;
@@ -664,6 +691,15 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
       res.status(400).json({ error: "Status does not belong to this entity" });
       return;
     }
+    // Hard boundary: the role may not explicitly assign a status hidden from its
+    // picker. (A hidden DEFAULT is still allowed — that's a system assignment, not
+    // a user choice — so creation never breaks.)
+    const createPerms = await getPermissions(req);
+    const { hiddenStatusIds } = effectiveStatusVisibility(createPerms, entityId);
+    if (hiddenStatusIds.includes(body.data.statusId)) {
+      res.status(403).json({ error: "This status is not available to your role" });
+      return;
+    }
     statusId = body.data.statusId;
   }
 
@@ -724,6 +760,13 @@ router.get("/records/:id", requireAuth, async (req, res): Promise<void> => {
   const { scope, scopeFieldKeys } = effectiveScope(perms, record.entityId);
   const values = (record.valuesJson as Record<string, unknown>) ?? {};
   if (scope === "own" && !recordOwnedBy(values, scopeFieldKeys, req.user!.userId)) {
+    res.status(404).json({ error: "Record not found" });
+    return;
+  }
+  // Hard boundary: rows sitting in a row-hidden status must not be reachable by
+  // ID either (NULL status is always visible). Mirror the list/query exclusion.
+  const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, record.entityId);
+  if (record.statusId != null && hiddenRowStatusIds.includes(record.statusId)) {
     res.status(404).json({ error: "Record not found" });
     return;
   }
@@ -933,6 +976,16 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
   // so concurrent status-changing writes cannot bypass the transition graph.
   let guardFromStatusId: number | null = null;
   const statusChanging = hasStatus && (update.statusId ?? null) !== (existing.statusId ?? null);
+  // Hard boundary: the role may not move a record INTO a status hidden from its
+  // picker. A record already sitting in a hidden status (status unchanged) is left
+  // alone so unrelated value edits never break.
+  if (statusChanging && update.statusId != null && !perms.superAdmin) {
+    const { hiddenStatusIds } = effectiveStatusVisibility(perms, existing.entityId);
+    if (hiddenStatusIds.includes(update.statusId)) {
+      res.status(403).json({ error: "This status is not available to your role" });
+      return;
+    }
+  }
   if (statusChanging && existing.statusId != null && !perms.superAdmin) {
     const transitions = await db
       .select()

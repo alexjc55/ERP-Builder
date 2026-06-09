@@ -4692,6 +4692,60 @@
     "he": "רק שלי"
   },
   {
+    "key": "roles.statusRights",
+    "ru": "Права на статусы",
+    "en": "Status rights",
+    "he": "הרשאות סטטוס"
+  },
+  {
+    "key": "roles.statusRightsDesc",
+    "ru": "Для выбранной сущности можно скрыть отдельные статусы у этой роли: «Отображать статус» — статус доступен в выборе и фильтре; «Отображать строки» — записи в этом статусе видны роли. По умолчанию включено всё.",
+    "en": "For a chosen entity you can hide individual statuses from this role: \"Show status\" — the status is available in the picker and filter; \"Show rows\" — records in that status are visible to the role. Everything is enabled by default.",
+    "he": "עבור ישות נבחרת ניתן להסתיר סטטוסים מסוימים מתפקיד זה: «הצג סטטוס» — הסטטוס זמין בבחירה ובסינון; «הצג שורות» — רשומות בסטטוס זה גלויות לתפקיד. הכול מופעל כברירת מחדל."
+  },
+  {
+    "key": "roles.statusSelectEntity",
+    "ru": "Выберите сущность",
+    "en": "Select entity",
+    "he": "בחר ישות"
+  },
+  {
+    "key": "roles.statusAllAdded",
+    "ru": "Все сущности добавлены",
+    "en": "All entities added",
+    "he": "כל הישויות נוספו"
+  },
+  {
+    "key": "roles.addStatusRights",
+    "ru": "Добавить права на статусы",
+    "en": "Add status rights",
+    "he": "הוסף הרשאות סטטוס"
+  },
+  {
+    "key": "roles.statusNone",
+    "ru": "У сущности нет статусов.",
+    "en": "The entity has no statuses.",
+    "he": "לישות אין סטטוסים."
+  },
+  {
+    "key": "roles.statusName",
+    "ru": "Статус",
+    "en": "Status",
+    "he": "סטטוס"
+  },
+  {
+    "key": "roles.statusShow",
+    "ru": "Отображать статус",
+    "en": "Show status",
+    "he": "הצג סטטוס"
+  },
+  {
+    "key": "roles.statusShowRows",
+    "ru": "Отображать строки",
+    "en": "Show rows",
+    "he": "הצג שורות"
+  },
+  {
     "key": "roles.subtitle",
     "ru": "Управление ролями и правами доступа",
     "en": "Manage roles and access permissions",

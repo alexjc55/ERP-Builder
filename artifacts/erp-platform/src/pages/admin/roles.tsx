@@ -7,6 +7,7 @@ import {
   useListPages,
   useListEntities,
   useListEntityFields,
+  useListEntityStatuses,
   type Role,
   type RolePermissions,
   type RoleAdminCaps,
@@ -15,6 +16,7 @@ import {
   type Page,
   type Entity,
   type Field,
+  type Status,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -93,6 +95,11 @@ export default function RolesPage() {
   const [nameJson, setNameJson] = useState<MLValue>({ ru: "", en: "", he: "" });
   const [descJson, setDescJson] = useState<MLValue>({ ru: "", en: "", he: "" });
   const [perms, setPerms] = useState<RolePermissions>(emptyPerms());
+  // Entity ids whose "status rights" block is open in the editor. Stored
+  // separately from perms because an entity can be configured with everything
+  // still checked (empty hidden arrays) — presence here = the block is shown.
+  const [statusEntityIds, setStatusEntityIds] = useState<number[]>([]);
+  const [addStatusEntityId, setAddStatusEntityId] = useState<string>("");
 
   const { data: roles = [], isLoading } = useListRoles();
   const { data: pages = [] } = useListPages();
@@ -131,6 +138,8 @@ export default function RolesPage() {
     setNameJson({ ru: "", en: "", he: "" });
     setDescJson({ ru: "", en: "", he: "" });
     setPerms(emptyPerms());
+    setStatusEntityIds([]);
+    setAddStatusEntityId("");
     setDialogOpen(true);
   };
 
@@ -140,16 +149,30 @@ export default function RolesPage() {
     setDescJson(role.descriptionJson || {});
     const base = emptyPerms();
     const p = role.permissionsJson;
+    const records = p?.records ?? {};
     setPerms(
       p
         ? {
             superAdmin: p.superAdmin ?? false,
             admin: { ...base.admin, ...(p.admin ?? {}) },
             pageIds: p.pageIds ?? [],
-            records: p.records ?? {},
+            records,
           }
         : base,
     );
+    // Open a status-rights block for every entity that already has a configured
+    // exception (keys "<entityId>" only — mirror keys are not entities).
+    setStatusEntityIds(
+      Object.entries(records)
+        .filter(
+          ([k, rp]) =>
+            /^\d+$/.test(k) &&
+            (((rp as RecordPermission).hiddenStatusIds?.length ?? 0) > 0 ||
+              ((rp as RecordPermission).hiddenRowStatusIds?.length ?? 0) > 0),
+        )
+        .map(([k]) => Number(k)),
+    );
+    setAddStatusEntityId("");
     setDialogOpen(true);
   };
 
@@ -249,6 +272,47 @@ export default function RolesPage() {
       const next = checked ? [...keys, key] : keys.filter((k) => k !== key);
       return { ...prev, records: { ...prev.records, [String(entityId)]: { ...current, scopeFieldKeys: next } } };
     });
+
+  // ----- Status visibility per entity (sparse: only the OFF exceptions stored) -----
+
+  // Toggle one hidden-status array (hiddenStatusIds | hiddenRowStatusIds) for an
+  // entity. `shown === false` adds the id (a stored exception); `true` removes it.
+  const setStatusFlag = (
+    entityId: number,
+    field: "hiddenStatusIds" | "hiddenRowStatusIds",
+    statusId: number,
+    shown: boolean,
+  ) =>
+    setPerms((prev) => {
+      const key = String(entityId);
+      const current: RecordPermission =
+        prev.records[key] ?? { view: false, create: false, update: false, delete: false };
+      const list = current[field] ?? [];
+      const next = shown ? list.filter((id) => id !== statusId) : [...new Set([...list, statusId])];
+      return { ...prev, records: { ...prev.records, [key]: { ...current, [field]: next } } };
+    });
+
+  const addStatusEntity = () => {
+    const id = Number(addStatusEntityId);
+    if (!Number.isInteger(id)) return;
+    setStatusEntityIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setAddStatusEntityId("");
+  };
+
+  // Remove an entity's status-rights block and clear its stored exceptions so the
+  // role reverts to "all statuses visible" for that entity.
+  const removeStatusEntity = (entityId: number) => {
+    setStatusEntityIds((prev) => prev.filter((id) => id !== entityId));
+    setPerms((prev) => {
+      const key = String(entityId);
+      const current = prev.records[key];
+      if (!current) return prev;
+      const { hiddenStatusIds: _h, hiddenRowStatusIds: _r, ...rest } = current;
+      return { ...prev, records: { ...prev.records, [key]: rest } };
+    });
+  };
+
+  const statusConfigurableEntities = entities.filter((e: Entity) => !statusEntityIds.includes(e.id));
 
   const scopedEntities = entities.filter((e: Entity) => getRecordPerm(e.id).view);
 
@@ -513,6 +577,60 @@ export default function RolesPage() {
                   </div>
                 )}
               </div>
+
+              <div>
+                <h4 className="text-sm font-semibold text-slate-700 mb-1">{t("roles.statusRights", "Права на статусы")}</h4>
+                <p className="text-xs text-slate-400 mb-2">
+                  {t(
+                    "roles.statusRightsDesc",
+                    "Для выбранной сущности можно скрыть отдельные статусы у этой роли: «Отображать статус» — статус доступен в выборе и фильтре; «Отображать строки» — записи в этом статусе видны роли. По умолчанию включено всё.",
+                  )}
+                </p>
+                {statusEntityIds.length > 0 && (
+                  <div className="space-y-3 mb-2">
+                    {statusEntityIds.map((entityId) => {
+                      const entity = entities.find((e: Entity) => e.id === entityId);
+                      if (!entity) return null;
+                      const rp = getRecordPerm(entityId);
+                      return (
+                        <EntityStatusPermsRow
+                          key={entityId}
+                          entity={entity}
+                          hiddenStatusIds={rp.hiddenStatusIds ?? []}
+                          hiddenRowStatusIds={rp.hiddenRowStatusIds ?? []}
+                          onToggleShown={(sid, shown) => setStatusFlag(entityId, "hiddenStatusIds", sid, shown)}
+                          onToggleRowsShown={(sid, shown) => setStatusFlag(entityId, "hiddenRowStatusIds", sid, shown)}
+                          onRemove={() => removeStatusEntity(entityId)}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <Select value={addStatusEntityId} onValueChange={setAddStatusEntityId}>
+                    <SelectTrigger className="w-56 h-9">
+                      <SelectValue placeholder={t("roles.statusSelectEntity", "Выберите сущность")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {statusConfigurableEntities.length === 0 ? (
+                        <div className="px-2 py-1.5 text-xs text-slate-400">
+                          {t("roles.statusAllAdded", "Все сущности добавлены")}
+                        </div>
+                      ) : (
+                        statusConfigurableEntities.map((entity: Entity) => (
+                          <SelectItem key={entity.id} value={String(entity.id)}>
+                            {ml(entity.nameJson) || entity.entityKey}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5" disabled={!addStatusEntityId} onClick={addStatusEntity}>
+                    <Plus className="w-4 h-4" />
+                    {t("roles.addStatusRights", "Добавить права на статусы")}
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -604,6 +722,68 @@ function EntityScopeRow({
               )}
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EntityStatusPermsRow({
+  entity,
+  hiddenStatusIds,
+  hiddenRowStatusIds,
+  onToggleShown,
+  onToggleRowsShown,
+  onRemove,
+}: {
+  entity: Entity;
+  hiddenStatusIds: number[];
+  hiddenRowStatusIds: number[];
+  onToggleShown: (statusId: number, shown: boolean) => void;
+  onToggleRowsShown: (statusId: number, shown: boolean) => void;
+  onRemove: () => void;
+}) {
+  const ml = useML();
+  const t = useT();
+  const { data: statuses = [] } = useListEntityStatuses(entity.id);
+
+  return (
+    <div className="rounded-lg border border-slate-200 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-medium text-slate-700 truncate">{ml(entity.nameJson) || entity.entityKey}</span>
+        <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-slate-400 hover:text-red-600" onClick={onRemove}>
+          <Trash2 className="w-4 h-4" />
+        </Button>
+      </div>
+      {statuses.length === 0 ? (
+        <p className="text-xs text-slate-400">{t("roles.statusNone", "У сущности нет статусов.")}</p>
+      ) : (
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-4 pl-1 pb-1 text-[11px] uppercase tracking-wide text-slate-400">
+            <span className="flex-1">{t("roles.statusName", "Статус")}</span>
+            <span className="w-28 text-center">{t("roles.statusShow", "Отображать статус")}</span>
+            <span className="w-28 text-center">{t("roles.statusShowRows", "Отображать строки")}</span>
+          </div>
+          {statuses.map((s: Status) => (
+            <div key={s.id} className="flex items-center gap-4 pl-1">
+              <span className="flex-1 flex items-center gap-2 text-sm text-slate-700 truncate">
+                <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color || "#cbd5e1" }} />
+                {ml(s.nameJson)}
+              </span>
+              <div className="w-28 flex justify-center">
+                <Checkbox
+                  checked={!hiddenStatusIds.includes(s.id)}
+                  onCheckedChange={(c) => onToggleShown(s.id, c === true)}
+                />
+              </div>
+              <div className="w-28 flex justify-center">
+                <Checkbox
+                  checked={!hiddenRowStatusIds.includes(s.id)}
+                  onCheckedChange={(c) => onToggleRowsShown(s.id, c === true)}
+                />
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

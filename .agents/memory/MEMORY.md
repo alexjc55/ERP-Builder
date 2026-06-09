@@ -1,6 +1,6 @@
 - [ERP platform core](erp-platform-core.md) — key foundational decisions for the metadata-driven Production ERP Builder (contract-first, metadata-driven, multilingual JSONB, custom JWT).
 - [Admin-cap stage pattern](admin-cap-stage-pattern.md) — repeatable recipe for a new admin area: RBAC cap + OpenAPI CRUD + gated route + DB-backed i18n screen.
-- [RBAC permissions](rbac-permissions.md) — how role `permissionsJson` is structured, enforced server-side, and mirrored cosmetically in the UI.
+- [RBAC permissions](rbac-permissions.md) — how role `permissionsJson` is structured, enforced server-side, mirrored cosmetically in the UI; incl. per-entity status visibility (hiddenStatusIds picker/write + hiddenRowStatusIds row read boundary).
 - [Field & row permissions](erp-field-row-permissions.md) — per-field hidden/view/edit + per-row all/own scope; the boundary decisions that must stay consistent across server and client.
 - [Display-only hide](erp-display-only-hide.md) — when a UI-only column hide is applied even to superAdmin while the server keeps super's full access; the two must not be conflated.
 - [Audit field security](audit-field-security.md) — any endpoint returning historical/raw stored values must re-apply the field-hidden boundary; record-level gating is not enough.
@@ -15,7 +15,7 @@
 - [Event system](event-system.md) — internal best-effort event bus design, the 5 core events, foundation for automations/modules.
 - [Impersonation](erp-impersonation.md) — impersonation modeled on the custom JWT; boundary/no-escalation rules that must stay consistent.
 - [Passwordless guest access](guest-access.md) — shareable-link guest sessions: read-only is a hard guard at requireAuth (not RBAC), guest reads must be side-effect free, links bind to passwordless accounts only.
-- [Mirror pages](mirror-pages.md) — a page shows another entity's LIVE records (bidirectional) via mirrorEntityId + display-only mirrorFieldKeys; source-entity RBAC is the boundary, with optional per-mirror-page CRUD overrides (`mirror:<pageId>`, gated by page-access + DB mirror check server-side).
+- [Mirror pages](mirror-pages.md) — a page shows another entity's LIVE records (bidirectional) via mirrorEntityId + display-only mirrorFieldKeys; source-entity RBAC is the boundary, with optional per-mirror-page CRUD overrides.
 - [ERP i18n](erp-i18n.md) — how erp-platform i18n is wired and how to keep translation seeding complete.
 - [Settings & branding](settings-branding.md) — /settings page (profile + admin-only branding); singleton app_settings; GET-public/PUT-admin boundary; public logo route is no-IDOR because path comes from DB.
 - [Orval param collision](orval-param-collision.md) — why adding a query param to a path-param GET breaks api-zod codegen, and how to avoid it.
