@@ -3984,7 +3984,7 @@ components:
     # ENTITIES
     Entity:
       type: object
-      required: [id, entityKey, nameJson, icon, sortOrder, isActive, createdAt, updatedAt]
+      required: [id, entityKey, nameJson, icon, defaultSortJson, sortOrder, isActive, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -3998,6 +3998,10 @@ components:
           type: string
         pageId:
           type: ["integer", "null"]
+        defaultSortJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/SortSpec"
         sortOrder:
           type: integer
         isActive:
@@ -4023,6 +4027,10 @@ components:
           type: string
         pageId:
           type: ["integer", "null"]
+        defaultSortJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/SortSpec"
         sortOrder:
           type: integer
         isActive:
@@ -4042,6 +4050,10 @@ components:
           type: string
         pageId:
           type: ["integer", "null"]
+        defaultSortJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/SortSpec"
         sortOrder:
           type: integer
         isActive:

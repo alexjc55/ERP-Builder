@@ -7,6 +7,7 @@ import {
   useDeleteView,
   useReorderViews,
   useListEntities,
+  useUpdateEntity,
   useListEntityFields,
   type View,
   type ViewConfig,
@@ -296,6 +297,14 @@ export default function EntityViewsPage() {
   const [filters, setFilters] = useState<DraftFilter[]>([]);
   const [sorts, setSorts] = useState<DraftSort[]>([]);
 
+  // Default sort: the row ordering applied when no view is selected (the implicit
+  // "По умолчанию"). Stored on the entity itself, configured via its own dialog.
+  const [defaultSortDialogOpen, setDefaultSortDialogOpen] = useState(false);
+  const [defaultSorts, setDefaultSorts] = useState<DraftSort[]>([]);
+  const entityDefaultSorts: SortSpec[] = Array.isArray(entity?.defaultSortJson)
+    ? (entity.defaultSortJson as SortSpec[])
+    : [];
+
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/views`] });
 
@@ -321,6 +330,17 @@ export default function EntityViewsPage() {
     mutation: {
       onSuccess: () => invalidate(),
       onError: () => toast({ title: t("views.reorderError", "Ошибка изменения порядка"), variant: "destructive" }),
+    },
+  });
+  const updateEntityMutation = useUpdateEntity({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: t("views.defaultSortSaved", "Сортировка по умолчанию сохранена") });
+        setDefaultSortDialogOpen(false);
+        queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/entities`] });
+      },
+      onError: (err) => toast({ title: t("views.defaultSortError", "Ошибка сохранения сортировки"), description: extractError(err), variant: "destructive" }),
     },
   });
 
@@ -391,6 +411,23 @@ export default function EntityViewsPage() {
   };
   const removeSort = (idx: number) => setSorts((prev) => prev.filter((_, i) => i !== idx));
 
+  const openDefaultSort = () => {
+    setDefaultSorts(entityDefaultSorts.map((s) => ({ field: s.field, direction: s.direction ?? "asc" })));
+    setDefaultSortDialogOpen(true);
+  };
+  const addDefaultSort = () => {
+    const field = fields[0]?.fieldKey ?? "";
+    setDefaultSorts((prev) => [...prev, { field, direction: "asc" }]);
+  };
+  const updateDefaultSort = (idx: number, patch: Partial<DraftSort>) => {
+    setDefaultSorts((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+  };
+  const removeDefaultSort = (idx: number) => setDefaultSorts((prev) => prev.filter((_, i) => i !== idx));
+  const saveDefaultSort = () => {
+    const builtSorts: SortSpec[] = defaultSorts.map((s) => ({ field: s.field, direction: s.direction }));
+    updateEntityMutation.mutate({ id: entityId, data: { defaultSortJson: builtSorts } });
+  };
+
   const buildConfig = (): ViewConfig => {
     const builtFilters: FilterCondition[] = filters.map((f) => {
       const cond: FilterCondition = { field: f.field, operator: f.operator };
@@ -457,6 +494,37 @@ export default function EntityViewsPage() {
           </Button>
         </div>
       </div>
+
+      <Card className="border-slate-200 shadow-sm">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+                <ArrowDownUp className="w-4 h-4 text-blue-600" />
+                {t("views.defaultSortTitle", "Сортировка по умолчанию")}
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {t("views.defaultSortDesc", "Применяется, когда вид не выбран. Без настройки — по дате создания (сначала новые).")}
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {entityDefaultSorts.length === 0 ? (
+                  <span className="text-xs text-slate-400">{t("views.defaultSortNone", "По дате создания (сначала новые)")}</span>
+                ) : (
+                  entityDefaultSorts.map((s, i) => (
+                    <Badge key={i} className="bg-slate-100 text-slate-600 border-0 font-normal">
+                      {fieldLabel(s.field)} · {s.direction === "desc" ? t("views.descShort", "↓") : t("views.ascShort", "↑")}
+                    </Badge>
+                  ))
+                )}
+              </div>
+            </div>
+            <Button type="button" variant="outline" className="gap-2 shrink-0" disabled={noFields} onClick={openDefaultSort}>
+              <Pencil className="w-3.5 h-3.5" />
+              {t("views.configure", "Настроить")}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="border-slate-200 shadow-sm">
         <CardContent className="p-0">
@@ -668,6 +736,62 @@ export default function EntityViewsPage() {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("views.cancel", "Отмена")}</Button>
             <Button onClick={handleSubmit} disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
               {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editing ? t("views.save", "Сохранить") : t("views.create", "Создать")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={defaultSortDialogOpen} onOpenChange={setDefaultSortDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t("views.defaultSortTitle", "Сортировка по умолчанию")}</DialogTitle>
+            <DialogDescription>
+              {t("views.defaultSortDialogDesc", "Эта сортировка применяется к записям, когда вид не выбран. Выбранный вид использует свою собственную сортировку.")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+                <ArrowDownUp className="w-4 h-4 text-blue-600" />
+                {t("views.sorting", "Сортировка")}
+              </div>
+              <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5" onClick={addDefaultSort}>
+                <Plus className="w-3.5 h-3.5" /> {t("views.field", "Поле")}
+              </Button>
+            </div>
+            {defaultSorts.length === 0 ? (
+              <p className="text-xs text-slate-400">{t("views.noSortsHint", "По умолчанию — по дате создания (сначала новые).")}</p>
+            ) : (
+              <div className="space-y-2">
+                {defaultSorts.map((s, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <Select value={s.field} onValueChange={(v) => updateDefaultSort(idx, { field: v })}>
+                      <SelectTrigger className="h-8 text-sm flex-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {fields.map((fld: Field) => (
+                          <SelectItem key={fld.fieldKey} value={fld.fieldKey}>{ml(fld.nameJson)}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={s.direction} onValueChange={(v) => updateDefaultSort(idx, { direction: v as SortSpecDirection })}>
+                      <SelectTrigger className="h-8 text-sm w-40"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="asc">{t("views.asc", "По возрастанию")}</SelectItem>
+                        <SelectItem value="desc">{t("views.desc", "По убыванию")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-500 shrink-0" onClick={() => removeDefaultSort(idx)}>
+                      <X className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDefaultSortDialogOpen(false)}>{t("views.cancel", "Отмена")}</Button>
+            <Button onClick={saveDefaultSort} disabled={updateEntityMutation.isPending} className="bg-blue-600 hover:bg-blue-700">
+              {updateEntityMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : t("views.save", "Сохранить")}
             </Button>
           </DialogFooter>
         </DialogContent>

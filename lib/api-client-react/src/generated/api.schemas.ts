@@ -1224,6 +1224,19 @@ export interface NotesContentInput {
   cells?: NotesContentInputCellsItem[] | null;
 }
 
+export type SortSpecDirection = typeof SortSpecDirection[keyof typeof SortSpecDirection];
+
+
+export const SortSpecDirection = {
+  asc: 'asc',
+  desc: 'desc',
+} as const;
+
+export interface SortSpec {
+  field: string;
+  direction?: SortSpecDirection;
+}
+
 export interface Entity {
   id: number;
   entityKey: string;
@@ -1232,6 +1245,7 @@ export interface Entity {
   icon: string;
   /** @nullable */
   pageId?: number | null;
+  defaultSortJson: SortSpec[];
   sortOrder: number;
   isActive: boolean;
   createdAt: string;
@@ -1245,6 +1259,7 @@ export interface EntityInput {
   icon: string;
   /** @nullable */
   pageId?: number | null;
+  defaultSortJson?: SortSpec[];
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -1256,6 +1271,7 @@ export interface EntityUpdate {
   icon?: string;
   /** @nullable */
   pageId?: number | null;
+  defaultSortJson?: SortSpec[];
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -1831,19 +1847,6 @@ export interface FilterCondition {
   field: string;
   operator: FilterOperator;
   value?: unknown;
-}
-
-export type SortSpecDirection = typeof SortSpecDirection[keyof typeof SortSpecDirection];
-
-
-export const SortSpecDirection = {
-  asc: 'asc',
-  desc: 'desc',
-} as const;
-
-export interface SortSpec {
-  field: string;
-  direction?: SortSpecDirection;
 }
 
 export type ViewConfigFilterConjunction = typeof ViewConfigFilterConjunction[keyof typeof ViewConfigFilterConjunction];

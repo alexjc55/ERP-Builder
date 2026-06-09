@@ -21,6 +21,11 @@ A component that does one-time bootstrap (e.g. auto-selecting the entity's defau
 ## Schema naming
 FilterCondition/SortSpec use `field` + `operator`/`direction` (NOT `fieldKey`). Field keys in filters/sorts are whitelist-validated server-side against the entity's active fields (400 on unknown); values are Drizzle bound params. configJson holds `{filters, filterConjunction, sorts, search, visibleFields}`.
 
+## Entity-level default sort (no view selected)
+Row ordering when NO view is selected (the implicit "По умолчанию") comes from `entities.defaultSortJson` (a `SortSpec[]`), configured in the views admin screen via its own card/dialog (persisted with the entity PUT, gated by `requireAdmin("entities")`). Empty array → server fallback `created_at DESC` (unchanged). A selected view's own `configJson.sorts` always take priority over the entity default.
+**Why:** users needed to set default sorting without the ceremony of creating a named view; the implicit default previously had no settings at all.
+**How to apply:** client sends `entityDefaultSorts` as the query `sorts` only when no view is active. Always filter those sorts against the entity's *current* active field keys before sending — a field deleted after the default was set would otherwise trip the server's whitelist (`Unknown sort field`) and break the default table for everyone. Don't add a server change for the fallback; the existing empty-sorts→created_at branch covers it.
+
 ## Views do NOT control which columns show — per-field "Показывать в таблице" does
 A view's `configJson.visibleFields` is **no longer used to choose/limit the records-table columns**. Columns are governed solely by each field's per-page `showInTable` flag (plus field-level role perms via `tableFields`); column order follows field `sortOrder`. A view carries only sort/filter/search.
 **Why:** the views admin UI never exposed a column picker, yet seeded default views had `visibleFields` populated — so selecting the default view silently hid columns the field settings said to show, with no way for the user to fix it. The user's model: column visibility is a per-page/per-field decision (independently per page, even for related/mirror columns), not a view concern.

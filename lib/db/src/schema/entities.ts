@@ -10,6 +10,7 @@ export const entitiesTable = pgTable("entities", {
   descriptionJson: jsonb("description_json").default({}),
   icon: text("icon").notNull().default("table"),
   pageId: integer("page_id").references(() => pagesTable.id, { onDelete: "set null" }),
+  defaultSortJson: jsonb("default_sort_json").notNull().default([]),
   sortOrder: integer("sort_order").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

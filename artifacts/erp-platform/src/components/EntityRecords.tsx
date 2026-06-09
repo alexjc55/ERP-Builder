@@ -12,6 +12,7 @@ import {
   useListEntityTransitions,
   useListEntityRelations,
   useListEntityViews,
+  useGetEntity,
   useQueryEntityRecords,
   useGetEntityFilterValues,
   useArchiveRecord,
@@ -44,6 +45,7 @@ import {
   type ViewConfig,
   type Transition,
   type RecordQuery,
+  type SortSpec,
   type LinkedRecord,
   type UserOption,
 } from "@workspace/api-client-react";
@@ -748,6 +750,7 @@ export function EntityRecords({
   const { data: statuses = [] } = useListEntityStatuses(entityId);
   const { data: transitions = [] } = useListEntityTransitions(entityId);
   const { data: views = [] } = useListEntityViews(entityId);
+  const { data: entity } = useGetEntity(entityId);
   const { data: userOptions = [] } = useListUserOptions();
 
   const userNames = useMemo(
@@ -1080,19 +1083,31 @@ export function EntityRecords({
   );
   const dateKey = JSON.stringify(dateFilters);
 
+  // With no view selected, fall back to the entity's configured default sort
+  // (set in the views screen). A selected view's own sorts always take priority.
+  // Drop any sort whose field no longer exists on the entity so a deleted field
+  // can't break the default table with a server "Unknown sort field" error.
+  const entityDefaultSorts = useMemo(() => {
+    const raw = Array.isArray(entity?.defaultSortJson) ? (entity.defaultSortJson as SortSpec[]) : [];
+    const known = new Set(allFields.filter((f: Field) => f.isActive).map((f: Field) => f.fieldKey));
+    return raw.filter((s) => known.has(s.field));
+  }, [entity?.defaultSortJson, allFields]);
+  const effectiveSorts = selectedView ? (selectedConfig.sorts ?? []) : entityDefaultSorts;
+  const sortsKey = JSON.stringify(effectiveSorts);
+
   const recordQuery: RecordQuery = useMemo(
     () => ({
       filters: [...(selectedConfig.filters ?? []), ...adHocFilters, ...dateFilterConditions],
       filterConjunction: selectedConfig.filterConjunction ?? "and",
       statusIds: statusFilter.length > 0 ? statusFilter : undefined,
-      sorts: selectedConfig.sorts ?? [],
+      sorts: effectiveSorts,
       search: search.trim() || undefined,
       archived,
       page,
       pageSize: PAGE_SIZE,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedConfig.filters, selectedConfig.filterConjunction, selectedConfig.sorts, adHocKey, dateKey, statusKey, search, archived, page],
+    [selectedConfig.filters, selectedConfig.filterConjunction, sortsKey, adHocKey, dateKey, statusKey, search, archived, page],
   );
 
   // Dependent filters: when fetching the option list for a field, we run a query against the

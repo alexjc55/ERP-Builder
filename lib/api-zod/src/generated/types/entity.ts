@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MultilingualText } from './multilingualText';
+import type { SortSpec } from './sortSpec';
 
 export interface Entity {
   id: number;
@@ -15,6 +16,7 @@ export interface Entity {
   icon: string;
   /** @nullable */
   pageId?: number | null;
+  defaultSortJson: SortSpec[];
   sortOrder: number;
   isActive: boolean;
   createdAt: Date;

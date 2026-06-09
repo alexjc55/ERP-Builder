@@ -3532,6 +3532,8 @@ export const ReorderViewsResponse = zod.object({
 /**
  * @summary List all entities
  */
+export const listEntitiesResponseDefaultSortJsonItemDirectionDefault = `asc`;
+
 export const ListEntitiesResponseItem = zod.object({
   "id": zod.number(),
   "entityKey": zod.string(),
@@ -3547,6 +3549,10 @@ export const ListEntitiesResponseItem = zod.object({
 }).optional(),
   "icon": zod.string(),
   "pageId": zod.number().nullish(),
+  "defaultSortJson": zod.array(zod.object({
+  "field": zod.string(),
+  "direction": zod.enum(['asc', 'desc']).default(listEntitiesResponseDefaultSortJsonItemDirectionDefault)
+})),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -3558,6 +3564,7 @@ export const ListEntitiesResponse = zod.array(ListEntitiesResponseItem)
 /**
  * @summary Create a new entity
  */
+export const createEntityBodyDefaultSortJsonItemDirectionDefault = `asc`;
 export const createEntityBodyIsActiveDefault = true;
 
 export const CreateEntityBody = zod.object({
@@ -3574,6 +3581,10 @@ export const CreateEntityBody = zod.object({
 }).optional(),
   "icon": zod.string(),
   "pageId": zod.number().nullish(),
+  "defaultSortJson": zod.array(zod.object({
+  "field": zod.string(),
+  "direction": zod.enum(['asc', 'desc']).default(createEntityBodyDefaultSortJsonItemDirectionDefault)
+})).optional(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createEntityBodyIsActiveDefault)
 })
@@ -3585,6 +3596,8 @@ export const CreateEntityBody = zod.object({
 export const GetEntityParams = zod.object({
   "id": zod.coerce.number()
 })
+
+export const getEntityResponseDefaultSortJsonItemDirectionDefault = `asc`;
 
 export const GetEntityResponse = zod.object({
   "id": zod.number(),
@@ -3601,6 +3614,10 @@ export const GetEntityResponse = zod.object({
 }).optional(),
   "icon": zod.string(),
   "pageId": zod.number().nullish(),
+  "defaultSortJson": zod.array(zod.object({
+  "field": zod.string(),
+  "direction": zod.enum(['asc', 'desc']).default(getEntityResponseDefaultSortJsonItemDirectionDefault)
+})),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -3614,6 +3631,8 @@ export const GetEntityResponse = zod.object({
 export const UpdateEntityParams = zod.object({
   "id": zod.coerce.number()
 })
+
+export const updateEntityBodyDefaultSortJsonItemDirectionDefault = `asc`;
 
 export const UpdateEntityBody = zod.object({
   "entityKey": zod.string().optional(),
@@ -3629,9 +3648,15 @@ export const UpdateEntityBody = zod.object({
 }).optional(),
   "icon": zod.string().optional(),
   "pageId": zod.number().nullish(),
+  "defaultSortJson": zod.array(zod.object({
+  "field": zod.string(),
+  "direction": zod.enum(['asc', 'desc']).default(updateEntityBodyDefaultSortJsonItemDirectionDefault)
+})).optional(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
+
+export const updateEntityResponseDefaultSortJsonItemDirectionDefault = `asc`;
 
 export const UpdateEntityResponse = zod.object({
   "id": zod.number(),
@@ -3648,6 +3673,10 @@ export const UpdateEntityResponse = zod.object({
 }).optional(),
   "icon": zod.string(),
   "pageId": zod.number().nullish(),
+  "defaultSortJson": zod.array(zod.object({
+  "field": zod.string(),
+  "direction": zod.enum(['asc', 'desc']).default(updateEntityResponseDefaultSortJsonItemDirectionDefault)
+})),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),

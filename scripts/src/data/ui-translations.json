@@ -5652,6 +5652,60 @@
     "he": "בסדר עולה"
   },
   {
+    "key": "views.ascShort",
+    "ru": "↑",
+    "en": "↑",
+    "he": "↑"
+  },
+  {
+    "key": "views.descShort",
+    "ru": "↓",
+    "en": "↓",
+    "he": "↓"
+  },
+  {
+    "key": "views.configure",
+    "ru": "Настроить",
+    "en": "Configure",
+    "he": "הגדרה"
+  },
+  {
+    "key": "views.defaultSortTitle",
+    "ru": "Сортировка по умолчанию",
+    "en": "Default sorting",
+    "he": "מיון ברירת מחדל"
+  },
+  {
+    "key": "views.defaultSortDesc",
+    "ru": "Применяется, когда вид не выбран. Без настройки — по дате создания (сначала новые).",
+    "en": "Applied when no view is selected. Without configuration — by creation date (newest first).",
+    "he": "מוחל כאשר לא נבחר תצוגה. ללא הגדרה — לפי תאריך יצירה (החדשים תחילה)."
+  },
+  {
+    "key": "views.defaultSortDialogDesc",
+    "ru": "Эта сортировка применяется к записям, когда вид не выбран. Выбранный вид использует свою собственную сортировку.",
+    "en": "This sorting is applied to records when no view is selected. A selected view uses its own sorting.",
+    "he": "מיון זה מוחל על רשומות כאשר לא נבחרה תצוגה. תצוגה נבחרת משתמשת במיון משלה."
+  },
+  {
+    "key": "views.defaultSortNone",
+    "ru": "По дате создания (сначала новые)",
+    "en": "By creation date (newest first)",
+    "he": "לפי תאריך יצירה (החדשים תחילה)"
+  },
+  {
+    "key": "views.defaultSortSaved",
+    "ru": "Сортировка по умолчанию сохранена",
+    "en": "Default sorting saved",
+    "he": "מיון ברירת המחדל נשמר"
+  },
+  {
+    "key": "views.defaultSortError",
+    "ru": "Ошибка сохранения сортировки",
+    "en": "Error saving sorting",
+    "he": "שגיאה בשמירת המיון"
+  },
+  {
     "key": "views.backToEntities",
     "ru": "К списку сущностей",
     "en": "Back to entities",
