@@ -4326,6 +4326,12 @@
     "he": "שדות בעלים (התאמה לפי כל אחד):"
   },
   {
+    "key": "roles.overrideRights",
+    "ru": "Переопределить права",
+    "en": "Override rights",
+    "he": "עקוף הרשאות"
+  },
+  {
     "key": "roles.pageAccess",
     "ru": "Доступ к страницам",
     "en": "Page access",
