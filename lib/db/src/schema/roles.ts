@@ -38,6 +38,19 @@ export interface RoleAdminCaps {
   settings: boolean;
 }
 
+/**
+ * Permission-map key for a mirror page's record-rights override.
+ *
+ * `RolePermissions.records` is keyed primarily by stringified entityId, but a
+ * mirror page can carry its OWN record CRUD override under `mirror:<pageId>`.
+ * When present it replaces the source entity's CRUD rights for record actions
+ * taken through that mirror page (create/update/delete/view); when absent the
+ * mirror page inherits the entity's rights (backward compatible). Only the four
+ * CRUD booleans are meaningful for a mirror override — row scope (all/own) is
+ * always resolved from the source entity, never overridden per page.
+ */
+export const mirrorPermKey = (pageId: number): string => `mirror:${pageId}`;
+
 /** Structured RBAC permission spec stored on each role. */
 export interface RolePermissions {
   /** Bypasses all checks (the seeded admin role). */
@@ -46,7 +59,11 @@ export interface RolePermissions {
   admin: RoleAdminCaps;
   /** Page ids visible in the sidebar / accessible (content pages). */
   pageIds: number[];
-  /** Per-entity record CRUD rights, keyed by stringified entityId. */
+  /**
+   * Record CRUD rights. Keyed by stringified entityId for entity-level rights,
+   * and optionally by `mirror:<pageId>` (see {@link mirrorPermKey}) for a
+   * per-mirror-page override.
+   */
   records: Record<string, RecordPermission>;
 }
 

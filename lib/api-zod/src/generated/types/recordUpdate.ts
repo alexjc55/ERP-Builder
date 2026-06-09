@@ -11,4 +11,6 @@ export interface RecordUpdate {
   valuesJson?: RecordUpdateValuesJson;
   /** @nullable */
   statusId?: number | null;
+  /** Optional mirror-page context (see RecordInput.pageId): applies the mirror page's update-rights override when editing through it. */
+  pageId?: number;
 }

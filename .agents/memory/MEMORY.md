@@ -15,7 +15,7 @@
 - [Event system](event-system.md) — internal best-effort event bus design, the 5 core events, foundation for automations/modules.
 - [Impersonation](erp-impersonation.md) — impersonation modeled on the custom JWT; boundary/no-escalation rules that must stay consistent.
 - [Passwordless guest access](guest-access.md) — shareable-link guest sessions: read-only is a hard guard at requireAuth (not RBAC), guest reads must be side-effect free, links bind to passwordless accounts only.
-- [Mirror pages](mirror-pages.md) — a page can show another entity's LIVE records (bidirectional, not a copy) via mirrorEntityId + display-only mirrorFieldKeys; RBAC on the source entity is the real boundary.
+- [Mirror pages](mirror-pages.md) — a page shows another entity's LIVE records (bidirectional) via mirrorEntityId + display-only mirrorFieldKeys; source-entity RBAC is the boundary, with optional per-mirror-page CRUD overrides (`mirror:<pageId>`, gated by page-access + DB mirror check server-side).
 - [ERP i18n](erp-i18n.md) — how erp-platform i18n is wired and how to keep translation seeding complete.
 - [Settings & branding](settings-branding.md) — /settings page (profile + admin-only branding); singleton app_settings; GET-public/PUT-admin boundary; public logo route is no-IDOR because path comes from DB.
 - [Orval param collision](orval-param-collision.md) — why adding a query param to a path-param GET breaks api-zod codegen, and how to avoid it.

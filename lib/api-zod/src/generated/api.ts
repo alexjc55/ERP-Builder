@@ -2740,7 +2740,8 @@ export const CreateEntityRecordParams = zod.object({
 
 export const CreateEntityRecordBody = zod.object({
   "valuesJson": zod.record(zod.string(), zod.unknown()),
-  "statusId": zod.number().nullish()
+  "statusId": zod.number().nullish(),
+  "pageId": zod.number().optional().describe('Optional mirror-page context. When this create is performed through a mirror page, send its page id so the server applies that page\'s record-rights override (if configured for the role) instead of the source entity\'s rights.')
 })
 
 
@@ -2772,7 +2773,8 @@ export const UpdateRecordParams = zod.object({
 
 export const UpdateRecordBody = zod.object({
   "valuesJson": zod.record(zod.string(), zod.unknown()).optional(),
-  "statusId": zod.number().nullish()
+  "statusId": zod.number().nullish(),
+  "pageId": zod.number().optional().describe('Optional mirror-page context (see RecordInput.pageId): applies the mirror page\'s update-rights override when editing through it.')
 })
 
 export const UpdateRecordResponse = zod.object({
@@ -2792,6 +2794,10 @@ export const UpdateRecordResponse = zod.object({
  */
 export const DeleteRecordParams = zod.object({
   "id": zod.coerce.number()
+})
+
+export const DeleteRecordBody = zod.object({
+  "pageId": zod.number().optional().describe('Optional mirror-page context (see RecordInput.pageId): applies the mirror page\'s delete-rights override when deleting through it.')
 })
 
 export const DeleteRecordResponse = zod.object({
@@ -3021,7 +3027,8 @@ export const QueryEntityRecordsBody = zod.object({
   "search": zod.string().optional(),
   "archived": zod.enum(['active', 'archived', 'all']).default(queryEntityRecordsBodyArchivedDefault),
   "page": zod.number().min(1).default(queryEntityRecordsBodyPageDefault),
-  "pageSize": zod.number().min(1).max(queryEntityRecordsBodyPageSizeMax).default(queryEntityRecordsBodyPageSizeDefault)
+  "pageSize": zod.number().min(1).max(queryEntityRecordsBodyPageSizeMax).default(queryEntityRecordsBodyPageSizeDefault),
+  "pageId": zod.number().optional().describe('Optional mirror-page context (see RecordInput.pageId): applies the mirror page\'s view-rights override and field-access when querying records through it.')
 })
 
 export const QueryEntityRecordsResponse = zod.object({
@@ -3051,6 +3058,7 @@ export const getEntityFilterValuesBodyFilterConjunctionDefault = `and`;
 export const getEntityFilterValuesBodyArchivedDefault = `active`;
 
 export const GetEntityFilterValuesBody = zod.object({
+  "pageId": zod.number().optional().describe('Optional mirror-page context. When the request is made through a mirror page, this lets the server honor a per-mirror-page record permission override for the view check.'),
   "field": zod.string(),
   "filters": zod.array(zod.object({
   "field": zod.string(),

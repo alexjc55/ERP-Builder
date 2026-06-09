@@ -122,6 +122,7 @@ export * from './pageRelationOption';
 export * from './pageRelationOptionField';
 export * from './pageRelationOptions';
 export * from './pageUpdate';
+export * from './recordDelete';
 export * from './recordInput';
 export * from './recordInputValuesJson';
 export * from './recordLink';

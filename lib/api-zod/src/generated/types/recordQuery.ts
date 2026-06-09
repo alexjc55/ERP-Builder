@@ -24,4 +24,6 @@ export interface RecordQuery {
      * @maximum 200
      */
   pageSize?: number;
+  /** Optional mirror-page context (see RecordInput.pageId): applies the mirror page's view-rights override and field-access when querying records through it. */
+  pageId?: number;
 }

@@ -725,10 +725,17 @@ export function EntityRecords({
   const queryClient = useQueryClient();
   const { canRecord, canAdmin, fieldAccess, user } = useAuth();
 
-  const canView = canRecord(entityId, "view");
-  const canCreate = canRecord(entityId, "create");
-  const canUpdate = canRecord(entityId, "update");
-  const canDelete = canRecord(entityId, "delete");
+  // On a mirror page, record permissions and field access are resolved against
+  // the mirror page's override (key `mirror:<pageId>`); on a regular entity page
+  // there is no override so this stays undefined and entity rights apply. The
+  // same id is sent in every record write/query payload so the server applies
+  // the matching boundary.
+  const permPageId = isMirror ? pageId : undefined;
+
+  const canView = canRecord(entityId, "view", permPageId);
+  const canCreate = canRecord(entityId, "create", permPageId);
+  const canUpdate = canRecord(entityId, "update", permPageId);
+  const canDelete = canRecord(entityId, "delete", permPageId);
   // Field/column management (setup mode) is gated exactly like the fields builder.
   const canConfigureColumns = canAdmin("entities");
 
@@ -805,7 +812,7 @@ export function EntityRecords({
     .filter((f: Field) => !mirrorKeySet || mirrorKeySet.has(f.fieldKey))
     .sort((a: Field, b: Field) => a.sortOrder - b.sortOrder);
   // Fields the current user is allowed to see (not hidden by field-level perms).
-  const visibleFormFields = fields.filter((f: Field) => fieldAccess(f, entityId) !== "hidden");
+  const visibleFormFields = fields.filter((f: Field) => fieldAccess(f, entityId, permPageId) !== "hidden");
   // Columns shown in the records table. A field explicitly marked "hidden" for the
   // current role drops its whole column even for a superAdmin (display-only — the
   // field stays editable in the record dialog and the server bypass is unchanged).
@@ -1064,6 +1071,7 @@ export function EntityRecords({
       const res = await fetchFilterOptions({
         entityId,
         data: {
+          pageId: permPageId,
           field: fieldKey,
           filters: [...(selectedConfig.filters ?? []), ...others, ...dateOthers],
           // Mirror the records query's conjunction so option lists stay consistent with the
@@ -1122,7 +1130,7 @@ export function EntityRecords({
     }
     let cancelled = false;
     setRecordsLoading(true);
-    runQuery({ entityId, data: recordQuery })
+    runQuery({ entityId, data: { ...recordQuery, pageId: permPageId } })
       .then((res) => {
         if (cancelled) return;
         setRecords(res.data);
@@ -1359,9 +1367,9 @@ export function EntityRecords({
     const valuesJson = formToValues(visibleFormFields, form);
     const statusValue = statusId === NO_STATUS ? null : Number(statusId);
     if (editing) {
-      updateMutation.mutate({ id: editing.id, data: { valuesJson, statusId: statusValue } });
+      updateMutation.mutate({ id: editing.id, data: { valuesJson, statusId: statusValue, pageId: permPageId } });
     } else {
-      createMutation.mutate({ entityId, data: { valuesJson, statusId: statusValue } });
+      createMutation.mutate({ entityId, data: { valuesJson, statusId: statusValue, pageId: permPageId } });
     }
   };
 
@@ -1384,13 +1392,13 @@ export function EntityRecords({
     const normalizedStored =
       field.fieldType === "boolean" ? Boolean(stored) : stored === undefined || stored === null ? "" : stored;
     if (next === normalizedStored) { setEditingCell(null); return; }
-    cellUpdateMutation.mutate({ id: record.id, data: { valuesJson: { [field.fieldKey]: next } } });
+    cellUpdateMutation.mutate({ id: record.id, data: { valuesJson: { [field.fieldKey]: next }, pageId: permPageId } });
   };
 
   const commitStatus = (record: EntityRecord, value: string) => {
     const next = value === NO_STATUS ? null : Number(value);
     if (next === (record.statusId ?? null)) { setEditingCell(null); return; }
-    cellUpdateMutation.mutate({ id: record.id, data: { statusId: next } });
+    cellUpdateMutation.mutate({ id: record.id, data: { statusId: next, pageId: permPageId } });
   };
 
   // Inline commit for a page-local field value. Page values are stored as a
@@ -1471,7 +1479,7 @@ export function EntityRecords({
 
   const commitNewRow = () => {
     const valuesJson = formToValues(
-      visibleFormFields.filter((f: Field) => fieldAccess(f, entityId) === "edit"),
+      visibleFormFields.filter((f: Field) => fieldAccess(f, entityId, permPageId) === "edit"),
       newRow,
     );
     const statusValue = newRowStatus === NO_STATUS ? null : Number(newRowStatus);
@@ -1484,7 +1492,7 @@ export function EntityRecords({
       }
       void (async () => {
         try {
-          const created = await createMutation.mutateAsync({ entityId, data: { valuesJson, statusId: statusValue } });
+          const created = await createMutation.mutateAsync({ entityId, data: { valuesJson, statusId: statusValue, pageId: permPageId } });
           if (created?.id != null && Object.keys(pageValuesJson).length > 0) {
             await setPageValuesMutation.mutateAsync({ pageId, recordId: created.id, data: { valuesJson: pageValuesJson } });
           }
@@ -1495,7 +1503,7 @@ export function EntityRecords({
       })();
       return;
     }
-    createMutation.mutate({ entityId, data: { valuesJson, statusId: statusValue } });
+    createMutation.mutate({ entityId, data: { valuesJson, statusId: statusValue, pageId: permPageId } });
   };
 
   const openColumnConfig = (field: Field | null) => {
@@ -1979,7 +1987,7 @@ export function EntityRecords({
                   {canCreate && !setupMode && addingRow && (
                     <tr className="border-b border-blue-100 bg-blue-50/40">
                       {displayFields.map((f: Field) => {
-                        const editable = fieldAccess(f, entityId) === "edit" && f.fieldType !== "function";
+                        const editable = fieldAccess(f, entityId, permPageId) === "edit" && f.fieldType !== "function";
                         return (
                           <td key={f.id} className="px-2 py-1.5 align-top max-w-[260px]" style={colWidthStyle(`f:${f.id}`)}>
                             {editable ? (
@@ -2089,7 +2097,7 @@ export function EntityRecords({
                         style={formatting.rowColor ? { backgroundColor: formatting.rowColor } : undefined}
                       >
                         {displayFields.map((f: Field) => {
-                          const access = fieldAccess(f, entityId);
+                          const access = fieldAccess(f, entityId, permPageId);
                           const isFunction = f.fieldType === "function";
                           const cellEditable = inlineEditEnabled && access === "edit" && !isFunction;
                           const cellBg = formatting.cellColors[f.fieldKey];
@@ -2385,7 +2393,7 @@ export function EntityRecords({
           </DialogHeader>
           <div className="space-y-4 py-2">
             {visibleFormFields.map((field: Field) => {
-              const access = fieldAccess(field, entityId);
+              const access = fieldAccess(field, entityId, permPageId);
               const readOnly = access === "view";
               return (
                 <div key={field.id} className="space-y-1.5">
@@ -2474,7 +2482,7 @@ export function EntityRecords({
             <AlertDialogCancel>{t("records.cancel", "Отмена")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700"
-              onClick={() => toDelete && deleteMutation.mutate({ id: toDelete.id })}
+              onClick={() => toDelete && deleteMutation.mutate({ id: toDelete.id, data: { pageId: permPageId } })}
             >
               {t("records.delete", "Удалить")}
             </AlertDialogAction>

@@ -79,6 +79,7 @@ import type {
   PageRelatedValuesInput,
   PageRelationOptions,
   PageUpdate,
+  RecordDelete,
   RecordInput,
   RecordLink,
   RecordQuery,
@@ -5787,14 +5788,16 @@ export const getDeleteRecordUrl = (id: number,) => {
 /**
  * @summary Delete record
  */
-export const deleteRecord = async (id: number, options?: RequestInit): Promise<SuccessResponse> => {
+export const deleteRecord = async (id: number,
+    recordDelete?: RecordDelete, options?: RequestInit): Promise<SuccessResponse> => {
 
   return customFetch<SuccessResponse>(getDeleteRecordUrl(id),
   {
     ...options,
-    method: 'DELETE'
-
-
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      recordDelete,)
   }
 );}
 
@@ -5802,8 +5805,8 @@ export const deleteRecord = async (id: number, options?: RequestInit): Promise<S
 
 
 export const getDeleteRecordMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteRecord>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteRecord>>, TError,{id: number}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteRecord>>, TError,{id: number;data?: BodyType<RecordDelete>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteRecord>>, TError,{id: number;data?: BodyType<RecordDelete>}, TContext> => {
 
 const mutationKey = ['deleteRecord'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -5815,10 +5818,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteRecord>>, {id: number}> = (props) => {
-          const {id} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteRecord>>, {id: number;data?: BodyType<RecordDelete>}> = (props) => {
+          const {id,data} = props ?? {};
 
-          return  deleteRecord(id,requestOptions)
+          return  deleteRecord(id,data,requestOptions)
         }
 
 
@@ -5829,18 +5832,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type DeleteRecordMutationResult = NonNullable<Awaited<ReturnType<typeof deleteRecord>>>
-
+    export type DeleteRecordMutationBody = BodyType<RecordDelete> | undefined
     export type DeleteRecordMutationError = ErrorType<unknown>
 
     /**
  * @summary Delete record
  */
 export const useDeleteRecord = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteRecord>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteRecord>>, TError,{id: number;data?: BodyType<RecordDelete>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof deleteRecord>>,
         TError,
-        {id: number},
+        {id: number;data?: BodyType<RecordDelete>},
         TContext
       > => {
       return useMutation(getDeleteRecordMutationOptions(options));

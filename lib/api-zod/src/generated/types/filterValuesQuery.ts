@@ -10,6 +10,8 @@ import type { FilterCondition } from './filterCondition';
 import type { FilterValuesQueryFilterConjunction } from './filterValuesQueryFilterConjunction';
 
 export interface FilterValuesQuery {
+  /** Optional mirror-page context. When the request is made through a mirror page, this lets the server honor a per-mirror-page record permission override for the view check. */
+  pageId?: number;
   field: string;
   filters?: FilterCondition[];
   filterConjunction?: FilterValuesQueryFilterConjunction;

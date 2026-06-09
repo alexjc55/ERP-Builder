@@ -1,11 +1,13 @@
 import { Request, Response, NextFunction } from "express";
-import { db, rolesTable, NO_ACCESS_PERMS, type RolePermissions, type RoleAdminCaps, type RecordPermission, type RecordScope, type EntityField, type FieldAccess, type FieldPermissions } from "@workspace/db";
+import { db, rolesTable, pagesTable, mirrorPermKey, NO_ACCESS_PERMS, type RolePermissions, type RoleAdminCaps, type RecordPermission, type RecordScope, type EntityField, type FieldAccess, type FieldPermissions } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 declare global {
   namespace Express {
     interface Request {
       permissions?: RolePermissions;
+      /** Per-request cache of page id → mirrorEntityId (null = not a mirror / unknown). */
+      _pageMirror?: Map<number, number | null>;
     }
   }
 }
@@ -62,9 +64,57 @@ export function canRecord(perms: RolePermissions, entityId: number, action: keyo
   return perms.records[String(entityId)]?.[action] === true;
 }
 
+/** Resolve and cache a page's mirrorEntityId on the request (one DB hit per page per request). */
+async function getPageMirrorEntityId(req: Request, pageId: number): Promise<number | null> {
+  if (!req._pageMirror) req._pageMirror = new Map();
+  const cached = req._pageMirror.get(pageId);
+  if (cached !== undefined) return cached;
+  const [page] = await db
+    .select({ mirrorEntityId: pagesTable.mirrorEntityId })
+    .from(pagesTable)
+    .where(eq(pagesTable.id, pageId))
+    .limit(1);
+  const value = page?.mirrorEntityId ?? null;
+  req._pageMirror.set(pageId, value);
+  return value;
+}
+
+/**
+ * Resolve the effective record permission for an action, honoring a mirror page
+ * override when `pageId` refers to a mirror page of `entityId`. The override is
+ * only consulted when BOTH hold: (1) the caller is authorized to that page
+ * (`perms.pageIds`), since the override means "actions taken through that mirror
+ * page"; and (2) the page genuinely mirrors that entity (validated against the
+ * DB). Together these stop a spoofed/foreign `pageId` from escalating or
+ * borrowing rights via a page the caller cannot actually use. Returns undefined
+ * when neither an override nor an entity-level entry exists (caller treats that
+ * as "no access").
+ */
+export async function effectiveRecordPerm(
+  req: Request,
+  perms: RolePermissions,
+  entityId: number,
+  pageId?: number,
+): Promise<RecordPermission | undefined> {
+  if (pageId != null && (perms.pageIds?.includes(pageId) ?? false)) {
+    const mirrorEntityId = await getPageMirrorEntityId(req, pageId);
+    if (mirrorEntityId === entityId) {
+      const override = perms.records[mirrorPermKey(pageId)];
+      if (override) return override;
+    }
+  }
+  return perms.records[String(entityId)];
+}
+
+/** Extract an optional mirror-page context id from a request body. */
+export function pageIdFromBody(req: Request): number | undefined {
+  const value = (req.body as { pageId?: unknown } | undefined)?.pageId;
+  return typeof value === "number" && Number.isInteger(value) ? value : undefined;
+}
+
 /**
  * Guard a record route that carries the entity id in `:entityId`.
- * Use after requireAuth.
+ * Honors a mirror-page override when the body carries `pageId`. Use after requireAuth.
  */
 export function requireRecordParam(action: keyof RecordPermission) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -74,7 +124,12 @@ export function requireRecordParam(action: keyof RecordPermission) {
       return;
     }
     const perms = await getPermissions(req);
-    if (canRecord(perms, entityId, action)) {
+    if (perms.superAdmin) {
+      next();
+      return;
+    }
+    const rp = await effectiveRecordPerm(req, perms, entityId, pageIdFromBody(req));
+    if (rp?.[action] === true) {
       next();
       return;
     }
@@ -84,11 +139,20 @@ export function requireRecordParam(action: keyof RecordPermission) {
 
 /**
  * Assert a record action for routes keyed by record id (entity resolved from the row).
- * Returns true if allowed; otherwise sends a 403 and returns false.
+ * Honors a mirror-page override when `pageId` is supplied. Returns true if
+ * allowed; otherwise sends a 403 and returns false.
  */
-export async function assertRecord(req: Request, res: Response, entityId: number, action: keyof RecordPermission): Promise<boolean> {
+export async function assertRecord(
+  req: Request,
+  res: Response,
+  entityId: number,
+  action: keyof RecordPermission,
+  pageId?: number,
+): Promise<boolean> {
   const perms = await getPermissions(req);
-  if (canRecord(perms, entityId, action)) return true;
+  if (perms.superAdmin) return true;
+  const rp = await effectiveRecordPerm(req, perms, entityId, pageId);
+  if (rp?.[action] === true) return true;
   res.status(403).json({ error: "Forbidden" });
   return false;
 }
@@ -117,10 +181,18 @@ export function recordOwnedBy(values: Record<string, unknown>, scopeFieldKeys: s
  * a create-only role can still populate fields on create, and an update-only role
  * can edit on update (each write endpoint stays gated by its own record perm).
  */
-export function resolveFieldAccess(field: EntityField, perms: RolePermissions, roleId: number, entityId: number): FieldAccess {
+export function resolveFieldAccess(
+  field: EntityField,
+  perms: RolePermissions,
+  roleId: number,
+  entityId: number,
+  rpOverride?: RecordPermission,
+): FieldAccess {
   if (perms.superAdmin) return "edit";
   const explicit = (field.permissionsJson as FieldPermissions | undefined)?.[String(roleId)];
   if (explicit) return explicit;
-  const rp = perms.records[String(entityId)];
+  // When a mirror-page override is supplied it replaces the entity-level record
+  // perm for write-derived field access; otherwise fall back to the entity entry.
+  const rp = rpOverride ?? perms.records[String(entityId)];
   return rp?.create || rp?.update ? "edit" : "view";
 }

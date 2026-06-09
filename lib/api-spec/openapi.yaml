@@ -1729,6 +1729,12 @@ paths:
           required: true
           schema:
             type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordDelete"
       responses:
         "200":
           description: Deleted
@@ -4892,6 +4898,22 @@ components:
           additionalProperties: true
         statusId:
           type: ["integer", "null"]
+        pageId:
+          type: integer
+          description: >-
+            Optional mirror-page context. When this create is performed through a
+            mirror page, send its page id so the server applies that page's
+            record-rights override (if configured for the role) instead of the
+            source entity's rights.
+
+    RecordDelete:
+      type: object
+      properties:
+        pageId:
+          type: integer
+          description: >-
+            Optional mirror-page context (see RecordInput.pageId): applies the
+            mirror page's delete-rights override when deleting through it.
 
     RecordUpdate:
       type: object
@@ -4901,6 +4923,11 @@ components:
           additionalProperties: true
         statusId:
           type: ["integer", "null"]
+        pageId:
+          type: integer
+          description: >-
+            Optional mirror-page context (see RecordInput.pageId): applies the
+            mirror page's update-rights override when editing through it.
 
     # VIEWS
     FilterOperator:
@@ -5075,6 +5102,12 @@ components:
           minimum: 1
           maximum: 200
           default: 50
+        pageId:
+          type: integer
+          description: >-
+            Optional mirror-page context (see RecordInput.pageId): applies the
+            mirror page's view-rights override and field-access when querying
+            records through it.
 
     RecordQueryResult:
       type: object
@@ -5096,6 +5129,12 @@ components:
       type: object
       required: [field]
       properties:
+        pageId:
+          type: integer
+          description: >-
+            Optional mirror-page context. When the request is made through a
+            mirror page, this lets the server honor a per-mirror-page record
+            permission override for the view check.
         field:
           type: string
         filters:

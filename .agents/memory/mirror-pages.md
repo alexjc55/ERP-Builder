@@ -29,3 +29,28 @@ EXISTING RBAC on the source entity.
   RBAC hiding on top — the two must not be conflated.
 - All records routes and RBAC (record param, effective row scope, field access)
   key off the source entityId, so the mirror inherits them unchanged.
+
+**Per-mirror-page record CRUD overrides:** a role's `permissionsJson.records` map
+can carry, in addition to entity-keyed entries (`String(entityId)`), mirror-keyed
+entries `mirror:<pageId>` (see `mirrorPermKey`). The override REPLACES the source
+entity's CRUD rights, but ONLY for actions taken through that mirror page; absent
+key = inherit the entity perm (backward compatible). Row scope (all/own) is never
+per-page — it stays entity-level (`effectiveScope` ignores the override).
+- **The override is resolved server-side by `effectiveRecordPerm(req,perms,entityId,pageId?)`,
+  which is the real boundary.** It honors a `mirror:<pageId>` override only when
+  BOTH hold: (1) the caller is authorized to that page (`perms.pageIds` includes
+  pageId) AND (2) the page genuinely mirrors that entity (`pages.mirrorEntityId`
+  === entityId, DB-checked + per-request cached). **Why:** the client sends `pageId`
+  in record write/query bodies; without the page-access gate a caller could spoof a
+  `pageId` to borrow a mirror override on a page they cannot use. Both checks must
+  stay or the page-context permission becomes a broken-access-control vector.
+- pageId rides in request BODIES (create/update/delete/query/filter-values), never
+  as a query param on path-param GETs (that breaks Orval — see orval-param-collision).
+  Consequently GET single/list of records stay entity-level by design; the page-aware
+  read path is the POST `.../records/query` endpoint.
+- Archive/unarchive (`setArchived`) intentionally stays entity-level: it is a global
+  row-state change, not a "through the mirror page" edit. Fail-closed: a mirror-only
+  update override does NOT grant archive.
+- The client (`auth.tsx` canRecord/fieldAccess, `EntityRecords` permPageId =
+  isMirror ? pageId : undefined) mirrors this cosmetically only; the server stays
+  authoritative.

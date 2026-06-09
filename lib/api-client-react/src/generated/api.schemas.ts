@@ -1776,6 +1776,13 @@ export interface RecordInput {
   valuesJson: RecordInputValuesJson;
   /** @nullable */
   statusId?: number | null;
+  /** Optional mirror-page context. When this create is performed through a mirror page, send its page id so the server applies that page's record-rights override (if configured for the role) instead of the source entity's rights. */
+  pageId?: number;
+}
+
+export interface RecordDelete {
+  /** Optional mirror-page context (see RecordInput.pageId): applies the mirror page's delete-rights override when deleting through it. */
+  pageId?: number;
 }
 
 export type RecordUpdateValuesJson = { [key: string]: unknown };
@@ -1784,6 +1791,8 @@ export interface RecordUpdate {
   valuesJson?: RecordUpdateValuesJson;
   /** @nullable */
   statusId?: number | null;
+  /** Optional mirror-page context (see RecordInput.pageId): applies the mirror page's update-rights override when editing through it. */
+  pageId?: number;
 }
 
 export type FilterOperator = typeof FilterOperator[keyof typeof FilterOperator];
@@ -1904,6 +1913,8 @@ export interface RecordQuery {
      * @maximum 200
      */
   pageSize?: number;
+  /** Optional mirror-page context (see RecordInput.pageId): applies the mirror page's view-rights override and field-access when querying records through it. */
+  pageId?: number;
 }
 
 /**
@@ -1927,6 +1938,8 @@ export const FilterValuesQueryFilterConjunction = {
 } as const;
 
 export interface FilterValuesQuery {
+  /** Optional mirror-page context. When the request is made through a mirror page, this lets the server honor a per-mirror-page record permission override for the view check. */
+  pageId?: number;
   field: string;
   filters?: FilterCondition[];
   filterConjunction?: FilterValuesQueryFilterConjunction;

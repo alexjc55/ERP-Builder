@@ -244,8 +244,9 @@ router.get("/pages/:pageId/fields", requireAuth, async (req, res): Promise<void>
     return;
   }
   // Page-field metadata mirrors record visibility: only callers who can view the
-  // page's effective entity (mirrored or bound) may read its column definitions.
-  if (eff.entityId != null && !(await assertRecord(req, res, eff.entityId, "view"))) return;
+  // page's effective entity (mirrored or bound) may read its column definitions
+  // (honoring a mirror-page view override for the page being read).
+  if (eff.entityId != null && !(await assertRecord(req, res, eff.entityId, "view", params.data.pageId))) return;
   const fields = await db
     .select()
     .from(pageFieldsTable)
@@ -476,8 +477,9 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
     return;
   }
   const entityId = eff.entityId;
-  // Record-level view permission on the page's effective entity is required.
-  if (!(await assertRecord(req, res, entityId, "view"))) return;
+  // Record-level view permission on the page's effective entity is required
+  // (honoring a mirror-page override when this page mirrors that entity).
+  if (!(await assertRecord(req, res, entityId, "view", params.data.pageId))) return;
   // Restrict the returned values to records the caller is actually allowed to
   // see: only rows of that entity, and only own rows under "own" scope.
   const perms = await getPermissions(req);
@@ -530,8 +532,9 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
     res.status(400).json({ error: "Record does not belong to this page" });
     return;
   }
-  // Record-level update permission on the effective entity is required.
-  if (!(await assertRecord(req, res, entityId, "update"))) return;
+  // Record-level update permission on the effective entity is required
+  // (honoring a mirror-page override when this page mirrors that entity).
+  if (!(await assertRecord(req, res, entityId, "update", pageId))) return;
   // Under "own" scope, the caller may only write to records they own.
   const perms = await getPermissions(req);
   const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
@@ -598,7 +601,7 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
     return;
   }
   const entityId = eff.entityId;
-  if (!(await assertRecord(req, res, entityId, "view"))) return;
+  if (!(await assertRecord(req, res, entityId, "view", params.data.pageId))) return;
 
   const perms = await getPermissions(req);
   const roleId = req.user!.roleId;
@@ -872,7 +875,7 @@ router.post("/pages/:pageId/related-candidates", requireAuth, async (req, res): 
     return;
   }
   const { entityId, pageField, relatedEntityId, relatedFieldKey, relatedField } = resolved;
-  if (!(await assertRecord(req, res, entityId, "view"))) return;
+  if (!(await assertRecord(req, res, entityId, "view", params.data.pageId))) return;
 
   const perms = await getPermissions(req);
   const roleId = req.user!.roleId;

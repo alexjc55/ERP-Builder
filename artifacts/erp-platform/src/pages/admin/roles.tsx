@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import {
   useListRoles,
   useCreateRole,
@@ -48,7 +48,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Shield, Loader2, Users, Crown } from "lucide-react";
+import { Plus, Pencil, Trash2, Shield, Loader2, Users, Crown, CornerDownRight } from "lucide-react";
 import { adminCapForPath } from "@/lib/permissions";
 import { useML, useT } from "@/lib/i18n";
 
@@ -195,6 +195,44 @@ export default function RolesPage() {
 
   const getRecordPerm = (entityId: number): RecordPermission =>
     perms.records[String(entityId)] ?? { view: false, create: false, update: false, delete: false };
+
+  // Mirror-page record-rights override (key `mirror:<pageId>`). Presence of the
+  // key = override; absence = inherit the source entity's rights.
+  const mirrorKey = (pageId: number) => `mirror:${pageId}`;
+  const isMirrorOverridden = (pageId: number) => mirrorKey(pageId) in perms.records;
+  const getMirrorPerm = (pageId: number): RecordPermission =>
+    perms.records[mirrorKey(pageId)] ?? { view: false, create: false, update: false, delete: false };
+
+  // Toggle a single CRUD bit on an arbitrary record-perm key (entity or mirror),
+  // applying the same view-implies-write / clear-on-view-off rules.
+  const toggleRecordKey = (key: string, action: keyof RecordPermission, checked: boolean) =>
+    setPerms((prev) => {
+      const current: RecordPermission =
+        prev.records[key] ?? { view: false, create: false, update: false, delete: false };
+      const next: RecordPermission = { ...current, [action]: checked };
+      if (checked && action !== "view") next.view = true;
+      if (action === "view" && !checked) {
+        next.create = false;
+        next.update = false;
+        next.delete = false;
+      }
+      return { ...prev, records: { ...prev.records, [key]: next } };
+    });
+
+  // Turn a mirror override on (seeding from the entity's current rights as a
+  // starting point) or off (removing the key so the page inherits the entity).
+  const toggleMirrorOverride = (entityId: number, pageId: number, on: boolean) =>
+    setPerms((prev) => {
+      const records = { ...prev.records };
+      const key = mirrorKey(pageId);
+      if (on) {
+        const ent = prev.records[String(entityId)] ?? { view: false, create: false, update: false, delete: false };
+        records[key] = { view: ent.view, create: ent.create, update: ent.update, delete: ent.delete };
+      } else {
+        delete records[key];
+      }
+      return { ...prev, records };
+    });
 
   const setScope = (entityId: number, scope: RecordScope) =>
     setPerms((prev) => {
@@ -384,18 +422,62 @@ export default function RolesPage() {
                       <tbody>
                         {entities.map((entity: Entity) => {
                           const rp = getRecordPerm(entity.id);
+                          // Mirror pages of this entity become first-class permission
+                          // targets that override the entity rights only for actions
+                          // taken through that page.
+                          const mirrorPages = pages.filter(
+                            (p: Page) => p.mirrorEntityId === entity.id,
+                          );
                           return (
-                            <tr key={entity.id} className="border-b border-slate-100 last:border-0">
-                              <td className="px-3 py-2 text-slate-700">{ml(entity.nameJson) || entity.entityKey}</td>
-                              {RECORD_ACTIONS.map((a) => (
-                                <td key={a.key} className="px-3 py-2 text-center">
-                                  <Checkbox
-                                    checked={rp[a.key] === true}
-                                    onCheckedChange={(v) => toggleRecord(entity.id, a.key, v === true)}
-                                  />
-                                </td>
-                              ))}
-                            </tr>
+                            <Fragment key={entity.id}>
+                              <tr className="border-b border-slate-100">
+                                <td className="px-3 py-2 text-slate-700">{ml(entity.nameJson) || entity.entityKey}</td>
+                                {RECORD_ACTIONS.map((a) => (
+                                  <td key={a.key} className="px-3 py-2 text-center">
+                                    <Checkbox
+                                      checked={rp[a.key] === true}
+                                      onCheckedChange={(v) => toggleRecord(entity.id, a.key, v === true)}
+                                    />
+                                  </td>
+                                ))}
+                              </tr>
+                              {mirrorPages.map((page: Page) => {
+                                const overridden = isMirrorOverridden(page.id);
+                                const mp = getMirrorPerm(page.id);
+                                const key = mirrorKey(page.id);
+                                return (
+                                  <tr key={`m-${page.id}`} className="border-b border-slate-100 bg-slate-50/40">
+                                    <td className="px-3 py-2">
+                                      <div className="flex items-center gap-2 pl-4 text-slate-600">
+                                        <CornerDownRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                        <span className="truncate">
+                                          {ml(entity.nameJson) || entity.entityKey}{" "}
+                                          <span className="text-slate-400">({ml(page.nameJson) || page.path})</span>
+                                        </span>
+                                        <div className="flex items-center gap-1.5 ml-2">
+                                          <Switch
+                                            checked={overridden}
+                                            onCheckedChange={(v) => toggleMirrorOverride(entity.id, page.id, v === true)}
+                                          />
+                                          <span className="text-xs text-slate-400 whitespace-nowrap">
+                                            {t("roles.overrideRights", "Переопределить права")}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    {RECORD_ACTIONS.map((a) => (
+                                      <td key={a.key} className="px-3 py-2 text-center">
+                                        <Checkbox
+                                          checked={overridden && mp[a.key] === true}
+                                          disabled={!overridden}
+                                          onCheckedChange={(v) => toggleRecordKey(key, a.key, v === true)}
+                                        />
+                                      </td>
+                                    ))}
+                                  </tr>
+                                );
+                              })}
+                            </Fragment>
                           );
                         })}
                       </tbody>

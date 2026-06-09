@@ -20,10 +20,15 @@ interface AuthContextType {
   permissions: RolePermissions | null;
   isSuperAdmin: boolean;
   canAdmin: (area: keyof RoleAdminCaps) => boolean;
-  canRecord: (entityId: number, action: RecordAction) => boolean;
+  /**
+   * Whether the current user may perform a record action on an entity. Pass the
+   * mirror `pageId` when acting through a mirror page so a per-mirror-page
+   * override (key `mirror:<pageId>`) is consulted instead of the entity rights.
+   */
+  canRecord: (entityId: number, action: RecordAction, pageId?: number) => boolean;
   canPage: (pageId: number) => boolean;
-  /** Resolve the current user's access to a field; mirrors the server boundary. */
-  fieldAccess: (field: { permissionsJson?: FieldPermissions | null }, entityId: number) => FieldAccess;
+  /** Resolve the current user's access to a field; mirrors the server boundary. Pass mirror pageId for a per-mirror-page override. */
+  fieldAccess: (field: { permissionsJson?: FieldPermissions | null }, entityId: number, pageId?: number) => FieldAccess;
   /** Start acting as another user (admin only). */
   impersonate: (userId: number) => Promise<void>;
   /** Return to the original admin account. */
@@ -93,8 +98,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const canAdmin = (area: keyof RoleAdminCaps): boolean =>
     isSuperAdmin || permissions?.admin?.[area] === true;
 
-  const canRecord = (entityId: number, action: RecordAction): boolean =>
-    isSuperAdmin || permissions?.records?.[String(entityId)]?.[action] === true;
+  // Resolve the effective record perm, preferring a mirror-page override when
+  // present. Mirrors the server boundary; the server remains the real boundary.
+  const recordPermFor = (entityId: number, pageId?: number) => {
+    if (pageId != null) {
+      const override = permissions?.records?.[`mirror:${pageId}`];
+      if (override) return override;
+    }
+    return permissions?.records?.[String(entityId)];
+  };
+
+  const canRecord = (entityId: number, action: RecordAction, pageId?: number): boolean =>
+    isSuperAdmin || recordPermFor(entityId, pageId)?.[action] === true;
 
   const canPage = (pageId: number): boolean =>
     isSuperAdmin || (permissions?.pageIds?.includes(pageId) ?? false);
@@ -102,12 +117,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fieldAccess = (
     field: { permissionsJson?: FieldPermissions | null },
     entityId: number,
+    pageId?: number,
   ): FieldAccess => {
     if (isSuperAdmin) return "edit";
     const roleId = user?.roleId;
     const explicit = roleId != null ? field.permissionsJson?.[String(roleId)] : undefined;
     if (explicit) return explicit;
-    const rp = permissions?.records?.[String(entityId)];
+    const rp = recordPermFor(entityId, pageId);
     return rp?.create || rp?.update ? "edit" : "view";
   };
 

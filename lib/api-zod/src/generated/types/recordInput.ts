@@ -11,4 +11,6 @@ export interface RecordInput {
   valuesJson: RecordInputValuesJson;
   /** @nullable */
   statusId?: number | null;
+  /** Optional mirror-page context. When this create is performed through a mirror page, send its page id so the server applies that page's record-rights override (if configured for the role) instead of the source entity's rights. */
+  pageId?: number;
 }

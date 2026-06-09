@@ -8,6 +8,7 @@ import {
   assertRecord,
   getPermissions,
   effectiveScope,
+  effectiveRecordPerm,
   recordOwnedBy,
   resolveFieldAccess,
 } from "../middlewares/permissions";
@@ -19,6 +20,7 @@ import {
   UpdateRecordParams,
   UpdateRecordBody,
   DeleteRecordParams,
+  DeleteRecordBody,
   QueryEntityRecordsParams,
   QueryEntityRecordsBody,
   GetEntityFilterValuesParams,
@@ -309,13 +311,17 @@ async function fieldAccessContext(
   req: Request,
   entityId: number,
   fields: EntityField[],
+  pageId?: number,
 ): Promise<{ hidden: Set<string>; editable: Set<string> }> {
   const perms = await getPermissions(req);
   const roleId = req.user!.roleId;
+  // Resolve the effective record perm once (honoring a mirror-page override) so
+  // write-derived field access matches the action gate for this page context.
+  const rp = await effectiveRecordPerm(req, perms, entityId, pageId);
   const hidden = new Set<string>();
   const editable = new Set<string>();
   for (const f of fields) {
-    const access = resolveFieldAccess(f, perms, roleId, entityId);
+    const access = resolveFieldAccess(f, perms, roleId, entityId, rp);
     if (access === "hidden") hidden.add(f.fieldKey);
     if (access === "edit") editable.add(f.fieldKey);
   }
@@ -463,7 +469,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   }
 
   const fields = await loadActiveFields(entityId);
-  const { hidden } = await fieldAccessContext(req, entityId, fields);
+  const { hidden } = await fieldAccessContext(req, entityId, fields, body.data.pageId);
   // Hidden fields must not be observable, including via filter/sort/search inference.
   // Restrict the query whitelist to visible fields so any reference to a hidden field
   // is rejected as an unknown field and search never touches hidden values.
@@ -622,7 +628,7 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
   }
 
   const fields = await loadActiveFields(entityId);
-  const { editable, hidden } = await fieldAccessContext(req, entityId, fields);
+  const { editable, hidden } = await fieldAccessContext(req, entityId, fields, body.data.pageId);
   const activeKeys = new Set(fields.map((f) => f.fieldKey));
   const rawValues = body.data.valuesJson;
   for (const k of Object.keys(rawValues)) {
@@ -841,7 +847,7 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(404).json({ error: "Record not found" });
     return;
   }
-  if (!(await assertRecord(req, res, existing.entityId, "update"))) return;
+  if (!(await assertRecord(req, res, existing.entityId, "update", body.data.pageId))) return;
 
   const perms = await getPermissions(req);
   const { scope, scopeFieldKeys } = effectiveScope(perms, existing.entityId);
@@ -867,7 +873,7 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
   } = {};
 
   const fields = await loadActiveFields(existing.entityId);
-  const { editable, hidden } = await fieldAccessContext(req, existing.entityId, fields);
+  const { editable, hidden } = await fieldAccessContext(req, existing.entityId, fields, body.data.pageId);
 
   if (hasValues) {
     const activeKeys = new Set(fields.map((f) => f.fieldKey));
@@ -1083,6 +1089,11 @@ router.delete("/records/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
+  const body = DeleteRecordBody.safeParse(req.body ?? {});
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
   const [existing] = await db
     .select({ id: entityRecordsTable.id, entityId: entityRecordsTable.entityId, valuesJson: entityRecordsTable.valuesJson })
     .from(entityRecordsTable)
@@ -1092,7 +1103,7 @@ router.delete("/records/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(404).json({ error: "Record not found" });
     return;
   }
-  if (!(await assertRecord(req, res, existing.entityId, "delete"))) return;
+  if (!(await assertRecord(req, res, existing.entityId, "delete", body.data.pageId))) return;
 
   const perms = await getPermissions(req);
   const { scope, scopeFieldKeys } = effectiveScope(perms, existing.entityId);
