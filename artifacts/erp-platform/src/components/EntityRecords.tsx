@@ -1890,7 +1890,7 @@ export function EntityRecords({
                     {displayFields.map((f: Field, ci: number) => (
                       <th
                         key={f.id}
-                        className="relative align-top text-left px-4 py-3 font-medium text-slate-600 break-words"
+                        className="relative align-top text-center px-4 py-3 font-medium text-slate-600 break-words"
                         style={colWidthStyle(`f:${f.id}`)}
                       >
                         {setupMode && !isMirror ? (
@@ -1934,7 +1934,7 @@ export function EntityRecords({
                     {displayedPageFields.map((pf: PageField, pi: number) => (
                       <th
                         key={`pf-${pf.id}`}
-                        className="relative align-top text-left px-4 py-3 font-medium text-slate-600 break-words"
+                        className="relative align-top text-center px-4 py-3 font-medium text-slate-600 break-words"
                         style={colWidthStyle(`pf:${pf.id}`)}
                       >
                         {setupMode ? (
@@ -1977,7 +1977,7 @@ export function EntityRecords({
                     ))}
                     {statuses.length > 0 && (
                       <th
-                        className="relative text-left px-4 py-3 font-medium text-slate-600"
+                        className="relative text-center px-4 py-3 font-medium text-slate-600"
                         style={colWidthStyle("__status__")}
                       >
                         {t("records.status", "Статус")}
@@ -1985,7 +1985,7 @@ export function EntityRecords({
                       </th>
                     )}
                     {setupMode ? (
-                      <th className="text-right px-4 py-3 font-medium text-slate-600">
+                      <th className="text-center px-4 py-3 font-medium text-slate-600">
                         <div className="inline-flex items-center gap-2">
                           {!isMirror && (
                             <Button
@@ -2013,7 +2013,7 @@ export function EntityRecords({
                         </div>
                       </th>
                     ) : (
-                      <th className="text-right px-4 py-3 font-medium text-slate-600">{t("records.actions", "Действия")}</th>
+                      <th className="text-center px-4 py-3 font-medium text-slate-600">{t("records.actions", "Действия")}</th>
                     )}
                   </tr>
                 </thead>
