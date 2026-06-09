@@ -182,6 +182,17 @@ export default function UsersPage() {
       };
       updateMutation.mutate({ id: editingUser.id, data: update });
     } else {
+      // A guest user is passwordless; a regular user needs a password of at
+      // least 6 characters. Validate here so the user sees a friendly localized
+      // message instead of a raw server validation payload.
+      if (!form.isGuest && (form.password ?? "").length < 6) {
+        toast({
+          title: t("users.error", "Ошибка"),
+          description: t("users.passwordTooShort", "Пароль должен содержать минимум 6 символов"),
+          variant: "destructive",
+        });
+        return;
+      }
       const create: UserInput = {
         email: form.email,
         // A guest user is passwordless: omit the password entirely so the server
@@ -486,7 +497,17 @@ export default function UsersPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setResetPwUser(null)}>{t("users.cancel", "Отмена")}</Button>
             <Button
-              onClick={() => resetPwUser && resetPwMutation.mutate({ id: resetPwUser.id, data: { newPassword } })}
+              onClick={() => {
+                if (newPassword.length < 6) {
+                  toast({
+                    title: t("users.error", "Ошибка"),
+                    description: t("users.passwordTooShort", "Пароль должен содержать минимум 6 символов"),
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                if (resetPwUser) resetPwMutation.mutate({ id: resetPwUser.id, data: { newPassword } });
+              }}
               disabled={!newPassword || resetPwMutation.isPending}
               className="bg-blue-600 hover:bg-blue-700"
             >

@@ -5364,6 +5364,12 @@
     "he": "שגיאה"
   },
   {
+    "key": "users.passwordTooShort",
+    "ru": "Пароль должен содержать минимум 6 символов",
+    "en": "Password must be at least 6 characters",
+    "he": "הסיסמה חייבת להכיל לפחות 6 תווים"
+  },
+  {
     "key": "users.filterByRole",
     "ru": "Фильтр по роли",
     "en": "Filter by role",
