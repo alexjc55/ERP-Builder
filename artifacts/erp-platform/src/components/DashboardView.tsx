@@ -240,7 +240,7 @@ function resolveValue(w: DashboardWidgetData): number {
  * against them as {key}, consistent with metric widgets. Numeric results honor
  * the cell's number/currency/percent format.
  */
-function renderNoteCellValue(cell: NoteCellData, currencySymbol: string): string {
+function renderNoteCellValue(cell: NoteCellData, currencySymbol: string, t: (key: string, fallback: string) => string): string {
   if (cell.kind === "static") return cell.text ?? "";
   const values = (cell.values ?? {}) as Record<string, unknown>;
   let result: unknown;
@@ -248,7 +248,7 @@ function renderNoteCellValue(cell: NoteCellData, currencySymbol: string): string
     try {
       result = evaluateFormula(cell.formula, values);
     } catch {
-      return "Ошибка формулы";
+      return t("fields.formulaError", "Ошибка формулы");
     }
   } else {
     const keys = Object.keys(values);
@@ -351,7 +351,7 @@ function notesColStyle(widths: Record<number, number>, ci: number): CSSPropertie
 }
 
 /** Drag handle pinned to a notes-table column's right edge; double-click resets the width. */
-function NotesResizeGrip({ onResizeStart, onReset }: { onResizeStart: (e: ReactPointerEvent) => void; onReset: () => void }) {
+function NotesResizeGrip({ onResizeStart, onReset, t }: { onResizeStart: (e: ReactPointerEvent) => void; onReset: () => void; t: (key: string, fallback: string) => string }) {
   return (
     <span
       onPointerDown={onResizeStart}
@@ -360,17 +360,17 @@ function NotesResizeGrip({ onResizeStart, onReset }: { onResizeStart: (e: ReactP
         e.stopPropagation();
         onReset();
       }}
-      title="Потяните, чтобы изменить ширину колонки (двойной клик — сбросить)"
+      title={t("dash.notesResizeTip", "Потяните, чтобы изменить ширину колонки (двойной клик — сбросить)")}
       className="absolute -right-px top-0 z-10 h-full w-1.5 cursor-col-resize touch-none select-none hover:bg-blue-400/70"
     />
   );
 }
 
 /** Render a free-form notes table: each cell is static text or a computed value. */
-function NotesTable({ cells, currencySymbol, widgetId }: { cells: NoteCellData[][]; currencySymbol: string; widgetId: number }) {
+function NotesTable({ cells, currencySymbol, widgetId, t }: { cells: NoteCellData[][]; currencySymbol: string; widgetId: number; t: (key: string, fallback: string) => string }) {
   const { widths, startResize, reset } = useNotesColResize(widgetId);
   if (!cells || cells.length === 0) {
-    return <div className="flex h-full items-center justify-center text-sm text-slate-400">Нет данных</div>;
+    return <div className="flex h-full items-center justify-center text-sm text-slate-400">{t("dash.noData", "Нет данных")}</div>;
   }
   return (
     <div className="h-full overflow-auto">
@@ -387,8 +387,8 @@ function NotesTable({ cells, currencySymbol, widgetId }: { cells: NoteCellData[]
                     cell.kind === "dynamic" ? "font-medium text-slate-800 tabular-nums" : "text-slate-600 whitespace-pre-wrap",
                   )}
                 >
-                  {renderNoteCellValue(cell, currencySymbol)}
-                  {ri === 0 && <NotesResizeGrip onResizeStart={startResize(ci)} onReset={() => reset(ci)} />}
+                  {renderNoteCellValue(cell, currencySymbol, t)}
+                  {ri === 0 && <NotesResizeGrip onResizeStart={startResize(ci)} onReset={() => reset(ci)} t={t} />}
                 </td>
               ))}
             </tr>
@@ -526,7 +526,7 @@ function EditableNotesTable({
   const [draft, setDraft] = useState("");
   const { widths, startResize, reset } = useNotesColResize(widgetId);
 
-  if (!canEdit) return <NotesTable cells={cells} currencySymbol={currencySymbol} widgetId={widgetId} />;
+  if (!canEdit) return <NotesTable cells={cells} currencySymbol={currencySymbol} widgetId={widgetId} t={t} />;
   if (!cells || cells.length === 0) {
     return <div className="flex h-full items-center justify-center text-sm text-slate-400">{t("dash.noData", "Нет данных")}</div>;
   }
@@ -586,8 +586,8 @@ function EditableNotesTable({
                       editableCell && "cursor-text hover:bg-blue-50/40",
                     )}
                   >
-                    {renderNoteCellValue(cell, currencySymbol)}
-                    {ri === 0 && <NotesResizeGrip onResizeStart={startResize(ci)} onReset={() => reset(ci)} />}
+                    {renderNoteCellValue(cell, currencySymbol, t)}
+                    {ri === 0 && <NotesResizeGrip onResizeStart={startResize(ci)} onReset={() => reset(ci)} t={t} />}
                   </td>
                 );
               })}

@@ -13,6 +13,8 @@ All static UI strings live in the Postgres `translations` table — there are no
 
 **How to apply:** static literal `t()` calls are auto-discovered (RU fallback even if uncurated), so they're safe; only template/dynamic keys need manual curation. The seed is idempotent (`onConflictDoUpdate` on `translationKey`), so re-running is always safe.
 
+**The literal-key audit does NOT prove "no hardcoded UI".** Verifying every `t("k",…)` key resolves in the DB only covers strings already wrapped in `t()`. It misses (a) whole screens/components that never call `t()` at all (e.g. the Translations admin page once shipped fully hard-coded Russian), and (b) template/dynamic keys that were referenced but never seeded (`fields.op.*`, formula function `descKey`/`sigKey`, audit reserved labels). To actually answer "are there untranslated phrases anywhere", run a raw-Cyrillic sweep over `*.ts/*.tsx`, then triage the hits: comments, swallowed parser `throw` messages (never surfaced), multi-line `t(key, "fallback")` second args, and language-intrinsic editor labels/placeholders (the RU/EN/HE input fields, endonyms like "Русский") are all acceptable; anything else rendered in JSX/`title=`/`placeholder=`/toast must be wrapped.
+
 **Login page is RU by design:** `useListTranslations` is enabled only when logged in, so pre-auth screens fall back to the code default (RU). Don't "fix" this by enabling the query for anonymous users unless that's actually wanted.
 
 **Direction/override:** the I18nProvider owns `document.documentElement.dir/lang` (he ⇒ rtl) — auth must not also set direction or they fight. `setLang` sets a transient override, persists via `PUT /auth/me`, sequence-tags the write so stale responses can't win, rolls back on error, and clears the override on logout.

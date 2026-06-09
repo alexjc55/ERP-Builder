@@ -1542,6 +1542,264 @@
     "he": "דוגמה"
   },
   {
+    "key": "fields.fnIf",
+    "ru": "Возвращает второй аргумент, если условие истинно, иначе третий.",
+    "en": "Returns the second argument if the condition is true, otherwise the third.",
+    "he": "מחזיר את הארגומנט השני אם התנאי נכון, אחרת את השלישי."
+  },
+  {
+    "key": "fields.fnRound",
+    "ru": "Округляет число до указанного количества знаков после запятой.",
+    "en": "Rounds a number to the given number of decimal places.",
+    "he": "מעגל מספר למספר הספרות העשרוניות שצוין."
+  },
+  {
+    "key": "fields.fnMin",
+    "ru": "Наименьшее из перечисленных значений.",
+    "en": "The smallest of the listed values.",
+    "he": "הקטן מבין הערכים המפורטים."
+  },
+  {
+    "key": "fields.fnMax",
+    "ru": "Наибольшее из перечисленных значений.",
+    "en": "The largest of the listed values.",
+    "he": "הגדול מבין הערכים המפורטים."
+  },
+  {
+    "key": "fields.fnSum",
+    "ru": "Сумма всех перечисленных значений.",
+    "en": "The sum of all listed values.",
+    "he": "סכום כל הערכים המפורטים."
+  },
+  {
+    "key": "fields.fnAbs",
+    "ru": "Абсолютное значение (модуль) числа.",
+    "en": "The absolute value (modulus) of a number.",
+    "he": "הערך המוחלט של מספר."
+  },
+  {
+    "key": "fields.fnConcat",
+    "ru": "Объединяет значения в одну строку.",
+    "en": "Joins values into a single string.",
+    "he": "מחבר ערכים למחרוזת אחת."
+  },
+  {
+    "key": "fields.fnCoalesce",
+    "ru": "Первое непустое значение из перечисленных.",
+    "en": "The first non-empty value from those listed.",
+    "he": "הערך הראשון שאינו ריק מבין המפורטים."
+  },
+  {
+    "key": "fields.fnUpper",
+    "ru": "Переводит текст в ВЕРХНИЙ регистр.",
+    "en": "Converts text to UPPERCASE.",
+    "he": "ממיר טקסט לאותיות גדולות."
+  },
+  {
+    "key": "fields.fnLower",
+    "ru": "Переводит текст в нижний регистр.",
+    "en": "Converts text to lowercase.",
+    "he": "ממיר טקסט לאותיות קטנות."
+  },
+  {
+    "key": "fields.fnLen",
+    "ru": "Количество символов в тексте.",
+    "en": "The number of characters in the text.",
+    "he": "מספר התווים בטקסט."
+  },
+  {
+    "key": "fields.fnSigIf",
+    "ru": "if(условие, если_да, если_нет)",
+    "en": "if(condition, if_true, if_false)",
+    "he": "if(תנאי, אם_כן, אם_לא)"
+  },
+  {
+    "key": "fields.fnSigRound",
+    "ru": "round(число, знаки)",
+    "en": "round(number, digits)",
+    "he": "round(מספר, ספרות)"
+  },
+  {
+    "key": "fields.fnSigMin",
+    "ru": "min(число1, число2, …)",
+    "en": "min(number1, number2, …)",
+    "he": "min(מספר1, מספר2, …)"
+  },
+  {
+    "key": "fields.fnSigMax",
+    "ru": "max(число1, число2, …)",
+    "en": "max(number1, number2, …)",
+    "he": "max(מספר1, מספר2, …)"
+  },
+  {
+    "key": "fields.fnSigSum",
+    "ru": "sum(число1, число2, …)",
+    "en": "sum(number1, number2, …)",
+    "he": "sum(מספר1, מספר2, …)"
+  },
+  {
+    "key": "fields.fnSigAbs",
+    "ru": "abs(число)",
+    "en": "abs(number)",
+    "he": "abs(מספר)"
+  },
+  {
+    "key": "fields.fnSigConcat",
+    "ru": "concat(значение1, значение2, …)",
+    "en": "concat(value1, value2, …)",
+    "he": "concat(ערך1, ערך2, …)"
+  },
+  {
+    "key": "fields.fnSigCoalesce",
+    "ru": "coalesce(значение1, значение2, …)",
+    "en": "coalesce(value1, value2, …)",
+    "he": "coalesce(ערך1, ערך2, …)"
+  },
+  {
+    "key": "fields.fnSigUpper",
+    "ru": "upper(текст)",
+    "en": "upper(text)",
+    "he": "upper(טקסט)"
+  },
+  {
+    "key": "fields.fnSigLower",
+    "ru": "lower(текст)",
+    "en": "lower(text)",
+    "he": "lower(טקסט)"
+  },
+  {
+    "key": "fields.fnSigLen",
+    "ru": "len(текст)",
+    "en": "len(text)",
+    "he": "len(טקסט)"
+  },
+  {
+    "key": "records.openInDrive",
+    "ru": "Открыть в Google Drive",
+    "en": "Open in Google Drive",
+    "he": "פתח ב-Google Drive"
+  },
+  {
+    "key": "records.auditStatus",
+    "ru": "Статус",
+    "en": "Status",
+    "he": "סטטוס"
+  },
+  {
+    "key": "records.auditArchived",
+    "ru": "Архив",
+    "en": "Archive",
+    "he": "ארכיון"
+  },
+  {
+    "key": "records.auditCreated",
+    "ru": "Запись создана",
+    "en": "Record created",
+    "he": "הרשומה נוצרה"
+  },
+  {
+    "key": "records.auditDeleted",
+    "ru": "Запись удалена",
+    "en": "Record deleted",
+    "he": "הרשומה נמחקה"
+  },
+  {
+    "key": "trans.title",
+    "ru": "Переводы",
+    "en": "Translations",
+    "he": "תרגומים"
+  },
+  {
+    "key": "trans.subtitle",
+    "ru": "Управление многоязычным контентом (ru/en/he)",
+    "en": "Manage multilingual content (ru/en/he)",
+    "he": "ניהול תוכן רב-לשוני (ru/en/he)"
+  },
+  {
+    "key": "trans.add",
+    "ru": "Добавить перевод",
+    "en": "Add translation",
+    "he": "הוסף תרגום"
+  },
+  {
+    "key": "trans.searchPlaceholder",
+    "ru": "Поиск по ключу или тексту...",
+    "en": "Search by key or text...",
+    "he": "חיפוש לפי מפתח או טקסט..."
+  },
+  {
+    "key": "trans.onlyUntranslated",
+    "ru": "Только непереведённые",
+    "en": "Untranslated only",
+    "he": "לא מתורגמים בלבד"
+  },
+  {
+    "key": "trans.colKey",
+    "ru": "Ключ",
+    "en": "Key",
+    "he": "מפתח"
+  },
+  {
+    "key": "trans.colActions",
+    "ru": "Действия",
+    "en": "Actions",
+    "he": "פעולות"
+  },
+  {
+    "key": "trans.notFound",
+    "ru": "Переводы не найдены",
+    "en": "No translations found",
+    "he": "לא נמצאו תרגומים"
+  },
+  {
+    "key": "trans.editTitle",
+    "ru": "Редактировать перевод",
+    "en": "Edit translation",
+    "he": "עריכת תרגום"
+  },
+  {
+    "key": "trans.newTitle",
+    "ru": "Новый перевод",
+    "en": "New translation",
+    "he": "תרגום חדש"
+  },
+  {
+    "key": "trans.keyLabel",
+    "ru": "Ключ *",
+    "en": "Key *",
+    "he": "מפתח *"
+  },
+  {
+    "key": "trans.create",
+    "ru": "Добавить",
+    "en": "Add",
+    "he": "הוסף"
+  },
+  {
+    "key": "trans.added",
+    "ru": "Перевод добавлен",
+    "en": "Translation added",
+    "he": "התרגום נוסף"
+  },
+  {
+    "key": "trans.errorExists",
+    "ru": "Ошибка: ключ уже существует",
+    "en": "Error: key already exists",
+    "he": "שגיאה: המפתח כבר קיים"
+  },
+  {
+    "key": "trans.updated",
+    "ru": "Перевод обновлён",
+    "en": "Translation updated",
+    "he": "התרגום עודכן"
+  },
+  {
+    "key": "dash.notesResizeTip",
+    "ru": "Потяните, чтобы изменить ширину колонки (двойной клик — сбросить)",
+    "en": "Drag to resize the column (double-click to reset)",
+    "he": "גרור לשינוי רוחב העמודה (לחיצה כפולה לאיפוס)"
+  },
+  {
     "key": "fields.formatRules",
     "ru": "Условное форматирование",
     "en": "Conditional formatting",
@@ -1660,6 +1918,66 @@
     "ru": "Пока пусто — сохраните цвет кнопкой ★",
     "en": "Empty for now — save a color with the ★ button",
     "he": "ריק בינתיים — שמרו צבע באמצעות הכפתור ★"
+  },
+  {
+    "key": "fields.op.contains",
+    "ru": "содержит",
+    "en": "contains",
+    "he": "מכיל"
+  },
+  {
+    "key": "fields.op.empty",
+    "ru": "пусто",
+    "en": "empty",
+    "he": "ריק"
+  },
+  {
+    "key": "fields.op.equals",
+    "ru": "равно",
+    "en": "equals",
+    "he": "שווה"
+  },
+  {
+    "key": "fields.op.gt",
+    "ru": "больше",
+    "en": "greater than",
+    "he": "גדול מ"
+  },
+  {
+    "key": "fields.op.gte",
+    "ru": "больше или равно",
+    "en": "greater or equal",
+    "he": "גדול או שווה"
+  },
+  {
+    "key": "fields.op.lt",
+    "ru": "меньше",
+    "en": "less than",
+    "he": "קטן מ"
+  },
+  {
+    "key": "fields.op.lte",
+    "ru": "меньше или равно",
+    "en": "less or equal",
+    "he": "קטן או שווה"
+  },
+  {
+    "key": "fields.op.notContains",
+    "ru": "не содержит",
+    "en": "does not contain",
+    "he": "לא מכיל"
+  },
+  {
+    "key": "fields.op.notEmpty",
+    "ru": "не пусто",
+    "en": "not empty",
+    "he": "לא ריק"
+  },
+  {
+    "key": "fields.op.notEquals",
+    "ru": "не равно",
+    "en": "not equal",
+    "he": "לא שווה"
   },
   {
     "key": "fields.options",

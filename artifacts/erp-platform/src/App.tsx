@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
-import { I18nProvider } from "@/lib/i18n";
+import { I18nProvider, useT } from "@/lib/i18n";
 import Layout from "@/components/layout/Layout";
 import LoginPage from "@/pages/login";
 import GuestEntryPage from "@/pages/guest";
@@ -35,15 +35,16 @@ const queryClient = new QueryClient({
 });
 
 function NoAccess() {
+  const t = useT();
   return (
     <div className="p-6">
       <div className="max-w-md mx-auto mt-16 text-center space-y-3">
         <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mx-auto">
           <ShieldAlert className="w-7 h-7 text-red-500" />
         </div>
-        <h1 className="text-xl font-semibold text-slate-800">Доступ запрещён</h1>
+        <h1 className="text-xl font-semibold text-slate-800">{t("page.accessDenied", "Доступ запрещён")}</h1>
         <p className="text-sm text-slate-500">
-          У вас нет прав для просмотра этого раздела. Обратитесь к администратору.
+          {t("page.accessDeniedDesc", "У вас нет прав для просмотра этой страницы. Обратитесь к администратору.")}
         </p>
       </div>
     </div>

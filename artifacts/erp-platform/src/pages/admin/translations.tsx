@@ -20,9 +20,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, Pencil, Loader2, Languages, Filter } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 export default function TranslationsPage() {
   const { toast } = useToast();
+  const t = useT();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -63,14 +65,14 @@ export default function TranslationsPage() {
 
   const createMutation = useCreateTranslation({
     mutation: {
-      onSuccess: () => { toast({ title: "Перевод добавлен" }); setDialogOpen(false); invalidate(); },
-      onError: () => toast({ title: "Ошибка: ключ уже существует", variant: "destructive" }),
+      onSuccess: () => { toast({ title: t("trans.added", "Перевод добавлен") }); setDialogOpen(false); invalidate(); },
+      onError: () => toast({ title: t("trans.errorExists", "Ошибка: ключ уже существует"), variant: "destructive" }),
     },
   });
 
   const updateMutation = useUpdateTranslation({
     mutation: {
-      onSuccess: () => { toast({ title: "Перевод обновлён" }); setDialogOpen(false); invalidate(); },
+      onSuccess: () => { toast({ title: t("trans.updated", "Перевод обновлён") }); setDialogOpen(false); invalidate(); },
     },
   });
 
@@ -109,12 +111,12 @@ export default function TranslationsPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Переводы</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Управление многоязычным контентом (ru/en/he)</p>
+          <h1 className="text-2xl font-bold text-slate-800">{t("trans.title", "Переводы")}</h1>
+          <p className="text-sm text-slate-500 mt-0.5">{t("trans.subtitle", "Управление многоязычным контентом (ru/en/he)")}</p>
         </div>
         <Button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 gap-2">
           <Plus className="w-4 h-4" />
-          Добавить перевод
+          {t("trans.add", "Добавить перевод")}
         </Button>
       </div>
 
@@ -122,7 +124,7 @@ export default function TranslationsPage() {
         <div className="relative max-w-sm flex-1 min-w-[220px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <Input
-            placeholder="Поиск по ключу или тексту..."
+            placeholder={t("trans.searchPlaceholder", "Поиск по ключу или тексту...")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -134,7 +136,7 @@ export default function TranslationsPage() {
           className={onlyUntranslated ? "bg-amber-500 hover:bg-amber-600 gap-2" : "gap-2"}
         >
           <Filter className="w-4 h-4" />
-          Только непереведённые
+          {t("trans.onlyUntranslated", "Только непереведённые")}
           {untranslatedCount > 0 && (
             <span
               className={
@@ -154,11 +156,11 @@ export default function TranslationsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
-                  <th className="text-left px-4 py-3 font-medium text-slate-600 w-56">Ключ</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600 w-56">{t("trans.colKey", "Ключ")}</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">RU</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">EN</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">HE</th>
-                  <th className="text-right px-4 py-3 font-medium text-slate-600">Действия</th>
+                  <th className="text-right px-4 py-3 font-medium text-slate-600">{t("trans.colActions", "Действия")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -174,7 +176,7 @@ export default function TranslationsPage() {
                   <tr>
                     <td colSpan={5} className="px-4 py-12 text-center text-slate-400">
                       <Languages className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                      Переводы не найдены
+                      {t("trans.notFound", "Переводы не найдены")}
                     </td>
                   </tr>
                 ) : (
@@ -216,11 +218,11 @@ export default function TranslationsPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingTrans ? "Редактировать перевод" : "Новый перевод"}</DialogTitle>
+            <DialogTitle>{editingTrans ? t("trans.editTitle", "Редактировать перевод") : t("trans.newTitle", "Новый перевод")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label>Ключ *</Label>
+              <Label>{t("trans.keyLabel", "Ключ *")}</Label>
               <Input
                 value={key}
                 onChange={(e) => setKey(e.target.value)}
@@ -243,9 +245,9 @@ export default function TranslationsPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Отмена</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("common.cancel", "Отмена")}</Button>
             <Button onClick={handleSubmit} disabled={isPending || !key} className="bg-blue-600 hover:bg-blue-700">
-              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editingTrans ? "Сохранить" : "Добавить"}
+              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editingTrans ? t("common.save", "Сохранить") : t("trans.create", "Добавить")}
             </Button>
           </DialogFooter>
         </DialogContent>

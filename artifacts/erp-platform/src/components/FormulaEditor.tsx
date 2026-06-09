@@ -15,6 +15,7 @@ export type FormulaFieldRef = { key: string; label: string };
 const FORMULA_FUNCS: {
   name: string;
   sig: string;
+  sigKey: string;
   example: string;
   descKey: string;
   descFallback: string;
@@ -22,6 +23,7 @@ const FORMULA_FUNCS: {
   {
     name: "if",
     sig: "if(условие, если_да, если_нет)",
+    sigKey: "fields.fnSigIf",
     example: 'if({qty} > 10, "опт", "розница")',
     descKey: "fields.fnIf",
     descFallback: "Возвращает второй аргумент, если условие истинно, иначе третий.",
@@ -29,6 +31,7 @@ const FORMULA_FUNCS: {
   {
     name: "round",
     sig: "round(число, знаки)",
+    sigKey: "fields.fnSigRound",
     example: "round({price} * 1.2, 2)",
     descKey: "fields.fnRound",
     descFallback: "Округляет число до указанного количества знаков после запятой.",
@@ -36,6 +39,7 @@ const FORMULA_FUNCS: {
   {
     name: "min",
     sig: "min(число1, число2, …)",
+    sigKey: "fields.fnSigMin",
     example: "min({plan}, {fact})",
     descKey: "fields.fnMin",
     descFallback: "Наименьшее из перечисленных значений.",
@@ -43,6 +47,7 @@ const FORMULA_FUNCS: {
   {
     name: "max",
     sig: "max(число1, число2, …)",
+    sigKey: "fields.fnSigMax",
     example: "max({plan}, {fact})",
     descKey: "fields.fnMax",
     descFallback: "Наибольшее из перечисленных значений.",
@@ -50,6 +55,7 @@ const FORMULA_FUNCS: {
   {
     name: "sum",
     sig: "sum(число1, число2, …)",
+    sigKey: "fields.fnSigSum",
     example: "sum({q1}, {q2}, {q3})",
     descKey: "fields.fnSum",
     descFallback: "Сумма всех перечисленных значений.",
@@ -57,6 +63,7 @@ const FORMULA_FUNCS: {
   {
     name: "abs",
     sig: "abs(число)",
+    sigKey: "fields.fnSigAbs",
     example: "abs({balance})",
     descKey: "fields.fnAbs",
     descFallback: "Абсолютное значение (модуль) числа.",
@@ -64,6 +71,7 @@ const FORMULA_FUNCS: {
   {
     name: "concat",
     sig: "concat(значение1, значение2, …)",
+    sigKey: "fields.fnSigConcat",
     example: 'concat({first}, " ", {last})',
     descKey: "fields.fnConcat",
     descFallback: "Объединяет значения в одну строку.",
@@ -71,6 +79,7 @@ const FORMULA_FUNCS: {
   {
     name: "coalesce",
     sig: "coalesce(значение1, значение2, …)",
+    sigKey: "fields.fnSigCoalesce",
     example: "coalesce({nick}, {name})",
     descKey: "fields.fnCoalesce",
     descFallback: "Первое непустое значение из перечисленных.",
@@ -78,6 +87,7 @@ const FORMULA_FUNCS: {
   {
     name: "upper",
     sig: "upper(текст)",
+    sigKey: "fields.fnSigUpper",
     example: "upper({code})",
     descKey: "fields.fnUpper",
     descFallback: "Переводит текст в ВЕРХНИЙ регистр.",
@@ -85,6 +95,7 @@ const FORMULA_FUNCS: {
   {
     name: "lower",
     sig: "lower(текст)",
+    sigKey: "fields.fnSigLower",
     example: "lower({email})",
     descKey: "fields.fnLower",
     descFallback: "Переводит текст в нижний регистр.",
@@ -92,6 +103,7 @@ const FORMULA_FUNCS: {
   {
     name: "len",
     sig: "len(текст)",
+    sigKey: "fields.fnSigLen",
     example: "len({title})",
     descKey: "fields.fnLen",
     descFallback: "Количество символов в тексте.",
@@ -177,7 +189,7 @@ export function FormulaEditor({
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" className="max-w-xs space-y-1">
-                <p className="font-mono text-[11px]">{fn.sig}</p>
+                <p className="font-mono text-[11px]">{t(fn.sigKey, fn.sig)}</p>
                 <p className="opacity-80">{t(fn.descKey, fn.descFallback)}</p>
                 <p className="font-mono text-[11px] opacity-70">
                   {t("fields.fnExample", "Пример")}: {fn.example}

@@ -182,15 +182,15 @@ function formToValues(fields: Field[], form: FormState): Record<string, unknown>
   return out;
 }
 
-function renderCellValue(field: Field, value: unknown, userNames?: Map<number, string>, textColor?: string): React.ReactNode {
+function renderCellValue(field: Field, value: unknown, t: (key: string, def: string) => string, userNames?: Map<number, string>, textColor?: string): React.ReactNode {
   const colorStyle = textColor ? { color: textColor } : undefined;
   if (value === undefined || value === null || value === "")
     return <span className="text-slate-300" style={colorStyle}>—</span>;
   if (field.fieldType === "boolean") {
     return value ? (
-      <Badge className="bg-emerald-100 text-emerald-700 border-0 font-normal">Да</Badge>
+      <Badge className="bg-emerald-100 text-emerald-700 border-0 font-normal">{t("fields.yes", "Да")}</Badge>
     ) : (
-      <Badge className="bg-slate-100 text-slate-500 border-0 font-normal">Нет</Badge>
+      <Badge className="bg-slate-100 text-slate-500 border-0 font-normal">{t("fields.no", "Нет")}</Badge>
     );
   }
   if (field.fieldType === "user") {
@@ -341,6 +341,7 @@ function GDrivePreview({ fileId, contentType, name }: { fileId: string; contentT
 
 /** A filled file cell, rendered per source (server / Google Drive / link). */
 function FileCell({ value }: { value: FileValue }) {
+  const t = useT();
   if (isLinkFile(value)) {
     return <UrlPreviewCell url={value.url} label={value.name && value.name.trim() ? value.name : value.url} />;
   }
@@ -396,7 +397,7 @@ function FileCell({ value }: { value: FileValue }) {
           rel="noreferrer"
           onClick={(e) => e.stopPropagation()}
           className="shrink-0 text-slate-400 hover:text-emerald-600"
-          title="Открыть в Google Drive"
+          title={t("records.openInDrive", "Открыть в Google Drive")}
         >
           <ExternalLink className="h-3 w-3" />
         </a>
@@ -2133,11 +2134,11 @@ export function EntityRecords({
                             return (
                               <td key={f.id} className="px-4 py-3 max-w-[240px] truncate" style={{ ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
                                 {computed.error ? (
-                                  <span className="text-red-400 text-xs" title={computed.text}>{t("fields.formulaError", "Ошибка формулы")}</span>
+                                  <span className="text-red-400 text-xs" title={t("fields.formulaError", "Ошибка формулы")}>{t("fields.formulaError", "Ошибка формулы")}</span>
                                 ) : computed.text === "" ? (
                                   <span className="text-slate-300" style={cellText ? { color: cellText } : undefined}>—</span>
                                 ) : (
-                                  <span className="text-slate-700" style={cellText ? { color: cellText } : undefined}>{computed.text}</span>
+                                  <span className="text-slate-700" style={cellText ? { color: cellText } : undefined}>{computed.bool !== undefined ? t(computed.bool ? "fields.yes" : "fields.no", computed.bool ? "Да" : "Нет") : computed.text}</span>
                                 )}
                               </td>
                             );
@@ -2150,7 +2151,7 @@ export function EntityRecords({
                               style={{ ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}
                               title={cellEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
                             >
-                              {renderCellValue(f, values[f.fieldKey], userNames, cellText)}
+                              {renderCellValue(f, values[f.fieldKey], t, userNames, cellText)}
                             </td>
                           );
                         })}
@@ -2176,7 +2177,7 @@ export function EntityRecords({
                               rel?.linkedRecordId == null ? (
                                 <span className="text-slate-300">—</span>
                               ) : (
-                                renderCellValue(relField, rel?.value, userNames, cellText)
+                                renderCellValue(relField, rel?.value, t, userNames, cellText)
                               );
                             return (
                               <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px] truncate" style={{ ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
@@ -2225,11 +2226,11 @@ export function EntityRecords({
                             return (
                               <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px] truncate" style={{ ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
                                 {computed.error ? (
-                                  <span className="text-red-400 text-xs" title={computed.text}>{t("fields.formulaError", "Ошибка формулы")}</span>
+                                  <span className="text-red-400 text-xs" title={t("fields.formulaError", "Ошибка формулы")}>{t("fields.formulaError", "Ошибка формулы")}</span>
                                 ) : computed.text === "" ? (
                                   <span className="text-slate-300" style={cellText ? { color: cellText } : undefined}>—</span>
                                 ) : (
-                                  <span className="text-slate-700" style={cellText ? { color: cellText } : undefined}>{computed.text}</span>
+                                  <span className="text-slate-700" style={cellText ? { color: cellText } : undefined}>{computed.bool !== undefined ? t(computed.bool ? "fields.yes" : "fields.no", computed.bool ? "Да" : "Нет") : computed.text}</span>
                                 )}
                               </td>
                             );
@@ -2242,7 +2243,7 @@ export function EntityRecords({
                               style={{ ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}
                               title={cellEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
                             >
-                              {renderCellValue(pageFieldAsField, pageValues[pf.fieldKey], userNames, cellText)}
+                              {renderCellValue(pageFieldAsField, pageValues[pf.fieldKey], t, userNames, cellText)}
                             </td>
                           );
                         })}
@@ -2525,11 +2526,11 @@ export function EntityRecords({
   );
 }
 
-const AUDIT_RESERVED: Record<string, string> = {
-  __status__: "Статус",
-  __archived__: "Архив",
-  __created__: "Запись создана",
-  __deleted__: "Запись удалена",
+const AUDIT_RESERVED: Record<string, { key: string; def: string }> = {
+  __status__: { key: "records.auditStatus", def: "Статус" },
+  __archived__: { key: "records.auditArchived", def: "Архив" },
+  __created__: { key: "records.auditCreated", def: "Запись создана" },
+  __deleted__: { key: "records.auditDeleted", def: "Запись удалена" },
 };
 
 function RecordHistoryDialog({
@@ -2574,7 +2575,7 @@ function RecordHistoryList({
 
   const fieldLabel = (key: string | null): string => {
     if (!key) return "—";
-    if (AUDIT_RESERVED[key]) return AUDIT_RESERVED[key];
+    if (AUDIT_RESERVED[key]) return t(AUDIT_RESERVED[key].key, AUDIT_RESERVED[key].def);
     return fieldNameByKey.get(key) || key;
   };
 

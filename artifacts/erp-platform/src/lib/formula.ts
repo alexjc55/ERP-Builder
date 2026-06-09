@@ -361,11 +361,11 @@ export function evaluateFormula(expression: string, values: Record<string, unkno
 }
 
 /** Display helper: evaluate and render the result as a string, or "—"/error. */
-export function formatFormulaResult(expression: string, values: Record<string, unknown>): { text: string; error: boolean } {
+export function formatFormulaResult(expression: string, values: Record<string, unknown>): { text: string; error: boolean; bool?: boolean } {
   try {
     const v = evaluateFormula(expression, values);
     if (v == null || v === "") return { text: "—", error: false };
-    if (typeof v === "boolean") return { text: v ? "Да" : "Нет", error: false };
+    if (typeof v === "boolean") return { text: v ? "Да" : "Нет", error: false, bool: v };
     return { text: String(v), error: false };
   } catch {
     return { text: "Ошибка формулы", error: true };
