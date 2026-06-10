@@ -2933,6 +2933,7 @@ function UserCombobox({
   disabled = false,
   allowCreate = false,
   allowedRoleIds,
+  fieldId,
 }: {
   options: UserOption[];
   value: number | null;
@@ -2944,6 +2945,7 @@ function UserCombobox({
   disabled?: boolean;
   allowCreate?: boolean;
   allowedRoleIds?: number[];
+  fieldId?: number;
 }) {
   const t = useT();
   const [open, setOpen] = useState(autoOpen);
@@ -3022,7 +3024,7 @@ function UserCombobox({
           </Command>
         </PopoverContent>
       </Popover>
-      {allowCreate && (
+      {allowCreate && fieldId != null && (
         <CreateUserDialog
           open={createOpen}
           onOpenChange={(o) => {
@@ -3035,6 +3037,7 @@ function UserCombobox({
               if (!created) onClose?.(false);
             }
           }}
+          fieldId={fieldId}
           allowedRoleIds={allowedRoleIds}
           onCreated={(u) => {
             createdRef.current = true;
@@ -3100,6 +3103,7 @@ function InlineCellEditor({
         onClose={(committed) => { if (!committed && !committedRef.current) onCancel(); }}
         allowCreate={field.userConfigJson?.allowCreate === true}
         allowedRoleIds={field.userConfigJson?.allowedRoleIds}
+        fieldId={field.id}
       />
     );
   }
@@ -3226,6 +3230,7 @@ function FieldInput({
           disabled={disabled}
           allowCreate={field.userConfigJson?.allowCreate === true}
           allowedRoleIds={field.userConfigJson?.allowedRoleIds}
+          fieldId={field.id}
         />
       );
     }

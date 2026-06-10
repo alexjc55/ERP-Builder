@@ -601,6 +601,30 @@ export const CreateUserBody = zod.object({
 
 
 /**
+ * @summary Create a user inline from a user-type field (record editors; non-privileged roles only)
+ */
+export const CreateUserFromFieldParams = zod.object({
+  "fieldId": zod.coerce.number()
+})
+
+export const createUserFromFieldBodyPasswordMin = 6;
+
+export const createUserFromFieldBodyLanguageDefault = `ru`;
+export const createUserFromFieldBodyDirectionDefault = `ltr`;
+
+export const CreateUserFromFieldBody = zod.object({
+  "email": zod.string().email(),
+  "password": zod.string().min(createUserFromFieldBodyPasswordMin).nullish().describe('Omit or null to create a passwordless guest user (cannot log in with a password; access only via a guest link).'),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "roleId": zod.number().describe('The single role to assign. Must be allowed by the field and must not be a privileged (admin) role.'),
+  "language": zod.enum(['ru', 'en', 'he']).default(createUserFromFieldBodyLanguageDefault),
+  "direction": zod.enum(['ltr', 'rtl']).default(createUserFromFieldBodyDirectionDefault),
+  "pageId": zod.number().optional().describe('Optional mirror-page context used to resolve the caller\'s record-edit permission.')
+}).describe('Payload for creating a user inline from a user-type field. Unlike UserInput this assigns exactly ONE role, and the server hard-rejects any role outside the field\'s allowedRoleIds or any privileged (admin) role.')
+
+
+/**
  * @summary List users as id+name options (auth-only; for user-type field pickers)
  */
 export const ListUserOptionsResponseItem = zod.object({

@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  useCreateUser,
+  useCreateUserFromField,
   useListRoles,
   getListUserOptionsQueryKey,
   type Role,
   type User,
-  type UserInput,
-  UserInputLanguage,
-  UserInputDirection,
+  type FieldUserInput,
+  FieldUserInputLanguage,
+  FieldUserInputDirection,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,8 @@ import { useToast } from "@/hooks/use-toast";
 interface CreateUserDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** The user-type field id; the server validates creation against its config. */
+  fieldId: number;
   /** Roles the new account may be assigned. Empty/unset = all roles. */
   allowedRoleIds?: number[];
   /** Called with the created user after success. */
@@ -42,16 +44,32 @@ interface CreateUserDialogProps {
 }
 
 /**
+ * True if a role carries any privileged capability (superAdmin or any admin.*
+ * cap). Such roles can never be assigned through inline field creation — the
+ * server hard-rejects them; this just keeps them out of the dropdown so the UI
+ * doesn't offer a choice that would always fail.
+ */
+function isPrivilegedRole(r: Role): boolean {
+  const p = r.permissionsJson;
+  if (!p) return false;
+  if (p.superAdmin) return true;
+  return Object.values(p.admin ?? {}).some(Boolean);
+}
+
+/**
  * Standalone "add a new user" dialog used inline from a `user`-type field's
  * value picker (opt-in via the field's `userConfigJson.allowCreate`). The role
- * choices are limited to the field's `allowedRoleIds` (empty = all roles), so a
- * user created here can only get a role the field already permits. On success it
- * invalidates the user-options query (so the new user appears in pickers) and
- * hands the created user back to the caller for immediate selection.
+ * choices are limited to the field's `allowedRoleIds` (empty = all roles) AND to
+ * non-privileged roles, and creation goes through a dedicated server endpoint
+ * that re-checks those boundaries (record-edit rights + allowed roles +
+ * non-privileged) as a hard guard. On success it invalidates the user-options
+ * query (so the new user appears in pickers) and hands the created user back to
+ * the caller for immediate selection.
  */
 export function CreateUserDialog({
   open,
   onOpenChange,
+  fieldId,
   allowedRoleIds,
   onCreated,
 }: CreateUserDialogProps) {
@@ -62,9 +80,12 @@ export function CreateUserDialog({
 
   const { data: allRoles = [] } = useListRoles();
   const roles: Role[] = useMemo(() => {
-    if (!Array.isArray(allowedRoleIds) || allowedRoleIds.length === 0) return allRoles;
-    const allowed = new Set(allowedRoleIds);
-    return allRoles.filter((r) => allowed.has(r.id));
+    let list = allRoles.filter((r) => !isPrivilegedRole(r));
+    if (Array.isArray(allowedRoleIds) && allowedRoleIds.length > 0) {
+      const allowed = new Set(allowedRoleIds);
+      list = list.filter((r) => allowed.has(r.id));
+    }
+    return list;
   }, [allRoles, allowedRoleIds]);
 
   const [firstName, setFirstName] = useState("");
@@ -72,8 +93,8 @@ export function CreateUserDialog({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [roleId, setRoleId] = useState(0);
-  const [language, setLanguage] = useState<UserInputLanguage>(UserInputLanguage.ru);
-  const [direction, setDirection] = useState<UserInputDirection>(UserInputDirection.ltr);
+  const [language, setLanguage] = useState<FieldUserInputLanguage>(FieldUserInputLanguage.ru);
+  const [direction, setDirection] = useState<FieldUserInputDirection>(FieldUserInputDirection.ltr);
 
   useEffect(() => {
     if (open) {
@@ -82,12 +103,12 @@ export function CreateUserDialog({
       setEmail("");
       setPassword("");
       setRoleId(0);
-      setLanguage(UserInputLanguage.ru);
-      setDirection(UserInputDirection.ltr);
+      setLanguage(FieldUserInputLanguage.ru);
+      setDirection(FieldUserInputDirection.ltr);
     }
   }, [open]);
 
-  const createMutation = useCreateUser({
+  const createMutation = useCreateUserFromField({
     mutation: {
       onSuccess: (created: User) => {
         toast({ title: t("users.created", "Пользователь создан") });
@@ -133,17 +154,16 @@ export function CreateUserDialog({
       });
       return;
     }
-    const create: UserInput = {
+    const create: FieldUserInput = {
       email: email.trim(),
       password,
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       roleId,
-      roleIds: [roleId],
       language,
       direction,
     };
-    createMutation.mutate({ data: create });
+    createMutation.mutate({ fieldId, data: create });
   };
 
   return (
@@ -195,7 +215,7 @@ export function CreateUserDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>{t("users.colLanguage", "Язык")}</Label>
-              <Select value={language} onValueChange={(v) => setLanguage(v as UserInputLanguage)}>
+              <Select value={language} onValueChange={(v) => setLanguage(v as FieldUserInputLanguage)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -208,7 +228,7 @@ export function CreateUserDialog({
             </div>
             <div className="space-y-1.5">
               <Label>{t("users.direction", "Направление")}</Label>
-              <Select value={direction} onValueChange={(v) => setDirection(v as UserInputDirection)}>
+              <Select value={direction} onValueChange={(v) => setDirection(v as FieldUserInputDirection)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

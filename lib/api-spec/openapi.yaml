@@ -463,6 +463,49 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /fields/{fieldId}/users:
+    post:
+      operationId: createUserFromField
+      tags: [users]
+      summary: Create a user inline from a user-type field (record editors; non-privileged roles only)
+      parameters:
+        - name: fieldId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FieldUserInput"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Field not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /users/options:
     get:
       operationId: listUserOptions
@@ -3171,6 +3214,40 @@ components:
           default: ltr
         startPageId:
           type: ["integer", "null"]
+
+    FieldUserInput:
+      type: object
+      required: [email, firstName, lastName, roleId]
+      description: >-
+        Payload for creating a user inline from a user-type field. Unlike
+        UserInput this assigns exactly ONE role, and the server hard-rejects any
+        role outside the field's allowedRoleIds or any privileged (admin) role.
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: ["string", "null"]
+          minLength: 6
+          description: Omit or null to create a passwordless guest user (cannot log in with a password; access only via a guest link).
+        firstName:
+          type: string
+        lastName:
+          type: string
+        roleId:
+          type: integer
+          description: The single role to assign. Must be allowed by the field and must not be a privileged (admin) role.
+        language:
+          type: string
+          enum: [ru, en, he]
+          default: ru
+        direction:
+          type: string
+          enum: [ltr, rtl]
+          default: ltr
+        pageId:
+          type: integer
+          description: Optional mirror-page context used to resolve the caller's record-edit permission.
 
     UserUpdate:
       type: object

@@ -453,6 +453,44 @@ export interface UserInput {
   startPageId?: number | null;
 }
 
+export type FieldUserInputLanguage = typeof FieldUserInputLanguage[keyof typeof FieldUserInputLanguage];
+
+
+export const FieldUserInputLanguage = {
+  ru: 'ru',
+  en: 'en',
+  he: 'he',
+} as const;
+
+export type FieldUserInputDirection = typeof FieldUserInputDirection[keyof typeof FieldUserInputDirection];
+
+
+export const FieldUserInputDirection = {
+  ltr: 'ltr',
+  rtl: 'rtl',
+} as const;
+
+/**
+ * Payload for creating a user inline from a user-type field. Unlike UserInput this assigns exactly ONE role, and the server hard-rejects any role outside the field's allowedRoleIds or any privileged (admin) role.
+ */
+export interface FieldUserInput {
+  email: string;
+  /**
+     * Omit or null to create a passwordless guest user (cannot log in with a password; access only via a guest link).
+     * @minLength 6
+     * @nullable
+     */
+  password?: string | null;
+  firstName: string;
+  lastName: string;
+  /** The single role to assign. Must be allowed by the field and must not be a privileged (admin) role. */
+  roleId: number;
+  language?: FieldUserInputLanguage;
+  direction?: FieldUserInputDirection;
+  /** Optional mirror-page context used to resolve the caller's record-edit permission. */
+  pageId?: number;
+}
+
 export type UserUpdateLanguage = typeof UserUpdateLanguage[keyof typeof UserUpdateLanguage];
 
 

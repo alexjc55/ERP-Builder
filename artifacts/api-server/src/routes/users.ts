@@ -1,9 +1,9 @@
 import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
-import { db, usersTable, rolesTable, userRolesTable, loginHistoryTable } from "@workspace/db";
+import { db, usersTable, rolesTable, userRolesTable, loginHistoryTable, entityFieldsTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
-import { requireAdmin } from "../middlewares/permissions";
+import { requireAdmin, getPermissions, effectiveRecordPerm, isPrivilegedRole } from "../middlewares/permissions";
 import { emitEvent, EVENT_USER_CREATED } from "../lib/events";
 import {
   CreateUserBody,
@@ -17,6 +17,8 @@ import {
   ResetUserPasswordBody,
   ListUserLoginHistoryParams,
   ListUsersQueryParams,
+  CreateUserFromFieldParams,
+  CreateUserFromFieldBody,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -190,6 +192,113 @@ router.post("/users", requireAuth, requireAdmin("users"), async (req, res): Prom
       .values({ ...rest, email: email.toLowerCase(), passwordHash })
       .returning({ id: usersTable.id, roleId: usersTable.roleId });
     await tx.insert(userRolesTable).values(roleSet.map((rid) => ({ userId: created.id, roleId: rid })));
+    return created;
+  });
+
+  await emitEvent(
+    {
+      eventName: EVENT_USER_CREATED,
+      recordId: user.id,
+      payload: { actorUserId: req.user!.userId, userId: user.id, roleId: user.roleId },
+    },
+    req.log,
+  );
+
+  const result = await getUserWithRole(user.id);
+  res.status(201).json(result);
+});
+
+/**
+ * Inline "create user from a user-type field". Unlike POST /users this is open to
+ * plain record EDITORS (no `users` admin cap), so it carries its own hard
+ * boundaries to avoid privilege escalation:
+ *  - the field must be a user-type field that opts in (`allowCreate`);
+ *  - the caller must have create/update rights on the field's entity;
+ *  - the target role must be within the field's `allowedRoleIds` (server-enforced,
+ *    not just the cosmetic UI list);
+ *  - the target role must NOT be privileged (no superAdmin / admin caps) — even a
+ *    misconfigured field cannot mint an administrator. Real admin creation always
+ *    goes through POST /users.
+ */
+router.post("/fields/:fieldId/users", requireAuth, async (req, res): Promise<void> => {
+  const paramsParsed = CreateUserFromFieldParams.safeParse(req.params);
+  if (!paramsParsed.success) {
+    res.status(400).json({ error: paramsParsed.error.message });
+    return;
+  }
+  const bodyParsed = CreateUserFromFieldBody.safeParse(req.body);
+  if (!bodyParsed.success) {
+    res.status(400).json({ error: bodyParsed.error.message });
+    return;
+  }
+  const { fieldId } = paramsParsed.data;
+  const { roleId, password, email, pageId, ...rest } = bodyParsed.data;
+
+  const [field] = await db
+    .select({
+      entityId: entityFieldsTable.entityId,
+      fieldType: entityFieldsTable.fieldType,
+      userConfig: entityFieldsTable.userConfigJson,
+    })
+    .from(entityFieldsTable)
+    .where(eq(entityFieldsTable.id, fieldId));
+  if (!field) {
+    res.status(404).json({ error: "Field not found" });
+    return;
+  }
+  if (field.fieldType !== "user" || field.userConfig?.allowCreate !== true) {
+    res.status(403).json({ error: "Inline user creation is not enabled for this field" });
+    return;
+  }
+
+  // Authorize on record-edit rights for the field's entity — NOT the users cap.
+  const perms = await getPermissions(req);
+  if (!perms.superAdmin) {
+    const rp = await effectiveRecordPerm(req, perms, field.entityId, pageId);
+    if (rp?.create !== true && rp?.update !== true) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+  }
+
+  // Server-enforced field role whitelist (the UI dropdown is only cosmetic).
+  const allowed = field.userConfig?.allowedRoleIds ?? [];
+  if (allowed.length > 0 && !allowed.includes(roleId)) {
+    res.status(403).json({ error: "Role is not allowed for this field" });
+    return;
+  }
+
+  const [role] = await db
+    .select({ permissions: rolesTable.permissionsJson })
+    .from(rolesTable)
+    .where(eq(rolesTable.id, roleId));
+  if (!role) {
+    res.status(400).json({ error: "Role does not exist" });
+    return;
+  }
+  // Hard anti-escalation boundary: this path can never create a privileged user.
+  if (isPrivilegedRole(role.permissions)) {
+    res.status(403).json({ error: "Cannot assign a privileged role through a field" });
+    return;
+  }
+
+  const passwordHash = password ? await bcrypt.hash(password, 10) : null;
+
+  const [existing] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.email, email.toLowerCase()));
+  if (existing) {
+    res.status(400).json({ error: "Email already in use" });
+    return;
+  }
+
+  const user = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(usersTable)
+      .values({ ...rest, roleId, email: email.toLowerCase(), passwordHash })
+      .returning({ id: usersTable.id, roleId: usersTable.roleId });
+    await tx.insert(userRolesTable).values({ userId: created.id, roleId });
     return created;
   });
 

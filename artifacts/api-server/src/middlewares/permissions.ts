@@ -225,6 +225,18 @@ export function canRecord(perms: RolePermissions, entityId: number, action: keyo
   return perms.records[String(entityId)]?.[action] === true;
 }
 
+/**
+ * True if a role carries ANY privileged capability — `superAdmin` or any
+ * `admin.*` capability. Privileged roles can never be assigned to a user created
+ * through the inline "create user from a field" path: that path is open to plain
+ * record editors (no `users` admin cap), so allowing a privileged target role
+ * would be a privilege-escalation hole even if a field were misconfigured to
+ * list one. This is a HARD server boundary, mirrored cosmetically in the UI.
+ */
+export function isPrivilegedRole(perms: RolePermissions): boolean {
+  return perms.superAdmin === true || Object.values(perms.admin).some(Boolean);
+}
+
 /** Resolve and cache a page's mirrorEntityId on the request (one DB hit per page per request). */
 async function getPageMirrorEntityId(req: Request, pageId: number): Promise<number | null> {
   if (!req._pageMirror) req._pageMirror = new Map();

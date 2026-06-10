@@ -2245,9 +2245,9 @@
   },
   {
     "key": "fields.userAllowCreateHint",
-    "ru": "Добавляет в выпадающий список действие для создания нового пользователя. Роль создаваемого пользователя ограничена выбранными выше ролями.",
-    "en": "Adds an action to the dropdown for creating a new user. The new user's role is limited to the roles selected above.",
-    "he": "מוסיף לרשימה הנפתחת פעולה ליצירת משתמש חדש. תפקיד המשתמש החדש מוגבל לתפקידים שנבחרו למעלה."
+    "ru": "Добавляет в выпадающий список действие для создания нового пользователя. Создавать пользователей сможет любой, у кого есть право редактировать записи. Роль создаваемого пользователя ограничена выбранными выше ролями; назначить административную (привилегированную) роль через поле нельзя.",
+    "en": "Adds an action to the dropdown for creating a new user. Anyone who can edit records will be able to create users. The new user's role is limited to the roles selected above; an administrative (privileged) role cannot be assigned through a field.",
+    "he": "מוסיף לרשימה הנפתחת פעולה ליצירת משתמש חדש. כל מי שיכול לערוך רשומות יוכל ליצור משתמשים. תפקיד המשתמש החדש מוגבל לתפקידים שנבחרו למעלה; לא ניתן להקצות תפקיד ניהולי (מורשה) דרך שדה."
   },
   {
     "key": "fields.yes",

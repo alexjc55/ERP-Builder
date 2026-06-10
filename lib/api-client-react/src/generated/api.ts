@@ -40,6 +40,7 @@ import type {
   Field,
   FieldInput,
   FieldUpdate,
+  FieldUserInput,
   FieldsReorderInput,
   FilterValuesQuery,
   FilterValuesResult,
@@ -1376,6 +1377,78 @@ export const useCreateUser = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getCreateUserMutationOptions(options));
+    }
+
+export const getCreateUserFromFieldUrl = (fieldId: number,) => {
+
+
+
+
+  return `/api/fields/${fieldId}/users`
+}
+
+/**
+ * @summary Create a user inline from a user-type field (record editors; non-privileged roles only)
+ */
+export const createUserFromField = async (fieldId: number,
+    fieldUserInput: FieldUserInput, options?: RequestInit): Promise<User> => {
+
+  return customFetch<User>(getCreateUserFromFieldUrl(fieldId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      fieldUserInput,)
+  }
+);}
+
+
+
+
+export const getCreateUserFromFieldMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createUserFromField>>, TError,{fieldId: number;data: BodyType<FieldUserInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createUserFromField>>, TError,{fieldId: number;data: BodyType<FieldUserInput>}, TContext> => {
+
+const mutationKey = ['createUserFromField'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createUserFromField>>, {fieldId: number;data: BodyType<FieldUserInput>}> = (props) => {
+          const {fieldId,data} = props ?? {};
+
+          return  createUserFromField(fieldId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateUserFromFieldMutationResult = NonNullable<Awaited<ReturnType<typeof createUserFromField>>>
+    export type CreateUserFromFieldMutationBody = BodyType<FieldUserInput>
+    export type CreateUserFromFieldMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Create a user inline from a user-type field (record editors; non-privileged roles only)
+ */
+export const useCreateUserFromField = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createUserFromField>>, TError,{fieldId: number;data: BodyType<FieldUserInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createUserFromField>>,
+        TError,
+        {fieldId: number;data: BodyType<FieldUserInput>},
+        TContext
+      > => {
+      return useMutation(getCreateUserFromFieldMutationOptions(options));
     }
 
 export const getListUserOptionsUrl = () => {
