@@ -4518,6 +4518,90 @@
     "he": "משתמשים"
   },
   {
+    "key": "roles.capShort.pages",
+    "ru": "Страницы",
+    "en": "Pages",
+    "he": "דפים"
+  },
+  {
+    "key": "roles.capShort.entities",
+    "ru": "Сущности",
+    "en": "Entities",
+    "he": "ישויות"
+  },
+  {
+    "key": "roles.capShort.roles",
+    "ru": "Роли",
+    "en": "Roles",
+    "he": "תפקידים"
+  },
+  {
+    "key": "roles.capShort.users",
+    "ru": "Пользователи",
+    "en": "Users",
+    "he": "משתמשים"
+  },
+  {
+    "key": "roles.capShort.translations",
+    "ru": "Переводы",
+    "en": "Translations",
+    "he": "תרגומים"
+  },
+  {
+    "key": "roles.capShort.events",
+    "ru": "События",
+    "en": "Events",
+    "he": "אירועים"
+  },
+  {
+    "key": "roles.capShort.modules",
+    "ru": "Модули",
+    "en": "Modules",
+    "he": "מודולים"
+  },
+  {
+    "key": "roles.capShort.googleDrive",
+    "ru": "Google Drive",
+    "en": "Google Drive",
+    "he": "Google Drive"
+  },
+  {
+    "key": "roles.capShort.settings",
+    "ru": "Настройки",
+    "en": "Settings",
+    "he": "הגדרות"
+  },
+  {
+    "key": "roles.cardData",
+    "ru": "Данные",
+    "en": "Data",
+    "he": "נתונים"
+  },
+  {
+    "key": "roles.cardPages",
+    "ru": "Страницы",
+    "en": "Pages",
+    "he": "דפים"
+  },
+  {
+    "key": "roles.cardAdmin",
+    "ru": "Администрирование",
+    "en": "Administration",
+    "he": "ניהול"
+  },
+  {
+    "key": "roles.cardNoPerms",
+    "ru": "Права не назначены",
+    "en": "No permissions assigned",
+    "he": "לא הוקצו הרשאות"
+  },
+  {
+    "key": "roles.scopeOwnShort",
+    "ru": "свои",
+    "en": "own",
+    "he": "שלו"
+  },
+  {
     "key": "roles.create",
     "ru": "Создать роль",
     "en": "Create role",

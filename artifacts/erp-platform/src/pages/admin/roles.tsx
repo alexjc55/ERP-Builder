@@ -84,6 +84,20 @@ const RECORD_ACTIONS: { key: keyof RecordPermission; label: string }[] = [
   { key: "delete", label: "Удаление" },
 ];
 
+// Compact labels for the role-card permission summary (the dialog uses the
+// longer ADMIN_CAP_LABELS; chips on the card need short names).
+const CAP_SHORT: { key: keyof RoleAdminCaps; label: string }[] = [
+  { key: "pages", label: "Страницы" },
+  { key: "entities", label: "Сущности" },
+  { key: "roles", label: "Роли" },
+  { key: "users", label: "Пользователи" },
+  { key: "translations", label: "Переводы" },
+  { key: "events", label: "События" },
+  { key: "modules", label: "Модули" },
+  { key: "googleDrive", label: "Google Drive" },
+  { key: "settings", label: "Настройки" },
+];
+
 export default function RolesPage() {
   const ml = useML();
   const t = useT();
@@ -316,6 +330,103 @@ export default function RolesPage() {
 
   const scopedEntities = entities.filter((e: Entity) => getRecordPerm(e.id).view);
 
+  // Compact, read-only permission summary shown on each role card so admins can
+  // see what a role grants without opening the editor. superAdmin cards already
+  // show the "Полный доступ" badge, so we skip the detailed list for them.
+  const renderPermsSummary = (role: Role) => {
+    const p = role.permissionsJson;
+    if (!p || p.superAdmin) return null;
+    const caps = CAP_SHORT.filter(({ key }) => p.admin?.[key]);
+    // Only content pages are page-gated (mirrors the editor's contentPages
+    // boundary); skip any admin/root ids that may linger in pageIds.
+    const pageNames = (p.pageIds ?? [])
+      .map((id) => contentPages.find((pg: Page) => pg.id === id))
+      .filter((pg): pg is Page => Boolean(pg))
+      .map((pg) => ml(pg.nameJson) || pg.path || "—");
+    const records = p.records ?? {};
+    const entityPerms = Object.entries(records)
+      .filter(
+        ([k, rp]) =>
+          /^\d+$/.test(k) &&
+          (rp.view === true || rp.create === true || rp.update === true || rp.delete === true),
+      )
+      .map(([k, rp]) => {
+        const ent = entities.find((e: Entity) => e.id === Number(k));
+        return { id: k, name: ent ? ml(ent.nameJson) || ent.entityKey : `#${k}`, rp };
+      });
+
+    if (caps.length === 0 && pageNames.length === 0 && entityPerms.length === 0) {
+      return (
+        <p className="text-xs text-slate-400 mt-3 pt-3 border-t border-slate-100">
+          {t("roles.cardNoPerms", "Права не назначены")}
+        </p>
+      );
+    }
+
+    const sectionTitle = "text-[11px] font-medium uppercase tracking-wide text-slate-400 mb-1";
+    return (
+      <div className="mt-3 pt-3 border-t border-slate-100 space-y-2.5">
+        {entityPerms.length > 0 && (
+          <div>
+            <p className={sectionTitle}>{t("roles.cardData", "Данные")}</p>
+            <div className="space-y-1">
+              {entityPerms.map(({ id, name, rp }) => (
+                <div key={id} className="flex items-start justify-between gap-2">
+                  <span className="text-xs text-slate-600 min-w-0 truncate">
+                    {name}
+                    {rp.scope === "own" && (
+                      <span className="text-slate-400"> · {t("roles.scopeOwnShort", "свои")}</span>
+                    )}
+                  </span>
+                  <div className="flex flex-wrap gap-1 justify-end shrink-0">
+                    {RECORD_ACTIONS.filter((a) => rp[a.key] === true).map((a) => (
+                      <span
+                        key={a.key}
+                        className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] leading-none"
+                      >
+                        {t(`roles.action.${a.key}`, a.label)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {pageNames.length > 0 && (
+          <div>
+            <p className={sectionTitle}>{t("roles.cardPages", "Страницы")}</p>
+            <div className="flex flex-wrap gap-1">
+              {pageNames.map((n, i) => (
+                <span
+                  key={i}
+                  className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] leading-none"
+                >
+                  {n}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        {caps.length > 0 && (
+          <div>
+            <p className={sectionTitle}>{t("roles.cardAdmin", "Администрирование")}</p>
+            <div className="flex flex-wrap gap-1">
+              {caps.map(({ key, label }) => (
+                <span
+                  key={key}
+                  className="px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 text-[10px] leading-none"
+                >
+                  {t(`roles.capShort.${key}`, label)}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between gap-4">
@@ -383,6 +494,8 @@ export default function RolesPage() {
                     {role.descriptionJson["ru"]}
                   </p>
                 )}
+
+                {renderPermsSummary(role)}
 
                 {role.userCount !== undefined && (
                   <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-slate-100">
