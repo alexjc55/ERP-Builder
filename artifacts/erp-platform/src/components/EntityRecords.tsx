@@ -1307,15 +1307,13 @@ export function EntityRecords({
   const moveColumn = (list: Field[], index: number, direction: -1 | 1) => {
     const target = index + direction;
     if (target < 0 || target >= list.length) return;
-    const a = list[index];
-    const b = list[target];
+    const reordered = [...list];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(target, 0, moved);
     reorderFieldsMutation.mutate({
       data: {
         entityId,
-        items: [
-          { id: a.id, sortOrder: b.sortOrder },
-          { id: b.id, sortOrder: a.sortOrder },
-        ],
+        items: reordered.map((f, i) => ({ id: f.id, sortOrder: i + 1 })),
       },
     });
   };
@@ -1333,15 +1331,13 @@ export function EntityRecords({
     if (pageId == null) return;
     const target = index + direction;
     if (target < 0 || target >= list.length) return;
-    const a = list[index];
-    const b = list[target];
+    const reordered = [...list];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(target, 0, moved);
     reorderPageFieldsMutation.mutate({
       data: {
         pageId,
-        items: [
-          { id: a.id, sortOrder: b.sortOrder },
-          { id: b.id, sortOrder: a.sortOrder },
-        ],
+        items: reordered.map((f, i) => ({ id: f.id, sortOrder: i + 1 })),
       },
     });
   };

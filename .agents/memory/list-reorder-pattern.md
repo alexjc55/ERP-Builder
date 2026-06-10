@@ -6,10 +6,21 @@ description: How sortOrder reordering is done across admin builders, and why it 
 # Arrow-based list reordering
 
 All admin builders with a `sortOrder` (pages, fields, statuses, record views,
-workflow transitions) expose up/down arrow reordering. The move helper swaps the
-two adjacent siblings' `sortOrder` values and sends them together to a dedicated
-`*/reorder` POST endpoint (body `{ entityId, items: [{id, sortOrder}, ...] }`).
-Arrows are disabled at list boundaries and while the mutation is pending.
+workflow transitions) expose up/down arrow reordering. The move helper sends the
+new desired order to a dedicated `*/reorder` POST endpoint (body
+`{ entityId, items: [{id, sortOrder}, ...] }`). Arrows are disabled at list
+boundaries and while the mutation is pending.
+
+**Renumber the whole list, do NOT swap two values.** The records column reorder
+(`moveColumn`/`movePageColumn`) used to swap just the two adjacent siblings'
+`sortOrder` values. That silently no-ops whenever two rows share the same
+`sortOrder` (duplicate/tie values DO occur in real data — fields can be created
+with colliding `sortOrder`), because swapping equal values changes nothing and the
+refetch returns the same order → "arrows do nothing" bug. Fix: splice the moved
+item into its new index and reassign sequential `sortOrder` (`i + 1`) across the
+entire displayed list, sending all items. This both fixes ordering and normalizes
+away duplicates on the first click. Apply the same renumber approach to any new
+arrow reorder rather than the two-value swap.
 
 **Why a dedicated endpoint, not paired single-row updates:** doing the swap as
 two independent update calls is non-atomic — if one succeeds and the other fails,
