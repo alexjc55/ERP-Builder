@@ -867,15 +867,19 @@ export function EntityRecords({
     .sort((a: Field, b: Field) => a.sortOrder - b.sortOrder);
   // Fields the current user is allowed to see (not hidden by field-level perms).
   const visibleFormFields = fields.filter((f: Field) => fieldAccess(f, entityId, permPageId) !== "hidden");
-  // Columns shown in the records table. A field explicitly marked "hidden" for the
-  // current role drops its whole column even for a superAdmin (display-only — the
-  // field stays editable in the record dialog and the server bypass is unchanged).
-  const currentRoleId = user?.roleId;
-  const tableFields = visibleFormFields.filter(
-    (f: Field) =>
-      currentRoleId == null ||
-      f.permissionsJson?.[String(currentRoleId)] !== "hidden",
-  );
+  // Columns shown in the records table. A field is dropped from the table only
+  // when it is explicitly "hidden" for the user under most-permissive multi-role
+  // semantics (i.e. every role that has an explicit entry hides it). A secondary
+  // role granting view/edit keeps the column. This display-only hide applies even
+  // to superAdmin — the field stays editable in the record dialog and the server
+  // bypass is unchanged.
+  const tableFields = visibleFormFields.filter((f: Field) => {
+    const explicits = userRoleIds
+      .map((rid) => f.permissionsJson?.[String(rid)])
+      .filter((v) => v != null);
+    if (explicits.length === 0) return true;
+    return explicits.some((v) => v !== "hidden");
+  });
   // Fields opted-in to filtering (the "участвует в фильтре" flag), restricted to fields the
   // role may see — a hidden field must never surface as a filter.
   const filterableFields = visibleFormFields.filter((f: Field) => f.isFilterable);
