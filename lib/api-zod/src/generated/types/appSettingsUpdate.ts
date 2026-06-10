@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { AppSettingsUpdateDefaultLanguage } from './appSettingsUpdateDefaultLanguage';
 import type { MultilingualText } from './multilingualText';
 
 export interface AppSettingsUpdate {
@@ -14,4 +15,5 @@ export interface AppSettingsUpdate {
   logoObjectPath?: string | null;
   /** @maxLength 8 */
   currencySymbol?: string;
+  defaultLanguage?: AppSettingsUpdateDefaultLanguage;
 }

@@ -12,6 +12,8 @@ import {
   getListTranslationsQueryKey,
   useUpdateMe,
   getGetMeQueryKey,
+  useGetSettings,
+  getGetSettingsQueryKey,
 } from "@workspace/api-client-react";
 import type { MultilingualText } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
@@ -63,7 +65,14 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   const [override, setOverride] = useState<Lang | null>(null);
   const langWriteSeq = useRef(0);
 
-  const lang: Lang = override ?? (user?.language as Lang | undefined) ?? "ru";
+  // Platform default language (from app settings) is the fallback when the user
+  // has no personal language preference yet.
+  const { data: settings } = useGetSettings({
+    query: { enabled: !!user, queryKey: getGetSettingsQueryKey() },
+  });
+  const defaultLang: Lang = (settings?.defaultLanguage as Lang | undefined) ?? "ru";
+
+  const lang: Lang = override ?? (user?.language as Lang | undefined) ?? defaultLang;
 
   // Reset transient override once the persisted profile catches up, and clear
   // it entirely on logout so stale UI language/direction can't leak across sessions.

@@ -42,6 +42,7 @@ router.get("/settings", requireAuth, async (_req, res): Promise<void> => {
     subtitleJson: row.subtitleJson ?? {},
     logoObjectPath: row.logoObjectPath ?? null,
     currencySymbol: row.currencySymbol ?? "₽",
+    defaultLanguage: row.defaultLanguage ?? "ru",
     updatedAt: row.updatedAt,
   });
 });
@@ -66,6 +67,7 @@ router.put(
     if (parsed.data.subtitleJson !== undefined) updates.subtitleJson = parsed.data.subtitleJson;
     if (parsed.data.logoObjectPath !== undefined) updates.logoObjectPath = parsed.data.logoObjectPath;
     if (parsed.data.currencySymbol !== undefined) updates.currencySymbol = parsed.data.currencySymbol;
+    if (parsed.data.defaultLanguage !== undefined) updates.defaultLanguage = parsed.data.defaultLanguage;
 
     // Ensure the row exists, then apply any provided fields.
     await getOrCreateSettings();
@@ -86,6 +88,7 @@ router.put(
       subtitleJson: row.subtitleJson ?? {},
       logoObjectPath: row.logoObjectPath ?? null,
       currencySymbol: row.currencySymbol ?? "₽",
+      defaultLanguage: row.defaultLanguage ?? "ru",
       updatedAt: row.updatedAt,
     });
   },

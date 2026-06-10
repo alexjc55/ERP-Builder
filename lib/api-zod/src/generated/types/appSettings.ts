@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { AppSettingsDefaultLanguage } from './appSettingsDefaultLanguage';
 import type { MultilingualText } from './multilingualText';
 
 export interface AppSettings {
@@ -14,5 +15,7 @@ export interface AppSettings {
   logoObjectPath: string | null;
   /** Free-text currency symbol/suffix used wherever monetary values are rendered. */
   currencySymbol: string;
+  /** Platform-wide default UI language for users who have not picked their own. */
+  defaultLanguage: AppSettingsDefaultLanguage;
   updatedAt: Date;
 }

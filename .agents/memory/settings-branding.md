@@ -20,4 +20,9 @@ The "Настройки" dropdown item opens `/settings` (auth-only ProtectedRou
 - **Why this is safe:** the object path comes from the DB (admin-set), never from request input, so a caller cannot point it at arbitrary objects. `getObjectEntityFile` additionally rejects non-`/objects/` paths.
 - **How to apply:** the sidebar references `/api/storage/branding-logo?v=<updatedAt>` (cache-bust). After a branding save, invalidate the `getSettings` query key so the shared layout refreshes.
 
+## Platform default language
+- `app_settings.defaultLanguage` (ru/en/he) is the i18n fallback for the active language **before** the hardcoded `"ru"`: `override ?? user.language ?? settings.defaultLanguage ?? "ru"` (see `i18n.tsx`). It only affects users who have not picked their own language.
+- **Why:** admins need to set the org-wide UI language without touching per-user prefs. It is returned by GET (auth-only) so the I18nProvider can read it, and written by PUT (admin cap).
+- **How to apply:** any new singleton-settings field must be returned by BOTH the GET and PUT response objects in `settings.ts` — they are duplicated with *different indentation* (GET 4-space, PUT 6-space), so a single `replace_all` will silently miss one. Verify both.
+
 Adding the `settings` cap followed the `admin-cap-stage-pattern.md` recipe (schema RoleAdminCaps + NO_ACCESS_PERMS, OpenAPI RoleAdminCaps, roles-editor label + local default-perms, but NO sidebar `/admin/*` route since settings lives at `/settings`).

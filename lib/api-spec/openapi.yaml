@@ -2987,7 +2987,7 @@ components:
     # Platform branding / general settings (singleton row).
     AppSettings:
       type: object
-      required: [appNameJson, subtitleJson, logoObjectPath, currencySymbol, updatedAt]
+      required: [appNameJson, subtitleJson, logoObjectPath, currencySymbol, defaultLanguage, updatedAt]
       properties:
         appNameJson:
           $ref: "#/components/schemas/MultilingualText"
@@ -2998,6 +2998,10 @@ components:
         currencySymbol:
           type: string
           description: Free-text currency symbol/suffix used wherever monetary values are rendered.
+        defaultLanguage:
+          type: string
+          enum: [ru, en, he]
+          description: Platform-wide default UI language for users who have not picked their own.
         updatedAt:
           type: string
           format: date-time
@@ -3014,6 +3018,9 @@ components:
         currencySymbol:
           type: string
           maxLength: 8
+        defaultLanguage:
+          type: string
+          enum: [ru, en, he]
 
     # AUTH
     LoginInput:

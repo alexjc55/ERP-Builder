@@ -16,6 +16,9 @@ export const appSettingsTable = pgTable("app_settings", {
   // Free-text currency symbol/suffix (e.g. "₽", "$", "€", "₸") used wherever a
   // monetary value is rendered (e.g. dashboard "currency"-format widgets).
   currencySymbol: text("currency_symbol").notNull().default("₽"),
+  // Platform-wide default UI language (ru/en/he) used for users who have not yet
+  // picked their own language; it is the fallback for the i18n active language.
+  defaultLanguage: text("default_language").notNull().default("ru"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

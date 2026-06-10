@@ -5124,6 +5124,18 @@
     "he": "משמש בכל מקום שבו מוצג סכום כספי (למשל ווידג'טים בלוח המחוונים). לדוגמה: ₽, $, €, ₸."
   },
   {
+    "key": "settings.defaultLanguage",
+    "ru": "Язык по умолчанию",
+    "en": "Default language",
+    "he": "שפת ברירת מחדל"
+  },
+  {
+    "key": "settings.defaultLanguageHint",
+    "ru": "Язык интерфейса для новых пользователей и тех, кто ещё не выбрал язык.",
+    "en": "Interface language for new users and those who haven't chosen a language yet.",
+    "he": "שפת הממשק למשתמשים חדשים ולמי שעדיין לא בחר שפה."
+  },
+  {
     "key": "settings.currentPassword",
     "ru": "Текущий пароль",
     "en": "Current password",

@@ -175,6 +175,18 @@ export interface MultilingualText {
   he?: string;
 }
 
+/**
+ * Platform-wide default UI language for users who have not picked their own.
+ */
+export type AppSettingsDefaultLanguage = typeof AppSettingsDefaultLanguage[keyof typeof AppSettingsDefaultLanguage];
+
+
+export const AppSettingsDefaultLanguage = {
+  ru: 'ru',
+  en: 'en',
+  he: 'he',
+} as const;
+
 export interface AppSettings {
   appNameJson: MultilingualText;
   subtitleJson: MultilingualText;
@@ -182,8 +194,19 @@ export interface AppSettings {
   logoObjectPath: string | null;
   /** Free-text currency symbol/suffix used wherever monetary values are rendered. */
   currencySymbol: string;
+  /** Platform-wide default UI language for users who have not picked their own. */
+  defaultLanguage: AppSettingsDefaultLanguage;
   updatedAt: string;
 }
+
+export type AppSettingsUpdateDefaultLanguage = typeof AppSettingsUpdateDefaultLanguage[keyof typeof AppSettingsUpdateDefaultLanguage];
+
+
+export const AppSettingsUpdateDefaultLanguage = {
+  ru: 'ru',
+  en: 'en',
+  he: 'he',
+} as const;
 
 export interface AppSettingsUpdate {
   appNameJson?: MultilingualText;
@@ -192,6 +215,7 @@ export interface AppSettingsUpdate {
   logoObjectPath?: string | null;
   /** @maxLength 8 */
   currencySymbol?: string;
+  defaultLanguage?: AppSettingsUpdateDefaultLanguage;
 }
 
 export interface LoginInput {

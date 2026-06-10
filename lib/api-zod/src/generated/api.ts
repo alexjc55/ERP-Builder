@@ -57,6 +57,7 @@ export const GetSettingsResponse = zod.object({
 }),
   "logoObjectPath": zod.string().nullable(),
   "currencySymbol": zod.string().describe('Free-text currency symbol\/suffix used wherever monetary values are rendered.'),
+  "defaultLanguage": zod.enum(['ru', 'en', 'he']).describe('Platform-wide default UI language for users who have not picked their own.'),
   "updatedAt": zod.coerce.date()
 })
 
@@ -80,7 +81,8 @@ export const UpdateSettingsBody = zod.object({
   "he": zod.string().optional()
 }).optional(),
   "logoObjectPath": zod.string().nullish(),
-  "currencySymbol": zod.string().max(updateSettingsBodyCurrencySymbolMax).optional()
+  "currencySymbol": zod.string().max(updateSettingsBodyCurrencySymbolMax).optional(),
+  "defaultLanguage": zod.enum(['ru', 'en', 'he']).optional()
 })
 
 export const UpdateSettingsResponse = zod.object({
@@ -96,6 +98,7 @@ export const UpdateSettingsResponse = zod.object({
 }),
   "logoObjectPath": zod.string().nullable(),
   "currencySymbol": zod.string().describe('Free-text currency symbol\/suffix used wherever monetary values are rendered.'),
+  "defaultLanguage": zod.enum(['ru', 'en', 'he']).describe('Platform-wide default UI language for users who have not picked their own.'),
   "updatedAt": zod.coerce.date()
 })
 

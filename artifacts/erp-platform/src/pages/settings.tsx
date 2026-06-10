@@ -10,7 +10,7 @@ import {
   type MultilingualText,
 } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
-import { useT } from "@/lib/i18n";
+import { useT, LANGS, type Lang } from "@/lib/i18n";
 import { uploadFile } from "@/lib/storage";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -98,6 +98,7 @@ export default function SettingsPage() {
   const [subtitleJson, setSubtitleJson] = useState<MLValue>({});
   const [logoObjectPath, setLogoObjectPath] = useState<string | null>(null);
   const [currencySymbol, setCurrencySymbol] = useState<string>("₽");
+  const [defaultLanguage, setDefaultLanguage] = useState<Lang>("ru");
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -111,6 +112,7 @@ export default function SettingsPage() {
     setSubtitleJson(s ? { ru: s.ru, en: s.en, he: s.he } : {});
     setLogoObjectPath(settings.logoObjectPath ?? null);
     setCurrencySymbol(settings.currencySymbol ?? "₽");
+    setDefaultLanguage((settings.defaultLanguage as Lang) ?? "ru");
     if (settings.logoObjectPath) {
       setLogoPreview(`/api/storage/branding-logo?v=${encodeURIComponent(settings.updatedAt)}`);
     } else {
@@ -152,6 +154,7 @@ export default function SettingsPage() {
           subtitleJson: subtitleJson as MultilingualText,
           logoObjectPath,
           currencySymbol: currencySymbol.trim() || "₽",
+          defaultLanguage,
         },
       });
       await queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
@@ -308,6 +311,20 @@ export default function SettingsPage() {
                 className="max-w-[140px]"
               />
               <p className="text-xs text-slate-400">{t("settings.currencyHint", "Используется везде, где отображается денежная сумма (например, виджеты дашборда). Например: ₽, $, €, ₸.")}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-slate-700">{t("settings.defaultLanguage", "Язык по умолчанию")}</Label>
+              <Select value={defaultLanguage} onValueChange={(v) => setDefaultLanguage(v as Lang)}>
+                <SelectTrigger className="max-w-[220px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LANGS.map((l) => (
+                    <SelectItem key={l.code} value={l.code}>{l.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-400">{t("settings.defaultLanguageHint", "Язык интерфейса для новых пользователей и тех, кто ещё не выбрал язык.")}</p>
             </div>
             <div className="flex justify-end">
               <Button onClick={saveBranding} disabled={updateSettings.isPending}>
