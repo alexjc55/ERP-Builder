@@ -745,6 +745,12 @@ export function EntityRecords({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { canRecord, canAdmin, fieldAccess, user } = useAuth();
+  const userRoleIds: number[] =
+    user?.roleIds && user.roleIds.length > 0
+      ? user.roleIds
+      : user?.roleId != null
+        ? [user.roleId]
+        : [];
 
   // On a mirror page, record permissions and field access are resolved against
   // the mirror page's override (key `mirror:<pageId>`); on a regular entity page
@@ -1047,7 +1053,7 @@ export function EntityRecords({
             (t: Transition) =>
               t.fromStatusId === currentEditStatusId &&
               ((t.allowedRoleIds?.length ?? 0) === 0 ||
-                (user?.roleId != null && t.allowedRoleIds.includes(user.roleId))),
+                t.allowedRoleIds.some((rid) => userRoleIds.includes(rid))),
           )
           .map((t: Transition) => t.toStatusId),
       ])
@@ -1554,7 +1560,7 @@ export function EntityRecords({
           (tr: Transition) =>
             tr.fromStatusId === cur &&
             ((tr.allowedRoleIds?.length ?? 0) === 0 ||
-              (user?.roleId != null && tr.allowedRoleIds.includes(user.roleId))),
+              tr.allowedRoleIds.some((rid) => userRoleIds.includes(rid))),
         )
         .map((tr: Transition) => tr.toStatusId),
     ]);
