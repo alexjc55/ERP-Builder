@@ -944,6 +944,12 @@ export function EntityRecords({
   // A fixed width on a cell must also clamp min/max so an auto-layout table
   // actually honours it (the widest unconstrained cell would otherwise win).
   const colWidthStyle = (key: string): CSSProperties | undefined => {
+    // In setup mode the headers carry extra controls (move arrows, sort number,
+    // permission badge, config button). Honoring the manually-saved widths there
+    // squeezes those controls and makes columns overlap, so we ignore the saved
+    // widths and let the table auto-size to fit one line. The saved widths stay
+    // in state/localStorage and reapply automatically once setup mode is off.
+    if (setupMode) return undefined;
     const w = columnWidths[key];
     return w ? { width: w, minWidth: w, maxWidth: w } : undefined;
   };
