@@ -3576,6 +3576,18 @@
     "he": "סכום"
   },
   {
+    "key": "records.colPermsBadge",
+    "ru": "Особые права",
+    "en": "Custom access",
+    "he": "הרשאות מותאמות"
+  },
+  {
+    "key": "records.colPermsTitle",
+    "ru": "Права доступа по ролям",
+    "en": "Access by role",
+    "he": "הרשאות לפי תפקיד"
+  },
+  {
     "key": "records.configureColumn",
     "ru": "Настроить колонку",
     "en": "Configure column",

@@ -22,6 +22,8 @@ import {
   useDeleteRecordLink,
   useListUserOptions,
   useListRecordAuditLogs,
+  useListRoles,
+  getListRolesQueryKey,
   useListPageFields,
   useListPageRecordValues,
   getListPageFieldsQueryKey,
@@ -48,6 +50,8 @@ import {
   type SortSpec,
   type LinkedRecord,
   type UserOption,
+  type Role,
+  type FieldAccess,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -752,11 +756,37 @@ export function EntityRecords({
   const { data: views = [] } = useListEntityViews(entityId);
   const { data: entity } = useGetEntity(entityId);
   const { data: userOptions = [] } = useListUserOptions();
+  // Roles are only needed to label per-field permission overrides in setup mode.
+  const { data: rolesList = [] } = useListRoles({
+    query: { enabled: canConfigureColumns, queryKey: getListRolesQueryKey() },
+  });
 
   const userNames = useMemo(
     () => new Map(userOptions.map((u: UserOption) => [u.id, u.name])),
     [userOptions],
   );
+
+  const roleNameById = useMemo(
+    () => new Map(rolesList.map((r: Role) => [String(r.id), ml(r.nameJson) || `#${r.id}`])),
+    [rolesList, ml],
+  );
+  const fieldAccessLabel = (a: FieldAccess) =>
+    a === "edit"
+      ? t("fields.access.edit", "Редактирование")
+      : a === "view"
+        ? t("fields.access.view", "Просмотр")
+        : t("fields.access.hidden", "Скрыто");
+  // Explicit per-role overrides set on a field (anything other than the default
+  // "inherit from the role's record perms"). Empty ⇒ the column uses defaults.
+  const fieldRoleOverrides = (f: Field) =>
+    Object.entries((f.permissionsJson ?? {}) as Record<string, FieldAccess>).map(
+      ([roleId, access]) => ({
+        roleId,
+        name: roleNameById.get(roleId) ?? `#${roleId}`,
+        access,
+        label: fieldAccessLabel(access),
+      }),
+    );
 
   // Page fields: extra columns that live on a page rather than on the source
   // entity. Available on any page (regular or mirror), loaded only when this
@@ -1909,36 +1939,83 @@ export function EntityRecords({
                         style={colWidthStyle(`f:${f.id}`)}
                       >
                         {setupMode && !isMirror ? (
-                          <div className="inline-flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-slate-400"
-                              disabled={ci === 0 || reorderFieldsMutation.isPending}
-                              onClick={() => moveColumn(displayFields, ci, -1)}
-                              title={t("records.moveColumnLeft", "Левее")}
-                            >
-                              <ChevronLeft className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-slate-400"
-                              disabled={ci === displayFields.length - 1 || reorderFieldsMutation.isPending}
-                              onClick={() => moveColumn(displayFields, ci, 1)}
-                              title={t("records.moveColumnRight", "Правее")}
-                            >
-                              <ChevronRight className="w-3.5 h-3.5" />
-                            </Button>
-                            <button
-                              type="button"
-                              onClick={() => openColumnConfig(f)}
-                              className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-2 py-1 text-amber-700 hover:bg-amber-100 transition"
-                              title={t("records.configureColumn", "Настроить колонку")}
-                            >
-                              {ml(f.nameJson)}
-                              <Settings2 className="w-3.5 h-3.5" />
-                            </button>
+                          <div className="flex flex-col items-center gap-1">
+                            <div className="inline-flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-slate-400"
+                                disabled={ci === 0 || reorderFieldsMutation.isPending}
+                                onClick={() => moveColumn(displayFields, ci, -1)}
+                                title={t("records.moveColumnLeft", "Левее")}
+                              >
+                                <ChevronLeft className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-slate-400"
+                                disabled={ci === displayFields.length - 1 || reorderFieldsMutation.isPending}
+                                onClick={() => moveColumn(displayFields, ci, 1)}
+                                title={t("records.moveColumnRight", "Правее")}
+                              >
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              </Button>
+                              <button
+                                type="button"
+                                onClick={() => openColumnConfig(f)}
+                                className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-2 py-1 text-amber-700 hover:bg-amber-100 transition"
+                                title={t("records.configureColumn", "Настроить колонку")}
+                              >
+                                {ml(f.nameJson)}
+                                <Settings2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            {(() => {
+                              const overrides = fieldRoleOverrides(f);
+                              if (overrides.length === 0) return null;
+                              return (
+                                <HoverCard openDelay={100}>
+                                  <HoverCardTrigger asChild>
+                                    <button
+                                      type="button"
+                                      onClick={() => openColumnConfig(f)}
+                                      className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 hover:bg-amber-100 transition"
+                                    >
+                                      <ShieldAlert className="w-3 h-3" />
+                                      {t("records.colPermsBadge", "Особые права")}: {overrides.length}
+                                    </button>
+                                  </HoverCardTrigger>
+                                  <HoverCardContent align="center" className="w-64 p-3">
+                                    <p className="text-xs font-semibold text-slate-700 mb-2">
+                                      {t("records.colPermsTitle", "Права доступа по ролям")}
+                                    </p>
+                                    <ul className="space-y-1">
+                                      {overrides.map((o) => (
+                                        <li
+                                          key={o.roleId}
+                                          className="flex items-center justify-between gap-2 text-xs"
+                                        >
+                                          <span className="text-slate-600 truncate text-left">{o.name}</span>
+                                          <span
+                                            className={cn(
+                                              "px-1.5 py-0.5 rounded text-[10px] leading-none shrink-0",
+                                              o.access === "hidden"
+                                                ? "bg-red-100 text-red-700"
+                                                : o.access === "view"
+                                                  ? "bg-slate-100 text-slate-600"
+                                                  : "bg-emerald-100 text-emerald-700",
+                                            )}
+                                          >
+                                            {o.label}
+                                          </span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </HoverCardContent>
+                                </HoverCard>
+                              );
+                            })()}
                           </div>
                         ) : (
                           ml(f.nameJson)
