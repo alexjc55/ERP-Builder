@@ -468,9 +468,13 @@ export interface UserInput {
   password?: string | null;
   firstName: string;
   lastName: string;
-  roleId: number;
-  /** All roles to assign. If omitted, defaults to [roleId]. The primary role (roleId) is always included. */
-  roleIds?: number[];
+  /** Deprecated and ignored on create — the primary role is roleIds[0]. Retained only because user responses still expose roleId. */
+  roleId?: number;
+  /**
+     * All roles to assign (non-empty). The first element is the primary role (used by JWT, display, impersonation, guest flows).
+     * @minItems 1
+     */
+  roleIds: number[];
   language?: UserInputLanguage;
   direction?: UserInputDirection;
   /** @nullable */
@@ -536,8 +540,12 @@ export interface UserUpdate {
   email?: string;
   firstName?: string;
   lastName?: string;
+  /** Deprecated. Optional back-compat alias used only as the primary when roleIds is omitted; prefer roleIds. */
   roleId?: number;
-  /** Replaces the full set of assigned roles. The primary role (roleId) is always included. */
+  /**
+     * Replaces the full set of assigned roles (non-empty). The first element is the primary role.
+     * @minItems 1
+     */
   roleIds?: number[];
   language?: UserUpdateLanguage;
   direction?: UserUpdateDirection;

@@ -587,6 +587,7 @@ export const ListUsersResponse = zod.object({
  */
 export const createUserBodyPasswordMin = 6;
 
+
 export const createUserBodyLanguageDefault = `ru`;
 export const createUserBodyDirectionDefault = `ltr`;
 
@@ -595,8 +596,8 @@ export const CreateUserBody = zod.object({
   "password": zod.string().min(createUserBodyPasswordMin).nullish().describe('Omit or null to create a passwordless guest user (cannot log in with a password; access only via a guest link).'),
   "firstName": zod.string(),
   "lastName": zod.string(),
-  "roleId": zod.number(),
-  "roleIds": zod.array(zod.number()).optional().describe('All roles to assign. If omitted, defaults to [roleId]. The primary role (roleId) is always included.'),
+  "roleId": zod.number().optional().describe('Deprecated and ignored on create — the primary role is roleIds[0]. Retained only because user responses still expose roleId.'),
+  "roleIds": zod.array(zod.number()).min(1).describe('All roles to assign (non-empty). The first element is the primary role (used by JWT, display, impersonation, guest flows).'),
   "language": zod.enum(['ru', 'en', 'he']).default(createUserBodyLanguageDefault),
   "direction": zod.enum(['ltr', 'rtl']).default(createUserBodyDirectionDefault),
   "startPageId": zod.number().nullish()
@@ -674,12 +675,15 @@ export const UpdateUserParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
+
+
 export const UpdateUserBody = zod.object({
   "email": zod.string().email().optional(),
   "firstName": zod.string().optional(),
   "lastName": zod.string().optional(),
-  "roleId": zod.number().optional(),
-  "roleIds": zod.array(zod.number()).optional().describe('Replaces the full set of assigned roles. The primary role (roleId) is always included.'),
+  "roleId": zod.number().optional().describe('Deprecated. Optional back-compat alias used only as the primary when roleIds is omitted; prefer roleIds.'),
+  "roleIds": zod.array(zod.number()).min(1).optional().describe('Replaces the full set of assigned roles (non-empty). The first element is the primary role.'),
   "language": zod.enum(['ru', 'en', 'he']).optional(),
   "direction": zod.enum(['ltr', 'rtl']).optional(),
   "startPageId": zod.number().nullish()

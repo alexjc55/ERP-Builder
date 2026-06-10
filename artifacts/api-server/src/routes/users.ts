@@ -181,13 +181,18 @@ router.post("/users", requireAuth, requireAdmin("users"), async (req, res): Prom
     return;
   }
 
-  const { password, email, roleIds, ...rest } = parsed.data;
+  const { password, email, roleIds, roleId, ...rest } = parsed.data;
   // A null/omitted password creates a passwordless guest user: they can never log
   // in with a password, only via a guest link (which issues a read-only token).
   const passwordHash = password ? await bcrypt.hash(password, 10) : null;
 
-  // The primary role (rest.roleId) is always part of the effective set.
-  const roleSet = await resolveRoleSet(rest.roleId, roleIds ?? undefined);
+  // The primary role is roleIds[0] (falling back to the deprecated roleId alias).
+  const primaryRoleId = roleIds && roleIds.length > 0 ? roleIds[0] : roleId;
+  if (primaryRoleId == null) {
+    res.status(400).json({ error: "At least one role is required" });
+    return;
+  }
+  const roleSet = await resolveRoleSet(primaryRoleId, roleIds ?? undefined);
   if (!roleSet) {
     res.status(400).json({ error: "One or more roles do not exist" });
     return;
@@ -208,7 +213,7 @@ router.post("/users", requireAuth, requireAdmin("users"), async (req, res): Prom
   const user = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(usersTable)
-      .values({ ...rest, language: lang, direction: rest.direction ?? dirForLang(lang), email: email.toLowerCase(), passwordHash })
+      .values({ ...rest, roleId: primaryRoleId, language: lang, direction: rest.direction ?? dirForLang(lang), email: email.toLowerCase(), passwordHash })
       .returning({ id: usersTable.id, roleId: usersTable.roleId });
     await tx.insert(userRolesTable).values(roleSet.map((rid) => ({ userId: created.id, roleId: rid })));
     return created;
@@ -410,14 +415,14 @@ router.put("/users/:id", requireAuth, requireAdmin("users"), async (req, res): P
   if (body.email != null) updateData.email = body.email.toLowerCase();
   if (body.firstName != null) updateData.firstName = body.firstName;
   if (body.lastName != null) updateData.lastName = body.lastName;
-  if (body.roleId != null) updateData.roleId = body.roleId;
   if (body.language != null) updateData.language = body.language;
   if (body.direction != null) updateData.direction = body.direction;
   if ("startPageId" in body) updateData.startPageId = body.startPageId;
 
-  const rolesProvided = body.roleIds != null;
+  const rolesProvided = body.roleIds != null && body.roleIds.length > 0;
+  const primaryProvided = rolesProvided || body.roleId != null;
 
-  if (Object.keys(updateData).length === 0 && !rolesProvided) {
+  if (Object.keys(updateData).length === 0 && !primaryProvided) {
     const user = await getUserWithRole(params.data.id);
     if (!user) { res.status(404).json({ error: "User not found" }); return; }
     res.json(user);
@@ -425,7 +430,7 @@ router.put("/users/:id", requireAuth, requireAdmin("users"), async (req, res): P
   }
 
   // Load the existing user so we can resolve the effective primary role when the
-  // request changes roleIds without changing roleId (or vice versa).
+  // request changes roleIds without changing the primary (or vice versa).
   const [current] = await db
     .select({ id: usersTable.id, roleId: usersTable.roleId })
     .from(usersTable)
@@ -435,7 +440,10 @@ router.put("/users/:id", requireAuth, requireAdmin("users"), async (req, res): P
     return;
   }
 
-  const newPrimary = body.roleId ?? current.roleId;
+  // Primary role is roleIds[0] when provided, else the deprecated roleId alias,
+  // else the user's existing primary.
+  const newPrimary = rolesProvided ? body.roleIds![0] : (body.roleId ?? current.roleId);
+  if (primaryProvided) updateData.roleId = newPrimary;
   // The primary role is always part of the effective set.
   const roleSet = rolesProvided
     ? await resolveRoleSet(newPrimary, body.roleIds ?? undefined)

@@ -12,8 +12,12 @@ export interface UserUpdate {
   email?: string;
   firstName?: string;
   lastName?: string;
+  /** Deprecated. Optional back-compat alias used only as the primary when roleIds is omitted; prefer roleIds. */
   roleId?: number;
-  /** Replaces the full set of assigned roles. The primary role (roleId) is always included. */
+  /**
+     * Replaces the full set of assigned roles (non-empty). The first element is the primary role.
+     * @minItems 1
+     */
   roleIds?: number[];
   language?: UserUpdateLanguage;
   direction?: UserUpdateDirection;

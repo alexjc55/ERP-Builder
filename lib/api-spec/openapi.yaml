@@ -3251,7 +3251,7 @@ components:
 
     UserInput:
       type: object
-      required: [email, firstName, lastName, roleId]
+      required: [email, firstName, lastName, roleIds]
       properties:
         email:
           type: string
@@ -3266,11 +3266,13 @@ components:
           type: string
         roleId:
           type: integer
+          description: Deprecated and ignored on create — the primary role is roleIds[0]. Retained only because user responses still expose roleId.
         roleIds:
           type: array
+          minItems: 1
           items:
             type: integer
-          description: All roles to assign. If omitted, defaults to [roleId]. The primary role (roleId) is always included.
+          description: All roles to assign (non-empty). The first element is the primary role (used by JWT, display, impersonation, guest flows).
         language:
           type: string
           enum: [ru, en, he]
@@ -3328,11 +3330,13 @@ components:
           type: string
         roleId:
           type: integer
+          description: Deprecated. Optional back-compat alias used only as the primary when roleIds is omitted; prefer roleIds.
         roleIds:
           type: array
+          minItems: 1
           items:
             type: integer
-          description: Replaces the full set of assigned roles. The primary role (roleId) is always included.
+          description: Replaces the full set of assigned roles (non-empty). The first element is the primary role.
         language:
           type: string
           enum: [ru, en, he]

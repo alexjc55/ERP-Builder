@@ -12,6 +12,14 @@ import type { UserProfile, RolePermissions, RoleAdminCaps, FieldAccess, FieldPer
 
 type RecordAction = "view" | "create" | "update" | "delete";
 
+const ACCESS_RANK: Record<FieldAccess, number> = { hidden: 0, view: 1, edit: 2 };
+// Most permissive of two access levels (edit > view > hidden). Mirrors the
+// server `maxAccess` so client and server resolve multi-role field access the same way.
+function maxAccess(a: FieldAccess | null, b: FieldAccess): FieldAccess {
+  if (a == null) return b;
+  return ACCESS_RANK[a] >= ACCESS_RANK[b] ? a : b;
+}
+
 interface AuthContextType {
   user: UserProfile | null;
   isLoading: boolean;
@@ -114,17 +122,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const canPage = (pageId: number): boolean =>
     isSuperAdmin || (permissions?.pageIds?.includes(pageId) ?? false);
 
+  // Most-permissive field access across ALL of the user's roles, mirroring the
+  // server `resolveFieldAccess`: an explicit per-field entry wins (most permissive
+  // among the roles that have one); otherwise it inherits from record write perms.
   const fieldAccess = (
     field: { permissionsJson?: FieldPermissions | null },
     entityId: number,
     pageId?: number,
   ): FieldAccess => {
     if (isSuperAdmin) return "edit";
-    const roleId = user?.roleId;
-    const explicit = roleId != null ? field.permissionsJson?.[String(roleId)] : undefined;
-    if (explicit) return explicit;
+    const roleIds =
+      user?.roleIds && user.roleIds.length > 0
+        ? user.roleIds
+        : user?.roleId != null
+          ? [user.roleId]
+          : [];
     const rp = recordPermFor(entityId, pageId);
-    return rp?.create || rp?.update ? "edit" : "view";
+    const inherited: FieldAccess = rp?.create || rp?.update ? "edit" : "view";
+    const permsJson = field.permissionsJson;
+    const explicits = roleIds
+      .map((rid) => permsJson?.[String(rid)])
+      .filter((v): v is FieldAccess => v != null);
+    if (roleIds.length > 0 && explicits.length === roleIds.length) {
+      return explicits.reduce<FieldAccess | null>((acc, v) => maxAccess(acc, v), null) ?? inherited;
+    }
+    if (explicits.length === 0) return inherited;
+    const maxExplicit = explicits.reduce<FieldAccess | null>((acc, v) => maxAccess(acc, v), null);
+    return maxAccess(maxExplicit, inherited);
   };
 
   return (
