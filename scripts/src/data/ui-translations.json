@@ -3630,6 +3630,12 @@
     "he": "בחרו תחילה את שדה האב"
   },
   {
+    "key": "records.depSelectPrefix",
+    "ru": "Выберите",
+    "en": "Select",
+    "he": "בחרו"
+  },
+  {
     "key": "records.depSelect",
     "ru": "Выберите или добавьте",
     "en": "Select or add",

@@ -3032,6 +3032,7 @@ function DependentFieldCombobox({
   triggerClassName?: string;
 }) {
   const t = useT();
+  const ml = useML();
   const { toast } = useToast();
   const [open, setOpen] = useState(autoOpen);
   const [options, setOptions] = useState<string[]>([]);
@@ -3133,16 +3134,22 @@ function DependentFieldCombobox({
   };
 
   if (!parentSet) {
+    const parentName = ml(allFields.find((f) => f.fieldKey === immediateParentKey)?.nameJson);
+    const placeholderMsg = parentName
+      ? `${t("records.depSelectPrefix", "Выберите")} ${parentName}`
+      : t("records.depParentRequired", "Сначала выберите родительское поле");
     return (
       <Button
         type="button"
         variant="outline"
-        disabled
-        className={cn("w-full justify-between font-normal text-slate-400", triggerClassName)}
+        aria-disabled="true"
+        title={placeholderMsg}
+        className={cn(
+          "w-full cursor-not-allowed justify-between font-normal text-slate-400",
+          triggerClassName,
+        )}
       >
-        <span className="truncate">
-          {t("records.depParentRequired", "Сначала выберите родительское поле")}
-        </span>
+        <span className="truncate">{placeholderMsg}</span>
       </Button>
     );
   }
