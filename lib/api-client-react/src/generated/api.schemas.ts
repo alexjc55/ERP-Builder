@@ -1435,6 +1435,7 @@ export interface Field {
   dependencyConfigJson?: DependencyFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
+  isPinned?: boolean;
   showColumnTotal?: boolean;
   /** @nullable */
   totalFillColor?: string | null;
@@ -1463,6 +1464,7 @@ export interface FieldInput {
   dependencyConfigJson?: DependencyFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
+  isPinned?: boolean;
   showColumnTotal?: boolean;
   /** @nullable */
   totalFillColor?: string | null;
@@ -1499,6 +1501,7 @@ export interface FieldUpdate {
   dependencyConfigJson?: DependencyFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
+  isPinned?: boolean;
   showColumnTotal?: boolean;
   /** @nullable */
   totalFillColor?: string | null;
@@ -1626,6 +1629,7 @@ export interface PageField {
   relationConfigJson?: RelationFieldConfig;
   permissionsJson?: FieldPermissions;
   showInTable?: boolean;
+  isPinned?: boolean;
   showColumnTotal?: boolean;
   /** @nullable */
   totalFillColor?: string | null;
@@ -1651,6 +1655,7 @@ export interface PageFieldInput {
   relationConfigJson?: RelationFieldConfig;
   permissionsJson?: FieldPermissions;
   showInTable?: boolean;
+  isPinned?: boolean;
   showColumnTotal?: boolean;
   /** @nullable */
   totalFillColor?: string | null;
@@ -1674,6 +1679,7 @@ export interface PageFieldUpdate {
   relationConfigJson?: RelationFieldConfig;
   permissionsJson?: FieldPermissions;
   showInTable?: boolean;
+  isPinned?: boolean;
   showColumnTotal?: boolean;
   /** @nullable */
   totalFillColor?: string | null;

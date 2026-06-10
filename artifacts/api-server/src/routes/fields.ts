@@ -267,6 +267,7 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   if (body.permissionsJson != null) updateData.permissionsJson = body.permissionsJson;
   if (body.isFilterable != null) updateData.isFilterable = body.isFilterable;
   if (body.showInTable != null) updateData.showInTable = body.showInTable;
+  if (body.isPinned != null) updateData.isPinned = body.isPinned;
   if (body.showColumnTotal != null) updateData.showColumnTotal = body.showColumnTotal;
   if ("totalFillColor" in body) updateData.totalFillColor = body.totalFillColor ?? null;
   if ("totalTextColor" in body) updateData.totalTextColor = body.totalTextColor ?? null;

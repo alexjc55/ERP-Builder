@@ -4364,6 +4364,8 @@ components:
           type: boolean
         showInTable:
           type: boolean
+        isPinned:
+          type: boolean
         showColumnTotal:
           type: boolean
         totalFillColor:
@@ -4422,6 +4424,9 @@ components:
         showInTable:
           type: boolean
           default: true
+        isPinned:
+          type: boolean
+          default: false
         showColumnTotal:
           type: boolean
           default: false
@@ -4488,6 +4493,8 @@ components:
         isFilterable:
           type: boolean
         showInTable:
+          type: boolean
+        isPinned:
           type: boolean
         showColumnTotal:
           type: boolean
@@ -4696,6 +4703,8 @@ components:
           $ref: "#/components/schemas/FieldPermissions"
         showInTable:
           type: boolean
+        isPinned:
+          type: boolean
         showColumnTotal:
           type: boolean
         totalFillColor:
@@ -4747,6 +4756,9 @@ components:
         showInTable:
           type: boolean
           default: true
+        isPinned:
+          type: boolean
+          default: false
         showColumnTotal:
           type: boolean
           default: false
@@ -4790,6 +4802,8 @@ components:
         permissionsJson:
           $ref: "#/components/schemas/FieldPermissions"
         showInTable:
+          type: boolean
+        isPinned:
           type: boolean
         showColumnTotal:
           type: boolean

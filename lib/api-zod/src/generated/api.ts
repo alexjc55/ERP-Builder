@@ -1791,6 +1791,7 @@ export const ListEntityFieldsResponseItem = zod.object({
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
+  "isPinned": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
@@ -1812,6 +1813,7 @@ export const CreateEntityFieldParams = zod.object({
 export const createEntityFieldBodyIsRequiredDefault = false;
 export const createEntityFieldBodyIsFilterableDefault = false;
 export const createEntityFieldBodyShowInTableDefault = true;
+export const createEntityFieldBodyIsPinnedDefault = false;
 export const createEntityFieldBodyShowColumnTotalDefault = false;
 export const createEntityFieldBodyIsActiveDefault = true;
 
@@ -1855,6 +1857,7 @@ export const CreateEntityFieldBody = zod.object({
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
   "isFilterable": zod.boolean().default(createEntityFieldBodyIsFilterableDefault),
   "showInTable": zod.boolean().default(createEntityFieldBodyShowInTableDefault),
+  "isPinned": zod.boolean().default(createEntityFieldBodyIsPinnedDefault),
   "showColumnTotal": zod.boolean().default(createEntityFieldBodyShowColumnTotalDefault),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
@@ -1912,6 +1915,7 @@ export const GetFieldResponse = zod.object({
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
+  "isPinned": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
@@ -1969,6 +1973,7 @@ export const UpdateFieldBody = zod.object({
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
+  "isPinned": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
@@ -2018,6 +2023,7 @@ export const UpdateFieldResponse = zod.object({
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
+  "isPinned": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
@@ -2099,6 +2105,7 @@ export const ListPageFieldsResponseItem = zod.object({
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().optional(),
+  "isPinned": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
@@ -2119,6 +2126,7 @@ export const CreatePageFieldParams = zod.object({
 
 export const createPageFieldBodyIsRequiredDefault = false;
 export const createPageFieldBodyShowInTableDefault = true;
+export const createPageFieldBodyIsPinnedDefault = false;
 export const createPageFieldBodyShowColumnTotalDefault = false;
 export const createPageFieldBodyIsActiveDefault = true;
 
@@ -2154,6 +2162,7 @@ export const CreatePageFieldBody = zod.object({
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().default(createPageFieldBodyShowInTableDefault),
+  "isPinned": zod.boolean().default(createPageFieldBodyIsPinnedDefault),
   "showColumnTotal": zod.boolean().default(createPageFieldBodyShowColumnTotalDefault),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
@@ -2201,6 +2210,7 @@ export const UpdatePageFieldBody = zod.object({
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().optional(),
+  "isPinned": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
@@ -2242,6 +2252,7 @@ export const UpdatePageFieldResponse = zod.object({
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().optional(),
+  "isPinned": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),

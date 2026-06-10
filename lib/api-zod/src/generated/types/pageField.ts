@@ -28,6 +28,7 @@ export interface PageField {
   relationConfigJson?: RelationFieldConfig;
   permissionsJson?: FieldPermissions;
   showInTable?: boolean;
+  isPinned?: boolean;
   showColumnTotal?: boolean;
   /** @nullable */
   totalFillColor?: string | null;

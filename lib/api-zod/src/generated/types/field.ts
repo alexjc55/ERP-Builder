@@ -33,6 +33,7 @@ export interface Field {
   dependencyConfigJson?: DependencyFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
+  isPinned?: boolean;
   showColumnTotal?: boolean;
   /** @nullable */
   totalFillColor?: string | null;

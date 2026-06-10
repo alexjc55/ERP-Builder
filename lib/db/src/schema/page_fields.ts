@@ -39,6 +39,7 @@ export const pageFieldsTable = pgTable(
     relationConfigJson: jsonb("relation_config_json").$type<RelationFieldConfig>().notNull().default({}),
     permissionsJson: jsonb("permissions_json").$type<FieldPermissions>().notNull().default({}),
     showInTable: boolean("show_in_table").notNull().default(true),
+    isPinned: boolean("is_pinned").notNull().default(false),
     showColumnTotal: boolean("show_column_total").notNull().default(false),
     totalFillColor: text("total_fill_color"),
     totalTextColor: text("total_text_color"),

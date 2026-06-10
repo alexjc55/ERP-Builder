@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback, type CSSProperties } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, type CSSProperties } from "react";
 import {
   useListEntityRecords,
   useGetRecord,
@@ -1659,6 +1659,72 @@ export function EntityRecords({
   const extraColCount = displayedPageFields.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  // ── Pinned (frozen-left) columns ──────────────────────────────────────────
+  // Fields/page-fields flagged isPinned stay stuck to the left while the rest of
+  // the table scrolls horizontally. A column's sticky offset is the cumulative
+  // measured width of the pinned columns to its left, in DOM order (entity
+  // fields, then page fields) — measurement is required because columns can be
+  // auto-width. Pinning is suppressed in setup mode where headers carry extra
+  // controls and saved widths are already ignored (see colWidthStyle).
+  const pinnedKeys = useMemo(() => {
+    const s = new Set<string>();
+    if (!setupMode) {
+      for (const f of displayFields) if (f.isPinned) s.add(`f:${f.id}`);
+      for (const pf of displayedPageFields) if (pf.isPinned) s.add(`pf:${pf.id}`);
+    }
+    return s;
+  }, [displayFields, displayedPageFields, setupMode]);
+  const pinnedOrder = useMemo(() => {
+    const keys: string[] = [];
+    for (const f of displayFields) if (pinnedKeys.has(`f:${f.id}`)) keys.push(`f:${f.id}`);
+    for (const pf of displayedPageFields) if (pinnedKeys.has(`pf:${pf.id}`)) keys.push(`pf:${pf.id}`);
+    return keys;
+  }, [displayFields, displayedPageFields, pinnedKeys]);
+  const lastPinnedKey = pinnedOrder[pinnedOrder.length - 1];
+  const pinHeaderRefs = useRef<Record<string, HTMLTableCellElement | null>>({});
+  const [pinnedLeft, setPinnedLeft] = useState<Record<string, number>>({});
+  useLayoutEffect(() => {
+    if (pinnedOrder.length === 0) {
+      setPinnedLeft((prev) => (Object.keys(prev).length ? {} : prev));
+      return;
+    }
+    const measure = () => {
+      const next: Record<string, number> = {};
+      let acc = 0;
+      for (const key of pinnedOrder) {
+        next[key] = acc;
+        acc += pinHeaderRefs.current[key]?.offsetWidth ?? 0;
+      }
+      setPinnedLeft((prev) => {
+        const same =
+          Object.keys(prev).length === pinnedOrder.length &&
+          pinnedOrder.every((k) => prev[k] === next[k]);
+        return same ? prev : next;
+      });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [pinnedOrder, columnWidths, records, recordsLoading, numericTotals]);
+  // Sticky is only applied once every pinned column's offset has been measured;
+  // until then we render columns normally rather than risk several collapsing to
+  // left:0 and overlapping during a transient render before refs resolve.
+  const pinReady = pinnedOrder.every((k) => k in pinnedLeft);
+  // Sticky style for a pinned cell. The background must be opaque so scrolling
+  // cells don't show through; a caller-supplied conditional-format/row colour
+  // takes precedence, otherwise the given base colour. The last pinned column
+  // gets a divider shadow to mark the frozen boundary.
+  const pinStyle = (key: string, bg: string, isHeader = false): CSSProperties | undefined => {
+    if (!pinnedKeys.has(key) || !pinReady) return undefined;
+    return {
+      position: "sticky",
+      left: pinnedLeft[key] ?? 0,
+      zIndex: isHeader ? 3 : 2,
+      backgroundColor: bg,
+      ...(key === lastPinnedKey ? { boxShadow: "2px 0 5px -2px rgba(15,23,42,0.15)" } : undefined),
+    };
+  };
+
   if (!canView) {
     return (
       <Card className="border-slate-200 shadow-sm">
@@ -1910,6 +1976,7 @@ export function EntityRecords({
                             key={`tot-${f.id}`}
                             className={cn("px-4 py-3 text-left", hasTotal && !f.totalFillColor && "bg-emerald-50")}
                             style={{
+                              ...pinStyle(`f:${f.id}`, hasTotal ? "#ecfdf5" : "#ffffff", true),
                               ...(hasTotal && f.totalFillColor ? { backgroundColor: f.totalFillColor } : undefined),
                               ...colWidthStyle(`f:${f.id}`),
                             }}
@@ -1932,6 +1999,7 @@ export function EntityRecords({
                             key={`tot-pf-${pf.id}`}
                             className={cn("px-4 py-3 text-left", hasTotal && !pf.totalFillColor && "bg-emerald-50")}
                             style={{
+                              ...pinStyle(`pf:${pf.id}`, hasTotal ? "#ecfdf5" : "#ffffff", true),
                               ...(hasTotal && pf.totalFillColor ? { backgroundColor: pf.totalFillColor } : undefined),
                               ...colWidthStyle(`pf:${pf.id}`),
                             }}
@@ -1955,8 +2023,9 @@ export function EntityRecords({
                     {displayFields.map((f: Field, ci: number) => (
                       <th
                         key={f.id}
+                        ref={(el) => { pinHeaderRefs.current[`f:${f.id}`] = el; }}
                         className="relative align-top text-center px-4 py-3 font-medium text-slate-600 break-words"
-                        style={colWidthStyle(`f:${f.id}`)}
+                        style={{ ...pinStyle(`f:${f.id}`, "#f8fafc", true), ...colWidthStyle(`f:${f.id}`) }}
                       >
                         {setupMode && !isMirror ? (
                           <div className="flex flex-col items-center gap-1">
@@ -2047,8 +2116,9 @@ export function EntityRecords({
                     {displayedPageFields.map((pf: PageField, pi: number) => (
                       <th
                         key={`pf-${pf.id}`}
+                        ref={(el) => { pinHeaderRefs.current[`pf:${pf.id}`] = el; }}
                         className="relative align-top text-center px-4 py-3 font-medium text-slate-600 break-words"
-                        style={colWidthStyle(`pf:${pf.id}`)}
+                        style={{ ...pinStyle(`pf:${pf.id}`, "#f8fafc", true), ...colWidthStyle(`pf:${pf.id}`) }}
                       >
                         {setupMode ? (
                           <div className="inline-flex items-center gap-1">
@@ -2149,7 +2219,7 @@ export function EntityRecords({
                       {displayFields.map((f: Field) => {
                         const editable = fieldAccess(f, entityId, permPageId) === "edit" && f.fieldType !== "function";
                         return (
-                          <td key={f.id} className="px-2 py-1.5 align-top max-w-[260px]" style={colWidthStyle(`f:${f.id}`)}>
+                          <td key={f.id} className="px-2 py-1.5 align-top max-w-[260px]" style={{ ...pinStyle(`f:${f.id}`, "#eff6ff"), ...colWidthStyle(`f:${f.id}`) }}>
                             {editable ? (
                               <FieldInput
                                 field={f}
@@ -2175,7 +2245,7 @@ export function EntityRecords({
                         const pageFieldAsField = { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
                         const editable = pf.fieldType !== "function" && pf.fieldType !== "relation";
                         return (
-                          <td key={`pf-${pf.id}`} className="px-2 py-1.5 align-top max-w-[260px]" style={colWidthStyle(`pf:${pf.id}`)}>
+                          <td key={`pf-${pf.id}`} className="px-2 py-1.5 align-top max-w-[260px]" style={{ ...pinStyle(`pf:${pf.id}`, "#eff6ff"), ...colWidthStyle(`pf:${pf.id}`) }}>
                             {editable ? (
                               <FieldInput
                                 field={pageFieldAsField}
@@ -2275,7 +2345,7 @@ export function EntityRecords({
                             editingCell?.recordId === record.id && editingCell?.fieldKey === f.fieldKey;
                           if (isEditingThis) {
                             return (
-                              <td key={f.id} className="px-4 py-3 max-w-[240px]" style={colWidthStyle(`f:${f.id}`)}>
+                              <td key={f.id} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`f:${f.id}`, formatting.rowColor || "#ffffff"), ...colWidthStyle(`f:${f.id}`) }}>
                                 <InlineCellEditor
                                   field={f}
                                   initial={valueToForm(f, values[f.fieldKey])}
@@ -2292,7 +2362,7 @@ export function EntityRecords({
                           }
                           if (f.fieldType === "boolean" && cellEditable) {
                             return (
-                              <td key={f.id} className="px-4 py-3 max-w-[240px]" style={{ ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
+                              <td key={f.id} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`f:${f.id}`, formatting.rowColor || "#ffffff"), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
                                 <Switch
                                   checked={values[f.fieldKey] === true}
                                   onCheckedChange={(v) => commitCell(record, f, v)}
@@ -2303,7 +2373,7 @@ export function EntityRecords({
                           if (isFunction) {
                             const computed = formatFormulaResult(f.formulaConfigJson?.expression ?? "", allValues);
                             return (
-                              <td key={f.id} className="px-4 py-3 max-w-[240px] truncate" style={{ ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
+                              <td key={f.id} className="px-4 py-3 max-w-[240px] truncate" style={{ ...pinStyle(`f:${f.id}`, formatting.rowColor || "#ffffff"), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
                                 {computed.error ? (
                                   <span className="text-red-400 text-xs" title={t("fields.formulaError", "Ошибка формулы")}>{t("fields.formulaError", "Ошибка формулы")}</span>
                                 ) : computed.text === "" ? (
@@ -2319,7 +2389,7 @@ export function EntityRecords({
                               key={f.id}
                               onClick={cellEditable ? () => setEditingCell({ recordId: record.id, fieldKey: f.fieldKey }) : undefined}
                               className={`px-4 py-3 max-w-[240px] truncate ${cellEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
-                              style={{ ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}
+                              style={{ ...pinStyle(`f:${f.id}`, formatting.rowColor || "#ffffff"), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}
                               title={cellEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
                             >
                               {renderCellValue(f, values[f.fieldKey], t, userNames, cellText)}
@@ -2351,7 +2421,7 @@ export function EntityRecords({
                                 renderCellValue(relField, rel?.value, t, userNames, cellText)
                               );
                             return (
-                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px] truncate" style={{ ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px] truncate" style={{ ...pinStyle(`pf:${pf.id}`, formatting.rowColor || "#ffffff"), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
                                 {relAssignable && pageId != null ? (
                                   <RelationLinkPicker
                                     pageId={pageId}
@@ -2371,7 +2441,7 @@ export function EntityRecords({
                           const pageFieldAsField = { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
                           if (isEditingThis) {
                             return (
-                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={colWidthStyle(`pf:${pf.id}`)}>
+                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`pf:${pf.id}`, formatting.rowColor || "#ffffff"), ...colWidthStyle(`pf:${pf.id}`) }}>
                                 <InlineCellEditor
                                   field={pageFieldAsField}
                                   initial={valueToForm(pageFieldAsField, pageValues[pf.fieldKey])}
@@ -2384,7 +2454,7 @@ export function EntityRecords({
                           }
                           if (pf.fieldType === "boolean" && cellEditable) {
                             return (
-                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={{ ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`pf:${pf.id}`, formatting.rowColor || "#ffffff"), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
                                 <Switch
                                   checked={pageValues[pf.fieldKey] === true}
                                   onCheckedChange={(v) => commitPageCell(record, pf, v)}
@@ -2395,7 +2465,7 @@ export function EntityRecords({
                           if (isFunction) {
                             const computed = formatFormulaResult(pf.formulaConfigJson?.expression ?? "", allValues);
                             return (
-                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px] truncate" style={{ ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px] truncate" style={{ ...pinStyle(`pf:${pf.id}`, formatting.rowColor || "#ffffff"), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
                                 {computed.error ? (
                                   <span className="text-red-400 text-xs" title={t("fields.formulaError", "Ошибка формулы")}>{t("fields.formulaError", "Ошибка формулы")}</span>
                                 ) : computed.text === "" ? (
@@ -2411,7 +2481,7 @@ export function EntityRecords({
                               key={`pf-${pf.id}`}
                               onClick={cellEditable ? () => setEditingCell({ recordId: record.id, fieldKey: pfKey }) : undefined}
                               className={`px-4 py-3 max-w-[240px] truncate ${cellEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
-                              style={{ ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}
+                              style={{ ...pinStyle(`pf:${pf.id}`, formatting.rowColor || "#ffffff"), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}
                               title={cellEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
                             >
                               {renderCellValue(pageFieldAsField, pageValues[pf.fieldKey], t, userNames, cellText)}

@@ -153,6 +153,7 @@ export function FieldConfigDialog({
   const [isActive, setIsActive] = useState(true);
   const [isFilterable, setIsFilterable] = useState(false);
   const [showInTable, setShowInTable] = useState(true);
+  const [isPinned, setIsPinned] = useState(false);
   const [showColumnTotal, setShowColumnTotal] = useState(false);
   const [totalFillColor, setTotalFillColor] = useState("");
   const [totalTextColor, setTotalTextColor] = useState("");
@@ -183,6 +184,7 @@ export function FieldConfigDialog({
       setIsActive(field.isActive);
       setIsFilterable(field.isFilterable ?? false);
       setShowInTable(field.showInTable ?? true);
+      setIsPinned(field.isPinned ?? false);
       setShowColumnTotal(field.showColumnTotal ?? false);
       setTotalFillColor(field.totalFillColor ?? "");
       setTotalTextColor(field.totalTextColor ?? "");
@@ -211,6 +213,7 @@ export function FieldConfigDialog({
       setIsActive(true);
       setIsFilterable(false);
       setShowInTable(true);
+      setIsPinned(false);
       setShowColumnTotal(false);
       setTotalFillColor("");
       setTotalTextColor("");
@@ -326,6 +329,7 @@ export function FieldConfigDialog({
       isActive,
       isFilterable,
       showInTable,
+      isPinned,
       showColumnTotal: fieldType === "number" ? showColumnTotal : false,
       totalFillColor: fieldType === "number" && showColumnTotal && totalFillColor ? totalFillColor : null,
       totalTextColor: fieldType === "number" && showColumnTotal && totalTextColor ? totalTextColor : null,
@@ -565,6 +569,10 @@ export function FieldConfigDialog({
               <div className="flex items-center gap-2">
                 <Switch checked={showInTable} onCheckedChange={setShowInTable} id="fcd-show-in-table" />
                 <Label htmlFor="fcd-show-in-table">{t("fields.showInTable", "Показывать в таблице")}</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={isPinned} onCheckedChange={setIsPinned} id="fcd-pinned" />
+                <Label htmlFor="fcd-pinned">{t("fields.pinColumn", "Закрепить при горизонтальной прокрутке")}</Label>
               </div>
               {fieldType === "number" && (
                 <div className="flex items-center gap-2">

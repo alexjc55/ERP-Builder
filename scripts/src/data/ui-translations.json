@@ -2088,6 +2088,12 @@
     "he": "הצג בטבלה"
   },
   {
+    "key": "fields.pinColumn",
+    "ru": "Закрепить при горизонтальной прокрутке",
+    "en": "Pin column on horizontal scroll",
+    "he": "הצמד עמודה בגלילה אופקית"
+  },
+  {
     "key": "fields.sortOrder",
     "ru": "Порядок",
     "en": "Sorting",

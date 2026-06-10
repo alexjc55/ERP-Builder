@@ -94,6 +94,7 @@ export const entityFieldsTable = pgTable(
     dependencyConfigJson: jsonb("dependency_config_json").$type<DependencyFieldConfig>().notNull().default({}),
     isFilterable: boolean("is_filterable").notNull().default(false),
     showInTable: boolean("show_in_table").notNull().default(true),
+    isPinned: boolean("is_pinned").notNull().default(false),
     showColumnTotal: boolean("show_column_total").notNull().default(false),
     totalFillColor: text("total_fill_color"),
     totalTextColor: text("total_text_color"),

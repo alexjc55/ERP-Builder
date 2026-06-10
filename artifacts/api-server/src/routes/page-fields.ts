@@ -439,6 +439,7 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
   if (body.isActive != null) updateData.isActive = body.isActive;
   if (body.showInTable != null) updateData.showInTable = body.showInTable;
+  if (body.isPinned != null) updateData.isPinned = body.isPinned;
   if (body.showColumnTotal != null) updateData.showColumnTotal = body.showColumnTotal;
   if ("totalFillColor" in body) updateData.totalFillColor = body.totalFillColor ?? null;
   if ("totalTextColor" in body) updateData.totalTextColor = body.totalTextColor ?? null;
