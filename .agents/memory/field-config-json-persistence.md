@@ -18,3 +18,22 @@ in review.
 
 **How to apply:** use `"key" in body` (presence check), not `body.key != null`, so an explicit
 reset to `{}`/`null` persists. Mirror the field type's empty default (file → `null`, user → `{}`).
+
+## Stale codegen silently strips the field (separate failure mode)
+
+Even with create + PUT allowlist + DB column all correct, edits can still no-op
+if `pnpm --filter @workspace/api-spec run codegen` was NOT re-run after editing
+`openapi.yaml`. The server validates the request body with the generated zod
+(`UpdateFieldBody` etc.); a `zod.object(...)` STRIPS unknown keys, so a config
+key missing from the stale zod is dropped before `"key" in body` is ever checked.
+
+**Why it hides:** `pnpm run typecheck` can still pass — the request *type* and the
+*zod* are emitted by the same codegen run, but if a prior partial state left types
+fresh and zod stale (or you only edited yaml), typecheck is not proof the runtime
+validator is current. Symptom: 200 OK, no error, value never persists, DB column
+stays at its default.
+
+**How to apply:** after ANY `openapi.yaml` edit, run codegen and grep the
+generated zod (`lib/api-zod/src/generated/api.ts`) for the new property before
+assuming a persistence bug is in the route. Restart the API workflow so the new
+zod is loaded.
