@@ -6282,6 +6282,18 @@
     "he": "מיון"
   },
   {
+    "key": "views.sortSysCreatedAt",
+    "ru": "Дата добавления (системная)",
+    "en": "Date added (system)",
+    "he": "תאריך הוספה (מערכת)"
+  },
+  {
+    "key": "views.sortSysId",
+    "ru": "ID записи (системный)",
+    "en": "Record ID (system)",
+    "he": "מזהה רשומה (מערכת)"
+  },
+  {
     "key": "views.subtitle",
     "ru": "Сохранённые виды записей: фильтры, сортировка и поиск",
     "en": "Saved record views: filters, sorting and search",

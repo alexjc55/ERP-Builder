@@ -147,6 +147,11 @@ import {
 const NO_STATUS = "__none__";
 const NO_VIEW = "__all__";
 const PAGE_SIZE = 50;
+// Reserved sort keys mapping to the record's system columns (creation date / id).
+// Never rendered as table columns; kept in lockstep with the server sort builder.
+const SYSTEM_SORT_CREATED_AT = "__created_at__";
+const SYSTEM_SORT_RECORD_ID = "__record_id__";
+const SYSTEM_SORT_KEYS = new Set<string>([SYSTEM_SORT_CREATED_AT, SYSTEM_SORT_RECORD_ID]);
 
 function extractError(err: unknown): string | undefined {
   if (err && typeof err === "object" && "response" in err) {
@@ -1129,7 +1134,7 @@ export function EntityRecords({
   const entityDefaultSorts = useMemo(() => {
     const raw = Array.isArray(entity?.defaultSortJson) ? (entity.defaultSortJson as SortSpec[]) : [];
     const known = new Set(allFields.filter((f: Field) => f.isActive).map((f: Field) => f.fieldKey));
-    return raw.filter((s) => known.has(s.field));
+    return raw.filter((s) => known.has(s.field) || SYSTEM_SORT_KEYS.has(s.field));
   }, [entity?.defaultSortJson, allFields]);
   const effectiveSorts = selectedView ? (selectedConfig.sorts ?? []) : entityDefaultSorts;
   const sortsKey = JSON.stringify(effectiveSorts);

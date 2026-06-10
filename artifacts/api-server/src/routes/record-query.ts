@@ -29,6 +29,16 @@ export interface SortSpec {
   direction?: "asc" | "desc";
 }
 
+/**
+ * Reserved sort keys that map to the record's system columns instead of an
+ * entity field. They are never rendered as table columns; they exist only so a
+ * view/default sort can order by the row's system creation date or its id
+ * (useful as a stable tie-breaker, e.g. two rows with the same business date
+ * keep their insertion order). Kept in lockstep with the web sort UI.
+ */
+export const SYSTEM_SORT_CREATED_AT = "__created_at__";
+export const SYSTEM_SORT_RECORD_ID = "__record_id__";
+
 export interface RecordQuerySpec {
   filters?: FilterCondition[];
   filterConjunction?: "and" | "or";
@@ -216,6 +226,14 @@ export function buildRecordQuery(
 
   const orderBy: SQL[] = [];
   for (const s of spec.sorts ?? []) {
+    if (s.field === SYSTEM_SORT_CREATED_AT) {
+      orderBy.push(s.direction === "desc" ? desc(entityRecordsTable.createdAt) : asc(entityRecordsTable.createdAt));
+      continue;
+    }
+    if (s.field === SYSTEM_SORT_RECORD_ID) {
+      orderBy.push(s.direction === "desc" ? desc(entityRecordsTable.id) : asc(entityRecordsTable.id));
+      continue;
+    }
     const field = fieldByKey.get(s.field);
     if (!field) return { error: `Unknown sort field: ${s.field}` };
     let expr: SQL = textExpr(s.field);

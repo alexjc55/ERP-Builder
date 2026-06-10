@@ -119,6 +119,12 @@ function textToFilterValue(op: FilterOperator, text: string): unknown {
 type DraftFilter = { field: string; operator: FilterOperator; valueText: string };
 type DraftSort = { field: string; direction: SortSpecDirection };
 
+// Reserved sort keys mapping to the record's system columns (creation date / id).
+// They are sortable but never shown as table columns; kept in lockstep with the
+// server sort builder (record-query.ts) and EntityRecords.tsx.
+const SYSTEM_SORT_CREATED_AT = "__created_at__";
+const SYSTEM_SORT_RECORD_ID = "__record_id__";
+
 /**
  * Value picker for a select ("список") field's filter condition. Offers the
  * field's options as a checklist (single-select for scalar operators,
@@ -714,6 +720,8 @@ export default function EntityViewsPage() {
                           {fields.map((fld: Field) => (
                             <SelectItem key={fld.fieldKey} value={fld.fieldKey}>{ml(fld.nameJson)}</SelectItem>
                           ))}
+                          <SelectItem value={SYSTEM_SORT_CREATED_AT}>{t("views.sortSysCreatedAt", "Дата добавления (системная)")}</SelectItem>
+                          <SelectItem value={SYSTEM_SORT_RECORD_ID}>{t("views.sortSysId", "ID записи (системный)")}</SelectItem>
                         </SelectContent>
                       </Select>
                       <Select value={s.direction} onValueChange={(v) => updateSort(idx, { direction: v as SortSpecDirection })}>
@@ -771,6 +779,8 @@ export default function EntityViewsPage() {
                         {fields.map((fld: Field) => (
                           <SelectItem key={fld.fieldKey} value={fld.fieldKey}>{ml(fld.nameJson)}</SelectItem>
                         ))}
+                        <SelectItem value={SYSTEM_SORT_CREATED_AT}>{t("views.sortSysCreatedAt", "Дата добавления (системная)")}</SelectItem>
+                        <SelectItem value={SYSTEM_SORT_RECORD_ID}>{t("views.sortSysId", "ID записи (системный)")}</SelectItem>
                       </SelectContent>
                     </Select>
                     <Select value={s.direction} onValueChange={(v) => updateDefaultSort(idx, { direction: v as SortSpecDirection })}>
