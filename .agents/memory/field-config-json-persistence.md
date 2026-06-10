@@ -37,3 +37,25 @@ stays at its default.
 generated zod (`lib/api-zod/src/generated/api.ts`) for the new property before
 assuming a persistence bug is in the route. Restart the API workflow so the new
 zod is loaded.
+
+## Create and update use SEPARATE request schemas (the real trap)
+
+`openapi.yaml` defines DISTINCT schemas for create vs update of a field:
+- create (`POST /entities/{id}/fields`) → `FieldInput`
+- update (`PUT /fields/{id}`) → `FieldUpdate`
+
+They are NOT derived from each other. A new per-field config property added only
+to `FieldInput` will create fine but every edit silently drops it: the generated
+`UpdateFieldBody` zod won't list it, so `safeParse` strips it before the route's
+`"key" in body` check — PUT returns 200, DB column stays at its default.
+
+**Why it's so easy to miss:** TS does not catch it. The route reads the value via
+`if ("key" in body) updateData.key = body.key`; the `in` narrowing exposes the
+property as `unknown`, so `pnpm run typecheck` passes even though the request type
+never had the field. So neither typecheck nor a 200 response proves persistence.
+
+**How to apply:** when adding any new field property, add it to BOTH `FieldInput`
+AND `FieldUpdate` in openapi.yaml (and the DB column + the PUT updateData
+allowlist), re-run codegen, then grep the generated `UpdateFieldBody` (not just
+`FieldInput`/`Field`) to confirm the property is present. Restart the API server.
+The same create-vs-update split likely exists for other entities (pages, etc.).

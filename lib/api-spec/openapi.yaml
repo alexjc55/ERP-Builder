@@ -4483,6 +4483,8 @@ components:
             $ref: "#/components/schemas/FieldFormatRule"
         formulaConfigJson:
           $ref: "#/components/schemas/FormulaFieldConfig"
+        dependencyConfigJson:
+          $ref: "#/components/schemas/DependencyFieldConfig"
         isFilterable:
           type: boolean
         showInTable:

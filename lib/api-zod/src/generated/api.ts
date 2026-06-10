@@ -1964,6 +1964,9 @@ export const UpdateFieldBody = zod.object({
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional()
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
+  "dependencyConfigJson": zod.object({
+  "dependsOnFieldKey": zod.string().optional()
+}).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),

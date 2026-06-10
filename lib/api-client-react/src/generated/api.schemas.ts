@@ -1496,6 +1496,7 @@ export interface FieldUpdate {
   userConfigJson?: UserFieldConfig;
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
+  dependencyConfigJson?: DependencyFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
   showColumnTotal?: boolean;
