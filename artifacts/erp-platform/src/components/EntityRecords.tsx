@@ -154,9 +154,11 @@ const SYSTEM_SORT_RECORD_ID = "__record_id__";
 const SYSTEM_SORT_KEYS = new Set<string>([SYSTEM_SORT_CREATED_AT, SYSTEM_SORT_RECORD_ID]);
 
 function extractError(err: unknown): string | undefined {
-  if (err && typeof err === "object" && "response" in err) {
-    const resp = (err as { response?: { data?: { error?: string } } }).response;
-    return resp?.data?.error;
+  if (err && typeof err === "object") {
+    const data = (err as { data?: { error?: unknown } }).data;
+    if (data && typeof data.error === "string" && data.error.trim()) return data.error;
+    const msg = (err as { message?: unknown }).message;
+    if (typeof msg === "string" && msg.trim()) return msg;
   }
   return undefined;
 }

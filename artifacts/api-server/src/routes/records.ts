@@ -193,7 +193,7 @@ function validateValues(fields: EntityField[], values: Record<string, unknown>, 
 
     if (isEmpty(raw)) {
       if (field.isRequired) {
-        return { error: `Field "${field.fieldKey}" is required` };
+        return { error: `Поле «${fieldRuName(field)}» обязательно для заполнения` };
       }
       continue;
     }
