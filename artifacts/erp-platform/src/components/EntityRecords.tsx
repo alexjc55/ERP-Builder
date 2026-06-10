@@ -3039,7 +3039,7 @@ function DependentFieldCombobox({
   const [open, setOpen] = useState(autoOpen);
   const [options, setOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [adding, setAdding] = useState("");
+  const [search, setSearch] = useState("");
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameText, setRenameText] = useState("");
   const committedRef = useRef(false);
@@ -3084,8 +3084,8 @@ function DependentFieldCombobox({
     setOpen(false);
   };
 
-  const handleAdd = () => {
-    const v = adding.trim();
+  const handleAdd = (raw: string) => {
+    const v = raw.trim();
     if (!v) return;
     if (options.some((o) => o === v)) {
       commitValue(v);
@@ -3161,7 +3161,10 @@ function DependentFieldCombobox({
       open={open}
       onOpenChange={(o) => {
         setOpen(o);
-        if (!o) onClose?.(committedRef.current);
+        if (!o) {
+          setSearch("");
+          onClose?.(committedRef.current);
+        }
       }}
     >
       <PopoverTrigger asChild>
@@ -3180,7 +3183,11 @@ function DependentFieldCombobox({
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-56 p-0">
         <Command>
-          <CommandInput placeholder={t("records.depSearch", "Поиск...")} />
+          <CommandInput
+            value={search}
+            onValueChange={setSearch}
+            placeholder={t("records.depSearch", "Поиск...")}
+          />
           <CommandList>
             <CommandEmpty>
               {loading ? t("records.loading", "Загрузка...") : t("records.depEmpty", "Нет значений")}
@@ -3235,31 +3242,22 @@ function DependentFieldCombobox({
                 ),
               )}
             </CommandGroup>
-            <CommandGroup className="border-t border-slate-100">
-              <div className="flex items-center gap-1 px-2 py-1.5">
-                <Input
-                  value={adding}
-                  onChange={(e) => setAdding(e.target.value)}
-                  placeholder={t("records.depAddNew", "Добавить значение")}
-                  className="h-7 text-sm"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleAdd();
-                    }
-                  }}
-                />
-                <Button
-                  size="icon"
-                  className="h-7 w-7 bg-blue-600 hover:bg-blue-700"
-                  onClick={handleAdd}
-                  disabled={!adding.trim()}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </CommandGroup>
           </CommandList>
+          {search.trim() !== "" && !options.some((o) => norm(o) === norm(search)) && (
+            <div className="border-t border-slate-100 p-1">
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-8 w-full justify-start gap-2 px-2 text-sm font-normal"
+                onClick={() => handleAdd(search)}
+              >
+                <Plus className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                <span className="truncate">
+                  {t("records.depAddNew", "Добавить значение")}: «{search.trim()}»
+                </span>
+              </Button>
+            </div>
+          )}
         </Command>
       </PopoverContent>
     </Popover>

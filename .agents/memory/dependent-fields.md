@@ -47,3 +47,15 @@ record's **parent-chain** values (closest parent + all ancestors).
   changed parent wipes now-mismatched child values. Inline edit (`commitCell`)
   sends only the changed key by default, so it must add the cleared descendant
   keys to the same `valuesJson` payload — easy to forget.
+
+- **cmdk create-path: the "add new value" action MUST live OUTSIDE
+  `<CommandList>`.** cmdk filters everything inside `CommandList` by the
+  `CommandInput` query, so an add-action placed there (even a plain div in a
+  `CommandGroup`) gets hidden exactly when the search matches nothing — i.e.
+  precisely when the user wants to create. **Why:** the dependent-field combobox
+  add-input used to be a `CommandGroup` inside the list and vanished on no-match.
+  **How to apply:** make `CommandInput` controlled (`value`/`onValueChange`) and
+  render the add-action as a sibling of `CommandList` inside `<Command>`, gated on
+  `search.trim() !== "" && !options.some(o => norm(o) === norm(search))`. Reuse
+  the typed search text as the value to add. This is the invariant for any cmdk
+  combobox with a create path.
