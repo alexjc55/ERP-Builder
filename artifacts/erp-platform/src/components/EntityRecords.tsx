@@ -1964,6 +1964,7 @@ export function EntityRecords({
                                 title={t("records.configureColumn", "Настроить колонку")}
                               >
                                 {ml(f.nameJson)}
+                                <span className="text-slate-400 font-normal">({f.sortOrder})</span>
                                 <Settings2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
@@ -2054,6 +2055,7 @@ export function EntityRecords({
                               title={t("pageFields.configureColumn", "Настроить поле страницы")}
                             >
                               {ml(pf.nameJson)}
+                              <span className="text-slate-400 font-normal">({pf.sortOrder})</span>
                               <Settings2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
