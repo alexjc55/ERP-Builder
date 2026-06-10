@@ -15,6 +15,8 @@ import {
   useGetEntity,
   useQueryEntityRecords,
   useGetEntityFilterValues,
+  useGetFieldDependentValues,
+  useRenameFieldValue,
   useArchiveRecord,
   useUnarchiveRecord,
   useListRecordLinks,
@@ -1481,7 +1483,15 @@ export function EntityRecords({
     const normalizedStored =
       field.fieldType === "boolean" ? Boolean(stored) : stored === undefined || stored === null ? "" : stored;
     if (next === normalizedStored) { setEditingCell(null); return; }
-    cellUpdateMutation.mutate({ id: record.id, data: { valuesJson: { [field.fieldKey]: next }, pageId: permPageId } });
+    // Changing a parent field invalidates its dependent children: clear them in
+    // the same write so stale child values don't persist (mirrors add-row/dialog).
+    const current = (record.valuesJson ?? {}) as Record<string, unknown>;
+    const cleared = clearDependentDescendants({ ...current, [field.fieldKey]: next }, field.fieldKey, fields);
+    const payload: Record<string, unknown> = { [field.fieldKey]: next };
+    for (const f of fields) {
+      if (isDependentField(f) && current[f.fieldKey] !== cleared[f.fieldKey]) payload[f.fieldKey] = "";
+    }
+    cellUpdateMutation.mutate({ id: record.id, data: { valuesJson: payload, pageId: permPageId } });
   };
 
   const commitStatus = (record: EntityRecord, value: string) => {
@@ -2137,8 +2147,16 @@ export function EntityRecords({
                               <FieldInput
                                 field={f}
                                 value={newRow[f.fieldKey]}
-                                onChange={(v) => setNewRow((prev) => ({ ...prev, [f.fieldKey]: v }))}
+                                onChange={(v) =>
+                                  setNewRow((prev) =>
+                                    clearDependentDescendants({ ...prev, [f.fieldKey]: v }, f.fieldKey, fields),
+                                  )
+                                }
                                 userOptions={userOptions}
+                                allFields={fields}
+                                rowValues={newRow}
+                                entityId={entityId}
+                                pageId={permPageId}
                               />
                             ) : (
                               <span className="text-slate-300 text-xs">—</span>
@@ -2257,6 +2275,10 @@ export function EntityRecords({
                                   userOptions={userOptions}
                                   onCommit={(raw) => commitCell(record, f, raw)}
                                   onCancel={() => setEditingCell(null)}
+                                  allFields={fields}
+                                  rowValues={values}
+                                  entityId={entityId}
+                                  pageId={permPageId}
                                 />
                               </td>
                             );
@@ -2548,9 +2570,17 @@ export function EntityRecords({
                   <FieldInput
                     field={field}
                     value={form[field.fieldKey]}
-                    onChange={(v) => setForm((prev) => ({ ...prev, [field.fieldKey]: v }))}
+                    onChange={(v) =>
+                      setForm((prev) =>
+                        clearDependentDescendants({ ...prev, [field.fieldKey]: v }, field.fieldKey, fields),
+                      )
+                    }
                     disabled={readOnly}
                     userOptions={userOptions}
+                    allFields={fields}
+                    rowValues={form}
+                    entityId={entityId}
+                    pageId={permPageId}
                   />
                   {ml(field.descriptionJson) && (
                     <p className="text-xs text-slate-400">{ml(field.descriptionJson)}</p>
@@ -2922,6 +2952,306 @@ function RelationLinkPicker({
  * When `allowCreate` is set (the field opted in via `userConfigJson.allowCreate`)
  * the dropdown gains an "add new user" action that opens a create-user dialog
  * restricted to `allowedRoleIds`; the new user is selected on success. */
+/**
+ * Walk a dependent field's parent chain (closest parent first), cycle-guarded.
+ * Mirrors the server's `dependencyAncestorKeys` so the option list / rename /
+ * dedupe scope is computed identically on both sides.
+ */
+function dependencyChainKeys(field: Field, allFields: Field[]): string[] {
+  const byKey = new Map(allFields.map((f) => [f.fieldKey, f] as const));
+  const out: string[] = [];
+  const seen = new Set<string>([field.fieldKey]);
+  let cur = field.dependencyConfigJson?.dependsOnFieldKey;
+  while (cur && !seen.has(cur)) {
+    seen.add(cur);
+    out.push(cur);
+    cur = byKey.get(cur)?.dependencyConfigJson?.dependsOnFieldKey;
+  }
+  return out;
+}
+
+/** True if `field` is a dependent (cascading) text field. */
+function isDependentField(field: Field): boolean {
+  return field.fieldType === "text" && !!field.dependencyConfigJson?.dependsOnFieldKey;
+}
+
+/**
+ * Clear the values of every field whose dependency chain leads back to
+ * `changedKey`, so changing a parent invalidates its (now mismatched) children.
+ */
+function clearDependentDescendants<T extends Record<string, unknown>>(
+  values: T,
+  changedKey: string,
+  allFields: Field[],
+): T {
+  let next = values;
+  for (const f of allFields) {
+    if (!isDependentField(f)) continue;
+    if (dependencyChainKeys(f, allFields).includes(changedKey) && f.fieldKey in next && next[f.fieldKey] !== "") {
+      if (next === values) next = { ...values };
+      (next as Record<string, unknown>)[f.fieldKey] = "";
+    }
+  }
+  return next;
+}
+
+/**
+ * Picker for a dependent ("cascading") text field. Disabled until the immediate
+ * parent has a value; otherwise lists the distinct existing values of this field
+ * scoped to the row's parent-chain values, with inline "add new" (client-side
+ * dedupe) and per-option rename (scoped merge via the rename endpoint).
+ */
+function DependentFieldCombobox({
+  field,
+  allFields,
+  rowValues,
+  entityId,
+  pageId,
+  value,
+  onChange,
+  disabled = false,
+  autoOpen = false,
+  onClose,
+  triggerClassName,
+}: {
+  field: Field;
+  allFields: Field[];
+  rowValues: Record<string, unknown>;
+  entityId: number;
+  pageId?: number;
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  autoOpen?: boolean;
+  onClose?: (committed: boolean) => void;
+  triggerClassName?: string;
+}) {
+  const t = useT();
+  const { toast } = useToast();
+  const [open, setOpen] = useState(autoOpen);
+  const [options, setOptions] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [adding, setAdding] = useState("");
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renameText, setRenameText] = useState("");
+  const committedRef = useRef(false);
+  const depValues = useGetFieldDependentValues();
+  const renameMutation = useRenameFieldValue();
+
+  const parentChain = useMemo(() => dependencyChainKeys(field, allFields), [field, allFields]);
+  const parentValues = parentChain
+    .map((key) => ({ field: key, value: rowValues[key] == null ? "" : String(rowValues[key]) }))
+    .filter((p) => p.value !== "");
+  const immediateParentKey = field.dependencyConfigJson?.dependsOnFieldKey ?? "";
+  const parentSet = parentValues.some((p) => p.field === immediateParentKey);
+  const parentKey = JSON.stringify(parentValues);
+
+  const loadOptions = useCallback(async () => {
+    if (!parentSet) {
+      setOptions([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await depValues.mutateAsync({ entityId, fieldId: field.id, data: { pageId, parentValues } });
+      setOptions(res.values);
+    } catch {
+      setOptions([]);
+    } finally {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parentSet, parentKey, entityId, field.id, pageId]);
+
+  useEffect(() => {
+    if (open && parentSet) void loadOptions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, parentSet, parentKey]);
+
+  const norm = (s: string) => s.trim().toLowerCase();
+
+  const commitValue = (v: string) => {
+    committedRef.current = true;
+    onChange(v);
+    setOpen(false);
+  };
+
+  const handleAdd = () => {
+    const v = adding.trim();
+    if (!v) return;
+    if (options.some((o) => o === v)) {
+      commitValue(v);
+      return;
+    }
+    if (options.some((o) => norm(o) === norm(v))) {
+      toast({
+        title: t("records.depDuplicate", "Такое значение уже существует в другом написании"),
+        variant: "destructive",
+      });
+      return;
+    }
+    commitValue(v);
+  };
+
+  const handleRename = async (oldValue: string) => {
+    const nv = renameText.trim();
+    if (!nv || nv === oldValue) {
+      setRenaming(null);
+      return;
+    }
+    const collides = options.some((o) => o !== oldValue && norm(o) === norm(nv));
+    if (
+      collides &&
+      !window.confirm(
+        t("records.depMergeConfirm", "Значение с таким названием уже существует. Объединить записи?"),
+      )
+    ) {
+      return;
+    }
+    try {
+      await renameMutation.mutateAsync({
+        entityId,
+        fieldId: field.id,
+        data: { pageId, parentValues, oldValue, newValue: nv },
+      });
+      toast({ title: t("records.depRenamed", "Значение переименовано") });
+      setRenaming(null);
+      if (value === oldValue) onChange(nv);
+      await loadOptions();
+    } catch (err) {
+      toast({
+        title: t("records.depRenameError", "Ошибка переименования"),
+        description: extractError(err),
+        variant: "destructive",
+      });
+    }
+  };
+
+  if (!parentSet) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        disabled
+        className={cn("w-full justify-between font-normal text-slate-400", triggerClassName)}
+      >
+        <span className="truncate">
+          {t("records.depParentRequired", "Сначала выберите родительское поле")}
+        </span>
+      </Button>
+    );
+  }
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) onClose?.(committedRef.current);
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          disabled={disabled}
+          className={cn("w-full justify-between font-normal", triggerClassName)}
+        >
+          <span className={cn("truncate", !value && "text-slate-400")}>
+            {value || t("records.depSelect", "Выберите или добавьте")}
+          </span>
+          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-56 p-0">
+        <Command>
+          <CommandInput placeholder={t("records.depSearch", "Поиск...")} />
+          <CommandList>
+            <CommandEmpty>
+              {loading ? t("records.loading", "Загрузка...") : t("records.depEmpty", "Нет значений")}
+            </CommandEmpty>
+            <CommandGroup>
+              {options.map((o) =>
+                renaming === o ? (
+                  <div key={o} className="flex items-center gap-1 px-2 py-1">
+                    <Input
+                      autoFocus
+                      value={renameText}
+                      onChange={(e) => setRenameText(e.target.value)}
+                      className="h-7 text-sm"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void handleRename(o);
+                        } else if (e.key === "Escape") {
+                          setRenaming(null);
+                        }
+                      }}
+                    />
+                    <Button
+                      size="icon"
+                      className="h-7 w-7 bg-blue-600 hover:bg-blue-700"
+                      onClick={() => void handleRename(o)}
+                      disabled={renameMutation.isPending}
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setRenaming(null)}>
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ) : (
+                  <CommandItem key={o} value={o} onSelect={() => commitValue(o)}>
+                    <Check className={cn("mr-2 h-4 w-4", value === o ? "opacity-100" : "opacity-0")} />
+                    <span className="flex-1 truncate">{o}</span>
+                    <button
+                      type="button"
+                      className="ml-2 opacity-50 hover:opacity-100"
+                      title={t("records.depRename", "Переименовать")}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRenaming(o);
+                        setRenameText(o);
+                      }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  </CommandItem>
+                ),
+              )}
+            </CommandGroup>
+            <CommandGroup className="border-t border-slate-100">
+              <div className="flex items-center gap-1 px-2 py-1.5">
+                <Input
+                  value={adding}
+                  onChange={(e) => setAdding(e.target.value)}
+                  placeholder={t("records.depAddNew", "Добавить значение")}
+                  className="h-7 text-sm"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAdd();
+                    }
+                  }}
+                />
+                <Button
+                  size="icon"
+                  className="h-7 w-7 bg-blue-600 hover:bg-blue-700"
+                  onClick={handleAdd}
+                  disabled={!adding.trim()}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function UserCombobox({
   options,
   value,
@@ -3061,12 +3391,20 @@ function InlineCellEditor({
   userOptions,
   onCommit,
   onCancel,
+  allFields,
+  rowValues,
+  entityId,
+  pageId,
 }: {
   field: Field;
   initial: CellValue;
   userOptions: UserOption[];
   onCommit: (raw: CellValue) => void;
   onCancel: () => void;
+  allFields?: Field[];
+  rowValues?: Record<string, unknown>;
+  entityId?: number;
+  pageId?: number;
 }) {
   const t = useT();
   const [draft, setDraft] = useState<CellValue>(initial);
@@ -3078,6 +3416,25 @@ function InlineCellEditor({
     committedRef.current = true;
     onCommit(raw);
   };
+
+  if (isDependentField(field) && allFields && rowValues && entityId != null) {
+    return (
+      <DependentFieldCombobox
+        field={field}
+        allFields={allFields}
+        rowValues={rowValues}
+        entityId={entityId}
+        pageId={pageId}
+        value={typeof initial === "string" ? initial : initial == null ? "" : String(initial)}
+        onChange={(v) => commitOnce(v)}
+        triggerClassName="h-8 w-full text-sm"
+        autoOpen
+        onClose={(committed) => {
+          if (!committed && !committedRef.current) onCancel();
+        }}
+      />
+    );
+  }
 
   if (field.fieldType === "file") {
     return (
@@ -3172,14 +3529,36 @@ function FieldInput({
   onChange,
   disabled = false,
   userOptions = [],
+  allFields,
+  rowValues,
+  entityId,
+  pageId,
 }: {
   field: Field;
   value: CellValue | undefined;
   onChange: (v: CellValue) => void;
   disabled?: boolean;
   userOptions?: UserOption[];
+  allFields?: Field[];
+  rowValues?: Record<string, unknown>;
+  entityId?: number;
+  pageId?: number;
 }) {
   const t = useT();
+  if (isDependentField(field) && allFields && rowValues && entityId != null) {
+    return (
+      <DependentFieldCombobox
+        field={field}
+        allFields={allFields}
+        rowValues={rowValues}
+        entityId={entityId}
+        pageId={pageId}
+        value={typeof value === "string" ? value : value == null ? "" : String(value)}
+        onChange={(v) => onChange(v)}
+        disabled={disabled}
+      />
+    );
+  }
   switch (field.fieldType) {
     case "file":
       return (

@@ -62,6 +62,16 @@ export type FieldFormatRule = {
  */
 export type FormulaFieldConfig = { expression?: string };
 
+/**
+ * Per-field configuration for a dependent ("cascading") field. When
+ * `dependsOnFieldKey` is set, this field's value picker is gated on the parent
+ * field: it stays disabled until the parent has a value, and its option list is
+ * the distinct existing values of THIS field among records whose parent-chain
+ * matches the current row. Used for Variant-A string suggestions (e.g.
+ * Client → Project → Order number). Empty/unset means no dependency.
+ */
+export type DependencyFieldConfig = { dependsOnFieldKey?: string };
+
 export const entityFieldsTable = pgTable(
   "entity_fields",
   {
@@ -81,6 +91,7 @@ export const entityFieldsTable = pgTable(
     userConfigJson: jsonb("user_config_json").$type<UserFieldConfig>().notNull().default({}),
     formatRulesJson: jsonb("format_rules_json").$type<FieldFormatRule[]>().notNull().default([]),
     formulaConfigJson: jsonb("formula_config_json").$type<FormulaFieldConfig>().notNull().default({}),
+    dependencyConfigJson: jsonb("dependency_config_json").$type<DependencyFieldConfig>().notNull().default({}),
     isFilterable: boolean("is_filterable").notNull().default(false),
     showInTable: boolean("show_in_table").notNull().default(true),
     showColumnTotal: boolean("show_column_total").notNull().default(false),

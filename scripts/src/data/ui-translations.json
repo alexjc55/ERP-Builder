@@ -1458,6 +1458,24 @@
     "he": "למחוק שדה?"
   },
   {
+    "key": "fields.dependsOn",
+    "ru": "Зависит от поля",
+    "en": "Depends on field",
+    "he": "תלוי בשדה"
+  },
+  {
+    "key": "fields.dependsOnNone",
+    "ru": "Не зависит",
+    "en": "No dependency",
+    "he": "ללא תלות"
+  },
+  {
+    "key": "fields.dependsOnHint",
+    "ru": "Значения этого поля будут подсказываться из существующих записей с тем же родительским значением.",
+    "en": "Values for this field are suggested from existing records that share the same parent value.",
+    "he": "ערכי שדה זה יוצעו מתוך רשומות קיימות בעלות אותו ערך אב."
+  },
+  {
     "key": "fields.description",
     "ru": "Описание",
     "en": "Description",
@@ -3604,6 +3622,66 @@
     "ru": "Настроить колонку",
     "en": "Configure column",
     "he": "הגדרת עמודה"
+  },
+  {
+    "key": "records.depParentRequired",
+    "ru": "Сначала выберите родительское поле",
+    "en": "Select the parent field first",
+    "he": "בחרו תחילה את שדה האב"
+  },
+  {
+    "key": "records.depSelect",
+    "ru": "Выберите или добавьте",
+    "en": "Select or add",
+    "he": "בחרו או הוסיפו"
+  },
+  {
+    "key": "records.depSearch",
+    "ru": "Поиск...",
+    "en": "Search...",
+    "he": "חיפוש..."
+  },
+  {
+    "key": "records.depEmpty",
+    "ru": "Нет значений",
+    "en": "No values",
+    "he": "אין ערכים"
+  },
+  {
+    "key": "records.depAddNew",
+    "ru": "Добавить значение",
+    "en": "Add value",
+    "he": "הוספת ערך"
+  },
+  {
+    "key": "records.depDuplicate",
+    "ru": "Такое значение уже существует в другом написании",
+    "en": "This value already exists with different casing",
+    "he": "ערך זה כבר קיים בכתיב אחר"
+  },
+  {
+    "key": "records.depRename",
+    "ru": "Переименовать",
+    "en": "Rename",
+    "he": "שינוי שם"
+  },
+  {
+    "key": "records.depRenamed",
+    "ru": "Значение переименовано",
+    "en": "Value renamed",
+    "he": "שם הערך שונה"
+  },
+  {
+    "key": "records.depRenameError",
+    "ru": "Ошибка переименования",
+    "en": "Rename error",
+    "he": "שגיאת שינוי שם"
+  },
+  {
+    "key": "records.depMergeConfirm",
+    "ru": "Значение с таким названием уже существует. Объединить записи?",
+    "en": "A value with this name already exists. Merge the records?",
+    "he": "ערך בשם זה כבר קיים. למזג את הרשומות?"
   },
   {
     "key": "records.create",

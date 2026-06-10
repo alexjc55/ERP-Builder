@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { DependencyFieldConfig } from './dependencyFieldConfig';
 import type { FieldFormatRule } from './fieldFormatRule';
 import type { FieldPermissions } from './fieldPermissions';
 import type { FieldType } from './fieldType';
@@ -27,6 +28,7 @@ export interface FieldInput {
   userConfigJson?: UserFieldConfig;
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
+  dependencyConfigJson?: DependencyFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
   showColumnTotal?: boolean;

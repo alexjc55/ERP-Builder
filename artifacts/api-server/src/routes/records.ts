@@ -27,6 +27,10 @@ import {
   QueryEntityRecordsBody,
   GetEntityFilterValuesParams,
   GetEntityFilterValuesBody,
+  GetFieldDependentValuesParams,
+  GetFieldDependentValuesBody,
+  RenameFieldValueParams,
+  RenameFieldValueBody,
   ArchiveRecordParams,
   UnarchiveRecordParams,
 } from "@workspace/api-zod";
@@ -347,6 +351,79 @@ function ownScopeWhere(scopeFieldKeys: string[], userId: number): SQL {
   return or(...clauses)!;
 }
 
+/** Russian label for a field, falling back to its key (server-side getML-lite). */
+function fieldRuName(field: EntityField): string {
+  const name = field.nameJson as { ru?: string; en?: string; he?: string } | null;
+  return name?.ru || name?.en || name?.he || field.fieldKey;
+}
+
+/**
+ * Walk a dependent field's parent chain and return its ancestor field keys
+ * (closest parent first). Cycle-guarded. Used to scope a dependent field's
+ * option list / rename / dedupe to the matching parent values.
+ */
+function dependencyAncestorKeys(field: EntityField, fields: EntityField[]): string[] {
+  const byKey = new Map(fields.map((f) => [f.fieldKey, f] as const));
+  const out: string[] = [];
+  const seen = new Set<string>([field.fieldKey]);
+  let cur = field.dependencyConfigJson?.dependsOnFieldKey;
+  while (cur && !seen.has(cur)) {
+    seen.add(cur);
+    out.push(cur);
+    cur = byKey.get(cur)?.dependencyConfigJson?.dependsOnFieldKey;
+  }
+  return out;
+}
+
+/**
+ * Dedupe guard for dependent fields, run on create/update before persisting.
+ * For each dependent field with a non-empty value V (scoped to the row's
+ * parent-chain values): the parent must be set; an exact existing value is
+ * reused (OK); a value that only matches case-insensitively is rejected (the
+ * user must pick the existing one or use rename); a genuinely new value is OK.
+ * Checks across ALL records in scope (not row-scoped) so values stay unique per
+ * parent. `excludeRecordId` skips the record being updated so it never collides
+ * with its own stored value.
+ */
+async function checkDependentValues(
+  entityId: number,
+  fields: EntityField[],
+  values: Record<string, unknown>,
+  excludeRecordId?: number,
+): Promise<string | null> {
+  const norm = (s: string) => s.trim().toLowerCase();
+  for (const f of fields) {
+    const parentKey = f.dependencyConfigJson?.dependsOnFieldKey;
+    if (!parentKey) continue;
+    const raw = values[f.fieldKey];
+    if (isEmpty(raw)) continue;
+    const v = typeof raw === "string" ? raw.trim() : String(raw);
+    if (isEmpty(values[parentKey])) {
+      return `Поле "${fieldRuName(f)}" нельзя заполнить, пока не выбрано родительское поле`;
+    }
+    const clauses: SQL[] = [eq(entityRecordsTable.entityId, entityId)];
+    for (const key of dependencyAncestorKeys(f, fields)) {
+      const av = values[key];
+      if (isEmpty(av)) continue;
+      const avStr = typeof av === "string" ? av.trim() : String(av);
+      clauses.push(sql`(${entityRecordsTable.valuesJson} ->> ${key}) = ${avStr}`);
+    }
+    if (excludeRecordId != null) clauses.push(sql`${entityRecordsTable.id} <> ${excludeRecordId}`);
+    const valueExpr = sql<string | null>`(${entityRecordsTable.valuesJson} ->> ${f.fieldKey})`;
+    clauses.push(sql`${valueExpr} IS NOT NULL AND ${valueExpr} <> ''`);
+    const rows = await db
+      .selectDistinct({ v: valueExpr })
+      .from(entityRecordsTable)
+      .where(and(...clauses)!);
+    const existing = rows.map((r) => r.v).filter((x): x is string => x != null);
+    if (existing.some((e) => e === v)) continue; // exact match → reuse
+    if (existing.some((e) => norm(e) === norm(v))) {
+      return `Значение "${v}" уже существует в другом написании. Используйте существующее значение.`;
+    }
+  }
+  return null;
+}
+
 /** Returns true if the status belongs to the given entity. */
 async function statusBelongsToEntity(statusId: number, entityId: number): Promise<boolean> {
   const [status] = await db
@@ -638,6 +715,222 @@ router.post(
   },
 );
 
+// Distinct existing values of a dependent ("cascading") field, scoped to the
+// supplied parent-chain values. Mirrors filter-values' access boundary (view
+// perm + field-hidden + own-row + hidden-row-status). Returns an empty list
+// unless the field's immediate parent has a value (no parent → no choices).
+router.post(
+  "/entities/:entityId/fields/:fieldId/dependent-values",
+  requireAuth,
+  requireRecordParam("view"),
+  async (req, res): Promise<void> => {
+    const params = GetFieldDependentValuesParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const body = GetFieldDependentValuesBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+    const { entityId, fieldId } = params.data;
+    if (!(await entityExists(entityId))) {
+      res.status(404).json({ error: "Entity not found" });
+      return;
+    }
+
+    const fields = await loadActiveFields(entityId);
+    const { hidden } = await fieldAccessContext(req, entityId, fields, body.data.pageId ?? undefined);
+    const visibleFields = fields.filter((f) => !hidden.has(f.fieldKey));
+
+    const target = visibleFields.find((f) => f.id === fieldId);
+    const immediateParent = target?.dependencyConfigJson?.dependsOnFieldKey;
+    if (!target || !immediateParent) {
+      res.status(400).json({ error: "Field is not a dependent field" });
+      return;
+    }
+
+    // Only ancestor keys that are visible to this role may scope the option list.
+    const allowedParents = new Set(dependencyAncestorKeys(target, fields));
+    const parentVals = (body.data.parentValues ?? []).filter(
+      (p) =>
+        allowedParents.has(p.field) &&
+        visibleFields.some((f) => f.fieldKey === p.field) &&
+        p.value !== "",
+    );
+    // No options without the immediate parent set (and don't leak the global list).
+    if (!parentVals.some((p) => p.field === immediateParent)) {
+      res.json({ values: [] });
+      return;
+    }
+
+    const spec: RecordQuerySpec = {
+      filters: parentVals.map((p) => ({ field: p.field, operator: "eq" as const, value: p.value })),
+      filterConjunction: "and",
+    };
+    const built = buildRecordQuery(visibleFields, spec);
+    if ("error" in built) {
+      res.status(400).json({ error: built.error });
+      return;
+    }
+
+    const perms = await getPermissions(req);
+    const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
+    const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, entityId);
+
+    const clauses: SQL[] = [eq(entityRecordsTable.entityId, entityId)];
+    if (built.where) clauses.push(built.where);
+    const archWhere = archivedWhere("active");
+    if (archWhere) clauses.push(archWhere);
+    if (scope === "own") clauses.push(ownScopeWhere(scopeFieldKeys, req.user!.userId));
+    const depHiddenRowWhere = hiddenRowStatusWhere(hiddenRowStatusIds);
+    if (depHiddenRowWhere) clauses.push(depHiddenRowWhere);
+    const valueExpr = sql<string | null>`(${entityRecordsTable.valuesJson} ->> ${target.fieldKey})`;
+    clauses.push(sql`${valueExpr} IS NOT NULL AND ${valueExpr} <> ''`);
+    const where = and(...clauses)!;
+
+    // ORDER BY ordinal (1) — same SELECT DISTINCT constraint as filter-values.
+    const rows = await db
+      .selectDistinct({ v: valueExpr })
+      .from(entityRecordsTable)
+      .where(where)
+      .orderBy(sql`1`)
+      .limit(500);
+
+    const values = rows.map((r) => r.v).filter((v): v is string => v != null && v !== "");
+    res.json({ values });
+  },
+);
+
+// Rename (merge) a dependent field's value across all records matching the
+// supplied parent scope. Requires update perm + edit access on the field; row
+// scope ("own") is honored so a restricted user only renames their own rows.
+// Best-effort per-row audit; merge confirmation is handled client-side.
+router.post(
+  "/entities/:entityId/fields/:fieldId/rename-value",
+  requireAuth,
+  requireRecordParam("update"),
+  async (req, res): Promise<void> => {
+    const params = RenameFieldValueParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const body = RenameFieldValueBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+    const { entityId, fieldId } = params.data;
+    if (!(await entityExists(entityId))) {
+      res.status(404).json({ error: "Entity not found" });
+      return;
+    }
+    const oldValue = body.data.oldValue;
+    const newValue = body.data.newValue.trim();
+    if (newValue === "") {
+      res.status(400).json({ error: "Новое значение не может быть пустым" });
+      return;
+    }
+
+    const fields = await loadActiveFields(entityId);
+    const { hidden, editable } = await fieldAccessContext(
+      req,
+      entityId,
+      fields,
+      body.data.pageId ?? undefined,
+    );
+    const target = fields.find((f) => f.id === fieldId);
+    if (!target || hidden.has(target.fieldKey)) {
+      res.status(404).json({ error: "Field not found" });
+      return;
+    }
+    if (!target.dependencyConfigJson?.dependsOnFieldKey) {
+      res.status(400).json({ error: "Field is not a dependent field" });
+      return;
+    }
+    if (!editable.has(target.fieldKey)) {
+      res.status(403).json({ error: "Нет прав на изменение этого поля" });
+      return;
+    }
+
+    const visibleFields = fields.filter((f) => !hidden.has(f.fieldKey));
+    const allowedParents = new Set(dependencyAncestorKeys(target, fields));
+    const parentVals = (body.data.parentValues ?? []).filter(
+      (p) =>
+        allowedParents.has(p.field) &&
+        visibleFields.some((f) => f.fieldKey === p.field) &&
+        p.value !== "",
+    );
+    const immediateParent = target.dependencyConfigJson.dependsOnFieldKey;
+    if (!parentVals.some((p) => p.field === immediateParent)) {
+      res.status(400).json({ error: "Не выбрано родительское значение" });
+      return;
+    }
+    const built = buildRecordQuery(visibleFields, {
+      filters: parentVals.map((p) => ({ field: p.field, operator: "eq" as const, value: p.value })),
+      filterConjunction: "and",
+    });
+    if ("error" in built) {
+      res.status(400).json({ error: built.error });
+      return;
+    }
+
+    const perms = await getPermissions(req);
+    const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
+    const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, entityId);
+
+    // Only rename within the rows this role can actually see — mirror the
+    // dependent-values read boundary (active rows, no hidden-status rows, own
+    // scope) so a direct API call cannot silently rewrite archived/hidden rows.
+    const clauses: SQL[] = [eq(entityRecordsTable.entityId, entityId)];
+    if (built.where) clauses.push(built.where);
+    const renameArchWhere = archivedWhere("active");
+    if (renameArchWhere) clauses.push(renameArchWhere);
+    if (scope === "own") clauses.push(ownScopeWhere(scopeFieldKeys, req.user!.userId));
+    const renameHiddenRowWhere = hiddenRowStatusWhere(hiddenRowStatusIds);
+    if (renameHiddenRowWhere) clauses.push(renameHiddenRowWhere);
+    const valueExpr = sql<string | null>`(${entityRecordsTable.valuesJson} ->> ${target.fieldKey})`;
+    clauses.push(sql`${valueExpr} = ${oldValue}`);
+    const where = and(...clauses)!;
+
+    const matches = await db
+      .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
+      .from(entityRecordsTable)
+      .where(where);
+    if (matches.length === 0) {
+      res.json({ updated: 0 });
+      return;
+    }
+
+    await db.transaction(async (tx) => {
+      for (const m of matches) {
+        const next = { ...((m.valuesJson as Record<string, unknown>) ?? {}), [target.fieldKey]: newValue };
+        await tx
+          .update(entityRecordsTable)
+          .set({ valuesJson: next })
+          .where(eq(entityRecordsTable.id, m.id));
+      }
+    });
+
+    const userId = req.user!.userId;
+    await writeAudit(
+      matches.map((m) => ({
+        entityId,
+        recordId: m.id,
+        userId,
+        fieldKey: target.fieldKey,
+        oldValue: auditStr(oldValue),
+        newValue: auditStr(newValue),
+      })),
+      req.log,
+    );
+
+    res.json({ updated: matches.length });
+  },
+);
+
 router.post("/entities/:entityId/records", requireAuth, requireRecordParam("create"), async (req, res): Promise<void> => {
   const params = CreateEntityRecordParams.safeParse(req.params);
   if (!params.success) {
@@ -679,6 +972,11 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
   const userRefError = await validateUserRefs(fields, result.values);
   if (userRefError) {
     res.status(400).json({ error: userRefError });
+    return;
+  }
+  const depError = await checkDependentValues(entityId, fields, result.values);
+  if (depError) {
+    res.status(400).json({ error: depError });
     return;
   }
 
@@ -948,6 +1246,11 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
     const userRefError = await validateUserRefs(fields, result.values);
     if (userRefError) {
       res.status(400).json({ error: userRefError });
+      return;
+    }
+    const depError = await checkDependentValues(existing.entityId, fields, result.values, params.data.id);
+    if (depError) {
+      res.status(400).json({ error: depError });
       return;
     }
     update.valuesJson = result.values;

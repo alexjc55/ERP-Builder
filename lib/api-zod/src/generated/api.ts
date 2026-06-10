@@ -1786,6 +1786,9 @@ export const ListEntityFieldsResponseItem = zod.object({
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional()
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
+  "dependencyConfigJson": zod.object({
+  "dependsOnFieldKey": zod.string().optional()
+}).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
@@ -1847,6 +1850,9 @@ export const CreateEntityFieldBody = zod.object({
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional()
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
+  "dependencyConfigJson": zod.object({
+  "dependsOnFieldKey": zod.string().optional()
+}).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
   "isFilterable": zod.boolean().default(createEntityFieldBodyIsFilterableDefault),
   "showInTable": zod.boolean().default(createEntityFieldBodyShowInTableDefault),
   "showColumnTotal": zod.boolean().default(createEntityFieldBodyShowColumnTotalDefault),
@@ -1901,6 +1907,9 @@ export const GetFieldResponse = zod.object({
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional()
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
+  "dependencyConfigJson": zod.object({
+  "dependsOnFieldKey": zod.string().optional()
+}).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
@@ -2001,6 +2010,9 @@ export const UpdateFieldResponse = zod.object({
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional()
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
+  "dependencyConfigJson": zod.object({
+  "dependsOnFieldKey": zod.string().optional()
+}).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
@@ -3138,6 +3150,50 @@ export const GetEntityFilterValuesBody = zod.object({
 
 export const GetEntityFilterValuesResponse = zod.object({
   "values": zod.array(zod.string())
+})
+
+
+/**
+ * @summary Distinct existing values of a dependent field, scoped by its parent-chain values
+ */
+export const GetFieldDependentValuesParams = zod.object({
+  "entityId": zod.coerce.number(),
+  "fieldId": zod.coerce.number()
+})
+
+export const GetFieldDependentValuesBody = zod.object({
+  "pageId": zod.number().optional().describe('Optional mirror-page context for the view permission check.'),
+  "parentValues": zod.array(zod.object({
+  "field": zod.string(),
+  "value": zod.string()
+})).optional().describe('The current values of this field\'s parent-chain (closest parent and its ancestors). Each narrows the option list.')
+})
+
+export const GetFieldDependentValuesResponse = zod.object({
+  "values": zod.array(zod.string())
+})
+
+
+/**
+ * @summary Rename (merge) a dependent field's value across records matching the parent scope
+ */
+export const RenameFieldValueParams = zod.object({
+  "entityId": zod.coerce.number(),
+  "fieldId": zod.coerce.number()
+})
+
+export const RenameFieldValueBody = zod.object({
+  "pageId": zod.number().optional().describe('Optional mirror-page context for the update permission check.'),
+  "parentValues": zod.array(zod.object({
+  "field": zod.string(),
+  "value": zod.string()
+})).optional().describe('Parent-chain values that scope which records are renamed.'),
+  "oldValue": zod.string(),
+  "newValue": zod.string()
+})
+
+export const RenameFieldValueResponse = zod.object({
+  "updated": zod.number()
 })
 
 

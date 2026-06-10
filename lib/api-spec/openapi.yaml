@@ -2028,6 +2028,66 @@ paths:
               schema:
                 $ref: "#/components/schemas/FilterValuesResult"
 
+  /entities/{entityId}/fields/{fieldId}/dependent-values:
+    post:
+      operationId: getFieldDependentValues
+      tags: [records]
+      summary: Distinct existing values of a dependent field, scoped by its parent-chain values
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: fieldId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DependentValuesQuery"
+      responses:
+        "200":
+          description: Distinct values for this dependent field under the given parent values
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FilterValuesResult"
+
+  /entities/{entityId}/fields/{fieldId}/rename-value:
+    post:
+      operationId: renameFieldValue
+      tags: [records]
+      summary: Rename (merge) a dependent field's value across records matching the parent scope
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: fieldId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameFieldValueInput"
+      responses:
+        "200":
+          description: Number of records updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RenameFieldValueResult"
+
   # RELATIONS
   /entities/{entityId}/relations:
     get:
@@ -4203,6 +4263,18 @@ components:
         expression:
           type: string
 
+    DependencyFieldConfig:
+      type: object
+      description: >-
+        Per-field configuration for a dependent ("cascading") field. When
+        `dependsOnFieldKey` is set, this field is gated on the parent field:
+        its picker is disabled until the parent has a value, and its option
+        list is the distinct existing values of this field among records whose
+        parent-chain matches the current row.
+      properties:
+        dependsOnFieldKey:
+          type: string
+
     FieldAccess:
       type: string
       enum: [hidden, view, edit]
@@ -4286,6 +4358,8 @@ components:
             $ref: "#/components/schemas/FieldFormatRule"
         formulaConfigJson:
           $ref: "#/components/schemas/FormulaFieldConfig"
+        dependencyConfigJson:
+          $ref: "#/components/schemas/DependencyFieldConfig"
         isFilterable:
           type: boolean
         showInTable:
@@ -4340,6 +4414,8 @@ components:
             $ref: "#/components/schemas/FieldFormatRule"
         formulaConfigJson:
           $ref: "#/components/schemas/FormulaFieldConfig"
+        dependencyConfigJson:
+          $ref: "#/components/schemas/DependencyFieldConfig"
         isFilterable:
           type: boolean
           default: false
@@ -5289,6 +5365,53 @@ components:
           type: array
           items:
             type: string
+
+    DependentParentValue:
+      type: object
+      required: [field, value]
+      properties:
+        field:
+          type: string
+        value:
+          type: string
+
+    DependentValuesQuery:
+      type: object
+      properties:
+        pageId:
+          type: integer
+          description: Optional mirror-page context for the view permission check.
+        parentValues:
+          type: array
+          description: >-
+            The current values of this field's parent-chain (closest parent and
+            its ancestors). Each narrows the option list.
+          items:
+            $ref: "#/components/schemas/DependentParentValue"
+
+    RenameFieldValueInput:
+      type: object
+      required: [oldValue, newValue]
+      properties:
+        pageId:
+          type: integer
+          description: Optional mirror-page context for the update permission check.
+        parentValues:
+          type: array
+          description: Parent-chain values that scope which records are renamed.
+          items:
+            $ref: "#/components/schemas/DependentParentValue"
+        oldValue:
+          type: string
+        newValue:
+          type: string
+
+    RenameFieldValueResult:
+      type: object
+      required: [updated]
+      properties:
+        updated:
+          type: integer
 
     # RELATIONS
     RelationType:

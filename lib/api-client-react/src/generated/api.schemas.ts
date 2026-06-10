@@ -1369,6 +1369,13 @@ export interface FormulaFieldConfig {
   expression?: string;
 }
 
+/**
+ * Per-field configuration for a dependent ("cascading") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.
+ */
+export interface DependencyFieldConfig {
+  dependsOnFieldKey?: string;
+}
+
 export type FieldAccess = typeof FieldAccess[keyof typeof FieldAccess];
 
 
@@ -1425,6 +1432,7 @@ export interface Field {
   userConfigJson?: UserFieldConfig;
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
+  dependencyConfigJson?: DependencyFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
   showColumnTotal?: boolean;
@@ -1452,6 +1460,7 @@ export interface FieldInput {
   userConfigJson?: UserFieldConfig;
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
+  dependencyConfigJson?: DependencyFieldConfig;
   isFilterable?: boolean;
   showInTable?: boolean;
   showColumnTotal?: boolean;
@@ -2005,6 +2014,31 @@ export interface FilterValuesQuery {
 
 export interface FilterValuesResult {
   values: string[];
+}
+
+export interface DependentParentValue {
+  field: string;
+  value: string;
+}
+
+export interface DependentValuesQuery {
+  /** Optional mirror-page context for the view permission check. */
+  pageId?: number;
+  /** The current values of this field's parent-chain (closest parent and its ancestors). Each narrows the option list. */
+  parentValues?: DependentParentValue[];
+}
+
+export interface RenameFieldValueInput {
+  /** Optional mirror-page context for the update permission check. */
+  pageId?: number;
+  /** Parent-chain values that scope which records are renamed. */
+  parentValues?: DependentParentValue[];
+  oldValue: string;
+  newValue: string;
+}
+
+export interface RenameFieldValueResult {
+  updated: number;
 }
 
 export type RelationType = typeof RelationType[keyof typeof RelationType];

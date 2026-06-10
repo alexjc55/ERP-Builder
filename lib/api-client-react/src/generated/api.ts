@@ -31,6 +31,7 @@ import type {
   DashboardWidgetData,
   DashboardWidgetInput,
   DeletedFile,
+  DependentValuesQuery,
   DriveFolder,
   Entity,
   EntityInput,
@@ -89,6 +90,8 @@ import type {
   Relation,
   RelationInput,
   RelationUpdate,
+  RenameFieldValueInput,
+  RenameFieldValueResult,
   ReorderInput,
   ResetPasswordInput,
   Role,
@@ -6732,6 +6735,154 @@ export const useGetEntityFilterValues = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getGetEntityFilterValuesMutationOptions(options));
+    }
+
+export const getGetFieldDependentValuesUrl = (entityId: number,
+    fieldId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/fields/${fieldId}/dependent-values`
+}
+
+/**
+ * @summary Distinct existing values of a dependent field, scoped by its parent-chain values
+ */
+export const getFieldDependentValues = async (entityId: number,
+    fieldId: number,
+    dependentValuesQuery: DependentValuesQuery, options?: RequestInit): Promise<FilterValuesResult> => {
+
+  return customFetch<FilterValuesResult>(getGetFieldDependentValuesUrl(entityId,fieldId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      dependentValuesQuery,)
+  }
+);}
+
+
+
+
+export const getGetFieldDependentValuesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getFieldDependentValues>>, TError,{entityId: number;fieldId: number;data: BodyType<DependentValuesQuery>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof getFieldDependentValues>>, TError,{entityId: number;fieldId: number;data: BodyType<DependentValuesQuery>}, TContext> => {
+
+const mutationKey = ['getFieldDependentValues'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getFieldDependentValues>>, {entityId: number;fieldId: number;data: BodyType<DependentValuesQuery>}> = (props) => {
+          const {entityId,fieldId,data} = props ?? {};
+
+          return  getFieldDependentValues(entityId,fieldId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GetFieldDependentValuesMutationResult = NonNullable<Awaited<ReturnType<typeof getFieldDependentValues>>>
+    export type GetFieldDependentValuesMutationBody = BodyType<DependentValuesQuery>
+    export type GetFieldDependentValuesMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Distinct existing values of a dependent field, scoped by its parent-chain values
+ */
+export const useGetFieldDependentValues = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getFieldDependentValues>>, TError,{entityId: number;fieldId: number;data: BodyType<DependentValuesQuery>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof getFieldDependentValues>>,
+        TError,
+        {entityId: number;fieldId: number;data: BodyType<DependentValuesQuery>},
+        TContext
+      > => {
+      return useMutation(getGetFieldDependentValuesMutationOptions(options));
+    }
+
+export const getRenameFieldValueUrl = (entityId: number,
+    fieldId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/fields/${fieldId}/rename-value`
+}
+
+/**
+ * @summary Rename (merge) a dependent field's value across records matching the parent scope
+ */
+export const renameFieldValue = async (entityId: number,
+    fieldId: number,
+    renameFieldValueInput: RenameFieldValueInput, options?: RequestInit): Promise<RenameFieldValueResult> => {
+
+  return customFetch<RenameFieldValueResult>(getRenameFieldValueUrl(entityId,fieldId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      renameFieldValueInput,)
+  }
+);}
+
+
+
+
+export const getRenameFieldValueMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof renameFieldValue>>, TError,{entityId: number;fieldId: number;data: BodyType<RenameFieldValueInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof renameFieldValue>>, TError,{entityId: number;fieldId: number;data: BodyType<RenameFieldValueInput>}, TContext> => {
+
+const mutationKey = ['renameFieldValue'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof renameFieldValue>>, {entityId: number;fieldId: number;data: BodyType<RenameFieldValueInput>}> = (props) => {
+          const {entityId,fieldId,data} = props ?? {};
+
+          return  renameFieldValue(entityId,fieldId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RenameFieldValueMutationResult = NonNullable<Awaited<ReturnType<typeof renameFieldValue>>>
+    export type RenameFieldValueMutationBody = BodyType<RenameFieldValueInput>
+    export type RenameFieldValueMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Rename (merge) a dependent field's value across records matching the parent scope
+ */
+export const useRenameFieldValue = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof renameFieldValue>>, TError,{entityId: number;fieldId: number;data: BodyType<RenameFieldValueInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof renameFieldValue>>,
+        TError,
+        {entityId: number;fieldId: number;data: BodyType<RenameFieldValueInput>},
+        TContext
+      > => {
+      return useMutation(getRenameFieldValueMutationOptions(options));
     }
 
 export const getListEntityRelationsUrl = (entityId: number,) => {

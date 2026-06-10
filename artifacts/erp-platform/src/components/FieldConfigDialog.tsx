@@ -161,6 +161,7 @@ export function FieldConfigDialog({
   const [allowCreateUser, setAllowCreateUser] = useState(false);
   const [formatRules, setFormatRules] = useState<FieldFormatRule[]>([]);
   const [formula, setFormula] = useState("");
+  const [dependsOnFieldKey, setDependsOnFieldKey] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Sync form state whenever the dialog opens for a given field (or create).
@@ -195,6 +196,7 @@ export function FieldConfigDialog({
       setAllowCreateUser(field.userConfigJson?.allowCreate === true);
       setFormatRules(Array.isArray(field.formatRulesJson) ? field.formatRulesJson : []);
       setFormula(field.formulaConfigJson?.expression ?? "");
+      setDependsOnFieldKey(field.dependencyConfigJson?.dependsOnFieldKey ?? "");
     } else {
       setFieldKey("");
       setNameJson({});
@@ -217,6 +219,7 @@ export function FieldConfigDialog({
       setAllowCreateUser(false);
       setFormatRules([]);
       setFormula("");
+      setDependsOnFieldKey("");
     }
   }, [open, field, nextSortOrder]);
 
@@ -282,6 +285,27 @@ export function FieldConfigDialog({
     .filter((f: Field) => f.id !== field?.id && f.fieldType !== "function")
     .map((f: Field) => ({ key: f.fieldKey, label: ml(f.nameJson) || f.fieldKey }));
 
+  // Candidate parent fields for a dependency: any OTHER field whose own
+  // dependency chain does NOT already lead back to this field (cycle guard).
+  const dependsByKey = new Map<string, string | undefined>(
+    existingFields.map((f: Field) => [f.fieldKey, f.dependencyConfigJson?.dependsOnFieldKey]),
+  );
+  const wouldCycle = (candidateKey: string): boolean => {
+    if (!field) return false;
+    const selfKey = field.fieldKey;
+    const seen = new Set<string>();
+    let cur: string | undefined = candidateKey;
+    while (cur && !seen.has(cur)) {
+      if (cur === selfKey) return true;
+      seen.add(cur);
+      cur = dependsByKey.get(cur);
+    }
+    return false;
+  };
+  const dependencyCandidates = existingFields.filter(
+    (f: Field) => f.id !== field?.id && f.fieldType !== "function" && !wouldCycle(f.fieldKey),
+  );
+
   const handleSubmit = () => {
     const options = optionsText
       .split("\n")
@@ -313,6 +337,7 @@ export function FieldConfigDialog({
       userConfigJson: fieldType === "user" ? { allowedRoleIds, allowCreate: allowCreateUser } : {},
       formatRulesJson: formatRules,
       formulaConfigJson: fieldType === "function" ? { expression: formula.trim() } : {},
+      dependencyConfigJson: fieldType === "text" && dependsOnFieldKey ? { dependsOnFieldKey } : {},
     };
     if (field) updateMutation.mutate({ id: field.id, data: payload });
     else createMutation.mutate({ entityId, data: payload });
@@ -488,6 +513,33 @@ export function FieldConfigDialog({
             )}
             {fieldType === "function" && (
               <FormulaEditor value={formula} onChange={setFormula} fields={formulaFields} />
+            )}
+            {fieldType === "text" && (
+              <div className="space-y-1.5">
+                <Label>{t("fields.dependsOn", "Зависит от поля")}</Label>
+                <Select
+                  value={dependsOnFieldKey || "__none__"}
+                  onValueChange={(v) => setDependsOnFieldKey(v === "__none__" ? "" : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("fields.dependsOnNone", "Не зависит")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">{t("fields.dependsOnNone", "Не зависит")}</SelectItem>
+                    {dependencyCandidates.map((f: Field) => (
+                      <SelectItem key={f.id} value={f.fieldKey}>
+                        {ml(f.nameJson) || f.fieldKey}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    "fields.dependsOnHint",
+                    "Значения этого поля будут подсказываться из существующих записей с тем же родительским значением.",
+                  )}
+                </p>
+              </div>
             )}
             {fieldType !== "function" && (
               <div className="space-y-1.5">
