@@ -25,7 +25,7 @@ export type FileFieldConfig = { allowedSources?: FileSource[]; driveFolderId?: s
  * Per-field configuration for a `user`-type field. `allowedRoleIds` restricts the
  * selectable users to those roles. Empty/unset means any user may be selected.
  */
-export type UserFieldConfig = { allowedRoleIds?: number[] };
+export type UserFieldConfig = { allowedRoleIds?: number[]; allowCreate?: boolean };
 
 /** Comparison used by a conditional-formatting rule. */
 export type FormatOperator =

@@ -4162,12 +4162,16 @@ components:
       description: >-
         Per-field configuration for a `user`-type field. `allowedRoleIds`
         restricts selectable users to those roles. Empty or unset means any
-        user may be selected.
+        user may be selected. `allowCreate` lets a user be created inline from
+        the value picker, with the new account's role limited to
+        `allowedRoleIds`.
       properties:
         allowedRoleIds:
           type: array
           items:
             type: integer
+        allowCreate:
+          type: boolean
 
     Field:
       type: object

@@ -1749,8 +1749,9 @@ export const ListEntityFieldsResponseItem = zod.object({
   "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.')
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "userConfigJson": zod.object({
-  "allowedRoleIds": zod.array(zod.number()).optional()
-}).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected.'),
+  "allowedRoleIds": zod.array(zod.number()).optional(),
+  "allowCreate": zod.boolean().optional()
+}).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected. `allowCreate` lets a user be created inline from the value picker, with the new account\'s role limited to `allowedRoleIds`.'),
   "formatRulesJson": zod.array(zod.object({
   "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
   "value": zod.string().optional(),
@@ -1809,8 +1810,9 @@ export const CreateEntityFieldBody = zod.object({
   "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.')
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "userConfigJson": zod.object({
-  "allowedRoleIds": zod.array(zod.number()).optional()
-}).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected.'),
+  "allowedRoleIds": zod.array(zod.number()).optional(),
+  "allowCreate": zod.boolean().optional()
+}).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected. `allowCreate` lets a user be created inline from the value picker, with the new account\'s role limited to `allowedRoleIds`.'),
   "formatRulesJson": zod.array(zod.object({
   "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
   "value": zod.string().optional(),
@@ -1862,8 +1864,9 @@ export const GetFieldResponse = zod.object({
   "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.')
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "userConfigJson": zod.object({
-  "allowedRoleIds": zod.array(zod.number()).optional()
-}).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected.'),
+  "allowedRoleIds": zod.array(zod.number()).optional(),
+  "allowCreate": zod.boolean().optional()
+}).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected. `allowCreate` lets a user be created inline from the value picker, with the new account\'s role limited to `allowedRoleIds`.'),
   "formatRulesJson": zod.array(zod.object({
   "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
   "value": zod.string().optional(),
@@ -1915,8 +1918,9 @@ export const UpdateFieldBody = zod.object({
   "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.')
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "userConfigJson": zod.object({
-  "allowedRoleIds": zod.array(zod.number()).optional()
-}).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected.'),
+  "allowedRoleIds": zod.array(zod.number()).optional(),
+  "allowCreate": zod.boolean().optional()
+}).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected. `allowCreate` lets a user be created inline from the value picker, with the new account\'s role limited to `allowedRoleIds`.'),
   "formatRulesJson": zod.array(zod.object({
   "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
   "value": zod.string().optional(),
@@ -1960,8 +1964,9 @@ export const UpdateFieldResponse = zod.object({
   "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.')
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "userConfigJson": zod.object({
-  "allowedRoleIds": zod.array(zod.number()).optional()
-}).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected.'),
+  "allowedRoleIds": zod.array(zod.number()).optional(),
+  "allowCreate": zod.boolean().optional()
+}).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected. `allowCreate` lets a user be created inline from the value picker, with the new account\'s role limited to `allowedRoleIds`.'),
   "formatRulesJson": zod.array(zod.object({
   "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
   "value": zod.string().optional(),

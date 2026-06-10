@@ -1364,10 +1364,11 @@ export interface FileFieldConfig {
 }
 
 /**
- * Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected.
+ * Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected. `allowCreate` lets a user be created inline from the value picker, with the new account's role limited to `allowedRoleIds`.
  */
 export interface UserFieldConfig {
   allowedRoleIds?: number[];
+  allowCreate?: boolean;
 }
 
 export interface Field {

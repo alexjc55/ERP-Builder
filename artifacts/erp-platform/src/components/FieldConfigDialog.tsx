@@ -158,6 +158,7 @@ export function FieldConfigDialog({
   const [allowedSources, setAllowedSources] = useState<FileSource[]>(["server"]);
   const [driveFolderId, setDriveFolderId] = useState<string>("");
   const [allowedRoleIds, setAllowedRoleIds] = useState<number[]>([]);
+  const [allowCreateUser, setAllowCreateUser] = useState(false);
   const [formatRules, setFormatRules] = useState<FieldFormatRule[]>([]);
   const [formula, setFormula] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -191,6 +192,7 @@ export function FieldConfigDialog({
       setAllowedRoleIds(
         Array.isArray(field.userConfigJson?.allowedRoleIds) ? field.userConfigJson!.allowedRoleIds : [],
       );
+      setAllowCreateUser(field.userConfigJson?.allowCreate === true);
       setFormatRules(Array.isArray(field.formatRulesJson) ? field.formatRulesJson : []);
       setFormula(field.formulaConfigJson?.expression ?? "");
     } else {
@@ -212,6 +214,7 @@ export function FieldConfigDialog({
       setAllowedSources(["server"]);
       setDriveFolderId("");
       setAllowedRoleIds([]);
+      setAllowCreateUser(false);
       setFormatRules([]);
       setFormula("");
     }
@@ -307,7 +310,7 @@ export function FieldConfigDialog({
               ...(allowedSources.includes("gdrive") && driveFolderId ? { driveFolderId } : {}),
             }
           : {},
-      userConfigJson: fieldType === "user" ? { allowedRoleIds } : {},
+      userConfigJson: fieldType === "user" ? { allowedRoleIds, allowCreate: allowCreateUser } : {},
       formatRulesJson: formatRules,
       formulaConfigJson: fieldType === "function" ? { expression: formula.trim() } : {},
     };
@@ -466,6 +469,21 @@ export function FieldConfigDialog({
                     })}
                   </div>
                 )}
+                <div className="flex items-start gap-2 pt-2 border-t border-slate-100 mt-2">
+                  <Switch
+                    id="fcd-user-allow-create"
+                    checked={allowCreateUser}
+                    onCheckedChange={setAllowCreateUser}
+                  />
+                  <div className="space-y-0.5">
+                    <Label htmlFor="fcd-user-allow-create">
+                      {t("fields.userAllowCreate", "Разрешить создание новых пользователей")}
+                    </Label>
+                    <p className="text-xs text-slate-400">
+                      {t("fields.userAllowCreateHint", "Добавляет в выпадающий список действие для создания нового пользователя. Роль создаваемого пользователя ограничена выбранными выше ролями.")}
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
             {fieldType === "function" && (

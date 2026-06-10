@@ -2238,6 +2238,18 @@
     "he": "הגבל את הבחירה למשתמשים עם תפקידים אלה. אם לא נבחר דבר — כל המשתמשים זמינים."
   },
   {
+    "key": "fields.userAllowCreate",
+    "ru": "Разрешить создание новых пользователей",
+    "en": "Allow creating new users",
+    "he": "אפשר יצירת משתמשים חדשים"
+  },
+  {
+    "key": "fields.userAllowCreateHint",
+    "ru": "Добавляет в выпадающий список действие для создания нового пользователя. Роль создаваемого пользователя ограничена выбранными выше ролями.",
+    "en": "Adds an action to the dropdown for creating a new user. The new user's role is limited to the roles selected above.",
+    "he": "מוסיף לרשימה הנפתחת פעולה ליצירת משתמש חדש. תפקיד המשתמש החדש מוגבל לתפקידים שנבחרו למעלה."
+  },
+  {
     "key": "fields.yes",
     "ru": "Да",
     "en": "Yes",
@@ -4194,6 +4206,12 @@
     "he": "שגיאת עדכון"
   },
   {
+    "key": "records.addNewUser",
+    "ru": "Добавить нового пользователя",
+    "en": "Add a new user",
+    "he": "הוסף משתמש חדש"
+  },
+  {
     "key": "records.userNotFound",
     "ru": "Пользователи не найдены",
     "en": "No users found",
@@ -5554,6 +5572,12 @@
     "ru": "Редактировать пользователя",
     "en": "Edit user",
     "he": "עריכת משתמש"
+  },
+  {
+    "key": "users.fieldsRequired",
+    "ru": "Заполните имя, фамилию и email",
+    "en": "Fill in first name, last name and email",
+    "he": "מלא שם פרטי, שם משפחה ואימייל"
   },
   {
     "key": "users.empty",

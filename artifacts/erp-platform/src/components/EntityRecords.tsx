@@ -121,11 +121,12 @@ import { useAuth } from "@/lib/auth";
 import { useML, useT } from "@/lib/i18n";
 import { useGoogleDriveReady } from "@/lib/googleDrive";
 import { FieldConfigDialog } from "@/components/FieldConfigDialog";
+import { CreateUserDialog } from "@/components/CreateUserDialog";
 import { PageFieldConfigDialog } from "@/components/PageFieldConfigDialog";
 import { formatFormulaResult, evaluateFormula } from "@/lib/formula";
 import { computeRowFormatting, type FormatField } from "@/lib/formatRules";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus } from "lucide-react";
 import { Link, useLocation, useSearch } from "wouter";
 import { Calendar } from "@/components/ui/calendar";
 import type { DateRange } from "react-day-picker";
@@ -2917,7 +2918,10 @@ function RelationLinkPicker({
   );
 }
 
-/** Searchable single-select for `user`-type field values (Command + Popover). */
+/** Searchable single-select for `user`-type field values (Command + Popover).
+ * When `allowCreate` is set (the field opted in via `userConfigJson.allowCreate`)
+ * the dropdown gains an "add new user" action that opens a create-user dialog
+ * restricted to `allowedRoleIds`; the new user is selected on success. */
 function UserCombobox({
   options,
   value,
@@ -2927,6 +2931,8 @@ function UserCombobox({
   autoOpen = false,
   onClose,
   disabled = false,
+  allowCreate = false,
+  allowedRoleIds,
 }: {
   options: UserOption[];
   value: number | null;
@@ -2936,59 +2942,108 @@ function UserCombobox({
   autoOpen?: boolean;
   onClose?: (committed: boolean) => void;
   disabled?: boolean;
+  allowCreate?: boolean;
+  allowedRoleIds?: number[];
 }) {
   const t = useT();
   const [open, setOpen] = useState(autoOpen);
+  const [createOpen, setCreateOpen] = useState(false);
   const committedRef = useRef(false);
+  const creatingRef = useRef(false);
+  const createdRef = useRef(false);
   const selected = options.find((u) => u.id === value) ?? null;
 
   return (
-    <Popover
-      open={open}
-      onOpenChange={(o) => {
-        setOpen(o);
-        if (!o) onClose?.(committedRef.current);
-      }}
-    >
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          role="combobox"
-          disabled={disabled}
-          className={cn("justify-between font-normal", triggerClassName)}
-        >
-          <span className={cn("truncate", !selected && "text-slate-400")}>
-            {selected ? selected.name : placeholder}
-          </span>
-          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-56 p-0">
-        <Command>
-          <CommandInput placeholder={t("records.userSearch", "Поиск пользователя...")} />
-          <CommandList>
-            <CommandEmpty>{t("records.userNotFound", "Пользователи не найдены")}</CommandEmpty>
-            <CommandGroup>
-              {options.map((u) => (
-                <CommandItem
-                  key={u.id}
-                  value={`${u.name} #${u.id}`}
-                  onSelect={() => {
-                    committedRef.current = true;
-                    onChange(u.id);
-                    setOpen(false);
-                  }}
-                >
-                  <Check className={cn("mr-2 h-4 w-4", value === u.id ? "opacity-100" : "opacity-0")} />
-                  <span className="truncate">{u.name}</span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <>
+      <Popover
+        open={open}
+        onOpenChange={(o) => {
+          setOpen(o);
+          if (!o) {
+            // When the popover closes only to open the create-user dialog, defer
+            // the commit/cancel decision to the dialog flow below.
+            if (creatingRef.current) return;
+            onClose?.(committedRef.current);
+          }
+        }}
+      >
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            role="combobox"
+            disabled={disabled}
+            className={cn("justify-between font-normal", triggerClassName)}
+          >
+            <span className={cn("truncate", !selected && "text-slate-400")}>
+              {selected ? selected.name : placeholder}
+            </span>
+            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-56 p-0">
+          <Command>
+            <CommandInput placeholder={t("records.userSearch", "Поиск пользователя...")} />
+            <CommandList>
+              <CommandEmpty>{t("records.userNotFound", "Пользователи не найдены")}</CommandEmpty>
+              <CommandGroup>
+                {options.map((u) => (
+                  <CommandItem
+                    key={u.id}
+                    value={`${u.name} #${u.id}`}
+                    onSelect={() => {
+                      committedRef.current = true;
+                      onChange(u.id);
+                      setOpen(false);
+                    }}
+                  >
+                    <Check className={cn("mr-2 h-4 w-4", value === u.id ? "opacity-100" : "opacity-0")} />
+                    <span className="truncate">{u.name}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+              {allowCreate && (
+                <CommandGroup className="border-t border-slate-100">
+                  <CommandItem
+                    value="__create_user__"
+                    onSelect={() => {
+                      creatingRef.current = true;
+                      setOpen(false);
+                      setCreateOpen(true);
+                    }}
+                    className="text-blue-600"
+                  >
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    {t("records.addNewUser", "Добавить нового пользователя")}
+                  </CommandItem>
+                </CommandGroup>
+              )}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      {allowCreate && (
+        <CreateUserDialog
+          open={createOpen}
+          onOpenChange={(o) => {
+            setCreateOpen(o);
+            if (!o) {
+              const created = createdRef.current;
+              createdRef.current = false;
+              creatingRef.current = false;
+              // Dialog dismissed without creating: cancel the pending inline edit.
+              if (!created) onClose?.(false);
+            }
+          }}
+          allowedRoleIds={allowedRoleIds}
+          onCreated={(u) => {
+            createdRef.current = true;
+            committedRef.current = true;
+            onChange(u.id);
+          }}
+        />
+      )}
+    </>
   );
 }
 
@@ -3043,6 +3098,8 @@ function InlineCellEditor({
         triggerClassName="h-8 w-full text-sm"
         autoOpen
         onClose={(committed) => { if (!committed && !committedRef.current) onCancel(); }}
+        allowCreate={field.userConfigJson?.allowCreate === true}
+        allowedRoleIds={field.userConfigJson?.allowedRoleIds}
       />
     );
   }
@@ -3167,6 +3224,8 @@ function FieldInput({
           placeholder={t("records.selectUser", "Выберите пользователя")}
           triggerClassName="w-full"
           disabled={disabled}
+          allowCreate={field.userConfigJson?.allowCreate === true}
+          allowedRoleIds={field.userConfigJson?.allowedRoleIds}
         />
       );
     }
