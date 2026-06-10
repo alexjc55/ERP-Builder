@@ -1,3 +1,5 @@
+import { useEffect, useMemo, useState } from "react";
+import { useGetSettings, getGetSettingsQueryKey } from "@workspace/api-client-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,6 +32,23 @@ export function MultilingualInput({
   multiline = false,
   required = false,
 }: MultilingualInputProps) {
+  // Lead with and open on the platform default language so the admin-configured
+  // default visibly drives multilingual content entry (primary language first).
+  const { data: settings } = useGetSettings({
+    query: { queryKey: getGetSettingsQueryKey() },
+  });
+  const defaultLang = (settings?.defaultLanguage as string) ?? "ru";
+
+  const orderedLangs = useMemo(
+    () => [...LANGS].sort((a, b) => Number(b.code === defaultLang) - Number(a.code === defaultLang)),
+    [defaultLang],
+  );
+
+  const [active, setActive] = useState(defaultLang);
+  useEffect(() => {
+    setActive(defaultLang);
+  }, [defaultLang]);
+
   const handleChange = (lang: string, text: string) => {
     onChange({ ...value, [lang]: text });
   };
@@ -42,9 +61,9 @@ export function MultilingualInput({
         {label}
         {required && <span className="text-red-500 ml-1">*</span>}
       </Label>
-      <Tabs defaultValue="ru" className="w-full">
+      <Tabs value={active} onValueChange={setActive} className="w-full">
         <TabsList className="h-8 bg-slate-100 p-0.5">
-          {LANGS.map((lang) => (
+          {orderedLangs.map((lang) => (
             <TabsTrigger
               key={lang.code}
               value={lang.code}

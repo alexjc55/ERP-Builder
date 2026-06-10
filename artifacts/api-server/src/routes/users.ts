@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
-import { db, usersTable, rolesTable, userRolesTable, loginHistoryTable, entityFieldsTable } from "@workspace/db";
+import { db, usersTable, rolesTable, userRolesTable, loginHistoryTable, entityFieldsTable, appSettingsTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin, getPermissions, effectiveRecordPerm, isPrivilegedRole } from "../middlewares/permissions";
@@ -26,6 +26,23 @@ const router: IRouter = Router();
 function parseId(raw: unknown): number {
   const id = parseInt(String(raw), 10);
   return id;
+}
+
+function dirForLang(lang: string): "ltr" | "rtl" {
+  return lang === "he" ? "rtl" : "ltr";
+}
+
+/**
+ * Platform default UI language (from the singleton app_settings row). New users
+ * inherit it so the admin-configured default actually takes effect for accounts
+ * that haven't picked their own language yet.
+ */
+async function getDefaultLang(): Promise<string> {
+  const [row] = await db
+    .select({ defaultLanguage: appSettingsTable.defaultLanguage })
+    .from(appSettingsTable)
+    .where(eq(appSettingsTable.id, 1));
+  return row?.defaultLanguage ?? "ru";
 }
 
 async function getUserWithRole(id: number) {
@@ -186,10 +203,12 @@ router.post("/users", requireAuth, requireAdmin("users"), async (req, res): Prom
     return;
   }
 
+  const defaultLang = await getDefaultLang();
+  const lang = rest.language ?? defaultLang;
   const user = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(usersTable)
-      .values({ ...rest, email: email.toLowerCase(), passwordHash })
+      .values({ ...rest, language: lang, direction: rest.direction ?? dirForLang(lang), email: email.toLowerCase(), passwordHash })
       .returning({ id: usersTable.id, roleId: usersTable.roleId });
     await tx.insert(userRolesTable).values(roleSet.map((rid) => ({ userId: created.id, roleId: rid })));
     return created;
@@ -293,10 +312,12 @@ router.post("/fields/:fieldId/users", requireAuth, async (req, res): Promise<voi
     return;
   }
 
+  const defaultLang = await getDefaultLang();
+  const lang = rest.language ?? defaultLang;
   const user = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(usersTable)
-      .values({ ...rest, roleId, email: email.toLowerCase(), passwordHash })
+      .values({ ...rest, language: lang, direction: rest.direction ?? dirForLang(lang), roleId, email: email.toLowerCase(), passwordHash })
       .returning({ id: usersTable.id, roleId: usersTable.roleId });
     await tx.insert(userRolesTable).values({ userId: created.id, roleId });
     return created;

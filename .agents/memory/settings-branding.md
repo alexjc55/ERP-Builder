@@ -21,8 +21,10 @@ The "Настройки" dropdown item opens `/settings` (auth-only ProtectedRou
 - **How to apply:** the sidebar references `/api/storage/branding-logo?v=<updatedAt>` (cache-bust). After a branding save, invalidate the `getSettings` query key so the shared layout refreshes.
 
 ## Platform default language
-- `app_settings.defaultLanguage` (ru/en/he) is the i18n fallback for the active language **before** the hardcoded `"ru"`: `override ?? user.language ?? settings.defaultLanguage ?? "ru"` (see `i18n.tsx`). It only affects users who have not picked their own language.
-- **Why:** admins need to set the org-wide UI language without touching per-user prefs. It is returned by GET (auth-only) so the I18nProvider can read it, and written by PUT (admin cap).
+- `app_settings.defaultLanguage` (ru/en/he) is the org-wide default UI language. Returned by GET /settings (auth-only) so any consumer can read it, written by PUT /settings (admin cap).
+- **CRITICAL constraint:** `users.language`/`users.direction` are `NOT NULL DEFAULT 'ru'/'ltr'`, so `user.language` is *never null* — the i18n active-language fallback `override ?? user.language ?? settings.defaultLanguage ?? "ru"` means defaultLanguage **never wins for an existing user**. Setting the default has NO effect on anyone already created. Don't expect the admin's own UI to switch when they change the default.
+- **Where the default actually takes effect:** (1) new users inherit it at creation (don't rely on the DB "ru" column default — every create path must resolve the platform default explicitly); (2) multilingual content entry leads with + opens on the default language (primary-language-first) — the visible signal that the default changed.
+- **Why:** users were confused that toggling the default did nothing visible; the dead i18n fallback was the cause. The two surfaces above make it observable and meaningful without overriding a user's explicit per-user choice (the language switcher).
 - **How to apply:** any new singleton-settings field must be returned by BOTH the GET and PUT response objects in `settings.ts` — they are duplicated with *different indentation* (GET 4-space, PUT 6-space), so a single `replace_all` will silently miss one. Verify both.
 
 Adding the `settings` cap followed the `admin-cap-stage-pattern.md` recipe (schema RoleAdminCaps + NO_ACCESS_PERMS, OpenAPI RoleAdminCaps, roles-editor label + local default-perms, but NO sidebar `/admin/*` route since settings lives at `/settings`).
