@@ -8,6 +8,7 @@ import {
   useListEntities,
   useListEntityFields,
   useListEntityStatuses,
+  getListEntityStatusesQueryKey,
   type Role,
   type RolePermissions,
   type RoleAdminCaps,
@@ -115,9 +116,23 @@ export default function RolesPage() {
   const [statusEntityIds, setStatusEntityIds] = useState<number[]>([]);
   const [addStatusEntityId, setAddStatusEntityId] = useState<string>("");
 
+  // Permission filter (top of page): "all" = no filter. Status depends on entity.
+  const [filterPageId, setFilterPageId] = useState<string>("all");
+  const [filterEntityId, setFilterEntityId] = useState<string>("all");
+  const [filterStatusId, setFilterStatusId] = useState<string>("all");
+
   const { data: roles = [], isLoading } = useListRoles();
   const { data: pages = [] } = useListPages();
   const { data: entities = [] } = useListEntities();
+
+  // Dependent status options for the filter — only fetched once an entity is chosen.
+  const filterEntityNum = filterEntityId === "all" ? 0 : Number(filterEntityId);
+  const { data: filterStatuses = [] } = useListEntityStatuses(filterEntityNum, {
+    query: {
+      enabled: filterEntityNum > 0,
+      queryKey: getListEntityStatusesQueryKey(filterEntityNum),
+    },
+  });
 
   // Content pages (everything not under /admin/*) are gated individually by id.
   const contentPages = pages.filter(
@@ -330,6 +345,43 @@ export default function RolesPage() {
 
   const scopedEntities = entities.filter((e: Entity) => getRecordPerm(e.id).view);
 
+  // ----- Permission filter helpers (superAdmin implicitly has full access) -----
+  const roleHasPageAccess = (role: Role, pageId: number) =>
+    role.permissionsJson?.superAdmin === true ||
+    (role.permissionsJson?.pageIds ?? []).includes(pageId);
+  const roleEntityPerm = (role: Role, entityId: number): RecordPermission | undefined =>
+    role.permissionsJson?.records?.[String(entityId)];
+  const roleHasEntityAccess = (role: Role, entityId: number) =>
+    role.permissionsJson?.superAdmin === true || roleEntityPerm(role, entityId)?.view === true;
+  const roleHasStatusAccess = (role: Role, entityId: number, statusId: number) => {
+    if (role.permissionsJson?.superAdmin === true) return true;
+    const rp = roleEntityPerm(role, entityId);
+    if (rp?.view !== true) return false;
+    return (
+      !(rp.hiddenStatusIds ?? []).includes(statusId) &&
+      !(rp.hiddenRowStatusIds ?? []).includes(statusId)
+    );
+  };
+
+  const filterActive = filterPageId !== "all" || filterEntityId !== "all";
+  const filteredRoles = roles.filter((role: Role) => {
+    if (filterPageId !== "all" && !roleHasPageAccess(role, Number(filterPageId))) return false;
+    if (filterEntityNum > 0) {
+      if (filterStatusId !== "all") {
+        if (!roleHasStatusAccess(role, filterEntityNum, Number(filterStatusId))) return false;
+      } else if (!roleHasEntityAccess(role, filterEntityNum)) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  const resetFilters = () => {
+    setFilterPageId("all");
+    setFilterEntityId("all");
+    setFilterStatusId("all");
+  };
+
   // Compact, read-only permission summary shown on each role card so admins can
   // see what a role grants without opening the editor. superAdmin cards already
   // show the "Полный доступ" badge, so we skip the detailed list for them.
@@ -354,8 +406,32 @@ export default function RolesPage() {
         const ent = entities.find((e: Entity) => e.id === Number(k));
         return { id: k, name: ent ? ml(ent.nameJson) || ent.entityKey : `#${k}`, rp };
       });
+    // Mirror-page record overrides (key `mirror:<pageId>`): rights granted only
+    // through a mirror page, not via the source entity directly.
+    const mirrorPerms = Object.entries(records)
+      .filter(
+        ([k, rp]) =>
+          k.startsWith("mirror:") &&
+          (rp.view === true || rp.create === true || rp.update === true || rp.delete === true),
+      )
+      .map(([k, rp]) => {
+        const pageId = Number(k.slice("mirror:".length));
+        const page = pages.find((pg: Page) => pg.id === pageId);
+        const ent = page ? entities.find((e: Entity) => e.id === page.mirrorEntityId) : undefined;
+        return {
+          id: k,
+          label: page ? ml(page.nameJson) || page.path || `#${pageId}` : `#${pageId}`,
+          entName: ent ? ml(ent.nameJson) || ent.entityKey : null,
+          rp,
+        };
+      });
 
-    if (caps.length === 0 && pageNames.length === 0 && entityPerms.length === 0) {
+    if (
+      caps.length === 0 &&
+      pageNames.length === 0 &&
+      entityPerms.length === 0 &&
+      mirrorPerms.length === 0
+    ) {
       return (
         <p className="text-xs text-slate-400 mt-3 pt-3 border-t border-slate-100">
           {t("roles.cardNoPerms", "Права не назначены")}
@@ -369,14 +445,46 @@ export default function RolesPage() {
         {entityPerms.length > 0 && (
           <div>
             <p className={sectionTitle}>{t("roles.cardData", "Данные")}</p>
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               {entityPerms.map(({ id, name, rp }) => (
+                <div key={id} className="space-y-0.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-xs text-slate-600 min-w-0 truncate">
+                      {name}
+                      {rp.scope === "own" && (
+                        <span className="text-slate-400"> · {t("roles.scopeOwnShort", "свои")}</span>
+                      )}
+                    </span>
+                    <div className="flex flex-wrap gap-1 justify-end shrink-0">
+                      {RECORD_ACTIONS.filter((a) => rp[a.key] === true).map((a) => (
+                        <span
+                          key={a.key}
+                          className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] leading-none"
+                        >
+                          {t(`roles.action.${a.key}`, a.label)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <EntityStatusChips
+                    entityId={Number(id)}
+                    hiddenStatusIds={rp.hiddenStatusIds ?? []}
+                    hiddenRowStatusIds={rp.hiddenRowStatusIds ?? []}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {mirrorPerms.length > 0 && (
+          <div>
+            <p className={sectionTitle}>{t("roles.cardMirror", "Зеркальные страницы")}</p>
+            <div className="space-y-1">
+              {mirrorPerms.map(({ id, label, entName, rp }) => (
                 <div key={id} className="flex items-start justify-between gap-2">
                   <span className="text-xs text-slate-600 min-w-0 truncate">
-                    {name}
-                    {rp.scope === "own" && (
-                      <span className="text-slate-400"> · {t("roles.scopeOwnShort", "свои")}</span>
-                    )}
+                    {label}
+                    {entName && <span className="text-slate-400"> · {entName}</span>}
                   </span>
                   <div className="flex flex-wrap gap-1 justify-end shrink-0">
                     {RECORD_ACTIONS.filter((a) => rp[a.key] === true).map((a) => (
@@ -440,6 +548,76 @@ export default function RolesPage() {
         </Button>
       </div>
 
+      {!isLoading && roles.length > 0 && (
+        <div className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+          <div className="space-y-1">
+            <label className="block text-[11px] font-medium uppercase tracking-wide text-slate-400">
+              {t("roles.filterByPage", "Страница")}
+            </label>
+            <Select value={filterPageId} onValueChange={setFilterPageId}>
+              <SelectTrigger className="w-52 h-9 bg-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("roles.filterAllPages", "Все страницы")}</SelectItem>
+                {contentPages.map((page: Page) => (
+                  <SelectItem key={page.id} value={String(page.id)}>
+                    {ml(page.nameJson) || page.path}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <label className="block text-[11px] font-medium uppercase tracking-wide text-slate-400">
+              {t("roles.filterByEntity", "Сущность")}
+            </label>
+            <Select
+              value={filterEntityId}
+              onValueChange={(v) => {
+                setFilterEntityId(v);
+                setFilterStatusId("all");
+              }}
+            >
+              <SelectTrigger className="w-52 h-9 bg-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("roles.filterAllEntities", "Все сущности")}</SelectItem>
+                {entities.map((entity: Entity) => (
+                  <SelectItem key={entity.id} value={String(entity.id)}>
+                    {ml(entity.nameJson) || entity.entityKey}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <label className="block text-[11px] font-medium uppercase tracking-wide text-slate-400">
+              {t("roles.filterByStatus", "Статус")}
+            </label>
+            <Select value={filterStatusId} onValueChange={setFilterStatusId} disabled={filterEntityNum === 0}>
+              <SelectTrigger className="w-52 h-9 bg-white">
+                <SelectValue placeholder={t("roles.filterStatusPlaceholder", "Сначала выберите сущность")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("roles.filterAllStatuses", "Все статусы")}</SelectItem>
+                {filterStatuses.map((s: Status) => (
+                  <SelectItem key={s.id} value={String(s.id)}>
+                    {ml(s.nameJson)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {filterActive && (
+            <Button variant="ghost" size="sm" className="h-9 text-slate-500" onClick={resetFilters}>
+              {t("roles.filterReset", "Сбросить")}
+            </Button>
+          )}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -453,9 +631,11 @@ export default function RolesPage() {
         </div>
       ) : roles.length === 0 ? (
         <div className="text-center py-16 text-slate-400">{t("roles.empty", "Роли не найдены")}</div>
+      ) : filteredRoles.length === 0 ? (
+        <div className="text-center py-16 text-slate-400">{t("roles.filterEmpty", "Нет ролей по выбранному фильтру")}</div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {roles.map((role) => (
+          {filteredRoles.map((role) => (
             <Card key={role.id} className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
               <CardContent className="p-5">
                 <div className="flex items-start justify-between gap-2">
@@ -774,6 +954,50 @@ export default function RolesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+// Card-summary helper: shows which statuses are hidden for a role on an entity.
+// Loads the entity's statuses lazily (only when there is something to show) so
+// the roles list doesn't fire a status query per entity unnecessarily.
+function EntityStatusChips({
+  entityId,
+  hiddenStatusIds,
+  hiddenRowStatusIds,
+}: {
+  entityId: number;
+  hiddenStatusIds: number[];
+  hiddenRowStatusIds: number[];
+}) {
+  const ml = useML();
+  const t = useT();
+  const hasRestrictions = hiddenStatusIds.length > 0 || hiddenRowStatusIds.length > 0;
+  const { data: statuses = [] } = useListEntityStatuses(entityId, {
+    query: {
+      enabled: hasRestrictions,
+      queryKey: getListEntityStatusesQueryKey(entityId),
+    },
+  });
+  if (!hasRestrictions) return null;
+  const nameOf = (id: number) => {
+    const s = statuses.find((st: Status) => st.id === id);
+    return s ? ml(s.nameJson) || String(id) : `#${id}`;
+  };
+  const hiddenNames = hiddenStatusIds.map(nameOf);
+  const hiddenRowNames = hiddenRowStatusIds.map(nameOf);
+  return (
+    <div className="space-y-0.5">
+      {hiddenNames.length > 0 && (
+        <p className="text-[10px] text-slate-400">
+          {t("roles.cardStatusHidden", "Статусы скрыты")}: {hiddenNames.join(", ")}
+        </p>
+      )}
+      {hiddenRowNames.length > 0 && (
+        <p className="text-[10px] text-slate-400">
+          {t("roles.cardRowsHidden", "Строки скрыты")}: {hiddenRowNames.join(", ")}
+        </p>
+      )}
     </div>
   );
 }

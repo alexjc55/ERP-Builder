@@ -4602,6 +4602,78 @@
     "he": "שלו"
   },
   {
+    "key": "roles.cardMirror",
+    "ru": "Зеркальные страницы",
+    "en": "Mirror pages",
+    "he": "דפי מראה"
+  },
+  {
+    "key": "roles.cardStatusHidden",
+    "ru": "Статусы скрыты",
+    "en": "Hidden statuses",
+    "he": "סטטוסים מוסתרים"
+  },
+  {
+    "key": "roles.cardRowsHidden",
+    "ru": "Строки скрыты",
+    "en": "Hidden rows",
+    "he": "שורות מוסתרות"
+  },
+  {
+    "key": "roles.filterByPage",
+    "ru": "Страница",
+    "en": "Page",
+    "he": "דף"
+  },
+  {
+    "key": "roles.filterAllPages",
+    "ru": "Все страницы",
+    "en": "All pages",
+    "he": "כל הדפים"
+  },
+  {
+    "key": "roles.filterByEntity",
+    "ru": "Сущность",
+    "en": "Entity",
+    "he": "ישות"
+  },
+  {
+    "key": "roles.filterAllEntities",
+    "ru": "Все сущности",
+    "en": "All entities",
+    "he": "כל הישויות"
+  },
+  {
+    "key": "roles.filterByStatus",
+    "ru": "Статус",
+    "en": "Status",
+    "he": "סטטוס"
+  },
+  {
+    "key": "roles.filterAllStatuses",
+    "ru": "Все статусы",
+    "en": "All statuses",
+    "he": "כל הסטטוסים"
+  },
+  {
+    "key": "roles.filterStatusPlaceholder",
+    "ru": "Сначала выберите сущность",
+    "en": "Select an entity first",
+    "he": "בחר ישות תחילה"
+  },
+  {
+    "key": "roles.filterReset",
+    "ru": "Сбросить",
+    "en": "Reset",
+    "he": "איפוס"
+  },
+  {
+    "key": "roles.filterEmpty",
+    "ru": "Нет ролей по выбранному фильтру",
+    "en": "No roles match the filter",
+    "he": "אין תפקידים התואמים את הסינון"
+  },
+  {
     "key": "roles.create",
     "ru": "Создать роль",
     "en": "Create role",
