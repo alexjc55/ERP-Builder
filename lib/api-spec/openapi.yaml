@@ -4381,6 +4381,10 @@ components:
           $ref: "#/components/schemas/FormulaFieldConfig"
         dependencyConfigJson:
           $ref: "#/components/schemas/DependencyFieldConfig"
+        isKey:
+          type: boolean
+        lockAfterCreate:
+          type: boolean
         isFilterable:
           type: boolean
         showInTable:
@@ -4439,6 +4443,12 @@ components:
           $ref: "#/components/schemas/FormulaFieldConfig"
         dependencyConfigJson:
           $ref: "#/components/schemas/DependencyFieldConfig"
+        isKey:
+          type: boolean
+          default: false
+        lockAfterCreate:
+          type: boolean
+          default: false
         isFilterable:
           type: boolean
           default: false
@@ -4511,6 +4521,10 @@ components:
           $ref: "#/components/schemas/FormulaFieldConfig"
         dependencyConfigJson:
           $ref: "#/components/schemas/DependencyFieldConfig"
+        isKey:
+          type: boolean
+        lockAfterCreate:
+          type: boolean
         isFilterable:
           type: boolean
         showInTable:

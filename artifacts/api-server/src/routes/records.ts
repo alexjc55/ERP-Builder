@@ -426,6 +426,70 @@ async function checkDependentValues(
   return null;
 }
 
+/** Arbitrary advisory-lock namespace for serializing unique-key checks per entity. */
+const UNIQUE_KEY_LOCK_NS = 415943;
+
+/** Thrown inside a write transaction when an isKey value collides; mapped to 409. */
+class UniqueKeyError extends Error {}
+
+/** A db handle that works for both the pool and a transaction. */
+type DbExecutor = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Uniqueness guard for `isKey` fields. MUST run inside the write transaction
+ * (under `pg_advisory_xact_lock`) so two concurrent writes can't both pass.
+ * Case-insensitive (trim+lower), global within the entity — NO archive/visibility
+ * filter, because a key must stay unique even against archived/hidden rows (else
+ * unarchiving could resurrect a duplicate). `excludeRecordId` skips the row being
+ * updated so it never collides with its own stored value.
+ */
+async function checkUniqueKeys(
+  exec: DbExecutor,
+  entityId: number,
+  keyFields: EntityField[],
+  values: Record<string, unknown>,
+  excludeRecordId?: number,
+): Promise<string | null> {
+  const norm = (s: string) => s.trim().toLowerCase();
+  for (const f of keyFields) {
+    const raw = values[f.fieldKey];
+    if (isEmpty(raw)) continue;
+    const v = typeof raw === "string" ? raw.trim() : String(raw);
+    const valueExpr = sql`lower(trim(${entityRecordsTable.valuesJson} ->> ${f.fieldKey}))`;
+    const clauses: SQL[] = [eq(entityRecordsTable.entityId, entityId), sql`${valueExpr} = ${norm(v)}`];
+    if (excludeRecordId != null) clauses.push(sql`${entityRecordsTable.id} <> ${excludeRecordId}`);
+    const [hit] = await exec
+      .select({ id: entityRecordsTable.id })
+      .from(entityRecordsTable)
+      .where(and(...clauses)!)
+      .limit(1);
+    if (hit) return `Поле «${fieldRuName(f)}»: значение «${v}» уже используется в другой записи`;
+  }
+  return null;
+}
+
+/**
+ * Immutability guard for `lockAfterCreate` fields, run on UPDATE only. Once a
+ * non-empty value has been stored, it can neither change nor be cleared. No
+ * superAdmin exception — durable integrity is the entire point of the flag.
+ */
+function checkImmutableFields(
+  fields: EntityField[],
+  newValues: Record<string, unknown>,
+  oldValues: Record<string, unknown>,
+): string | null {
+  for (const f of fields) {
+    if (!f.lockAfterCreate) continue;
+    const oldV = oldValues[f.fieldKey];
+    if (isEmpty(oldV)) continue; // not yet set → the first non-empty save is allowed
+    const newV = newValues[f.fieldKey];
+    if (JSON.stringify(newV ?? null) !== JSON.stringify(oldV ?? null)) {
+      return `Поле «${fieldRuName(f)}» нельзя изменить после создания записи`;
+    }
+  }
+  return null;
+}
+
 /** Returns true if the status belongs to the given entity. */
 async function statusBelongsToEntity(statusId: number, entityId: number): Promise<boolean> {
   const [status] = await db
@@ -1130,10 +1194,31 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
   }
 
   // Stamp when the record entered its status so the N-day auto-archive rule has a baseline.
-  const [record] = await db
-    .insert(entityRecordsTable)
-    .values({ entityId, valuesJson: result.values, statusId, statusChangedAt: new Date() })
-    .returning();
+  // isKey uniqueness is verified inside the write transaction under an advisory lock
+  // (per entity) so two concurrent creates can't both pass the check and insert a dup.
+  const keyFields = fields.filter((f) => f.isKey);
+  let record: typeof entityRecordsTable.$inferSelect;
+  try {
+    record = await db.transaction(async (tx) => {
+      if (keyFields.length > 0) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${UNIQUE_KEY_LOCK_NS}, ${entityId})`);
+        const dup = await checkUniqueKeys(tx, entityId, keyFields, result.values);
+        if (dup) throw new UniqueKeyError(dup);
+      }
+      const [rec] = await tx
+        .insert(entityRecordsTable)
+        .values({ entityId, valuesJson: result.values, statusId, statusChangedAt: new Date() })
+        .returning();
+      if (!rec) throw new Error("Failed to create record");
+      return rec;
+    });
+  } catch (err) {
+    if (err instanceof UniqueKeyError) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
+    throw err;
+  }
 
   // Audit: record the initial value of every set field (old = null) plus the
   // initial status; if nothing was set, leave a creation marker so the row's
@@ -1487,6 +1572,17 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
+  // Immutability (lockAfterCreate) is enforced on the FINAL values — after any
+  // workflow set_field actions have been applied to update.valuesJson — so a
+  // transition action can no more bypass the lock than a direct edit can.
+  if (update.valuesJson !== undefined) {
+    const immErr = checkImmutableFields(fields, update.valuesJson, existingValues);
+    if (immErr) {
+      res.status(422).json({ error: immErr });
+      return;
+    }
+  }
+
   const whereClause =
     guardFromStatusId != null
       ? and(
@@ -1494,11 +1590,31 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
           eq(entityRecordsTable.statusId, guardFromStatusId),
         )
       : eq(entityRecordsTable.id, params.data.id);
-  const [record] = await db
-    .update(entityRecordsTable)
-    .set(update)
-    .where(whereClause)
-    .returning();
+  // isKey uniqueness is verified inside the write transaction under an advisory lock
+  // (per entity), excluding this record, so concurrent edits can't both pass.
+  const keyFields = fields.filter((f) => f.isKey);
+  let record: typeof entityRecordsTable.$inferSelect | undefined;
+  try {
+    record = await db.transaction(async (tx) => {
+      if (keyFields.length > 0 && update.valuesJson !== undefined) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${UNIQUE_KEY_LOCK_NS}, ${existing.entityId})`);
+        const dup = await checkUniqueKeys(tx, existing.entityId, keyFields, update.valuesJson, params.data.id);
+        if (dup) throw new UniqueKeyError(dup);
+      }
+      const [rec] = await tx
+        .update(entityRecordsTable)
+        .set(update)
+        .where(whereClause)
+        .returning();
+      return rec;
+    });
+  } catch (err) {
+    if (err instanceof UniqueKeyError) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
+    throw err;
+  }
   if (!record) {
     res.status(409).json({ error: "Record status changed concurrently; please retry" });
     return;

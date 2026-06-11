@@ -167,6 +167,8 @@ export function FieldConfigDialog({
   const [formula, setFormula] = useState("");
   const [formulaDecimals, setFormulaDecimals] = useState("");
   const [dependsOnFieldKey, setDependsOnFieldKey] = useState("");
+  const [isKey, setIsKey] = useState(false);
+  const [lockAfterCreate, setLockAfterCreate] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Sync form state whenever the dialog opens for a given field (or create).
@@ -206,6 +208,8 @@ export function FieldConfigDialog({
         field.formulaConfigJson?.decimals != null ? String(field.formulaConfigJson.decimals) : "",
       );
       setDependsOnFieldKey(field.dependencyConfigJson?.dependsOnFieldKey ?? "");
+      setIsKey(field.isKey ?? false);
+      setLockAfterCreate(field.lockAfterCreate ?? false);
     } else {
       setFieldKey("");
       setNameJson({});
@@ -231,6 +235,8 @@ export function FieldConfigDialog({
       setFormula("");
       setFormulaDecimals("");
       setDependsOnFieldKey("");
+      setIsKey(false);
+      setLockAfterCreate(false);
     }
   }, [open, field, nextSortOrder]);
 
@@ -358,6 +364,8 @@ export function FieldConfigDialog({
             }
           : {},
       dependencyConfigJson: fieldType === "text" && dependsOnFieldKey ? { dependsOnFieldKey } : {},
+      isKey: fieldType !== "file" && fieldType !== "function" ? isKey : false,
+      lockAfterCreate: fieldType !== "file" && fieldType !== "function" ? lockAfterCreate : false,
     };
     if (field) updateMutation.mutate({ id: field.id, data: payload });
     else createMutation.mutate({ entityId, data: payload });
@@ -611,6 +619,18 @@ export function FieldConfigDialog({
                 <Switch checked={isPinned} onCheckedChange={setIsPinned} id="fcd-pinned" />
                 <Label htmlFor="fcd-pinned">{t("fields.pinColumn", "Закрепить при горизонтальной прокрутке")}</Label>
               </div>
+              {fieldType !== "file" && fieldType !== "function" && (
+                <div className="flex items-center gap-2">
+                  <Switch checked={isKey} onCheckedChange={setIsKey} id="fcd-is-key" />
+                  <Label htmlFor="fcd-is-key">{t("fields.isKey", "Ключевое поле (уникальное)")}</Label>
+                </div>
+              )}
+              {fieldType !== "file" && fieldType !== "function" && (
+                <div className="flex items-center gap-2">
+                  <Switch checked={lockAfterCreate} onCheckedChange={setLockAfterCreate} id="fcd-lock-after-create" />
+                  <Label htmlFor="fcd-lock-after-create">{t("fields.lockAfterCreate", "Запрет изменения после создания")}</Label>
+                </div>
+              )}
               {(fieldType === "number" || fieldType === "function") && (
                 <div className="flex items-center gap-2">
                   <Switch checked={showColumnTotal} onCheckedChange={setShowColumnTotal} id="fcd-show-column-total" />

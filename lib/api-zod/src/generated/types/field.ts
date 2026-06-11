@@ -31,6 +31,8 @@ export interface Field {
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
   dependencyConfigJson?: DependencyFieldConfig;
+  isKey?: boolean;
+  lockAfterCreate?: boolean;
   isFilterable?: boolean;
   showInTable?: boolean;
   isPinned?: boolean;

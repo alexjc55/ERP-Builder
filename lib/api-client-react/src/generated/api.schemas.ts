@@ -1471,6 +1471,8 @@ export interface Field {
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
   dependencyConfigJson?: DependencyFieldConfig;
+  isKey?: boolean;
+  lockAfterCreate?: boolean;
   isFilterable?: boolean;
   showInTable?: boolean;
   isPinned?: boolean;
@@ -1500,6 +1502,8 @@ export interface FieldInput {
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
   dependencyConfigJson?: DependencyFieldConfig;
+  isKey?: boolean;
+  lockAfterCreate?: boolean;
   isFilterable?: boolean;
   showInTable?: boolean;
   isPinned?: boolean;
@@ -1537,6 +1541,8 @@ export interface FieldUpdate {
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
   dependencyConfigJson?: DependencyFieldConfig;
+  isKey?: boolean;
+  lockAfterCreate?: boolean;
   isFilterable?: boolean;
   showInTable?: boolean;
   isPinned?: boolean;

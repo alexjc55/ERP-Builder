@@ -92,6 +92,12 @@ export const entityFieldsTable = pgTable(
     formatRulesJson: jsonb("format_rules_json").$type<FieldFormatRule[]>().notNull().default([]),
     formulaConfigJson: jsonb("formula_config_json").$type<FormulaFieldConfig>().notNull().default({}),
     dependencyConfigJson: jsonb("dependency_config_json").$type<DependencyFieldConfig>().notNull().default({}),
+    // Value must be unique within the entity (case-insensitive). Enforced server-side
+    // on record create/update; meaningless for file/function types (rejected at field CRUD).
+    isKey: boolean("is_key").notNull().default(false),
+    // Value is immutable once a non-empty value has been saved (hard server boundary,
+    // no superAdmin exception). Used e.g. to make an order's Project unchangeable.
+    lockAfterCreate: boolean("lock_after_create").notNull().default(false),
     isFilterable: boolean("is_filterable").notNull().default(false),
     showInTable: boolean("show_in_table").notNull().default(true),
     isPinned: boolean("is_pinned").notNull().default(false),

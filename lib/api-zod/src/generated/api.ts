@@ -1802,6 +1802,8 @@ export const ListEntityFieldsResponseItem = zod.object({
   "dependencyConfigJson": zod.object({
   "dependsOnFieldKey": zod.string().optional()
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
+  "isKey": zod.boolean().optional(),
+  "lockAfterCreate": zod.boolean().optional(),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
@@ -1827,6 +1829,8 @@ export const createEntityFieldBodyIsRequiredDefault = false;
 export const createEntityFieldBodyFormulaConfigJsonDecimalsMin = 0;
 export const createEntityFieldBodyFormulaConfigJsonDecimalsMax = 10;
 
+export const createEntityFieldBodyIsKeyDefault = false;
+export const createEntityFieldBodyLockAfterCreateDefault = false;
 export const createEntityFieldBodyIsFilterableDefault = false;
 export const createEntityFieldBodyShowInTableDefault = true;
 export const createEntityFieldBodyIsPinnedDefault = false;
@@ -1872,6 +1876,8 @@ export const CreateEntityFieldBody = zod.object({
   "dependencyConfigJson": zod.object({
   "dependsOnFieldKey": zod.string().optional()
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
+  "isKey": zod.boolean().default(createEntityFieldBodyIsKeyDefault),
+  "lockAfterCreate": zod.boolean().default(createEntityFieldBodyLockAfterCreateDefault),
   "isFilterable": zod.boolean().default(createEntityFieldBodyIsFilterableDefault),
   "showInTable": zod.boolean().default(createEntityFieldBodyShowInTableDefault),
   "isPinned": zod.boolean().default(createEntityFieldBodyIsPinnedDefault),
@@ -1936,6 +1942,8 @@ export const GetFieldResponse = zod.object({
   "dependencyConfigJson": zod.object({
   "dependsOnFieldKey": zod.string().optional()
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
+  "isKey": zod.boolean().optional(),
+  "lockAfterCreate": zod.boolean().optional(),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
@@ -2000,6 +2008,8 @@ export const UpdateFieldBody = zod.object({
   "dependencyConfigJson": zod.object({
   "dependsOnFieldKey": zod.string().optional()
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
+  "isKey": zod.boolean().optional(),
+  "lockAfterCreate": zod.boolean().optional(),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
@@ -2056,6 +2066,8 @@ export const UpdateFieldResponse = zod.object({
   "dependencyConfigJson": zod.object({
   "dependsOnFieldKey": zod.string().optional()
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
+  "isKey": zod.boolean().optional(),
+  "lockAfterCreate": zod.boolean().optional(),
   "isFilterable": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),

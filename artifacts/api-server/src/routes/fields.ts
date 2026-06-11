@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, entityFieldsTable, entitiesTable } from "@workspace/db";
-import { eq, asc, and, ne, inArray } from "drizzle-orm";
+import { db, entityFieldsTable, entitiesTable, entityRecordsTable } from "@workspace/db";
+import { eq, asc, and, ne, inArray, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
 import {
@@ -123,6 +123,13 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
 
   if (parsed.data.fieldType === "select" && (!parsed.data.optionsJson || parsed.data.optionsJson.length === 0)) {
     res.status(400).json({ error: "Select fields require at least one option" });
+    return;
+  }
+
+  // isKey/lockAfterCreate operate on the stored scalar value; they are meaningless
+  // for file (object) and function (computed, never stored) fields.
+  if ((parsed.data.isKey || parsed.data.lockAfterCreate) && (parsed.data.fieldType === "file" || parsed.data.fieldType === "function")) {
+    res.status(400).json({ error: "Ключевое поле и запрет изменения недоступны для полей типа «файл» и «функция»" });
     return;
   }
 
@@ -274,6 +281,50 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
     }
   }
 
+  // isKey/lockAfterCreate are only valid for stored-scalar field types.
+  const nextIsKey = body.isKey ?? current.isKey;
+  const nextLock = body.lockAfterCreate ?? current.lockAfterCreate;
+  if ((nextIsKey || nextLock) && (nextType === "file" || nextType === "function")) {
+    res.status(400).json({ error: "Ключевое поле и запрет изменения недоступны для полей типа «файл» и «функция»" });
+    return;
+  }
+
+  // Renaming the fieldKey and enabling uniqueness in one request is ambiguous:
+  // existing record values are still stored under the OLD key, so a scan can't
+  // unambiguously reflect the effective final state. Require these as two steps.
+  if (
+    body.isKey === true &&
+    !current.isKey &&
+    body.fieldKey != null &&
+    body.fieldKey.trim() !== current.fieldKey
+  ) {
+    res.status(400).json({
+      error: "Нельзя одновременно переименовать ключ поля и включить уникальность — выполните это в два отдельных действия",
+    });
+    return;
+  }
+
+  // Turning uniqueness ON requires the existing data to already be unique;
+  // otherwise we'd be unable to honor the constraint for current rows.
+  if (body.isKey === true && !current.isKey) {
+    const dups = await db
+      .select({ c: sql<number>`count(*)` })
+      .from(entityRecordsTable)
+      .where(
+        and(
+          eq(entityRecordsTable.entityId, current.entityId),
+          sql`length(trim(coalesce(${entityRecordsTable.valuesJson} ->> ${current.fieldKey}, ''))) > 0`,
+        ),
+      )
+      .groupBy(sql`lower(trim(${entityRecordsTable.valuesJson} ->> ${current.fieldKey}))`)
+      .having(sql`count(*) > 1`)
+      .limit(1);
+    if (dups.length > 0) {
+      res.status(409).json({ error: "Нельзя включить уникальность: уже есть записи с повторяющимися значениями этого поля" });
+      return;
+    }
+  }
+
   if (body.nameJson != null) updateData.nameJson = body.nameJson;
   if (body.descriptionJson != null) updateData.descriptionJson = body.descriptionJson;
   if (body.fieldType != null) updateData.fieldType = body.fieldType;
@@ -284,6 +335,8 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   if (body.formulaConfigJson != null)
     updateData.formulaConfigJson = clampFormulaDecimals(body.formulaConfigJson);
   if ("dependencyConfigJson" in body) updateData.dependencyConfigJson = body.dependencyConfigJson ?? {};
+  if (body.isKey != null) updateData.isKey = body.isKey;
+  if (body.lockAfterCreate != null) updateData.lockAfterCreate = body.lockAfterCreate;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
   if (body.isActive != null) updateData.isActive = body.isActive;
   if (body.permissionsJson != null) updateData.permissionsJson = body.permissionsJson;
