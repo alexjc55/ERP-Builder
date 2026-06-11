@@ -71,6 +71,7 @@ import { FieldFormatRulesEditor } from "@/components/FieldFormatRulesEditor";
 import { ColorPickerControl } from "@/components/ColorPickerControl";
 import { useToast } from "@/hooks/use-toast";
 import { FormulaEditor, type FormulaFieldRef } from "@/components/FormulaEditor";
+import { normalizeDecimals } from "@/lib/formula";
 import { useML, useT } from "@/lib/i18n";
 import { FIELD_KEY_RE, slugifyKey, uniqueKey } from "@/lib/keys";
 import { Loader2, Trash2 } from "lucide-react";
@@ -164,6 +165,7 @@ export function FieldConfigDialog({
   const [allowCreateUser, setAllowCreateUser] = useState(false);
   const [formatRules, setFormatRules] = useState<FieldFormatRule[]>([]);
   const [formula, setFormula] = useState("");
+  const [formulaDecimals, setFormulaDecimals] = useState("");
   const [dependsOnFieldKey, setDependsOnFieldKey] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -200,6 +202,9 @@ export function FieldConfigDialog({
       setAllowCreateUser(field.userConfigJson?.allowCreate === true);
       setFormatRules(Array.isArray(field.formatRulesJson) ? field.formatRulesJson : []);
       setFormula(field.formulaConfigJson?.expression ?? "");
+      setFormulaDecimals(
+        field.formulaConfigJson?.decimals != null ? String(field.formulaConfigJson.decimals) : "",
+      );
       setDependsOnFieldKey(field.dependencyConfigJson?.dependsOnFieldKey ?? "");
     } else {
       setFieldKey("");
@@ -224,6 +229,7 @@ export function FieldConfigDialog({
       setAllowCreateUser(false);
       setFormatRules([]);
       setFormula("");
+      setFormulaDecimals("");
       setDependsOnFieldKey("");
     }
   }, [open, field, nextSortOrder]);
@@ -342,7 +348,15 @@ export function FieldConfigDialog({
           : {},
       userConfigJson: fieldType === "user" ? { allowedRoleIds, allowCreate: allowCreateUser } : {},
       formatRulesJson: formatRules,
-      formulaConfigJson: fieldType === "function" ? { expression: formula.trim() } : {},
+      formulaConfigJson:
+        fieldType === "function"
+          ? {
+              expression: formula.trim(),
+              ...(normalizeDecimals(formulaDecimals) != null
+                ? { decimals: normalizeDecimals(formulaDecimals) as number }
+                : {}),
+            }
+          : {},
       dependencyConfigJson: fieldType === "text" && dependsOnFieldKey ? { dependsOnFieldKey } : {},
     };
     if (field) updateMutation.mutate({ id: field.id, data: payload });
@@ -518,7 +532,30 @@ export function FieldConfigDialog({
               </div>
             )}
             {fieldType === "function" && (
-              <FormulaEditor value={formula} onChange={setFormula} fields={formulaFields} />
+              <div className="space-y-3">
+                <FormulaEditor value={formula} onChange={setFormula} fields={formulaFields} />
+                <div className="space-y-1.5">
+                  <Label htmlFor="fcd-formula-decimals">
+                    {t("fields.formulaDecimals", "Знаков после запятой (округление)")}
+                  </Label>
+                  <Input
+                    id="fcd-formula-decimals"
+                    type="number"
+                    min={0}
+                    max={10}
+                    value={formulaDecimals}
+                    onChange={(e) => setFormulaDecimals(e.target.value)}
+                    placeholder={t("fields.formulaDecimalsNone", "Без округления")}
+                    className="w-48"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {t(
+                      "fields.formulaDecimalsHint",
+                      "Применяется только к числовому результату. Пусто — без округления.",
+                    )}
+                  </p>
+                </div>
+              </div>
             )}
             {fieldType === "text" && (
               <div className="space-y-1.5">

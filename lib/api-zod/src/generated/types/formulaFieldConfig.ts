@@ -7,8 +7,14 @@
  */
 
 /**
- * Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.
+ * Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.
  */
 export interface FormulaFieldConfig {
   expression?: string;
+  /**
+     * Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null/omitted means no rounding. Ignored for non-numeric (text/boolean) results.
+     * @minimum 0
+     * @maximum 10
+     */
+  decimals?: number | null;
 }

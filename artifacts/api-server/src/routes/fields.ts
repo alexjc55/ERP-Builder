@@ -22,6 +22,22 @@ function isUniqueViolation(err: unknown): boolean {
   return Boolean(err && typeof err === "object" && "code" in err && (err as { code?: string }).code === "23505");
 }
 
+/**
+ * Coerce a formula config's `decimals` into a bounded integer (0–10) or null.
+ * The generated Zod only enforces min/max (not integer-ness), so this is the
+ * server-side guard that keeps direct API callers from persisting fractions.
+ */
+function clampFormulaDecimals<T>(cfg: T): T {
+  if (cfg && typeof cfg === "object" && "decimals" in cfg) {
+    const raw = (cfg as { decimals?: unknown }).decimals;
+    if (raw == null) return cfg;
+    const n = Number(raw);
+    const d = Number.isFinite(n) ? Math.min(10, Math.max(0, Math.round(n))) : null;
+    return { ...(cfg as object), decimals: d } as T;
+  }
+  return cfg;
+}
+
 async function entityExists(entityId: number): Promise<boolean> {
   const [entity] = await db
     .select({ id: entitiesTable.id })
@@ -118,7 +134,12 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
   try {
     const [field] = await db
       .insert(entityFieldsTable)
-      .values({ ...parsed.data, fieldKey: key, entityId: params.data.entityId })
+      .values({
+        ...parsed.data,
+        formulaConfigJson: clampFormulaDecimals(parsed.data.formulaConfigJson),
+        fieldKey: key,
+        entityId: params.data.entityId,
+      })
       .returning();
     res.status(201).json(field);
   } catch (err) {
@@ -260,7 +281,8 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   if ("defaultValue" in body) updateData.defaultValue = body.defaultValue ?? null;
   if (body.optionsJson != null) updateData.optionsJson = body.optionsJson;
   if (body.formatRulesJson != null) updateData.formatRulesJson = body.formatRulesJson;
-  if (body.formulaConfigJson != null) updateData.formulaConfigJson = body.formulaConfigJson;
+  if (body.formulaConfigJson != null)
+    updateData.formulaConfigJson = clampFormulaDecimals(body.formulaConfigJson);
   if ("dependencyConfigJson" in body) updateData.dependencyConfigJson = body.dependencyConfigJson ?? {};
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
   if (body.isActive != null) updateData.isActive = body.isActive;

@@ -360,12 +360,38 @@ export function evaluateFormula(expression: string, values: Record<string, unkno
   return evalNode(ast, values);
 }
 
-/** Display helper: evaluate and render the result as a string, or "—"/error. */
-export function formatFormulaResult(expression: string, values: Record<string, unknown>): { text: string; error: boolean; bool?: boolean } {
+/**
+ * Normalize a user/stored "decimal places" value into a bounded integer (0–10),
+ * or null when absent/invalid. Used at every write/display boundary so the
+ * integer contract holds even when a value is persisted directly via the API
+ * (the generated Zod only enforces min/max, not integer-ness).
+ */
+export function normalizeDecimals(input: unknown): number | null {
+  if (input == null || input === "") return null;
+  const n = Number(input);
+  if (!Number.isFinite(n)) return null;
+  return Math.min(10, Math.max(0, Math.round(n)));
+}
+
+/**
+ * Display helper: evaluate and render the result as a string, or "—"/error.
+ * When `decimals` is provided and the result is a finite number, the value is
+ * rounded and shown with exactly that many decimal places. Non-numeric results
+ * (text/boolean) ignore `decimals`.
+ */
+export function formatFormulaResult(
+  expression: string,
+  values: Record<string, unknown>,
+  decimals?: number | null,
+): { text: string; error: boolean; bool?: boolean } {
   try {
     const v = evaluateFormula(expression, values);
     if (v == null || v === "") return { text: "—", error: false };
     if (typeof v === "boolean") return { text: v ? "Да" : "Нет", error: false, bool: v };
+    const d = normalizeDecimals(decimals);
+    if (typeof v === "number" && d != null && Number.isFinite(v)) {
+      return { text: v.toFixed(d), error: false };
+    }
     return { text: String(v), error: false };
   } catch {
     return { text: "Ошибка формулы", error: true };

@@ -54,6 +54,22 @@ const router: IRouter = Router();
 const FIELD_KEY_RE = /^[a-z][a-z0-9_]*$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/**
+ * Coerce a formula config's `decimals` into a bounded integer (0–10) or null.
+ * The generated Zod only enforces min/max (not integer-ness), so this is the
+ * server-side guard that keeps direct API callers from persisting fractions.
+ */
+function clampFormulaDecimals<T>(cfg: T): T {
+  if (cfg && typeof cfg === "object" && "decimals" in cfg) {
+    const raw = (cfg as { decimals?: unknown }).decimals;
+    if (raw == null) return cfg;
+    const n = Number(raw);
+    const d = Number.isFinite(n) ? Math.min(10, Math.max(0, Math.round(n))) : null;
+    return { ...(cfg as object), decimals: d } as T;
+  }
+  return cfg;
+}
+
 function isUniqueViolation(err: unknown): boolean {
   return Boolean(err && typeof err === "object" && "code" in err && (err as { code?: string }).code === "23505");
 }
@@ -324,7 +340,12 @@ router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (
   try {
     const [field] = await db
       .insert(pageFieldsTable)
-      .values({ ...parsed.data, fieldKey: key, pageId: params.data.pageId })
+      .values({
+        ...parsed.data,
+        formulaConfigJson: clampFormulaDecimals(parsed.data.formulaConfigJson),
+        fieldKey: key,
+        pageId: params.data.pageId,
+      })
       .returning();
     res.status(201).json(field);
   } catch (err) {
@@ -433,7 +454,8 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
   if ("defaultValue" in body) updateData.defaultValue = body.defaultValue ?? null;
   if (body.optionsJson != null) updateData.optionsJson = body.optionsJson;
   if (body.formatRulesJson != null) updateData.formatRulesJson = body.formatRulesJson;
-  if (body.formulaConfigJson != null) updateData.formulaConfigJson = body.formulaConfigJson;
+  if (body.formulaConfigJson != null)
+    updateData.formulaConfigJson = clampFormulaDecimals(body.formulaConfigJson);
   if ("relationConfigJson" in body) updateData.relationConfigJson = body.relationConfigJson ?? null;
   if ("permissionsJson" in body) updateData.permissionsJson = body.permissionsJson ?? null;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;

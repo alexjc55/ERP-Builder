@@ -49,6 +49,7 @@ import { MultilingualInput } from "@/components/MultilingualInput";
 import { FieldFormatRulesEditor } from "@/components/FieldFormatRulesEditor";
 import { ColorPickerControl } from "@/components/ColorPickerControl";
 import { FormulaEditor, type FormulaFieldRef } from "@/components/FormulaEditor";
+import { normalizeDecimals } from "@/lib/formula";
 import { useToast } from "@/hooks/use-toast";
 import { useML, useT } from "@/lib/i18n";
 import { FIELD_KEY_RE, slugifyKey, uniqueKey } from "@/lib/keys";
@@ -140,6 +141,7 @@ export function PageFieldConfigDialog({
   const [totalTextColor, setTotalTextColor] = useState("");
   const [formatRules, setFormatRules] = useState<FieldFormatRule[]>([]);
   const [formula, setFormula] = useState("");
+  const [formulaDecimals, setFormulaDecimals] = useState("");
   const [relationId, setRelationId] = useState<number | null>(null);
   const [relatedFieldKey, setRelatedFieldKey] = useState("");
   const [permissions, setPermissions] = useState<FieldPermissions>({});
@@ -166,6 +168,9 @@ export function PageFieldConfigDialog({
       setTotalTextColor(field.totalTextColor ?? "");
       setFormatRules(Array.isArray(field.formatRulesJson) ? field.formatRulesJson : []);
       setFormula(field.formulaConfigJson?.expression ?? "");
+      setFormulaDecimals(
+        field.formulaConfigJson?.decimals != null ? String(field.formulaConfigJson.decimals) : "",
+      );
       setRelationId(field.relationConfigJson?.relationId ?? null);
       setRelatedFieldKey(field.relationConfigJson?.relatedFieldKey ?? "");
       setPermissions(field.permissionsJson ? { ...field.permissionsJson } : {});
@@ -186,6 +191,7 @@ export function PageFieldConfigDialog({
       setTotalTextColor("");
       setFormatRules([]);
       setFormula("");
+      setFormulaDecimals("");
       setRelationId(null);
       setRelatedFieldKey("");
       setPermissions({});
@@ -286,7 +292,15 @@ export function PageFieldConfigDialog({
       totalFillColor: fieldType === "number" && showColumnTotal && totalFillColor ? totalFillColor : null,
       totalTextColor: fieldType === "number" && showColumnTotal && totalTextColor ? totalTextColor : null,
       formatRulesJson: formatRules,
-      formulaConfigJson: fieldType === "function" ? { expression: formula.trim() } : {},
+      formulaConfigJson:
+        fieldType === "function"
+          ? {
+              expression: formula.trim(),
+              ...(normalizeDecimals(formulaDecimals) != null
+                ? { decimals: normalizeDecimals(formulaDecimals) as number }
+                : {}),
+            }
+          : {},
       relationConfigJson:
         fieldType === "relation" ? { relationId, relatedFieldKey: relatedFieldKey || null } : {},
       permissionsJson: fieldType === "relation" ? permissions : {},
@@ -357,7 +371,30 @@ export function PageFieldConfigDialog({
               </div>
             )}
             {fieldType === "function" && (
-              <FormulaEditor value={formula} onChange={setFormula} fields={formulaFields} />
+              <div className="space-y-3">
+                <FormulaEditor value={formula} onChange={setFormula} fields={formulaFields} />
+                <div className="space-y-1.5">
+                  <Label htmlFor="pfcd-formula-decimals">
+                    {t("fields.formulaDecimals", "Знаков после запятой (округление)")}
+                  </Label>
+                  <Input
+                    id="pfcd-formula-decimals"
+                    type="number"
+                    min={0}
+                    max={10}
+                    value={formulaDecimals}
+                    onChange={(e) => setFormulaDecimals(e.target.value)}
+                    placeholder={t("fields.formulaDecimalsNone", "Без округления")}
+                    className="w-48"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {t(
+                      "fields.formulaDecimalsHint",
+                      "Применяется только к числовому результату. Пусто — без округления.",
+                    )}
+                  </p>
+                </div>
+              </div>
             )}
             {fieldType === "relation" && (
               <div className="rounded-md border border-slate-100 bg-slate-50/50 p-3 space-y-3">

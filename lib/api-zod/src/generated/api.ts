@@ -1756,6 +1756,11 @@ export const ListEntityFieldsParams = zod.object({
   "entityId": zod.coerce.number()
 })
 
+export const listEntityFieldsResponseFormulaConfigJsonDecimalsMin = 0;
+export const listEntityFieldsResponseFormulaConfigJsonDecimalsMax = 10;
+
+
+
 export const ListEntityFieldsResponseItem = zod.object({
   "id": zod.number(),
   "entityId": zod.number(),
@@ -1791,8 +1796,9 @@ export const ListEntityFieldsResponseItem = zod.object({
   "textColor": zod.string().optional()
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
   "formulaConfigJson": zod.object({
-  "expression": zod.string().optional()
-}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
+  "expression": zod.string().optional(),
+  "decimals": zod.number().min(listEntityFieldsResponseFormulaConfigJsonDecimalsMin).max(listEntityFieldsResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
+}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
   "dependencyConfigJson": zod.object({
   "dependsOnFieldKey": zod.string().optional()
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
@@ -1818,6 +1824,9 @@ export const CreateEntityFieldParams = zod.object({
 })
 
 export const createEntityFieldBodyIsRequiredDefault = false;
+export const createEntityFieldBodyFormulaConfigJsonDecimalsMin = 0;
+export const createEntityFieldBodyFormulaConfigJsonDecimalsMax = 10;
+
 export const createEntityFieldBodyIsFilterableDefault = false;
 export const createEntityFieldBodyShowInTableDefault = true;
 export const createEntityFieldBodyIsPinnedDefault = false;
@@ -1857,8 +1866,9 @@ export const CreateEntityFieldBody = zod.object({
   "textColor": zod.string().optional()
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
   "formulaConfigJson": zod.object({
-  "expression": zod.string().optional()
-}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
+  "expression": zod.string().optional(),
+  "decimals": zod.number().min(createEntityFieldBodyFormulaConfigJsonDecimalsMin).max(createEntityFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
+}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
   "dependencyConfigJson": zod.object({
   "dependsOnFieldKey": zod.string().optional()
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
@@ -1879,6 +1889,11 @@ export const CreateEntityFieldBody = zod.object({
 export const GetFieldParams = zod.object({
   "id": zod.coerce.number()
 })
+
+export const getFieldResponseFormulaConfigJsonDecimalsMin = 0;
+export const getFieldResponseFormulaConfigJsonDecimalsMax = 10;
+
+
 
 export const GetFieldResponse = zod.object({
   "id": zod.number(),
@@ -1915,8 +1930,9 @@ export const GetFieldResponse = zod.object({
   "textColor": zod.string().optional()
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
   "formulaConfigJson": zod.object({
-  "expression": zod.string().optional()
-}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
+  "expression": zod.string().optional(),
+  "decimals": zod.number().min(getFieldResponseFormulaConfigJsonDecimalsMin).max(getFieldResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
+}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
   "dependencyConfigJson": zod.object({
   "dependsOnFieldKey": zod.string().optional()
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
@@ -1939,6 +1955,11 @@ export const GetFieldResponse = zod.object({
 export const UpdateFieldParams = zod.object({
   "id": zod.coerce.number()
 })
+
+export const updateFieldBodyFormulaConfigJsonDecimalsMin = 0;
+export const updateFieldBodyFormulaConfigJsonDecimalsMax = 10;
+
+
 
 export const UpdateFieldBody = zod.object({
   "fieldKey": zod.string().optional(),
@@ -1973,8 +1994,9 @@ export const UpdateFieldBody = zod.object({
   "textColor": zod.string().optional()
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
   "formulaConfigJson": zod.object({
-  "expression": zod.string().optional()
-}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
+  "expression": zod.string().optional(),
+  "decimals": zod.number().min(updateFieldBodyFormulaConfigJsonDecimalsMin).max(updateFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
+}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
   "dependencyConfigJson": zod.object({
   "dependsOnFieldKey": zod.string().optional()
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
@@ -1987,6 +2009,11 @@ export const UpdateFieldBody = zod.object({
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
+
+export const updateFieldResponseFormulaConfigJsonDecimalsMin = 0;
+export const updateFieldResponseFormulaConfigJsonDecimalsMax = 10;
+
+
 
 export const UpdateFieldResponse = zod.object({
   "id": zod.number(),
@@ -2023,8 +2050,9 @@ export const UpdateFieldResponse = zod.object({
   "textColor": zod.string().optional()
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
   "formulaConfigJson": zod.object({
-  "expression": zod.string().optional()
-}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
+  "expression": zod.string().optional(),
+  "decimals": zod.number().min(updateFieldResponseFormulaConfigJsonDecimalsMin).max(updateFieldResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
+}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
   "dependencyConfigJson": zod.object({
   "dependsOnFieldKey": zod.string().optional()
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
@@ -2078,6 +2106,11 @@ export const ListPageFieldsParams = zod.object({
   "pageId": zod.coerce.number()
 })
 
+export const listPageFieldsResponseFormulaConfigJsonDecimalsMin = 0;
+export const listPageFieldsResponseFormulaConfigJsonDecimalsMax = 10;
+
+
+
 export const ListPageFieldsResponseItem = zod.object({
   "id": zod.number(),
   "pageId": zod.number(),
@@ -2104,8 +2137,9 @@ export const ListPageFieldsResponseItem = zod.object({
   "textColor": zod.string().optional()
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
   "formulaConfigJson": zod.object({
-  "expression": zod.string().optional()
-}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
+  "expression": zod.string().optional(),
+  "decimals": zod.number().min(listPageFieldsResponseFormulaConfigJsonDecimalsMin).max(listPageFieldsResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
+}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish()
@@ -2132,6 +2166,9 @@ export const CreatePageFieldParams = zod.object({
 })
 
 export const createPageFieldBodyIsRequiredDefault = false;
+export const createPageFieldBodyFormulaConfigJsonDecimalsMin = 0;
+export const createPageFieldBodyFormulaConfigJsonDecimalsMax = 10;
+
 export const createPageFieldBodyShowInTableDefault = true;
 export const createPageFieldBodyIsPinnedDefault = false;
 export const createPageFieldBodyShowColumnTotalDefault = false;
@@ -2161,8 +2198,9 @@ export const CreatePageFieldBody = zod.object({
   "textColor": zod.string().optional()
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
   "formulaConfigJson": zod.object({
-  "expression": zod.string().optional()
-}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
+  "expression": zod.string().optional(),
+  "decimals": zod.number().min(createPageFieldBodyFormulaConfigJsonDecimalsMin).max(createPageFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
+}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish()
@@ -2184,6 +2222,11 @@ export const CreatePageFieldBody = zod.object({
 export const UpdatePageFieldParams = zod.object({
   "id": zod.coerce.number()
 })
+
+export const updatePageFieldBodyFormulaConfigJsonDecimalsMin = 0;
+export const updatePageFieldBodyFormulaConfigJsonDecimalsMax = 10;
+
+
 
 export const UpdatePageFieldBody = zod.object({
   "fieldKey": zod.string().optional(),
@@ -2209,8 +2252,9 @@ export const UpdatePageFieldBody = zod.object({
   "textColor": zod.string().optional()
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
   "formulaConfigJson": zod.object({
-  "expression": zod.string().optional()
-}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
+  "expression": zod.string().optional(),
+  "decimals": zod.number().min(updatePageFieldBodyFormulaConfigJsonDecimalsMin).max(updatePageFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
+}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish()
@@ -2224,6 +2268,11 @@ export const UpdatePageFieldBody = zod.object({
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
+
+export const updatePageFieldResponseFormulaConfigJsonDecimalsMin = 0;
+export const updatePageFieldResponseFormulaConfigJsonDecimalsMax = 10;
+
+
 
 export const UpdatePageFieldResponse = zod.object({
   "id": zod.number(),
@@ -2251,8 +2300,9 @@ export const UpdatePageFieldResponse = zod.object({
   "textColor": zod.string().optional()
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
   "formulaConfigJson": zod.object({
-  "expression": zod.string().optional()
-}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored.'),
+  "expression": zod.string().optional(),
+  "decimals": zod.number().min(updatePageFieldResponseFormulaConfigJsonDecimalsMin).max(updatePageFieldResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
+}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish()

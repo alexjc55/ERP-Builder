@@ -2381,7 +2381,7 @@ export function EntityRecords({
                             );
                           }
                           if (isFunction) {
-                            const computed = formatFormulaResult(f.formulaConfigJson?.expression ?? "", allValues);
+                            const computed = formatFormulaResult(f.formulaConfigJson?.expression ?? "", allValues, f.formulaConfigJson?.decimals);
                             return (
                               <td key={f.id} className="px-4 py-3 max-w-[240px] truncate" style={{ ...pinStyle(`f:${f.id}`, formatting.rowColor || "#ffffff"), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
                                 {computed.error ? (
@@ -2473,7 +2473,7 @@ export function EntityRecords({
                             );
                           }
                           if (isFunction) {
-                            const computed = formatFormulaResult(pf.formulaConfigJson?.expression ?? "", allValues);
+                            const computed = formatFormulaResult(pf.formulaConfigJson?.expression ?? "", allValues, pf.formulaConfigJson?.decimals);
                             return (
                               <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px] truncate" style={{ ...pinStyle(`pf:${pf.id}`, formatting.rowColor || "#ffffff"), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
                                 {computed.error ? (

@@ -2082,6 +2082,24 @@
     "he": "הצג סכום עמודה"
   },
   {
+    "key": "fields.formulaDecimals",
+    "ru": "Знаков после запятой (округление)",
+    "en": "Decimal places (rounding)",
+    "he": "ספרות אחרי הנקודה (עיגול)"
+  },
+  {
+    "key": "fields.formulaDecimalsNone",
+    "ru": "Без округления",
+    "en": "No rounding",
+    "he": "ללא עיגול"
+  },
+  {
+    "key": "fields.formulaDecimalsHint",
+    "ru": "Применяется только к числовому результату. Пусто — без округления.",
+    "en": "Applies only to a numeric result. Empty means no rounding.",
+    "he": "חל רק על תוצאה מספרית. ריק — ללא עיגול."
+  },
+  {
     "key": "fields.showInTable",
     "ru": "Показывать в таблице",
     "en": "Show in table",
