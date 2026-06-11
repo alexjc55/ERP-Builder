@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable } from "@workspace/db";
+import { db, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable, pageFieldsTable, pageRecordValuesTable } from "@workspace/db";
 import { eq, asc, desc, and, or, sql, inArray, type SQL } from "drizzle-orm";
 import { evaluateFormula, normalizeDecimals } from "@workspace/formula";
 import type { Request } from "express";
@@ -14,6 +14,7 @@ import {
   effectiveRecordPerm,
   recordOwnedBy,
   resolveFieldAccess,
+  mostPermissiveFieldPerm,
 } from "../middlewares/permissions";
 import {
   ListEntityRecordsParams,
@@ -647,14 +648,14 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       if (!expr) continue;
       let sum = 0;
       for (const r of allRows) {
-        // Strip hidden field keys before evaluating so the aggregate can never
-        // leak (even indirectly) values the caller is not allowed to see, and so
-        // the total stays consistent with the per-row results the client computes
-        // over the already hidden-stripped records.
-        const vals = stripHidden({ valuesJson: r.values ?? {} }, hidden).valuesJson as Record<
-          string,
-          unknown
-        >;
+        // Evaluate over the RAW stored values, INCLUDING fields hidden for this
+        // viewer. This is a deliberate product decision: a column total must be
+        // the true total. Silently dropping hidden-field contributions would
+        // produce an under-count that the viewer cannot detect — unacceptable for
+        // financial data where a wrong sum has serious consequences. The trade-off
+        // is that the aggregate may reflect data the viewer cannot see per-row;
+        // correctness of the total is prioritized over that aggregate confidentiality.
+        const vals = (r.values as Record<string, unknown> | null) ?? {};
         try {
           const out = evaluateFormula(expr, vals);
           if (typeof out === "number" && Number.isFinite(out)) sum += out;
@@ -664,6 +665,84 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       }
       const d = normalizeDecimals(cfg?.decimals);
       numericTotals[f.fieldKey] = d != null ? Number(sum.toFixed(d)) : sum;
+    }
+  }
+
+  // Page-local column totals (number + formula) when this table is rendered
+  // inside a page. Page-local fields live in `page_fields` and their values in
+  // `page_record_values` (keyed by pageId+recordId), separate from the entity's
+  // own data — so the entity totals above never see them. A page formula field
+  // references the MERGED row ({...entityValues, ...pageValues}); we reproduce
+  // that merge here. Totals are gated by per-viewer page-field visibility (a
+  // field hidden for the viewer never gets a total), but — like the entity
+  // formula totals above — evaluate over the full underlying values for
+  // correctness. Mirror pages are covered because `where` is built over the
+  // page's effective (mirrored) entity.
+  const totalsPageId = body.data.pageId;
+  if (totalsPageId != null) {
+    const roleIds = await getUserRoleIds(req);
+    const pageFieldRows = await db
+      .select()
+      .from(pageFieldsTable)
+      .where(
+        and(
+          eq(pageFieldsTable.pageId, totalsPageId),
+          eq(pageFieldsTable.isActive, true),
+          eq(pageFieldsTable.showColumnTotal, true),
+        ),
+      );
+    const pageTotalFields = pageFieldRows.filter(
+      (pf) =>
+        (pf.fieldType === "number" || pf.fieldType === "function") &&
+        mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view") !== "hidden",
+    );
+    if (pageTotalFields.length > 0) {
+      const recRows = await db
+        .select({ id: entityRecordsTable.id, values: entityRecordsTable.valuesJson })
+        .from(entityRecordsTable)
+        .where(where);
+      const ids = recRows.map((r) => r.id);
+      const pvRows =
+        ids.length > 0
+          ? await db
+              .select({ recordId: pageRecordValuesTable.recordId, values: pageRecordValuesTable.valuesJson })
+              .from(pageRecordValuesTable)
+              .where(and(eq(pageRecordValuesTable.pageId, totalsPageId), inArray(pageRecordValuesTable.recordId, ids)))
+          : [];
+      const pvByRecord = new Map<number, Record<string, unknown>>();
+      for (const r of pvRows) pvByRecord.set(r.recordId, (r.values as Record<string, unknown> | null) ?? {});
+      numericTotals = numericTotals ?? {};
+      for (const pf of pageTotalFields) {
+        // Namespace page totals by the stable page-field id (`pf:<id>`) so they
+        // can never collide with an entity field that happens to share the same
+        // fieldKey — a flat key would silently overwrite one of the two totals.
+        const totalKey = `pf:${pf.id}`;
+        if (pf.fieldType === "number") {
+          let sum = 0;
+          for (const r of recRows) {
+            const raw = (pvByRecord.get(r.id) ?? {})[pf.fieldKey];
+            if (typeof raw === "number" && Number.isFinite(raw)) sum += raw;
+            else if (typeof raw === "string" && raw.trim() !== "" && Number.isFinite(Number(raw))) sum += Number(raw);
+          }
+          numericTotals[totalKey] = sum;
+        } else {
+          const cfg = pf.formulaConfigJson as { expression?: string; decimals?: number | null } | null;
+          const expr = (cfg?.expression ?? "").trim();
+          if (!expr) continue;
+          let sum = 0;
+          for (const r of recRows) {
+            const merged = { ...((r.values as Record<string, unknown> | null) ?? {}), ...(pvByRecord.get(r.id) ?? {}) };
+            try {
+              const out = evaluateFormula(expr, merged);
+              if (typeof out === "number" && Number.isFinite(out)) sum += out;
+            } catch {
+              // Skip rows whose formula fails to parse/evaluate.
+            }
+          }
+          const d = normalizeDecimals(cfg?.decimals);
+          numericTotals[totalKey] = d != null ? Number(sum.toFixed(d)) : sum;
+        }
+      }
     }
   }
 

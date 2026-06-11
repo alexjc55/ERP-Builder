@@ -108,27 +108,37 @@ EXACTLY the keys the evaluator can resolve, no more:
 **Why:** suggesting a key the evaluator can't resolve (e.g. a function field, or
 a source key shadowed by a page-local one) produces silently-wrong formulas.
 
-## Server-side formula aggregates must re-apply the field-hidden strip
+## Column totals evaluate over RAW values (including hidden fields) — by product decision
 
 A `function`/formula field can opt into a column total (`showColumnTotal`), summed
-server-side over the FULL filtered set in `records/query`. That aggregate evaluates
-the formula per row, so it MUST run over hidden-stripped values — apply the same
-`stripHidden(record, hidden)` used on the returned per-row records before calling
-the evaluator.
+server-side over the FULL filtered set in `records/query`. The formula total
+evaluates per row over the **raw** `valuesJson`, INCLUDING fields hidden for the
+viewer. Do NOT strip hidden fields before summing.
 
-**Why:** the records response strips hidden fields per row, and the client computes
-each row's formula over that stripped map. If the server total instead evaluates
-over the raw `valuesJson`, a visible formula referencing a hidden field would (a)
-leak aggregated hidden data through the total and (b) diverge from the per-row
-results the user actually sees. Any new server-side aggregate over formulas/raw
-values must re-apply the field boundary, not trust raw `valuesJson`.
+**Why:** a column total must be the *true* total. Silently dropping a hidden
+field's contribution produces an under-count the viewer cannot detect — explicitly
+rejected by the product owner as dangerous for financial data (a wrong sum has
+serious consequences). The accepted trade-off: the aggregate may reflect data the
+viewer cannot see per-row. Correctness of the total beats aggregate confidentiality
+here. (This reverses an earlier strip-hidden decision — do not reintroduce the strip.)
 
-**How to apply:** the pure evaluator now lives in `@workspace/formula` (shared by
-erp-platform client and api-server) precisely so server totals and client per-row
-results use identical logic — keep them fed identical (hidden-stripped) inputs.
+**How to apply:** the pure evaluator lives in `@workspace/formula` (shared by
+erp-platform client and api-server). Per-row results the client shows are still
+computed over hidden-stripped maps (the hard per-row boundary stays), so per-row
+values may not sum to the displayed total — that inconsistency is intended.
 
-**Known limitation:** page-local (mirror-page) field totals are NOT computed —
-`records/query` totals only read entity `fields`/`valuesJson`, never the separate
-page-values table. The `showColumnTotal` toggle in the page-field dialog (number
-AND function) is therefore stored but produces no total; this is pre-existing for
-number and intentionally consistent for function.
+## Page-local (mirror-page) field totals ARE computed
+
+`records/query` also computes totals for page-local fields when `body.data.pageId`
+is set: `number` page fields sum `page_record_values`; `function`/formula page
+fields evaluate over the MERGED `{...entityValues, ...pageValues}` per row (same
+merge the client uses). Row-scope/own-scope/hidden-row-status are inherited via the
+shared `where` (so mirror pages are covered — `where` targets the page's effective
+entity). A page total is only produced when the page field is visible to the viewer
+(`mostPermissiveFieldPerm(view) !== "hidden"`).
+
+**Key collision rule:** page totals are keyed `pf:<pageFieldId>` in `numericTotals`
+(NOT by `fieldKey`) so they never clobber an entity total when a page field shares a
+key with an entity field. The client reads page-column totals by that same
+`pf:<id>` key. `numericTotals` is a free map (`additionalProperties: number`), so
+prefixed keys need no OpenAPI change — but server and client must stay in lockstep.

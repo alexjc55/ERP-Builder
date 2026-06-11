@@ -2029,7 +2029,8 @@ export function EntityRecords({
                         );
                       })}
                       {displayedPageFields.map((pf: PageField) => {
-                        const hasTotal = numericTotals[pf.fieldKey] !== undefined;
+                        const pfTotalKey = `pf:${pf.id}`;
+                        const hasTotal = numericTotals[pfTotalKey] !== undefined;
                         return (
                           <th
                             key={`tot-pf-${pf.id}`}
@@ -2045,7 +2046,7 @@ export function EntityRecords({
                                 className={cn("text-sm font-bold whitespace-nowrap", !pf.totalTextColor && "text-emerald-700")}
                                 style={pf.totalTextColor ? { color: pf.totalTextColor } : undefined}
                               >
-                                {numericTotals[pf.fieldKey].toLocaleString("ru-RU")}
+                                {numericTotals[pfTotalKey].toLocaleString("ru-RU")}
                               </span>
                             ) : null}
                           </th>
