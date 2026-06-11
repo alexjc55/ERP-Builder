@@ -3618,9 +3618,38 @@ function InlineCellEditor({
     );
   }
 
+  if (field.fieldType === "number") {
+    const dotHint = t(
+      "records.numberDotHint",
+      "Используйте точку как десятичный разделитель, например 11.6",
+    );
+    return (
+      <Input
+        autoFocus
+        type="text"
+        inputMode="decimal"
+        title={dotHint}
+        className="h-auto w-full rounded-sm border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-1 focus-visible:ring-blue-400"
+        value={draft === "" || draft === undefined ? "" : String(draft)}
+        onChange={(e) => {
+          const { value: clean, hadComma } = sanitizeNumberInput(e.target.value);
+          // Reject comma-bearing input (e.g. pasted "1,5") instead of stripping
+          // the comma, which would silently corrupt it to "15".
+          if (hadComma) return;
+          setDraft(clean);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === ",") { e.preventDefault(); }
+          else if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
+          else if (e.key === "Escape") { cancelRef.current = true; (e.target as HTMLInputElement).blur(); }
+        }}
+        onBlur={() => { if (cancelRef.current) onCancel(); else commitOnce(draft); }}
+      />
+    );
+  }
+
   const inputType =
-    field.fieldType === "number" ? "number"
-    : field.fieldType === "date" ? "date"
+    field.fieldType === "date" ? "date"
     : field.fieldType === "datetime" ? "datetime-local"
     : field.fieldType === "email" ? "email"
     : field.fieldType === "url" ? "url"
@@ -3640,6 +3669,78 @@ function InlineCellEditor({
       }}
       onBlur={() => { if (cancelRef.current) onCancel(); else commitOnce(draft); }}
     />
+  );
+}
+
+/**
+ * Sanitize free-typed number input into the canonical dot-decimal format the DB
+ * stores. Keeps only digits, a single leading minus, and a single dot; commas
+ * are rejected (never auto-converted), so the stored value can never depend on
+ * the user's browser/OS locale. `hadComma` lets the caller surface a hint.
+ */
+function sanitizeNumberInput(raw: string): { value: string; hadComma: boolean } {
+  const hadComma = raw.includes(",");
+  const neg = raw.trimStart().startsWith("-");
+  let s = raw.replace(/[^0-9.]/g, "");
+  const firstDot = s.indexOf(".");
+  if (firstDot !== -1) {
+    s = s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, "");
+  }
+  return { value: (neg ? "-" : "") + s, hadComma };
+}
+
+/**
+ * Number entry for the modal/add-row form. A controlled text input with
+ * inputMode="decimal" (so mobile shows a numeric keypad) instead of a native
+ * `<input type="number">`: the native control's decimal separator is locale-
+ * dependent, which silently drops comma-typed values in dot-locale browsers.
+ * Here we own the parsing — commas are blocked and a hint is shown.
+ */
+function NumberInput({
+  value,
+  onChange,
+  disabled = false,
+}: {
+  value: CellValue | undefined;
+  onChange: (v: CellValue) => void;
+  disabled?: boolean;
+}) {
+  const t = useT();
+  const [showHint, setShowHint] = useState(false);
+  const dotHint = t(
+    "records.numberDotHint",
+    "Используйте точку как десятичный разделитель, например 11.6",
+  );
+  return (
+    <div>
+      <Input
+        type="text"
+        inputMode="decimal"
+        placeholder={t("records.numberPlaceholder", "Например: 11.6")}
+        title={dotHint}
+        value={value === "" || value === undefined || value === null ? "" : String(value)}
+        onChange={(e) => {
+          const { value: clean, hadComma } = sanitizeNumberInput(e.target.value);
+          // Reject (rather than rewrite) any input containing a comma — e.g. a
+          // pasted "1,5". Rewriting by stripping the comma would silently corrupt
+          // it to "15". Returning without updating leaves the controlled input on
+          // its previous value and surfaces the dot hint.
+          if (hadComma) {
+            setShowHint(true);
+            return;
+          }
+          onChange(clean);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === ",") {
+            e.preventDefault();
+            setShowHint(true);
+          }
+        }}
+        disabled={disabled}
+      />
+      {showHint && <p className="mt-1 text-xs text-amber-600">{dotHint}</p>}
+    </div>
   );
 }
 
@@ -3700,14 +3801,7 @@ function FieldInput({
         </div>
       );
     case "number":
-      return (
-        <Input
-          type="number"
-          value={value === "" || value === undefined ? "" : String(value)}
-          onChange={(e) => onChange(e.target.value)}
-          disabled={disabled}
-        />
-      );
+      return <NumberInput value={value} onChange={onChange} disabled={disabled} />;
     case "date":
       return <Input type="date" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} disabled={disabled} />;
     case "datetime":

@@ -646,6 +646,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       const cfg = f.formulaConfigJson as { expression?: string; decimals?: number | null } | null;
       const expr = (cfg?.expression ?? "").trim();
       if (!expr) continue;
+      const d = normalizeDecimals(cfg?.decimals);
       let sum = 0;
       for (const r of allRows) {
         // Evaluate over the RAW stored values, INCLUDING fields hidden for this
@@ -658,12 +659,19 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         const vals = (r.values as Record<string, unknown> | null) ?? {};
         try {
           const out = evaluateFormula(expr, vals);
-          if (typeof out === "number" && Number.isFinite(out)) sum += out;
+          if (typeof out === "number" && Number.isFinite(out)) {
+            // Round EACH per-row result to the field's configured decimals before
+            // summing, so the total equals the sum of the values the user actually
+            // sees per row (the client renders each cell via toFixed(decimals)).
+            // Summing raw then rounding once at the end would let `round(Σ raw)`
+            // drift from `Σ round(row)` and show a total that doesn't match the
+            // visible column.
+            sum += d != null ? Number(out.toFixed(d)) : out;
+          }
         } catch {
           // Skip rows whose formula fails to parse/evaluate.
         }
       }
-      const d = normalizeDecimals(cfg?.decimals);
       numericTotals[f.fieldKey] = d != null ? Number(sum.toFixed(d)) : sum;
     }
   }
@@ -729,17 +737,19 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           const cfg = pf.formulaConfigJson as { expression?: string; decimals?: number | null } | null;
           const expr = (cfg?.expression ?? "").trim();
           if (!expr) continue;
+          const d = normalizeDecimals(cfg?.decimals);
           let sum = 0;
           for (const r of recRows) {
             const merged = { ...((r.values as Record<string, unknown> | null) ?? {}), ...(pvByRecord.get(r.id) ?? {}) };
             try {
               const out = evaluateFormula(expr, merged);
-              if (typeof out === "number" && Number.isFinite(out)) sum += out;
+              // Round each per-row result to the configured decimals before summing
+              // so the total matches the sum of the per-row values the user sees.
+              if (typeof out === "number" && Number.isFinite(out)) sum += d != null ? Number(out.toFixed(d)) : out;
             } catch {
               // Skip rows whose formula fails to parse/evaluate.
             }
           }
-          const d = normalizeDecimals(cfg?.decimals);
           numericTotals[totalKey] = d != null ? Number(sum.toFixed(d)) : sum;
         }
       }

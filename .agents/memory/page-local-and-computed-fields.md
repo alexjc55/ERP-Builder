@@ -142,3 +142,30 @@ entity). A page total is only produced when the page field is visible to the vie
 key with an entity field. The client reads page-column totals by that same
 `pf:<id>` key. `numericTotals` is a free map (`additionalProperties: number`), so
 prefixed keys need no OpenAPI change — but server and client must stay in lockstep.
+
+## Formula column total must round per-row to `decimals` BEFORE summing
+
+A `function`/formula field with a `decimals` setting renders each per-row value
+via `formatFormulaResult -> toFixed(decimals)`. The column total must therefore
+round EACH per-row result to `decimals` before summing (then clean the final sum
+to `decimals`), not sum raw full-precision then round once — `round(Σ raw)` drifts
+from `Σ round(row)` and shows a total that doesn't match the visible column.
+
+**Why:** finance users expect the total to equal the sum of what they see per
+row; an off-by-rounding total looks like a bug.
+
+**How to apply:** in `records.ts`, BOTH the entity formula-total block and the
+page-local formula-total block compute `d = normalizeDecimals(cfg.decimals)` up
+front and add `d != null ? Number(out.toFixed(d)) : out` per row. Keep the two
+blocks in lockstep. Number-field totals are exact SQL sums and need no rounding
+(number fields have no `decimals` option).
+
+## Number input is canonical dot-decimal, locale-independent (no commas)
+
+Number entry in `EntityRecords.tsx` does NOT use native `<input type=number>`
+(its decimal separator is locale-dependent — a comma typed in a dot-locale
+browser is silently dropped). Both surfaces (modal `NumberInput` + the inline
+`InlineCellEditor` number branch) use a controlled text input + `inputMode=
+"decimal"` and `sanitizeNumberInput`. Comma handling is REJECT, not strip: a
+typed comma is `preventDefault`-ed on keydown, and a comma-bearing paste returns
+without updating (the controlled input reverts) — never rewrite "1,5" to "15".
