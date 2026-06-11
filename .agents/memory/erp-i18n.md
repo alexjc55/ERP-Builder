@@ -18,3 +18,14 @@ All static UI strings live in the Postgres `translations` table — there are no
 **Login page is RU by design:** `useListTranslations` is enabled only when logged in, so pre-auth screens fall back to the code default (RU). Don't "fix" this by enabling the query for anonymous users unless that's actually wanted.
 
 **Direction/override:** the I18nProvider owns `document.documentElement.dir/lang` (he ⇒ rtl) — auth must not also set direction or they fight. `setLang` sets a transient override, persists via `PUT /auth/me`, sequence-tags the write so stale responses can't win, rolls back on error, and clears the override on logout.
+
+## RTL (Hebrew) flips pointer-geometry interactions
+
+Any mouse/pointer interaction whose math assumes left-to-right breaks under
+Hebrew (`lang === "he"`), because the app sets `document.documentElement.dir =
+"rtl"` and the whole layout mirrors. The records table column-resize is the known
+case: the drag handle must sit on the column's logical END edge (`right` in LTR,
+`left` in RTL) AND the width delta must invert (`clientX - startX` in LTR,
+`startX - clientX` in RTL). Detect via `useLang()` → `lang === "he"`. When adding
+new drag/resize/swipe affordances, account for both the handle side and the delta
+sign in RTL.

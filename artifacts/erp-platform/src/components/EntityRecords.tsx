@@ -120,7 +120,7 @@ import {
 } from "@/lib/storage";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { useML, useT } from "@/lib/i18n";
+import { useML, useT, useLang } from "@/lib/i18n";
 import { useGoogleDriveReady } from "@/lib/googleDrive";
 import { FieldConfigDialog } from "@/components/FieldConfigDialog";
 import { CreateUserDialog } from "@/components/CreateUserDialog";
@@ -742,6 +742,11 @@ export function EntityRecords({
 }) {
   const ml = useML();
   const t = useT();
+  const { lang } = useLang();
+  // Hebrew renders the whole table right-to-left, which flips the geometry of
+  // column resizing: the handle's logical "end" edge is on the LEFT, and a
+  // rightward pointer move must SHRINK (not grow) the column.
+  const isRtl = lang === "he";
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { canRecord, canAdmin, fieldAccess, user } = useAuth();
@@ -1014,7 +1019,10 @@ export function EntityRecords({
     const startX = e.clientX;
     let latest: Record<string, number> = columnWidths;
     const onMove = (ev: PointerEvent) => {
-      const w = Math.max(60, Math.round(startW + (ev.clientX - startX)));
+      // In RTL the resize handle is on the column's left edge, so a leftward
+      // (decreasing clientX) move must grow the column — invert the delta.
+      const delta = isRtl ? startX - ev.clientX : ev.clientX - startX;
+      const w = Math.max(60, Math.round(startW + delta));
       latest = { ...columnWidths, [key]: w };
       setColumnWidths(latest);
     };
@@ -1065,7 +1073,7 @@ export function EntityRecords({
         });
       }}
       title={t("records.resizeColumn", "Потяните, чтобы изменить ширину (двойной клик — сбросить)")}
-      className="absolute top-0 right-0 z-10 h-full w-1.5 cursor-col-resize touch-none select-none bg-transparent hover:bg-blue-400/60"
+      className={`absolute top-0 ${isRtl ? "left-0" : "right-0"} z-10 h-full w-1.5 cursor-col-resize touch-none select-none bg-transparent hover:bg-blue-400/60`}
     />
   );
 
