@@ -125,7 +125,7 @@ import { useGoogleDriveReady } from "@/lib/googleDrive";
 import { FieldConfigDialog } from "@/components/FieldConfigDialog";
 import { CreateUserDialog } from "@/components/CreateUserDialog";
 import { PageFieldConfigDialog } from "@/components/PageFieldConfigDialog";
-import { formatFormulaResult, evaluateFormula } from "@/lib/formula";
+import { formatFormulaResult, evaluateFormula } from "@workspace/formula";
 import { computeRowFormatting, type FormatField } from "@/lib/formatRules";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus } from "lucide-react";
@@ -820,6 +820,34 @@ export function EntityRecords({
         .filter((f: PageField) => f.isActive)
         .sort((a: PageField, b: PageField) => a.sortOrder - b.sortOrder),
     [allPageFields],
+  );
+
+  // Keys of all `user`-type fields (entity + page). A formula that references a
+  // user field should show the user's NAME, not the raw stored id, so we
+  // substitute id → name in the values map before evaluating.
+  const userFormulaFieldKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const f of allFields) if (f.fieldType === "user") keys.add(f.fieldKey);
+    for (const pf of pageFields) if (pf.fieldType === "user") keys.add(pf.fieldKey);
+    return keys;
+  }, [allFields, pageFields]);
+
+  const resolveFormulaValues = useCallback(
+    (vals: Record<string, unknown>): Record<string, unknown> => {
+      if (userFormulaFieldKeys.size === 0) return vals;
+      const out: Record<string, unknown> = { ...vals };
+      for (const k of userFormulaFieldKeys) {
+        const v = out[k];
+        if (v == null || v === "") continue;
+        if (Array.isArray(v)) {
+          out[k] = v.map((id) => userNames.get(Number(id)) ?? String(id)).join(", ");
+        } else {
+          out[k] = userNames.get(Number(v)) ?? v;
+        }
+      }
+      return out;
+    },
+    [userFormulaFieldKeys, userNames],
   );
   const pageValuesByRecord = useMemo(() => {
     const m = new Map<number, Record<string, unknown>>();
@@ -2324,6 +2352,7 @@ export function EntityRecords({
                     const values = (record.valuesJson ?? {}) as Record<string, unknown>;
                     const pageValues = pageValuesByRecord.get(record.id) ?? {};
                     const allValues = { ...values, ...pageValues };
+                    const formulaValues = resolveFormulaValues(allValues);
                     const status = record.statusId != null ? statusById.get(record.statusId) : undefined;
                     // Conditional formatting across both entity and page columns.
                     const formatFields: FormatField[] = [
@@ -2381,7 +2410,7 @@ export function EntityRecords({
                             );
                           }
                           if (isFunction) {
-                            const computed = formatFormulaResult(f.formulaConfigJson?.expression ?? "", allValues, f.formulaConfigJson?.decimals);
+                            const computed = formatFormulaResult(f.formulaConfigJson?.expression ?? "", formulaValues, f.formulaConfigJson?.decimals);
                             return (
                               <td key={f.id} className="px-4 py-3 max-w-[240px] truncate" style={{ ...pinStyle(`f:${f.id}`, formatting.rowColor || "#ffffff"), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
                                 {computed.error ? (
@@ -2473,7 +2502,7 @@ export function EntityRecords({
                             );
                           }
                           if (isFunction) {
-                            const computed = formatFormulaResult(pf.formulaConfigJson?.expression ?? "", allValues, pf.formulaConfigJson?.decimals);
+                            const computed = formatFormulaResult(pf.formulaConfigJson?.expression ?? "", formulaValues, pf.formulaConfigJson?.decimals);
                             return (
                               <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px] truncate" style={{ ...pinStyle(`pf:${pf.id}`, formatting.rowColor || "#ffffff"), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
                                 {computed.error ? (

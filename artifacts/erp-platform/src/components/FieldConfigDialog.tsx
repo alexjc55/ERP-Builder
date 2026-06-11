@@ -71,7 +71,7 @@ import { FieldFormatRulesEditor } from "@/components/FieldFormatRulesEditor";
 import { ColorPickerControl } from "@/components/ColorPickerControl";
 import { useToast } from "@/hooks/use-toast";
 import { FormulaEditor, type FormulaFieldRef } from "@/components/FormulaEditor";
-import { normalizeDecimals } from "@/lib/formula";
+import { normalizeDecimals } from "@workspace/formula";
 import { useML, useT } from "@/lib/i18n";
 import { FIELD_KEY_RE, slugifyKey, uniqueKey } from "@/lib/keys";
 import { Loader2, Trash2 } from "lucide-react";
@@ -336,9 +336,9 @@ export function FieldConfigDialog({
       isFilterable,
       showInTable,
       isPinned,
-      showColumnTotal: fieldType === "number" ? showColumnTotal : false,
-      totalFillColor: fieldType === "number" && showColumnTotal && totalFillColor ? totalFillColor : null,
-      totalTextColor: fieldType === "number" && showColumnTotal && totalTextColor ? totalTextColor : null,
+      showColumnTotal: fieldType === "number" || fieldType === "function" ? showColumnTotal : false,
+      totalFillColor: (fieldType === "number" || fieldType === "function") && showColumnTotal && totalFillColor ? totalFillColor : null,
+      totalTextColor: (fieldType === "number" || fieldType === "function") && showColumnTotal && totalTextColor ? totalTextColor : null,
       fileConfigJson:
         fieldType === "file"
           ? {
@@ -611,7 +611,7 @@ export function FieldConfigDialog({
                 <Switch checked={isPinned} onCheckedChange={setIsPinned} id="fcd-pinned" />
                 <Label htmlFor="fcd-pinned">{t("fields.pinColumn", "Закрепить при горизонтальной прокрутке")}</Label>
               </div>
-              {fieldType === "number" && (
+              {(fieldType === "number" || fieldType === "function") && (
                 <div className="flex items-center gap-2">
                   <Switch checked={showColumnTotal} onCheckedChange={setShowColumnTotal} id="fcd-show-column-total" />
                   <Label htmlFor="fcd-show-column-total">{t("fields.showColumnTotal", "Показывать сумму столбца")}</Label>
@@ -619,7 +619,7 @@ export function FieldConfigDialog({
               )}
             </div>
 
-            {fieldType === "number" && showColumnTotal && (
+            {(fieldType === "number" || fieldType === "function") && showColumnTotal && (
               <div className="rounded-md border border-slate-100 bg-slate-50/50 p-3 space-y-2">
                 <p className="text-xs text-slate-500">
                   {t("fields.totalColorsHint", "Цвета ячейки итога столбца (необязательно)")}

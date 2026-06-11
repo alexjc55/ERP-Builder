@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable } from "@workspace/db";
 import { eq, asc, desc, and, or, sql, inArray, type SQL } from "drizzle-orm";
+import { evaluateFormula, normalizeDecimals } from "@workspace/formula";
 import type { Request } from "express";
 import { requireAuth } from "../middlewares/auth";
 import {
@@ -615,6 +616,12 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   // text is skipped so an unguarded ::numeric cast can never error.
   const NUMERIC_RE = "^-?[0-9]+(\\.[0-9]+)?$";
   const totalFields = visibleFields.filter((f) => f.fieldType === "number" && f.showColumnTotal);
+  // Function (formula) fields can also opt into a column total. Their value is not
+  // stored, so we evaluate the formula per row over the FULL filtered set and sum
+  // the finite numeric results (non-numeric/error rows contribute nothing).
+  const formulaTotalFields = visibleFields.filter(
+    (f) => f.fieldType === "function" && f.showColumnTotal,
+  );
   let numericTotals: Record<string, number> | undefined;
   if (totalFields.length > 0) {
     const sel: Record<string, SQL<number>> = {};
@@ -626,6 +633,37 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     numericTotals = {};
     for (const f of totalFields) {
       numericTotals[f.fieldKey] = Number((row as Record<string, unknown> | undefined)?.[f.fieldKey] ?? 0);
+    }
+  }
+  if (formulaTotalFields.length > 0) {
+    const allRows = await db
+      .select({ values: entityRecordsTable.valuesJson })
+      .from(entityRecordsTable)
+      .where(where);
+    numericTotals = numericTotals ?? {};
+    for (const f of formulaTotalFields) {
+      const cfg = f.formulaConfigJson as { expression?: string; decimals?: number | null } | null;
+      const expr = (cfg?.expression ?? "").trim();
+      if (!expr) continue;
+      let sum = 0;
+      for (const r of allRows) {
+        // Strip hidden field keys before evaluating so the aggregate can never
+        // leak (even indirectly) values the caller is not allowed to see, and so
+        // the total stays consistent with the per-row results the client computes
+        // over the already hidden-stripped records.
+        const vals = stripHidden({ valuesJson: r.values ?? {} }, hidden).valuesJson as Record<
+          string,
+          unknown
+        >;
+        try {
+          const out = evaluateFormula(expr, vals);
+          if (typeof out === "number" && Number.isFinite(out)) sum += out;
+        } catch {
+          // Skip rows whose formula fails to parse/evaluate.
+        }
+      }
+      const d = normalizeDecimals(cfg?.decimals);
+      numericTotals[f.fieldKey] = d != null ? Number(sum.toFixed(d)) : sum;
     }
   }
 

@@ -107,3 +107,28 @@ EXACTLY the keys the evaluator can resolve, no more:
 
 **Why:** suggesting a key the evaluator can't resolve (e.g. a function field, or
 a source key shadowed by a page-local one) produces silently-wrong formulas.
+
+## Server-side formula aggregates must re-apply the field-hidden strip
+
+A `function`/formula field can opt into a column total (`showColumnTotal`), summed
+server-side over the FULL filtered set in `records/query`. That aggregate evaluates
+the formula per row, so it MUST run over hidden-stripped values — apply the same
+`stripHidden(record, hidden)` used on the returned per-row records before calling
+the evaluator.
+
+**Why:** the records response strips hidden fields per row, and the client computes
+each row's formula over that stripped map. If the server total instead evaluates
+over the raw `valuesJson`, a visible formula referencing a hidden field would (a)
+leak aggregated hidden data through the total and (b) diverge from the per-row
+results the user actually sees. Any new server-side aggregate over formulas/raw
+values must re-apply the field boundary, not trust raw `valuesJson`.
+
+**How to apply:** the pure evaluator now lives in `@workspace/formula` (shared by
+erp-platform client and api-server) precisely so server totals and client per-row
+results use identical logic — keep them fed identical (hidden-stripped) inputs.
+
+**Known limitation:** page-local (mirror-page) field totals are NOT computed —
+`records/query` totals only read entity `fields`/`valuesJson`, never the separate
+page-values table. The `showColumnTotal` toggle in the page-field dialog (number
+AND function) is therefore stored but produces no total; this is pre-existing for
+number and intentionally consistent for function.

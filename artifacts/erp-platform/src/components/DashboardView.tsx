@@ -102,7 +102,7 @@ import { MultilingualInput } from "@/components/MultilingualInput";
 import { IconPicker } from "@/components/IconPicker";
 import { getIconComponent } from "@/lib/icons";
 import { cn } from "@/lib/utils";
-import { evaluateFormula } from "@/lib/formula";
+import { evaluateFormula } from "@workspace/formula";
 import DOMPurify from "dompurify";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
