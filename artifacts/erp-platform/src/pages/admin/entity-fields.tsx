@@ -339,7 +339,15 @@ export default function EntityFieldsPage() {
                 {sorted.map((field: Field, idx: number) => (
                   <tr key={field.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="px-4 py-3">
-                      <span className="font-medium text-slate-700">{ml(field.nameJson)}</span>
+                      <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+                        {field.isKey && (
+                          <KeyRound
+                            className="w-3.5 h-3.5 text-amber-600 shrink-0"
+                            aria-label={t("fields.isKey", "Ключевое поле (уникальное)")}
+                          />
+                        )}
+                        {ml(field.nameJson)}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-slate-500 font-mono text-xs">{field.fieldKey}</td>
                     <td className="px-4 py-3">
@@ -349,9 +357,7 @@ export default function EntityFieldsPage() {
                     </td>
                     <td className="px-4 py-3">
                       {field.isRequired ? (
-                        <span className="inline-flex items-center gap-1 text-amber-600 text-xs">
-                          <KeyRound className="w-3 h-3" /> {t("fields.yes", "Да")}
-                        </span>
+                        <span className="text-amber-600 text-xs">{t("fields.yes", "Да")}</span>
                       ) : (
                         <span className="text-slate-400 text-xs">{t("fields.no", "Нет")}</span>
                       )}
