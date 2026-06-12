@@ -15,7 +15,7 @@ import {
   type DependencyFieldConfig,
   type FieldPermissions,
 } from "@workspace/db";
-import { eq, asc, and, ne, inArray, or, sql, type SQL } from "drizzle-orm";
+import { eq, asc, desc, and, ne, inArray, or, sql, type SQL } from "drizzle-orm";
 import { getRelationLockSides, linkExistsForSide, RELATION_LOCKED } from "../lib/relationLock";
 import { requireAuth } from "../middlewares/auth";
 import {
@@ -980,7 +980,7 @@ router.post("/pages/:pageId/related-candidates", requireAuth, async (req, res): 
     .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
     .from(entityRecordsTable)
     .where(and(...conds))
-    .orderBy(asc(entityRecordsTable.id))
+    .orderBy(desc(entityRecordsTable.id))
     .limit(50);
 
   const candidates = rows.map((r) => {
@@ -1729,7 +1729,7 @@ router.post("/entities/:entityId/related-candidates", requireAuth, async (req, r
     .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
     .from(entityRecordsTable)
     .where(and(...conds))
-    .orderBy(asc(entityRecordsTable.id))
+    .orderBy(desc(entityRecordsTable.id))
     .limit(50);
 
   const candidates = rows.map((r) => {
