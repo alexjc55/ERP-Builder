@@ -12,6 +12,7 @@ import type { FieldType } from './fieldType';
 import type { FileFieldConfig } from './fileFieldConfig';
 import type { FormulaFieldConfig } from './formulaFieldConfig';
 import type { MultilingualText } from './multilingualText';
+import type { RelationFieldConfig } from './relationFieldConfig';
 import type { UserFieldConfig } from './userFieldConfig';
 
 export interface FieldUpdate {
@@ -29,6 +30,7 @@ export interface FieldUpdate {
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
   dependencyConfigJson?: DependencyFieldConfig;
+  relationConfigJson?: RelationFieldConfig;
   isKey?: boolean;
   lockAfterCreate?: boolean;
   isFilterable?: boolean;

@@ -1,5 +1,13 @@
 import { Router, type IRouter } from "express";
-import { db, entityFieldsTable, entitiesTable, entityRecordsTable } from "@workspace/db";
+import {
+  db,
+  entityFieldsTable,
+  entitiesTable,
+  entityRecordsTable,
+  relationsTable,
+  type Relation,
+  type RelationFieldConfig,
+} from "@workspace/db";
 import { eq, asc, and, ne, inArray, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
@@ -36,6 +44,57 @@ function clampFormulaDecimals<T>(cfg: T): T {
     return { ...(cfg as object), decimals: d } as T;
   }
   return cfg;
+}
+
+/**
+ * Direction of a qualifying *single-link* relation relative to `entityId`.
+ * "source" = this entity is the relation's source and the single linked record is
+ * its target (1:1 / N:1); "target" = the inverse side (1:1 / 1:N). Any other
+ * shape (N:N, or the many side) is not single-link → null. Mirrors the identical
+ * helper in page-fields so both relation-field surfaces stay consistent.
+ */
+function relationDirection(relation: Relation, entityId: number): "source" | "target" | null {
+  const t = relation.relationType;
+  if (relation.sourceEntityId === entityId && (t === "one_to_one" || t === "many_to_one")) return "source";
+  if (relation.targetEntityId === entityId && (t === "one_to_one" || t === "one_to_many")) return "target";
+  return null;
+}
+
+/**
+ * Validate a relation entity-field's config against its entity: the relation must
+ * exist, qualify as single-link for this entity (either direction), and the named
+ * related field must exist and be active on the other side. Returns the cleaned
+ * config (only relationId + relatedFieldKey) to persist.
+ */
+async function validateEntityRelationConfig(
+  entityId: number,
+  cfg: RelationFieldConfig | undefined | null,
+): Promise<{ ok: true; cleaned: RelationFieldConfig } | { error: string }> {
+  const relationId = cfg?.relationId ?? null;
+  const relatedFieldKey = cfg?.relatedFieldKey ?? null;
+  if (relationId == null || !relatedFieldKey) {
+    return { error: "Связанное поле требует выбора связи и связанного поля" };
+  }
+  const [relation] = await db.select().from(relationsTable).where(eq(relationsTable.id, relationId));
+  if (!relation) return { error: "Связь не найдена" };
+  if (relation.sourceEntityId !== entityId && relation.targetEntityId !== entityId) {
+    return { error: "Связь не относится к этой сущности" };
+  }
+  const direction = relationDirection(relation, entityId);
+  if (!direction) return { error: "Связь не даёт одну связанную запись для этой сущности" };
+  const relatedEntityId = direction === "source" ? relation.targetEntityId : relation.sourceEntityId;
+  const [rf] = await db
+    .select({ id: entityFieldsTable.id })
+    .from(entityFieldsTable)
+    .where(
+      and(
+        eq(entityFieldsTable.entityId, relatedEntityId),
+        eq(entityFieldsTable.fieldKey, relatedFieldKey),
+        eq(entityFieldsTable.isActive, true),
+      ),
+    );
+  if (!rf) return { error: "Связанное поле не найдено в связанной сущности" };
+  return { ok: true, cleaned: { relationId, relatedFieldKey } };
 }
 
 async function entityExists(entityId: number): Promise<boolean> {
@@ -113,12 +172,17 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
     return;
   }
 
-  // "relation" is a PAGE-FIELD-only type (it derives values from a linked record
-  // via relationConfigJson). Entity fields share the FieldType enum but must not
-  // accept it — reject so the shared contract cannot create an invalid column.
+  // A "relation" entity field derives its value from a single linked record (via
+  // relationConfigJson + a qualifying single-link relation); validate the config
+  // against this entity before accepting it. Cleaned config is persisted below.
+  let relationConfig: RelationFieldConfig | undefined;
   if (parsed.data.fieldType === "relation") {
-    res.status(400).json({ error: 'Field type "relation" is not valid for entity fields' });
-    return;
+    const check = await validateEntityRelationConfig(params.data.entityId, parsed.data.relationConfigJson);
+    if (!("ok" in check)) {
+      res.status(400).json({ error: check.error });
+      return;
+    }
+    relationConfig = check.cleaned;
   }
 
   if (parsed.data.fieldType === "select" && (!parsed.data.optionsJson || parsed.data.optionsJson.length === 0)) {
@@ -127,9 +191,12 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
   }
 
   // isKey/lockAfterCreate operate on the stored scalar value; they are meaningless
-  // for file (object) and function (computed, never stored) fields.
-  if ((parsed.data.isKey || parsed.data.lockAfterCreate) && (parsed.data.fieldType === "file" || parsed.data.fieldType === "function")) {
-    res.status(400).json({ error: "Ключевое поле и запрет изменения недоступны для полей типа «файл» и «функция»" });
+  // for file (object), function (computed) and relation (derived) fields.
+  if (
+    (parsed.data.isKey || parsed.data.lockAfterCreate) &&
+    (parsed.data.fieldType === "file" || parsed.data.fieldType === "function" || parsed.data.fieldType === "relation")
+  ) {
+    res.status(400).json({ error: "Ключевое поле и запрет изменения недоступны для полей типа «файл», «функция» и «связанное поле»" });
     return;
   }
 
@@ -144,6 +211,7 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
       .values({
         ...parsed.data,
         formulaConfigJson: clampFormulaDecimals(parsed.data.formulaConfigJson),
+        relationConfigJson: relationConfig ?? {},
         fieldKey: key,
         entityId: params.data.entityId,
       })
@@ -267,12 +335,24 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
     updateData.fieldKey = key;
   }
 
-  if (body.fieldType === "relation") {
-    res.status(400).json({ error: 'Field type "relation" is not valid for entity fields' });
-    return;
+  const nextType = body.fieldType ?? current.fieldType;
+
+  // Validate relation config whenever the field is (or is becoming) a relation
+  // field. The config comes from the body when present, else the stored value.
+  let relationConfigToPersist: RelationFieldConfig | undefined;
+  if (nextType === "relation") {
+    const incoming =
+      "relationConfigJson" in body
+        ? (body.relationConfigJson as RelationFieldConfig | null | undefined)
+        : (current.relationConfigJson as RelationFieldConfig | null);
+    const check = await validateEntityRelationConfig(current.entityId, incoming);
+    if (!("ok" in check)) {
+      res.status(400).json({ error: check.error });
+      return;
+    }
+    relationConfigToPersist = check.cleaned;
   }
 
-  const nextType = body.fieldType ?? current.fieldType;
   if ("optionsJson" in body || body.fieldType != null) {
     const nextOptions = body.optionsJson ?? (current.optionsJson as string[]);
     if (nextType === "select" && (!nextOptions || nextOptions.length === 0)) {
@@ -284,8 +364,8 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   // isKey/lockAfterCreate are only valid for stored-scalar field types.
   const nextIsKey = body.isKey ?? current.isKey;
   const nextLock = body.lockAfterCreate ?? current.lockAfterCreate;
-  if ((nextIsKey || nextLock) && (nextType === "file" || nextType === "function")) {
-    res.status(400).json({ error: "Ключевое поле и запрет изменения недоступны для полей типа «файл» и «функция»" });
+  if ((nextIsKey || nextLock) && (nextType === "file" || nextType === "function" || nextType === "relation")) {
+    res.status(400).json({ error: "Ключевое поле и запрет изменения недоступны для полей типа «файл», «функция» и «связанное поле»" });
     return;
   }
 
@@ -335,6 +415,13 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   if (body.formulaConfigJson != null)
     updateData.formulaConfigJson = clampFormulaDecimals(body.formulaConfigJson);
   if ("dependencyConfigJson" in body) updateData.dependencyConfigJson = body.dependencyConfigJson ?? {};
+  // Persist the validated relation config when this is/becomes a relation field;
+  // reset it to {} when switching a former relation field away from that type.
+  if (relationConfigToPersist !== undefined) {
+    updateData.relationConfigJson = relationConfigToPersist;
+  } else if (nextType !== "relation" && current.fieldType === "relation") {
+    updateData.relationConfigJson = {};
+  }
   if (body.isKey != null) updateData.isKey = body.isKey;
   if (body.lockAfterCreate != null) updateData.lockAfterCreate = body.lockAfterCreate;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;

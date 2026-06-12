@@ -22,16 +22,16 @@ Page-fields of type `relation` (config `{relationId, relatedFieldKey}` in `relat
 
 **Why:** the frontend derives displayed columns straight from this endpoint; filtering only on the client leaks restricted column existence/labels/config. The related-values endpoint already filters values by role, but metadata must be gated at its own source.
 
-## relation-options for widget editors is gated by `pages`, not `entities`
-**Rule:** the entity-keyed `GET /entities/:entityId/relation-options` backs the dashboard widget editors (metric related fields, table related columns), so it must be gated by the SAME cap as widget editing (`requireAdmin("pages")`), not `requireAdmin("entities")`. The page-keyed variant is also `pages`.
+## relation-options is DUAL-USE (entities OR pages cap), gate by the union
+**Rule:** the entity-keyed `GET /entities/:entityId/relation-options` backs BOTH the dashboard widget editors (metric related fields, table related columns — `pages` cap) AND the entity Fields Builder configuring a `relation` field (`entities` cap). It cannot use `requireAdmin("pages")` alone: use an inline guard allowing `superAdmin || admin.entities || admin.pages`. The page-keyed `/pages/:pageId/relation-options` variant stays `pages`-only.
 
-**Why:** a role that can build dashboards but lacks the entities-builder cap was locked out of configuring related metrics/columns — a capability regression. Gate config-helper endpoints by the cap of the screen that consumes them.
+**Why:** when the endpoint became dual-use (entity relation fields were added on top of the dashboard use), `requireAdmin("pages")` locked entities-only roles out of configuring relation fields. `requireAdmin` takes a single cap, so a shared config-helper consumed by two differently-capped screens needs an explicit union guard.
 
 ## Table widget needs ≥1 column across direct OR related
 `validateTableConfig` must accept a config where `fieldKeys` is empty as long as `relatedColumns` has at least one entry (related-only tables are valid). Requiring non-empty `fieldKeys` breaks the related-only UX the frontend allows.
 
-## `relation` is a PAGE-FIELD-only type sharing the entity FieldType enum
-The `relation` value lives in the shared `FieldType` OpenAPI enum (used by BOTH entity-field and page-field create/update bodies), but it is only valid for page-fields (it needs relationConfigJson). Entity-field create/update must reject `fieldType === "relation"` server-side, and the entity-field type picker must not offer it. **Why:** shared contract enums leak new values to every consumer; constrain invalid ones at each server boundary.
+## `relation` is now valid on BOTH entity-fields and page-fields
+The `relation` value lives in the shared `FieldType` OpenAPI enum, and is now a real entity-field type too (config `{relationId, relatedFieldKey}` in entity_fields.relationConfigJson). Eligible only when the entity has ≥1 single-link relation (1:1 or N:1, EITHER direction — consistent with `buildRelationOptions`). It is DERIVED: never stored in valuesJson (records.ts `validateValues` skips it like `function`); the link lives in `record_links` and is assigned via `PUT /entities/:entityId/related-link`. fields.ts create/PUT validate via `validateEntityRelationConfig`, persist `relationConfigJson` (`?? {}`), reset to `{}` when switching away, and exclude relation from isKey/lockAfterCreate. **Why (historical):** it was previously page-field-only and entity-field create/PUT hard-rejected it; that rejection has been removed. The entity records table shows the linked value via a click-to-assign searchable picker (`EntityRelationLinkPicker`), the entity twin of the page `RelationLinkPicker`.
 
 ## Widgets are admin-authoritative but visibility-gated
 Metric/chart/table widget values are computed bypassing the viewer's row/field perms (real totals), but only after page access + per-widget role visibility pass. Related columns/metrics inherit this — do not re-filter widget values by viewer perms.
@@ -57,6 +57,11 @@ Metric/chart/table widget values are computed bypassing the viewer's row/field p
 **Rule:** both `related-candidates` (label/search expose the field value) and `related-link` (mutation) must reject with 403 when `resolveFieldAccess(relatedField, perms, roleId, relatedEntityId) === "hidden"` — in addition to the entity record-view + own-scope checks. The UI hides the column via `editableColumn` (which already depends on non-hidden access), but a direct API call bypasses the UI.
 
 **Why:** a role with related-entity view but a HIDDEN specific related field could otherwise enumerate/search that field's values through candidates, or assign links it shouldn't, via direct API. Caught in code review. Mirror the same dual boundary (record-view gate + per-field hidden gate) that related-values applies to its column.
+
+## related-link must ALSO re-apply the row-hidden-STATUS boundary on the linked record
+**Rule:** `related-candidates` filters out status-hidden related records (`hiddenRowStatusWhere(effectiveStatusVisibility(perms, relatedEntityId).hiddenRowStatusIds)`), so `related-link` (both page and entity variants) MUST add the SAME condition to its linked-record lookup query. Otherwise a direct PUT with a known id can link to — and read the returned `value` of — a record the viewer can't see by status. The own-scope check alone does NOT cover status-hidden rows.
+
+**Why:** caught in code review; candidates and link enumerate/expose the same related value, so every boundary candidates applies (record-view, per-field hidden, own-scope, AND row-hidden-status) must be mirrored on link. Add the hidden-status WHERE to the `linked` SELECT so a hidden row resolves to "not found" (400) instead of leaking.
 
 ## Resizable records-table columns (viewer-local, auto-layout clamp)
 **Rule:** column widths in the records table are a per-viewer localStorage preference (key `erp:colwidths:{entityId}:{pageId}`), NOT a server contract. To make the `table-layout: auto` table actually honour a width, EVERY cell in that column (totals header, main header, add-row, and all body td variants — entity + page incl. relation/boolean/function/inline-editor) must carry `width+minWidth+maxWidth` of the same value; otherwise the widest unconstrained cell wins and the width is ignored.

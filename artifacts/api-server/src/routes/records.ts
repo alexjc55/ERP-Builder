@@ -190,7 +190,9 @@ function validateValues(fields: EntityField[], values: Record<string, unknown>, 
 
   for (const field of fields) {
     // Function/formula fields are computed at read time and never stored.
-    if (field.fieldType === "function") continue;
+    // Relation fields are derived from a single linked record (the link lives in
+    // record_links, assigned via the related-link endpoint) and never stored here.
+    if (field.fieldType === "function" || field.fieldType === "relation") continue;
     const raw = values[field.fieldKey];
 
     if (isEmpty(raw)) {

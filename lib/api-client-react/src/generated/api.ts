@@ -4677,6 +4677,222 @@ export function useGetEntityRelationOptions<TData = Awaited<ReturnType<typeof ge
 
 
 
+export const getGetEntityRelatedValuesUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/related-values`
+}
+
+/**
+ * @summary Resolve relation-field column values for a set of this entity's records
+ */
+export const getEntityRelatedValues = async (entityId: number,
+    pageRelatedValuesInput: PageRelatedValuesInput, options?: RequestInit): Promise<PageRelatedValues> => {
+
+  return customFetch<PageRelatedValues>(getGetEntityRelatedValuesUrl(entityId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      pageRelatedValuesInput,)
+  }
+);}
+
+
+
+
+export const getGetEntityRelatedValuesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getEntityRelatedValues>>, TError,{entityId: number;data: BodyType<PageRelatedValuesInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof getEntityRelatedValues>>, TError,{entityId: number;data: BodyType<PageRelatedValuesInput>}, TContext> => {
+
+const mutationKey = ['getEntityRelatedValues'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getEntityRelatedValues>>, {entityId: number;data: BodyType<PageRelatedValuesInput>}> = (props) => {
+          const {entityId,data} = props ?? {};
+
+          return  getEntityRelatedValues(entityId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GetEntityRelatedValuesMutationResult = NonNullable<Awaited<ReturnType<typeof getEntityRelatedValues>>>
+    export type GetEntityRelatedValuesMutationBody = BodyType<PageRelatedValuesInput>
+    export type GetEntityRelatedValuesMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Resolve relation-field column values for a set of this entity's records
+ */
+export const useGetEntityRelatedValues = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getEntityRelatedValues>>, TError,{entityId: number;data: BodyType<PageRelatedValuesInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof getEntityRelatedValues>>,
+        TError,
+        {entityId: number;data: BodyType<PageRelatedValuesInput>},
+        TContext
+      > => {
+      return useMutation(getGetEntityRelatedValuesMutationOptions(options));
+    }
+
+export const getGetEntityRelatedCandidatesUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/related-candidates`
+}
+
+/**
+ * @summary List assignable linked-record candidates for a relation field (RBAC-filtered, searchable)
+ */
+export const getEntityRelatedCandidates = async (entityId: number,
+    pageRelatedCandidatesInput: PageRelatedCandidatesInput, options?: RequestInit): Promise<PageRelatedCandidates> => {
+
+  return customFetch<PageRelatedCandidates>(getGetEntityRelatedCandidatesUrl(entityId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      pageRelatedCandidatesInput,)
+  }
+);}
+
+
+
+
+export const getGetEntityRelatedCandidatesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getEntityRelatedCandidates>>, TError,{entityId: number;data: BodyType<PageRelatedCandidatesInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof getEntityRelatedCandidates>>, TError,{entityId: number;data: BodyType<PageRelatedCandidatesInput>}, TContext> => {
+
+const mutationKey = ['getEntityRelatedCandidates'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getEntityRelatedCandidates>>, {entityId: number;data: BodyType<PageRelatedCandidatesInput>}> = (props) => {
+          const {entityId,data} = props ?? {};
+
+          return  getEntityRelatedCandidates(entityId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GetEntityRelatedCandidatesMutationResult = NonNullable<Awaited<ReturnType<typeof getEntityRelatedCandidates>>>
+    export type GetEntityRelatedCandidatesMutationBody = BodyType<PageRelatedCandidatesInput>
+    export type GetEntityRelatedCandidatesMutationError = ErrorType<unknown>
+
+    /**
+ * @summary List assignable linked-record candidates for a relation field (RBAC-filtered, searchable)
+ */
+export const useGetEntityRelatedCandidates = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getEntityRelatedCandidates>>, TError,{entityId: number;data: BodyType<PageRelatedCandidatesInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof getEntityRelatedCandidates>>,
+        TError,
+        {entityId: number;data: BodyType<PageRelatedCandidatesInput>},
+        TContext
+      > => {
+      return useMutation(getGetEntityRelatedCandidatesMutationOptions(options));
+    }
+
+export const getSetEntityRelatedLinkUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/related-link`
+}
+
+/**
+ * @summary Assign, change, or clear the single link backing a relation field cell
+ */
+export const setEntityRelatedLink = async (entityId: number,
+    pageRelatedLinkInput: PageRelatedLinkInput, options?: RequestInit): Promise<PageRelatedLinkResult> => {
+
+  return customFetch<PageRelatedLinkResult>(getSetEntityRelatedLinkUrl(entityId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      pageRelatedLinkInput,)
+  }
+);}
+
+
+
+
+export const getSetEntityRelatedLinkMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setEntityRelatedLink>>, TError,{entityId: number;data: BodyType<PageRelatedLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setEntityRelatedLink>>, TError,{entityId: number;data: BodyType<PageRelatedLinkInput>}, TContext> => {
+
+const mutationKey = ['setEntityRelatedLink'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setEntityRelatedLink>>, {entityId: number;data: BodyType<PageRelatedLinkInput>}> = (props) => {
+          const {entityId,data} = props ?? {};
+
+          return  setEntityRelatedLink(entityId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetEntityRelatedLinkMutationResult = NonNullable<Awaited<ReturnType<typeof setEntityRelatedLink>>>
+    export type SetEntityRelatedLinkMutationBody = BodyType<PageRelatedLinkInput>
+    export type SetEntityRelatedLinkMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Assign, change, or clear the single link backing a relation field cell
+ */
+export const useSetEntityRelatedLink = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setEntityRelatedLink>>, TError,{entityId: number;data: BodyType<PageRelatedLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setEntityRelatedLink>>,
+        TError,
+        {entityId: number;data: BodyType<PageRelatedLinkInput>},
+        TContext
+      > => {
+      return useMutation(getSetEntityRelatedLinkMutationOptions(options));
+    }
+
 export const getListEntityStatusesUrl = (entityId: number,) => {
 
 

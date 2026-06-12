@@ -1430,6 +1430,81 @@ paths:
               schema:
                 $ref: "#/components/schemas/PageRelationOptions"
 
+  /entities/{entityId}/related-values:
+    post:
+      operationId: getEntityRelatedValues
+      tags: [pageFields]
+      summary: Resolve relation-field column values for a set of this entity's records
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PageRelatedValuesInput"
+      responses:
+        "200":
+          description: Relation column metadata and per-record resolved values
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageRelatedValues"
+
+  /entities/{entityId}/related-candidates:
+    post:
+      operationId: getEntityRelatedCandidates
+      tags: [pageFields]
+      summary: List assignable linked-record candidates for a relation field (RBAC-filtered, searchable)
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PageRelatedCandidatesInput"
+      responses:
+        "200":
+          description: Candidate linked records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageRelatedCandidates"
+
+  /entities/{entityId}/related-link:
+    put:
+      operationId: setEntityRelatedLink
+      tags: [pageFields]
+      summary: Assign, change, or clear the single link backing a relation field cell
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PageRelatedLinkInput"
+      responses:
+        "200":
+          description: Link updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageRelatedLinkResult"
+
   # STATUSES
   /entities/{entityId}/statuses:
     get:
@@ -4381,6 +4456,8 @@ components:
           $ref: "#/components/schemas/FormulaFieldConfig"
         dependencyConfigJson:
           $ref: "#/components/schemas/DependencyFieldConfig"
+        relationConfigJson:
+          $ref: "#/components/schemas/RelationFieldConfig"
         isKey:
           type: boolean
         lockAfterCreate:
@@ -4443,6 +4520,8 @@ components:
           $ref: "#/components/schemas/FormulaFieldConfig"
         dependencyConfigJson:
           $ref: "#/components/schemas/DependencyFieldConfig"
+        relationConfigJson:
+          $ref: "#/components/schemas/RelationFieldConfig"
         isKey:
           type: boolean
           default: false
@@ -4521,6 +4600,8 @@ components:
           $ref: "#/components/schemas/FormulaFieldConfig"
         dependencyConfigJson:
           $ref: "#/components/schemas/DependencyFieldConfig"
+        relationConfigJson:
+          $ref: "#/components/schemas/RelationFieldConfig"
         isKey:
           type: boolean
         lockAfterCreate:

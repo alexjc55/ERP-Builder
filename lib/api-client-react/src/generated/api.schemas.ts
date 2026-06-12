@@ -1454,6 +1454,16 @@ export interface UserFieldConfig {
   allowCreate?: boolean;
 }
 
+/**
+ * Config for a relation-type page field (surfaces one field of a linked related record).
+ */
+export interface RelationFieldConfig {
+  /** @nullable */
+  relationId?: number | null;
+  /** @nullable */
+  relatedFieldKey?: string | null;
+}
+
 export interface Field {
   id: number;
   entityId: number;
@@ -1471,6 +1481,7 @@ export interface Field {
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
   dependencyConfigJson?: DependencyFieldConfig;
+  relationConfigJson?: RelationFieldConfig;
   isKey?: boolean;
   lockAfterCreate?: boolean;
   isFilterable?: boolean;
@@ -1502,6 +1513,7 @@ export interface FieldInput {
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
   dependencyConfigJson?: DependencyFieldConfig;
+  relationConfigJson?: RelationFieldConfig;
   isKey?: boolean;
   lockAfterCreate?: boolean;
   isFilterable?: boolean;
@@ -1541,6 +1553,7 @@ export interface FieldUpdate {
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
   dependencyConfigJson?: DependencyFieldConfig;
+  relationConfigJson?: RelationFieldConfig;
   isKey?: boolean;
   lockAfterCreate?: boolean;
   isFilterable?: boolean;
@@ -1645,16 +1658,6 @@ export interface PageRelationOption {
 
 export interface PageRelationOptions {
   options: PageRelationOption[];
-}
-
-/**
- * Config for a relation-type page field (surfaces one field of a linked related record).
- */
-export interface RelationFieldConfig {
-  /** @nullable */
-  relationId?: number | null;
-  /** @nullable */
-  relatedFieldKey?: string | null;
 }
 
 export interface PageField {

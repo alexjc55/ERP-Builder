@@ -2,16 +2,7 @@ import { pgTable, serial, jsonb, text, integer, boolean, timestamp, unique } fro
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { pagesTable } from "./pages";
-import type { FieldFormatRule, FormulaFieldConfig, FieldPermissions } from "./fields";
-
-/**
- * Per-field configuration for a `relation`-type page field. The column surfaces a
- * single field of a RELATED entity's record, resolved through a qualifying
- * single-link relation (source side of 1:1/N:1, or target side of 1:1/1:N).
- * The value is derived (never stored in `page_record_values`); edits write back
- * to the linked record through the normal records-update path.
- */
-export type RelationFieldConfig = { relationId?: number | null; relatedFieldKey?: string | null };
+import type { FieldFormatRule, FormulaFieldConfig, FieldPermissions, RelationFieldConfig } from "./fields";
 
 /**
  * Page-local field definitions. A mirror page shows another entity's records,

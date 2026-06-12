@@ -8,6 +8,8 @@ import {
   useReorderFields,
   useListEntities,
   useListRoles,
+  useGetEntityRelationOptions,
+  getGetEntityRelationOptionsQueryKey,
   type Field,
   type Entity,
   type FieldType,
@@ -72,6 +74,7 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "phone", label: "Телефон" },
   { value: "user", label: "Пользователь" },
   { value: "file", label: "Файл" },
+  { value: "relation", label: "Связанное поле" },
 ];
 
 const FILE_SOURCES: { value: FileSource; labelKey: string; label: string }[] = [
@@ -119,10 +122,19 @@ export default function EntityFieldsPage() {
   const [permissions, setPermissions] = useState<FieldPermissions>({});
   const [allowedSources, setAllowedSources] = useState<FileSource[]>(["server"]);
   const [allowedRoleIds, setAllowedRoleIds] = useState<number[]>([]);
+  const [relationId, setRelationId] = useState<number | null>(null);
+  const [relatedFieldKey, setRelatedFieldKey] = useState("");
 
   const { data: entities = [] } = useListEntities();
   const { data: roles = [] } = useListRoles();
   const entity = entities.find((e: Entity) => e.id === entityId);
+
+  const { data: relationOptionsData } = useGetEntityRelationOptions(entityId, {
+    query: { enabled: dialogOpen, queryKey: getGetEntityRelationOptionsQueryKey(entityId) },
+  });
+  const relationOptions = relationOptionsData?.options ?? [];
+  const selectedRelation = relationOptions.find((o) => o.relationId === relationId);
+  const relatedFieldOptions = selectedRelation?.fields ?? [];
 
   const { data: fields = [], isLoading } = useListEntityFields(entityId);
 
@@ -191,6 +203,8 @@ export default function EntityFieldsPage() {
     setPermissions({});
     setAllowedSources(["server"]);
     setAllowedRoleIds([]);
+    setRelationId(null);
+    setRelatedFieldKey("");
     setDialogOpen(true);
   };
 
@@ -220,6 +234,8 @@ export default function EntityFieldsPage() {
     setAllowedRoleIds(
       Array.isArray(field.userConfigJson?.allowedRoleIds) ? field.userConfigJson!.allowedRoleIds : [],
     );
+    setRelationId(field.relationConfigJson?.relationId ?? null);
+    setRelatedFieldKey(field.relationConfigJson?.relatedFieldKey ?? "");
     setDialogOpen(true);
   };
 
@@ -242,13 +258,16 @@ export default function EntityFieldsPage() {
       isActive,
       isFilterable,
       showInTable,
-      isKey: fieldType !== "file" && fieldType !== "function" ? isKey : false,
-      lockAfterCreate: fieldType !== "file" && fieldType !== "function" ? lockAfterCreate : false,
+      isKey: fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" ? isKey : false,
+      lockAfterCreate:
+        fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" ? lockAfterCreate : false,
       fileConfigJson:
         fieldType === "file"
           ? { allowedSources: allowedSources.length > 0 ? allowedSources : (["server"] as FileSource[]) }
           : {},
       userConfigJson: fieldType === "user" ? { allowedRoleIds } : {},
+      relationConfigJson:
+        fieldType === "relation" ? { relationId, relatedFieldKey: relatedFieldKey || null } : {},
     };
     if (editingField) {
       updateMutation.mutate({ id: editingField.id, data: payload });
@@ -282,7 +301,8 @@ export default function EntityFieldsPage() {
   const keyFormatInvalid = trimmedKey !== "" && !FIELD_KEY_RE.test(trimmedKey);
   const manualKeyTaken = trimmedKey !== "" && existingKeys.has(trimmedKey);
   const effectiveKey = trimmedKey || generatedKey;
-  const canSubmit = !isPending && FIELD_KEY_RE.test(effectiveKey) && !manualKeyTaken;
+  const relationIncomplete = fieldType === "relation" && (relationId == null || !relatedFieldKey);
+  const canSubmit = !isPending && FIELD_KEY_RE.test(effectiveKey) && !manualKeyTaken && !relationIncomplete;
 
   return (
     <div className="p-6 space-y-6">
@@ -521,14 +541,64 @@ export default function EntityFieldsPage() {
                 )}
               </div>
             )}
-            <div className="space-y-1.5">
-              <Label>{t("fields.defaultValue", "Значение по умолчанию")}</Label>
-              <Input
-                value={defaultValue}
-                onChange={(e) => setDefaultValue(e.target.value)}
-                placeholder="—"
-              />
-            </div>
+            {fieldType === "relation" && (
+              <div className="rounded-md border border-slate-100 bg-slate-50/50 p-3 space-y-3">
+                <p className="text-xs text-slate-500">
+                  {t(
+                    "fields.relationHint",
+                    "Связанное поле показывает значение из единственной связанной записи. Доступны связи «один к одному» и «многие к одному» (а также обратная сторона «один ко многим»).",
+                  )}
+                </p>
+                <div className="space-y-1.5">
+                  <Label>{t("fields.relation", "Связь")}</Label>
+                  <Select
+                    value={relationId != null ? String(relationId) : ""}
+                    onValueChange={(v) => {
+                      setRelationId(Number(v));
+                      setRelatedFieldKey("");
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder={t("fields.relationPlaceholder", "Выберите связь")} /></SelectTrigger>
+                    <SelectContent>
+                      {relationOptions.length === 0 ? (
+                        <div className="px-2 py-1.5 text-xs text-slate-400">
+                          {t("fields.noRelations", "Нет подходящих связей для этой сущности.")}
+                        </div>
+                      ) : (
+                        relationOptions.map((o) => (
+                          <SelectItem key={o.relationId} value={String(o.relationId)}>
+                            {ml(o.label)} → {ml(o.relatedEntityLabel)}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {relationId != null && (
+                  <div className="space-y-1.5">
+                    <Label>{t("fields.relatedField", "Поле связанной сущности")}</Label>
+                    <Select value={relatedFieldKey} onValueChange={setRelatedFieldKey}>
+                      <SelectTrigger><SelectValue placeholder={t("fields.relatedFieldPlaceholder", "Выберите поле")} /></SelectTrigger>
+                      <SelectContent>
+                        {relatedFieldOptions.map((f) => (
+                          <SelectItem key={f.key} value={f.key}>{ml(f.label) || f.key}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            )}
+            {fieldType !== "relation" && (
+              <div className="space-y-1.5">
+                <Label>{t("fields.defaultValue", "Значение по умолчанию")}</Label>
+                <Input
+                  value={defaultValue}
+                  onChange={(e) => setDefaultValue(e.target.value)}
+                  placeholder="—"
+                />
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-x-6 gap-y-3">
               <div className="flex items-center gap-2">
                 <Switch checked={isRequired} onCheckedChange={setIsRequired} id="field-required" />
@@ -546,13 +616,13 @@ export default function EntityFieldsPage() {
                 <Switch checked={showInTable} onCheckedChange={setShowInTable} id="field-show-in-table" />
                 <Label htmlFor="field-show-in-table">{t("fields.showInTable", "Показывать в таблице")}</Label>
               </div>
-              {fieldType !== "file" && fieldType !== "function" && (
+              {fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && (
                 <div className="flex items-center gap-2">
                   <Switch checked={isKey} onCheckedChange={setIsKey} id="field-is-key" />
                   <Label htmlFor="field-is-key">{t("fields.isKey", "Ключевое поле (уникальное)")}</Label>
                 </div>
               )}
-              {fieldType !== "file" && fieldType !== "function" && (
+              {fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && (
                 <div className="flex items-center gap-2">
                   <Switch checked={lockAfterCreate} onCheckedChange={setLockAfterCreate} id="field-lock-after-create" />
                   <Label htmlFor="field-lock-after-create">{t("fields.lockAfterCreate", "Запрет изменения после создания")}</Label>

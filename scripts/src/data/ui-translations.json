@@ -6694,5 +6694,47 @@
     "ru": "Да",
     "en": "Yes",
     "he": "כן"
+  },
+  {
+    "key": "fields.type.relation",
+    "ru": "Связанное поле",
+    "en": "Related field",
+    "he": "שדה מקושר"
+  },
+  {
+    "key": "fields.relation",
+    "ru": "Связь",
+    "en": "Relation",
+    "he": "קשר"
+  },
+  {
+    "key": "fields.relationHint",
+    "ru": "Связанное поле показывает значение из единственной связанной записи. Доступны связи «один к одному» и «многие к одному» (а также обратная сторона «один ко многим»).",
+    "en": "A related field shows a value from the single linked record. One-to-one and many-to-one relations are available (as well as the one-to-many inverse side).",
+    "he": "שדה מקושר מציג ערך מהרשומה המקושרת היחידה. זמינים קשרי אחד-לאחד ורבים-לאחד (וגם הצד ההפוך של אחד-לרבים)."
+  },
+  {
+    "key": "fields.relationPlaceholder",
+    "ru": "Выберите связь",
+    "en": "Select a relation",
+    "he": "בחרו קשר"
+  },
+  {
+    "key": "fields.noRelations",
+    "ru": "Нет подходящих связей для этой сущности.",
+    "en": "No suitable relations for this entity.",
+    "he": "אין קשרים מתאימים לישות זו."
+  },
+  {
+    "key": "fields.relatedField",
+    "ru": "Поле связанной сущности",
+    "en": "Related entity field",
+    "he": "שדה של הישות המקושרת"
+  },
+  {
+    "key": "fields.relatedFieldPlaceholder",
+    "ru": "Выберите поле",
+    "en": "Select a field",
+    "he": "בחרו שדה"
   }
 ]

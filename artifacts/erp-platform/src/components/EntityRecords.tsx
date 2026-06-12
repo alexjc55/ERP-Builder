@@ -35,6 +35,9 @@ import {
   useGetPageRelatedValues,
   useGetPageRelatedCandidates,
   useSetPageRelatedLink,
+  useGetEntityRelatedValues,
+  useGetEntityRelatedCandidates,
+  useSetEntityRelatedLink,
   type PageField,
   type PageRelatedColumn,
   type PageRelatedValue,
@@ -891,6 +894,22 @@ export function EntityRecords({
   const relatedValuesMutation = useGetPageRelatedValues();
   const fetchRelatedValues = relatedValuesMutation.mutateAsync;
 
+  // Entity-level relation FIELDS mirror the page-field relation mechanism, but the
+  // config lives on the entity field (relationConfigJson) and values resolve via
+  // the entity-keyed related-values endpoint (the relation field's OWN field perms
+  // apply — there is no page-field role-visibility layer here).
+  const hasEntityRelationFields = allFields.some((f: Field) => f.fieldType === "relation");
+  const [entityRelatedColumns, setEntityRelatedColumns] = useState<PageRelatedColumn[]>([]);
+  const [entityRelatedByRecord, setEntityRelatedByRecord] = useState<
+    Map<number, Map<string, PageRelatedValue>>
+  >(new Map());
+  const entityRelatedColMeta = useMemo(() => {
+    const m = new Map<string, PageRelatedColumn>();
+    for (const c of entityRelatedColumns) m.set(c.fieldKey, c);
+    return m;
+  }, [entityRelatedColumns]);
+  const fetchEntityRelatedValues = useGetEntityRelatedValues().mutateAsync;
+
   // Optional mirror-page projection: restrict to a chosen subset of field keys.
   const mirrorKeySet =
     visibleFieldKeys && visibleFieldKeys.length > 0 ? new Set(visibleFieldKeys) : null;
@@ -1356,6 +1375,51 @@ export function EntityRecords({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageId, hasRelationFields, recordIdsKey, relationFieldsKey, refreshTick]);
+
+  // Entity relation FIELDS: resolve their live values via the entity-keyed
+  // endpoint (independent of the page-field relation fetch above).
+  const entityRelationFieldsKey = useMemo(
+    () =>
+      JSON.stringify(
+        allFields
+          .filter((f: Field) => f.fieldType === "relation")
+          .map((f: Field) => [f.fieldKey, f.relationConfigJson?.relationId, f.relationConfigJson?.relatedFieldKey]),
+      ),
+    [allFields],
+  );
+  useEffect(() => {
+    if (!hasEntityRelationFields || records.length === 0) {
+      setEntityRelatedColumns([]);
+      setEntityRelatedByRecord(new Map());
+      return;
+    }
+    let cancelled = false;
+    const recordIds = records.map((r: EntityRecord) => r.id);
+    fetchEntityRelatedValues({ entityId, data: { recordIds } })
+      .then((res) => {
+        if (cancelled) return;
+        setEntityRelatedColumns(res.columns);
+        const m = new Map<number, Map<string, PageRelatedValue>>();
+        for (const v of res.values) {
+          let inner = m.get(v.recordId);
+          if (!inner) {
+            inner = new Map();
+            m.set(v.recordId, inner);
+          }
+          inner.set(v.fieldKey, v);
+        }
+        setEntityRelatedByRecord(m);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setEntityRelatedColumns([]);
+        setEntityRelatedByRecord(new Map());
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entityId, hasEntityRelationFields, recordIdsKey, entityRelationFieldsKey, refreshTick]);
 
   const reorderFieldsMutation = useReorderFields({
     mutation: {
@@ -2387,6 +2451,43 @@ export function EntityRecords({
                           const cellBg = formatting.cellColors[f.fieldKey];
                           const cellText = formatting.cellTextColors[f.fieldKey];
                           const cellStyle = cellBg || cellText ? { backgroundColor: cellBg || undefined, color: cellText || undefined } : undefined;
+                          if (f.fieldType === "relation") {
+                            const meta = entityRelatedColMeta.get(f.fieldKey);
+                            const rel = entityRelatedByRecord.get(record.id)?.get(f.fieldKey);
+                            // Synthetic Field so the related value reuses the standard cell
+                            // renderer with the related field's render type / select options.
+                            const relField = {
+                              ...f,
+                              fieldType: (meta?.relatedFieldType ?? "text") as Field["fieldType"],
+                              optionsJson: meta?.optionsJson ?? [],
+                            } as unknown as Field;
+                            // Assignable column-wide when inline edit is on and the server
+                            // reports both the column and this row's link as editable.
+                            const relAssignable =
+                              inlineEditEnabled && !!meta?.editableColumn && !!rel?.editable;
+                            const display =
+                              rel?.linkedRecordId == null ? (
+                                <span className="text-slate-300">—</span>
+                              ) : (
+                                renderCellValue(relField, rel?.value, t, userNames, cellText)
+                              );
+                            return (
+                              <td key={f.id} className="px-4 py-3 max-w-[240px] truncate" style={{ ...pinStyle(`f:${f.id}`, formatting.rowColor || "#ffffff"), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
+                                {relAssignable ? (
+                                  <EntityRelationLinkPicker
+                                    entityId={entityId}
+                                    fieldKey={f.fieldKey}
+                                    recordId={record.id}
+                                    currentLinkedId={rel?.linkedRecordId ?? null}
+                                    display={display}
+                                    onChanged={() => setRefreshTick((x) => x + 1)}
+                                  />
+                                ) : (
+                                  <div className="truncate">{display}</div>
+                                )}
+                              </td>
+                            );
+                          }
                           const isEditingThis =
                             editingCell?.recordId === record.id && editingCell?.fieldKey === f.fieldKey;
                           if (isEditingThis) {
@@ -3007,6 +3108,120 @@ function RelationLinkPicker({
   const choose = async (linkedRecordId: number | null) => {
     try {
       await linkMutation.mutateAsync({ pageId, data: { fieldKey, recordId, linkedRecordId } });
+      setOpen(false);
+      setSearch("");
+      onChanged();
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        title: t("records.linkFailed", "Не удалось изменить связь"),
+        description: e instanceof Error ? e.message : undefined,
+      });
+    }
+  };
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setSearch("");
+      }}
+    >
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-2 -mx-1 rounded px-1 text-left hover:bg-blue-50/60"
+          title={t("records.clickToAssign", "Нажмите, чтобы назначить связь")}
+        >
+          <span className="truncate">{display}</span>
+          <ChevronDown className="h-4 w-4 shrink-0 opacity-40" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-64 p-0">
+        <Command shouldFilter={false}>
+          <CommandInput
+            value={search}
+            onValueChange={setSearch}
+            placeholder={t("records.relatedSearch", "Поиск записи...")}
+          />
+          <CommandList>
+            <CommandEmpty>{t("records.relatedNotFound", "Записи не найдены")}</CommandEmpty>
+            {currentLinkedId != null && (
+              <CommandGroup>
+                <CommandItem value="__clear__" onSelect={() => choose(null)} className="text-rose-600">
+                  <X className="mr-2 h-4 w-4" />
+                  {t("records.clearLink", "Очистить связь")}
+                </CommandItem>
+              </CommandGroup>
+            )}
+            <CommandGroup>
+              {candidates.map((c) => (
+                <CommandItem key={c.id} value={`${c.label} #${c.id}`} onSelect={() => choose(c.id)}>
+                  <Check
+                    className={cn("mr-2 h-4 w-4", currentLinkedId === c.id ? "opacity-100" : "opacity-0")}
+                  />
+                  <span className="truncate">{c.label || `#${c.id}`}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * Entity-keyed twin of RelationLinkPicker: assigns / changes / clears the single
+ * link backing a relation ENTITY-field cell. Identical UX, but candidates and the
+ * link write go through the entity-keyed endpoints (the relation field's own
+ * field/row boundary applies — no page-field role-visibility layer).
+ */
+function EntityRelationLinkPicker({
+  entityId,
+  fieldKey,
+  recordId,
+  currentLinkedId,
+  display,
+  onChanged,
+}: {
+  entityId: number;
+  fieldKey: string;
+  recordId: number;
+  currentLinkedId: number | null;
+  display: React.ReactNode;
+  onChanged: () => void;
+}) {
+  const t = useT();
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [candidates, setCandidates] = useState<PageRelatedCandidate[]>([]);
+  const fetchCandidates = useGetEntityRelatedCandidates().mutateAsync;
+  const linkMutation = useSetEntityRelatedLink();
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const handle = setTimeout(() => {
+      fetchCandidates({ entityId, data: { fieldKey, q: search.trim() || undefined } })
+        .then((res) => {
+          if (!cancelled) setCandidates(res.candidates);
+        })
+        .catch(() => {
+          if (!cancelled) setCandidates([]);
+        });
+    }, 200);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [open, search, entityId, fieldKey, fetchCandidates]);
+
+  const choose = async (linkedRecordId: number | null) => {
+    try {
+      await linkMutation.mutateAsync({ entityId, data: { fieldKey, recordId, linkedRecordId } });
       setOpen(false);
       setSearch("");
       onChanged();

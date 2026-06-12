@@ -72,6 +72,15 @@ export type FormulaFieldConfig = { expression?: string };
  */
 export type DependencyFieldConfig = { dependsOnFieldKey?: string };
 
+/**
+ * Per-field configuration for a `relation`-type field. The column surfaces one
+ * field (`relatedFieldKey`) of a single linked record, resolved through a
+ * qualifying single-link relation (`relationId`). The value is derived from the
+ * linked record (never stored in `valuesJson`); assigning/clearing the link
+ * writes a row in `record_links`. Shared by entity fields and page fields.
+ */
+export type RelationFieldConfig = { relationId?: number | null; relatedFieldKey?: string | null };
+
 export const entityFieldsTable = pgTable(
   "entity_fields",
   {
@@ -92,6 +101,9 @@ export const entityFieldsTable = pgTable(
     formatRulesJson: jsonb("format_rules_json").$type<FieldFormatRule[]>().notNull().default([]),
     formulaConfigJson: jsonb("formula_config_json").$type<FormulaFieldConfig>().notNull().default({}),
     dependencyConfigJson: jsonb("dependency_config_json").$type<DependencyFieldConfig>().notNull().default({}),
+    // Per-field config for a `relation`-type entity field (the relation it binds to
+    // and which target field to display). Empty {} for non-relation fields.
+    relationConfigJson: jsonb("relation_config_json").$type<RelationFieldConfig>().notNull().default({}),
     // Value must be unique within the entity (case-insensitive). Enforced server-side
     // on record create/update; meaningless for file/function types (rejected at field CRUD).
     isKey: boolean("is_key").notNull().default(false),

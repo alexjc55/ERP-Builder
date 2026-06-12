@@ -1802,6 +1802,10 @@ export const ListEntityFieldsResponseItem = zod.object({
   "dependencyConfigJson": zod.object({
   "dependsOnFieldKey": zod.string().optional()
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
+  "relationConfigJson": zod.object({
+  "relationId": zod.number().nullish(),
+  "relatedFieldKey": zod.string().nullish()
+}).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "isKey": zod.boolean().optional(),
   "lockAfterCreate": zod.boolean().optional(),
   "isFilterable": zod.boolean().optional(),
@@ -1876,6 +1880,10 @@ export const CreateEntityFieldBody = zod.object({
   "dependencyConfigJson": zod.object({
   "dependsOnFieldKey": zod.string().optional()
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
+  "relationConfigJson": zod.object({
+  "relationId": zod.number().nullish(),
+  "relatedFieldKey": zod.string().nullish()
+}).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "isKey": zod.boolean().default(createEntityFieldBodyIsKeyDefault),
   "lockAfterCreate": zod.boolean().default(createEntityFieldBodyLockAfterCreateDefault),
   "isFilterable": zod.boolean().default(createEntityFieldBodyIsFilterableDefault),
@@ -1942,6 +1950,10 @@ export const GetFieldResponse = zod.object({
   "dependencyConfigJson": zod.object({
   "dependsOnFieldKey": zod.string().optional()
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
+  "relationConfigJson": zod.object({
+  "relationId": zod.number().nullish(),
+  "relatedFieldKey": zod.string().nullish()
+}).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "isKey": zod.boolean().optional(),
   "lockAfterCreate": zod.boolean().optional(),
   "isFilterable": zod.boolean().optional(),
@@ -2008,6 +2020,10 @@ export const UpdateFieldBody = zod.object({
   "dependencyConfigJson": zod.object({
   "dependsOnFieldKey": zod.string().optional()
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
+  "relationConfigJson": zod.object({
+  "relationId": zod.number().nullish(),
+  "relatedFieldKey": zod.string().nullish()
+}).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "isKey": zod.boolean().optional(),
   "lockAfterCreate": zod.boolean().optional(),
   "isFilterable": zod.boolean().optional(),
@@ -2066,6 +2082,10 @@ export const UpdateFieldResponse = zod.object({
   "dependencyConfigJson": zod.object({
   "dependsOnFieldKey": zod.string().optional()
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
+  "relationConfigJson": zod.object({
+  "relationId": zod.number().nullish(),
+  "relatedFieldKey": zod.string().nullish()
+}).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "isKey": zod.boolean().optional(),
   "lockAfterCreate": zod.boolean().optional(),
   "isFilterable": zod.boolean().optional(),
@@ -2527,6 +2547,74 @@ export const GetEntityRelationOptionsResponse = zod.object({
   "fieldType": zod.string()
 }))
 }))
+})
+
+
+/**
+ * @summary Resolve relation-field column values for a set of this entity's records
+ */
+export const GetEntityRelatedValuesParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const GetEntityRelatedValuesBody = zod.object({
+  "recordIds": zod.array(zod.number())
+})
+
+export const GetEntityRelatedValuesResponse = zod.object({
+  "columns": zod.array(zod.object({
+  "fieldKey": zod.string().describe('The relation page-field\'s own key (column identity).'),
+  "relatedFieldKey": zod.string(),
+  "relatedFieldType": zod.string().nullish().describe('Field type of the related entity field (drives rendering\/editing).'),
+  "optionsJson": zod.array(zod.string()).optional().describe('Select options of the related field (for inline editing).'),
+  "editableColumn": zod.boolean().describe('Whether the viewer\'s role may edit the related field at all (before per-row scope).')
+})),
+  "values": zod.array(zod.object({
+  "recordId": zod.number(),
+  "fieldKey": zod.string(),
+  "value": zod.unknown().optional().describe('The related field\'s value (null if hidden for the viewer or no linked record).'),
+  "linkedRecordId": zod.number().nullish(),
+  "editable": zod.boolean()
+}))
+})
+
+
+/**
+ * @summary List assignable linked-record candidates for a relation field (RBAC-filtered, searchable)
+ */
+export const GetEntityRelatedCandidatesParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const GetEntityRelatedCandidatesBody = zod.object({
+  "fieldKey": zod.string().describe('The relation page-field\'s own key (identifies which relation to list candidates for).'),
+  "q": zod.string().optional().describe('Optional case-insensitive search over the candidate label (related field value).')
+})
+
+export const GetEntityRelatedCandidatesResponse = zod.object({
+  "candidates": zod.array(zod.object({
+  "id": zod.number().describe('The related entity record id (to link to).'),
+  "label": zod.string().describe('Display label (the related field value as text).')
+}))
+})
+
+
+/**
+ * @summary Assign, change, or clear the single link backing a relation field cell
+ */
+export const SetEntityRelatedLinkParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const SetEntityRelatedLinkBody = zod.object({
+  "fieldKey": zod.string().describe('The relation page-field\'s own key.'),
+  "recordId": zod.number().describe('The base (page) record whose link is being set.'),
+  "linkedRecordId": zod.number().nullish().describe('The related record to link to, or null to clear the existing link.')
+})
+
+export const SetEntityRelatedLinkResponse = zod.object({
+  "linkedRecordId": zod.number().nullable().describe('The linked record id after the change (null if cleared).'),
+  "value": zod.unknown().optional().describe('The related field value after the change (null if cleared or hidden).')
 })
 
 
