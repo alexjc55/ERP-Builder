@@ -114,6 +114,8 @@ export default function EntityFieldsPage() {
   const [isActive, setIsActive] = useState(true);
   const [isFilterable, setIsFilterable] = useState(false);
   const [showInTable, setShowInTable] = useState(true);
+  const [isKey, setIsKey] = useState(false);
+  const [lockAfterCreate, setLockAfterCreate] = useState(false);
   const [permissions, setPermissions] = useState<FieldPermissions>({});
   const [allowedSources, setAllowedSources] = useState<FileSource[]>(["server"]);
   const [allowedRoleIds, setAllowedRoleIds] = useState<number[]>([]);
@@ -184,6 +186,8 @@ export default function EntityFieldsPage() {
     setIsActive(true);
     setIsFilterable(false);
     setShowInTable(true);
+    setIsKey(false);
+    setLockAfterCreate(false);
     setPermissions({});
     setAllowedSources(["server"]);
     setAllowedRoleIds([]);
@@ -205,6 +209,8 @@ export default function EntityFieldsPage() {
     setIsActive(field.isActive);
     setIsFilterable(field.isFilterable ?? false);
     setShowInTable(field.showInTable ?? true);
+    setIsKey(field.isKey ?? false);
+    setLockAfterCreate(field.lockAfterCreate ?? false);
     setPermissions(field.permissionsJson ?? {});
     setAllowedSources(
       field.fileConfigJson?.allowedSources && field.fileConfigJson.allowedSources.length > 0
@@ -236,6 +242,8 @@ export default function EntityFieldsPage() {
       isActive,
       isFilterable,
       showInTable,
+      isKey: fieldType !== "file" && fieldType !== "function" ? isKey : false,
+      lockAfterCreate: fieldType !== "file" && fieldType !== "function" ? lockAfterCreate : false,
       fileConfigJson:
         fieldType === "file"
           ? { allowedSources: allowedSources.length > 0 ? allowedSources : (["server"] as FileSource[]) }
@@ -532,6 +540,18 @@ export default function EntityFieldsPage() {
                 <Switch checked={showInTable} onCheckedChange={setShowInTable} id="field-show-in-table" />
                 <Label htmlFor="field-show-in-table">{t("fields.showInTable", "Показывать в таблице")}</Label>
               </div>
+              {fieldType !== "file" && fieldType !== "function" && (
+                <div className="flex items-center gap-2">
+                  <Switch checked={isKey} onCheckedChange={setIsKey} id="field-is-key" />
+                  <Label htmlFor="field-is-key">{t("fields.isKey", "Ключевое поле (уникальное)")}</Label>
+                </div>
+              )}
+              {fieldType !== "file" && fieldType !== "function" && (
+                <div className="flex items-center gap-2">
+                  <Switch checked={lockAfterCreate} onCheckedChange={setLockAfterCreate} id="field-lock-after-create" />
+                  <Label htmlFor="field-lock-after-create">{t("fields.lockAfterCreate", "Запрет изменения после создания")}</Label>
+                </div>
+              )}
             </div>
 
             <div className="border-t border-slate-100 pt-4 space-y-2">
