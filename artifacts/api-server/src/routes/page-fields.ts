@@ -1739,7 +1739,12 @@ router.post("/entities/:entityId/related-candidates", requireAuth, async (req, r
   // Surface the related entity id + create permission so the client can offer an
   // in-place "add record" affordance (create a record in the related entity and
   // link it without leaving the picker).
-  res.json({ candidates, relatedEntityId, canCreate: canRecord(perms, relatedEntityId, "create") });
+  res.json({
+    candidates,
+    relatedEntityId,
+    relatedFieldKey,
+    canCreate: canRecord(perms, relatedEntityId, "create"),
+  });
 });
 
 /**

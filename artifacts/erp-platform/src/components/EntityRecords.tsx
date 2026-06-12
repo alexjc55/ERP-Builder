@@ -3558,6 +3558,7 @@ function RelationCreatePicker({
   const [search, setSearch] = useState("");
   const [candidates, setCandidates] = useState<PageRelatedCandidate[]>([]);
   const [relatedEntityId, setRelatedEntityId] = useState<number | null>(null);
+  const [relatedLabelFieldKey, setRelatedLabelFieldKey] = useState<string | null>(null);
   const [canCreateRelated, setCanCreateRelated] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   // Label of the current selection, remembered when chosen (create mode starts
@@ -3587,6 +3588,7 @@ function RelationCreatePicker({
           if (cancelled) return;
           setCandidates(res.candidates);
           setRelatedEntityId(res.relatedEntityId ?? null);
+          setRelatedLabelFieldKey(res.relatedFieldKey ?? null);
           setCanCreateRelated(res.canCreate === true);
         })
         .catch(() => {
@@ -3688,9 +3690,10 @@ function RelationCreatePicker({
           pageId={pageId}
           lockedFieldKey={dependent ? relatedFilterFieldKey : null}
           lockedValue={dependent ? parentValue : null}
-          onCreated={(newId) => {
+          labelFieldKey={relatedLabelFieldKey}
+          onCreated={(newId, label) => {
             setCreateOpen(false);
-            choose(newId, null);
+            choose(newId, label);
           }}
         />
       )}
@@ -3882,6 +3885,7 @@ function QuickCreateRelatedRecordDialog({
   pageId,
   lockedFieldKey,
   lockedValue,
+  labelFieldKey,
   onCreated,
 }: {
   open: boolean;
@@ -3890,7 +3894,10 @@ function QuickCreateRelatedRecordDialog({
   pageId?: number;
   lockedFieldKey?: string | null;
   lockedValue?: string | null;
-  onCreated: (newId: number) => void;
+  /** The related entity field used as the display label, so the caller can show
+   * the new record's name instead of its id right after a quick-create. */
+  labelFieldKey?: string | null;
+  onCreated: (newId: number, label: string | null) => void;
 }) {
   const t = useT();
   const ml = useML();
@@ -3976,7 +3983,12 @@ function QuickCreateRelatedRecordDialog({
       }
     }
     setSubmitting(false);
-    onCreated(newId);
+    // Derive the new record's display label from the label field the caller named,
+    // so the picker can show the name immediately (the record is not yet in the
+    // candidate list). Falls back to null → the caller renders `#id`.
+    const labelRaw = labelFieldKey ? form[labelFieldKey] : undefined;
+    const label = labelRaw == null || labelRaw === "" ? null : String(labelRaw);
+    onCreated(newId, label);
   };
 
   return (
