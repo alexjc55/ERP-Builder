@@ -1365,6 +1365,7 @@ export const FieldType = {
   file: 'file',
   function: 'function',
   relation: 'relation',
+  lookup: 'lookup',
 } as const;
 
 export type FormatOperator = typeof FormatOperator[keyof typeof FormatOperator];

@@ -1450,7 +1450,7 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
         and(
           eq(entityFieldsTable.entityId, entityId),
           eq(entityFieldsTable.isActive, true),
-          eq(entityFieldsTable.fieldType, "relation"),
+          inArray(entityFieldsTable.fieldType, ["relation", "lookup"]),
         ),
       )
       .orderBy(asc(entityFieldsTable.sortOrder))
@@ -1534,7 +1534,10 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
     // the relation field is editable for the role, the viewer can update the base
     // entity, and the related field is not hidden. Column-wide, so empty cells are
     // assignable too.
+    // A lookup field is read-only: it projects another field of the linked record
+    // and never assigns the link, so its column is never editable.
     const columnEditable =
+      f.fieldType !== "lookup" &&
       ownAccess === "edit" && access !== "hidden" && canRecord(perms, entityId, "update");
 
     columns.push({

@@ -1775,7 +1775,7 @@ export const ListEntityFieldsResponseItem = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
@@ -1854,7 +1854,7 @@ export const CreateEntityFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
   "isRequired": zod.boolean().default(createEntityFieldBodyIsRequiredDefault),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()).optional(),
@@ -1925,7 +1925,7 @@ export const GetFieldResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
@@ -1996,7 +1996,7 @@ export const UpdateFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation']).optional(),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']).optional(),
   "isRequired": zod.boolean().optional(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()).optional(),
@@ -2059,7 +2059,7 @@ export const UpdateFieldResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
@@ -2162,7 +2162,7 @@ export const ListPageFieldsResponseItem = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
@@ -2223,7 +2223,7 @@ export const CreatePageFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
   "isRequired": zod.boolean().default(createPageFieldBodyIsRequiredDefault),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()).optional(),
@@ -2277,7 +2277,7 @@ export const UpdatePageFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation']).optional(),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']).optional(),
   "isRequired": zod.boolean().optional(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()).optional(),
@@ -2325,7 +2325,7 @@ export const UpdatePageFieldResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),

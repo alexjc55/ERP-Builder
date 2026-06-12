@@ -4304,6 +4304,7 @@ components:
         - file
         - function
         - relation
+        - lookup
 
     FormatOperator:
       type: string

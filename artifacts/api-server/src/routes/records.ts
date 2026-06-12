@@ -192,7 +192,14 @@ function validateValues(fields: EntityField[], values: Record<string, unknown>, 
     // Function/formula fields are computed at read time and never stored.
     // Relation fields are derived from a single linked record (the link lives in
     // record_links, assigned via the related-link endpoint) and never stored here.
-    if (field.fieldType === "function" || field.fieldType === "relation") continue;
+    // Lookup fields project another field of that same linked record (read-only),
+    // so they are likewise derived and never stored in valuesJson.
+    if (
+      field.fieldType === "function" ||
+      field.fieldType === "relation" ||
+      field.fieldType === "lookup"
+    )
+      continue;
     const raw = values[field.fieldKey];
 
     if (isEmpty(raw)) {

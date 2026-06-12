@@ -174,9 +174,11 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
 
   // A "relation" entity field derives its value from a single linked record (via
   // relationConfigJson + a qualifying single-link relation); validate the config
-  // against this entity before accepting it. Cleaned config is persisted below.
+  // against this entity before accepting it. A "lookup" field reuses the same
+  // config to project ANOTHER field of that linked record (read-only), so it is
+  // validated identically. Cleaned config is persisted below.
   let relationConfig: RelationFieldConfig | undefined;
-  if (parsed.data.fieldType === "relation") {
+  if (parsed.data.fieldType === "relation" || parsed.data.fieldType === "lookup") {
     const check = await validateEntityRelationConfig(params.data.entityId, parsed.data.relationConfigJson);
     if (!("ok" in check)) {
       res.status(400).json({ error: check.error });
@@ -194,18 +196,25 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
   // for file (object), function (computed) and relation (derived) fields.
   if (
     parsed.data.isKey &&
-    (parsed.data.fieldType === "file" || parsed.data.fieldType === "function" || parsed.data.fieldType === "relation")
+    (parsed.data.fieldType === "file" ||
+      parsed.data.fieldType === "function" ||
+      parsed.data.fieldType === "relation" ||
+      parsed.data.fieldType === "lookup")
   ) {
-    res.status(400).json({ error: "Ключевое поле недоступно для полей типа «файл», «функция» и «связанное поле»" });
+    res.status(400).json({ error: "Ключевое поле недоступно для полей типа «файл», «функция», «связанное поле» и «поле подстановки»" });
     return;
   }
   // lockAfterCreate is enforced on the stored value (file/function have none); for
   // relation fields it is enforced separately on the related-link assignment path.
+  // A lookup field is read-only/derived (no stored value, no link assignment), so
+  // immutability is meaningless for it.
   if (
     parsed.data.lockAfterCreate &&
-    (parsed.data.fieldType === "file" || parsed.data.fieldType === "function")
+    (parsed.data.fieldType === "file" ||
+      parsed.data.fieldType === "function" ||
+      parsed.data.fieldType === "lookup")
   ) {
-    res.status(400).json({ error: "Запрет изменения недоступен для полей типа «файл» и «функция»" });
+    res.status(400).json({ error: "Запрет изменения недоступен для полей типа «файл», «функция» и «поле подстановки»" });
     return;
   }
 
@@ -349,7 +358,7 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   // Validate relation config whenever the field is (or is becoming) a relation
   // field. The config comes from the body when present, else the stored value.
   let relationConfigToPersist: RelationFieldConfig | undefined;
-  if (nextType === "relation") {
+  if (nextType === "relation" || nextType === "lookup") {
     const incoming =
       "relationConfigJson" in body
         ? (body.relationConfigJson as RelationFieldConfig | null | undefined)
@@ -375,12 +384,15 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   // relation fields (so it IS allowed for relation, but isKey is not).
   const nextIsKey = body.isKey ?? current.isKey;
   const nextLock = body.lockAfterCreate ?? current.lockAfterCreate;
-  if (nextIsKey && (nextType === "file" || nextType === "function" || nextType === "relation")) {
-    res.status(400).json({ error: "Ключевое поле недоступно для полей типа «файл», «функция» и «связанное поле»" });
+  if (
+    nextIsKey &&
+    (nextType === "file" || nextType === "function" || nextType === "relation" || nextType === "lookup")
+  ) {
+    res.status(400).json({ error: "Ключевое поле недоступно для полей типа «файл», «функция», «связанное поле» и «поле подстановки»" });
     return;
   }
-  if (nextLock && (nextType === "file" || nextType === "function")) {
-    res.status(400).json({ error: "Запрет изменения недоступен для полей типа «файл» и «функция»" });
+  if (nextLock && (nextType === "file" || nextType === "function" || nextType === "lookup")) {
+    res.status(400).json({ error: "Запрет изменения недоступен для полей типа «файл», «функция» и «поле подстановки»" });
     return;
   }
 
@@ -434,7 +446,11 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   // reset it to {} when switching a former relation field away from that type.
   if (relationConfigToPersist !== undefined) {
     updateData.relationConfigJson = relationConfigToPersist;
-  } else if (nextType !== "relation" && current.fieldType === "relation") {
+  } else if (
+    nextType !== "relation" &&
+    nextType !== "lookup" &&
+    (current.fieldType === "relation" || current.fieldType === "lookup")
+  ) {
     updateData.relationConfigJson = {};
   }
   if (body.isKey != null) updateData.isKey = body.isKey;

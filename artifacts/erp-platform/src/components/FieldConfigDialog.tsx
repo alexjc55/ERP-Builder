@@ -95,6 +95,7 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "file", label: "Файл" },
   { value: "function", label: "Формула (вычисляемое)" },
   { value: "relation", label: "Связанное поле" },
+  { value: "lookup", label: "Поле подстановки" },
 ];
 
 const FIELD_ACCESS_OPTIONS: { value: FieldAccess; label: string }[] = [
@@ -393,16 +394,23 @@ export function FieldConfigDialog({
             ? { dependsOnFieldKey, relatedFilterFieldKey }
             : {},
       relationConfigJson:
-        fieldType === "relation" ? { relationId, relatedFieldKey: relatedFieldKey || null } : {},
-      isKey: fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" ? isKey : false,
-      lockAfterCreate: fieldType !== "file" && fieldType !== "function" ? lockAfterCreate : false,
+        fieldType === "relation" || fieldType === "lookup"
+          ? { relationId, relatedFieldKey: relatedFieldKey || null }
+          : {},
+      isKey:
+        fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup"
+          ? isKey
+          : false,
+      lockAfterCreate:
+        fieldType !== "file" && fieldType !== "function" && fieldType !== "lookup" ? lockAfterCreate : false,
     };
     if (field) updateMutation.mutate({ id: field.id, data: payload });
     else createMutation.mutate({ entityId, data: payload });
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
-  const relationIncomplete = fieldType === "relation" && (relationId == null || !relatedFieldKey);
+  const relationIncomplete =
+    (fieldType === "relation" || fieldType === "lookup") && (relationId == null || !relatedFieldKey);
   const canSubmit =
     !isPending && FIELD_KEY_RE.test(effectiveKey) && !manualKeyTaken && !keyFormatInvalid && !relationIncomplete;
 
@@ -445,7 +453,10 @@ export function FieldConfigDialog({
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {FIELD_TYPES.filter(
-                      (ft) => ft.value !== "relation" || canUseRelation || fieldType === "relation",
+                      (ft) =>
+                        (ft.value !== "relation" && ft.value !== "lookup") ||
+                        canUseRelation ||
+                        fieldType === ft.value,
                     ).map((ft) => (
                       <SelectItem key={ft.value} value={ft.value}>{t(`fields.type.${ft.value}`, ft.label)}</SelectItem>
                     ))}
@@ -457,13 +468,18 @@ export function FieldConfigDialog({
                 <Input type="number" value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value))} />
               </div>
             </div>
-            {fieldType === "relation" && (
+            {(fieldType === "relation" || fieldType === "lookup") && (
               <div className="rounded-md border border-slate-100 bg-slate-50/50 p-3 space-y-3">
                 <p className="text-xs text-slate-500">
-                  {t(
-                    "fields.relationHint",
-                    "Связанное поле показывает значение из единственной связанной записи. Доступны связи «один к одному» и «многие к одному», где эта сущность — источник.",
-                  )}
+                  {fieldType === "lookup"
+                    ? t(
+                        "fields.lookupHint",
+                        "Поле подстановки показывает значение из уже связанной записи (только для чтения). Выберите ту же связь, что и у связанного поля, и поле, значение которого нужно подставить.",
+                      )
+                    : t(
+                        "fields.relationHint",
+                        "Связанное поле показывает значение из единственной связанной записи. Доступны связи «один к одному» и «многие к одному», где эта сущность — источник.",
+                      )}
                 </p>
                 <div className="space-y-1.5">
                   <Label>{t("fields.relation", "Связь")}</Label>
@@ -503,7 +519,7 @@ export function FieldConfigDialog({
                     </Select>
                   </div>
                 )}
-                {relationId != null && relatedFieldKey && (
+                {fieldType === "relation" && relationId != null && relatedFieldKey && (
                   <div className="space-y-3 border-t border-slate-100 pt-3">
                     <div className="space-y-1.5">
                       <Label>{t("fields.dependsOn", "Зависит от поля")}</Label>
@@ -728,7 +744,7 @@ export function FieldConfigDialog({
                 </p>
               </div>
             )}
-            {fieldType !== "function" && fieldType !== "relation" && (
+            {fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup" && (
               <div className="space-y-1.5">
                 <Label>{t("fields.defaultValue", "Значение по умолчанию")}</Label>
                 <Input value={defaultValue} onChange={(e) => setDefaultValue(e.target.value)} placeholder="—" />
@@ -755,13 +771,13 @@ export function FieldConfigDialog({
                 <Switch checked={isPinned} onCheckedChange={setIsPinned} id="fcd-pinned" />
                 <Label htmlFor="fcd-pinned">{t("fields.pinColumn", "Закрепить при горизонтальной прокрутке")}</Label>
               </div>
-              {fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && (
+              {fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup" && (
                 <div className="flex items-center gap-2">
                   <Switch checked={isKey} onCheckedChange={setIsKey} id="fcd-is-key" />
                   <Label htmlFor="fcd-is-key">{t("fields.isKey", "Ключевое поле (уникальное)")}</Label>
                 </div>
               )}
-              {fieldType !== "file" && fieldType !== "function" && (
+              {fieldType !== "file" && fieldType !== "function" && fieldType !== "lookup" && (
                 <div className="flex items-center gap-2">
                   <Switch checked={lockAfterCreate} onCheckedChange={setLockAfterCreate} id="fcd-lock-after-create" />
                   <Label htmlFor="fcd-lock-after-create">{t("fields.lockAfterCreate", "Запрет изменения после создания")}</Label>

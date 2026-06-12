@@ -186,6 +186,13 @@ function valueToForm(field: Field, value: unknown): CellValue {
 function formToValues(fields: Field[], form: FormState): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const field of fields) {
+    // Derived/read-only field types never carry a stored value in valuesJson:
+    // function (computed), relation (linked record) and lookup (projected from a
+    // linked record). The server drops them anyway, but we must not let the UI
+    // even attempt to send them.
+    if (field.fieldType === "function" || field.fieldType === "relation" || field.fieldType === "lookup") {
+      continue;
+    }
     const raw = form[field.fieldKey];
     if (field.fieldType === "boolean") {
       out[field.fieldKey] = Boolean(raw);
@@ -898,7 +905,9 @@ export function EntityRecords({
   // config lives on the entity field (relationConfigJson) and values resolve via
   // the entity-keyed related-values endpoint (the relation field's OWN field perms
   // apply — there is no page-field role-visibility layer here).
-  const hasEntityRelationFields = allFields.some((f: Field) => f.fieldType === "relation");
+  const hasEntityRelationFields = allFields.some(
+    (f: Field) => f.fieldType === "relation" || f.fieldType === "lookup",
+  );
   const [entityRelatedColumns, setEntityRelatedColumns] = useState<PageRelatedColumn[]>([]);
   const [entityRelatedByRecord, setEntityRelatedByRecord] = useState<
     Map<number, Map<string, PageRelatedValue>>
@@ -1382,7 +1391,7 @@ export function EntityRecords({
     () =>
       JSON.stringify(
         allFields
-          .filter((f: Field) => f.fieldType === "relation")
+          .filter((f: Field) => f.fieldType === "relation" || f.fieldType === "lookup")
           .map((f: Field) => [f.fieldKey, f.relationConfigJson?.relationId, f.relationConfigJson?.relatedFieldKey]),
       ),
     [allFields],
@@ -2326,7 +2335,10 @@ export function EntityRecords({
                   {canCreate && !setupMode && addingRow && (
                     <tr className="border-b border-blue-100 bg-blue-50/40">
                       {displayFields.map((f: Field) => {
-                        const editable = fieldAccess(f, entityId, permPageId) === "edit" && f.fieldType !== "function";
+                        const editable =
+                          fieldAccess(f, entityId, permPageId) === "edit" &&
+                          f.fieldType !== "function" &&
+                          f.fieldType !== "lookup";
                         return (
                           <td key={f.id} className="px-2 py-1.5 align-top max-w-[260px]" style={{ ...pinStyle(`f:${f.id}`, "#eff6ff"), ...colWidthStyle(`f:${f.id}`) }}>
                             {editable ? (
@@ -2451,7 +2463,7 @@ export function EntityRecords({
                           const cellBg = formatting.cellColors[f.fieldKey];
                           const cellText = formatting.cellTextColors[f.fieldKey];
                           const cellStyle = cellBg || cellText ? { backgroundColor: cellBg || undefined, color: cellText || undefined } : undefined;
-                          if (f.fieldType === "relation") {
+                          if (f.fieldType === "relation" || f.fieldType === "lookup") {
                             const meta = entityRelatedColMeta.get(f.fieldKey);
                             const rel = entityRelatedByRecord.get(record.id)?.get(f.fieldKey);
                             // Synthetic Field so the related value reuses the standard cell
@@ -2810,7 +2822,9 @@ export function EntityRecords({
           <div className="space-y-4 py-2">
             {visibleFormFields.map((field: Field) => {
               const access = fieldAccess(field, entityId, permPageId);
-              const readOnly = access === "view";
+              // A lookup field projects a value from a linked record (read-only);
+              // it has no stored value to edit, so always render it disabled.
+              const readOnly = access === "view" || field.fieldType === "lookup";
               return (
                 <div key={field.id} className="space-y-1.5">
                   <Label>
