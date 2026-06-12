@@ -3896,6 +3896,7 @@ function QuickCreateRelatedRecordDialog({
   const ml = useML();
   const { toast } = useToast();
   const { data: relFields = [], isLoading: fieldsLoading } = useListEntityFields(relatedEntityId);
+  const { data: userOptions = [] } = useListUserOptions();
   const createMutation = useCreateEntityRecord();
   const setLinkMutation = useSetEntityRelatedLink();
   const [form, setForm] = useState<FormState>({});
@@ -4004,6 +4005,7 @@ function QuickCreateRelatedRecordDialog({
                     value={form[f.fieldKey]}
                     onChange={(v) => setForm((prev) => ({ ...prev, [f.fieldKey]: v }))}
                     disabled={isLockedScalar}
+                    userOptions={userOptions}
                     allFields={relFields}
                     rowValues={form}
                     entityId={relatedEntityId}
