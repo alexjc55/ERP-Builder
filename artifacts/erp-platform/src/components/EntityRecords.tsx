@@ -175,6 +175,14 @@ function emptyForField(field: Field): CellValue {
   return "";
 }
 
+/** True when a value counts as "set" (mirrors the server's isEmpty boundary). */
+function valueIsSet(v: unknown): boolean {
+  if (v === null || v === undefined) return false;
+  if (typeof v === "string" && v.trim() === "") return false;
+  if (Array.isArray(v) && v.length === 0) return false;
+  return true;
+}
+
 function valueToForm(field: Field, value: unknown): CellValue {
   if (field.fieldType === "boolean") return value === true;
   if (field.fieldType === "number") return typeof value === "number" ? value : "";
@@ -2530,7 +2538,13 @@ export function EntityRecords({
                         {displayFields.map((f: Field) => {
                           const access = fieldAccess(f, entityId, permPageId);
                           const isFunction = f.fieldType === "function";
-                          const cellEditable = inlineEditEnabled && access === "edit" && !isFunction;
+                          // A lockAfterCreate field stops being editable once it has a
+                          // value (mirrors the hard server boundary on records update).
+                          const cellEditable =
+                            inlineEditEnabled &&
+                            access === "edit" &&
+                            !isFunction &&
+                            !(f.lockAfterCreate && valueIsSet(values[f.fieldKey]));
                           const cellBg = formatting.cellColors[f.fieldKey];
                           const cellText = formatting.cellTextColors[f.fieldKey];
                           const cellStyle = cellBg || cellText ? { backgroundColor: cellBg || undefined, color: cellText || undefined } : undefined;
@@ -2913,8 +2927,13 @@ export function EntityRecords({
             {visibleFormFields.map((field: Field) => {
               const access = fieldAccess(field, entityId, permPageId);
               // A lookup field projects a value from a linked record (read-only);
-              // it has no stored value to edit, so always render it disabled.
-              const readOnly = access === "view" || field.fieldType === "lookup";
+              // it has no stored value to edit, so always render it disabled. A
+              // lockAfterCreate field becomes read-only in edit mode once it has a
+              // value (mirrors the hard server boundary on records update).
+              const readOnly =
+                access === "view" ||
+                field.fieldType === "lookup" ||
+                !!(editing && field.lockAfterCreate && valueIsSet(form[field.fieldKey]));
               // In CREATE mode a relation field gets a real picker (+ "Добавить
               // запись") instead of a plain text box; the link is written after the
               // base record is created. Edit mode keeps its existing behavior.
@@ -3808,7 +3827,11 @@ function RecordEditModal({
           <div className="space-y-4 py-2">
             {visibleFields.map((field: Field) => {
               const access = fieldAccess(field, entityId);
-              const readOnly = access === "view" || field.fieldType === "lookup";
+              // lockAfterCreate field is read-only once set (mirrors server boundary).
+              const readOnly =
+                access === "view" ||
+                field.fieldType === "lookup" ||
+                !!(field.lockAfterCreate && valueIsSet(form[field.fieldKey]));
               return (
                 <div key={field.id} className="space-y-1.5">
                   <Label>
