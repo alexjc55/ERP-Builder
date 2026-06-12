@@ -69,6 +69,7 @@ function relationDirection(relation: Relation, entityId: number): "source" | nul
 async function validateEntityRelationConfig(
   entityId: number,
   cfg: RelationFieldConfig | undefined | null,
+  allowWriteThrough = false,
 ): Promise<{ ok: true; cleaned: RelationFieldConfig } | { error: string }> {
   const relationId = cfg?.relationId ?? null;
   const relatedFieldKey = cfg?.relatedFieldKey ?? null;
@@ -94,7 +95,13 @@ async function validateEntityRelationConfig(
       ),
     );
   if (!rf) return { error: "Связанное поле не найдено в связанной сущности" };
-  return { ok: true, cleaned: { relationId, relatedFieldKey } };
+  const cleaned: RelationFieldConfig = { relationId, relatedFieldKey };
+  // writeThrough is a lookup-only flag: when set, the (read-only) lookup cell
+  // becomes a gateway that opens the linked record's full editor in the related
+  // entity. It is meaningless for relation fields, so callers gate it via
+  // allowWriteThrough and we never persist it otherwise.
+  if (allowWriteThrough && cfg?.writeThrough === true) cleaned.writeThrough = true;
+  return { ok: true, cleaned };
 }
 
 async function entityExists(entityId: number): Promise<boolean> {
@@ -179,7 +186,11 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
   // validated identically. Cleaned config is persisted below.
   let relationConfig: RelationFieldConfig | undefined;
   if (parsed.data.fieldType === "relation" || parsed.data.fieldType === "lookup") {
-    const check = await validateEntityRelationConfig(params.data.entityId, parsed.data.relationConfigJson);
+    const check = await validateEntityRelationConfig(
+      params.data.entityId,
+      parsed.data.relationConfigJson,
+      parsed.data.fieldType === "lookup",
+    );
     if (!("ok" in check)) {
       res.status(400).json({ error: check.error });
       return;
@@ -363,7 +374,7 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
       "relationConfigJson" in body
         ? (body.relationConfigJson as RelationFieldConfig | null | undefined)
         : (current.relationConfigJson as RelationFieldConfig | null);
-    const check = await validateEntityRelationConfig(current.entityId, incoming);
+    const check = await validateEntityRelationConfig(current.entityId, incoming, nextType === "lookup");
     if (!("ok" in check)) {
       res.status(400).json({ error: check.error });
       return;

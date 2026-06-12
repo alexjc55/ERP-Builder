@@ -1465,6 +1465,8 @@ export interface RelationFieldConfig {
   relationId?: number | null;
   /** @nullable */
   relatedFieldKey?: string | null;
+  /** Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record's full editor in the related entity (subject to that entity's own permissions). The projected value itself stays read-only; ignored for relation fields. */
+  writeThrough?: boolean;
 }
 
 export interface Field {
@@ -1588,6 +1590,10 @@ export interface PageRelatedColumn {
   optionsJson?: string[];
   /** Whether the viewer's role may edit the related field at all (before per-row scope). */
   editableColumn: boolean;
+  /** The id of the related entity this column projects from (set by the entity-keyed endpoint; used to open the linked record's editor for write-through lookups). */
+  relatedEntityId?: number;
+  /** True for a write-through lookup column whose cells open the linked record's full editor in the related entity. */
+  writeThrough?: boolean;
 }
 
 export interface PageRelatedValue {

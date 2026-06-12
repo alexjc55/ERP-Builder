@@ -1805,7 +1805,8 @@ export const ListEntityFieldsResponseItem = zod.object({
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
-  "relatedFieldKey": zod.string().nullish()
+  "relatedFieldKey": zod.string().nullish(),
+  "writeThrough": zod.boolean().optional().describe('Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record\'s full editor in the related entity (subject to that entity\'s own permissions). The projected value itself stays read-only; ignored for relation fields.')
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "isKey": zod.boolean().optional(),
   "lockAfterCreate": zod.boolean().optional(),
@@ -1884,7 +1885,8 @@ export const CreateEntityFieldBody = zod.object({
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
-  "relatedFieldKey": zod.string().nullish()
+  "relatedFieldKey": zod.string().nullish(),
+  "writeThrough": zod.boolean().optional().describe('Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record\'s full editor in the related entity (subject to that entity\'s own permissions). The projected value itself stays read-only; ignored for relation fields.')
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "isKey": zod.boolean().default(createEntityFieldBodyIsKeyDefault),
   "lockAfterCreate": zod.boolean().default(createEntityFieldBodyLockAfterCreateDefault),
@@ -1955,7 +1957,8 @@ export const GetFieldResponse = zod.object({
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
-  "relatedFieldKey": zod.string().nullish()
+  "relatedFieldKey": zod.string().nullish(),
+  "writeThrough": zod.boolean().optional().describe('Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record\'s full editor in the related entity (subject to that entity\'s own permissions). The projected value itself stays read-only; ignored for relation fields.')
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "isKey": zod.boolean().optional(),
   "lockAfterCreate": zod.boolean().optional(),
@@ -2026,7 +2029,8 @@ export const UpdateFieldBody = zod.object({
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
-  "relatedFieldKey": zod.string().nullish()
+  "relatedFieldKey": zod.string().nullish(),
+  "writeThrough": zod.boolean().optional().describe('Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record\'s full editor in the related entity (subject to that entity\'s own permissions). The projected value itself stays read-only; ignored for relation fields.')
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "isKey": zod.boolean().optional(),
   "lockAfterCreate": zod.boolean().optional(),
@@ -2089,7 +2093,8 @@ export const UpdateFieldResponse = zod.object({
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
-  "relatedFieldKey": zod.string().nullish()
+  "relatedFieldKey": zod.string().nullish(),
+  "writeThrough": zod.boolean().optional().describe('Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record\'s full editor in the related entity (subject to that entity\'s own permissions). The projected value itself stays read-only; ignored for relation fields.')
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "isKey": zod.boolean().optional(),
   "lockAfterCreate": zod.boolean().optional(),
@@ -2179,7 +2184,8 @@ export const ListPageFieldsResponseItem = zod.object({
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
-  "relatedFieldKey": zod.string().nullish()
+  "relatedFieldKey": zod.string().nullish(),
+  "writeThrough": zod.boolean().optional().describe('Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record\'s full editor in the related entity (subject to that entity\'s own permissions). The projected value itself stays read-only; ignored for relation fields.')
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().optional(),
@@ -2240,7 +2246,8 @@ export const CreatePageFieldBody = zod.object({
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
-  "relatedFieldKey": zod.string().nullish()
+  "relatedFieldKey": zod.string().nullish(),
+  "writeThrough": zod.boolean().optional().describe('Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record\'s full editor in the related entity (subject to that entity\'s own permissions). The projected value itself stays read-only; ignored for relation fields.')
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().default(createPageFieldBodyShowInTableDefault),
@@ -2294,7 +2301,8 @@ export const UpdatePageFieldBody = zod.object({
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
-  "relatedFieldKey": zod.string().nullish()
+  "relatedFieldKey": zod.string().nullish(),
+  "writeThrough": zod.boolean().optional().describe('Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record\'s full editor in the related entity (subject to that entity\'s own permissions). The projected value itself stays read-only; ignored for relation fields.')
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().optional(),
@@ -2342,7 +2350,8 @@ export const UpdatePageFieldResponse = zod.object({
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
-  "relatedFieldKey": zod.string().nullish()
+  "relatedFieldKey": zod.string().nullish(),
+  "writeThrough": zod.boolean().optional().describe('Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record\'s full editor in the related entity (subject to that entity\'s own permissions). The projected value itself stays read-only; ignored for relation fields.')
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().optional(),
@@ -2436,7 +2445,9 @@ export const GetPageRelatedValuesResponse = zod.object({
   "relatedFieldKey": zod.string(),
   "relatedFieldType": zod.string().nullish().describe('Field type of the related entity field (drives rendering\/editing).'),
   "optionsJson": zod.array(zod.string()).optional().describe('Select options of the related field (for inline editing).'),
-  "editableColumn": zod.boolean().describe('Whether the viewer\'s role may edit the related field at all (before per-row scope).')
+  "editableColumn": zod.boolean().describe('Whether the viewer\'s role may edit the related field at all (before per-row scope).'),
+  "relatedEntityId": zod.number().optional().describe('The id of the related entity this column projects from (set by the entity-keyed endpoint; used to open the linked record\'s editor for write-through lookups).'),
+  "writeThrough": zod.boolean().optional().describe('True for a write-through lookup column whose cells open the linked record\'s full editor in the related entity.')
 })),
   "values": zod.array(zod.object({
   "recordId": zod.number(),
@@ -2577,7 +2588,9 @@ export const GetEntityRelatedValuesResponse = zod.object({
   "relatedFieldKey": zod.string(),
   "relatedFieldType": zod.string().nullish().describe('Field type of the related entity field (drives rendering\/editing).'),
   "optionsJson": zod.array(zod.string()).optional().describe('Select options of the related field (for inline editing).'),
-  "editableColumn": zod.boolean().describe('Whether the viewer\'s role may edit the related field at all (before per-row scope).')
+  "editableColumn": zod.boolean().describe('Whether the viewer\'s role may edit the related field at all (before per-row scope).'),
+  "relatedEntityId": zod.number().optional().describe('The id of the related entity this column projects from (set by the entity-keyed endpoint; used to open the linked record\'s editor for write-through lookups).'),
+  "writeThrough": zod.boolean().optional().describe('True for a write-through lookup column whose cells open the linked record\'s full editor in the related entity.')
 })),
   "values": zod.array(zod.object({
   "recordId": zod.number(),

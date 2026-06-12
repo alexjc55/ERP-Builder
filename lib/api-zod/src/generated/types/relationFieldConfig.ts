@@ -14,4 +14,6 @@ export interface RelationFieldConfig {
   relationId?: number | null;
   /** @nullable */
   relatedFieldKey?: string | null;
+  /** Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record's full editor in the related entity (subject to that entity's own permissions). The projected value itself stays read-only; ignored for relation fields. */
+  writeThrough?: boolean;
 }

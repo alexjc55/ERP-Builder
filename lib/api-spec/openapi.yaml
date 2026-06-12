@@ -4663,6 +4663,12 @@ components:
         editableColumn:
           type: boolean
           description: Whether the viewer's role may edit the related field at all (before per-row scope).
+        relatedEntityId:
+          type: integer
+          description: The id of the related entity this column projects from (set by the entity-keyed endpoint; used to open the linked record's editor for write-through lookups).
+        writeThrough:
+          type: boolean
+          description: True for a write-through lookup column whose cells open the linked record's full editor in the related entity.
 
     PageRelatedValue:
       type: object
@@ -4820,6 +4826,13 @@ components:
           type: ["integer", "null"]
         relatedFieldKey:
           type: ["string", "null"]
+        writeThrough:
+          type: boolean
+          description: >-
+            Lookup-only. When true, a lookup field becomes an editable gateway:
+            clicking the cell opens the LINKED record's full editor in the
+            related entity (subject to that entity's own permissions). The
+            projected value itself stays read-only; ignored for relation fields.
 
     PageField:
       type: object

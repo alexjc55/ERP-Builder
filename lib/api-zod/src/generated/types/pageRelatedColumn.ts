@@ -19,4 +19,8 @@ export interface PageRelatedColumn {
   optionsJson?: string[];
   /** Whether the viewer's role may edit the related field at all (before per-row scope). */
   editableColumn: boolean;
+  /** The id of the related entity this column projects from (set by the entity-keyed endpoint; used to open the linked record's editor for write-through lookups). */
+  relatedEntityId?: number;
+  /** True for a write-through lookup column whose cells open the linked record's full editor in the related entity. */
+  writeThrough?: boolean;
 }

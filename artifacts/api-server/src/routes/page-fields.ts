@@ -1488,6 +1488,8 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
     relatedFieldType: string | null;
     optionsJson: string[];
     editableColumn: boolean;
+    relatedEntityId?: number;
+    writeThrough?: boolean;
   }[] = [];
   const values: {
     recordId: number;
@@ -1540,12 +1542,22 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
       f.fieldType !== "lookup" &&
       ownAccess === "edit" && access !== "hidden" && canRecord(perms, entityId, "update");
 
+    // A write-through lookup is read-only as a VALUE (columnEditable stays false,
+    // no inline edit) but its cells act as a gateway: when a link exists the
+    // client opens the linked record's full editor in the related entity. We
+    // surface the related entity id + flag so the client knows where to navigate;
+    // the real write boundary is enforced by that entity's own record PUT.
+    const writeThrough =
+      f.fieldType === "lookup" && cfg?.writeThrough === true && access !== "hidden";
+
     columns.push({
       fieldKey: f.fieldKey,
       relatedFieldKey,
       relatedFieldType: access === "hidden" ? null : relatedField.fieldType,
       optionsJson: access === "hidden" ? [] : ((relatedField.optionsJson as string[]) ?? []),
       editableColumn: columnEditable,
+      relatedEntityId: access === "hidden" ? undefined : relatedEntityId,
+      writeThrough,
     });
 
     const linkRows =
