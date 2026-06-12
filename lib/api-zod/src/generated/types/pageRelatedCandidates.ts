@@ -9,4 +9,8 @@ import type { PageRelatedCandidate } from './pageRelatedCandidate';
 
 export interface PageRelatedCandidates {
   candidates: PageRelatedCandidate[];
+  /** The id of the related entity these candidates belong to. Returned by the entity-keyed endpoint so the client can quick-create a new record in that entity and link it. Omitted by the page-keyed endpoint. */
+  relatedEntityId?: number;
+  /** True when the viewer may create a record in the related entity (drives the in-place "add record" affordance in the picker). */
+  canCreate?: boolean;
 }

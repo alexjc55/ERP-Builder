@@ -2506,6 +2506,8 @@ export function EntityRecords({
                                     onChanged={() => setRefreshTick((x) => x + 1)}
                                     dependent={relIsDependent}
                                     parentValue={relParentValue}
+                                    relatedFilterFieldKey={relDep?.relatedFilterFieldKey ?? null}
+                                    pageId={pageId}
                                   />
                                 ) : (
                                   <div className="truncate">{display}</div>
@@ -3212,6 +3214,8 @@ function EntityRelationLinkPicker({
   onChanged,
   dependent = false,
   parentValue = null,
+  relatedFilterFieldKey = null,
+  pageId,
 }: {
   entityId: number;
   fieldKey: string;
@@ -3224,12 +3228,23 @@ function EntityRelationLinkPicker({
   /** The parent field's value used to narrow candidates (scalar, or a linked
    * record id for a relation parent). Null/empty disables the picker. */
   parentValue?: string | null;
+  /** For a dependent relation field: the field key (in the related entity) used
+   * to filter candidates. Used to prefill+lock that field when quick-creating a
+   * related record so the new record satisfies the dependency filter. */
+  relatedFilterFieldKey?: string | null;
+  /** The page the records table is rendered under (RBAC scope for create). */
+  pageId?: number;
 }) {
   const t = useT();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [candidates, setCandidates] = useState<PageRelatedCandidate[]>([]);
+  // The related entity id + create permission are surfaced by the entity-keyed
+  // candidates endpoint; they drive the in-place "add record" affordance.
+  const [relatedEntityId, setRelatedEntityId] = useState<number | null>(null);
+  const [canCreateRelated, setCanCreateRelated] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const fetchCandidates = useGetEntityRelatedCandidates().mutateAsync;
   const linkMutation = useSetEntityRelatedLink();
   // A dependent relation field is gated until its parent has a value.
@@ -3257,7 +3272,10 @@ function EntityRelationLinkPicker({
         },
       })
         .then((res) => {
-          if (!cancelled) setCandidates(res.candidates);
+          if (cancelled) return;
+          setCandidates(res.candidates);
+          setRelatedEntityId(res.relatedEntityId ?? null);
+          setCanCreateRelated(res.canCreate === true);
         })
         .catch(() => {
           if (!cancelled) setCandidates([]);
@@ -3335,10 +3353,202 @@ function EntityRelationLinkPicker({
                 </CommandItem>
               ))}
             </CommandGroup>
+            {canCreateRelated && relatedEntityId != null && !gated && (
+              <CommandGroup>
+                <CommandItem
+                  value="__create__"
+                  onSelect={() => {
+                    setOpen(false);
+                    setCreateOpen(true);
+                  }}
+                  className="text-blue-600"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  {t("records.relatedCreate", "Добавить запись")}
+                </CommandItem>
+              </CommandGroup>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>
+      {createOpen && relatedEntityId != null && (
+        <QuickCreateRelatedRecordDialog
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          relatedEntityId={relatedEntityId}
+          pageId={pageId}
+          lockedFieldKey={dependent ? relatedFilterFieldKey : null}
+          lockedValue={dependent ? parentValue : null}
+          onCreated={(newId) => {
+            setCreateOpen(false);
+            void choose(newId);
+          }}
+        />
+      )}
     </Popover>
+  );
+}
+
+/**
+ * Quick-create modal: create a record in the RELATED entity from inside the
+ * relation picker, then link it to the base record. For a dependent (cascading)
+ * relation field the dependency filter field is prefilled and locked to the
+ * parent's value so the new record satisfies the filter:
+ *  - scalar filter field → the value is written into valuesJson at create time;
+ *  - relation filter field → after create, the link is set on the new record.
+ * Only valuesJson-backed field types are offered in the form; pure relation
+ * fields on the related entity cannot be filled here (the dependency filter
+ * relation field is the exception, set via the link path above).
+ */
+function QuickCreateRelatedRecordDialog({
+  open,
+  onOpenChange,
+  relatedEntityId,
+  pageId,
+  lockedFieldKey,
+  lockedValue,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  relatedEntityId: number;
+  pageId?: number;
+  lockedFieldKey?: string | null;
+  lockedValue?: string | null;
+  onCreated: (newId: number) => void;
+}) {
+  const t = useT();
+  const ml = useML();
+  const { toast } = useToast();
+  const { data: relFields = [], isLoading: fieldsLoading } = useListEntityFields(relatedEntityId);
+  const createMutation = useCreateEntityRecord();
+  const setLinkMutation = useSetEntityRelatedLink();
+  const [form, setForm] = useState<FormState>({});
+  const [submitting, setSubmitting] = useState(false);
+
+  // Is the locked dependency filter field a relation field on the related entity?
+  // If so it cannot live in valuesJson; we set it as a link after create.
+  const lockedField = lockedFieldKey ? relFields.find((f: Field) => f.fieldKey === lockedFieldKey) : undefined;
+  const lockedIsRelation = lockedField?.fieldType === "relation";
+
+  // Fields editable in the quick-create form: skip read-only/computed types and
+  // any relation field (relations are linked separately, not stored in values).
+  const editableFields = relFields.filter(
+    (f: Field) => f.fieldType !== "relation" && f.fieldType !== "function",
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    const initial: FormState = {};
+    for (const f of editableFields) {
+      initial[f.fieldKey] =
+        f.fieldKey === lockedFieldKey && !lockedIsRelation && lockedValue != null
+          ? valueToForm(f, lockedValue)
+          : emptyForField(f);
+    }
+    setForm(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, relatedEntityId, relFields.length]);
+
+  const submit = async () => {
+    setSubmitting(true);
+    // Step 1 — create. A failure here means nothing was written.
+    let newId: number;
+    try {
+      const valuesJson = formToValues(editableFields, form);
+      const created = await createMutation.mutateAsync({
+        entityId: relatedEntityId,
+        data: { valuesJson, ...(pageId != null ? { pageId } : {}) },
+      });
+      newId = created.id;
+    } catch (e) {
+      setSubmitting(false);
+      toast({
+        variant: "destructive",
+        title: t("records.relatedCreateFailed", "Не удалось создать запись"),
+        description: e instanceof Error ? e.message : undefined,
+      });
+      return;
+    }
+    // Step 2 — for a relation dependency filter field, set the link on the new
+    // record so it matches the parent (scalar values went in via valuesJson). The
+    // record already exists; a failure here leaves it created-but-unmatched, so we
+    // report that honestly rather than claiming creation failed.
+    if (lockedIsRelation && lockedFieldKey) {
+      const linkedRecordId = lockedValue == null || lockedValue === "" ? NaN : Number(lockedValue);
+      if (!Number.isFinite(linkedRecordId)) {
+        setSubmitting(false);
+        toast({
+          variant: "destructive",
+          title: t("records.relatedCreatedNotLinked", "Запись создана, но не привязана"),
+        });
+        return;
+      }
+      try {
+        await setLinkMutation.mutateAsync({
+          entityId: relatedEntityId,
+          data: { fieldKey: lockedFieldKey, recordId: newId, linkedRecordId },
+        });
+      } catch (e) {
+        setSubmitting(false);
+        toast({
+          variant: "destructive",
+          title: t("records.relatedCreatedNotLinked", "Запись создана, но не привязана"),
+          description: e instanceof Error ? e.message : undefined,
+        });
+        return;
+      }
+    }
+    setSubmitting(false);
+    onCreated(newId);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{t("records.relatedCreateTitle", "Новая связанная запись")}</DialogTitle>
+        </DialogHeader>
+        {fieldsLoading ? (
+          <div className="py-8 text-center text-sm text-slate-400">{t("common.loading", "Загрузка...")}</div>
+        ) : (
+          <div className="max-h-[60vh] space-y-4 overflow-y-auto py-2">
+            {editableFields.length === 0 && (
+              <p className="text-sm text-slate-400">{t("records.relatedCreateNoFields", "Нет полей для заполнения")}</p>
+            )}
+            {editableFields.map((f: Field) => {
+              const isLockedScalar = f.fieldKey === lockedFieldKey && !lockedIsRelation;
+              return (
+                <div key={f.id} className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-700">
+                    {ml(f.nameJson) || f.fieldKey}
+                    {f.isRequired && <span className="ml-0.5 text-rose-500">*</span>}
+                  </label>
+                  <FieldInput
+                    field={f}
+                    value={form[f.fieldKey]}
+                    onChange={(v) => setForm((prev) => ({ ...prev, [f.fieldKey]: v }))}
+                    disabled={isLockedScalar}
+                    allFields={relFields}
+                    rowValues={form}
+                    entityId={relatedEntityId}
+                    pageId={pageId}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+            {t("common.cancel", "Отмена")}
+          </Button>
+          <Button onClick={submit} disabled={submitting || fieldsLoading}>
+            {t("common.create", "Создать")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

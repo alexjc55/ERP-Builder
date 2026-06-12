@@ -2465,7 +2465,9 @@ export const GetPageRelatedCandidatesResponse = zod.object({
   "candidates": zod.array(zod.object({
   "id": zod.number().describe('The related entity record id (to link to).'),
   "label": zod.string().describe('Display label (the related field value as text).')
-}))
+})),
+  "relatedEntityId": zod.number().optional().describe('The id of the related entity these candidates belong to. Returned by the entity-keyed endpoint so the client can quick-create a new record in that entity and link it. Omitted by the page-keyed endpoint.'),
+  "canCreate": zod.boolean().optional().describe('True when the viewer may create a record in the related entity (drives the in-place \"add record\" affordance in the picker).')
 })
 
 
@@ -2604,7 +2606,9 @@ export const GetEntityRelatedCandidatesResponse = zod.object({
   "candidates": zod.array(zod.object({
   "id": zod.number().describe('The related entity record id (to link to).'),
   "label": zod.string().describe('Display label (the related field value as text).')
-}))
+})),
+  "relatedEntityId": zod.number().optional().describe('The id of the related entity these candidates belong to. Returned by the entity-keyed endpoint so the client can quick-create a new record in that entity and link it. Omitted by the page-keyed endpoint.'),
+  "canCreate": zod.boolean().optional().describe('True when the viewer may create a record in the related entity (drives the in-place \"add record\" affordance in the picker).')
 })
 
 
