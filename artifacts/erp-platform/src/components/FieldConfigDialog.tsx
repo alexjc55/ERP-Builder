@@ -6,6 +6,8 @@ import {
   useListRoles,
   useListEntityFields,
   useListGoogleDriveFolders,
+  useGetEntityRelationOptions,
+  getGetEntityRelationOptionsQueryKey,
   type Field,
   type FieldType,
   type FieldAccess,
@@ -92,6 +94,7 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "user", label: "Пользователь" },
   { value: "file", label: "Файл" },
   { value: "function", label: "Формула (вычисляемое)" },
+  { value: "relation", label: "Связанное поле" },
 ];
 
 const FIELD_ACCESS_OPTIONS: { value: FieldAccess; label: string }[] = [
@@ -142,6 +145,19 @@ export function FieldConfigDialog({
   const { data: roles = [] } = useListRoles();
   const { data: existingFields = [] } = useListEntityFields(entityId);
   const { data: driveFolders = [] } = useListGoogleDriveFolders();
+  const [relationId, setRelationId] = useState<number | null>(null);
+  const [relatedFieldKey, setRelatedFieldKey] = useState("");
+  const { data: relationOptionsData } = useGetEntityRelationOptions(entityId, {
+    query: { enabled: open, queryKey: getGetEntityRelationOptionsQueryKey(entityId) },
+  });
+  const relationOptions = relationOptionsData?.options ?? [];
+  // Entity relation fields surface a single linked record's value and only
+  // make sense from the SOURCE side of a to-one relation (mirrors the Fields
+  // Builder). Target-side / N:N relations are not eligible here.
+  const relationFieldOptions = relationOptions.filter((o) => o.direction === "source");
+  const canUseRelation = relationFieldOptions.length > 0;
+  const selectedRelation = relationFieldOptions.find((o) => o.relationId === relationId);
+  const relatedFieldOptions = selectedRelation?.fields ?? [];
 
   const [fieldKey, setFieldKey] = useState("");
   const [nameJson, setNameJson] = useState<MLValue>({});
@@ -210,6 +226,8 @@ export function FieldConfigDialog({
       setDependsOnFieldKey(field.dependencyConfigJson?.dependsOnFieldKey ?? "");
       setIsKey(field.isKey ?? false);
       setLockAfterCreate(field.lockAfterCreate ?? false);
+      setRelationId(field.relationConfigJson?.relationId ?? null);
+      setRelatedFieldKey(field.relationConfigJson?.relatedFieldKey ?? "");
     } else {
       setFieldKey("");
       setNameJson({});
@@ -237,6 +255,8 @@ export function FieldConfigDialog({
       setDependsOnFieldKey("");
       setIsKey(false);
       setLockAfterCreate(false);
+      setRelationId(null);
+      setRelatedFieldKey("");
     }
   }, [open, field, nextSortOrder]);
 
@@ -364,7 +384,9 @@ export function FieldConfigDialog({
             }
           : {},
       dependencyConfigJson: fieldType === "text" && dependsOnFieldKey ? { dependsOnFieldKey } : {},
-      isKey: fieldType !== "file" && fieldType !== "function" ? isKey : false,
+      relationConfigJson:
+        fieldType === "relation" ? { relationId, relatedFieldKey: relatedFieldKey || null } : {},
+      isKey: fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" ? isKey : false,
       lockAfterCreate: fieldType !== "file" && fieldType !== "function" ? lockAfterCreate : false,
     };
     if (field) updateMutation.mutate({ id: field.id, data: payload });
@@ -372,7 +394,9 @@ export function FieldConfigDialog({
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
-  const canSubmit = !isPending && FIELD_KEY_RE.test(effectiveKey) && !manualKeyTaken && !keyFormatInvalid;
+  const relationIncomplete = fieldType === "relation" && (relationId == null || !relatedFieldKey);
+  const canSubmit =
+    !isPending && FIELD_KEY_RE.test(effectiveKey) && !manualKeyTaken && !keyFormatInvalid && !relationIncomplete;
 
   return (
     <>
@@ -412,7 +436,9 @@ export function FieldConfigDialog({
                 <Select value={fieldType} onValueChange={(v) => setFieldType(v as FieldType)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {FIELD_TYPES.map((ft) => (
+                    {FIELD_TYPES.filter(
+                      (ft) => ft.value !== "relation" || canUseRelation || fieldType === "relation",
+                    ).map((ft) => (
                       <SelectItem key={ft.value} value={ft.value}>{t(`fields.type.${ft.value}`, ft.label)}</SelectItem>
                     ))}
                   </SelectContent>
@@ -423,6 +449,54 @@ export function FieldConfigDialog({
                 <Input type="number" value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value))} />
               </div>
             </div>
+            {fieldType === "relation" && (
+              <div className="rounded-md border border-slate-100 bg-slate-50/50 p-3 space-y-3">
+                <p className="text-xs text-slate-500">
+                  {t(
+                    "fields.relationHint",
+                    "Связанное поле показывает значение из единственной связанной записи. Доступны связи «один к одному» и «многие к одному», где эта сущность — источник.",
+                  )}
+                </p>
+                <div className="space-y-1.5">
+                  <Label>{t("fields.relation", "Связь")}</Label>
+                  <Select
+                    value={relationId != null ? String(relationId) : ""}
+                    onValueChange={(v) => {
+                      setRelationId(Number(v));
+                      setRelatedFieldKey("");
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder={t("fields.relationPlaceholder", "Выберите связь")} /></SelectTrigger>
+                    <SelectContent>
+                      {relationFieldOptions.length === 0 ? (
+                        <div className="px-2 py-1.5 text-xs text-slate-400">
+                          {t("fields.noRelations", "Нет подходящих связей для этой сущности.")}
+                        </div>
+                      ) : (
+                        relationFieldOptions.map((o) => (
+                          <SelectItem key={o.relationId} value={String(o.relationId)}>
+                            {ml(o.label)} → {ml(o.relatedEntityLabel)}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {relationId != null && (
+                  <div className="space-y-1.5">
+                    <Label>{t("fields.relatedField", "Поле связанной сущности")}</Label>
+                    <Select value={relatedFieldKey} onValueChange={setRelatedFieldKey}>
+                      <SelectTrigger><SelectValue placeholder={t("fields.relatedFieldPlaceholder", "Выберите поле")} /></SelectTrigger>
+                      <SelectContent>
+                        {relatedFieldOptions.map((f) => (
+                          <SelectItem key={f.key} value={f.key}>{ml(f.label) || f.key}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            )}
             {fieldType === "select" && (
               <div className="space-y-1.5">
                 <Label>{t("fields.options", "Варианты списка")}</Label>
@@ -592,7 +666,7 @@ export function FieldConfigDialog({
                 </p>
               </div>
             )}
-            {fieldType !== "function" && (
+            {fieldType !== "function" && fieldType !== "relation" && (
               <div className="space-y-1.5">
                 <Label>{t("fields.defaultValue", "Значение по умолчанию")}</Label>
                 <Input value={defaultValue} onChange={(e) => setDefaultValue(e.target.value)} placeholder="—" />
@@ -619,7 +693,7 @@ export function FieldConfigDialog({
                 <Switch checked={isPinned} onCheckedChange={setIsPinned} id="fcd-pinned" />
                 <Label htmlFor="fcd-pinned">{t("fields.pinColumn", "Закрепить при горизонтальной прокрутке")}</Label>
               </div>
-              {fieldType !== "file" && fieldType !== "function" && (
+              {fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && (
                 <div className="flex items-center gap-2">
                   <Switch checked={isKey} onCheckedChange={setIsKey} id="fcd-is-key" />
                   <Label htmlFor="fcd-is-key">{t("fields.isKey", "Ключевое поле (уникальное)")}</Label>
