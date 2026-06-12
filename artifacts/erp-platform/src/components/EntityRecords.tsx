@@ -3489,22 +3489,24 @@ function EntityRelationLinkPicker({
                 </CommandItem>
               ))}
             </CommandGroup>
-            {canCreateRelated && relatedEntityId != null && !gated && (
-              <CommandGroup>
-                <CommandItem
-                  value="__create__"
-                  onSelect={() => {
-                    setOpen(false);
-                    setCreateOpen(true);
-                  }}
-                  className="text-blue-600"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  {t("records.relatedCreate", "Добавить запись")}
-                </CommandItem>
-              </CommandGroup>
-            )}
           </CommandList>
+          {canCreateRelated && relatedEntityId != null && !gated && (
+            // Fixed footer (outside the scrollable CommandList) so "Add record"
+            // stays reachable no matter how long the candidate list is.
+            <div className="border-t border-slate-200 p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setCreateOpen(true);
+                }}
+                className="flex w-full items-center rounded-sm px-2 py-1.5 text-sm text-blue-600 hover:bg-blue-50"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                {t("records.relatedCreate", "Добавить запись")}
+              </button>
+            </div>
+          )}
         </Command>
       </PopoverContent>
       {createOpen && relatedEntityId != null && (
@@ -3664,22 +3666,24 @@ function RelationCreatePicker({
                 </CommandItem>
               ))}
             </CommandGroup>
-            {canCreateRelated && relatedEntityId != null && !gated && (
-              <CommandGroup>
-                <CommandItem
-                  value="__create__"
-                  onSelect={() => {
-                    setOpen(false);
-                    setCreateOpen(true);
-                  }}
-                  className="text-blue-600"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  {t("records.relatedCreate", "Добавить запись")}
-                </CommandItem>
-              </CommandGroup>
-            )}
           </CommandList>
+          {canCreateRelated && relatedEntityId != null && !gated && (
+            // Fixed footer (outside the scrollable CommandList) so "Add record"
+            // stays reachable no matter how long the candidate list is.
+            <div className="border-t border-slate-200 p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setCreateOpen(true);
+                }}
+                className="flex w-full items-center rounded-sm px-2 py-1.5 text-sm text-blue-600 hover:bg-blue-50"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                {t("records.relatedCreate", "Добавить запись")}
+              </button>
+            </div>
+          )}
         </Command>
       </PopoverContent>
       {createOpen && relatedEntityId != null && (
