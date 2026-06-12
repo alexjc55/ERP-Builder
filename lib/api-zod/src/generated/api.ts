@@ -1800,8 +1800,9 @@ export const ListEntityFieldsResponseItem = zod.object({
   "decimals": zod.number().min(listEntityFieldsResponseFormulaConfigJsonDecimalsMin).max(listEntityFieldsResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
   "dependencyConfigJson": zod.object({
-  "dependsOnFieldKey": zod.string().optional()
-}).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
+  "dependsOnFieldKey": zod.string().optional(),
+  "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
+}).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish()
@@ -1878,8 +1879,9 @@ export const CreateEntityFieldBody = zod.object({
   "decimals": zod.number().min(createEntityFieldBodyFormulaConfigJsonDecimalsMin).max(createEntityFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
   "dependencyConfigJson": zod.object({
-  "dependsOnFieldKey": zod.string().optional()
-}).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
+  "dependsOnFieldKey": zod.string().optional(),
+  "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
+}).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish()
@@ -1948,8 +1950,9 @@ export const GetFieldResponse = zod.object({
   "decimals": zod.number().min(getFieldResponseFormulaConfigJsonDecimalsMin).max(getFieldResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
   "dependencyConfigJson": zod.object({
-  "dependsOnFieldKey": zod.string().optional()
-}).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
+  "dependsOnFieldKey": zod.string().optional(),
+  "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
+}).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish()
@@ -2018,8 +2021,9 @@ export const UpdateFieldBody = zod.object({
   "decimals": zod.number().min(updateFieldBodyFormulaConfigJsonDecimalsMin).max(updateFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
   "dependencyConfigJson": zod.object({
-  "dependsOnFieldKey": zod.string().optional()
-}).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
+  "dependsOnFieldKey": zod.string().optional(),
+  "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
+}).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish()
@@ -2080,8 +2084,9 @@ export const UpdateFieldResponse = zod.object({
   "decimals": zod.number().min(updateFieldResponseFormulaConfigJsonDecimalsMin).max(updateFieldResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
   "dependencyConfigJson": zod.object({
-  "dependsOnFieldKey": zod.string().optional()
-}).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.'),
+  "dependsOnFieldKey": zod.string().optional(),
+  "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
+}).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish()
@@ -2452,7 +2457,8 @@ export const GetPageRelatedCandidatesParams = zod.object({
 
 export const GetPageRelatedCandidatesBody = zod.object({
   "fieldKey": zod.string().describe('The relation page-field\'s own key (identifies which relation to list candidates for).'),
-  "q": zod.string().optional().describe('Optional case-insensitive search over the candidate label (related field value).')
+  "q": zod.string().optional().describe('Optional case-insensitive search over the candidate label (related field value).'),
+  "parentValue": zod.string().nullish().describe('For a dependent (cascading) relation field, the current row\'s parent-field value used to narrow candidates: a scalar value, or a linked record id (as a string) when the parent is itself a relation field. Empty\/omitted yields no candidates when the field is dependent.')
 })
 
 export const GetPageRelatedCandidatesResponse = zod.object({
@@ -2590,7 +2596,8 @@ export const GetEntityRelatedCandidatesParams = zod.object({
 
 export const GetEntityRelatedCandidatesBody = zod.object({
   "fieldKey": zod.string().describe('The relation page-field\'s own key (identifies which relation to list candidates for).'),
-  "q": zod.string().optional().describe('Optional case-insensitive search over the candidate label (related field value).')
+  "q": zod.string().optional().describe('Optional case-insensitive search over the candidate label (related field value).'),
+  "parentValue": zod.string().nullish().describe('For a dependent (cascading) relation field, the current row\'s parent-field value used to narrow candidates: a scalar value, or a linked record id (as a string) when the parent is itself a relation field. Empty\/omitted yields no candidates when the field is dependent.')
 })
 
 export const GetEntityRelatedCandidatesResponse = zod.object({

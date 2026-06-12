@@ -183,6 +183,7 @@ export function FieldConfigDialog({
   const [formula, setFormula] = useState("");
   const [formulaDecimals, setFormulaDecimals] = useState("");
   const [dependsOnFieldKey, setDependsOnFieldKey] = useState("");
+  const [relatedFilterFieldKey, setRelatedFilterFieldKey] = useState("");
   const [isKey, setIsKey] = useState(false);
   const [lockAfterCreate, setLockAfterCreate] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -224,6 +225,7 @@ export function FieldConfigDialog({
         field.formulaConfigJson?.decimals != null ? String(field.formulaConfigJson.decimals) : "",
       );
       setDependsOnFieldKey(field.dependencyConfigJson?.dependsOnFieldKey ?? "");
+      setRelatedFilterFieldKey(field.dependencyConfigJson?.relatedFilterFieldKey ?? "");
       setIsKey(field.isKey ?? false);
       setLockAfterCreate(field.lockAfterCreate ?? false);
       setRelationId(field.relationConfigJson?.relationId ?? null);
@@ -253,6 +255,7 @@ export function FieldConfigDialog({
       setFormula("");
       setFormulaDecimals("");
       setDependsOnFieldKey("");
+      setRelatedFilterFieldKey("");
       setIsKey(false);
       setLockAfterCreate(false);
       setRelationId(null);
@@ -383,7 +386,12 @@ export function FieldConfigDialog({
                 : {}),
             }
           : {},
-      dependencyConfigJson: fieldType === "text" && dependsOnFieldKey ? { dependsOnFieldKey } : {},
+      dependencyConfigJson:
+        fieldType === "text" && dependsOnFieldKey
+          ? { dependsOnFieldKey }
+          : fieldType === "relation" && dependsOnFieldKey && relatedFilterFieldKey
+            ? { dependsOnFieldKey, relatedFilterFieldKey }
+            : {},
       relationConfigJson:
         fieldType === "relation" ? { relationId, relatedFieldKey: relatedFieldKey || null } : {},
       isKey: fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" ? isKey : false,
@@ -493,6 +501,60 @@ export function FieldConfigDialog({
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                )}
+                {relationId != null && relatedFieldKey && (
+                  <div className="space-y-3 border-t border-slate-100 pt-3">
+                    <div className="space-y-1.5">
+                      <Label>{t("fields.dependsOn", "Зависит от поля")}</Label>
+                      <Select
+                        value={dependsOnFieldKey || "__none__"}
+                        onValueChange={(v) => {
+                          const nv = v === "__none__" ? "" : v;
+                          setDependsOnFieldKey(nv);
+                          if (!nv) setRelatedFilterFieldKey("");
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={t("fields.dependsOnNone", "Не зависит")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">{t("fields.dependsOnNone", "Не зависит")}</SelectItem>
+                          {dependencyCandidates.map((f: Field) => (
+                            <SelectItem key={f.id} value={f.fieldKey}>
+                              {ml(f.nameJson) || f.fieldKey}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {dependsOnFieldKey && (
+                      <div className="space-y-1.5">
+                        <Label>
+                          {t("fields.relatedFilterField", "Поле фильтрации в связанной сущности")}
+                        </Label>
+                        <Select
+                          value={relatedFilterFieldKey || "__none__"}
+                          onValueChange={(v) => setRelatedFilterFieldKey(v === "__none__" ? "" : v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={t("fields.relatedFilterFieldPlaceholder", "Выберите поле")} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">{t("fields.relatedFilterNone", "Без фильтра")}</SelectItem>
+                            {relatedFieldOptions.map((f) => (
+                              <SelectItem key={f.key} value={f.key}>{ml(f.label) || f.key}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          {t(
+                            "fields.relatedFilterHint",
+                            "Список связанных записей будет сужен до тех, у кого это поле совпадает со значением родительского поля в текущей строке.",
+                          )}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

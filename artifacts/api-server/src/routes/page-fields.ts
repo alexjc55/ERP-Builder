@@ -12,6 +12,7 @@ import {
   type PageField,
   type Relation,
   type RelationFieldConfig,
+  type DependencyFieldConfig,
   type FieldPermissions,
 } from "@workspace/db";
 import { eq, asc, and, ne, inArray, or, sql, type SQL } from "drizzle-orm";
@@ -1305,6 +1306,108 @@ async function resolveRelationEntityField(
 }
 
 /**
+ * Hard server boundary for a dependent (cascading) relation field: a link may
+ * only be SET when the linked record actually matches the base record's current
+ * parent value under `relatedFilterFieldKey`. Mirrors the candidate-list filter
+ * so the dependency is enforced on the write path, not merely cosmetic in the UI
+ * (a direct PUT with a known id must not bypass it). Clearing a link is handled
+ * by the caller and always allowed. Returns `{ ok: true }` when the field is not
+ * dependent or the link satisfies the dependency.
+ */
+async function checkDependentRelationLink(args: {
+  field: typeof entityFieldsTable.$inferSelect;
+  baseEntityId: number;
+  baseRecordId: number;
+  baseValues: Record<string, unknown>;
+  relatedEntityId: number;
+  linkedRecordId: number;
+  linkedValues: Record<string, unknown>;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const dep = args.field.dependencyConfigJson as DependencyFieldConfig | null;
+  const dependsOnFieldKey = dep?.dependsOnFieldKey?.trim();
+  const relatedFilterFieldKey = dep?.relatedFilterFieldKey?.trim();
+  if (!dependsOnFieldKey || !relatedFilterFieldKey) return { ok: true };
+
+  // Resolve the base record's parent value (relation parent -> linked record id;
+  // scalar parent -> stored JSONB value).
+  const [parentField] = await db
+    .select()
+    .from(entityFieldsTable)
+    .where(
+      and(
+        eq(entityFieldsTable.entityId, args.baseEntityId),
+        eq(entityFieldsTable.fieldKey, dependsOnFieldKey),
+        eq(entityFieldsTable.isActive, true),
+      ),
+    );
+  let parentValue = "";
+  if (parentField?.fieldType === "relation") {
+    const pr = await resolveRelationEntityField(args.baseEntityId, dependsOnFieldKey);
+    if (pr.ok) {
+      const baseCol =
+        pr.direction === "source" ? recordLinksTable.sourceRecordId : recordLinksTable.targetRecordId;
+      const otherCol =
+        pr.direction === "source" ? recordLinksTable.targetRecordId : recordLinksTable.sourceRecordId;
+      const [pl] = await db
+        .select({ id: otherCol })
+        .from(recordLinksTable)
+        .where(and(eq(recordLinksTable.relationId, pr.relation.id), eq(baseCol, args.baseRecordId)))
+        .limit(1);
+      parentValue = pl?.id == null ? "" : String(pl.id);
+    }
+  } else {
+    const raw = args.baseValues[dependsOnFieldKey];
+    parentValue = raw == null || raw === "" ? "" : String(raw);
+  }
+  if (!parentValue) return { ok: false, error: "Сначала заполните родительское поле" };
+
+  // Resolve the filter field on the related entity and verify the linked record
+  // matches the parent value (relation filter -> match via record_links; scalar
+  // filter -> compare the stored value).
+  const [filterField] = await db
+    .select()
+    .from(entityFieldsTable)
+    .where(
+      and(
+        eq(entityFieldsTable.entityId, args.relatedEntityId),
+        eq(entityFieldsTable.fieldKey, relatedFilterFieldKey),
+        eq(entityFieldsTable.isActive, true),
+      ),
+    );
+  if (!filterField) return { ok: false, error: "Связанная запись не соответствует родителю" };
+
+  if (filterField.fieldType === "relation") {
+    const fr = await resolveRelationEntityField(args.relatedEntityId, relatedFilterFieldKey);
+    const parentId = Number(parentValue);
+    if (!fr.ok || !Number.isFinite(parentId)) {
+      return { ok: false, error: "Связанная запись не соответствует родителю" };
+    }
+    const baseCol =
+      fr.direction === "source" ? recordLinksTable.sourceRecordId : recordLinksTable.targetRecordId;
+    const otherCol =
+      fr.direction === "source" ? recordLinksTable.targetRecordId : recordLinksTable.sourceRecordId;
+    const [m] = await db
+      .select({ id: baseCol })
+      .from(recordLinksTable)
+      .where(
+        and(
+          eq(recordLinksTable.relationId, fr.relation.id),
+          eq(baseCol, args.linkedRecordId),
+          eq(otherCol, parentId),
+        ),
+      )
+      .limit(1);
+    if (!m) return { ok: false, error: "Связанная запись не соответствует родителю" };
+  } else {
+    const lv = args.linkedValues[relatedFilterFieldKey];
+    if ((lv == null ? "" : String(lv)) !== parentValue) {
+      return { ok: false, error: "Связанная запись не соответствует родителю" };
+    }
+  }
+  return { ok: true };
+}
+
+/**
  * Resolve relation-type ENTITY-field column values for a set of the entity's
  * records. Mirror of the page `related-values` endpoint, but the relation field's
  * own per-role access (not a page-field visibility entry) decides whether the
@@ -1549,6 +1652,64 @@ router.post("/entities/:entityId/related-candidates", requireAuth, async (req, r
   if (q) {
     conds.push(sql`(${entityRecordsTable.valuesJson} ->> ${relatedFieldKey}) ILIKE ${`%${q}%`}`);
   }
+
+  // Dependent (cascading) relation field: when configured, narrow the candidate
+  // list to related records whose `relatedFilterFieldKey` matches the parent
+  // field's value in the row being edited. `parentValue` is supplied by the
+  // client (a scalar value, or a linked record id for a relation parent). An
+  // empty parent yields no candidates (the picker is also gated client-side).
+  const dep = field.dependencyConfigJson as DependencyFieldConfig | null;
+  const dependsOnFieldKey = dep?.dependsOnFieldKey?.trim();
+  const relatedFilterFieldKey = dep?.relatedFilterFieldKey?.trim();
+  if (dependsOnFieldKey && relatedFilterFieldKey) {
+    const parentValue = body.data.parentValue?.trim() ?? "";
+    if (!parentValue) {
+      res.json({ candidates: [] });
+      return;
+    }
+    const [filterField] = await db
+      .select()
+      .from(entityFieldsTable)
+      .where(
+        and(
+          eq(entityFieldsTable.entityId, relatedEntityId),
+          eq(entityFieldsTable.fieldKey, relatedFilterFieldKey),
+          eq(entityFieldsTable.isActive, true),
+        ),
+      );
+    if (!filterField) {
+      res.json({ candidates: [] });
+      return;
+    }
+    if (filterField.fieldType === "relation") {
+      // The filter field on the related entity is itself a relation: match by the
+      // linked record id (parentValue) via record_links on that relation.
+      const fr = await resolveRelationEntityField(relatedEntityId, relatedFilterFieldKey);
+      const parentId = Number(parentValue);
+      if (!fr.ok || !Number.isFinite(parentId)) {
+        res.json({ candidates: [] });
+        return;
+      }
+      const baseCol =
+        fr.direction === "source" ? recordLinksTable.sourceRecordId : recordLinksTable.targetRecordId;
+      const otherCol =
+        fr.direction === "source" ? recordLinksTable.targetRecordId : recordLinksTable.sourceRecordId;
+      const linkRows = await db
+        .select({ id: baseCol })
+        .from(recordLinksTable)
+        .where(and(eq(recordLinksTable.relationId, fr.relation.id), eq(otherCol, parentId)));
+      const ids = linkRows.map((r) => r.id);
+      if (ids.length === 0) {
+        res.json({ candidates: [] });
+        return;
+      }
+      conds.push(inArray(entityRecordsTable.id, ids));
+    } else {
+      // Scalar filter field: match the stored JSONB value as text.
+      conds.push(sql`(${entityRecordsTable.valuesJson} ->> ${relatedFilterFieldKey}) = ${parentValue}`);
+    }
+  }
+
   const rows = await db
     .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
     .from(entityRecordsTable)
@@ -1653,6 +1814,23 @@ router.put("/entities/:entityId/related-link", requireAuth, async (req, res): Pr
       return;
     }
     linkedValues = lv;
+
+    // Dependent (cascading) relation field: enforce that the chosen record matches
+    // the base record's current parent value as a hard server boundary (the UI
+    // gating/filtering alone is not authoritative). Clearing a link is exempt.
+    const depCheck = await checkDependentRelationLink({
+      field,
+      baseEntityId: entityId,
+      baseRecordId,
+      baseValues: (baseRecord.valuesJson as Record<string, unknown>) ?? {},
+      relatedEntityId,
+      linkedRecordId,
+      linkedValues: lv,
+    });
+    if (!depCheck.ok) {
+      res.status(400).json({ error: depCheck.error });
+      return;
+    }
   }
 
   try {

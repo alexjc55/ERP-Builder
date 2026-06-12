@@ -2470,6 +2470,24 @@ export function EntityRecords({
                               !!meta?.editableColumn &&
                               !!rel?.editable &&
                               !(f.lockAfterCreate && rel?.linkedRecordId != null);
+                            // Dependent (cascading) relation field: resolve the parent
+                            // field's value for this row to gate + filter the picker. A
+                            // relation parent contributes its linked record id; any other
+                            // parent contributes its stored scalar value.
+                            const relDep = f.dependencyConfigJson;
+                            const relDepParentKey = relDep?.dependsOnFieldKey;
+                            const relIsDependent = !!(relDepParentKey && relDep?.relatedFilterFieldKey);
+                            let relParentValue: string | null = null;
+                            if (relIsDependent && relDepParentKey) {
+                              const parentField = fields.find((x) => x.fieldKey === relDepParentKey);
+                              if (parentField?.fieldType === "relation") {
+                                const pid = entityRelatedByRecord.get(record.id)?.get(relDepParentKey)?.linkedRecordId;
+                                relParentValue = pid == null ? null : String(pid);
+                              } else {
+                                const raw = values[relDepParentKey];
+                                relParentValue = raw == null || raw === "" ? null : String(raw);
+                              }
+                            }
                             const display =
                               rel?.linkedRecordId == null ? (
                                 <span className="text-slate-300">—</span>
@@ -2486,6 +2504,8 @@ export function EntityRecords({
                                     currentLinkedId={rel?.linkedRecordId ?? null}
                                     display={display}
                                     onChanged={() => setRefreshTick((x) => x + 1)}
+                                    dependent={relIsDependent}
+                                    parentValue={relParentValue}
                                   />
                                 ) : (
                                   <div className="truncate">{display}</div>
@@ -3190,6 +3210,8 @@ function EntityRelationLinkPicker({
   currentLinkedId,
   display,
   onChanged,
+  dependent = false,
+  parentValue = null,
 }: {
   entityId: number;
   fieldKey: string;
@@ -3197,6 +3219,11 @@ function EntityRelationLinkPicker({
   currentLinkedId: number | null;
   display: React.ReactNode;
   onChanged: () => void;
+  /** True when this relation field is a dependent (cascading) field. */
+  dependent?: boolean;
+  /** The parent field's value used to narrow candidates (scalar, or a linked
+   * record id for a relation parent). Null/empty disables the picker. */
+  parentValue?: string | null;
 }) {
   const t = useT();
   const { toast } = useToast();
@@ -3205,12 +3232,30 @@ function EntityRelationLinkPicker({
   const [candidates, setCandidates] = useState<PageRelatedCandidate[]>([]);
   const fetchCandidates = useGetEntityRelatedCandidates().mutateAsync;
   const linkMutation = useSetEntityRelatedLink();
+  // A dependent relation field is gated until its parent has a value.
+  const gated = dependent && (parentValue == null || parentValue === "");
+  // When gated we block assigning a new link, but a previously-set ("stale")
+  // link must still be clearable — relation children are not auto-cleared when a
+  // parent changes — so the picker stays openable while a link exists.
+  const triggerDisabled = gated && currentLinkedId == null;
+  const allowOpen = !gated || currentLinkedId != null;
 
   useEffect(() => {
     if (!open) return;
+    if (gated) {
+      setCandidates([]);
+      return;
+    }
     let cancelled = false;
     const handle = setTimeout(() => {
-      fetchCandidates({ entityId, data: { fieldKey, q: search.trim() || undefined } })
+      fetchCandidates({
+        entityId,
+        data: {
+          fieldKey,
+          q: search.trim() || undefined,
+          ...(dependent ? { parentValue: parentValue ?? undefined } : {}),
+        },
+      })
         .then((res) => {
           if (!cancelled) setCandidates(res.candidates);
         })
@@ -3222,7 +3267,7 @@ function EntityRelationLinkPicker({
       cancelled = true;
       clearTimeout(handle);
     };
-  }, [open, search, entityId, fieldKey, fetchCandidates]);
+  }, [open, search, entityId, fieldKey, fetchCandidates, gated, dependent, parentValue]);
 
   const choose = async (linkedRecordId: number | null) => {
     try {
@@ -3241,8 +3286,9 @@ function EntityRelationLinkPicker({
 
   return (
     <Popover
-      open={open}
+      open={open && allowOpen}
       onOpenChange={(o) => {
+        if (!allowOpen) return;
         setOpen(o);
         if (!o) setSearch("");
       }}
@@ -3250,8 +3296,13 @@ function EntityRelationLinkPicker({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex w-full items-center justify-between gap-2 -mx-1 rounded px-1 text-left hover:bg-blue-50/60"
-          title={t("records.clickToAssign", "Нажмите, чтобы назначить связь")}
+          disabled={triggerDisabled}
+          className="flex w-full items-center justify-between gap-2 -mx-1 rounded px-1 text-left hover:bg-blue-50/60 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+          title={
+            gated
+              ? t("records.relatedPickParentFirst", "Сначала заполните родительское поле")
+              : t("records.clickToAssign", "Нажмите, чтобы назначить связь")
+          }
         >
           <span className="truncate">{display}</span>
           <ChevronDown className="h-4 w-4 shrink-0 opacity-40" />

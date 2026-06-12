@@ -1408,10 +1408,12 @@ export interface FormulaFieldConfig {
 }
 
 /**
- * Per-field configuration for a dependent ("cascading") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.
+ * Per-field configuration for a dependent ("cascading") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field's value in the row being edited.
  */
 export interface DependencyFieldConfig {
   dependsOnFieldKey?: string;
+  /** Relation fields only. The field key on the related entity whose value must match the parent field's value for a record to be offered as a link candidate. */
+  relatedFilterFieldKey?: string;
 }
 
 export type FieldAccess = typeof FieldAccess[keyof typeof FieldAccess];
@@ -1607,6 +1609,8 @@ export interface PageRelatedCandidatesInput {
   fieldKey: string;
   /** Optional case-insensitive search over the candidate label (related field value). */
   q?: string;
+  /** For a dependent (cascading) relation field, the current row's parent-field value used to narrow candidates: a scalar value, or a linked record id (as a string) when the parent is itself a relation field. Empty/omitted yields no candidates when the field is dependent. */
+  parentValue?: string | null;
 }
 
 export interface PageRelatedCandidate {

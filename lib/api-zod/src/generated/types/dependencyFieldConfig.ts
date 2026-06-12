@@ -7,8 +7,10 @@
  */
 
 /**
- * Per-field configuration for a dependent ("cascading") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value, and its option list is the distinct existing values of this field among records whose parent-chain matches the current row.
+ * Per-field configuration for a dependent ("cascading") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field's value in the row being edited.
  */
 export interface DependencyFieldConfig {
   dependsOnFieldKey?: string;
+  /** Relation fields only. The field key on the related entity whose value must match the parent field's value for a record to be offered as a link candidate. */
+  relatedFilterFieldKey?: string;
 }

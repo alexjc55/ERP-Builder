@@ -70,7 +70,7 @@ export type FormulaFieldConfig = { expression?: string };
  * matches the current row. Used for Variant-A string suggestions (e.g.
  * Client → Project → Order number). Empty/unset means no dependency.
  */
-export type DependencyFieldConfig = { dependsOnFieldKey?: string };
+export type DependencyFieldConfig = { dependsOnFieldKey?: string; relatedFilterFieldKey?: string };
 
 /**
  * Per-field configuration for a `relation`-type field. The column surfaces one
