@@ -3732,6 +3732,18 @@
     "he": "שגיאה ביצירת רשומה"
   },
   {
+    "key": "records.relatedDuplicateTitle",
+    "ru": "Такая запись уже существует",
+    "en": "This record already exists",
+    "he": "רשומה כזו כבר קיימת"
+  },
+  {
+    "key": "records.relatedDuplicateDesc",
+    "ru": "Запись с таким значением уже есть. Закройте это окно и выберите её из списка, а не создавайте новую.",
+    "en": "A record with this value already exists. Close this window and pick it from the list instead of creating a new one.",
+    "he": "רשומה עם ערך זה כבר קיימת. סגרו חלון זה ובחרו אותה מהרשימה במקום ליצור חדשה."
+  },
+  {
     "key": "records.dateFilter30days",
     "ru": "30 дней",
     "en": "30 days",

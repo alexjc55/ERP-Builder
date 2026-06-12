@@ -3973,10 +3973,24 @@ function QuickCreateRelatedRecordDialog({
       newId = created.id;
     } catch (e) {
       setSubmitting(false);
+      // A 409 here means the typed value duplicates an existing record's unique
+      // (isKey) field. Guide the user to pick the existing record from the list
+      // instead of surfacing the raw "HTTP 409 …" technical message.
+      if ((e as { status?: number }).status === 409) {
+        toast({
+          variant: "destructive",
+          title: t("records.relatedDuplicateTitle", "Такая запись уже существует"),
+          description: t(
+            "records.relatedDuplicateDesc",
+            "Запись с таким значением уже есть. Закройте это окно и выберите её из списка, а не создавайте новую.",
+          ),
+        });
+        return;
+      }
       toast({
         variant: "destructive",
         title: t("records.relatedCreateFailed", "Не удалось создать запись"),
-        description: e instanceof Error ? e.message : undefined,
+        description: extractError(e),
       });
       return;
     }
