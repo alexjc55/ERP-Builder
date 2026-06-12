@@ -2497,6 +2497,7 @@ export const GetPageRelationOptionsResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }),
+  "direction": zod.enum(['source', 'target']).describe('Which side of the relation `entityId` sits on. \"source\" = this entity is the relation\'s source linking to one target (1:1 \/ N:1); \"target\" = the inverse single-link side (1:1 \/ 1:N). Entity `relation` fields are eligible only for \"source\" options.'),
   "relatedEntityId": zod.number(),
   "relatedEntityLabel": zod.object({
   "ru": zod.string().optional(),
@@ -2531,6 +2532,7 @@ export const GetEntityRelationOptionsResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }),
+  "direction": zod.enum(['source', 'target']).describe('Which side of the relation `entityId` sits on. \"source\" = this entity is the relation\'s source linking to one target (1:1 \/ N:1); \"target\" = the inverse single-link side (1:1 \/ 1:N). Entity `relation` fields are eligible only for \"source\" options.'),
   "relatedEntityId": zod.number(),
   "relatedEntityLabel": zod.object({
   "ru": zod.string().optional(),

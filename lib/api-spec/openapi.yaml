@@ -4750,12 +4750,20 @@ components:
 
     PageRelationOption:
       type: object
-      required: [relationId, label, relatedEntityId, relatedEntityLabel, fields]
+      required: [relationId, label, direction, relatedEntityId, relatedEntityLabel, fields]
       properties:
         relationId:
           type: integer
         label:
           $ref: "#/components/schemas/MultilingualText"
+        direction:
+          type: string
+          enum: [source, target]
+          description: >-
+            Which side of the relation `entityId` sits on. "source" = this entity
+            is the relation's source linking to one target (1:1 / N:1); "target" =
+            the inverse single-link side (1:1 / 1:N). Entity `relation` fields are
+            eligible only for "source" options.
         relatedEntityId:
           type: integer
         relatedEntityLabel:

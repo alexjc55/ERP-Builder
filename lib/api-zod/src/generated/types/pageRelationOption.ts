@@ -6,11 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MultilingualText } from './multilingualText';
+import type { PageRelationOptionDirection } from './pageRelationOptionDirection';
 import type { PageRelationOptionField } from './pageRelationOptionField';
 
 export interface PageRelationOption {
   relationId: number;
   label: MultilingualText;
+  /** Which side of the relation `entityId` sits on. "source" = this entity is the relation's source linking to one target (1:1 / N:1); "target" = the inverse single-link side (1:1 / 1:N). Entity `relation` fields are eligible only for "source" options. */
+  direction: PageRelationOptionDirection;
   relatedEntityId: number;
   relatedEntityLabel: MultilingualText;
   fields: PageRelationOptionField[];

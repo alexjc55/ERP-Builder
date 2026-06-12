@@ -127,6 +127,7 @@ export * from './pageRelatedValue';
 export * from './pageRelatedValues';
 export * from './pageRelatedValuesInput';
 export * from './pageRelationOption';
+export * from './pageRelationOptionDirection';
 export * from './pageRelationOptionField';
 export * from './pageRelationOptions';
 export * from './pageUpdate';

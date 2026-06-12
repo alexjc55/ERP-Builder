@@ -47,22 +47,22 @@ function clampFormulaDecimals<T>(cfg: T): T {
 }
 
 /**
- * Direction of a qualifying *single-link* relation relative to `entityId`.
- * "source" = this entity is the relation's source and the single linked record is
- * its target (1:1 / N:1); "target" = the inverse side (1:1 / 1:N). Any other
- * shape (N:N, or the many side) is not single-link → null. Mirrors the identical
- * helper in page-fields so both relation-field surfaces stay consistent.
+ * Eligibility of a relation as an entity `relation` field on `entityId`.
+ * Scoped (task contract) to the SOURCE side of a to-one relation: this entity is
+ * the relation's source and the single linked record is its target (1:1 / N:1) →
+ * "source". Target-side, the many side, 1:N and N:N are all out of scope → null.
+ * Note: page-fields keeps its own broader helper (it also allows the target side
+ * of 1:1 / 1:N); entity relation fields are intentionally narrower.
  */
-function relationDirection(relation: Relation, entityId: number): "source" | "target" | null {
+function relationDirection(relation: Relation, entityId: number): "source" | null {
   const t = relation.relationType;
   if (relation.sourceEntityId === entityId && (t === "one_to_one" || t === "many_to_one")) return "source";
-  if (relation.targetEntityId === entityId && (t === "one_to_one" || t === "one_to_many")) return "target";
   return null;
 }
 
 /**
  * Validate a relation entity-field's config against its entity: the relation must
- * exist, qualify as single-link for this entity (either direction), and the named
+ * exist, qualify as single-link with this entity on the SOURCE side, and the named
  * related field must exist and be active on the other side. Returns the cleaned
  * config (only relationId + relatedFieldKey) to persist.
  */

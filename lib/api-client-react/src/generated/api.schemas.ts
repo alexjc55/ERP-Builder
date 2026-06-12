@@ -1648,9 +1648,22 @@ export interface PageRelationOptionField {
   fieldType: string;
 }
 
+/**
+ * Which side of the relation `entityId` sits on. "source" = this entity is the relation's source linking to one target (1:1 / N:1); "target" = the inverse single-link side (1:1 / 1:N). Entity `relation` fields are eligible only for "source" options.
+ */
+export type PageRelationOptionDirection = typeof PageRelationOptionDirection[keyof typeof PageRelationOptionDirection];
+
+
+export const PageRelationOptionDirection = {
+  source: 'source',
+  target: 'target',
+} as const;
+
 export interface PageRelationOption {
   relationId: number;
   label: MultilingualText;
+  /** Which side of the relation `entityId` sits on. "source" = this entity is the relation's source linking to one target (1:1 / N:1); "target" = the inverse single-link side (1:1 / 1:N). Entity `relation` fields are eligible only for "source" options. */
+  direction: PageRelationOptionDirection;
   relatedEntityId: number;
   relatedEntityLabel: MultilingualText;
   fields: PageRelationOptionField[];

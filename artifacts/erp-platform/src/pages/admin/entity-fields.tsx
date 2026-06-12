@@ -133,7 +133,12 @@ export default function EntityFieldsPage() {
     query: { enabled: dialogOpen, queryKey: getGetEntityRelationOptionsQueryKey(entityId) },
   });
   const relationOptions = relationOptionsData?.options ?? [];
-  const selectedRelation = relationOptions.find((o) => o.relationId === relationId);
+  // Entity `relation` fields are scoped (task contract) to the SOURCE side of a
+  // to-one relation. The shared options endpoint also returns target-side options
+  // (consumed by dashboards / page fields), so narrow them here.
+  const relationFieldOptions = relationOptions.filter((o) => o.direction === "source");
+  const canUseRelation = relationFieldOptions.length > 0;
+  const selectedRelation = relationFieldOptions.find((o) => o.relationId === relationId);
   const relatedFieldOptions = selectedRelation?.fields ?? [];
 
   const { data: fields = [], isLoading } = useListEntityFields(entityId);
@@ -459,7 +464,9 @@ export default function EntityFieldsPage() {
                 <Select value={fieldType} onValueChange={(v) => setFieldType(v as FieldType)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {FIELD_TYPES.map((ft) => (
+                    {FIELD_TYPES.filter(
+                      (ft) => ft.value !== "relation" || canUseRelation || fieldType === "relation",
+                    ).map((ft) => (
                       <SelectItem key={ft.value} value={ft.value}>{t(`fields.type.${ft.value}`, ft.label)}</SelectItem>
                     ))}
                   </SelectContent>
@@ -546,7 +553,7 @@ export default function EntityFieldsPage() {
                 <p className="text-xs text-slate-500">
                   {t(
                     "fields.relationHint",
-                    "Связанное поле показывает значение из единственной связанной записи. Доступны связи «один к одному» и «многие к одному» (а также обратная сторона «один ко многим»).",
+                    "Связанное поле показывает значение из единственной связанной записи. Доступны связи «один к одному» и «многие к одному», где эта сущность — источник.",
                   )}
                 </p>
                 <div className="space-y-1.5">
@@ -560,12 +567,12 @@ export default function EntityFieldsPage() {
                   >
                     <SelectTrigger><SelectValue placeholder={t("fields.relationPlaceholder", "Выберите связь")} /></SelectTrigger>
                     <SelectContent>
-                      {relationOptions.length === 0 ? (
+                      {relationFieldOptions.length === 0 ? (
                         <div className="px-2 py-1.5 text-xs text-slate-400">
                           {t("fields.noRelations", "Нет подходящих связей для этой сущности.")}
                         </div>
                       ) : (
-                        relationOptions.map((o) => (
+                        relationFieldOptions.map((o) => (
                           <SelectItem key={o.relationId} value={String(o.relationId)}>
                             {ml(o.label)} → {ml(o.relatedEntityLabel)}
                           </SelectItem>

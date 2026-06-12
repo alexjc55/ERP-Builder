@@ -1163,6 +1163,7 @@ async function buildRelationOptions(entityId: number): Promise<
   {
     relationId: number;
     label: unknown;
+    direction: LinkDirection;
     relatedEntityId: number;
     relatedEntityLabel: unknown;
     fields: { key: string; label: unknown; fieldType: string }[];
@@ -1176,6 +1177,7 @@ async function buildRelationOptions(entityId: number): Promise<
   const options: {
     relationId: number;
     label: unknown;
+    direction: LinkDirection;
     relatedEntityId: number;
     relatedEntityLabel: unknown;
     fields: { key: string; label: unknown; fieldType: string }[];
@@ -1200,6 +1202,7 @@ async function buildRelationOptions(entityId: number): Promise<
       // For the target side show the inverse name so the label reads from the
       // referencing entity's perspective.
       label: direction === "target" ? relation.inverseNameJson : relation.nameJson,
+      direction,
       relatedEntityId,
       relatedEntityLabel: relatedEntity.nameJson,
       fields: fields.map((f) => ({ key: f.fieldKey, label: f.nameJson, fieldType: f.fieldType })),
