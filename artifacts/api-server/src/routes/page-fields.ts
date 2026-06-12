@@ -15,6 +15,7 @@ import {
   type FieldPermissions,
 } from "@workspace/db";
 import { eq, asc, and, ne, inArray, or, sql, type SQL } from "drizzle-orm";
+import { getRelationLockSides, linkExistsForSide, RELATION_LOCKED } from "../lib/relationLock";
 import { requireAuth } from "../middlewares/auth";
 import {
   requireAdmin,
@@ -1661,6 +1662,17 @@ router.put("/entities/:entityId/related-link", requireAuth, async (req, res): Pr
         .for("update");
       if (!locked) throw new Error("relation_gone");
       const baseCol = direction === "source" ? recordLinksTable.sourceRecordId : recordLinksTable.targetRecordId;
+      // lockAfterCreate: once a link has been set on this base record it can
+      // neither be changed nor cleared. The first assignment (no existing link
+      // yet) is allowed. Checked over ALL relation fields on this side — not just
+      // the requested field — so a second, unlocked relation field over the same
+      // relation can't be used to bypass it. No superAdmin exception — durable
+      // integrity is the entire point of the flag (mirrors checkImmutableFields).
+      const lockSides = await getRelationLockSides(tx, relation.id);
+      const sideLocked = direction === "source" ? lockSides?.sourceLocked : lockSides?.targetLocked;
+      if (sideLocked && (await linkExistsForSide(tx, relation.id, direction, baseRecordId))) {
+        throw new Error(RELATION_LOCKED);
+      }
       await tx.delete(recordLinksTable).where(and(eq(recordLinksTable.relationId, relation.id), eq(baseCol, baseRecordId)));
       if (linkedRecordId != null) {
         await tx.insert(recordLinksTable).values({
@@ -1672,6 +1684,11 @@ router.put("/entities/:entityId/related-link", requireAuth, async (req, res): Pr
       }
     });
   } catch (err) {
+    if (err instanceof Error && err.message === RELATION_LOCKED) {
+      const ru = (field.nameJson as Record<string, string> | null)?.ru || field.fieldKey;
+      res.status(409).json({ error: `Поле «${ru}» нельзя изменить после создания записи` });
+      return;
+    }
     const msg = recordLinkUniqueMessage(err);
     if (msg) {
       res.status(409).json({ error: msg });

@@ -190,13 +190,22 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
     return;
   }
 
-  // isKey/lockAfterCreate operate on the stored scalar value; they are meaningless
+  // isKey enforces uniqueness over a stored scalar value, so it is meaningless
   // for file (object), function (computed) and relation (derived) fields.
   if (
-    (parsed.data.isKey || parsed.data.lockAfterCreate) &&
+    parsed.data.isKey &&
     (parsed.data.fieldType === "file" || parsed.data.fieldType === "function" || parsed.data.fieldType === "relation")
   ) {
-    res.status(400).json({ error: "Ключевое поле и запрет изменения недоступны для полей типа «файл», «функция» и «связанное поле»" });
+    res.status(400).json({ error: "Ключевое поле недоступно для полей типа «файл», «функция» и «связанное поле»" });
+    return;
+  }
+  // lockAfterCreate is enforced on the stored value (file/function have none); for
+  // relation fields it is enforced separately on the related-link assignment path.
+  if (
+    parsed.data.lockAfterCreate &&
+    (parsed.data.fieldType === "file" || parsed.data.fieldType === "function")
+  ) {
+    res.status(400).json({ error: "Запрет изменения недоступен для полей типа «файл» и «функция»" });
     return;
   }
 
@@ -361,11 +370,17 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
     }
   }
 
-  // isKey/lockAfterCreate are only valid for stored-scalar field types.
+  // isKey enforces uniqueness over a stored scalar value; lockAfterCreate is
+  // enforced on the stored value for scalars and on the related-link path for
+  // relation fields (so it IS allowed for relation, but isKey is not).
   const nextIsKey = body.isKey ?? current.isKey;
   const nextLock = body.lockAfterCreate ?? current.lockAfterCreate;
-  if ((nextIsKey || nextLock) && (nextType === "file" || nextType === "function" || nextType === "relation")) {
-    res.status(400).json({ error: "Ключевое поле и запрет изменения недоступны для полей типа «файл», «функция» и «связанное поле»" });
+  if (nextIsKey && (nextType === "file" || nextType === "function" || nextType === "relation")) {
+    res.status(400).json({ error: "Ключевое поле недоступно для полей типа «файл», «функция» и «связанное поле»" });
+    return;
+  }
+  if (nextLock && (nextType === "file" || nextType === "function")) {
+    res.status(400).json({ error: "Запрет изменения недоступен для полей типа «файл» и «функция»" });
     return;
   }
 

@@ -2462,9 +2462,14 @@ export function EntityRecords({
                               optionsJson: meta?.optionsJson ?? [],
                             } as unknown as Field;
                             // Assignable column-wide when inline edit is on and the server
-                            // reports both the column and this row's link as editable.
+                            // reports both the column and this row's link as editable. A
+                            // lockAfterCreate field stops being assignable once a link exists
+                            // (mirrors the hard server boundary on related-link).
                             const relAssignable =
-                              inlineEditEnabled && !!meta?.editableColumn && !!rel?.editable;
+                              inlineEditEnabled &&
+                              !!meta?.editableColumn &&
+                              !!rel?.editable &&
+                              !(f.lockAfterCreate && rel?.linkedRecordId != null);
                             const display =
                               rel?.linkedRecordId == null ? (
                                 <span className="text-slate-300">—</span>
