@@ -4041,7 +4041,7 @@ function QuickCreateRelatedRecordDialog({
         {fieldsLoading ? (
           <div className="py-8 text-center text-sm text-slate-400">{t("common.loading", "Загрузка...")}</div>
         ) : (
-          <div className="max-h-[60vh] space-y-4 overflow-y-auto py-2">
+          <div className="max-h-[60vh] space-y-4 overflow-y-auto py-2 pr-2">
             {editableFields.length === 0 && (
               <p className="text-sm text-slate-400">{t("records.relatedCreateNoFields", "Нет полей для заполнения")}</p>
             )}
