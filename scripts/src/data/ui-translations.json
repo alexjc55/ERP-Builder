@@ -6,6 +6,18 @@
     "he": "ביטול"
   },
   {
+    "key": "common.moveUp",
+    "ru": "Вверх",
+    "en": "Move up",
+    "he": "למעלה"
+  },
+  {
+    "key": "common.moveDown",
+    "ru": "Вниз",
+    "en": "Move down",
+    "he": "למטה"
+  },
+  {
     "key": "common.showPassword",
     "ru": "Показать пароль",
     "en": "Show password",
@@ -1558,6 +1570,18 @@
     "ru": "Какие способы добавления файла доступны при заполнении (нужен хотя бы один)",
     "en": "Which ways to add a file are available when filling in (at least one required)",
     "he": "אילו דרכים להוספת קובץ זמינות בעת המילוי (נדרשת לפחות אחת)"
+  },
+  {
+    "key": "fields.fileSourceOrderHint",
+    "ru": "Порядок источников. Первый используется по умолчанию.",
+    "en": "Source order. The first one is used by default.",
+    "he": "סדר המקורות. הראשון משמש כברירת מחדל."
+  },
+  {
+    "key": "fields.fileSourceDefault",
+    "ru": "по умолчанию",
+    "en": "default",
+    "he": "ברירת מחדל"
   },
   {
     "key": "fields.filterable",

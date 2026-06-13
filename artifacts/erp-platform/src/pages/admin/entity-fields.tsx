@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { FileSourcesConfig } from "@/components/FileSourcesConfig";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -77,11 +78,6 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "relation", label: "Связанное поле" },
 ];
 
-const FILE_SOURCES: { value: FileSource; labelKey: string; label: string }[] = [
-  { value: "server", labelKey: "fields.fileSource.server", label: "Загрузка на сервер" },
-  { value: "gdrive", labelKey: "fields.fileSource.gdrive", label: "Загрузка в Google Drive" },
-  { value: "link", labelKey: "fields.fileSource.link", label: "Ссылка" },
-];
 
 const FIELD_ACCESS_OPTIONS: { value: FieldAccess; label: string }[] = [
   { value: "edit", label: "Редактирование" },
@@ -495,26 +491,12 @@ export default function EntityFieldsPage() {
                 <p className="text-xs text-slate-400">
                   {t("fields.fileSourcesHint", "Выберите, как пользователи смогут прикреплять файлы. Должен быть выбран хотя бы один источник.")}
                 </p>
-                <div className="space-y-1.5 pt-1">
-                  {FILE_SOURCES.map((s) => {
-                    const checked = allowedSources.includes(s.value);
-                    return (
-                      <div key={s.value} className="flex items-center gap-2">
-                        <Switch
-                          id={`field-src-${s.value}`}
-                          checked={checked}
-                          onCheckedChange={(on) =>
-                            setAllowedSources((prev) => {
-                              const next = on ? [...prev, s.value] : prev.filter((x) => x !== s.value);
-                              return next.length > 0 ? next : prev;
-                            })
-                          }
-                        />
-                        <Label htmlFor={`field-src-${s.value}`}>{t(s.labelKey, s.label)}</Label>
-                      </div>
-                    );
-                  })}
-                </div>
+                <FileSourcesConfig
+                  value={allowedSources}
+                  onChange={setAllowedSources}
+                  t={t}
+                  idPrefix="field-src"
+                />
               </div>
             )}
             {fieldType === "user" && (
