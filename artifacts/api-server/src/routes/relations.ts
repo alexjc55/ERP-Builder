@@ -9,6 +9,7 @@ import {
   type RelationType,
 } from "@workspace/db";
 import { eq, and, ne, asc, desc, inArray } from "drizzle-orm";
+import { relationLinkLockViolation } from "../lib/relation-lock";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin, getPermissions, canRecord } from "../middlewares/permissions";
 import {
@@ -346,6 +347,17 @@ router.post("/records/:recordId/links", requireAuth, async (req, res): Promise<v
       if (tgtEntity !== relation.targetEntityId) {
         return { status: 400 as const, error: "Target record does not belong to the relation's target entity" };
       }
+      // Immutability boundary for lockAfterCreate relation fields, checked under
+      // the relation row lock (TOCTOU-free). A relation field can sit on either
+      // side of the relation, so guard both the source and target ends.
+      const srcViolation = await relationLinkLockViolation(
+        tx, srcEntity, relationId, sourceRecordId, "source", targetRecordId,
+      );
+      if (srcViolation) return { status: 400 as const, error: srcViolation };
+      const tgtViolation = await relationLinkLockViolation(
+        tx, tgtEntity, relationId, targetRecordId, "target", sourceRecordId,
+      );
+      if (tgtViolation) return { status: 400 as const, error: tgtViolation };
       const [link] = await tx
         .insert(recordLinksTable)
         .values({ relationId, relationType: relation.relationType, sourceRecordId, targetRecordId })
@@ -405,6 +417,7 @@ router.delete("/links/:id", requireAuth, async (req, res): Promise<void> => {
       id: recordLinksTable.id,
       relationId: recordLinksTable.relationId,
       sourceRecordId: recordLinksTable.sourceRecordId,
+      targetRecordId: recordLinksTable.targetRecordId,
     })
     .from(recordLinksTable)
     .where(eq(recordLinksTable.id, params.data.id))
@@ -419,7 +432,36 @@ router.delete("/links/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
-  await db.delete(recordLinksTable).where(eq(recordLinksTable.id, params.data.id));
+  // Deleting a link clears the value of any relation field backing it. If that
+  // field is lockAfterCreate, clearing is forbidden — guard both ends (the
+  // locked field can sit on either side of the relation). The guard + delete run
+  // under the relation FOR UPDATE lock, matching the other write paths, so a
+  // concurrent set/delete cannot slip past the immutability boundary.
+  const tgtEntity = await recordEntityId(link.targetRecordId);
+  const delError = await db.transaction(async (tx) => {
+    await tx
+      .select({ id: relationsTable.id })
+      .from(relationsTable)
+      .where(eq(relationsTable.id, link.relationId))
+      .limit(1)
+      .for("update");
+    const srcViolation = await relationLinkLockViolation(
+      tx, srcEntity, link.relationId, link.sourceRecordId, "source", null,
+    );
+    if (srcViolation) return srcViolation;
+    if (tgtEntity !== null) {
+      const tgtViolation = await relationLinkLockViolation(
+        tx, tgtEntity, link.relationId, link.targetRecordId, "target", null,
+      );
+      if (tgtViolation) return tgtViolation;
+    }
+    await tx.delete(recordLinksTable).where(eq(recordLinksTable.id, params.data.id));
+    return null;
+  });
+  if (delError) {
+    res.status(400).json({ error: delError });
+    return;
+  }
   res.json({ success: true });
 });
 

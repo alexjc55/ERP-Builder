@@ -19,9 +19,6 @@ import {
   useRenameFieldValue,
   useArchiveRecord,
   useUnarchiveRecord,
-  useListRecordLinks,
-  useCreateRecordLink,
-  useDeleteRecordLink,
   useListUserOptions,
   useListRecordAuditLogs,
   useListRoles,
@@ -53,7 +50,6 @@ import {
   type Transition,
   type RecordQuery,
   type SortSpec,
-  type LinkedRecord,
   type UserOption,
   type Role,
   type FieldAccess,
@@ -131,7 +127,7 @@ import { PageFieldConfigDialog } from "@/components/PageFieldConfigDialog";
 import { formatFormulaResult, evaluateFormula } from "@workspace/formula";
 import { computeRowFormatting, type FormatField } from "@/lib/formatRules";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, Inbox, Link2, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus } from "lucide-react";
 import { Link, useLocation, useSearch } from "wouter";
 import { Calendar } from "@/components/ui/calendar";
 import type { DateRange } from "react-day-picker";
@@ -1692,25 +1688,6 @@ export function EntityRecords({
     return { dependent, parentValue, relatedFilterFieldKey: dep?.relatedFilterFieldKey ?? null };
   };
 
-  // A relation field's link lives in the per-record relation links, not in
-  // valuesJson/form. When editing, merge those linked ids into a form snapshot so
-  // dependent (cascading) children whose parent is a relation field can resolve
-  // their parent value in the edit modal (the inline table reads links directly).
-  const formWithRelationParents = useMemo<FormState>(() => {
-    if (!editing) return form;
-    const links = entityRelatedByRecord.get(editing.id);
-    if (!links) return form;
-    const merged: FormState = { ...form };
-    for (const f of fields) {
-      if (f.fieldType !== "relation") continue;
-      const lid = links.get(f.fieldKey)?.linkedRecordId;
-      if (lid != null && (merged[f.fieldKey] == null || merged[f.fieldKey] === "")) {
-        merged[f.fieldKey] = lid;
-      }
-    }
-    return merged;
-  }, [editing, entityRelatedByRecord, form, fields]);
-
   // After a base record is created, persist any relation-field selections made in
   // a CREATE flow (modal or inline add-row). A relation link needs the new record
   // id, so it cannot be written before create — we defer it to here. Best-effort
@@ -2672,7 +2649,7 @@ export function EntityRecords({
                             inlineEditEnabled &&
                             access === "edit" &&
                             !isFunction &&
-                            !(f.lockAfterCreate && valueIsSet(values[f.fieldKey]));
+                            !scalarFieldLocked(f, values[f.fieldKey]);
                           const cellBg = formatting.cellColors[f.fieldKey];
                           const cellText = formatting.cellTextColors[f.fieldKey];
                           const cellStyle = cellBg || cellText ? { backgroundColor: cellBg || undefined, color: cellText || undefined } : undefined;
@@ -2694,7 +2671,7 @@ export function EntityRecords({
                               inlineEditEnabled &&
                               !!meta?.editableColumn &&
                               !!rel?.editable &&
-                              !(f.lockAfterCreate && rel?.linkedRecordId != null);
+                              !relationFieldLocked(f, rel?.linkedRecordId);
                             // Dependent (cascading) relation field: resolve the parent
                             // field's value for this row to gate + filter the picker. A
                             // relation parent contributes its linked record id; any other
@@ -3075,119 +3052,18 @@ export function EntityRecords({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            {visibleFormFields.map((field: Field) => {
-              const access = fieldAccess(field, entityId, permPageId);
-              // A lookup field projects a value from a linked record (read-only);
-              // it has no stored value to edit, so always render it disabled. A
-              // lockAfterCreate field becomes read-only in edit mode once it has a
-              // value (mirrors the hard server boundary on records update).
-              const readOnly =
-                access === "view" ||
-                field.fieldType === "lookup" ||
-                !!(editing && field.lockAfterCreate && valueIsSet(form[field.fieldKey]));
-              // A relation field gets a real picker (+ "Добавить запись" quick-
-              // create), never a plain text box. CREATE mode defers the link until
-              // the base record exists (RelationCreatePicker); EDIT mode uses the
-              // in-place picker that writes the link immediately (the record already
-              // exists), matching the inline table.
-              const isRelationCreate = !editing && field.fieldType === "relation" && access === "edit";
-              const modalRelInfo = relCreateDepInfo(field, form, editing?.id);
-              const editRel = editing
-                ? entityRelatedByRecord.get(editing.id)?.get(field.fieldKey)
-                : undefined;
-              const relColMeta = entityRelatedColMeta.get(field.fieldKey);
-              return (
-                <div key={field.id} className="space-y-1.5">
-                  <Label>
-                    {ml(field.nameJson)}
-                    {field.isRequired && <span className="text-red-500 ml-0.5">*</span>}
-                    {readOnly && <span className="ml-1.5 text-xs font-normal text-slate-400">{t("records.readOnly", "(только чтение)")}</span>}
-                  </Label>
-                  {editing && field.fieldType === "relation" && access === "edit" ? (
-                    <EntityRelationLinkPicker
-                      entityId={entityId}
-                      fieldKey={field.fieldKey}
-                      recordId={editing.id}
-                      currentLinkedId={editRel?.linkedRecordId ?? null}
-                      display={
-                        editRel?.linkedRecordId == null ? (
-                          <span className="text-slate-300">—</span>
-                        ) : (
-                          renderCellValue(
-                            {
-                              ...field,
-                              fieldType: (relColMeta?.relatedFieldType ?? "text") as Field["fieldType"],
-                              optionsJson: relColMeta?.optionsJson ?? [],
-                            } as unknown as Field,
-                            editRel?.value,
-                            t,
-                            userNames,
-                          )
-                        )
-                      }
-                      onChanged={() => setRefreshTick((x) => x + 1)}
-                      dependent={modalRelInfo.dependent}
-                      parentValue={modalRelInfo.parentValue}
-                      relatedFilterFieldKey={modalRelInfo.relatedFilterFieldKey}
-                      pageId={permPageId}
-                    />
-                  ) : isRelationCreate ? (
-                    <RelationCreatePicker
-                      entityId={entityId}
-                      fieldKey={field.fieldKey}
-                      pageId={permPageId}
-                      value={typeof form[field.fieldKey] === "number" ? (form[field.fieldKey] as number) : null}
-                      onChange={(id) =>
-                        setForm((prev) =>
-                          clearDependentDescendants({ ...prev, [field.fieldKey]: id ?? "" }, field.fieldKey, fields),
-                        )
-                      }
-                      dependent={modalRelInfo.dependent}
-                      parentValue={modalRelInfo.parentValue}
-                      relatedFilterFieldKey={modalRelInfo.relatedFilterFieldKey}
-                    />
-                  ) : field.fieldType === "lookup" && lookupLinkedId(field, form) != null ? (
-                    (() => {
-                      const meta = entityRelatedColMeta.get(field.fieldKey);
-                      const fallbackField = {
-                        ...field,
-                        fieldType: (meta?.relatedFieldType ?? "text") as Field["fieldType"],
-                        optionsJson: meta?.optionsJson ?? [],
-                      } as unknown as Field;
-                      return (
-                        <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm">
-                          <LookupCreatePreview
-                            linkedRecordId={lookupLinkedId(field, form) as number}
-                            relatedFieldKey={field.relationConfigJson?.relatedFieldKey ?? ""}
-                            fallbackField={fallbackField}
-                            userNames={userNames}
-                          />
-                        </div>
-                      );
-                    })()
-                  ) : (
-                    <FieldInput
-                      field={field}
-                      value={form[field.fieldKey]}
-                      onChange={(v) =>
-                        setForm((prev) =>
-                          clearDependentDescendants({ ...prev, [field.fieldKey]: v }, field.fieldKey, fields),
-                        )
-                      }
-                      disabled={readOnly}
-                      userOptions={userOptions}
-                      allFields={fields}
-                      rowValues={formWithRelationParents}
-                      entityId={entityId}
-                      pageId={permPageId}
-                    />
-                  )}
-                  {ml(field.descriptionJson) && (
-                    <p className="text-xs text-slate-400">{ml(field.descriptionJson)}</p>
-                  )}
-                </div>
-              );
-            })}
+            <RecordFormBody
+              entityId={entityId}
+              pageId={permPageId}
+              mode={editing ? "edit" : "create"}
+              recordId={editing?.id ?? null}
+              allFields={fields}
+              formFields={visibleFormFields}
+              form={form}
+              setForm={setForm}
+              userOptions={userOptions}
+              onRelationChanged={() => setRefreshTick((x) => x + 1)}
+            />
 
             {statuses.length > 0 && (
               <div className="space-y-1.5">
@@ -3232,7 +3108,6 @@ export function EntityRecords({
               </div>
             )}
 
-            {editing && <RecordLinkManager entityId={entityId} recordId={editing.id} />}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("records.cancel", "Отмена")}</Button>
@@ -3936,6 +3811,282 @@ function RelationCreatePicker({
  * the standard records update path. Relation fields render an in-place link picker
  * (like the main editor); the generic RecordLinkManager handles ad-hoc links.
  */
+// Single source of truth for field immutability, shared by the inline grid AND
+// the shared record-form body so a lockAfterCreate field can never be editable in
+// one surface but locked in another (mirrors the hard server boundary).
+function scalarFieldLocked(field: Field, value: unknown): boolean {
+  return !!(field.lockAfterCreate && valueIsSet(value));
+}
+function relationFieldLocked(field: Field, linkedRecordId: number | null | undefined): boolean {
+  return !!(field.lockAfterCreate && linkedRecordId != null);
+}
+
+/**
+ * The ONE shared body of both record-edit dialogs (the main add/edit dialog and
+ * the write-through RecordEditModal). It owns ALL per-field rendering, locking,
+ * dependent-field resolution and relation/lookup display so the two dialogs can no
+ * longer drift apart. In edit mode it self-fetches THIS record's relation/lookup
+ * values, so relation pickers show the current link and relation/lookup read-only
+ * displays show their value (matching the inline grid).
+ */
+function RecordFormBody({
+  entityId,
+  pageId,
+  mode,
+  recordId,
+  allFields,
+  formFields,
+  form,
+  setForm,
+  userOptions,
+  onRelationChanged,
+}: {
+  entityId: number;
+  pageId?: number;
+  mode: "create" | "edit";
+  recordId: number | null;
+  /** Full field list — needed for dependency-chain resolution. */
+  allFields: Field[];
+  /** The fields actually rendered (caller applies its own visibility filter). */
+  formFields: Field[];
+  form: FormState;
+  setForm: React.Dispatch<React.SetStateAction<FormState>>;
+  userOptions: UserOption[];
+  /** Bubbled when a relation link changes, so the parent table can refresh. */
+  onRelationChanged?: () => void;
+}) {
+  const t = useT();
+  const ml = useML();
+  const { fieldAccess } = useAuth();
+  const userNames = useMemo(
+    () => new Map<number, string>(userOptions.map((u: UserOption) => [u.id, u.name])),
+    [userOptions],
+  );
+
+  // THIS record's relation/lookup values (edit mode only — a create has no record
+  // yet). Self-fetched so relation fields render a live picker with the current
+  // selection and relation/lookup read-only displays show their value.
+  const fetchEntityRelatedValues = useGetEntityRelatedValues().mutateAsync;
+  const [relCols, setRelCols] = useState<PageRelatedColumn[]>([]);
+  const [relByField, setRelByField] = useState<Map<string, PageRelatedValue>>(new Map());
+  const [relTick, setRelTick] = useState(0);
+  const relColMetaMap = useMemo(() => {
+    const m = new Map<string, PageRelatedColumn>();
+    for (const c of relCols) m.set(c.fieldKey, c);
+    return m;
+  }, [relCols]);
+
+  // Clear stale relation values the instant the edited record changes, so the
+  // previous record's links never flash on the new one before the fetch resolves.
+  useEffect(() => {
+    setRelCols([]);
+    setRelByField(new Map());
+  }, [recordId]);
+
+  // Load this record's relation/lookup values. relTick re-fetches after a link
+  // change so the display stays in sync without closing the dialog.
+  useEffect(() => {
+    if (mode !== "edit" || recordId == null || recordId <= 0) return;
+    let cancelled = false;
+    fetchEntityRelatedValues({ entityId, data: { recordIds: [recordId] } })
+      .then((res) => {
+        if (cancelled) return;
+        setRelCols(res.columns);
+        const m = new Map<string, PageRelatedValue>();
+        for (const v of res.values) m.set(v.fieldKey, v);
+        setRelByField(m);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRelCols([]);
+        setRelByField(new Map());
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, recordId, entityId, relTick]);
+
+  // Merge each relation field's linked record id into the form values so dependent
+  // (cascading) fields whose parent is a relation field — and lookups projecting
+  // from a relation — can resolve their parent in both create and edit modes.
+  const formWithRelationParents = useMemo<FormState>(() => {
+    const merged: FormState = { ...form };
+    for (const [fieldKey, v] of relByField.entries()) {
+      if (v.linkedRecordId != null) merged[fieldKey] = v.linkedRecordId;
+    }
+    return merged;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, relByField]);
+
+  const relationFieldKeyByRelationId = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const f of allFields) {
+      const rid = f.fieldType === "relation" ? f.relationConfigJson?.relationId : undefined;
+      if (rid != null) m.set(rid, f.fieldKey);
+    }
+    return m;
+  }, [allFields]);
+
+  // A lookup projects a value from the record linked by its underlying relation
+  // field; resolve that relation field's selected id from the merged form snapshot.
+  const lookupLinkedId = (f: Field): number | null => {
+    const rid = f.relationConfigJson?.relationId;
+    if (rid == null) return null;
+    const relKey = relationFieldKeyByRelationId.get(rid);
+    if (!relKey) return null;
+    const v = formWithRelationParents[relKey];
+    return typeof v === "number" && v > 0 ? v : null;
+  };
+
+  // ONE dependent-field resolver: the parent value comes from the relation-merged
+  // form snapshot, covering scalar parents AND relation parents in BOTH modes.
+  const depInfo = (field: Field) => {
+    const dep = field.dependencyConfigJson;
+    const dependsOn = dep?.dependsOnFieldKey?.trim();
+    const filterKey = dep?.relatedFilterFieldKey?.trim();
+    if (!dependsOn || !filterKey)
+      return { dependent: false, parentValue: null as string | null, relatedFilterFieldKey: null as string | null };
+    const raw = formWithRelationParents[dependsOn];
+    const parentValue = raw == null || raw === "" ? null : String(raw);
+    return { dependent: true, parentValue, relatedFilterFieldKey: filterKey };
+  };
+
+  const handleRelationChanged = () => {
+    setRelTick((x) => x + 1);
+    onRelationChanged?.();
+  };
+
+  // Read-only display node for a relation/lookup field's current value (its
+  // configured display field), or an em dash when nothing is linked.
+  const relDisplayFor = (field: Field): React.ReactNode => {
+    const relColMeta = relColMetaMap.get(field.fieldKey);
+    const relVal = relByField.get(field.fieldKey);
+    if (relVal?.linkedRecordId == null) return <span className="text-slate-300">—</span>;
+    return renderCellValue(
+      {
+        ...field,
+        fieldType: (relColMeta?.relatedFieldType ?? "text") as Field["fieldType"],
+        optionsJson: relColMeta?.optionsJson ?? [],
+      } as unknown as Field,
+      relVal?.value,
+      t,
+      userNames,
+    );
+  };
+
+  const roBox = (children: React.ReactNode) => (
+    <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm">{children}</div>
+  );
+
+  return (
+    <>
+      {formFields.map((field: Field) => {
+        const access = fieldAccess(field, entityId, pageId);
+        const relVal = relByField.get(field.fieldKey);
+        const relLocked = mode === "edit" && relationFieldLocked(field, relVal?.linkedRecordId);
+        // A lookup is always read-only (it projects a linked record's value); a
+        // lockAfterCreate scalar becomes read-only in edit mode once it has a value.
+        const readOnly =
+          access === "view" ||
+          field.fieldType === "lookup" ||
+          (mode === "edit" && scalarFieldLocked(field, form[field.fieldKey]));
+        const dep = depInfo(field);
+        return (
+          <div key={field.id} className="space-y-1.5">
+            <Label>
+              {ml(field.nameJson)}
+              {field.isRequired && <span className="text-red-500 ml-0.5">*</span>}
+              {(readOnly || relLocked) && (
+                <span className="ml-1.5 text-xs font-normal text-slate-400">
+                  {t("records.readOnly", "(только чтение)")}
+                </span>
+              )}
+            </Label>
+            {field.fieldType === "relation" ? (
+              access === "edit" && !relLocked ? (
+                mode === "edit" && recordId != null ? (
+                  <EntityRelationLinkPicker
+                    entityId={entityId}
+                    fieldKey={field.fieldKey}
+                    recordId={recordId}
+                    currentLinkedId={relVal?.linkedRecordId ?? null}
+                    display={relDisplayFor(field)}
+                    onChanged={handleRelationChanged}
+                    dependent={dep.dependent}
+                    parentValue={dep.parentValue}
+                    relatedFilterFieldKey={dep.relatedFilterFieldKey}
+                    pageId={pageId}
+                  />
+                ) : (
+                  <RelationCreatePicker
+                    entityId={entityId}
+                    fieldKey={field.fieldKey}
+                    pageId={pageId}
+                    value={typeof form[field.fieldKey] === "number" ? (form[field.fieldKey] as number) : null}
+                    onChange={(id) =>
+                      setForm((prev) =>
+                        clearDependentDescendants({ ...prev, [field.fieldKey]: id ?? "" }, field.fieldKey, allFields),
+                      )
+                    }
+                    dependent={dep.dependent}
+                    parentValue={dep.parentValue}
+                    relatedFilterFieldKey={dep.relatedFilterFieldKey}
+                  />
+                )
+              ) : (
+                roBox(relDisplayFor(field))
+              )
+            ) : field.fieldType === "lookup" ? (
+              mode === "edit" ? (
+                roBox(relDisplayFor(field))
+              ) : lookupLinkedId(field) != null ? (
+                (() => {
+                  const meta = relColMetaMap.get(field.fieldKey);
+                  const fallbackField = {
+                    ...field,
+                    fieldType: (meta?.relatedFieldType ?? "text") as Field["fieldType"],
+                    optionsJson: meta?.optionsJson ?? [],
+                  } as unknown as Field;
+                  return roBox(
+                    <LookupCreatePreview
+                      linkedRecordId={lookupLinkedId(field) as number}
+                      relatedFieldKey={field.relationConfigJson?.relatedFieldKey ?? ""}
+                      fallbackField={fallbackField}
+                      userNames={userNames}
+                    />,
+                  );
+                })()
+              ) : (
+                roBox(<span className="text-slate-300">—</span>)
+              )
+            ) : (
+              <FieldInput
+                field={field}
+                value={form[field.fieldKey]}
+                onChange={(v) =>
+                  setForm((prev) =>
+                    clearDependentDescendants({ ...prev, [field.fieldKey]: v }, field.fieldKey, allFields),
+                  )
+                }
+                disabled={readOnly}
+                userOptions={userOptions}
+                allFields={allFields}
+                rowValues={formWithRelationParents}
+                entityId={entityId}
+                pageId={pageId}
+              />
+            )}
+            {ml(field.descriptionJson) && (
+              <p className="text-xs text-slate-400">{ml(field.descriptionJson)}</p>
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 function RecordEditModal({
   entityId,
   recordId,
@@ -3963,25 +4114,10 @@ function RecordEditModal({
   const [statusId, setStatusId] = useState<string>(NO_STATUS);
   const [submitting, setSubmitting] = useState(false);
 
-  // User options (for `user` field selects) and a name map (for rendering relation
-  // cell labels that point at a user field). Without userOptions a `user` field's
-  // dropdown is empty and cannot be selected.
+  // User options for `user` field selects; without them a `user` field's dropdown
+  // is empty and cannot be selected. Relation/lookup values are now fetched inside
+  // RecordFormBody (the shared editor body), not here.
   const { data: userOptions = [] } = useListUserOptions();
-  const userNames = useMemo(
-    () => new Map<number, string>(userOptions.map((u: UserOption) => [u.id, u.name])),
-    [userOptions],
-  );
-  // Per-record relation/lookup values for THIS record, so relation fields render a
-  // live link picker (with the current selection) instead of a dead text box.
-  const fetchEntityRelatedValues = useGetEntityRelatedValues().mutateAsync;
-  const [relCols, setRelCols] = useState<PageRelatedColumn[]>([]);
-  const [relByField, setRelByField] = useState<Map<string, PageRelatedValue>>(new Map());
-  const [relTick, setRelTick] = useState(0);
-  const relColMetaMap = useMemo(() => {
-    const m = new Map<string, PageRelatedColumn>();
-    for (const c of relCols) m.set(c.fieldKey, c);
-    return m;
-  }, [relCols]);
 
   const visibleFields = fields.filter((f: Field) => fieldAccess(f, entityId) !== "hidden");
 
@@ -4011,70 +4147,6 @@ function RecordEditModal({
     setStatusId(record.statusId != null ? String(record.statusId) : NO_STATUS);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, record?.id, fields.length]);
-
-  // Clear stale relation values the instant the edited record changes, so the
-  // previous record's links never flash on the new one before the fetch resolves.
-  // (Not keyed on relTick, so a link-change refresh doesn't blank the picker.)
-  useEffect(() => {
-    setRelCols([]);
-    setRelByField(new Map());
-  }, [recordId]);
-
-  // Load this record's relation/lookup values so each relation field can render a
-  // live picker showing the current linked record. relTick re-fetches after a link
-  // change so the display stays in sync without closing the modal.
-  useEffect(() => {
-    if (!open || recordId <= 0) return;
-    let cancelled = false;
-    fetchEntityRelatedValues({ entityId, data: { recordIds: [recordId] } })
-      .then((res) => {
-        if (cancelled) return;
-        setRelCols(res.columns);
-        const m = new Map<string, PageRelatedValue>();
-        for (const v of res.values) m.set(v.fieldKey, v);
-        setRelByField(m);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setRelCols([]);
-        setRelByField(new Map());
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, recordId, entityId, relTick]);
-
-  // Merge each relation field's linked record id into the form values so dependent
-  // (cascading) fields whose parent is a relation field can resolve their parent.
-  const formWithRelationParents = useMemo(() => {
-    const merged: FormState = { ...form };
-    for (const [fieldKey, v] of relByField.entries()) {
-      if (v.linkedRecordId != null) merged[fieldKey] = v.linkedRecordId;
-    }
-    return merged;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, relByField]);
-
-  // Dependency info for a relation field (mirrors the main editor): the parent's
-  // current value narrows the candidate list. A relation parent contributes its
-  // linked record id; a scalar parent contributes its raw value.
-  const relDepInfo = (field: Field) => {
-    const dependsOn = field.dependencyConfigJson?.dependsOnFieldKey?.trim();
-    const filterKey = field.dependencyConfigJson?.relatedFilterFieldKey?.trim();
-    if (!dependsOn || !filterKey)
-      return { dependent: false, parentValue: null as string | null, relatedFilterFieldKey: null as string | null };
-    const parentField = fields.find((f: Field) => f.fieldKey === dependsOn);
-    let parentValue = "";
-    if (parentField?.fieldType === "relation") {
-      const pid = relByField.get(dependsOn)?.linkedRecordId;
-      parentValue = pid != null ? String(pid) : "";
-    } else {
-      const v = form[dependsOn];
-      parentValue = v == null || v === "" ? "" : String(v);
-    }
-    return { dependent: true, parentValue, relatedFilterFieldKey: filterKey };
-  };
 
   const submit = async () => {
     setSubmitting(true);
@@ -4114,88 +4186,16 @@ function RecordEditModal({
           <div className="py-8 text-center text-sm text-slate-400">{t("common.loading", "Загрузка...")}</div>
         ) : (
           <div className="space-y-4 py-2">
-            {visibleFields.map((field: Field) => {
-              const access = fieldAccess(field, entityId);
-              const relColMeta = relColMetaMap.get(field.fieldKey);
-              const relVal = relByField.get(field.fieldKey);
-              // lockAfterCreate field is read-only once set (mirrors server boundary).
-              const readOnly =
-                access === "view" ||
-                field.fieldType === "lookup" ||
-                !!(field.lockAfterCreate && valueIsSet(form[field.fieldKey]));
-              // Display node for a relation field's current linked record (its
-              // configured display field value), or an em dash when nothing is linked.
-              const relDisplay =
-                relVal?.linkedRecordId == null ? (
-                  <span className="text-slate-300">—</span>
-                ) : (
-                  renderCellValue(
-                    {
-                      ...field,
-                      fieldType: (relColMeta?.relatedFieldType ?? "text") as Field["fieldType"],
-                      optionsJson: relColMeta?.optionsJson ?? [],
-                    } as unknown as Field,
-                    relVal?.value,
-                    t,
-                    userNames,
-                  )
-                );
-              return (
-                <div key={field.id} className="space-y-1.5">
-                  <Label>
-                    {ml(field.nameJson)}
-                    {field.isRequired && <span className="text-red-500 ml-0.5">*</span>}
-                    {readOnly && (
-                      <span className="ml-1.5 text-xs font-normal text-slate-400">
-                        {t("records.readOnly", "(только чтение)")}
-                      </span>
-                    )}
-                  </Label>
-                  {field.fieldType === "relation" ? (
-                    access === "edit" ? (
-                      (() => {
-                        const dep = relDepInfo(field);
-                        return (
-                          <EntityRelationLinkPicker
-                            entityId={entityId}
-                            fieldKey={field.fieldKey}
-                            recordId={recordId}
-                            currentLinkedId={relVal?.linkedRecordId ?? null}
-                            display={relDisplay}
-                            onChanged={() => setRelTick((x) => x + 1)}
-                            dependent={dep.dependent}
-                            parentValue={dep.parentValue}
-                            relatedFilterFieldKey={dep.relatedFilterFieldKey}
-                          />
-                        );
-                      })()
-                    ) : (
-                      <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm">
-                        {relDisplay}
-                      </div>
-                    )
-                  ) : (
-                    <FieldInput
-                      field={field}
-                      value={form[field.fieldKey]}
-                      onChange={(v) =>
-                        setForm((prev) =>
-                          clearDependentDescendants({ ...prev, [field.fieldKey]: v }, field.fieldKey, fields),
-                        )
-                      }
-                      disabled={readOnly}
-                      userOptions={userOptions}
-                      allFields={fields}
-                      rowValues={formWithRelationParents}
-                      entityId={entityId}
-                    />
-                  )}
-                  {ml(field.descriptionJson) && (
-                    <p className="text-xs text-slate-400">{ml(field.descriptionJson)}</p>
-                  )}
-                </div>
-              );
-            })}
+            <RecordFormBody
+              entityId={entityId}
+              mode="edit"
+              recordId={recordId}
+              allFields={fields}
+              formFields={visibleFields}
+              form={form}
+              setForm={setForm}
+              userOptions={userOptions}
+            />
             {statuses.length > 0 && (
               <div className="space-y-1.5">
                 <Label>{t("records.status", "Статус")}</Label>
@@ -4212,7 +4212,6 @@ function RecordEditModal({
                 </Select>
               </div>
             )}
-            <RecordLinkManager entityId={entityId} recordId={recordId} />
           </div>
         )}
         <DialogFooter>
@@ -5494,145 +5493,3 @@ function recordLabel(record: EntityRecord): string {
   return `#${record.id}`;
 }
 
-/** Link manager shown inside the record edit dialog. Lists each outgoing relation
- *  with its currently linked records and lets the user add/remove links. */
-function RecordLinkManager({ entityId, recordId }: { entityId: number; recordId: number }) {
-  const t = useT();
-  const { data: relations = [], isLoading: relationsLoading } = useListEntityRelations(entityId);
-  const { data: links = [], isLoading: linksLoading } = useListRecordLinks(recordId);
-
-  if (relationsLoading) {
-    return <Skeleton className="h-10 w-full" />;
-  }
-  if (relations.length === 0) {
-    return null;
-  }
-
-  const linksByRelation = new Map<number, LinkedRecord[]>();
-  for (const link of links) {
-    const arr = linksByRelation.get(link.relationId) ?? [];
-    arr.push(link);
-    linksByRelation.set(link.relationId, arr);
-  }
-
-  return (
-    <div className="space-y-4 border-t border-slate-100 pt-4">
-      <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
-        <Link2 className="w-4 h-4 text-blue-600" />
-        {t("records.links", "Связи")}
-      </div>
-      {relations.map((relation: Relation) => (
-        <RelationLinkSection
-          key={relation.id}
-          relation={relation}
-          recordId={recordId}
-          existingLinks={linksByRelation.get(relation.id) ?? []}
-          linksLoading={linksLoading}
-        />
-      ))}
-    </div>
-  );
-}
-
-const PICK_PLACEHOLDER = "__pick__";
-
-function RelationLinkSection({
-  relation,
-  recordId,
-  existingLinks,
-  linksLoading,
-}: {
-  relation: Relation;
-  recordId: number;
-  existingLinks: LinkedRecord[];
-  linksLoading: boolean;
-}) {
-  const ml = useML();
-  const t = useT();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const [pick, setPick] = useState<string>(PICK_PLACEHOLDER);
-
-  const { data: targetRecords = [], isLoading: targetLoading } = useListEntityRecords(
-    relation.targetEntityId,
-  );
-
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: [`/api/records/${recordId}/links`] });
-
-  const createLink = useCreateRecordLink({
-    mutation: {
-      onSuccess: () => { setPick(PICK_PLACEHOLDER); invalidate(); },
-      onError: (err) => toast({ title: t("records.linkAddError", "Не удалось добавить связь"), description: extractError(err), variant: "destructive" }),
-    },
-  });
-  const deleteLink = useDeleteRecordLink({
-    mutation: {
-      onSuccess: () => invalidate(),
-      onError: (err) => toast({ title: t("records.linkDeleteError", "Не удалось удалить связь"), description: extractError(err), variant: "destructive" }),
-    },
-  });
-
-  const linkedIds = new Set(existingLinks.map((l) => l.record.id));
-  const available = targetRecords.filter((r: EntityRecord) => !linkedIds.has(r.id));
-  const busy = createLink.isPending || deleteLink.isPending;
-
-  const handleAdd = () => {
-    if (pick === PICK_PLACEHOLDER) return;
-    createLink.mutate({ recordId, data: { relationId: relation.id, targetRecordId: Number(pick) } });
-  };
-
-  return (
-    <div className="space-y-2 rounded-md border border-slate-100 p-3">
-      <div className="text-sm font-medium text-slate-600">{ml(relation.nameJson)}</div>
-      {linksLoading ? (
-        <Skeleton className="h-6 w-full" />
-      ) : existingLinks.length === 0 ? (
-        <p className="text-xs text-slate-400">{t("records.noLinks", "Связанных записей нет.")}</p>
-      ) : (
-        <div className="flex flex-wrap gap-1.5">
-          {existingLinks.map((link) => (
-            <span
-              key={link.linkId}
-              className="inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-700 text-xs px-2 py-1"
-            >
-              {recordLabel(link.record)}
-              <button
-                type="button"
-                className="hover:text-blue-900 disabled:opacity-50"
-                disabled={busy}
-                onClick={() => deleteLink.mutate({ id: link.linkId })}
-                aria-label={t("records.deleteLink", "Удалить связь")}
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-      <div className="flex items-center gap-2">
-        <Select value={pick} onValueChange={setPick} disabled={targetLoading || available.length === 0}>
-          <SelectTrigger className="h-8 text-sm">
-            <SelectValue placeholder={available.length === 0 ? t("records.noAvailable", "Нет доступных записей") : t("records.selectRecord", "Выберите запись")} />
-          </SelectTrigger>
-          <SelectContent>
-            {available.map((r: EntityRecord) => (
-              <SelectItem key={r.id} value={String(r.id)}>{recordLabel(r)}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-8 gap-1.5"
-          disabled={pick === PICK_PLACEHOLDER || busy}
-          onClick={handleAdd}
-        >
-          {createLink.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-          {t("records.link", "Связать")}
-        </Button>
-      </div>
-    </div>
-  );
-}

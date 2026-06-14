@@ -16,6 +16,7 @@ import {
   type FieldPermissions,
 } from "@workspace/db";
 import { eq, asc, desc, and, ne, inArray, or, sql, type SQL } from "drizzle-orm";
+import { relationLinkLockViolation } from "../lib/relation-lock";
 import { requireAuth } from "../middlewares/auth";
 import {
   requireAdmin,
@@ -1090,7 +1091,7 @@ router.put("/pages/:pageId/related-link", requireAuth, async (req, res): Promise
   }
 
   try {
-    await db.transaction(async (tx) => {
+    const lockMsg = await db.transaction(async (tx) => {
       // Lock the relation so the relationType copied into record_links cannot
       // drift from the parent under a concurrent type change.
       const [locked] = await tx
@@ -1100,6 +1101,18 @@ router.put("/pages/:pageId/related-link", requireAuth, async (req, res): Promise
         .limit(1)
         .for("update");
       if (!locked) throw new Error("relation_gone");
+      // Immutability boundary for lockAfterCreate relation fields, checked under
+      // the relation row lock (TOCTOU-free). A relation page-field can target the
+      // same relation as a locked entity field, so this path must enforce it too.
+      const lockViolation = await relationLinkLockViolation(
+        tx,
+        entityId,
+        relation.id,
+        baseRecordId,
+        direction,
+        linkedRecordId,
+      );
+      if (lockViolation) return lockViolation;
       // Remove the existing single link on the base record's side, then insert
       // the new one (or leave it cleared when linkedRecordId is null).
       const baseCol = direction === "source" ? recordLinksTable.sourceRecordId : recordLinksTable.targetRecordId;
@@ -1112,7 +1125,12 @@ router.put("/pages/:pageId/related-link", requireAuth, async (req, res): Promise
           targetRecordId: direction === "source" ? linkedRecordId : baseRecordId,
         });
       }
+      return null;
     });
+    if (lockMsg) {
+      res.status(400).json({ error: lockMsg });
+      return;
+    }
   } catch (err) {
     const msg = recordLinkUniqueMessage(err);
     if (msg) {
@@ -1856,7 +1874,7 @@ router.put("/entities/:entityId/related-link", requireAuth, async (req, res): Pr
   }
 
   try {
-    await db.transaction(async (tx) => {
+    const lockMsg = await db.transaction(async (tx) => {
       const [locked] = await tx
         .select()
         .from(relationsTable)
@@ -1864,6 +1882,18 @@ router.put("/entities/:entityId/related-link", requireAuth, async (req, res): Pr
         .limit(1)
         .for("update");
       if (!locked) throw new Error("relation_gone");
+      // Immutability boundary for lockAfterCreate relation fields, checked under
+      // the relation row lock so two writers cannot both pass a "no link yet"
+      // check and race to set the value (TOCTOU-free).
+      const lockViolation = await relationLinkLockViolation(
+        tx,
+        entityId,
+        relation.id,
+        baseRecordId,
+        direction,
+        linkedRecordId,
+      );
+      if (lockViolation) return lockViolation;
       const baseCol = direction === "source" ? recordLinksTable.sourceRecordId : recordLinksTable.targetRecordId;
       await tx.delete(recordLinksTable).where(and(eq(recordLinksTable.relationId, relation.id), eq(baseCol, baseRecordId)));
       if (linkedRecordId != null) {
@@ -1874,7 +1904,12 @@ router.put("/entities/:entityId/related-link", requireAuth, async (req, res): Pr
           targetRecordId: direction === "source" ? linkedRecordId : baseRecordId,
         });
       }
+      return null;
     });
+    if (lockMsg) {
+      res.status(400).json({ error: lockMsg });
+      return;
+    }
   } catch (err) {
     const msg = recordLinkUniqueMessage(err);
     if (msg) {

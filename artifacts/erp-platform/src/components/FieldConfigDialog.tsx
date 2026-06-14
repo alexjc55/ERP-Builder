@@ -407,7 +407,6 @@ export function FieldConfigDialog({
       lockAfterCreate:
         fieldType !== "file" &&
         fieldType !== "function" &&
-        fieldType !== "relation" &&
         fieldType !== "lookup"
           ? lockAfterCreate
           : false,
@@ -787,7 +786,7 @@ export function FieldConfigDialog({
                   <Label htmlFor="fcd-is-key">{t("fields.isKey", "Ключевое поле (уникальное)")}</Label>
                 </div>
               )}
-              {fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup" && (
+              {fieldType !== "file" && fieldType !== "function" && fieldType !== "lookup" && (
                 <div className="flex items-center gap-2">
                   <Switch checked={lockAfterCreate} onCheckedChange={setLockAfterCreate} id="fcd-lock-after-create" />
                   <Label htmlFor="fcd-lock-after-create">{t("fields.lockAfterCreate", "Запрет изменения после создания")}</Label>
