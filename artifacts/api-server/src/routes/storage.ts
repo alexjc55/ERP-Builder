@@ -20,8 +20,8 @@ import {
   canRecord,
   effectiveScope,
   resolveFieldAccess,
-  recordOwnedBy,
 } from "../middlewares/permissions";
+import { isRecordOwned } from "./own-scope";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
@@ -47,6 +47,7 @@ async function canReadObjectPath(req: Request, objectPath: string): Promise<bool
   if (!req.user) return false;
   const candidates = await db
     .select({
+      id: entityRecordsTable.id,
       entityId: entityRecordsTable.entityId,
       valuesJson: entityRecordsTable.valuesJson,
     })
@@ -76,7 +77,7 @@ async function canReadObjectPath(req: Request, objectPath: string): Promise<bool
     if (!holder) continue;
     if (resolveFieldAccess(holder, perms, roleIds, rec.entityId) === "hidden") continue;
     const { scope, scopeFieldKeys } = effectiveScope(perms, rec.entityId);
-    if (scope === "own" && !recordOwnedBy(values, scopeFieldKeys, userId)) continue;
+    if (scope === "own" && !(await isRecordOwned(rec.entityId, rec, scopeFieldKeys, userId, fields))) continue;
     return true;
   }
   return false;

@@ -69,8 +69,10 @@ EXISTING RBAC on the source entity.
 can carry, in addition to entity-keyed entries (`String(entityId)`), mirror-keyed
 entries `mirror:<pageId>` (see `mirrorPermKey`). The override REPLACES the source
 entity's CRUD rights, but ONLY for actions taken through that mirror page; absent
-key = inherit the entity perm (backward compatible). Row scope (all/own) is never
-per-page — it stays entity-level (`effectiveScope` ignores the override).
+key = inherit the entity perm (backward compatible). Row scope (all/own +
+`scopeFieldKeys`) is ALSO per-page: a `mirror:<pageId>` override carries its own
+scope, and when an authorized override exists the row scope is taken ENTIRELY from
+it (missing scope ⇒ "all"), fully REPLACING the entity scope — it does not merge.
 - **The override is resolved server-side by `effectiveRecordPerm(req,perms,entityId,pageId?)`,
   which is the real boundary.** It honors a `mirror:<pageId>` override only when
   BOTH hold: (1) the caller is authorized to that page (`perms.pageIds` includes
@@ -83,6 +85,16 @@ per-page — it stays entity-level (`effectiveScope` ignores the override).
   as a query param on path-param GETs (that breaks Orval — see orval-param-collision).
   Consequently GET single/list of records stay entity-level by design; the page-aware
   read path is the POST `.../records/query` endpoint.
+- **Row scope resolver = `effectiveScopeFor(req,perms,entityId,pageId?)`** (async,
+  parallels `effectiveRecordPerm`'s page gating). EVERY base-entity page-context
+  row-scope site must call it with the pageId — page-fields `record-values`,
+  `records/:id/values` update, `related-values` base, `related-link` base — NOT the
+  sync entity-level `effectiveScope`. **Why:** page-aware CRUD (`assertRecord(...,pageId)`)
+  without page-aware row scope is fail-open: `entity=all` + `mirror override=own`
+  would still return all rows. The two must move together at every page route.
+  The RELATED-entity scope on those same endpoints (relScope for `relatedEntityId`)
+  and the entity-context `/entities/:entityId/related-link` correctly STAY
+  `effectiveScope` — no mirror page applies to them.
 - Archive/unarchive (`setArchived`) intentionally stays entity-level: it is a global
   row-state change, not a "through the mirror page" edit. Fail-closed: a mirror-only
   update override does NOT grant archive.

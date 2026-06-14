@@ -7,9 +7,9 @@ import {
   getPermissions,
   getUserRoleIds,
   effectiveScope,
-  recordOwnedBy,
   resolveFieldAccess,
 } from "../middlewares/permissions";
+import { isRecordOwned } from "./own-scope";
 import { GetRecordParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -75,7 +75,7 @@ router.get("/records/:id/audit", requireAuth, async (req, res): Promise<void> =>
   }
 
   const [record] = await db
-    .select({ entityId: entityRecordsTable.entityId, valuesJson: entityRecordsTable.valuesJson })
+    .select({ id: entityRecordsTable.id, entityId: entityRecordsTable.entityId, valuesJson: entityRecordsTable.valuesJson })
     .from(entityRecordsTable)
     .where(eq(entityRecordsTable.id, params.data.id))
     .limit(1);
@@ -88,12 +88,6 @@ router.get("/records/:id/audit", requireAuth, async (req, res): Promise<void> =>
 
   const perms = await getPermissions(req);
   const { scope, scopeFieldKeys } = effectiveScope(perms, record.entityId);
-  const values = (record.valuesJson as Record<string, unknown>) ?? {};
-  if (scope === "own" && !recordOwnedBy(values, scopeFieldKeys, req.user!.userId)) {
-    res.status(404).json({ error: "Record not found" });
-    return;
-  }
-
   // Mirror the record endpoints' field-level boundary: history must never reveal
   // values of fields the requester cannot see. Resolve the hidden field keys for
   // this requester so we can drop hidden field entries and redact reserved
@@ -103,6 +97,10 @@ router.get("/records/:id/audit", requireAuth, async (req, res): Promise<void> =>
     .from(entityFieldsTable)
     .where(and(eq(entityFieldsTable.entityId, record.entityId), eq(entityFieldsTable.isActive, true)))
     .orderBy(asc(entityFieldsTable.sortOrder));
+  if (scope === "own" && !(await isRecordOwned(record.entityId, record, scopeFieldKeys, req.user!.userId, fields))) {
+    res.status(404).json({ error: "Record not found" });
+    return;
+  }
   const roleIds = await getUserRoleIds(req);
   const hidden = new Set<string>();
   for (const f of fields) {

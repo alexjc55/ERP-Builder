@@ -32,10 +32,25 @@ stored value (update) or are dropped (create). This is what makes it safe for th
 view-only/hidden fields without clobbering them.
 
 ## Row scope (all/own)
-`RecordPermission` carries `scope: all|own` + `scopeFieldKeys` (keys of `user`-type fields).
-`own` shows rows where ANY listed user-field equals the current user id; `own` + empty
-`scopeFieldKeys` ⇒ no rows (by design, not a bug). get/update/delete re-check ownership and return
-**404** (not 403) for non-owned rows so existence isn't disclosed.
+`RecordPermission` carries `scope: all|own` + `scopeFieldKeys`. `own` shows rows where ANY listed
+owner field designates the current user; `own` + empty `scopeFieldKeys` ⇒ **no rows** (deny, by
+design — never fail-open to all). get/update/delete re-check ownership and return **404** (not 403)
+for non-owned rows so existence isn't disclosed.
+
+### Owner fields are relation-aware (one hop), not just native `user` fields
+An owner field key in `scopeFieldKeys` is EITHER a native `user`-type field (ownership lives in
+`values_json[key]`) OR a relation/lookup field that projects a `user`-type field one hop away
+(ownership lives in record links, NOT in values_json). The single shared resolver
+(`own-scope.ts`: `ownScopeWhere` for SQL list filters, `isRecordOwned` for single-record re-checks)
+classifies each key and builds a native equality clause or a relation `EXISTS` clause.
+**Why:** ownership designated through a relation can't be seen in `values_json`, so any site that
+checked `values[key] === userId` natively was under-inclusive (silently hid owned rows) for
+relation owner fields.
+**How to apply:** EVERY enforcement site must go through `own-scope.ts` — both the list-filter
+sites (records list/query/filter-values, page record-values/related-values/related-candidates) AND
+the single-record re-checks (records update/delete/GET-by-id, page record update, related-link
+base+linked checks, and file-access checks in storage/audit-log/google-drive). A native-only check
+left at any one site re-opens the bypass. Never reintroduce an inline `values[key] === userId`.
 
 ## Adding a column to entity_fields: update PUT explicitly
 The fields update route builds its update object key-by-key, so a new column (e.g. `permissionsJson`)

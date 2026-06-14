@@ -342,6 +342,41 @@ export function effectiveScope(perms: RolePermissions, entityId: number): { scop
 }
 
 /**
+ * Page-aware effective row scope, paralleling {@link effectiveRecordPerm}. When
+ * `pageId` refers to an AUTHORIZED mirror page of `entityId` (caller is in
+ * `perms.pageIds` AND the page genuinely mirrors the entity per the DB) and a
+ * `mirror:<pageId>` override exists, the row scope is taken ENTIRELY from that
+ * override — fully replacing the entity-level scope, exactly as the override
+ * replaces the entity's CRUD rights for actions through that page. A missing
+ * `scope` on the override means "all" (the override's own default), so enabling
+ * an override never silently inherits a narrower entity scope. Otherwise this
+ * falls back to the entity-level {@link effectiveScope}. Use ONLY on paths that
+ * resolve CRUD page-aware (carry `pageId`); entity-level paths must keep using
+ * the sync `effectiveScope`, so scope page-awareness tracks CRUD page-awareness.
+ */
+export async function effectiveScopeFor(
+  req: Request,
+  perms: RolePermissions,
+  entityId: number,
+  pageId?: number,
+): Promise<{ scope: RecordScope; scopeFieldKeys: string[] }> {
+  if (perms.superAdmin) return { scope: "all", scopeFieldKeys: [] };
+  if (pageId != null && (perms.pageIds?.includes(pageId) ?? false)) {
+    const mirrorEntityId = await getPageMirrorEntityId(req, pageId);
+    if (mirrorEntityId === entityId) {
+      const override = perms.records[mirrorPermKey(pageId)];
+      if (override) {
+        return {
+          scope: override.scope === "own" ? "own" : "all",
+          scopeFieldKeys: override.scopeFieldKeys ?? [],
+        };
+      }
+    }
+  }
+  return effectiveScope(perms, entityId);
+}
+
+/**
  * Effective status visibility for the requester on an entity. superAdmin (and
  * roles with no configured exceptions) see every status and every row. Both
  * arrays are SPARSE — they list only the hidden statuses, so statuses added
@@ -358,11 +393,6 @@ export function effectiveStatusVisibility(
   if (perms.superAdmin) return { hiddenStatusIds: [], hiddenRowStatusIds: [] };
   const rp = perms.records[String(entityId)];
   return { hiddenStatusIds: intIds(rp?.hiddenStatusIds), hiddenRowStatusIds: intIds(rp?.hiddenRowStatusIds) };
-}
-
-/** True if the record (its values) is owned by `userId` via any scope field key. */
-export function recordOwnedBy(values: Record<string, unknown>, scopeFieldKeys: string[], userId: number): boolean {
-  return scopeFieldKeys.some((k) => Number(values[k]) === userId);
 }
 
 /**

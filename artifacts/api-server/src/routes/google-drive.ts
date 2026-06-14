@@ -22,8 +22,8 @@ import {
   canRecord,
   effectiveScope,
   resolveFieldAccess,
-  recordOwnedBy,
 } from "../middlewares/permissions";
+import { isRecordOwned } from "./own-scope";
 import { encryptSecret } from "../lib/crypto";
 import { APP_SECRET } from "../lib/secret";
 import {
@@ -364,7 +364,7 @@ function gdriveValueRefersTo(value: unknown, fileId: string): boolean {
 async function canReadDriveFile(req: Request, fileId: string): Promise<boolean> {
   if (!req.user) return false;
   const candidates = await db
-    .select({ entityId: entityRecordsTable.entityId, valuesJson: entityRecordsTable.valuesJson })
+    .select({ id: entityRecordsTable.id, entityId: entityRecordsTable.entityId, valuesJson: entityRecordsTable.valuesJson })
     .from(entityRecordsTable)
     .where(sql`${entityRecordsTable.valuesJson}::text LIKE ${"%" + fileId + "%"}`);
   if (candidates.length === 0) return false;
@@ -391,7 +391,7 @@ async function canReadDriveFile(req: Request, fileId: string): Promise<boolean> 
     if (!holder) continue;
     if (resolveFieldAccess(holder, perms, roleIds, rec.entityId) === "hidden") continue;
     const { scope, scopeFieldKeys } = effectiveScope(perms, rec.entityId);
-    if (scope === "own" && !recordOwnedBy(values, scopeFieldKeys, userId)) continue;
+    if (scope === "own" && !(await isRecordOwned(rec.entityId, rec, scopeFieldKeys, userId, fields))) continue;
     return true;
   }
   return false;

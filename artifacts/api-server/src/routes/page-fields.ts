@@ -14,6 +14,7 @@ import {
   type RelationFieldConfig,
   type DependencyFieldConfig,
   type FieldPermissions,
+  type EntityField,
 } from "@workspace/db";
 import { eq, asc, desc, and, ne, inArray, or, sql, type SQL } from "drizzle-orm";
 import { relationLinkLockViolation } from "../lib/relation-lock";
@@ -25,11 +26,12 @@ import {
   getPermissions,
   getUserRoleIds,
   effectiveScope,
+  effectiveScopeFor,
   effectiveStatusVisibility,
-  recordOwnedBy,
   resolveFieldAccess,
   mostPermissiveFieldPerm,
 } from "../middlewares/permissions";
+import { ownScopeWhere, isRecordOwned } from "./own-scope";
 import {
   ListPageFieldsParams,
   CreatePageFieldParams,
@@ -162,13 +164,18 @@ async function validateRelationFieldConfig(
   return { ok: true };
 }
 
-/** SQL predicate restricting entity_records rows to those owned by `userId`. */
-function ownScopeWhere(scopeFieldKeys: string[], userId: number): SQL {
-  if (scopeFieldKeys.length === 0) return sql`false`;
-  const clauses = scopeFieldKeys.map(
-    (k) => sql`(${entityRecordsTable.valuesJson} ->> ${k}) = ${String(userId)}`,
-  );
-  return or(...clauses)!;
+/**
+ * Load an entity's active fields. Needed to classify a role's `scopeFieldKeys`
+ * (own-row owner fields) as native vs relation/lookup so the shared relation-
+ * aware {@link ownScopeWhere}/{@link isRecordOwned} helpers can resolve ownership
+ * designated through a one-hop projected user field, not only native `user`
+ * fields. Cached per request would be ideal but these paths are low-traffic.
+ */
+async function loadActiveEntityFields(entityId: number): Promise<EntityField[]> {
+  return db
+    .select()
+    .from(entityFieldsTable)
+    .where(and(eq(entityFieldsTable.entityId, entityId), eq(entityFieldsTable.isActive, true)));
 }
 
 /**
@@ -532,12 +539,15 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
   // Restrict the returned values to records the caller is actually allowed to
   // see: only rows of that entity, and only own rows under "own" scope.
   const perms = await getPermissions(req);
-  const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
+  const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, entityId, params.data.pageId);
   const where: SQL[] = [
     eq(pageRecordValuesTable.pageId, params.data.pageId),
     eq(entityRecordsTable.entityId, entityId),
   ];
-  if (scope === "own") where.push(ownScopeWhere(scopeFieldKeys, req.user!.userId));
+  if (scope === "own") {
+    const entityFields = await loadActiveEntityFields(entityId);
+    where.push(await ownScopeWhere(entityId, scopeFieldKeys, req.user!.userId, entityFields));
+  }
   const rvHiddenRowWhere = hiddenRowStatusWhere(effectiveStatusVisibility(perms, entityId).hiddenRowStatusIds);
   if (rvHiddenRowWhere) where.push(rvHiddenRowWhere);
   const rows = await db
@@ -588,8 +598,17 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
   if (!(await assertRecord(req, res, entityId, "update", pageId))) return;
   // Under "own" scope, the caller may only write to records they own.
   const perms = await getPermissions(req);
-  const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
-  if (scope === "own" && !recordOwnedBy((record.valuesJson as Record<string, unknown>) ?? {}, scopeFieldKeys, req.user!.userId)) {
+  const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, entityId, pageId);
+  if (
+    scope === "own" &&
+    !(await isRecordOwned(
+      entityId,
+      { id: record.id, valuesJson: record.valuesJson },
+      scopeFieldKeys,
+      req.user!.userId,
+      await loadActiveEntityFields(entityId),
+    ))
+  ) {
     res.status(404).json({ error: "Record not found" });
     return;
   }
@@ -681,8 +700,9 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
     return;
   }
 
-  // Restrict to records of THIS entity the viewer is allowed to see (own scope).
-  const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
+  // Restrict to records of THIS entity the viewer is allowed to see (own scope),
+  // honoring a mirror-page override when this page mirrors that entity.
+  const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, entityId, params.data.pageId);
   const requested = Array.from(new Set(parsed.data.recordIds));
   // Hard boundary: base records sitting in a row-hidden status (for the page's
   // entity) must not be returned even when their ids are passed in explicitly.
@@ -692,13 +712,19 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
   ];
   const baseHiddenRowWhere = hiddenRowStatusWhere(effectiveStatusVisibility(perms, entityId).hiddenRowStatusIds);
   if (baseHiddenRowWhere) baseConds.push(baseHiddenRowWhere);
+  // Own-scope (relation-aware): a row is owned when an owner field — native
+  // `user` or a one-hop relation/lookup projecting a `user` field — designates
+  // the viewer. Filtering in SQL keeps this correct for relation owner fields
+  // (whose ownership is not in values_json) without an in-memory under-include.
+  if (scope === "own") {
+    const entityFields = await loadActiveEntityFields(entityId);
+    baseConds.push(await ownScopeWhere(entityId, scopeFieldKeys, userId, entityFields));
+  }
   const pageRecords = await db
     .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
     .from(entityRecordsTable)
     .where(and(...baseConds));
-  const allowedIds = pageRecords
-    .filter((r) => scope !== "own" || recordOwnedBy((r.valuesJson as Record<string, unknown>) ?? {}, scopeFieldKeys, userId))
-    .map((r) => r.id);
+  const allowedIds = pageRecords.map((r) => r.id);
 
   if (allowedIds.length === 0) {
     res.json({ columns: [], values: [] });
@@ -799,6 +825,14 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
         inArray(entityRecordsTable.id, linkedIds),
       ];
       if (relHiddenRowWhere) linkedConds.push(relHiddenRowWhere);
+      // Related own-scope (relation-aware): restrict the loaded linked records to
+      // those the viewer owns under the related entity's scope. Doing it in SQL
+      // covers relation/lookup owner fields too; non-owned linked records simply
+      // never enter linkedMap, so their value/id stay hidden below.
+      if (relScope.scope === "own") {
+        const relatedFields = await loadActiveEntityFields(relatedEntityId);
+        linkedConds.push(await ownScopeWhere(relatedEntityId, relScope.scopeFieldKeys, userId, relatedFields));
+      }
       const linkedRecords = await db
         .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
         .from(entityRecordsTable)
@@ -814,11 +848,10 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
       const editable = columnEditable;
       let visible = false;
       if (rawLinkedId != null && access !== "hidden") {
+        // linkedMap already excludes non-owned linked records (own-scope applied
+        // in the query above), so presence here means the value is viewable.
         const linkedValues = linkedMap.get(rawLinkedId);
-        if (
-          linkedValues != null &&
-          (relScope.scope !== "own" || recordOwnedBy(linkedValues, relScope.scopeFieldKeys, userId))
-        ) {
+        if (linkedValues != null) {
           visible = true;
           value = linkedValues[relatedFieldKey] ?? null;
         }
@@ -965,7 +998,10 @@ router.post("/pages/:pageId/related-candidates", requireAuth, async (req, res): 
 
   const relScope = effectiveScope(perms, relatedEntityId);
   const conds: SQL[] = [eq(entityRecordsTable.entityId, relatedEntityId)];
-  if (relScope.scope === "own") conds.push(ownScopeWhere(relScope.scopeFieldKeys, userId));
+  if (relScope.scope === "own") {
+    const relatedFields = await loadActiveEntityFields(relatedEntityId);
+    conds.push(await ownScopeWhere(relatedEntityId, relScope.scopeFieldKeys, userId, relatedFields));
+  }
   // Hard boundary: row-hidden-status records of the related entity must not be
   // offered as link candidates (mirrors the records list/query exclusion).
   const candHiddenRowWhere = hiddenRowStatusWhere(
@@ -1035,7 +1071,8 @@ router.put("/pages/:pageId/related-link", requireAuth, async (req, res): Promise
     return;
   }
 
-  // Base record must belong to this entity and pass the viewer's own-row scope.
+  // Base record must belong to this entity and pass the viewer's own-row scope
+  // (honoring a mirror-page override when this page mirrors that entity).
   const [baseRecord] = await db
     .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
     .from(entityRecordsTable)
@@ -1044,10 +1081,16 @@ router.put("/pages/:pageId/related-link", requireAuth, async (req, res): Promise
     res.status(404).json({ error: "Record not found" });
     return;
   }
-  const baseScope = effectiveScope(perms, entityId);
+  const baseScope = await effectiveScopeFor(req, perms, entityId, params.data.pageId);
   if (
     baseScope.scope === "own" &&
-    !recordOwnedBy((baseRecord.valuesJson as Record<string, unknown>) ?? {}, baseScope.scopeFieldKeys, userId)
+    !(await isRecordOwned(
+      entityId,
+      { id: baseRecord.id, valuesJson: baseRecord.valuesJson },
+      baseScope.scopeFieldKeys,
+      userId,
+      await loadActiveEntityFields(entityId),
+    ))
   ) {
     res.status(403).json({ error: "Forbidden" });
     return;
@@ -1083,7 +1126,16 @@ router.put("/pages/:pageId/related-link", requireAuth, async (req, res): Promise
     }
     const relScope = effectiveScope(perms, relatedEntityId);
     const lv = (linked.valuesJson as Record<string, unknown>) ?? {};
-    if (relScope.scope === "own" && !recordOwnedBy(lv, relScope.scopeFieldKeys, userId)) {
+    if (
+      relScope.scope === "own" &&
+      !(await isRecordOwned(
+        relatedEntityId,
+        { id: linked.id, valuesJson: linked.valuesJson },
+        relScope.scopeFieldKeys,
+        userId,
+        await loadActiveEntityFields(relatedEntityId),
+      ))
+    ) {
       res.status(403).json({ error: "Forbidden" });
       return;
     }
@@ -1486,13 +1538,17 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
   ];
   const baseHiddenRowWhere = hiddenRowStatusWhere(effectiveStatusVisibility(perms, entityId).hiddenRowStatusIds);
   if (baseHiddenRowWhere) baseConds.push(baseHiddenRowWhere);
+  // Own-scope (relation-aware) filtered in SQL — see the page-fields variant for
+  // rationale (relation/lookup owner fields have no value in values_json).
+  if (scope === "own") {
+    const entityFields = await loadActiveEntityFields(entityId);
+    baseConds.push(await ownScopeWhere(entityId, scopeFieldKeys, userId, entityFields));
+  }
   const baseRecords = await db
     .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
     .from(entityRecordsTable)
     .where(and(...baseConds));
-  const allowedIds = baseRecords
-    .filter((r) => scope !== "own" || recordOwnedBy((r.valuesJson as Record<string, unknown>) ?? {}, scopeFieldKeys, userId))
-    .map((r) => r.id);
+  const allowedIds = baseRecords.map((r) => r.id);
 
   if (allowedIds.length === 0) {
     res.json({ columns: [], values: [] });
@@ -1601,6 +1657,12 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
         inArray(entityRecordsTable.id, linkedIds),
       ];
       if (relHiddenRowWhere) linkedConds.push(relHiddenRowWhere);
+      // Related own-scope (relation-aware) applied in SQL; non-owned linked
+      // records never enter linkedMap, so their value/id stay hidden below.
+      if (relScope.scope === "own") {
+        const relatedFields = await loadActiveEntityFields(relatedEntityId);
+        linkedConds.push(await ownScopeWhere(relatedEntityId, relScope.scopeFieldKeys, userId, relatedFields));
+      }
       const linkedRecords = await db
         .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
         .from(entityRecordsTable)
@@ -1614,11 +1676,10 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
       const editable = columnEditable;
       let visible = false;
       if (rawLinkedId != null && access !== "hidden") {
+        // linkedMap already excludes non-owned linked records (own-scope applied
+        // in the query above), so presence here means the value is viewable.
         const linkedValues = linkedMap.get(rawLinkedId);
-        if (
-          linkedValues != null &&
-          (relScope.scope !== "own" || recordOwnedBy(linkedValues, relScope.scopeFieldKeys, userId))
-        ) {
+        if (linkedValues != null) {
           visible = true;
           value = linkedValues[relatedFieldKey] ?? null;
         }
@@ -1675,7 +1736,10 @@ router.post("/entities/:entityId/related-candidates", requireAuth, async (req, r
 
   const relScope = effectiveScope(perms, relatedEntityId);
   const conds: SQL[] = [eq(entityRecordsTable.entityId, relatedEntityId)];
-  if (relScope.scope === "own") conds.push(ownScopeWhere(relScope.scopeFieldKeys, userId));
+  if (relScope.scope === "own") {
+    const relatedFields = await loadActiveEntityFields(relatedEntityId);
+    conds.push(await ownScopeWhere(relatedEntityId, relScope.scopeFieldKeys, userId, relatedFields));
+  }
   const candHiddenRowWhere = hiddenRowStatusWhere(
     effectiveStatusVisibility(perms, relatedEntityId).hiddenRowStatusIds,
   );
@@ -1815,7 +1879,13 @@ router.put("/entities/:entityId/related-link", requireAuth, async (req, res): Pr
   const baseScope = effectiveScope(perms, entityId);
   if (
     baseScope.scope === "own" &&
-    !recordOwnedBy((baseRecord.valuesJson as Record<string, unknown>) ?? {}, baseScope.scopeFieldKeys, userId)
+    !(await isRecordOwned(
+      entityId,
+      { id: baseRecord.id, valuesJson: baseRecord.valuesJson },
+      baseScope.scopeFieldKeys,
+      userId,
+      await loadActiveEntityFields(entityId),
+    ))
   ) {
     res.status(403).json({ error: "Forbidden" });
     return;
@@ -1849,7 +1919,16 @@ router.put("/entities/:entityId/related-link", requireAuth, async (req, res): Pr
     }
     const relScope = effectiveScope(perms, relatedEntityId);
     const lv = (linked.valuesJson as Record<string, unknown>) ?? {};
-    if (relScope.scope === "own" && !recordOwnedBy(lv, relScope.scopeFieldKeys, userId)) {
+    if (
+      relScope.scope === "own" &&
+      !(await isRecordOwned(
+        relatedEntityId,
+        { id: linked.id, valuesJson: linked.valuesJson },
+        relScope.scopeFieldKeys,
+        userId,
+        await loadActiveEntityFields(relatedEntityId),
+      ))
+    ) {
       res.status(403).json({ error: "Forbidden" });
       return;
     }

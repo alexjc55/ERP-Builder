@@ -11,9 +11,9 @@ import {
   getPermissions,
   getUserRoleIds,
   effectiveScope,
+  effectiveScopeFor,
   effectiveStatusVisibility,
   effectiveRecordPerm,
-  recordOwnedBy,
   resolveFieldAccess,
   mostPermissiveFieldPerm,
 } from "../middlewares/permissions";
@@ -38,7 +38,8 @@ import {
   UnarchiveRecordParams,
 } from "@workspace/api-zod";
 import type { EntityField, InsertAuditLog, FileSource, FileFieldConfig } from "@workspace/db";
-import { buildRecordQuery, relationDirection, type RecordQuerySpec, type RelationFilterMeta } from "./record-query";
+import { buildRecordQuery, type RecordQuerySpec } from "./record-query";
+import { buildRelationMeta, ownScopeWhere, isRecordOwned } from "./own-scope";
 import { isGoogleDriveModuleEnabled } from "../lib/googleDrive";
 import {
   writeAudit,
@@ -354,15 +355,6 @@ function stripHidden<T extends { valuesJson: unknown }>(record: T, hidden: Set<s
   return { ...record, valuesJson: values };
 }
 
-/** SQL predicate restricting rows to those owned by `userId` via scope field keys. */
-function ownScopeWhere(scopeFieldKeys: string[], userId: number): SQL {
-  if (scopeFieldKeys.length === 0) return sql`false`;
-  const clauses = scopeFieldKeys.map(
-    (k) => sql`(${entityRecordsTable.valuesJson} ->> ${k}) = ${String(userId)}`,
-  );
-  return or(...clauses)!;
-}
-
 /** Russian label for a field, falling back to its key (server-side getML-lite). */
 function fieldRuName(field: EntityField): string {
   const name = field.nameJson as { ru?: string; en?: string; he?: string } | null;
@@ -609,7 +601,7 @@ router.get("/entities/:entityId/records", requireAuth, requireRecordParam("view"
   if (!req.user?.guest) await runAutoArchiveSweep(entityId);
   let where: SQL = and(eq(entityRecordsTable.entityId, entityId), archivedWhere("active")!)!;
   if (scope === "own") {
-    where = and(where, ownScopeWhere(scopeFieldKeys, req.user!.userId))!;
+    where = and(where, await ownScopeWhere(entityId, scopeFieldKeys, req.user!.userId, fields))!;
   }
   const listHiddenRowWhere = hiddenRowStatusWhere(hiddenRowStatusIds);
   if (listHiddenRowWhere) where = and(where, listHiddenRowWhere)!;
@@ -621,46 +613,6 @@ router.get("/entities/:entityId/records", requireAuth, requireRecordParam("view"
     .orderBy(desc(entityRecordsTable.createdAt));
   res.json(records.map((r) => stripHidden(r, hidden)));
 });
-
-/**
- * Resolve filter/search metadata for the relation & lookup fields among the
- * VISIBLE fields of an entity. These field types store no value in values_json —
- * their displayed value is the projected `relatedFieldKey` of a single linked
- * record reached via record_links. The returned map (fieldKey → meta) lets
- * buildRecordQuery match/search them with an EXISTS subquery. Only fields whose
- * relation resolves to a single-link direction are included; a hidden relation
- * field is excluded by the caller (it passes only visibleFields), so it can
- * never become searchable or filterable.
- */
-async function buildRelationMeta(
-  entityId: number,
-  visibleFields: EntityField[],
-): Promise<Map<string, RelationFilterMeta>> {
-  const meta = new Map<string, RelationFilterMeta>();
-  const relFields = visibleFields.filter(
-    (f) =>
-      (f.fieldType === "relation" || f.fieldType === "lookup") &&
-      f.relationConfigJson?.relationId != null &&
-      !!f.relationConfigJson?.relatedFieldKey,
-  );
-  if (relFields.length === 0) return meta;
-  const relIds = [...new Set(relFields.map((f) => f.relationConfigJson!.relationId as number))];
-  const relRows = await db.select().from(relationsTable).where(inArray(relationsTable.id, relIds));
-  const relById = new Map(relRows.map((r) => [r.id, r]));
-  for (const f of relFields) {
-    const cfg = f.relationConfigJson!;
-    const rel = relById.get(cfg.relationId as number);
-    if (!rel) continue;
-    const dir = relationDirection(rel, entityId);
-    if (!dir) continue;
-    meta.set(f.fieldKey, {
-      relationId: cfg.relationId as number,
-      relatedFieldKey: cfg.relatedFieldKey as string,
-      direction: dir,
-    });
-  }
-  return meta;
-}
 
 router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam("view"), async (req, res): Promise<void> => {
   const params = QueryEntityRecordsParams.safeParse(req.params);
@@ -693,7 +645,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   }
 
   const perms = await getPermissions(req);
-  const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
+  const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, entityId, body.data.pageId);
   const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, entityId);
 
   // Guests are strictly read-only: skip the archival write sweep for guest sessions.
@@ -704,7 +656,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   if (built.where) clauses.push(built.where);
   const archWhere = archivedWhere(archived);
   if (archWhere) clauses.push(archWhere);
-  if (scope === "own") clauses.push(ownScopeWhere(scopeFieldKeys, req.user!.userId));
+  if (scope === "own") clauses.push(await ownScopeWhere(entityId, scopeFieldKeys, req.user!.userId, fields));
   // Hard boundary: rows in a status hidden-for-rows for this role are never
   // returned, so the role cannot surface them via any filter/status pick either.
   const queryHiddenRowWhere = hiddenRowStatusWhere(hiddenRowStatusIds);
@@ -926,7 +878,7 @@ router.post(
     }
 
     const perms = await getPermissions(req);
-    const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
+    const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, entityId, body.data.pageId);
     const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, entityId);
     const archived = (body.data.archived ?? "active") as ArchiveFilterValue;
 
@@ -937,7 +889,7 @@ router.post(
     if (built.where) clauses.push(built.where);
     const archWhere = archivedWhere(archived);
     if (archWhere) clauses.push(archWhere);
-    if (scope === "own") clauses.push(ownScopeWhere(scopeFieldKeys, req.user!.userId));
+    if (scope === "own") clauses.push(await ownScopeWhere(entityId, scopeFieldKeys, req.user!.userId, fields));
     // Same hard boundary as the records query: dependent-filter options must not
     // leak values that only exist on rows hidden-for-rows for this role.
     const fvHiddenRowWhere = hiddenRowStatusWhere(hiddenRowStatusIds);
@@ -1046,14 +998,14 @@ router.post(
     }
 
     const perms = await getPermissions(req);
-    const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
+    const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, entityId, body.data.pageId);
     const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, entityId);
 
     const clauses: SQL[] = [eq(entityRecordsTable.entityId, entityId)];
     if (built.where) clauses.push(built.where);
     const archWhere = archivedWhere("active");
     if (archWhere) clauses.push(archWhere);
-    if (scope === "own") clauses.push(ownScopeWhere(scopeFieldKeys, req.user!.userId));
+    if (scope === "own") clauses.push(await ownScopeWhere(entityId, scopeFieldKeys, req.user!.userId, fields));
     const depHiddenRowWhere = hiddenRowStatusWhere(hiddenRowStatusIds);
     if (depHiddenRowWhere) clauses.push(depHiddenRowWhere);
     const valueExpr = sql<string | null>`(${entityRecordsTable.valuesJson} ->> ${target.fieldKey})`;
@@ -1153,7 +1105,7 @@ router.post(
     }
 
     const perms = await getPermissions(req);
-    const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
+    const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, entityId, body.data.pageId);
     const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, entityId);
 
     // Only rename within the rows this role can actually see — mirror the
@@ -1163,7 +1115,7 @@ router.post(
     if (built.where) clauses.push(built.where);
     const renameArchWhere = archivedWhere("active");
     if (renameArchWhere) clauses.push(renameArchWhere);
-    if (scope === "own") clauses.push(ownScopeWhere(scopeFieldKeys, req.user!.userId));
+    if (scope === "own") clauses.push(await ownScopeWhere(entityId, scopeFieldKeys, req.user!.userId, fields));
     const renameHiddenRowWhere = hiddenRowStatusWhere(hiddenRowStatusIds);
     if (renameHiddenRowWhere) clauses.push(renameHiddenRowWhere);
     const valueExpr = sql<string | null>`(${entityRecordsTable.valuesJson} ->> ${target.fieldKey})`;
@@ -1352,9 +1304,9 @@ router.get("/records/:id", requireAuth, async (req, res): Promise<void> => {
   if (!(await assertRecord(req, res, record.entityId, "view"))) return;
 
   const perms = await getPermissions(req);
+  const fields = await loadActiveFields(record.entityId);
   const { scope, scopeFieldKeys } = effectiveScope(perms, record.entityId);
-  const values = (record.valuesJson as Record<string, unknown>) ?? {};
-  if (scope === "own" && !recordOwnedBy(values, scopeFieldKeys, req.user!.userId)) {
+  if (scope === "own" && !(await isRecordOwned(record.entityId, record, scopeFieldKeys, req.user!.userId, fields))) {
     res.status(404).json({ error: "Record not found" });
     return;
   }
@@ -1366,7 +1318,6 @@ router.get("/records/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const fields = await loadActiveFields(record.entityId);
   const { hidden } = await fieldAccessContext(req, record.entityId, fields);
   res.json(stripHidden(record, hidden));
 });
@@ -1488,9 +1439,10 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
   if (!(await assertRecord(req, res, existing.entityId, "update", body.data.pageId))) return;
 
   const perms = await getPermissions(req);
-  const { scope, scopeFieldKeys } = effectiveScope(perms, existing.entityId);
+  const fields = await loadActiveFields(existing.entityId);
+  const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, existing.entityId, body.data.pageId);
   const existingValues = (existing.valuesJson as Record<string, unknown>) ?? {};
-  if (scope === "own" && !recordOwnedBy(existingValues, scopeFieldKeys, req.user!.userId)) {
+  if (scope === "own" && !(await isRecordOwned(existing.entityId, existing, scopeFieldKeys, req.user!.userId, fields))) {
     res.status(404).json({ error: "Record not found" });
     return;
   }
@@ -1510,7 +1462,6 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
     archiveExempt?: boolean;
   } = {};
 
-  const fields = await loadActiveFields(existing.entityId);
   const { editable, hidden } = await fieldAccessContext(req, existing.entityId, fields, body.data.pageId);
 
   if (hasValues) {
@@ -1791,9 +1742,10 @@ router.delete("/records/:id", requireAuth, async (req, res): Promise<void> => {
   if (!(await assertRecord(req, res, existing.entityId, "delete", body.data.pageId))) return;
 
   const perms = await getPermissions(req);
-  const { scope, scopeFieldKeys } = effectiveScope(perms, existing.entityId);
+  const fields = await loadActiveFields(existing.entityId);
+  const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, existing.entityId, body.data.pageId);
   const values = (existing.valuesJson as Record<string, unknown>) ?? {};
-  if (scope === "own" && !recordOwnedBy(values, scopeFieldKeys, req.user!.userId)) {
+  if (scope === "own" && !(await isRecordOwned(existing.entityId, existing, scopeFieldKeys, req.user!.userId, fields))) {
     res.status(404).json({ error: "Record not found" });
     return;
   }
@@ -1854,9 +1806,9 @@ async function setArchived(
   if (!(await assertRecord(req, res, existing.entityId, "update"))) return;
 
   const perms = await getPermissions(req);
+  const fields = await loadActiveFields(existing.entityId);
   const { scope, scopeFieldKeys } = effectiveScope(perms, existing.entityId);
-  const existingValues = (existing.valuesJson as Record<string, unknown>) ?? {};
-  if (scope === "own" && !recordOwnedBy(existingValues, scopeFieldKeys, req.user!.userId)) {
+  if (scope === "own" && !(await isRecordOwned(existing.entityId, existing, scopeFieldKeys, req.user!.userId, fields))) {
     res.status(404).json({ error: "Record not found" });
     return;
   }
@@ -1898,7 +1850,6 @@ async function setArchived(
     );
   }
 
-  const fields = await loadActiveFields(existing.entityId);
   const { hidden } = await fieldAccessContext(req, existing.entityId, fields);
   res.json(stripHidden(record, hidden));
 }

@@ -102,6 +102,19 @@ function relationValueExists(meta: RelationFilterMeta, valueCond: (linkedVal: SQ
 }
 
 /**
+ * Row-ownership EXISTS for a `relation`/`lookup` owner field: the base row has a
+ * single linked record whose projected (user-type) `relatedFieldKey` equals
+ * `userId`. Used by the own-scope ("Только свои") boundary so ownership can be
+ * designated by a projected user field, not only a native `user` field. The
+ * projected value is text in `values_json`, so the user id is compared as a
+ * string. Reuses {@link relationValueExists} so it matches the relation-filter
+ * direction/join logic exactly.
+ */
+export function ownRelationExists(meta: RelationFilterMeta, userId: number): SQL {
+  return relationValueExists(meta, (v) => sql`${v} = ${String(userId)}`);
+}
+
+/**
  * A filter condition on a `relation`/`lookup` field, expressed as an EXISTS over
  * the linked record's projected value. Mirrors the operators `buildCondition`
  * supports for text, but always wrapped so it matches by the LINKED value, not a

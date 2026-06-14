@@ -1,4 +1,4 @@
-import { useState, Fragment } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 import {
   useListRoles,
   useCreateRole,
@@ -7,6 +7,7 @@ import {
   useListPages,
   useListEntities,
   useListEntityFields,
+  useListEntityRelations,
   useListEntityStatuses,
   getListEntityStatusesQueryKey,
   type Role,
@@ -17,6 +18,7 @@ import {
   type Page,
   type Entity,
   type Field,
+  type Relation,
   type Status,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -271,36 +273,51 @@ export default function RolesPage() {
       return { ...prev, records: { ...prev.records, [key]: next } };
     });
 
-  // Turn a mirror override on (seeding from the entity's current rights as a
-  // starting point) or off (removing the key so the page inherits the entity).
+  // Turn a mirror override on (seeding from the entity's current rights AND scope
+  // as a starting point — scope is copied so enabling an override never silently
+  // widens row visibility) or off (removing the key so the page inherits the
+  // entity, scope included).
   const toggleMirrorOverride = (entityId: number, pageId: number, on: boolean) =>
     setPerms((prev) => {
       const records = { ...prev.records };
       const key = mirrorKey(pageId);
       if (on) {
         const ent = prev.records[String(entityId)] ?? { view: false, create: false, update: false, delete: false };
-        records[key] = { view: ent.view, create: ent.create, update: ent.update, delete: ent.delete };
+        records[key] = {
+          view: ent.view,
+          create: ent.create,
+          update: ent.update,
+          delete: ent.delete,
+          scope: ent.scope ?? "all",
+          scopeFieldKeys: [...(ent.scopeFieldKeys ?? [])],
+        };
       } else {
         delete records[key];
       }
       return { ...prev, records };
     });
 
-  const setScope = (entityId: number, scope: RecordScope) =>
+  // Scope helpers are key-based so they work for both entity rows (key
+  // `<entityId>`) and mirror-page overrides (key `mirror:<pageId>`).
+  const setScopeForKey = (key: string, scope: RecordScope) =>
     setPerms((prev) => {
       const current: RecordPermission =
-        prev.records[String(entityId)] ?? { view: false, create: false, update: false, delete: false };
-      return { ...prev, records: { ...prev.records, [String(entityId)]: { ...current, scope } } };
+        prev.records[key] ?? { view: false, create: false, update: false, delete: false };
+      return { ...prev, records: { ...prev.records, [key]: { ...current, scope } } };
     });
 
-  const toggleScopeFieldKey = (entityId: number, key: string, checked: boolean) =>
+  const toggleScopeFieldKeyForKey = (key: string, fieldKey: string, checked: boolean) =>
     setPerms((prev) => {
       const current: RecordPermission =
-        prev.records[String(entityId)] ?? { view: false, create: false, update: false, delete: false };
+        prev.records[key] ?? { view: false, create: false, update: false, delete: false };
       const keys = current.scopeFieldKeys ?? [];
-      const next = checked ? [...keys, key] : keys.filter((k) => k !== key);
-      return { ...prev, records: { ...prev.records, [String(entityId)]: { ...current, scopeFieldKeys: next } } };
+      const next = checked ? [...new Set([...keys, fieldKey])] : keys.filter((k) => k !== fieldKey);
+      return { ...prev, records: { ...prev.records, [key]: { ...current, scopeFieldKeys: next } } };
     });
+
+  const setScope = (entityId: number, scope: RecordScope) => setScopeForKey(String(entityId), scope);
+  const toggleScopeFieldKey = (entityId: number, fieldKey: string, checked: boolean) =>
+    toggleScopeFieldKeyForKey(String(entityId), fieldKey, checked);
 
   // ----- Status visibility per entity (sparse: only the OFF exceptions stored) -----
 
@@ -344,6 +361,14 @@ export default function RolesPage() {
   const statusConfigurableEntities = entities.filter((e: Entity) => !statusEntityIds.includes(e.id));
 
   const scopedEntities = entities.filter((e: Entity) => getRecordPerm(e.id).view);
+
+  // Mirror-page overrides that grant view get their OWN scope configuration: the
+  // server takes row-visibility ENTIRELY from the override when one exists, so the
+  // admin must be able to set it per page (independently of the source entity).
+  const scopedMirrors = pages
+    .filter((p: Page) => p.mirrorEntityId != null && isMirrorOverridden(p.id) && getMirrorPerm(p.id).view)
+    .map((p: Page) => ({ page: p, entity: entities.find((e: Entity) => e.id === p.mirrorEntityId) }))
+    .filter((x): x is { page: Page; entity: Entity } => x.entity != null);
 
   // ----- Permission filter helpers (superAdmin implicitly has full access) -----
   const roleHasPageAccess = (role: Role, pageId: number) =>
@@ -850,7 +875,7 @@ export default function RolesPage() {
                 <p className="text-xs text-slate-400 mb-2">
                   {t("roles.recordScopeDesc", "«Все» — роль видит все записи сущности. «Только свои» — видны только записи, где выбранное поле типа «Пользователь» равно текущему пользователю.")}
                 </p>
-                {scopedEntities.length === 0 ? (
+                {scopedEntities.length === 0 && scopedMirrors.length === 0 ? (
                   <p className="text-xs text-slate-400">{t("roles.noViewableEntities", "Нет сущностей с правом просмотра.")}</p>
                 ) : (
                   <div className="space-y-3">
@@ -864,6 +889,21 @@ export default function RolesPage() {
                           scopeFieldKeys={rp.scopeFieldKeys ?? []}
                           onScopeChange={(s) => setScope(entity.id, s)}
                           onToggleFieldKey={(k, c) => toggleScopeFieldKey(entity.id, k, c)}
+                        />
+                      );
+                    })}
+                    {scopedMirrors.map(({ page, entity }) => {
+                      const key = mirrorKey(page.id);
+                      const rp = getMirrorPerm(page.id);
+                      return (
+                        <EntityScopeRow
+                          key={`m-${page.id}`}
+                          entity={entity}
+                          mirrorLabel={ml(page.nameJson) || page.path || undefined}
+                          scope={rp.scope ?? "all"}
+                          scopeFieldKeys={rp.scopeFieldKeys ?? []}
+                          onScopeChange={(s) => setScopeForKey(key, s)}
+                          onToggleFieldKey={(k, c) => toggleScopeFieldKeyForKey(key, k, c)}
                         />
                       );
                     })}
@@ -1002,14 +1042,37 @@ function EntityStatusChips({
   );
 }
 
+// Loads a related entity's fields and reports the set of its `user`-typed field
+// keys up to the parent. Rendered once per distinct related entity so the
+// per-entity hook count stays stable (Rules of Hooks): the parent can't call
+// `useListEntityFields` in a loop whose length depends on fetched data.
+function RelatedUserFieldsProbe({
+  entityId,
+  onResolved,
+}: {
+  entityId: number;
+  onResolved: (entityId: number, userFieldKeys: string[]) => void;
+}) {
+  const { data: fields = [] } = useListEntityFields(entityId);
+  useEffect(() => {
+    onResolved(
+      entityId,
+      fields.filter((f: Field) => f.fieldType === "user").map((f: Field) => f.fieldKey),
+    );
+  }, [entityId, fields, onResolved]);
+  return null;
+}
+
 function EntityScopeRow({
   entity,
+  mirrorLabel,
   scope,
   scopeFieldKeys,
   onScopeChange,
   onToggleFieldKey,
 }: {
   entity: Entity;
+  mirrorLabel?: string;
   scope: RecordScope;
   scopeFieldKeys: string[];
   onScopeChange: (scope: RecordScope) => void;
@@ -1018,12 +1081,74 @@ function EntityScopeRow({
   const ml = useML();
   const t = useT();
   const { data: fields = [] } = useListEntityFields(entity.id);
-  const userFields = fields.filter((f: Field) => f.fieldType === "user");
+  const { data: relations = [] } = useListEntityRelations(entity.id);
+
+  // Native `user` fields are owner candidates directly.
+  const nativeUserFields = fields.filter((f: Field) => f.fieldType === "user");
+
+  // Relation/lookup fields can also designate ownership when they project a
+  // `user`-typed field of the related entity (one hop). Resolve each such field
+  // to its related entity + the projected field key.
+  const relById = new Map<number, Relation>(relations.map((r: Relation) => [r.id, r]));
+  const relProjections = fields
+    .filter(
+      (f: Field) =>
+        (f.fieldType === "relation" || f.fieldType === "lookup") &&
+        f.relationConfigJson?.relationId != null &&
+        !!f.relationConfigJson?.relatedFieldKey,
+    )
+    .map((f: Field) => {
+      const rel = relById.get(f.relationConfigJson!.relationId!);
+      if (!rel) return null;
+      const relatedEntityId = rel.sourceEntityId === entity.id ? rel.targetEntityId : rel.sourceEntityId;
+      return { field: f, relatedEntityId, relatedFieldKey: f.relationConfigJson!.relatedFieldKey! };
+    })
+    .filter((p): p is { field: Field; relatedEntityId: number; relatedFieldKey: string } => p != null);
+
+  const distinctRelatedIds = [...new Set(relProjections.map((p) => p.relatedEntityId))];
+
+  // Map relatedEntityId → set of its user-typed field keys, filled by the probes.
+  const [relatedUserKeys, setRelatedUserKeys] = useState<Map<number, Set<string>>>(new Map());
+  const handleResolved = useCallback((relatedEntityId: number, userFieldKeys: string[]) => {
+    setRelatedUserKeys((prev) => {
+      const existing = prev.get(relatedEntityId);
+      const nextSet = new Set(userFieldKeys);
+      if (existing && existing.size === nextSet.size && [...nextSet].every((k) => existing.has(k))) {
+        return prev; // unchanged — avoid a re-render loop
+      }
+      const next = new Map(prev);
+      next.set(relatedEntityId, nextSet);
+      return next;
+    });
+  }, []);
+
+  // Projected owner fields = relation/lookup fields whose projected related field
+  // is a `user` field (per the probe results).
+  const projectedFields = relProjections.filter((p) =>
+    relatedUserKeys.get(p.relatedEntityId)?.has(p.relatedFieldKey),
+  );
+
+  // Combined owner-field options keyed by THIS entity's field key (what the
+  // server stores in scopeFieldKeys and classifies as native vs relation owner).
+  const ownerOptions = [
+    ...nativeUserFields.map((f: Field) => ({ fieldKey: f.fieldKey, label: ml(f.nameJson) || f.fieldKey, projected: false })),
+    ...projectedFields.map((p) => ({
+      fieldKey: p.field.fieldKey,
+      label: ml(p.field.nameJson) || p.field.fieldKey,
+      projected: true,
+    })),
+  ];
 
   return (
     <div className="rounded-lg border border-slate-200 p-3 space-y-2">
+      {distinctRelatedIds.map((rid) => (
+        <RelatedUserFieldsProbe key={rid} entityId={rid} onResolved={handleResolved} />
+      ))}
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm text-slate-700 truncate">{ml(entity.nameJson) || entity.entityKey}</span>
+        <span className="text-sm text-slate-700 truncate">
+          {ml(entity.nameJson) || entity.entityKey}
+          {mirrorLabel && <span className="text-slate-400"> ({mirrorLabel})</span>}
+        </span>
         <Select value={scope} onValueChange={(v) => onScopeChange(v as RecordScope)}>
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -1034,7 +1159,7 @@ function EntityScopeRow({
       </div>
       {scope === "own" && (
         <div className="pt-1">
-          {userFields.length === 0 ? (
+          {ownerOptions.length === 0 ? (
             <p className="text-xs text-amber-600">
               {t("roles.noUserFields", "Нет полей типа «Пользователь» — при выборе «Только свои» записи не будут видны. Добавьте такое поле в сущность.")}
             </p>
@@ -1042,17 +1167,22 @@ function EntityScopeRow({
             <div className="space-y-1.5">
               <p className="text-xs text-slate-400">{t("roles.ownerFields", "Поля-владельцы (совпадение по любому):")}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                {userFields.map((f: Field) => (
-                  <label key={f.id} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                {ownerOptions.map((o) => (
+                  <label key={o.fieldKey} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
                     <Checkbox
-                      checked={scopeFieldKeys.includes(f.fieldKey)}
-                      onCheckedChange={(v) => onToggleFieldKey(f.fieldKey, v === true)}
+                      checked={scopeFieldKeys.includes(o.fieldKey)}
+                      onCheckedChange={(v) => onToggleFieldKey(o.fieldKey, v === true)}
                     />
-                    <span className="truncate">{ml(f.nameJson) || f.fieldKey}</span>
+                    <span className="truncate">
+                      {o.label}
+                      {o.projected && (
+                        <span className="text-slate-400"> · {t("roles.ownerViaRelation", "по связи")}</span>
+                      )}
+                    </span>
                   </label>
                 ))}
               </div>
-              {!userFields.some((f: Field) => scopeFieldKeys.includes(f.fieldKey)) && (
+              {!ownerOptions.some((o) => scopeFieldKeys.includes(o.fieldKey)) && (
                 <p className="text-xs text-amber-600">
                   {t("roles.noOwnerSelected", "Не выбрано ни одного поля-владельца — при «Только свои» записи не будут видны. Отметьте хотя бы одно поле.")}
                 </p>
