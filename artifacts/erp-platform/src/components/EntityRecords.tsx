@@ -2632,6 +2632,16 @@ export function EntityRecords({
                     ]);
                     const formatting = computeRowFormatting(formatFields, (key) => {
                       const def = formatFieldByKey.get(key);
+                      // relation/lookup values are projected from the linked
+                      // record (held in entityRelatedByRecord for entity fields,
+                      // relatedByRecord for page-relation fields), NOT stored in the
+                      // row's valuesJson. Resolve them here so conditional formatting
+                      // matches the displayed value instead of treating it as empty.
+                      if (def && (def.fieldType === "relation" || def.fieldType === "lookup")) {
+                        const entityRel = entityRelatedByRecord.get(record.id)?.get(key);
+                        if (entityRel) return entityRel.value;
+                        return relatedByRecord.get(record.id)?.get(key)?.value;
+                      }
                       return def ? fieldRawValue({ fieldKey: key, ...def }, allValues) : allValues[key];
                     });
                     return (
