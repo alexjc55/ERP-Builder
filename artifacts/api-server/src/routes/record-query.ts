@@ -1,5 +1,5 @@
 import { sql, and, or, asc, desc, inArray, type SQL } from "drizzle-orm";
-import { entityRecordsTable } from "@workspace/db";
+import { entityRecordsTable, recordLinksTable } from "@workspace/db";
 import type { EntityField } from "@workspace/db";
 
 export type FilterOperator =
@@ -55,6 +55,93 @@ const TEXT_SEARCH_TYPES = new Set(["text", "textarea", "email", "url", "phone", 
 /** Text expression for a JSONB field value: (values_json ->> 'key'). Key is a bound param. */
 function textExpr(key: string): SQL {
   return sql`(${entityRecordsTable.valuesJson} ->> ${key})`;
+}
+
+/**
+ * Metadata needed to filter/search a `relation` or `lookup` field. Unlike stored
+ * field types, these have no value in `values_json` — the displayed value is the
+ * projected `relatedFieldKey` of the single linked record (reached through
+ * `record_links`). `direction` says which side of the relation the base row sits
+ * on, so we know which link column points at the base record vs. the linked one.
+ */
+export interface RelationFilterMeta {
+  relationId: number;
+  relatedFieldKey: string;
+  direction: "source" | "target";
+}
+
+/**
+ * Which side of a single-link relation the base entity sits on (or null when the
+ * relation isn't single-link for that entity). Kept here so both the records
+ * query and the filter-values endpoint resolve direction identically to the
+ * page-fields resolver. "source" → base is source, single linked record is the
+ * target; "target" → the inverse.
+ */
+export function relationDirection(
+  relation: { sourceEntityId: number; targetEntityId: number; relationType: string },
+  entityId: number,
+): "source" | "target" | null {
+  const t = relation.relationType;
+  if (relation.sourceEntityId === entityId && (t === "one_to_one" || t === "many_to_one")) return "source";
+  if (relation.targetEntityId === entityId && (t === "one_to_one" || t === "one_to_many")) return "target";
+  return null;
+}
+
+/**
+ * Correlated EXISTS subquery: the base row (outer `entity_records`) has a single
+ * linked record via `record_links` whose projected value satisfies `valueCond`.
+ * The linked value is `lt.values_json ->> relatedFieldKey`. All identifiers are
+ * literal table/column names; only the relationId, relatedFieldKey and any
+ * filter values are bound params.
+ */
+function relationValueExists(meta: RelationFilterMeta, valueCond: (linkedVal: SQL) => SQL): SQL {
+  const baseCol = meta.direction === "source" ? sql`rl.source_record_id` : sql`rl.target_record_id`;
+  const linkedCol = meta.direction === "source" ? sql`rl.target_record_id` : sql`rl.source_record_id`;
+  const linkedVal = sql`(lt.values_json ->> ${meta.relatedFieldKey})`;
+  return sql`EXISTS (SELECT 1 FROM ${recordLinksTable} rl JOIN ${entityRecordsTable} lt ON lt.id = ${linkedCol} WHERE rl.relation_id = ${meta.relationId} AND ${baseCol} = ${entityRecordsTable.id} AND ${valueCond(linkedVal)})`;
+}
+
+/**
+ * A filter condition on a `relation`/`lookup` field, expressed as an EXISTS over
+ * the linked record's projected value. Mirrors the operators `buildCondition`
+ * supports for text, but always wrapped so it matches by the LINKED value, not a
+ * (non-existent) `values_json` entry. `is_empty` = no link with a non-empty value.
+ */
+function buildRelationCondition(cond: FilterCondition, meta: RelationFilterMeta): { sql: SQL } | { error: string } {
+  const op = cond.operator;
+  const nonEmpty = (v: SQL): SQL => sql`${v} IS NOT NULL AND ${v} <> ''`;
+
+  if (op === "is_empty") return { sql: sql`NOT ${relationValueExists(meta, nonEmpty)}` };
+  if (op === "is_not_empty") return { sql: relationValueExists(meta, nonEmpty) };
+
+  if (op === "in") {
+    if (!Array.isArray(cond.value)) {
+      return { error: `Operator "in" requires an array value for field "${cond.field}"` };
+    }
+    if (cond.value.length === 0) return { sql: sql`false` };
+    const parts = cond.value.map((v) => sql`${String(v)}`);
+    return { sql: relationValueExists(meta, (v) => sql`${v} IN (${sql.join(parts, sql`, `)})`) };
+  }
+
+  const value = cond.value;
+  if (value === undefined || value === null) {
+    return { error: `Operator "${op}" requires a value for field "${cond.field}"` };
+  }
+  switch (op) {
+    case "eq":
+      return { sql: relationValueExists(meta, (v) => sql`${v} = ${String(value)}`) };
+    case "neq":
+      return { sql: sql`NOT ${relationValueExists(meta, (v) => sql`${v} = ${String(value)}`)}` };
+    case "contains":
+      return { sql: relationValueExists(meta, (v) => sql`${v} ILIKE ${"%" + String(value) + "%"}`) };
+    case "not_contains":
+      return { sql: sql`NOT ${relationValueExists(meta, (v) => sql`${v} ILIKE ${"%" + String(value) + "%"}`)}` };
+    case "starts_with":
+      return { sql: relationValueExists(meta, (v) => sql`${v} ILIKE ${String(value) + "%"}`) };
+    case "ends_with":
+      return { sql: relationValueExists(meta, (v) => sql`${v} ILIKE ${"%" + String(value)}`) };
+  }
+  return { error: `Unsupported operator "${op}" for relation field "${cond.field}"` };
 }
 
 function buildCondition(cond: FilterCondition, fieldType: string): { sql: SQL } | { error: string } {
@@ -186,6 +273,7 @@ function buildCondition(cond: FilterCondition, fieldType: string): { sql: SQL } 
 export function buildRecordQuery(
   fields: EntityField[],
   spec: RecordQuerySpec,
+  relationMeta: Map<string, RelationFilterMeta> = new Map(),
 ): { where: SQL | undefined; orderBy: SQL[] } | { error: string } {
   const fieldByKey = new Map(fields.map((f) => [f.fieldKey, f]));
 
@@ -193,7 +281,10 @@ export function buildRecordQuery(
   for (const cond of spec.filters ?? []) {
     const field = fieldByKey.get(cond.field);
     if (!field) return { error: `Unknown filter field: ${cond.field}` };
-    const built = buildCondition(cond, field.fieldType);
+    // relation/lookup fields have no value in values_json — filter via the linked
+    // record's projected value (EXISTS subquery) instead of the text expression.
+    const relMeta = relationMeta.get(cond.field);
+    const built = relMeta ? buildRelationCondition(cond, relMeta) : buildCondition(cond, field.fieldType);
     if ("error" in built) return { error: built.error };
     filterChunks.push(built.sql);
   }
@@ -206,13 +297,20 @@ export function buildRecordQuery(
   let searchWhere: SQL | undefined;
   const search = spec.search?.trim();
   if (search) {
-    const searchable = fields.filter((f) => TEXT_SEARCH_TYPES.has(f.fieldType));
-    if (searchable.length === 0) {
-      searchWhere = sql`false`;
-    } else {
-      const pattern = "%" + search + "%";
-      searchWhere = or(...searchable.map((f) => sql`${textExpr(f.fieldKey)} ILIKE ${pattern}`));
+    const pattern = "%" + search + "%";
+    const searchChunks: SQL[] = [];
+    for (const f of fields) {
+      if (TEXT_SEARCH_TYPES.has(f.fieldType)) {
+        searchChunks.push(sql`${textExpr(f.fieldKey)} ILIKE ${pattern}`);
+      } else if (f.fieldType === "relation" || f.fieldType === "lookup") {
+        // Search the LINKED record's projected value (e.g. "Номер заказа",
+        // "Проект"). Only fields with resolved relation metadata participate —
+        // a hidden relation field is never in the map, so it stays unsearchable.
+        const m = relationMeta.get(f.fieldKey);
+        if (m) searchChunks.push(relationValueExists(m, (v) => sql`${v} ILIKE ${pattern}`));
+      }
     }
+    searchWhere = searchChunks.length === 0 ? sql`false` : or(...searchChunks);
   }
 
   let statusWhere: SQL | undefined;

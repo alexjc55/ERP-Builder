@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { db, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable, pageFieldsTable, pageRecordValuesTable } from "@workspace/db";
+import { db, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable, pageFieldsTable, pageRecordValuesTable, relationsTable, recordLinksTable } from "@workspace/db";
 import { eq, asc, desc, and, or, sql, inArray, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { evaluateFormula, normalizeDecimals } from "@workspace/formula";
 import type { Request } from "express";
 import { requireAuth } from "../middlewares/auth";
@@ -37,7 +38,7 @@ import {
   UnarchiveRecordParams,
 } from "@workspace/api-zod";
 import type { EntityField, InsertAuditLog, FileSource, FileFieldConfig } from "@workspace/db";
-import { buildRecordQuery, type RecordQuerySpec } from "./record-query";
+import { buildRecordQuery, relationDirection, type RecordQuerySpec, type RelationFilterMeta } from "./record-query";
 import { isGoogleDriveModuleEnabled } from "../lib/googleDrive";
 import {
   writeAudit,
@@ -621,6 +622,46 @@ router.get("/entities/:entityId/records", requireAuth, requireRecordParam("view"
   res.json(records.map((r) => stripHidden(r, hidden)));
 });
 
+/**
+ * Resolve filter/search metadata for the relation & lookup fields among the
+ * VISIBLE fields of an entity. These field types store no value in values_json —
+ * their displayed value is the projected `relatedFieldKey` of a single linked
+ * record reached via record_links. The returned map (fieldKey → meta) lets
+ * buildRecordQuery match/search them with an EXISTS subquery. Only fields whose
+ * relation resolves to a single-link direction are included; a hidden relation
+ * field is excluded by the caller (it passes only visibleFields), so it can
+ * never become searchable or filterable.
+ */
+async function buildRelationMeta(
+  entityId: number,
+  visibleFields: EntityField[],
+): Promise<Map<string, RelationFilterMeta>> {
+  const meta = new Map<string, RelationFilterMeta>();
+  const relFields = visibleFields.filter(
+    (f) =>
+      (f.fieldType === "relation" || f.fieldType === "lookup") &&
+      f.relationConfigJson?.relationId != null &&
+      !!f.relationConfigJson?.relatedFieldKey,
+  );
+  if (relFields.length === 0) return meta;
+  const relIds = [...new Set(relFields.map((f) => f.relationConfigJson!.relationId as number))];
+  const relRows = await db.select().from(relationsTable).where(inArray(relationsTable.id, relIds));
+  const relById = new Map(relRows.map((r) => [r.id, r]));
+  for (const f of relFields) {
+    const cfg = f.relationConfigJson!;
+    const rel = relById.get(cfg.relationId as number);
+    if (!rel) continue;
+    const dir = relationDirection(rel, entityId);
+    if (!dir) continue;
+    meta.set(f.fieldKey, {
+      relationId: cfg.relationId as number,
+      relatedFieldKey: cfg.relatedFieldKey as string,
+      direction: dir,
+    });
+  }
+  return meta;
+}
+
 router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam("view"), async (req, res): Promise<void> => {
   const params = QueryEntityRecordsParams.safeParse(req.params);
   if (!params.success) {
@@ -644,7 +685,8 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   // Restrict the query whitelist to visible fields so any reference to a hidden field
   // is rejected as an unknown field and search never touches hidden values.
   const visibleFields = fields.filter((f) => !hidden.has(f.fieldKey));
-  const built = buildRecordQuery(visibleFields, body.data as RecordQuerySpec);
+  const relationMeta = await buildRelationMeta(entityId, visibleFields);
+  const built = buildRecordQuery(visibleFields, body.data as RecordQuerySpec, relationMeta);
   if ("error" in built) {
     res.status(400).json({ error: built.error });
     return;
@@ -876,7 +918,8 @@ router.post(
       statusIds: body.data.statusIds ?? undefined,
       search: body.data.search ?? undefined,
     };
-    const built = buildRecordQuery(visibleFields, spec);
+    const relationMeta = await buildRelationMeta(entityId, visibleFields);
+    const built = buildRecordQuery(visibleFields, spec, relationMeta);
     if ("error" in built) {
       res.status(400).json({ error: built.error });
       return;
@@ -887,6 +930,9 @@ router.post(
     const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, entityId);
     const archived = (body.data.archived ?? "active") as ArchiveFilterValue;
 
+    // Boundary clauses over the BASE records (entity scope + the OTHER active
+    // filters + archival + own-row + hidden-status). These are identical for
+    // stored and relation/lookup targets — only the value expression differs.
     const clauses: SQL[] = [eq(entityRecordsTable.entityId, entityId)];
     if (built.where) clauses.push(built.where);
     const archWhere = archivedWhere(archived);
@@ -896,21 +942,44 @@ router.post(
     // leak values that only exist on rows hidden-for-rows for this role.
     const fvHiddenRowWhere = hiddenRowStatusWhere(hiddenRowStatusIds);
     if (fvHiddenRowWhere) clauses.push(fvHiddenRowWhere);
-    const valueExpr = sql<string | null>`(${entityRecordsTable.valuesJson} ->> ${body.data.field})`;
-    clauses.push(sql`${valueExpr} IS NOT NULL AND ${valueExpr} <> ''`);
-    const where = and(...clauses)!;
 
-    // ORDER BY ordinal (1) — for SELECT DISTINCT the order-by expression must match the
-    // selected column; re-emitting valueExpr would bind a fresh param and Postgres would
-    // reject it as not in the select list.
-    const rows = await db
-      .selectDistinct({ v: valueExpr })
-      .from(entityRecordsTable)
-      .where(where)
-      .orderBy(sql`1`)
-      .limit(500);
-
-    const values = rows.map((r) => r.v).filter((v): v is string => v != null && v !== "");
+    const targetMeta = relationMeta.get(body.data.field);
+    let values: string[];
+    if (targetMeta) {
+      // relation/lookup target: the distinct values are the LINKED record's
+      // projected field. Join the link + linked record (aliased to avoid the
+      // base table) and read its value. Only links reachable from base rows the
+      // viewer can see contribute — the same exposure as the rendered column.
+      const flt = alias(entityRecordsTable, "flt");
+      const frl = alias(recordLinksTable, "frl");
+      const baseCol = targetMeta.direction === "source" ? frl.sourceRecordId : frl.targetRecordId;
+      const linkedCol = targetMeta.direction === "source" ? frl.targetRecordId : frl.sourceRecordId;
+      const valueExpr = sql<string | null>`(${flt.valuesJson} ->> ${targetMeta.relatedFieldKey})`;
+      const where = and(...clauses, sql`${valueExpr} IS NOT NULL AND ${valueExpr} <> ''`)!;
+      // ORDER BY ordinal (1) — same SELECT DISTINCT constraint as below.
+      const rows = await db
+        .selectDistinct({ v: valueExpr })
+        .from(entityRecordsTable)
+        .innerJoin(frl, and(eq(frl.relationId, targetMeta.relationId), eq(baseCol, entityRecordsTable.id)))
+        .innerJoin(flt, eq(flt.id, linkedCol))
+        .where(where)
+        .orderBy(sql`1`)
+        .limit(500);
+      values = rows.map((r) => r.v).filter((v): v is string => v != null && v !== "");
+    } else {
+      const valueExpr = sql<string | null>`(${entityRecordsTable.valuesJson} ->> ${body.data.field})`;
+      const where = and(...clauses, sql`${valueExpr} IS NOT NULL AND ${valueExpr} <> ''`)!;
+      // ORDER BY ordinal (1) — for SELECT DISTINCT the order-by expression must match the
+      // selected column; re-emitting valueExpr would bind a fresh param and Postgres would
+      // reject it as not in the select list.
+      const rows = await db
+        .selectDistinct({ v: valueExpr })
+        .from(entityRecordsTable)
+        .where(where)
+        .orderBy(sql`1`)
+        .limit(500);
+      values = rows.map((r) => r.v).filter((v): v is string => v != null && v !== "");
+    }
     res.json({ values });
   },
 );
@@ -969,7 +1038,8 @@ router.post(
       filters: parentVals.map((p) => ({ field: p.field, operator: "eq" as const, value: p.value })),
       filterConjunction: "and",
     };
-    const built = buildRecordQuery(visibleFields, spec);
+    const relationMeta = await buildRelationMeta(entityId, visibleFields);
+    const built = buildRecordQuery(visibleFields, spec, relationMeta);
     if ("error" in built) {
       res.status(400).json({ error: built.error });
       return;
@@ -1068,10 +1138,15 @@ router.post(
       res.status(400).json({ error: "Не выбрано родительское значение" });
       return;
     }
-    const built = buildRecordQuery(visibleFields, {
-      filters: parentVals.map((p) => ({ field: p.field, operator: "eq" as const, value: p.value })),
-      filterConjunction: "and",
-    });
+    const relationMeta = await buildRelationMeta(entityId, visibleFields);
+    const built = buildRecordQuery(
+      visibleFields,
+      {
+        filters: parentVals.map((p) => ({ field: p.field, operator: "eq" as const, value: p.value })),
+        filterConjunction: "and",
+      },
+      relationMeta,
+    );
     if ("error" in built) {
       res.status(400).json({ error: built.error });
       return;

@@ -45,6 +45,31 @@ not a pair of conditions, because the surrounding conjunction is not guaranteed 
 date filters must also be fed into `getEntityFilterValues` (self-excluding the target field) so the
 dependent dropdowns narrow by the date range too.
 
+## relation/lookup fields participate in search AND filters (no values_json entry)
+`relation`/`lookup` fields store NOTHING in `values_json`; their displayed value is the LINKED
+record's `valuesJson[relatedFieldKey]` reached through `record_links`. So free-text search and the
+filter bar must resolve them through the link, not the text expression.
+- `record-query.ts` exposes `relationDirection(relation, entityId)` (single source of truth for which
+  side the base row sits on: "source" for source-side one_to_one/many_to_one, "target" for target-side
+  one_to_one/one_to_many) and `RelationFilterMeta {relationId, relatedFieldKey, direction}`.
+- `buildRecordQuery(fields, spec, relationMeta)` takes a `fieldKey → RelationFilterMeta` map. For any
+  field in that map it matches/searches via a correlated `EXISTS` over `record_links` + the linked
+  `entity_records`, instead of `values_json ->> key`. Search adds these EXISTS-ILIKE chunks for every
+  relation/lookup field that has meta.
+- `buildRelationMeta(entityId, visibleFields)` in `records.ts` builds that map ONLY for VISIBLE
+  relation/lookup fields whose direction resolves (null direction = excluded). It must be passed to
+  EVERY `buildRecordQuery` caller (query, filter-values, dependent-values, rename-value) so relation
+  filters work uniformly.
+**Boundary:** the map is built from `visibleFields`, so a hidden relation field can never become
+searchable/filterable — same field-hidden boundary as stored fields. Distinct option values for a
+relation/lookup target reuse the EXACT base-row boundary (entity/archived/own-scope/hidden-status +
+other active filters); only links reachable from visible base rows contribute (= same exposure as the
+rendered column, no new leak).
+**SQL alias rule:** the inner EXISTS subquery aliases `record_links rl` / `entity_records lt`; the
+filter-values DISTINCT path joins with DIFFERENT aliases `record_links frl` / `entity_records flt` to
+avoid shadowing. Pick `frl.source_record_id`=base / `frl.target_record_id`=linked for direction
+"source", inverse for "target".
+
 ## SELECT DISTINCT + ORDER BY gotcha (the bug that cost the most here)
 Building the distinct query as
 `db.selectDistinct({ v: valueExpr }).orderBy(asc(valueExpr))` FAILS at runtime in Postgres.
