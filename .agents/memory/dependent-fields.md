@@ -48,6 +48,20 @@ record's **parent-chain** values (closest parent + all ancestors).
   sends only the changed key by default, so it must add the cleared descendant
   keys to the same `valuesJson` payload — easy to forget.
 
+- **A relation parent's value is NOT in valuesJson/form — resolve it from the
+  per-record relation links on every edit surface.** A relation field's link lives
+  in the loaded per-record links (`entityRelatedByRecord`), not in the record's
+  `valuesJson`/`form`. So a dependent field whose parent is a relation field cannot
+  read its parent from the form snapshot in edit mode. **Why:** the modal edit form
+  showed relation fields as a dead text box (the picker was gated create-only) and
+  relation-parented cascading fields never resolved. **How to apply:** (1) every
+  record edit surface (inline cell, add-row, modal create AND modal edit) must
+  render a relation field with a live picker — create defers the link
+  (RelationCreatePicker), edit mutates immediately (EntityRelationLinkPicker,
+  recordId set) — never FieldInput's default text input; (2) before passing
+  `rowValues` to a dependent child's input in edit mode, merge relation linked ids
+  into the form snapshot so the child can resolve a relation parent.
+
 - **cmdk create-path: the "add new value" action MUST live OUTSIDE
   `<CommandList>`.** cmdk filters everything inside `CommandList` by the
   `CommandInput` query, so an add-action placed there (even a plain div in a

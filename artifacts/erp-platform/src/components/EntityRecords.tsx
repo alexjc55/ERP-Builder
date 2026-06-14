@@ -1668,16 +1668,48 @@ export function EntityRecords({
   const relCreateDepInfo = (
     field: Field,
     src: FormState,
+    recordId?: number,
   ): { dependent: boolean; parentValue: string | null; relatedFilterFieldKey: string | null } => {
     const dep = field.dependencyConfigJson;
     const dependent = !!(dep?.dependsOnFieldKey && dep?.relatedFilterFieldKey);
     let parentValue: string | null = null;
     if (dependent && dep?.dependsOnFieldKey) {
       const raw = src[dep.dependsOnFieldKey];
-      parentValue = raw == null || raw === "" ? null : String(raw);
+      if (raw != null && raw !== "") {
+        // CREATE flow keeps a relation parent's picked id (and scalar parents) in
+        // the form snapshot.
+        parentValue = String(raw);
+      } else {
+        // EDIT flow: a relation parent's link is not part of valuesJson/form — read
+        // it from the loaded per-record relation links.
+        const parentField = fields.find((x) => x.fieldKey === dep.dependsOnFieldKey);
+        if (parentField?.fieldType === "relation" && recordId != null) {
+          const pid = entityRelatedByRecord.get(recordId)?.get(dep.dependsOnFieldKey)?.linkedRecordId;
+          parentValue = pid == null ? null : String(pid);
+        }
+      }
     }
     return { dependent, parentValue, relatedFilterFieldKey: dep?.relatedFilterFieldKey ?? null };
   };
+
+  // A relation field's link lives in the per-record relation links, not in
+  // valuesJson/form. When editing, merge those linked ids into a form snapshot so
+  // dependent (cascading) children whose parent is a relation field can resolve
+  // their parent value in the edit modal (the inline table reads links directly).
+  const formWithRelationParents = useMemo<FormState>(() => {
+    if (!editing) return form;
+    const links = entityRelatedByRecord.get(editing.id);
+    if (!links) return form;
+    const merged: FormState = { ...form };
+    for (const f of fields) {
+      if (f.fieldType !== "relation") continue;
+      const lid = links.get(f.fieldKey)?.linkedRecordId;
+      if (lid != null && (merged[f.fieldKey] == null || merged[f.fieldKey] === "")) {
+        merged[f.fieldKey] = lid;
+      }
+    }
+    return merged;
+  }, [editing, entityRelatedByRecord, form, fields]);
 
   // After a base record is created, persist any relation-field selections made in
   // a CREATE flow (modal or inline add-row). A relation link needs the new record
@@ -3053,11 +3085,17 @@ export function EntityRecords({
                 access === "view" ||
                 field.fieldType === "lookup" ||
                 !!(editing && field.lockAfterCreate && valueIsSet(form[field.fieldKey]));
-              // In CREATE mode a relation field gets a real picker (+ "Добавить
-              // запись") instead of a plain text box; the link is written after the
-              // base record is created. Edit mode keeps its existing behavior.
+              // A relation field gets a real picker (+ "Добавить запись" quick-
+              // create), never a plain text box. CREATE mode defers the link until
+              // the base record exists (RelationCreatePicker); EDIT mode uses the
+              // in-place picker that writes the link immediately (the record already
+              // exists), matching the inline table.
               const isRelationCreate = !editing && field.fieldType === "relation" && access === "edit";
-              const modalRelInfo = relCreateDepInfo(field, form);
+              const modalRelInfo = relCreateDepInfo(field, form, editing?.id);
+              const editRel = editing
+                ? entityRelatedByRecord.get(editing.id)?.get(field.fieldKey)
+                : undefined;
+              const relColMeta = entityRelatedColMeta.get(field.fieldKey);
               return (
                 <div key={field.id} className="space-y-1.5">
                   <Label>
@@ -3065,7 +3103,35 @@ export function EntityRecords({
                     {field.isRequired && <span className="text-red-500 ml-0.5">*</span>}
                     {readOnly && <span className="ml-1.5 text-xs font-normal text-slate-400">{t("records.readOnly", "(только чтение)")}</span>}
                   </Label>
-                  {isRelationCreate ? (
+                  {editing && field.fieldType === "relation" && access === "edit" ? (
+                    <EntityRelationLinkPicker
+                      entityId={entityId}
+                      fieldKey={field.fieldKey}
+                      recordId={editing.id}
+                      currentLinkedId={editRel?.linkedRecordId ?? null}
+                      display={
+                        editRel?.linkedRecordId == null ? (
+                          <span className="text-slate-300">—</span>
+                        ) : (
+                          renderCellValue(
+                            {
+                              ...field,
+                              fieldType: (relColMeta?.relatedFieldType ?? "text") as Field["fieldType"],
+                              optionsJson: relColMeta?.optionsJson ?? [],
+                            } as unknown as Field,
+                            editRel?.value,
+                            t,
+                            userNames,
+                          )
+                        )
+                      }
+                      onChanged={() => setRefreshTick((x) => x + 1)}
+                      dependent={modalRelInfo.dependent}
+                      parentValue={modalRelInfo.parentValue}
+                      relatedFilterFieldKey={modalRelInfo.relatedFilterFieldKey}
+                      pageId={permPageId}
+                    />
+                  ) : isRelationCreate ? (
                     <RelationCreatePicker
                       entityId={entityId}
                       fieldKey={field.fieldKey}
@@ -3111,7 +3177,7 @@ export function EntityRecords({
                       disabled={readOnly}
                       userOptions={userOptions}
                       allFields={fields}
-                      rowValues={form}
+                      rowValues={formWithRelationParents}
                       entityId={entityId}
                       pageId={permPageId}
                     />
@@ -3965,6 +4031,9 @@ function RecordEditModal({
           <div className="space-y-4 py-2">
             {visibleFields.map((field: Field) => {
               const access = fieldAccess(field, entityId);
+              // Relation fields are managed below via RecordLinkManager (the generic
+              // links UI), not as a valuesJson field — don't render a dead text box.
+              if (field.fieldType === "relation") return null;
               // lockAfterCreate field is read-only once set (mirrors server boundary).
               const readOnly =
                 access === "view" ||
