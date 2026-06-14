@@ -11,7 +11,6 @@ import {
 import { eq, and, ne, asc, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin, getPermissions, canRecord } from "../middlewares/permissions";
-import { getRelationLockSides } from "../lib/relationLock";
 import {
   ListEntityRelationsParams,
   CreateEntityRelationParams,
@@ -418,18 +417,6 @@ router.delete("/links/:id", requireAuth, async (req, res): Promise<void> => {
   const perms = await getPermissions(req);
   if (srcEntity === null || !canRecord(perms, srcEntity, "update")) {
     res.status(403).json({ error: "Forbidden" });
-    return;
-  }
-  // A relation entity-field with lockAfterCreate makes its underlying link
-  // immutable once set. The manual relations engine mutates record_links
-  // directly, so it must honour the same lock — otherwise it's a bypass of the
-  // field's "запрет изменения после сохранения". Deleting an existing link clears
-  // a locked field's value, so block it when EITHER side carries a locked field.
-  const lockSides = await getRelationLockSides(db, link.relationId);
-  if (lockSides && (lockSides.sourceLocked || lockSides.targetLocked)) {
-    res.status(409).json({
-      error: "Связь нельзя удалить: связанное поле с запретом изменения после создания записи",
-    });
     return;
   }
   await db.delete(recordLinksTable).where(eq(recordLinksTable.id, params.data.id));

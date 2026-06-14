@@ -215,17 +215,17 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
     res.status(400).json({ error: "Ключевое поле недоступно для полей типа «файл», «функция», «связанное поле» и «поле подстановки»" });
     return;
   }
-  // lockAfterCreate is enforced on the stored value (file/function have none); for
-  // relation fields it is enforced separately on the related-link assignment path.
-  // A lookup field is read-only/derived (no stored value, no link assignment), so
-  // immutability is meaningless for it.
+  // lockAfterCreate is enforced on the stored scalar value; file/function/lookup
+  // have no stored value, and a relation field's value is a derived record_link
+  // (not a JSONB scalar), so immutability is meaningless / out of scope for it.
   if (
     parsed.data.lockAfterCreate &&
     (parsed.data.fieldType === "file" ||
       parsed.data.fieldType === "function" ||
+      parsed.data.fieldType === "relation" ||
       parsed.data.fieldType === "lookup")
   ) {
-    res.status(400).json({ error: "Запрет изменения недоступен для полей типа «файл», «функция» и «поле подстановки»" });
+    res.status(400).json({ error: "Запрет изменения недоступен для полей типа «файл», «функция», «связанное поле» и «поле подстановки»" });
     return;
   }
 
@@ -391,8 +391,9 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   }
 
   // isKey enforces uniqueness over a stored scalar value; lockAfterCreate is
-  // enforced on the stored value for scalars and on the related-link path for
-  // relation fields (so it IS allowed for relation, but isKey is not).
+  // enforced on the stored scalar value. Both are meaningless for file/function
+  // (no stored value), lookup (derived) and relation (value is a derived
+  // record_link, not a JSONB scalar) — so neither is allowed for those types.
   const nextIsKey = body.isKey ?? current.isKey;
   const nextLock = body.lockAfterCreate ?? current.lockAfterCreate;
   if (
@@ -402,8 +403,11 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
     res.status(400).json({ error: "Ключевое поле недоступно для полей типа «файл», «функция», «связанное поле» и «поле подстановки»" });
     return;
   }
-  if (nextLock && (nextType === "file" || nextType === "function" || nextType === "lookup")) {
-    res.status(400).json({ error: "Запрет изменения недоступен для полей типа «файл», «функция» и «поле подстановки»" });
+  if (
+    nextLock &&
+    (nextType === "file" || nextType === "function" || nextType === "relation" || nextType === "lookup")
+  ) {
+    res.status(400).json({ error: "Запрет изменения недоступен для полей типа «файл», «функция», «связанное поле» и «поле подстановки»" });
     return;
   }
 
