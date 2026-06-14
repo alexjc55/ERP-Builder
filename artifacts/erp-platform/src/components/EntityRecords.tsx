@@ -2707,20 +2707,43 @@ export function EntityRecords({
                                   meta?.relatedEntityId != null &&
                                   rel?.linkedRecordId != null &&
                                   canRecord(meta.relatedEntityId, "update") ? (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setWriteThroughEdit({
-                                        entityId: meta.relatedEntityId as number,
-                                        recordId: rel.linkedRecordId as number,
-                                      })
-                                    }
-                                    className="flex w-full items-center justify-between gap-1 -mx-1 rounded px-1 text-left hover:bg-blue-50/60"
-                                    title={t("records.openLinkedRecord", "Открыть связанную запись")}
-                                  >
-                                    <span className="truncate">{display}</span>
-                                    <Pencil className="h-3.5 w-3.5 shrink-0 opacity-40" />
-                                  </button>
+                                  // The projected value of a file/url lookup renders as a
+                                  // clickable <a> (opens the file/link), so the whole cell
+                                  // can't double as the "edit source record" target — keep a
+                                  // dedicated pencil button next to the link. Every other
+                                  // type makes the entire cell clickable, no icon.
+                                  relField.fieldType === "file" || relField.fieldType === "url" ? (
+                                    <div className="flex w-full items-center justify-between gap-1">
+                                      <span className="truncate">{display}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setWriteThroughEdit({
+                                            entityId: meta.relatedEntityId as number,
+                                            recordId: rel.linkedRecordId as number,
+                                          })
+                                        }
+                                        className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-blue-50/60 hover:text-slate-600"
+                                        title={t("records.openLinkedRecord", "Открыть связанную запись")}
+                                      >
+                                        <Pencil className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setWriteThroughEdit({
+                                          entityId: meta.relatedEntityId as number,
+                                          recordId: rel.linkedRecordId as number,
+                                        })
+                                      }
+                                      className="flex w-full items-center -mx-1 rounded px-1 text-left hover:bg-blue-50/60"
+                                      title={t("records.openLinkedRecord", "Открыть связанную запись")}
+                                    >
+                                      <span className="truncate">{display}</span>
+                                    </button>
+                                  )
                                 ) : (
                                   <div className="truncate">{display}</div>
                                 )}
