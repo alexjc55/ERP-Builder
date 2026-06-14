@@ -3051,7 +3051,7 @@ export function EntityRecords({
               {t("records.dialogDesc", "Заполните поля записи. Обязательные поля помечены звёздочкой.")}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 py-2 min-w-0">
             <RecordFormBody
               entityId={entityId}
               pageId={permPageId}
@@ -4247,7 +4247,7 @@ function RecordEditModal({
         {loading ? (
           <div className="py-8 text-center text-sm text-slate-400">{t("common.loading", "Загрузка...")}</div>
         ) : (
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 py-2 min-w-0">
             <RecordFormBody
               entityId={entityId}
               mode="edit"
