@@ -261,7 +261,9 @@ export default function EntityFieldsPage() {
       showInTable,
       isKey: fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" ? isKey : false,
       lockAfterCreate:
-        fieldType !== "file" && fieldType !== "function" ? lockAfterCreate : false,
+        fieldType !== "file" && fieldType !== "function" && fieldType !== "relation"
+          ? lockAfterCreate
+          : false,
       fileConfigJson:
         fieldType === "file"
           ? { allowedSources: allowedSources.length > 0 ? allowedSources : (["server"] as FileSource[]) }
@@ -611,19 +613,11 @@ export default function EntityFieldsPage() {
                   <Label htmlFor="field-is-key">{t("fields.isKey", "Ключевое поле (уникальное)")}</Label>
                 </div>
               )}
-              {fieldType !== "file" && fieldType !== "function" && (
+              {fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && (
                 <div className="flex items-center gap-2">
                   <Switch checked={lockAfterCreate} onCheckedChange={setLockAfterCreate} id="field-lock-after-create" />
                   <Label htmlFor="field-lock-after-create">{t("fields.lockAfterCreate", "Запрет изменения после создания")}</Label>
                 </div>
-              )}
-              {fieldType === "relation" && lockAfterCreate && (
-                <p className="col-span-2 text-xs text-slate-400">
-                  {t(
-                    "fields.lockAfterCreateRelationHint",
-                    "Для связанного поля: после того как связь установлена, её нельзя будет изменить или очистить.",
-                  )}
-                </p>
               )}
             </div>
 

@@ -398,7 +398,12 @@ export function FieldConfigDialog({
           ? isKey
           : false,
       lockAfterCreate:
-        fieldType !== "file" && fieldType !== "function" && fieldType !== "lookup" ? lockAfterCreate : false,
+        fieldType !== "file" &&
+        fieldType !== "function" &&
+        fieldType !== "relation" &&
+        fieldType !== "lookup"
+          ? lockAfterCreate
+          : false,
     };
     if (field) updateMutation.mutate({ id: field.id, data: payload });
     else createMutation.mutate({ entityId, data: payload });
@@ -759,7 +764,7 @@ export function FieldConfigDialog({
                   <Label htmlFor="fcd-is-key">{t("fields.isKey", "Ключевое поле (уникальное)")}</Label>
                 </div>
               )}
-              {fieldType !== "file" && fieldType !== "function" && fieldType !== "lookup" && (
+              {fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup" && (
                 <div className="flex items-center gap-2">
                   <Switch checked={lockAfterCreate} onCheckedChange={setLockAfterCreate} id="fcd-lock-after-create" />
                   <Label htmlFor="fcd-lock-after-create">{t("fields.lockAfterCreate", "Запрет изменения после создания")}</Label>
