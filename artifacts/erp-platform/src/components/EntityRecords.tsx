@@ -1568,7 +1568,7 @@ export function EntityRecords({
     }
     let cancelled = false;
     const recordIds = records.map((r: EntityRecord) => r.id);
-    fetchEntityRelatedValues({ entityId, data: { recordIds } })
+    fetchEntityRelatedValues({ entityId, data: { recordIds, pageId: permPageId } })
       .then((res) => {
         if (cancelled) return;
         setEntityRelatedColumns(res.columns);
@@ -4076,7 +4076,7 @@ function RecordFormBody({
   useEffect(() => {
     if (mode !== "edit" || recordId == null || recordId <= 0) return;
     let cancelled = false;
-    fetchEntityRelatedValues({ entityId, data: { recordIds: [recordId] } })
+    fetchEntityRelatedValues({ entityId, data: { recordIds: [recordId], pageId } })
       .then((res) => {
         if (cancelled) return;
         setRelCols(res.columns);

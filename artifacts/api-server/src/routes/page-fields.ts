@@ -1505,7 +1505,14 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
     res.status(404).json({ error: "Entity not found" });
     return;
   }
-  if (!(await assertRecord(req, res, entityId, "view"))) return;
+  // Mirror-page context: when the records are viewed through a mirror page, the
+  // viewer's access to this entity may come ONLY from a per-mirror override
+  // (entity-level view can be off). Honor that override for both the view gate
+  // and own-scope, exactly like the page-keyed record read paths. A spoofed
+  // pageId is harmless: assertRecord/effectiveScopeFor only apply the override
+  // when the caller is authorized to the page AND the page mirrors this entity.
+  const pageId = parsed.data.pageId ?? undefined;
+  if (!(await assertRecord(req, res, entityId, "view", pageId))) return;
 
   const perms = await getPermissions(req);
   const roleIds = await getUserRoleIds(req);
@@ -1530,7 +1537,7 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
     return;
   }
 
-  const { scope, scopeFieldKeys } = effectiveScope(perms, entityId);
+  const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, entityId, pageId);
   const requested = Array.from(new Set(parsed.data.recordIds));
   const baseConds: SQL[] = [
     eq(entityRecordsTable.entityId, entityId),

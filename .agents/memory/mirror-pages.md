@@ -95,6 +95,18 @@ it (missing scope ⇒ "all"), fully REPLACING the entity scope — it does not m
   The RELATED-entity scope on those same endpoints (relScope for `relatedEntityId`)
   and the entity-context `/entities/:entityId/related-link` correctly STAY
   `effectiveScope` — no mirror page applies to them.
+- **EVERY read surface EntityRecords uses on a mirror page must be page-aware**, not
+  just the base records query. A role can have access to the mirror's entity ONLY via
+  the `mirror:<pageId>` override (entity-level view off). The entity-keyed
+  `POST /entities/:entityId/related-values` (relation+lookup ENTITY columns) was a
+  silent miss: it gated entity-level, so a mirror-only role saw every related/lookup
+  column as a dash even after granting view on the related entities. Fix = accept an
+  optional `pageId` in the body and pass it to `assertRecord`/`effectiveScopeFor`; the
+  client threads `permPageId` (isMirror?pageId:undefined). **Why:** base record query
+  being page-aware while a sibling read endpoint is not is the recurring failure mode —
+  audit ALL of EntityRecords' fetches for the page context, not just the obvious one.
+  Related-ENTITY checks on that endpoint correctly stay entity-level (no mirror page
+  applies to the related entity).
 - Archive/unarchive (`setArchived`) intentionally stays entity-level: it is a global
   row-state change, not a "through the mirror page" edit. Fail-closed: a mirror-only
   update override does NOT grant archive.

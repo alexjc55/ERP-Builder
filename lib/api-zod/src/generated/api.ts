@@ -2461,7 +2461,8 @@ export const GetPageRelatedValuesParams = zod.object({
 })
 
 export const GetPageRelatedValuesBody = zod.object({
-  "recordIds": zod.array(zod.number())
+  "recordIds": zod.array(zod.number()),
+  "pageId": zod.number().optional().describe('Optional mirror-page context for the entity-keyed endpoint. When the records are viewed through a mirror page, pass its id so the view gate and own-scope honor the page\'s per-mirror permission override. Ignored by the page-keyed endpoint (which takes pageId from the path).')
 })
 
 export const GetPageRelatedValuesResponse = zod.object({
@@ -2605,7 +2606,8 @@ export const GetEntityRelatedValuesParams = zod.object({
 })
 
 export const GetEntityRelatedValuesBody = zod.object({
-  "recordIds": zod.array(zod.number())
+  "recordIds": zod.array(zod.number()),
+  "pageId": zod.number().optional().describe('Optional mirror-page context for the entity-keyed endpoint. When the records are viewed through a mirror page, pass its id so the view gate and own-scope honor the page\'s per-mirror permission override. Ignored by the page-keyed endpoint (which takes pageId from the path).')
 })
 
 export const GetEntityRelatedValuesResponse = zod.object({

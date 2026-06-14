@@ -8,4 +8,6 @@
 
 export interface PageRelatedValuesInput {
   recordIds: number[];
+  /** Optional mirror-page context for the entity-keyed endpoint. When the records are viewed through a mirror page, pass its id so the view gate and own-scope honor the page's per-mirror permission override. Ignored by the page-keyed endpoint (which takes pageId from the path). */
+  pageId?: number;
 }
