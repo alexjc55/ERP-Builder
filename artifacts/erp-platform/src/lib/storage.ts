@@ -248,6 +248,18 @@ export function detectUrlPreview(url: string): UrlPreview {
       return { kind: "gdrive", src: `https://drive.google.com/file/d/${id}/preview` };
     }
   }
+  // Google Docs editors (Docs / Sheets / Slides / Forms) live on docs.google.com
+  // with a different URL shape than Drive binary files; rewrite to their /preview embed.
+  const docsMatch = url.match(
+    /docs\.google\.com\/(document|spreadsheets|presentation|forms)\/d\/([^/?#]+)/i,
+  );
+  if (docsMatch) {
+    const [, kind, id] = docsMatch;
+    return {
+      kind: "gdrive",
+      src: `https://docs.google.com/${kind.toLowerCase()}/d/${id}/preview`,
+    };
+  }
   if (IMAGE_EXT.test(url)) return { kind: "image", src: url };
   if (PDF_EXT.test(url)) return { kind: "pdf", src: url };
   return { kind: null, src: url };

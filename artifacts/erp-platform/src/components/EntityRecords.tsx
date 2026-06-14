@@ -243,6 +243,37 @@ function renderCellValue(field: Field, value: unknown, t: (key: string, def: str
 }
 
 /**
+ * Live preview of a lookup field's projected value during a CREATE flow, before
+ * the base record (and thus its relation link) exists. We already know which
+ * related record the user picked, so we fetch that record directly and project
+ * its `relatedFieldKey`. The fetch re-applies the related entity's view / own /
+ * hidden-status / field-hidden boundary server-side (GET /records/:id), so the
+ * value shown here matches what the saved row will resolve via related-values.
+ */
+function LookupCreatePreview({
+  linkedRecordId,
+  relatedFieldKey,
+  relField,
+  userNames,
+}: {
+  linkedRecordId: number;
+  relatedFieldKey: string;
+  relField: Field;
+  userNames: Map<number, string>;
+}): React.ReactNode {
+  const t = useT();
+  const { data: record } = useGetRecord(linkedRecordId, {
+    query: {
+      enabled: linkedRecordId > 0 && relatedFieldKey !== "",
+      queryKey: getGetRecordQueryKey(linkedRecordId),
+    },
+  });
+  if (!record) return <span className="text-slate-300 text-xs">—</span>;
+  const value = ((record.valuesJson ?? {}) as Record<string, unknown>)[relatedFieldKey];
+  return renderCellValue(relField, value, t, userNames);
+}
+
+/**
  * Auth-gated preview of a file fetched as a blob (image inline, pdf in an
  * iframe). `load` fetches a blob object URL (server object or proxied Drive
  * file); the loaded URL is revoked on cleanup.
@@ -936,6 +967,28 @@ export function EntityRecords({
     .sort((a: Field, b: Field) => a.sortOrder - b.sortOrder);
   // Fields the current user is allowed to see (not hidden by field-level perms).
   const visibleFormFields = fields.filter((f: Field) => fieldAccess(f, entityId, permPageId) !== "hidden");
+  // Map relationId → the relation FIELD key that carries the chosen linked record.
+  // A lookup field projects from the SAME relation, so during a CREATE flow (no
+  // base record yet) we resolve which linked record id was picked to preview its
+  // value before the record is saved.
+  const relationFieldKeyByRelationId = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const f of fields) {
+      const rid = f.relationConfigJson?.relationId;
+      if (f.fieldType === "relation" && rid != null && !m.has(rid)) m.set(rid, f.fieldKey);
+    }
+    return m;
+  }, [fields]);
+  // Resolve the linked record id feeding a lookup field from the current form
+  // state (inline add-row or create modal). Null when the relation isn't picked.
+  const lookupLinkedId = (f: Field, rowValues: FormState): number | null => {
+    const rid = f.relationConfigJson?.relationId;
+    if (rid == null) return null;
+    const relKey = relationFieldKeyByRelationId.get(rid);
+    if (!relKey) return null;
+    const v = rowValues[relKey];
+    return typeof v === "number" && v > 0 ? v : null;
+  };
   // Columns shown in the records table. A field is dropped from the table only
   // when EVERY assigned role hides it (most-permissive multi-role union). A role
   // with no explicit per-field entry inherits view/edit (i.e. not hidden), so its
@@ -2435,6 +2488,26 @@ export function EntityRecords({
                                 entityId={entityId}
                                 pageId={permPageId}
                               />
+                            ) : f.fieldType === "lookup" ? (
+                              (() => {
+                                const linkedId = lookupLinkedId(f, newRow);
+                                if (linkedId == null)
+                                  return <span className="text-slate-300 text-xs">—</span>;
+                                const meta = entityRelatedColMeta.get(f.fieldKey);
+                                const relField = {
+                                  ...f,
+                                  fieldType: (meta?.relatedFieldType ?? "text") as Field["fieldType"],
+                                  optionsJson: meta?.optionsJson ?? [],
+                                } as unknown as Field;
+                                return (
+                                  <LookupCreatePreview
+                                    linkedRecordId={linkedId}
+                                    relatedFieldKey={f.relationConfigJson?.relatedFieldKey ?? ""}
+                                    relField={relField}
+                                    userNames={userNames}
+                                  />
+                                );
+                              })()
                             ) : (
                               <span className="text-slate-300 text-xs">—</span>
                             )}
@@ -2961,6 +3034,25 @@ export function EntityRecords({
                       parentValue={modalRelInfo.parentValue}
                       relatedFilterFieldKey={modalRelInfo.relatedFilterFieldKey}
                     />
+                  ) : field.fieldType === "lookup" && lookupLinkedId(field, form) != null ? (
+                    (() => {
+                      const meta = entityRelatedColMeta.get(field.fieldKey);
+                      const relField = {
+                        ...field,
+                        fieldType: (meta?.relatedFieldType ?? "text") as Field["fieldType"],
+                        optionsJson: meta?.optionsJson ?? [],
+                      } as unknown as Field;
+                      return (
+                        <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm">
+                          <LookupCreatePreview
+                            linkedRecordId={lookupLinkedId(field, form) as number}
+                            relatedFieldKey={field.relationConfigJson?.relatedFieldKey ?? ""}
+                            relField={relField}
+                            userNames={userNames}
+                          />
+                        </div>
+                      );
+                    })()
                   ) : (
                     <FieldInput
                       field={field}
