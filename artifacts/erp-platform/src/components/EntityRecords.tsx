@@ -23,6 +23,8 @@ import {
   useListRecordAuditLogs,
   useListRoles,
   getListRolesQueryKey,
+  useUpdatePage,
+  getListPagesQueryKey,
   useListPageFields,
   useListPageRecordValues,
   getListPageFieldsQueryKey,
@@ -122,6 +124,7 @@ import { useAuth } from "@/lib/auth";
 import { useML, useT, useLang } from "@/lib/i18n";
 import { useGoogleDriveReady } from "@/lib/googleDrive";
 import { FieldConfigDialog } from "@/components/FieldConfigDialog";
+import { MultilingualInput } from "@/components/MultilingualInput";
 import { CreateUserDialog } from "@/components/CreateUserDialog";
 import { PageFieldConfigDialog } from "@/components/PageFieldConfigDialog";
 import { formatFormulaResult, evaluateFormula } from "@workspace/formula";
@@ -867,6 +870,41 @@ export function EntityRecords({
   const canDelete = canRecord(entityId, "delete", permPageId);
   // Field/column management (setup mode) is gated exactly like the fields builder.
   const canConfigureColumns = canAdmin("entities");
+  // Mirror pages let a "pages" admin rename a field's DISPLAYED label for this
+  // page only (display-only override, NOT a security boundary — real hiding stays
+  // via field "hidden" RBAC). Saving writes page.mirrorFieldLabelsJson via the
+  // page update endpoint, which itself requires the "pages" cap server-side.
+  const canEditMirrorLabels = isMirror && pageId != null && canAdmin("pages");
+  const updateMirrorLabelsMutation = useUpdatePage({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListPagesQueryKey() });
+        toast({ title: t("records.mirrorLabelSaved", "Заголовок обновлён") });
+      },
+      onError: () =>
+        toast({
+          title: t("records.mirrorLabelSaveError", "Не удалось сохранить заголовок"),
+          variant: "destructive",
+        }),
+    },
+  });
+  const saveMirrorLabel = (fieldKey: string, value: { ru?: string; en?: string; he?: string }) => {
+    if (pageId == null) return;
+    const ru = value.ru?.trim() || undefined;
+    const en = value.en?.trim() || undefined;
+    const he = value.he?.trim() || undefined;
+    const current: Record<string, { ru?: string; en?: string; he?: string }> = {
+      ...(fieldLabelOverrides ?? {}),
+    };
+    if (ru || en || he) current[fieldKey] = { ru, en, he };
+    else delete current[fieldKey];
+    const next = Object.keys(current).length > 0 ? current : null;
+    updateMirrorLabelsMutation.mutate({
+      id: pageId,
+      data: { mirrorFieldLabelsJson: next as Record<string, Field["nameJson"]> | null },
+    });
+    setMirrorLabelField(null);
+  };
 
   const { data: rawAllFields = [], isLoading: fieldsLoading } = useListEntityFields(entityId);
   // On a mirror page, apply display-only per-field label overrides at the source
@@ -1119,6 +1157,11 @@ export function EntityRecords({
   // Page-local field config (mirror pages only).
   const [pageColumnDialogOpen, setPageColumnDialogOpen] = useState(false);
   const [pageColumnField, setPageColumnField] = useState<PageField | null>(null);
+  // Mirror-page display-only label override editor: in setup mode, clicking a
+  // column header on a mirror page opens this dialog to rename just that field's
+  // displayed label for this page (writes page.mirrorFieldLabelsJson). Editing
+  // never touches the source entity field.
+  const [mirrorLabelField, setMirrorLabelField] = useState<Field | null>(null);
 
   // Leaving an entity resets the transient table-editing UI so it can't leak across entities.
   useEffect(() => {
@@ -2124,7 +2167,7 @@ export function EntityRecords({
           </div>
         </div>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
-          {canConfigureColumns && (
+          {(canConfigureColumns || canEditMirrorLabels) && (
             <Button
               type="button"
               variant={setupMode ? "default" : "outline"}
@@ -2416,6 +2459,16 @@ export function EntityRecords({
                               );
                             })()}
                           </div>
+                        ) : setupMode && isMirror && canEditMirrorLabels ? (
+                          <button
+                            type="button"
+                            onClick={() => setMirrorLabelField(f)}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-2 py-1 text-amber-700 hover:bg-amber-100 transition"
+                            title={t("records.mirrorLabelEdit", "Переименовать заголовок на этой странице")}
+                          >
+                            {ml(f.nameJson)}
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
                         ) : (
                           ml(f.nameJson)
                         )}
@@ -3232,7 +3285,86 @@ export function EntityRecords({
           onSaved={() => { invalidatePageFields(); }}
         />
       )}
+      {canEditMirrorLabels && (
+        <MirrorFieldLabelDialog
+          field={mirrorLabelField}
+          sourceName={
+            mirrorLabelField
+              ? ml(rawAllFields.find((rf: Field) => rf.fieldKey === mirrorLabelField.fieldKey)?.nameJson)
+              : ""
+          }
+          current={
+            (mirrorLabelField ? fieldLabelOverrides?.[mirrorLabelField.fieldKey] : undefined) ?? {}
+          }
+          saving={updateMirrorLabelsMutation.isPending}
+          onClose={() => setMirrorLabelField(null)}
+          onSave={(value) => {
+            if (mirrorLabelField) saveMirrorLabel(mirrorLabelField.fieldKey, value);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function MirrorFieldLabelDialog({
+  field,
+  sourceName,
+  current,
+  saving,
+  onClose,
+  onSave,
+}: {
+  field: Field | null;
+  sourceName: string;
+  current: { ru?: string; en?: string; he?: string };
+  saving: boolean;
+  onClose: () => void;
+  onSave: (value: { ru?: string; en?: string; he?: string }) => void;
+}) {
+  const t = useT();
+  const [value, setValue] = useState<{ ru?: string; en?: string; he?: string }>(current);
+  // Reload the inputs each time a different field's dialog opens.
+  useEffect(() => {
+    setValue(current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [field]);
+  return (
+    <Dialog open={!!field} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{t("records.mirrorLabelTitle", "Заголовок поля на этой странице")}</DialogTitle>
+          <DialogDescription>
+            {t(
+              "records.mirrorLabelDesc",
+              "Переименование действует только на этой зеркальной странице. Исходное поле сущности не меняется.",
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="py-1">
+          <MultilingualInput
+            label={t("records.mirrorLabelInput", "Новый заголовок (пусто = как в источнике)")}
+            value={value}
+            onChange={setValue}
+          />
+          <p className="mt-2 text-xs text-slate-400">
+            {t("records.mirrorLabelSource", "В источнике")}: {sourceName || "—"}
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>
+            {t("records.cancel", "Отмена")}
+          </Button>
+          <Button
+            onClick={() => onSave(value)}
+            disabled={saving}
+            className="bg-amber-500 hover:bg-amber-600"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : t("records.save", "Сохранить")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

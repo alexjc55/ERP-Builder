@@ -46,9 +46,22 @@ EXISTING RBAC on the source entity.
     treated as absent (source name shows).
   - `RecordEditModal` and the related-create picker fetch a DIFFERENT (linked)
     entity's fields, so mirror-entity overrides correctly do not apply there.
-  - Admin UI (`admin/pages.tsx`): label inputs appear per SELECTED mirror field
-    key; payload keeps only selected keys with a non-empty trimmed value, null
-    when none. Changing the mirror entity / leaving mirror type clears the labels.
+  - **Where it's edited: INLINE on the mirror page, NOT in the admin page modal.**
+    In `EntityRecords` setup mode on a mirror page, each column header becomes a
+    button that opens a small label dialog (ru/en/he, placeholder = raw source
+    name from `rawAllFields`); saving merges that one fieldKey into
+    `mirrorFieldLabelsJson` and persists via `useUpdatePage` (then invalidates the
+    pages query so `dynamic.tsx` re-supplies overrides). **Why moved here:** keeps
+    editing next to where you see the result and stops the admin page modal from
+    ballooning. `admin/pages.tsx` MirrorFieldPicker now only PICKS which fields
+    show — it no longer reads/writes labels, so an admin "page save" must NOT send
+    `mirrorFieldLabelsJson` (the PUT uses `if ("mirrorFieldLabelsJson" in body)`,
+    so omitting it preserves inline-set labels).
+  - **RBAC split:** label editing is gated by `canAdmin("pages")` (the page
+    update endpoint requires the `pages` cap), independent of the entity-column
+    setup gate `canConfigureColumns = canAdmin("entities")`. The setup-mode toggle
+    on a mirror page is shown when EITHER cap is present; the per-header label
+    button only when `canEditMirrorLabels` (isMirror && pageId && pages cap).
 - All records routes and RBAC (record param, effective row scope, field access)
   key off the source entityId, so the mirror inherits them unchanged.
 

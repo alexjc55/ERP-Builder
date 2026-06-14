@@ -79,9 +79,6 @@ export default function PagesPage() {
   const [isActive, setIsActive] = useState(true);
   const [mirrorEntityId, setMirrorEntityId] = useState<string>("none");
   const [mirrorFieldKeys, setMirrorFieldKeys] = useState<string[]>([]);
-  // Display-only per-field label overrides for the mirror page, keyed by the
-  // source-entity fieldKey. Cosmetic rename only — never a security boundary.
-  const [mirrorFieldLabels, setMirrorFieldLabels] = useState<Record<string, MLValue>>({});
   const [pageType, setPageType] = useState<"normal" | "mirror" | "dashboard">("normal");
 
   const { data: pages = [], isLoading } = useListPages();
@@ -146,7 +143,6 @@ export default function PagesPage() {
     setIsActive(true);
     setMirrorEntityId("none");
     setMirrorFieldKeys([]);
-    setMirrorFieldLabels({});
     setPageType("normal");
     setDialogOpen(true);
   };
@@ -164,7 +160,6 @@ export default function PagesPage() {
     setIsActive(page.isActive);
     setMirrorEntityId(page.mirrorEntityId ? String(page.mirrorEntityId) : "none");
     setMirrorFieldKeys(page.mirrorFieldKeysJson ?? []);
-    setMirrorFieldLabels((page.mirrorFieldLabelsJson ?? {}) as Record<string, MLValue>);
     setPageType(page.isDashboard ? "dashboard" : page.mirrorEntityId ? "mirror" : "normal");
     setDialogOpen(true);
   };
@@ -186,7 +181,6 @@ export default function PagesPage() {
     if (v !== "mirror") {
       setMirrorEntityId("none");
       setMirrorFieldKeys([]);
-      setMirrorFieldLabels({});
     }
   };
 
@@ -195,22 +189,6 @@ export default function PagesPage() {
       toast({ title: t("pages.pathRequiredError", "Укажите путь для страницы со связанной сущностью"), variant: "destructive" });
       return;
     }
-    // Keep only label overrides for currently-selected mirror fields that carry
-    // at least one non-empty localized value; trim each value. Null when none, so
-    // the column is cleared rather than storing empty noise.
-    const cleanedMirrorFieldLabels: Record<string, MultilingualText> | null = (() => {
-      if (pageType !== "mirror" || mirrorEntityId === "none") return null;
-      const out: Record<string, MLValue> = {};
-      for (const key of mirrorFieldKeys) {
-        const ov = mirrorFieldLabels[key];
-        if (!ov) continue;
-        const ru = ov.ru?.trim() || undefined;
-        const en = ov.en?.trim() || undefined;
-        const he = ov.he?.trim() || undefined;
-        if (ru || en || he) out[key] = { ru, en, he };
-      }
-      return Object.keys(out).length > 0 ? (out as Record<string, MultilingualText>) : null;
-    })();
     const payload = {
       nameJson: nameJson as MultilingualText,
       descriptionJson: descJson as MultilingualText,
@@ -220,7 +198,6 @@ export default function PagesPage() {
       mirrorEntityId: pageType === "mirror" && mirrorEntityId !== "none" ? Number(mirrorEntityId) : null,
       mirrorFieldKeysJson:
         pageType === "mirror" && mirrorEntityId !== "none" && mirrorFieldKeys.length > 0 ? mirrorFieldKeys : null,
-      mirrorFieldLabelsJson: cleanedMirrorFieldLabels,
       isDashboard: pageType === "dashboard",
       sortOrder,
       isActive,
@@ -450,7 +427,6 @@ export default function PagesPage() {
                     onValueChange={(v) => {
                       setMirrorEntityId(v);
                       setMirrorFieldKeys([]);
-                      setMirrorFieldLabels({});
                     }}
                   >
                     <SelectTrigger>
@@ -478,8 +454,6 @@ export default function PagesPage() {
                       entityId={Number(mirrorEntityId)}
                       selected={mirrorFieldKeys}
                       onChange={setMirrorFieldKeys}
-                      labels={mirrorFieldLabels}
-                      onLabelsChange={setMirrorFieldLabels}
                       ml={ml}
                       t={t}
                     />
@@ -534,16 +508,12 @@ function MirrorFieldPicker({
   entityId,
   selected,
   onChange,
-  labels,
-  onLabelsChange,
   ml,
   t,
 }: {
   entityId: number;
   selected: string[];
   onChange: (keys: string[]) => void;
-  labels: Record<string, MultilingualText>;
-  onLabelsChange: (next: Record<string, MultilingualText>) => void;
   ml: (v: unknown) => string;
   t: (key: string, fallback: string) => string;
 }) {
@@ -553,10 +523,6 @@ function MirrorFieldPicker({
   const toggle = (key: string, checked: boolean) => {
     if (checked) onChange([...selected, key]);
     else onChange(selected.filter((k) => k !== key));
-  };
-
-  const setLabel = (key: string, value: MultilingualText) => {
-    onLabelsChange({ ...labels, [key]: value });
   };
 
   if (isLoading) {
@@ -571,28 +537,20 @@ function MirrorFieldPicker({
       <p className="text-xs font-medium text-slate-600">
         {t("pages.mirrorFields", "Какие поля показать (пусто = все)")}
       </p>
+      <p className="text-xs text-slate-400">
+        {t("pages.mirrorLabelInlineHint", "Переименовать заголовки полей можно прямо на странице: «Режим настройки» → клик по заголовку.")}
+      </p>
       <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
         {active.map((f: Field) => {
           const isSelected = selected.includes(f.fieldKey);
           return (
-            <div key={f.id} className="rounded-md border border-slate-100 p-2">
-              <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                <Checkbox
-                  checked={isSelected}
-                  onCheckedChange={(c) => toggle(f.fieldKey, c === true)}
-                />
-                <span className="truncate">{ml(f.nameJson)}</span>
-              </label>
-              {isSelected && (
-                <div className="mt-2 pl-6">
-                  <MultilingualInput
-                    label={t("pages.mirrorLabelHint", "Заголовок на этой странице (пусто = как в источнике)")}
-                    value={labels[f.fieldKey] ?? {}}
-                    onChange={(v) => setLabel(f.fieldKey, v)}
-                  />
-                </div>
-              )}
-            </div>
+            <label key={f.id} className="flex items-center gap-2 rounded-md border border-slate-100 p-2 text-sm text-slate-700 cursor-pointer">
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={(c) => toggle(f.fieldKey, c === true)}
+              />
+              <span className="truncate">{ml(f.nameJson)}</span>
+            </label>
           );
         })}
       </div>
