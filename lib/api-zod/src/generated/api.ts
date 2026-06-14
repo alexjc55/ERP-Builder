@@ -1077,6 +1077,11 @@ export const ListPagesResponseItem = zod.object({
   "parentPageId": zod.number().nullish(),
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
+  "mirrorFieldLabelsJson": zod.record(zod.string(), zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+})).nullish().describe('Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.'),
   "isDashboard": zod.boolean().optional(),
   "widgetsCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
   "sortOrder": zod.number(),
@@ -1110,6 +1115,11 @@ export const CreatePageBody = zod.object({
   "parentPageId": zod.number().nullish(),
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
+  "mirrorFieldLabelsJson": zod.record(zod.string(), zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+})).nullish().describe('Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.'),
   "isDashboard": zod.boolean().optional(),
   "widgetsCollapsedDefault": zod.boolean().default(createPageBodyWidgetsCollapsedDefaultDefault).describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
   "sortOrder": zod.number().optional(),
@@ -1141,6 +1151,11 @@ export const GetPageResponse = zod.object({
   "parentPageId": zod.number().nullish(),
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
+  "mirrorFieldLabelsJson": zod.record(zod.string(), zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+})).nullish().describe('Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.'),
   "isDashboard": zod.boolean().optional(),
   "widgetsCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
   "sortOrder": zod.number(),
@@ -1174,6 +1189,11 @@ export const UpdatePageBody = zod.object({
   "parentPageId": zod.number().nullish(),
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
+  "mirrorFieldLabelsJson": zod.record(zod.string(), zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+})).nullish().describe('Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.'),
   "isDashboard": zod.boolean().optional(),
   "widgetsCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
   "sortOrder": zod.number().optional(),
@@ -1197,6 +1217,11 @@ export const UpdatePageResponse = zod.object({
   "parentPageId": zod.number().nullish(),
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
+  "mirrorFieldLabelsJson": zod.record(zod.string(), zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+})).nullish().describe('Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.'),
   "isDashboard": zod.boolean().optional(),
   "widgetsCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
   "sortOrder": zod.number(),

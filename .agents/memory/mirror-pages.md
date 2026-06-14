@@ -27,6 +27,28 @@ EXISTING RBAC on the source entity.
   done with field-permission "hidden" for the relevant role. `EntityRecords`
   applies the visibleFieldKeys projection first, then still applies field-level
   RBAC hiding on top — the two must not be conflated.
+- `mirrorFieldLabelsJson` (`Record<fieldKey, {ru,en,he}>`) is a **DISPLAY-ONLY**
+  per-mirror-page label rename — e.g. show «Цена» instead of the source field's
+  «Цена для производителя» — without touching the source field. It is NOT a
+  security boundary: it does not hide anything (real hiding stays via field
+  "hidden" RBAC), and the renamed text replaces the displayed label only.
+  - **Applied once at the field source, not per call-site.** `EntityRecords`
+    rewrites each field's `nameJson` to the override (when non-empty) right after
+    fetching `allFields`, so every consumer (table header, filter bar, sort/view
+    config, record form, dependent pickers) reflects it automatically. **Why:**
+    there are ~12 label render sites; resolving at the source is the only way to
+    stay complete and not drift. **Safe because** overrides arrive ONLY on mirror
+    pages, where entity-column setup is suppressed (`!isMirror`), so the
+    `FieldConfigDialog` never receives (and can never persist) an overridden name.
+  - Override REPLACES the whole `nameJson` (not per-language merge): once any
+    language is set, `ml()` falls back ru→en→he WITHIN the override so the source
+    name never leaks in an unset language. An override with all-empty values is
+    treated as absent (source name shows).
+  - `RecordEditModal` and the related-create picker fetch a DIFFERENT (linked)
+    entity's fields, so mirror-entity overrides correctly do not apply there.
+  - Admin UI (`admin/pages.tsx`): label inputs appear per SELECTED mirror field
+    key; payload keeps only selected keys with a non-empty trimmed value, null
+    when none. Changing the mirror entity / leaving mirror type clears the labels.
 - All records routes and RBAC (record param, effective row scope, field access)
   key off the source entityId, so the mirror inherits them unchanged.
 

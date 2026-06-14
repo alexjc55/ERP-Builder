@@ -655,6 +655,12 @@ export interface RoleUpdate {
   permissionsJson?: RolePermissions;
 }
 
+/**
+ * Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.
+ * @nullable
+ */
+export type PageMirrorFieldLabelsJson = {[key: string]: MultilingualText} | null;
+
 export interface Page {
   id: number;
   nameJson: MultilingualText;
@@ -668,6 +674,11 @@ export interface Page {
   mirrorEntityId?: number | null;
   /** @nullable */
   mirrorFieldKeysJson?: string[] | null;
+  /**
+     * Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.
+     * @nullable
+     */
+  mirrorFieldLabelsJson?: PageMirrorFieldLabelsJson;
   isDashboard?: boolean;
   /** Default collapsed state of the analytics widgets block above a page's records table */
   widgetsCollapsedDefault?: boolean;
@@ -677,6 +688,12 @@ export interface Page {
   createdAt: string;
   updatedAt: string;
 }
+
+/**
+ * Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.
+ * @nullable
+ */
+export type PageInputMirrorFieldLabelsJson = {[key: string]: MultilingualText} | null;
 
 export interface PageInput {
   nameJson: MultilingualText;
@@ -690,12 +707,23 @@ export interface PageInput {
   mirrorEntityId?: number | null;
   /** @nullable */
   mirrorFieldKeysJson?: string[] | null;
+  /**
+     * Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.
+     * @nullable
+     */
+  mirrorFieldLabelsJson?: PageInputMirrorFieldLabelsJson;
   isDashboard?: boolean;
   /** Default collapsed state of the analytics widgets block above a page's records table */
   widgetsCollapsedDefault?: boolean;
   sortOrder?: number;
   isActive?: boolean;
 }
+
+/**
+ * Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.
+ * @nullable
+ */
+export type PageUpdateMirrorFieldLabelsJson = {[key: string]: MultilingualText} | null;
 
 export interface PageUpdate {
   nameJson?: MultilingualText;
@@ -709,6 +737,11 @@ export interface PageUpdate {
   mirrorEntityId?: number | null;
   /** @nullable */
   mirrorFieldKeysJson?: string[] | null;
+  /**
+     * Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.
+     * @nullable
+     */
+  mirrorFieldLabelsJson?: PageUpdateMirrorFieldLabelsJson;
   isDashboard?: boolean;
   /** Default collapsed state of the analytics widgets block above a page's records table */
   widgetsCollapsedDefault?: boolean;

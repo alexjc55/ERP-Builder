@@ -19,6 +19,12 @@ export const pagesTable = pgTable("pages", {
   // projection only — real security (row scope, field hiding) is enforced by RBAC
   // on the mirrored entity.
   mirrorFieldKeysJson: jsonb("mirror_field_keys_json").$type<string[]>(),
+  // Optional per-mirror-page DISPLAY label override for mirrored source-entity
+  // fields, keyed by fieldKey → multilingual {ru,en,he}. Lets a mirror page show
+  // a different column/field label (e.g. "Цена для производителя" → "Цена")
+  // WITHOUT touching the source field. Display-only — never a security boundary;
+  // field identity and hiding stay keyed off fieldKey + RBAC on the source entity.
+  mirrorFieldLabelsJson: jsonb("mirror_field_labels_json").$type<Record<string, { ru?: string; en?: string; he?: string }>>(),
   // Dashboard page: when true, this page renders admin-defined dashboard widgets
   // instead of entity records. Mutually exclusive with a bound entity and with
   // mirrorEntityId (enforced in the API and the pages editor). The renderer reads

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MultilingualText } from './multilingualText';
+import type { PageMirrorFieldLabelsJson } from './pageMirrorFieldLabelsJson';
 
 export interface Page {
   id: number;
@@ -20,6 +21,11 @@ export interface Page {
   mirrorEntityId?: number | null;
   /** @nullable */
   mirrorFieldKeysJson?: string[] | null;
+  /**
+     * Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.
+     * @nullable
+     */
+  mirrorFieldLabelsJson?: PageMirrorFieldLabelsJson;
   isDashboard?: boolean;
   /** Default collapsed state of the analytics widgets block above a page's records table */
   widgetsCollapsedDefault?: boolean;

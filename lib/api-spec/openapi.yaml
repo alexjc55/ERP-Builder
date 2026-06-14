@@ -3685,6 +3685,11 @@ components:
           type: ["array", "null"]
           items:
             type: string
+        mirrorFieldLabelsJson:
+          type: ["object", "null"]
+          additionalProperties:
+            $ref: "#/components/schemas/MultilingualText"
+          description: Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.
         isDashboard:
           type: boolean
         widgetsCollapsedDefault:
@@ -3725,6 +3730,11 @@ components:
           type: ["array", "null"]
           items:
             type: string
+        mirrorFieldLabelsJson:
+          type: ["object", "null"]
+          additionalProperties:
+            $ref: "#/components/schemas/MultilingualText"
+          description: Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.
         isDashboard:
           type: boolean
         widgetsCollapsedDefault:
@@ -3756,6 +3766,11 @@ components:
           type: ["array", "null"]
           items:
             type: string
+        mirrorFieldLabelsJson:
+          type: ["object", "null"]
+          additionalProperties:
+            $ref: "#/components/schemas/MultilingualText"
+          description: Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.
         isDashboard:
           type: boolean
         widgetsCollapsedDefault:

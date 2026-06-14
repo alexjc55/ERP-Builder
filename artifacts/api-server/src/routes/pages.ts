@@ -146,6 +146,7 @@ router.put("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): P
   if ("parentPageId" in body) updateData.parentPageId = body.parentPageId ?? null;
   if ("mirrorEntityId" in body) updateData.mirrorEntityId = body.mirrorEntityId ?? null;
   if ("mirrorFieldKeysJson" in body) updateData.mirrorFieldKeysJson = body.mirrorFieldKeysJson ?? null;
+  if ("mirrorFieldLabelsJson" in body) updateData.mirrorFieldLabelsJson = body.mirrorFieldLabelsJson ?? null;
   if ("isDashboard" in body) updateData.isDashboard = body.isDashboard ?? false;
   if ("widgetsCollapsedDefault" in body) updateData.widgetsCollapsedDefault = body.widgetsCollapsedDefault ?? false;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;

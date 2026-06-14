@@ -774,11 +774,34 @@ function DateFilterPopover({
   );
 }
 
+/**
+ * Apply per-mirror-page display-only label overrides to a field list. When an
+ * override for a field's `fieldKey` carries any non-empty localized value, the
+ * field's `nameJson` is REPLACED by the override object (so `ml()` falls back
+ * ru→en→he WITHIN the override and never leaks the source name in any language).
+ * Fields with no/empty override are returned untouched. No-op when `overrides`
+ * is undefined (regular non-mirror pages).
+ */
+function applyFieldLabelOverrides(
+  fields: Field[],
+  overrides: Record<string, Field["nameJson"]> | undefined,
+): Field[] {
+  if (!overrides) return fields;
+  return fields.map((f) => {
+    const ov = overrides[f.fieldKey];
+    if (ov && (ov.ru?.trim() || ov.en?.trim() || ov.he?.trim())) {
+      return { ...f, nameJson: ov };
+    }
+    return f;
+  });
+}
+
 export function EntityRecords({
   entityId,
   visibleFieldKeys,
   pageId,
   isMirror = false,
+  fieldLabelOverrides,
 }: {
   entityId: number;
   /**
@@ -802,6 +825,17 @@ export function EntityRecords({
    * so a regular entity page can still own page fields and related columns.
    */
   isMirror?: boolean;
+  /**
+   * Per-mirror-page display-only label overrides, keyed by source-entity
+   * `fieldKey`. When an override yields a non-empty localized string it REPLACES
+   * the field's displayed name everywhere on this view (table header, filter bar,
+   * sort/view config, record form). This is cosmetic only — it does NOT hide the
+   * field or change any security boundary (real hiding stays via field-permission
+   * "hidden" RBAC on the source entity). Only supplied on mirror pages, where
+   * entity-column setup is suppressed, so the raw source field is never edited
+   * through the (replaced) label.
+   */
+  fieldLabelOverrides?: Record<string, Field["nameJson"]>;
 }) {
   const ml = useML();
   const t = useT();
@@ -834,7 +868,16 @@ export function EntityRecords({
   // Field/column management (setup mode) is gated exactly like the fields builder.
   const canConfigureColumns = canAdmin("entities");
 
-  const { data: allFields = [], isLoading: fieldsLoading } = useListEntityFields(entityId);
+  const { data: rawAllFields = [], isLoading: fieldsLoading } = useListEntityFields(entityId);
+  // On a mirror page, apply display-only per-field label overrides at the source
+  // so every downstream consumer (table header, filter bar, sort/view config,
+  // record form, dependent pickers) shows the renamed label automatically. No-op
+  // on regular pages (no overrides supplied). The raw source field is never
+  // mutated server-side; this only rewrites the displayed `nameJson`.
+  const allFields = useMemo(
+    () => applyFieldLabelOverrides(rawAllFields, fieldLabelOverrides),
+    [rawAllFields, fieldLabelOverrides],
+  );
   const { data: statuses = [] } = useListEntityStatuses(entityId);
   const { data: transitions = [] } = useListEntityTransitions(entityId);
   const { data: views = [] } = useListEntityViews(entityId);
