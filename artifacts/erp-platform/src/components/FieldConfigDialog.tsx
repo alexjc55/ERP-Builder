@@ -144,6 +144,9 @@ export function FieldConfigDialog({
   const { data: driveFolders = [] } = useListGoogleDriveFolders();
   const [relationId, setRelationId] = useState<number | null>(null);
   const [relatedFieldKey, setRelatedFieldKey] = useState("");
+  // lookup-only: when on, clicking a lookup cell opens the source record's
+  // full editor (gated server-side by the viewer's update perm on that entity).
+  const [writeThrough, setWriteThrough] = useState(false);
   const { data: relationOptionsData } = useGetEntityRelationOptions(entityId, {
     query: { enabled: open, queryKey: getGetEntityRelationOptionsQueryKey(entityId) },
   });
@@ -227,6 +230,7 @@ export function FieldConfigDialog({
       setLockAfterCreate(field.lockAfterCreate ?? false);
       setRelationId(field.relationConfigJson?.relationId ?? null);
       setRelatedFieldKey(field.relationConfigJson?.relatedFieldKey ?? "");
+      setWriteThrough(field.relationConfigJson?.writeThrough ?? false);
     } else {
       setFieldKey("");
       setNameJson({});
@@ -257,6 +261,7 @@ export function FieldConfigDialog({
       setLockAfterCreate(false);
       setRelationId(null);
       setRelatedFieldKey("");
+      setWriteThrough(false);
     }
   }, [open, field, nextSortOrder]);
 
@@ -390,9 +395,11 @@ export function FieldConfigDialog({
             ? { dependsOnFieldKey, relatedFilterFieldKey }
             : {},
       relationConfigJson:
-        fieldType === "relation" || fieldType === "lookup"
-          ? { relationId, relatedFieldKey: relatedFieldKey || null }
-          : {},
+        fieldType === "lookup"
+          ? { relationId, relatedFieldKey: relatedFieldKey || null, writeThrough }
+          : fieldType === "relation"
+            ? { relationId, relatedFieldKey: relatedFieldKey || null }
+            : {},
       isKey:
         fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup"
           ? isKey
@@ -518,6 +525,22 @@ export function FieldConfigDialog({
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                )}
+                {fieldType === "lookup" && relationId != null && relatedFieldKey && (
+                  <div className="space-y-1.5 border-t border-slate-100 pt-3">
+                    <div className="flex items-center gap-2">
+                      <Switch checked={writeThrough} onCheckedChange={setWriteThrough} id="fcd-lookup-write-through" />
+                      <Label htmlFor="fcd-lookup-write-through">
+                        {t("fields.lookupWriteThrough", "Разрешить редактирование исходной записи")}
+                      </Label>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      {t(
+                        "fields.lookupWriteThroughHint",
+                        "При клике по ячейке откроется окно исходной записи для редактирования (если у пользователя есть права на изменение исходной сущности).",
+                      )}
+                    </p>
                   </div>
                 )}
                 {fieldType === "relation" && relationId != null && relatedFieldKey && (

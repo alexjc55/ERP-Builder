@@ -527,6 +527,7 @@ function FieldFilterPopover({
   ml,
   t,
   userNames,
+  effectiveType,
   triggerClassName,
 }: {
   field: Field;
@@ -536,6 +537,11 @@ function FieldFilterPopover({
   ml: (v: unknown) => string;
   t: (key: string, def: string) => string;
   userNames: Map<number, string>;
+  // For relation/lookup fields the filter values are the LINKED record's
+  // projected field, so labels must resolve by that field's render type
+  // (e.g. a projected `user` field stores ids → show names), not the
+  // relation/lookup type itself.
+  effectiveType?: Field["fieldType"];
   triggerClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -543,9 +549,10 @@ function FieldFilterPopover({
   const [loading, setLoading] = useState(false);
   const [optSearch, setOptSearch] = useState("");
 
+  const ft = effectiveType ?? field.fieldType;
   const labelFor = (v: string): string => {
-    if (field.fieldType === "user") return userNames.get(Number(v)) ?? `#${v}`;
-    if (field.fieldType === "boolean") return v === "true" ? t("common.yes", "Да") : t("common.no", "Нет");
+    if (ft === "user") return userNames.get(Number(v)) ?? `#${v}`;
+    if (ft === "boolean") return v === "true" ? t("common.yes", "Да") : t("common.no", "Нет");
     return v;
   };
 
@@ -2156,6 +2163,11 @@ export function EntityRecords({
                 ml={ml}
                 t={t}
                 userNames={userNames}
+                effectiveType={
+                  f.fieldType === "relation" || f.fieldType === "lookup"
+                    ? ((entityRelatedColMeta.get(f.fieldKey)?.relatedFieldType ?? "text") as Field["fieldType"])
+                    : f.fieldType
+                }
                 triggerClassName="w-full justify-between sm:w-auto sm:justify-center"
               />
             ),
