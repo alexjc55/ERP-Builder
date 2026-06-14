@@ -3933,7 +3933,8 @@ function RelationCreatePicker({
  * lookup cells: clicking the cell opens the LINKED record's editor in the related
  * entity. Loads that entity's fields/statuses, mirrors the per-field read-only
  * boundary cosmetically (the server PUT remains the real boundary), and saves via
- * the standard records update path. Relations are managed via RecordLinkManager.
+ * the standard records update path. Relation fields render an in-place link picker
+ * (like the main editor); the generic RecordLinkManager handles ad-hoc links.
  */
 function RecordEditModal({
   entityId,
@@ -3961,6 +3962,26 @@ function RecordEditModal({
   const [form, setForm] = useState<FormState>({});
   const [statusId, setStatusId] = useState<string>(NO_STATUS);
   const [submitting, setSubmitting] = useState(false);
+
+  // User options (for `user` field selects) and a name map (for rendering relation
+  // cell labels that point at a user field). Without userOptions a `user` field's
+  // dropdown is empty and cannot be selected.
+  const { data: userOptions = [] } = useListUserOptions();
+  const userNames = useMemo(
+    () => new Map<number, string>(userOptions.map((u: UserOption) => [u.id, u.name])),
+    [userOptions],
+  );
+  // Per-record relation/lookup values for THIS record, so relation fields render a
+  // live link picker (with the current selection) instead of a dead text box.
+  const fetchEntityRelatedValues = useGetEntityRelatedValues().mutateAsync;
+  const [relCols, setRelCols] = useState<PageRelatedColumn[]>([]);
+  const [relByField, setRelByField] = useState<Map<string, PageRelatedValue>>(new Map());
+  const [relTick, setRelTick] = useState(0);
+  const relColMetaMap = useMemo(() => {
+    const m = new Map<string, PageRelatedColumn>();
+    for (const c of relCols) m.set(c.fieldKey, c);
+    return m;
+  }, [relCols]);
 
   const visibleFields = fields.filter((f: Field) => fieldAccess(f, entityId) !== "hidden");
 
@@ -3990,6 +4011,70 @@ function RecordEditModal({
     setStatusId(record.statusId != null ? String(record.statusId) : NO_STATUS);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, record?.id, fields.length]);
+
+  // Clear stale relation values the instant the edited record changes, so the
+  // previous record's links never flash on the new one before the fetch resolves.
+  // (Not keyed on relTick, so a link-change refresh doesn't blank the picker.)
+  useEffect(() => {
+    setRelCols([]);
+    setRelByField(new Map());
+  }, [recordId]);
+
+  // Load this record's relation/lookup values so each relation field can render a
+  // live picker showing the current linked record. relTick re-fetches after a link
+  // change so the display stays in sync without closing the modal.
+  useEffect(() => {
+    if (!open || recordId <= 0) return;
+    let cancelled = false;
+    fetchEntityRelatedValues({ entityId, data: { recordIds: [recordId] } })
+      .then((res) => {
+        if (cancelled) return;
+        setRelCols(res.columns);
+        const m = new Map<string, PageRelatedValue>();
+        for (const v of res.values) m.set(v.fieldKey, v);
+        setRelByField(m);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRelCols([]);
+        setRelByField(new Map());
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, recordId, entityId, relTick]);
+
+  // Merge each relation field's linked record id into the form values so dependent
+  // (cascading) fields whose parent is a relation field can resolve their parent.
+  const formWithRelationParents = useMemo(() => {
+    const merged: FormState = { ...form };
+    for (const [fieldKey, v] of relByField.entries()) {
+      if (v.linkedRecordId != null) merged[fieldKey] = v.linkedRecordId;
+    }
+    return merged;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, relByField]);
+
+  // Dependency info for a relation field (mirrors the main editor): the parent's
+  // current value narrows the candidate list. A relation parent contributes its
+  // linked record id; a scalar parent contributes its raw value.
+  const relDepInfo = (field: Field) => {
+    const dependsOn = field.dependencyConfigJson?.dependsOnFieldKey?.trim();
+    const filterKey = field.dependencyConfigJson?.relatedFilterFieldKey?.trim();
+    if (!dependsOn || !filterKey)
+      return { dependent: false, parentValue: null as string | null, relatedFilterFieldKey: null as string | null };
+    const parentField = fields.find((f: Field) => f.fieldKey === dependsOn);
+    let parentValue = "";
+    if (parentField?.fieldType === "relation") {
+      const pid = relByField.get(dependsOn)?.linkedRecordId;
+      parentValue = pid != null ? String(pid) : "";
+    } else {
+      const v = form[dependsOn];
+      parentValue = v == null || v === "" ? "" : String(v);
+    }
+    return { dependent: true, parentValue, relatedFilterFieldKey: filterKey };
+  };
 
   const submit = async () => {
     setSubmitting(true);
@@ -4031,14 +4116,30 @@ function RecordEditModal({
           <div className="space-y-4 py-2">
             {visibleFields.map((field: Field) => {
               const access = fieldAccess(field, entityId);
-              // Relation fields are managed below via RecordLinkManager (the generic
-              // links UI), not as a valuesJson field — don't render a dead text box.
-              if (field.fieldType === "relation") return null;
+              const relColMeta = relColMetaMap.get(field.fieldKey);
+              const relVal = relByField.get(field.fieldKey);
               // lockAfterCreate field is read-only once set (mirrors server boundary).
               const readOnly =
                 access === "view" ||
                 field.fieldType === "lookup" ||
                 !!(field.lockAfterCreate && valueIsSet(form[field.fieldKey]));
+              // Display node for a relation field's current linked record (its
+              // configured display field value), or an em dash when nothing is linked.
+              const relDisplay =
+                relVal?.linkedRecordId == null ? (
+                  <span className="text-slate-300">—</span>
+                ) : (
+                  renderCellValue(
+                    {
+                      ...field,
+                      fieldType: (relColMeta?.relatedFieldType ?? "text") as Field["fieldType"],
+                      optionsJson: relColMeta?.optionsJson ?? [],
+                    } as unknown as Field,
+                    relVal?.value,
+                    t,
+                    userNames,
+                  )
+                );
               return (
                 <div key={field.id} className="space-y-1.5">
                   <Label>
@@ -4050,19 +4151,45 @@ function RecordEditModal({
                       </span>
                     )}
                   </Label>
-                  <FieldInput
-                    field={field}
-                    value={form[field.fieldKey]}
-                    onChange={(v) =>
-                      setForm((prev) =>
-                        clearDependentDescendants({ ...prev, [field.fieldKey]: v }, field.fieldKey, fields),
-                      )
-                    }
-                    disabled={readOnly}
-                    allFields={fields}
-                    rowValues={form}
-                    entityId={entityId}
-                  />
+                  {field.fieldType === "relation" ? (
+                    access === "edit" ? (
+                      (() => {
+                        const dep = relDepInfo(field);
+                        return (
+                          <EntityRelationLinkPicker
+                            entityId={entityId}
+                            fieldKey={field.fieldKey}
+                            recordId={recordId}
+                            currentLinkedId={relVal?.linkedRecordId ?? null}
+                            display={relDisplay}
+                            onChanged={() => setRelTick((x) => x + 1)}
+                            dependent={dep.dependent}
+                            parentValue={dep.parentValue}
+                            relatedFilterFieldKey={dep.relatedFilterFieldKey}
+                          />
+                        );
+                      })()
+                    ) : (
+                      <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm">
+                        {relDisplay}
+                      </div>
+                    )
+                  ) : (
+                    <FieldInput
+                      field={field}
+                      value={form[field.fieldKey]}
+                      onChange={(v) =>
+                        setForm((prev) =>
+                          clearDependentDescendants({ ...prev, [field.fieldKey]: v }, field.fieldKey, fields),
+                        )
+                      }
+                      disabled={readOnly}
+                      userOptions={userOptions}
+                      allFields={fields}
+                      rowValues={formWithRelationParents}
+                      entityId={entityId}
+                    />
+                  )}
                   {ml(field.descriptionJson) && (
                     <p className="text-xs text-slate-400">{ml(field.descriptionJson)}</p>
                   )}
