@@ -3857,7 +3857,7 @@ function RecordFormBody({
 }) {
   const t = useT();
   const ml = useML();
-  const { fieldAccess } = useAuth();
+  const { fieldAccess, canRecord } = useAuth();
   const userNames = useMemo(
     () => new Map<number, string>(userOptions.map((u: UserOption) => [u.id, u.name])),
     [userOptions],
@@ -3870,6 +3870,9 @@ function RecordFormBody({
   const [relCols, setRelCols] = useState<PageRelatedColumn[]>([]);
   const [relByField, setRelByField] = useState<Map<string, PageRelatedValue>>(new Map());
   const [relTick, setRelTick] = useState(0);
+  // Open the linked record's full editor for a write-through lookup (mirrors the
+  // inline grid's "Открыть связанную запись" affordance).
+  const [writeThroughEdit, setWriteThroughEdit] = useState<{ entityId: number; recordId: number } | null>(null);
   const relColMetaMap = useMemo(() => {
     const m = new Map<string, PageRelatedColumn>();
     for (const c of relCols) m.set(c.fieldKey, c);
@@ -3976,8 +3979,56 @@ function RecordFormBody({
   };
 
   const roBox = (children: React.ReactNode) => (
-    <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm">{children}</div>
+    <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm break-all">{children}</div>
   );
+
+  // Edit-mode display for a lookup field. When the lookup is write-through and the
+  // viewer can update the linked record, the value doubles as an "open linked
+  // record" action (mirrors the inline grid). A file/url projection renders as a
+  // clickable <a> (opens the file), so it gets a dedicated pencil button; every
+  // other type makes the whole box clickable.
+  const lookupEditNode = (field: Field): React.ReactNode => {
+    const meta = relColMetaMap.get(field.fieldKey);
+    const relVal = relByField.get(field.fieldKey);
+    const canOpen =
+      !!meta?.writeThrough &&
+      meta?.relatedEntityId != null &&
+      relVal?.linkedRecordId != null &&
+      canRecord(meta.relatedEntityId, "update");
+    if (!canOpen) return roBox(relDisplayFor(field));
+    const open = () =>
+      setWriteThroughEdit({
+        entityId: meta!.relatedEntityId as number,
+        recordId: relVal!.linkedRecordId as number,
+      });
+    const relatedType = meta?.relatedFieldType;
+    if (relatedType === "file" || relatedType === "url") {
+      return (
+        <div className="flex items-center justify-between gap-2 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm">
+          <span className="min-w-0 break-all">{relDisplayFor(field)}</span>
+          <button
+            type="button"
+            onClick={open}
+            className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-blue-50/60 hover:text-slate-600"
+            title={t("records.openLinkedRecord", "Открыть связанную запись")}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={open}
+        className="flex w-full items-center justify-between gap-2 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-left text-sm hover:bg-blue-50/60"
+        title={t("records.openLinkedRecord", "Открыть связанную запись")}
+      >
+        <span className="min-w-0 break-all">{relDisplayFor(field)}</span>
+        <Pencil className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+      </button>
+    );
+  };
 
   return (
     <>
@@ -3993,7 +4044,7 @@ function RecordFormBody({
           (mode === "edit" && scalarFieldLocked(field, form[field.fieldKey]));
         const dep = depInfo(field);
         return (
-          <div key={field.id} className="space-y-1.5">
+          <div key={field.id} className="min-w-0 space-y-1.5">
             <Label>
               {ml(field.nameJson)}
               {field.isRequired && <span className="text-red-500 ml-0.5">*</span>}
@@ -4039,7 +4090,7 @@ function RecordFormBody({
               )
             ) : field.fieldType === "lookup" ? (
               mode === "edit" ? (
-                roBox(relDisplayFor(field))
+                lookupEditNode(field)
               ) : lookupLinkedId(field) != null ? (
                 (() => {
                   const meta = relColMetaMap.get(field.fieldKey);
@@ -4083,6 +4134,17 @@ function RecordFormBody({
           </div>
         );
       })}
+      {writeThroughEdit && (
+        <RecordEditModal
+          entityId={writeThroughEdit.entityId}
+          recordId={writeThroughEdit.recordId}
+          open={true}
+          onOpenChange={(o) => {
+            if (!o) setWriteThroughEdit(null);
+          }}
+          onSaved={handleRelationChanged}
+        />
+      )}
     </>
   );
 }
