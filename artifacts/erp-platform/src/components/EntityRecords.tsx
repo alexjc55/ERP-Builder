@@ -253,12 +253,12 @@ function renderCellValue(field: Field, value: unknown, t: (key: string, def: str
 function LookupCreatePreview({
   linkedRecordId,
   relatedFieldKey,
-  relField,
+  fallbackField,
   userNames,
 }: {
   linkedRecordId: number;
   relatedFieldKey: string;
-  relField: Field;
+  fallbackField: Field;
   userNames: Map<number, string>;
 }): React.ReactNode {
   const t = useT();
@@ -270,6 +270,17 @@ function LookupCreatePreview({
   });
   if (!record) return <span className="text-slate-300 text-xs">—</span>;
   const value = ((record.valuesJson ?? {}) as Record<string, unknown>)[relatedFieldKey];
+  // `fallbackField` carries the correct related field type from
+  // entityRelatedColMeta, but that map is empty until the page has ≥1 saved row,
+  // so on a first-record create it falls back to "text". The only field type
+  // that stores an OBJECT value is `file` — under the text fallback it would
+  // render as "[object Object]". Detect a file value by shape and render it
+  // properly; every other type is a primitive and renders fine as text. We do
+  // NOT fetch the related entity's field schema here (that endpoint isn't view-
+  // scoped); the value itself already passed the GET /records/:id boundary.
+  const relField = isFileValue(value)
+    ? ({ ...fallbackField, fieldType: "file" } as Field)
+    : fallbackField;
   return renderCellValue(relField, value, t, userNames);
 }
 
@@ -2494,7 +2505,7 @@ export function EntityRecords({
                                 if (linkedId == null)
                                   return <span className="text-slate-300 text-xs">—</span>;
                                 const meta = entityRelatedColMeta.get(f.fieldKey);
-                                const relField = {
+                                const fallbackField = {
                                   ...f,
                                   fieldType: (meta?.relatedFieldType ?? "text") as Field["fieldType"],
                                   optionsJson: meta?.optionsJson ?? [],
@@ -2503,7 +2514,7 @@ export function EntityRecords({
                                   <LookupCreatePreview
                                     linkedRecordId={linkedId}
                                     relatedFieldKey={f.relationConfigJson?.relatedFieldKey ?? ""}
-                                    relField={relField}
+                                    fallbackField={fallbackField}
                                     userNames={userNames}
                                   />
                                 );
@@ -3037,7 +3048,7 @@ export function EntityRecords({
                   ) : field.fieldType === "lookup" && lookupLinkedId(field, form) != null ? (
                     (() => {
                       const meta = entityRelatedColMeta.get(field.fieldKey);
-                      const relField = {
+                      const fallbackField = {
                         ...field,
                         fieldType: (meta?.relatedFieldType ?? "text") as Field["fieldType"],
                         optionsJson: meta?.optionsJson ?? [],
@@ -3047,7 +3058,7 @@ export function EntityRecords({
                           <LookupCreatePreview
                             linkedRecordId={lookupLinkedId(field, form) as number}
                             relatedFieldKey={field.relationConfigJson?.relatedFieldKey ?? ""}
-                            relField={relField}
+                            fallbackField={fallbackField}
                             userNames={userNames}
                           />
                         </div>
