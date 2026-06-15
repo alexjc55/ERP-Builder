@@ -6,6 +6,7 @@ import {
   useListRoles,
   useListEntityFields,
   useListGoogleDriveFolders,
+  useListUserOptions,
   useGetEntityRelationOptions,
   getGetEntityRelationOptionsQueryKey,
   type Field,
@@ -142,6 +143,7 @@ export function FieldConfigDialog({
   const { data: roles = [] } = useListRoles();
   const { data: existingFields = [] } = useListEntityFields(entityId);
   const { data: driveFolders = [] } = useListGoogleDriveFolders();
+  const { data: userOptions = [] } = useListUserOptions();
   const [relationId, setRelationId] = useState<number | null>(null);
   const [relatedFieldKey, setRelatedFieldKey] = useState("");
   // lookup-only: when on, clicking a lookup cell opens the source record's
@@ -822,6 +824,7 @@ export function FieldConfigDialog({
               <FieldFormatRulesEditor
                 fieldType={fieldType}
                 options={optionsText.split("\n").map((o) => o.trim()).filter(Boolean)}
+                users={userOptions}
                 rules={formatRules}
                 onChange={setFormatRules}
               />

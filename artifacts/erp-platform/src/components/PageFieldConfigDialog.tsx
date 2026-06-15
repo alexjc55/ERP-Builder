@@ -7,6 +7,7 @@ import {
   useGetPageRelationOptions,
   getGetPageRelationOptionsQueryKey,
   useListRoles,
+  useListUserOptions,
   type PageField,
   type FieldType,
   type MultilingualText,
@@ -124,6 +125,7 @@ export function PageFieldConfigDialog({
   });
   const relationOptions = relationOptionsData?.options ?? [];
   const { data: roles = [] } = useListRoles();
+  const { data: userOptions = [] } = useListUserOptions();
 
   const [fieldKey, setFieldKey] = useState("");
   const [nameJson, setNameJson] = useState<MLValue>({});
@@ -532,6 +534,7 @@ export function PageFieldConfigDialog({
               <FieldFormatRulesEditor
                 fieldType={formatFieldType}
                 options={optionsText.split("\n").map((o) => o.trim()).filter(Boolean)}
+                users={userOptions}
                 rules={formatRules}
                 onChange={setFormatRules}
               />

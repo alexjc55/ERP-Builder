@@ -39,6 +39,11 @@ function operatorsForType(fieldType: FieldType): { value: FormatOperator; label:
   if (fieldType === "select") {
     return OPERATORS.filter((o) => ["equals", "notEquals", "empty", "notEmpty"].includes(o.value));
   }
+  if (fieldType === "user") {
+    // A user value is the stored user id; only identity/presence comparisons make
+    // sense (substring/ordering on an id is meaningless and misleading).
+    return OPERATORS.filter((o) => ["equals", "notEquals", "empty", "notEmpty"].includes(o.value));
+  }
   return OPERATORS.filter((o) =>
     ["equals", "notEquals", "contains", "notContains", "empty", "notEmpty"].includes(o.value),
   );
@@ -75,11 +80,13 @@ function normalizeHexColor(raw: string): string | null {
 export function FieldFormatRulesEditor({
   fieldType,
   options,
+  users = [],
   rules,
   onChange,
 }: {
   fieldType: FieldType;
   options: string[];
+  users?: { id: number; name: string }[];
   rules: FieldFormatRule[];
   onChange: (rules: FieldFormatRule[]) => void;
 }) {
@@ -223,6 +230,23 @@ export function FieldFormatRulesEditor({
           <SelectContent>
             {options.map((o) => (
               <SelectItem key={o} value={o}>{o}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      );
+    }
+    if (fieldType === "user") {
+      // The stored cell value is the user id, so the rule value must also be the
+      // id (stringified). Picking from the user list keeps them aligned — a
+      // free-typed name would never equal the id and silently never match.
+      return (
+        <Select value={rule.value || ""} onValueChange={(v) => update(idx, { value: v })}>
+          <SelectTrigger className="h-8">
+            <SelectValue placeholder={t("records.selectUser", "Выберите пользователя")} />
+          </SelectTrigger>
+          <SelectContent>
+            {users.map((u) => (
+              <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
