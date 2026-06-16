@@ -259,9 +259,12 @@ export default function EntityFieldsPage() {
       isActive,
       isFilterable,
       showInTable,
-      isKey: fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" ? isKey : false,
+      isKey:
+        fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup"
+          ? isKey
+          : false,
       lockAfterCreate:
-        fieldType !== "file" && fieldType !== "function"
+        fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup"
           ? lockAfterCreate
           : false,
       fileConfigJson:
@@ -607,13 +610,13 @@ export default function EntityFieldsPage() {
                 <Switch checked={showInTable} onCheckedChange={setShowInTable} id="field-show-in-table" />
                 <Label htmlFor="field-show-in-table">{t("fields.showInTable", "Показывать в таблице")}</Label>
               </div>
-              {fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && (
+              {fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup" && (
                 <div className="flex items-center gap-2">
                   <Switch checked={isKey} onCheckedChange={setIsKey} id="field-is-key" />
                   <Label htmlFor="field-is-key">{t("fields.isKey", "Ключевое поле (уникальное)")}</Label>
                 </div>
               )}
-              {fieldType !== "file" && fieldType !== "function" && (
+              {fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup" && (
                 <div className="flex items-center gap-2">
                   <Switch checked={lockAfterCreate} onCheckedChange={setLockAfterCreate} id="field-lock-after-create" />
                   <Label htmlFor="field-lock-after-create">{t("fields.lockAfterCreate", "Запрет изменения после создания")}</Label>

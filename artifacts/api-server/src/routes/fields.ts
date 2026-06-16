@@ -215,17 +215,19 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
     res.status(400).json({ error: "Ключевое поле недоступно для полей типа «файл», «функция», «связанное поле» и «поле подстановки»" });
     return;
   }
-  // lockAfterCreate is enforced on the stored value: scalar fields via the JSONB
-  // value map (checkImmutableFields), relation fields via the record_link write
-  // path (the related-link route). file/function have no stored value and lookup
-  // is a derived read-only mirror, so immutability is meaningless for those three.
+  // lockAfterCreate is enforced on the stored scalar value via the JSONB value map
+  // (checkImmutableFields). file (object) and function (computed) have no stored
+  // scalar, lookup is a derived read-only mirror, and relation is a derived
+  // record_link rather than a JSONB scalar — so immutability is meaningless for all
+  // four and stays disallowed.
   if (
     parsed.data.lockAfterCreate &&
     (parsed.data.fieldType === "file" ||
       parsed.data.fieldType === "function" ||
+      parsed.data.fieldType === "relation" ||
       parsed.data.fieldType === "lookup")
   ) {
-    res.status(400).json({ error: "Запрет изменения недоступен для полей типа «файл», «функция» и «поле подстановки»" });
+    res.status(400).json({ error: "Запрет изменения недоступен для полей типа «файл», «функция», «связанное поле» и «поле подстановки»" });
     return;
   }
 
@@ -390,11 +392,10 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
     }
   }
 
-  // isKey enforces uniqueness over a stored scalar value — meaningless for
-  // file/function (no stored value), lookup (derived) and relation (value is a
-  // derived record_link, not a JSONB scalar), so it stays disallowed for those.
-  // lockAfterCreate, by contrast, IS supported for relation (enforced on the
-  // record_link write path); only file/function/lookup have no value to lock.
+  // Both isKey and lockAfterCreate operate on a stored JSONB scalar value, which
+  // file/function (no stored value), lookup (derived mirror) and relation (value
+  // is a derived record_link, not a JSONB scalar) do not have — so both stay
+  // disallowed for all four types.
   const nextIsKey = body.isKey ?? current.isKey;
   const nextLock = body.lockAfterCreate ?? current.lockAfterCreate;
   if (
@@ -406,9 +407,9 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   }
   if (
     nextLock &&
-    (nextType === "file" || nextType === "function" || nextType === "lookup")
+    (nextType === "file" || nextType === "function" || nextType === "relation" || nextType === "lookup")
   ) {
-    res.status(400).json({ error: "Запрет изменения недоступен для полей типа «файл», «функция» и «поле подстановки»" });
+    res.status(400).json({ error: "Запрет изменения недоступен для полей типа «файл», «функция», «связанное поле» и «поле подстановки»" });
     return;
   }
 
