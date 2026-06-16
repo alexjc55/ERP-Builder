@@ -17,6 +17,7 @@ interface MultilingualInputProps {
   onChange: (value: MultilingualValue) => void;
   multiline?: boolean;
   required?: boolean;
+  onActiveLangChange?: (lang: string) => void;
 }
 
 const LANGS = [
@@ -31,6 +32,7 @@ export function MultilingualInput({
   onChange,
   multiline = false,
   required = false,
+  onActiveLangChange,
 }: MultilingualInputProps) {
   // Lead with and open on the platform default language so the admin-configured
   // default visibly drives multilingual content entry (primary language first).
@@ -48,6 +50,10 @@ export function MultilingualInput({
   useEffect(() => {
     setActive(defaultLang);
   }, [defaultLang]);
+  useEffect(() => {
+    onActiveLangChange?.(active);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 
   const handleChange = (lang: string, text: string) => {
     onChange({ ...value, [lang]: text });

@@ -32,6 +32,16 @@ EXISTING RBAC on the source entity.
   «Цена для производителя» — without touching the source field. It is NOT a
   security boundary: it does not hide anything (real hiding stays via field
   "hidden" RBAC), and the renamed text replaces the displayed label only.
+  - **The rename dialog's "source name" hint must follow the active language
+    tab, not the UI locale.** The hint that shows the source field's original
+    name must reflect whichever RU/EN/HE tab the admin has open in
+    `MultilingualInput`, and disappear entirely when that language has no source
+    name. **Why:** it previously pre-resolved via `ml(nameJson)` (UI locale) and
+    never changed with the tab. **How to apply:** pass the full `nameJson` object
+    (not a pre-resolved string) and lift the input's active tab up via
+    `MultilingualInput`'s optional `onActiveLangChange` callback — that component
+    keeps its active-tab state internal, so any per-language sibling UI (hints,
+    counters) must subscribe through this callback rather than guessing the lang.
   - **Applied once at the field source, not per call-site.** `EntityRecords`
     rewrites each field's `nameJson` to the override (when non-empty) right after
     fetching `allFields`, so every consumer (table header, filter bar, sort/view

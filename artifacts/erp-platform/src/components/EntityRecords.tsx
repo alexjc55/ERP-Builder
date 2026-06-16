@@ -3288,10 +3288,10 @@ export function EntityRecords({
       {canEditMirrorLabels && (
         <MirrorFieldLabelDialog
           field={mirrorLabelField}
-          sourceName={
-            mirrorLabelField
-              ? ml(rawAllFields.find((rf: Field) => rf.fieldKey === mirrorLabelField.fieldKey)?.nameJson)
-              : ""
+          sourceNameJson={
+            (mirrorLabelField
+              ? rawAllFields.find((rf: Field) => rf.fieldKey === mirrorLabelField.fieldKey)?.nameJson
+              : undefined) ?? {}
           }
           current={
             (mirrorLabelField ? fieldLabelOverrides?.[mirrorLabelField.fieldKey] : undefined) ?? {}
@@ -3309,14 +3309,14 @@ export function EntityRecords({
 
 function MirrorFieldLabelDialog({
   field,
-  sourceName,
+  sourceNameJson,
   current,
   saving,
   onClose,
   onSave,
 }: {
   field: Field | null;
-  sourceName: string;
+  sourceNameJson: { ru?: string; en?: string; he?: string };
   current: { ru?: string; en?: string; he?: string };
   saving: boolean;
   onClose: () => void;
@@ -3324,11 +3324,13 @@ function MirrorFieldLabelDialog({
 }) {
   const t = useT();
   const [value, setValue] = useState<{ ru?: string; en?: string; he?: string }>(current);
+  const [activeLang, setActiveLang] = useState<"ru" | "en" | "he" | null>(null);
   // Reload the inputs each time a different field's dialog opens.
   useEffect(() => {
     setValue(current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [field]);
+  const sourceForLang = activeLang ? sourceNameJson?.[activeLang]?.trim() : undefined;
   return (
     <Dialog open={!!field} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
@@ -3346,10 +3348,13 @@ function MirrorFieldLabelDialog({
             label={t("records.mirrorLabelInput", "Новый заголовок (пусто = как в источнике)")}
             value={value}
             onChange={setValue}
+            onActiveLangChange={(lang) => setActiveLang(lang as "ru" | "en" | "he")}
           />
-          <p className="mt-2 text-xs text-slate-400">
-            {t("records.mirrorLabelSource", "В источнике")}: {sourceName || "—"}
-          </p>
+          {sourceForLang && (
+            <p className="mt-2 text-xs text-slate-400">
+              {t("records.mirrorLabelSource", "В источнике")}: {sourceForLang}
+            </p>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>
