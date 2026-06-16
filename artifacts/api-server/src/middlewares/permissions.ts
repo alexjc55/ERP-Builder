@@ -288,8 +288,17 @@ export function pageIdFromBody(req: Request): number | undefined {
 /**
  * Guard a record route that carries the entity id in `:entityId`.
  * Honors a mirror-page override when the body carries `pageId`. Use after requireAuth.
+ *
+ * `opts.entityOnly` forces an ENTITY-LEVEL gate that ignores any body `pageId`.
+ * It MUST be set on routes whose handler resolves row scope and field visibility
+ * at the entity level (the sync `effectiveScope`, no pageId) — e.g. the
+ * entity-direct list. Otherwise a mirror-only role could pass the page-aware CRUD
+ * gate with a spoofed body `pageId` and then be served entity-level scope/fields
+ * (a confused-deputy widening). Mirror reads go through the page-aware POST
+ * endpoints instead. Keep gate page-awareness in lockstep with scope/field
+ * page-awareness on every route.
  */
-export function requireRecordParam(action: keyof RecordPermission) {
+export function requireRecordParam(action: keyof RecordPermission, opts?: { entityOnly?: boolean }) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const entityId = Number(req.params.entityId);
     if (!Number.isInteger(entityId)) {
@@ -301,7 +310,8 @@ export function requireRecordParam(action: keyof RecordPermission) {
       next();
       return;
     }
-    const rp = await effectiveRecordPerm(req, perms, entityId, pageIdFromBody(req));
+    const pageId = opts?.entityOnly ? undefined : pageIdFromBody(req);
+    const rp = await effectiveRecordPerm(req, perms, entityId, pageId);
     if (rp?.[action] === true) {
       next();
       return;

@@ -129,8 +129,13 @@ export async function isRecordOwned(
   if (scopeFieldKeys.length === 0) return false;
   const { native, relation } = partitionOwnerFields(scopeFieldKeys, fields);
   const values = (record.valuesJson as Record<string, unknown>) ?? {};
+  // Compare as text to match ownScopeWhere's SQL `values_json ->> key = <userId>`
+  // exactly (the `->>` operator yields the textual representation). A numeric
+  // compare here would diverge for odd stored forms like "01"/"1.0", letting the
+  // single-record re-check accept a row the list filter would hide.
   for (const k of native) {
-    if (Number(values[k]) === userId) return true;
+    const v = values[k];
+    if (v != null && String(v) === String(userId)) return true;
   }
   if (relation.length === 0) return false;
   const meta = await buildRelationMeta(entityId, relation);

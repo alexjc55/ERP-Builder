@@ -51,6 +51,10 @@ sites (records list/query/filter-values, page record-values/related-values/relat
 the single-record re-checks (records update/delete/GET-by-id, page record update, related-link
 base+linked checks, and file-access checks in storage/audit-log/google-drive). A native-only check
 left at any one site re-opens the bypass. Never reintroduce an inline `values[key] === userId`.
+The native comparison in `isRecordOwned` must be **text-based** (`String(values[key]) === String(userId)`)
+to match `ownScopeWhere`'s SQL `values_json ->> key = <userId>` (the `->>` operator yields text). A
+numeric (`Number(...)`) compare diverges for odd stored forms (`"01"`, `"1.0"`) so the single-record
+re-check would accept a row the list filter hides — the two MUST agree exactly.
 
 ## Adding a column to entity_fields: update PUT explicitly
 The fields update route builds its update object key-by-key, so a new column (e.g. `permissionsJson`)

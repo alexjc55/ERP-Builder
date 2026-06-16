@@ -232,11 +232,21 @@ function renderCellValue(field: Field, value: unknown, t: (key: string, def: str
     return <span className="text-slate-700" style={colorStyle}>{name ?? `#${value}`}</span>;
   }
   if (field.fieldType === "url") {
-    return <UrlPreviewCell url={String(value)} />;
+    // URLs are inherently LTR; force LTR + left align so in an RTL (Hebrew) UI the
+    // link reads from its start and truncates at the end, not the other way round.
+    return (
+      <span dir="ltr" className="block max-w-full truncate text-left">
+        <UrlPreviewCell url={String(value)} />
+      </span>
+    );
   }
   if (field.fieldType === "file") {
     if (!isFileValue(value)) return <span className="text-slate-300" style={colorStyle}>—</span>;
-    return <FileCell value={value} />;
+    return (
+      <span dir="ltr" className="block max-w-full truncate text-left">
+        <FileCell value={value} />
+      </span>
+    );
   }
   return <span className="text-slate-700" style={colorStyle}>{String(value)}</span>;
 }

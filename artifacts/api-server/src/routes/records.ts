@@ -578,7 +578,7 @@ async function statusArchiveInfo(
   return s ?? null;
 }
 
-router.get("/entities/:entityId/records", requireAuth, requireRecordParam("view"), async (req, res): Promise<void> => {
+router.get("/entities/:entityId/records", requireAuth, requireRecordParam("view", { entityOnly: true }), async (req, res): Promise<void> => {
   const params = ListEntityRecordsParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

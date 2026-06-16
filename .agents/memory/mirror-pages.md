@@ -95,6 +95,15 @@ it (missing scope ⇒ "all"), fully REPLACING the entity scope — it does not m
   as a query param on path-param GETs (that breaks Orval — see orval-param-collision).
   Consequently GET single/list of records stay entity-level by design; the page-aware
   read path is the POST `.../records/query` endpoint.
+- **The CRUD GATE's page-awareness must track the handler's, not just the scope.**
+  `requireRecordParam` reads `pageIdFromBody`, and Express parses a JSON body even on
+  GET — so the entity-direct `GET .../records` (entity-level scope + entity-level
+  field-hidden) MUST gate with `requireRecordParam("view", { entityOnly: true })`.
+  Without it a mirror-only role (no entity view, only `mirror:<pageId>` view) passes
+  the page-aware gate with a spoofed body `pageId`, then gets served entity-level
+  scope/fields — a confused-deputy widening. **Rule:** gate page-awareness, row-scope
+  page-awareness, AND field-hidden page-awareness must all agree per route (all
+  entity-level, or all carry the same pageId).
 - **Row scope resolver = `effectiveScopeFor(req,perms,entityId,pageId?)`** (async,
   parallels `effectiveRecordPerm`'s page gating). EVERY base-entity page-context
   row-scope site must call it with the pageId — page-fields `record-values`,
