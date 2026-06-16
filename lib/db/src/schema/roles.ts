@@ -28,6 +28,16 @@ export interface RecordPermission {
   hiddenStatusIds?: number[];
   /** Status ids whose ROWS are excluded from list/query results for this role (hard boundary — also removes them from filters). */
   hiddenRowStatusIds?: number[];
+  /**
+   * Cosmetic per-role hide of the whole "Status" column in the records table.
+   * SPARSE — only stored when true. superAdmin bypasses (always sees columns).
+   */
+  hideStatusColumn?: boolean;
+  /**
+   * Cosmetic per-role hide of the whole "Actions" column (edit/history/archive/
+   * delete) in the records table. SPARSE. superAdmin bypasses.
+   */
+  hideActionsColumn?: boolean;
 }
 
 /** Admin-builder capability areas. */

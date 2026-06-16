@@ -45,6 +45,11 @@ function mergeRecordPerms(rps: RecordPermission[]): RecordPermission {
   const scopeKeys = new Set<string>();
   let hiddenStatus: number[] | null = null;
   let hiddenRow: number[] | null = null;
+  // Cosmetic column hides are restrictions: a column stays hidden only if EVERY
+  // view-granting role hides it (AND), so stacking a role that shows the column
+  // re-reveals it. null = no view-granting role seen yet.
+  let hideStatusCol: boolean | null = null;
+  let hideActionsCol: boolean | null = null;
   for (const rp of rps) {
     out.view ||= rp.view === true;
     out.create ||= rp.create === true;
@@ -65,11 +70,17 @@ function mergeRecordPerms(rps: RecordPermission[]): RecordPermission {
     hiddenStatus = hiddenStatus === null ? hs : intersectIds(hiddenStatus, hs);
     const hr = intIds(rp.hiddenRowStatusIds);
     hiddenRow = hiddenRow === null ? hr : intersectIds(hiddenRow, hr);
+    const hsc = rp.hideStatusColumn === true;
+    hideStatusCol = hideStatusCol === null ? hsc : hideStatusCol && hsc;
+    const hac = rp.hideActionsColumn === true;
+    hideActionsCol = hideActionsCol === null ? hac : hideActionsCol && hac;
   }
   out.scope = anyAllScope ? "all" : "own";
   if (out.scope === "own" && scopeKeys.size > 0) out.scopeFieldKeys = [...scopeKeys];
   if (hiddenStatus && hiddenStatus.length > 0) out.hiddenStatusIds = hiddenStatus;
   if (hiddenRow && hiddenRow.length > 0) out.hiddenRowStatusIds = hiddenRow;
+  if (hideStatusCol) out.hideStatusColumn = true;
+  if (hideActionsCol) out.hideActionsColumn = true;
   return out;
 }
 

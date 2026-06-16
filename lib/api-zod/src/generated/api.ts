@@ -159,7 +159,9 @@ export const LoginResponse = zod.object({
   "scope": zod.enum(['all', 'own']).optional(),
   "scopeFieldKeys": zod.array(zod.string()).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
-  "hiddenRowStatusIds": zod.array(zod.number()).optional()
+  "hiddenRowStatusIds": zod.array(zod.number()).optional(),
+  "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
+  "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
 }))
 }).optional(),
   "isGuest": zod.boolean().optional(),
@@ -221,7 +223,9 @@ export const GetMeResponse = zod.object({
   "scope": zod.enum(['all', 'own']).optional(),
   "scopeFieldKeys": zod.array(zod.string()).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
-  "hiddenRowStatusIds": zod.array(zod.number()).optional()
+  "hiddenRowStatusIds": zod.array(zod.number()).optional(),
+  "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
+  "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
 }))
 }).optional(),
   "isGuest": zod.boolean().optional(),
@@ -281,7 +285,9 @@ export const UpdateMeResponse = zod.object({
   "scope": zod.enum(['all', 'own']).optional(),
   "scopeFieldKeys": zod.array(zod.string()).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
-  "hiddenRowStatusIds": zod.array(zod.number()).optional()
+  "hiddenRowStatusIds": zod.array(zod.number()).optional(),
+  "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
+  "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
 }))
 }).optional(),
   "isGuest": zod.boolean().optional(),
@@ -339,7 +345,9 @@ export const ImpersonateResponse = zod.object({
   "scope": zod.enum(['all', 'own']).optional(),
   "scopeFieldKeys": zod.array(zod.string()).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
-  "hiddenRowStatusIds": zod.array(zod.number()).optional()
+  "hiddenRowStatusIds": zod.array(zod.number()).optional(),
+  "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
+  "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
 }))
 }).optional(),
   "isGuest": zod.boolean().optional(),
@@ -394,7 +402,9 @@ export const StopImpersonationResponse = zod.object({
   "scope": zod.enum(['all', 'own']).optional(),
   "scopeFieldKeys": zod.array(zod.string()).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
-  "hiddenRowStatusIds": zod.array(zod.number()).optional()
+  "hiddenRowStatusIds": zod.array(zod.number()).optional(),
+  "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
+  "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
 }))
 }).optional(),
   "isGuest": zod.boolean().optional(),
@@ -453,7 +463,9 @@ export const RedeemGuestLinkResponse = zod.object({
   "scope": zod.enum(['all', 'own']).optional(),
   "scopeFieldKeys": zod.array(zod.string()).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
-  "hiddenRowStatusIds": zod.array(zod.number()).optional()
+  "hiddenRowStatusIds": zod.array(zod.number()).optional(),
+  "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
+  "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
 }))
 }).optional(),
   "isGuest": zod.boolean().optional(),
@@ -854,7 +866,9 @@ export const ListRolesResponseItem = zod.object({
   "scope": zod.enum(['all', 'own']).optional(),
   "scopeFieldKeys": zod.array(zod.string()).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
-  "hiddenRowStatusIds": zod.array(zod.number()).optional()
+  "hiddenRowStatusIds": zod.array(zod.number()).optional(),
+  "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
+  "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
 }))
 }),
   "userCount": zod.number().optional(),
@@ -900,7 +914,9 @@ export const CreateRoleBody = zod.object({
   "scope": zod.enum(['all', 'own']).optional(),
   "scopeFieldKeys": zod.array(zod.string()).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
-  "hiddenRowStatusIds": zod.array(zod.number()).optional()
+  "hiddenRowStatusIds": zod.array(zod.number()).optional(),
+  "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
+  "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
 }))
 }).optional()
 })
@@ -947,7 +963,9 @@ export const GetRoleResponse = zod.object({
   "scope": zod.enum(['all', 'own']).optional(),
   "scopeFieldKeys": zod.array(zod.string()).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
-  "hiddenRowStatusIds": zod.array(zod.number()).optional()
+  "hiddenRowStatusIds": zod.array(zod.number()).optional(),
+  "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
+  "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
 }))
 }),
   "userCount": zod.number().optional(),
@@ -996,7 +1014,9 @@ export const UpdateRoleBody = zod.object({
   "scope": zod.enum(['all', 'own']).optional(),
   "scopeFieldKeys": zod.array(zod.string()).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
-  "hiddenRowStatusIds": zod.array(zod.number()).optional()
+  "hiddenRowStatusIds": zod.array(zod.number()).optional(),
+  "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
+  "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
 }))
 }).optional()
 })
@@ -1035,7 +1055,9 @@ export const UpdateRoleResponse = zod.object({
   "scope": zod.enum(['all', 'own']).optional(),
   "scopeFieldKeys": zod.array(zod.string()).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
-  "hiddenRowStatusIds": zod.array(zod.number()).optional()
+  "hiddenRowStatusIds": zod.array(zod.number()).optional(),
+  "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
+  "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
 }))
 }),
   "userCount": zod.number().optional(),

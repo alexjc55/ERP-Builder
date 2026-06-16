@@ -273,6 +273,23 @@ export default function RolesPage() {
       return { ...prev, records: { ...prev.records, [key]: next } };
     });
 
+  // Cosmetic column-hide flags (hideStatusColumn | hideActionsColumn) on an
+  // arbitrary record-perm key. Stored sparsely (only the ON exception is kept)
+  // and never touches view/CRUD — hiding a column is independent of access.
+  const setRecordFlag = (
+    key: string,
+    flag: "hideStatusColumn" | "hideActionsColumn",
+    value: boolean,
+  ) =>
+    setPerms((prev) => {
+      const current: RecordPermission =
+        prev.records[key] ?? { view: false, create: false, update: false, delete: false };
+      const next: RecordPermission = { ...current };
+      if (value) next[flag] = true;
+      else delete next[flag];
+      return { ...prev, records: { ...prev.records, [key]: next } };
+    });
+
   // Turn a mirror override on (seeding from the entity's current rights AND scope
   // as a starting point — scope is copied so enabling an override never silently
   // widens row visibility) or off (removing the key so the page inherits the
@@ -889,6 +906,10 @@ export default function RolesPage() {
                           scopeFieldKeys={rp.scopeFieldKeys ?? []}
                           onScopeChange={(s) => setScope(entity.id, s)}
                           onToggleFieldKey={(k, c) => toggleScopeFieldKey(entity.id, k, c)}
+                          hideStatusColumn={rp.hideStatusColumn === true}
+                          hideActionsColumn={rp.hideActionsColumn === true}
+                          onToggleHideStatusColumn={(c) => setRecordFlag(String(entity.id), "hideStatusColumn", c)}
+                          onToggleHideActionsColumn={(c) => setRecordFlag(String(entity.id), "hideActionsColumn", c)}
                         />
                       );
                     })}
@@ -904,6 +925,10 @@ export default function RolesPage() {
                           scopeFieldKeys={rp.scopeFieldKeys ?? []}
                           onScopeChange={(s) => setScopeForKey(key, s)}
                           onToggleFieldKey={(k, c) => toggleScopeFieldKeyForKey(key, k, c)}
+                          hideStatusColumn={rp.hideStatusColumn === true}
+                          hideActionsColumn={rp.hideActionsColumn === true}
+                          onToggleHideStatusColumn={(c) => setRecordFlag(key, "hideStatusColumn", c)}
+                          onToggleHideActionsColumn={(c) => setRecordFlag(key, "hideActionsColumn", c)}
                         />
                       );
                     })}
@@ -1070,6 +1095,10 @@ function EntityScopeRow({
   scopeFieldKeys,
   onScopeChange,
   onToggleFieldKey,
+  hideStatusColumn,
+  hideActionsColumn,
+  onToggleHideStatusColumn,
+  onToggleHideActionsColumn,
 }: {
   entity: Entity;
   mirrorLabel?: string;
@@ -1077,6 +1106,10 @@ function EntityScopeRow({
   scopeFieldKeys: string[];
   onScopeChange: (scope: RecordScope) => void;
   onToggleFieldKey: (key: string, checked: boolean) => void;
+  hideStatusColumn: boolean;
+  hideActionsColumn: boolean;
+  onToggleHideStatusColumn: (checked: boolean) => void;
+  onToggleHideActionsColumn: (checked: boolean) => void;
 }) {
   const ml = useML();
   const t = useT();
@@ -1156,6 +1189,22 @@ function EntityScopeRow({
             <SelectItem value="own">{t("roles.scopeOwn", "Только свои")}</SelectItem>
           </SelectContent>
         </Select>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
+        <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+          <Checkbox
+            checked={hideStatusColumn}
+            onCheckedChange={(v) => onToggleHideStatusColumn(v === true)}
+          />
+          <span className="truncate">{t("roles.hideStatusColumn", "Скрыть колонку «Статус»")}</span>
+        </label>
+        <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+          <Checkbox
+            checked={hideActionsColumn}
+            onCheckedChange={(v) => onToggleHideActionsColumn(v === true)}
+          />
+          <span className="truncate">{t("roles.hideActionsColumn", "Скрыть колонку «Действия»")}</span>
+        </label>
       </div>
       {scope === "own" && (
         <div className="pt-1">

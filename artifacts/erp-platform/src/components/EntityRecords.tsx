@@ -1120,6 +1120,16 @@ export function EntityRecords({
   const statusEntityPerm = isSuperAdmin ? undefined : user?.permissions?.records?.[String(entityId)];
   const hiddenStatusIds = toIdSet(statusEntityPerm?.hiddenStatusIds);
   const hiddenRowStatusIds = toIdSet(statusEntityPerm?.hiddenRowStatusIds);
+  // Cosmetic per-role column hide. Read from the CURRENT context key (mirror
+  // override when on a mirror page, else the entity) so it matches canRecord's
+  // resolution. superAdmin bypasses (sees every column).
+  const ctxRecordPerm = isSuperAdmin
+    ? undefined
+    : user?.permissions?.records?.[isMirror ? `mirror:${pageId}` : String(entityId)];
+  const hideStatusColumn = ctxRecordPerm?.hideStatusColumn === true;
+  const hideActionsColumn = ctxRecordPerm?.hideActionsColumn === true;
+  const showStatusColumn = statuses.length > 0 && !hideStatusColumn;
+  const showActionsColumn = !hideActionsColumn;
   // Drop hidden-picker statuses but always keep `keepId` (a record's current
   // status) so its Select still renders the value it's actually set to.
   const dropHidden = (list: Status[], keepId?: number | null): Status[] =>
@@ -2377,8 +2387,8 @@ export function EntityRecords({
                           </th>
                         );
                       })}
-                      {statuses.length > 0 && <th className="px-4 py-1.5" style={colWidthStyle("__status__")} />}
-                      <th className="px-4 py-1.5" />
+                      {showStatusColumn && <th className="px-4 py-1.5" style={colWidthStyle("__status__")} />}
+                      {showActionsColumn && <th className="px-4 py-1.5" />}
                     </tr>
                   )}
                   <tr className="border-b border-slate-100 bg-slate-50">
@@ -2531,7 +2541,7 @@ export function EntityRecords({
                         <ResizeHandle colKey={`pf:${pf.id}`} />
                       </th>
                     ))}
-                    {statuses.length > 0 && (
+                    {showStatusColumn && (
                       <th
                         className="relative align-top text-center px-4 py-3 font-medium text-slate-600"
                         style={colWidthStyle("__status__")}
@@ -2540,7 +2550,7 @@ export function EntityRecords({
                         <ResizeHandle colKey="__status__" />
                       </th>
                     )}
-                    {setupMode ? (
+                    {showActionsColumn && (setupMode ? (
                       <th className="align-top text-center px-4 py-3 font-medium text-slate-600">
                         <div className="inline-flex items-center gap-2">
                           {!isMirror && (
@@ -2570,14 +2580,14 @@ export function EntityRecords({
                       </th>
                     ) : (
                       <th className="align-top text-center px-4 py-3 font-medium text-slate-600">{t("records.actions", "Действия")}</th>
-                    )}
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {records.length === 0 && (
                     <tr>
                       <td
-                        colSpan={displayFields.length + extraColCount + (statuses.length > 0 ? 1 : 0) + 1}
+                        colSpan={displayFields.length + extraColCount + (showStatusColumn ? 1 : 0) + (showActionsColumn ? 1 : 0)}
                         className="text-center py-12 text-slate-400"
                       >
                         {total === 0 && (search.trim() || (selectedConfig.filters?.length ?? 0) > 0)
@@ -2670,7 +2680,7 @@ export function EntityRecords({
                           </td>
                         );
                       })}
-                      {statuses.length > 0 && (
+                      {showStatusColumn && (
                         <td className="px-2 py-1.5 align-top" style={colWidthStyle("__status__")}>
                           <Select value={newRowStatus} onValueChange={setNewRowStatus}>
                             <SelectTrigger className="h-8 w-44 text-sm"><SelectValue /></SelectTrigger>
@@ -2683,6 +2693,7 @@ export function EntityRecords({
                           </Select>
                         </td>
                       )}
+                      {showActionsColumn && (
                       <td className="px-2 py-1.5 align-top">
                         <div className="flex items-center justify-end gap-1">
                           <Button
@@ -2705,11 +2716,12 @@ export function EntityRecords({
                           </Button>
                         </div>
                       </td>
+                      )}
                     </tr>
                   )}
                   {canCreate && !setupMode && !addingRow && (
                     <tr className="border-b border-slate-100">
-                      <td colSpan={displayFields.length + extraColCount + (statuses.length > 0 ? 1 : 0) + 1} className="px-2 py-2">
+                      <td colSpan={displayFields.length + extraColCount + (showStatusColumn ? 1 : 0) + (showActionsColumn ? 1 : 0)} className="px-2 py-2">
                         <button
                           type="button"
                           onClick={startAddRow}
@@ -3022,7 +3034,7 @@ export function EntityRecords({
                             </td>
                           );
                         })}
-                        {statuses.length > 0 && (
+                        {showStatusColumn && (
                           <td className="px-4 py-3" style={colWidthStyle("__status__")}>
                             {editingCell?.recordId === record.id && editingCell?.fieldKey === "__status__" ? (
                               <Select
@@ -3067,6 +3079,7 @@ export function EntityRecords({
                             )}
                           </td>
                         )}
+                        {showActionsColumn && (
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
                             {canUpdate && (
@@ -3116,6 +3129,7 @@ export function EntityRecords({
                             {!canUpdate && !canDelete && <span className="text-slate-300 text-xs">—</span>}
                           </div>
                         </td>
+                        )}
                       </tr>
                     );
                   })}

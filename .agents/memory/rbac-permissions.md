@@ -50,3 +50,15 @@ Effective permissions = the most-permissive union across ALL of a user's roles, 
 - Server: `effectiveStatusVisibility(perms, entityId)` (superAdmin → empty) is the source of truth. `hiddenRowStatusWhere(ids)` builds the exclusion SQL; apply it to ANY new endpoint that returns rows of an entity — including ones that take explicit record ids (the base-record set must be filtered too, not just joined/related rows).
 - Client (cosmetic mirror only, EntityRecords.tsx): drop hidden-picker statuses from pickers but always keep a record's CURRENT status so its Select renders.
 - **Create-default gotcha:** server assigns the default status only when `statusId` is OMITTED (`undefined`); `null` is stored as explicit no-status. When the role's default is hidden the form falls back to NO_STATUS → the create payload must OMIT statusId (see `buildCreateData`) so the server assigns the hidden default, else records are created status-less.
+
+## Cosmetic column-hide flags (Status / Actions columns)
+
+`records[key]` may carry two SPARSE booleans `hideStatusColumn` / `hideActionsColumn` (only stored when true). They hide the WHOLE "Статус" / "Действия" table columns for a role. `key` is the same context key as scope/hidden-status: the entity id OR `mirror:<pageId>` — the roles editor writes to whichever the scope row represents and EntityRecords reads from `isMirror ? mirror:<pageId> : <entityId>`, so keying must stay in lockstep.
+
+**Why:** the user wanted to suppress noise (status column, and the history/archive buttons in the actions column) for a restricted role — explicitly "purely cosmetic", NOT an access change.
+
+**How to apply:**
+- These are CONVENIENCE flags, not a security boundary. The DB type is the source of truth (`lib/db` `RecordPermission`) — the server merge reads it; the OpenAPI/api-zod copy only validates the write payload. Add the field to BOTH the DB interface and `openapi.yaml` (then codegen) or one side silently drops it.
+- Merge like a restriction (mirrors `hiddenStatusIds`): AND-fold across ONLY `view===true` roles inside the read-boundary loop — a column stays hidden only if EVERY view-granting role hides it, so stacking a role that shows it re-reveals it. superAdmin bypasses (always sees columns).
+- Hiding the Actions column does NOT remove edit ability: inline cell editing (`inlineEditEnabled = canUpdate && !setupMode`) still works, which is what keeps a "hide actions but keep edit" config coherent.
+- Client gating must cover EVERY status/actions render site AND both `colSpan` calcs (totals header, main header, add-row cells, data-row cells, empty-state + add-row-button colSpans) or column counts drift. Use `showStatusColumn = statuses.length>0 && !hideStatusColumn` and `showActionsColumn = !hideActionsColumn`.

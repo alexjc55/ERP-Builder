@@ -269,6 +269,10 @@ export interface RecordPermission {
   scopeFieldKeys?: string[];
   hiddenStatusIds?: number[];
   hiddenRowStatusIds?: number[];
+  /** Cosmetic per-role hide of the whole "Status" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses). */
+  hideStatusColumn?: boolean;
+  /** Cosmetic per-role hide of the whole "Actions" column (edit/history/ archive/delete) in the records table. superAdmin bypasses. */
+  hideActionsColumn?: boolean;
 }
 
 export type RolePermissionsRecords = {[key: string]: RecordPermission};
