@@ -53,7 +53,7 @@ interface I18nContextType {
 
 const I18nContext = createContext<I18nContextType | undefined>(undefined);
 
-function dirFor(lang: Lang): "ltr" | "rtl" {
+export function dirFor(lang: Lang): "ltr" | "rtl" {
   return lang === "he" ? "rtl" : "ltr";
 }
 

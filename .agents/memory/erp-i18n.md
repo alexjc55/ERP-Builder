@@ -29,3 +29,22 @@ case: the drag handle must sit on the column's logical END edge (`right` in LTR,
 `startX - clientX` in RTL). Detect via `useLang()` → `lang === "he"`. When adding
 new drag/resize/swipe affordances, account for both the handle side and the delta
 sign in RTL.
+
+## Radix needs a DirectionProvider — `document.dir` is NOT enough
+
+Radix UI primitives (Select, Dropdown, Popover, Tooltip, etc.) read text
+direction from a Radix `DirectionProvider` context, NOT from
+`document.documentElement.dir`. Without it they default to `"ltr"`, so their
+popper alignment/positioning is wrong in Hebrew. The app wraps everything in
+`<DirectionProvider dir={dirFor(lang)}>` (in `App.tsx`, INSIDE `I18nProvider` so
+`useLang()` is available; reuse the exported `dirFor` helper, don't re-derive).
+
+**Why:** symptom was the records-table Status `Select` dropdown rendering
+incorrectly in Hebrew, but only when the Actions column was hidden — because then
+Status is the last/edge column (RTL = left viewport edge) and the LTR-assuming
+popper mis-collided. The dropdown itself looked fine when not at the edge, which
+is why it presented as "only happens with Actions hidden".
+
+**How to apply:** never assume setting `document.dir` fixes Radix RTL. Keep the
+DirectionProvider at the app root; any new Radix overlay/popper inherits it
+automatically.

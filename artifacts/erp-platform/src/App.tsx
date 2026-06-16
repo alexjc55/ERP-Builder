@@ -1,9 +1,10 @@
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { DirectionProvider } from "@radix-ui/react-direction";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
-import { I18nProvider, useT } from "@/lib/i18n";
+import { I18nProvider, dirFor, useLang, useT } from "@/lib/i18n";
 import Layout from "@/components/layout/Layout";
 import LoginPage from "@/pages/login";
 import GuestEntryPage from "@/pages/guest";
@@ -246,17 +247,24 @@ function Router() {
   );
 }
 
+function RadixDirection({ children }: { children: React.ReactNode }) {
+  const { lang } = useLang();
+  return <DirectionProvider dir={dirFor(lang)}>{children}</DirectionProvider>;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <I18nProvider>
-          <TooltipProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-              <Router />
-            </WouterRouter>
-            <Toaster />
-          </TooltipProvider>
+          <RadixDirection>
+            <TooltipProvider>
+              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                <Router />
+              </WouterRouter>
+              <Toaster />
+            </TooltipProvider>
+          </RadixDirection>
         </I18nProvider>
       </AuthProvider>
     </QueryClientProvider>
