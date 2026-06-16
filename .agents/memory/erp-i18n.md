@@ -30,21 +30,35 @@ case: the drag handle must sit on the column's logical END edge (`right` in LTR,
 new drag/resize/swipe affordances, account for both the handle side and the delta
 sign in RTL.
 
-## Radix needs a DirectionProvider — `document.dir` is NOT enough
+## Radix RTL: DirectionProvider AND a single react-direction copy
 
 Radix UI primitives (Select, Dropdown, Popover, Tooltip, etc.) read text
-direction from a Radix `DirectionProvider` context, NOT from
-`document.documentElement.dir`. Without it they default to `"ltr"`, so their
-popper alignment/positioning is wrong in Hebrew. The app wraps everything in
+direction from the `@radix-ui/react-direction` `DirectionProvider` context, NOT
+from `document.documentElement.dir`, and they actively STAMP `dir="..."` onto
+their own trigger/content elements (`dir: context.dir`, defaulting to `"ltr"`).
+That stamped `dir="ltr"` overrides the `rtl` the element would otherwise inherit
+from `<html dir="rtl">` — so in Hebrew the Select trigger renders LTR (value
+left, chevron right, text clipped on the wrong side) even though the rest of the
+page is correctly RTL. The app wraps everything in
 `<DirectionProvider dir={dirFor(lang)}>` (in `App.tsx`, INSIDE `I18nProvider` so
-`useLang()` is available; reuse the exported `dirFor` helper, don't re-derive).
+`useLang()` is available; reuse the exported `dirFor`, don't re-derive).
 
-**Why:** symptom was the records-table Status `Select` dropdown rendering
-incorrectly in Hebrew, but only when the Actions column was hidden — because then
-Status is the last/edge column (RTL = left viewport edge) and the LTR-assuming
-popper mis-collided. The dropdown itself looked fine when not at the edge, which
-is why it presented as "only happens with Actions hidden".
+**The provider only works if it is the SAME module instance the Radix component
+consumes.** pnpm can install two copies of `@radix-ui/react-direction` (e.g. a
+deduped `1.1.1` pulled by `react-select` + a `1.1.2` from an artifact's direct
+dependency). Two copies = two distinct React context objects, so the provider is
+invisible to the consumer and silently does nothing. Fix = pin one version via a
+`pnpm-workspace.yaml` override (`'@radix-ui/react-direction': <version>`) so
+provider and all Radix packages share one context, then `pnpm install` + restart
+the web workflow so Vite re-bundles.
 
-**How to apply:** never assume setting `document.dir` fixes Radix RTL. Keep the
-DirectionProvider at the app root; any new Radix overlay/popper inherits it
-automatically.
+**Why:** symptom was the records-table Status `Select` in Hebrew — field/text
+clipped, can't scroll, everything left-aligned. Adding the DirectionProvider
+alone did NOT fix it because the provider's copy differed from react-select's
+copy; the visible LTR layout was Radix stamping its default `dir="ltr"`.
+
+**How to apply:** for any Radix RTL bug, first verify there is exactly ONE
+installed copy of `@radix-ui/react-direction` (check the `.pnpm` symlinks of the
+consuming package AND the artifact). Never assume `document.dir` or the provider
+alone is enough. Watch for the same duplicate-context trap with other shared
+Radix context packages.
