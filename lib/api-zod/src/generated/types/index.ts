@@ -113,6 +113,7 @@ export * from './pageFieldInput';
 export * from './pageFieldsReorderInput';
 export * from './pageFieldsReorderInputItemsItem';
 export * from './pageFieldUpdate';
+export * from './pageFilterValuesQuery';
 export * from './pageInput';
 export * from './pageInputMirrorFieldLabelsJson';
 export * from './pageMirrorFieldLabelsJson';

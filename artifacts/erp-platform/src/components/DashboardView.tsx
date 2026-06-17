@@ -102,6 +102,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MultilingualInput } from "@/components/MultilingualInput";
+import { FormulaEditor } from "@/components/FormulaEditor";
 import { IconPicker } from "@/components/IconPicker";
 import { getIconComponent } from "@/lib/icons";
 import { cn } from "@/lib/utils";
@@ -2019,13 +2020,15 @@ function WidgetEditorDialog({
                 ))}
               </div>
 
-              <div className="space-y-1.5">
-                <Label>{t("dash.formula", "Формула (необязательно)")}</Label>
-                <Input value={formula} onChange={(e) => setFormula(e.target.value)} placeholder="{m1} / {m2} * 100" />
-                <p className="text-xs text-slate-400">
-                  {t("dash.formulaHint", "Комбинируйте метрики по ключу: {m1}. Без формулы показывается первая метрика.")}
-                </p>
-              </div>
+              <FormulaEditor
+                value={formula}
+                onChange={setFormula}
+                fields={metrics.filter((m) => m.key.trim()).map((m) => ({ key: m.key, label: m.key }))}
+                label={t("dash.formula", "Формула (необязательно)")}
+                placeholder="{m1} / {m2} * 100"
+                insertLabel={t("dash.formulaInsertMetric", "Вставить метрику:")}
+                hint={t("dash.formulaHint", "Комбинируйте метрики по ключу: {m1}. Без формулы показывается первая метрика.")}
+              />
             </>
           )}
 
@@ -3170,11 +3173,15 @@ function NoteCellDialog({
                   />
                 ))}
               </div>
-              <div className="space-y-1.5">
-                <Label>{t("dash.formula", "Формула (необязательно)")}</Label>
-                <Input value={draft.formula} onChange={(e) => setDraft((p) => ({ ...p, formula: e.target.value }))} placeholder="{s1} / {s2} * 100" />
-                <p className="text-xs text-slate-400">{t("dash.notesFormulaHint", "Комбинируйте значения по ключу: {s1}. Без формулы показывается первое значение.")}</p>
-              </div>
+              <FormulaEditor
+                value={draft.formula}
+                onChange={(v) => setDraft((p) => ({ ...p, formula: v }))}
+                fields={draft.sources.filter((s) => s.key.trim()).map((s) => ({ key: s.key, label: s.key }))}
+                label={t("dash.formula", "Формула (необязательно)")}
+                placeholder="{s1} / {s2} * 100"
+                insertLabel={t("dash.formulaInsertValue", "Вставить значение:")}
+                hint={t("dash.notesFormulaHint", "Комбинируйте значения по ключу: {s1}. Без формулы показывается первое значение.")}
+              />
               <div className="space-y-1.5">
                 <Label>{t("dash.format", "Формат")}</Label>
                 <Select value={draft.format} onValueChange={(v) => setDraft((p) => ({ ...p, format: v }))}>

@@ -2192,6 +2192,14 @@ export interface FilterValuesQuery {
   archived?: ArchiveFilter;
 }
 
+export interface PageFilterValuesQuery {
+  /** The mirror-page context that owns the page-local field. */
+  pageId: number;
+  /** The page-local field key whose distinct existing values to list. */
+  field: string;
+  archived?: ArchiveFilter;
+}
+
 export interface FilterValuesResult {
   values: string[];
 }

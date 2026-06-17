@@ -84,11 +84,22 @@ paths) and lets the server validate/scope them independently.
   where `pageLocalValueExpr(pageId,key)` is a CORRELATED subquery
   `(SELECT prv.values_json ->> key FROM page_record_values prv WHERE prv.page_id=? AND prv.record_id=entity_records.id)`
   passed as `buildCondition`'s `exprOverride` (default expr is the normal `textExpr(field)`).
-- **Client (EntityRecords)** scopes the page-local filter UI to types whose options are self-contained
-  (`select`/`boolean`/`date`/`datetime`) so NO dependent-values endpoint is needed: select uses the
-  field's own `optionsJson`, boolean is a fixed `["true","false"]`. Date/datetime reuse the same
-  half-open `between` range pattern as entity date filters. There is NO dependent narrowing for
-  page-local options (they're static).
+- **Client (EntityRecords)** scopes the page-local filter UI to types `select`/`boolean`/`date`/`datetime`.
+  Boolean is a fixed `["true","false"]`; date/datetime reuse the same half-open `between` range pattern
+  as entity date filters. For everything else (select), the dropdown shows the DISTINCT EXISTING values
+  actually present in the table — NOT the field's static `optionsJson` — so an option no record uses is
+  never offered. There is still NO *dependent* (cross-filter) narrowing for page-local options; the
+  values just reflect what is stored.
+- **Existing-values endpoint:** `POST /entities/{entityId}/records/page-filter-values` (op
+  `getPageFilterValues`, body `{pageId, field, archived?}` → reuses `FilterValuesResult`). It mirrors the
+  EXACT `/records/query` page-local read boundary (requireRecordParam view + entityExists + page-field
+  lookup by `(pageId,isActive)` + `isFilterable && PAGE_LOCAL_FILTERABLE_TYPES.has(type) &&
+  mostPermissiveFieldPerm(...,"view")!=="hidden"` with NO super bypass), then runs
+  `selectDistinct({v: valuesJson->>field})` over `entity_records INNER JOIN page_record_values ON
+  (page_id, record_id)` with `eq(entityId)` + `archivedWhere` + `ownScopeWhere` (when scope=own) +
+  `hiddenRowStatusWhere` + value-non-empty, `.orderBy(sql`1`)` (the ordinal gotcha below), `.limit(500)`.
+  Cross-entity safe because `entity_records.id` is a global PK so a mismatched page row joins to nothing.
+  Client `getPageFilterOptions` calls it for non-boolean and returns `[]` when `permPageId` is null.
 - **Client visibility must match the server boundary:** `filterablePageFields` ALSO drops any field
   hidden for every assigned role (same per-role display-only hide as `tableFields`, applied even to
   admins). Without this, a pages-admin — who receives hidden page-fields from `GET /pages/:id/fields`

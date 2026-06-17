@@ -30,6 +30,8 @@ import {
   QueryEntityRecordsBody,
   GetEntityFilterValuesParams,
   GetEntityFilterValuesBody,
+  GetPageFilterValuesParams,
+  GetPageFilterValuesBody,
   GetFieldDependentValuesParams,
   GetFieldDependentValuesBody,
   RenameFieldValueParams,
@@ -994,6 +996,92 @@ router.post(
         .limit(500);
       values = rows.map((r) => r.v).filter((v): v is string => v != null && v !== "");
     }
+    res.json({ values });
+  },
+);
+
+// Distinct EXISTING values of a filterable page-local field (mirror-page column
+// stored in page_record_values, NOT on the entity). Unlike entity filter-values
+// this is not dependent on the other active filters — it simply lists the values
+// actually present in the table so the filter dropdown never offers a select
+// option no record uses. Reuses the records read boundary exactly: view perm
+// (requireRecordParam), entity scope, archival, own-row, hidden-row-status, plus
+// the page-field per-role visibility gate (a field hidden for this role is
+// rejected so its values can't be inferred — superAdmin/pages-admin get NO pass,
+// same hard boundary as /records/query's page-local filters).
+router.post(
+  "/entities/:entityId/records/page-filter-values",
+  requireAuth,
+  requireRecordParam("view"),
+  async (req, res): Promise<void> => {
+    const params = GetPageFilterValuesParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const body = GetPageFilterValuesBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+    const { entityId } = params.data;
+    if (!(await entityExists(entityId))) {
+      res.status(404).json({ error: "Entity not found" });
+      return;
+    }
+    const { pageId } = body.data;
+
+    // The target must be an active, filterable, value-backed page field that is
+    // not hidden for this caller's roles — identical gate to /records/query.
+    const roleIds = await getUserRoleIds(req);
+    const plRows = await db
+      .select()
+      .from(pageFieldsTable)
+      .where(and(eq(pageFieldsTable.pageId, pageId), eq(pageFieldsTable.isActive, true)));
+    const target = plRows.find(
+      (pf) =>
+        pf.fieldKey === body.data.field &&
+        pf.isFilterable &&
+        PAGE_LOCAL_FILTERABLE_TYPES.has(pf.fieldType) &&
+        mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view") !== "hidden",
+    );
+    if (!target) {
+      res.status(400).json({ error: `Field is not a filterable page field: ${body.data.field}` });
+      return;
+    }
+
+    const fields = await loadActiveFields(entityId);
+    const perms = await getPermissions(req);
+    const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, entityId, pageId);
+    const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, entityId);
+    const archived = (body.data.archived ?? "active") as ArchiveFilterValue;
+
+    // Value lives in page_record_values keyed by (pageId, recordId). INNER JOIN so
+    // only records that actually carry a page value contribute (= "in the table").
+    const valueExpr = sql<string | null>`(${pageRecordValuesTable.valuesJson} ->> ${target.fieldKey})`;
+    const clauses: SQL[] = [eq(entityRecordsTable.entityId, entityId)];
+    const archWhere = archivedWhere(archived);
+    if (archWhere) clauses.push(archWhere);
+    if (scope === "own") clauses.push(await ownScopeWhere(entityId, scopeFieldKeys, req.user!.userId, fields));
+    const pfvHiddenRowWhere = hiddenRowStatusWhere(hiddenRowStatusIds);
+    if (pfvHiddenRowWhere) clauses.push(pfvHiddenRowWhere);
+    clauses.push(sql`${valueExpr} IS NOT NULL AND ${valueExpr} <> ''`);
+    const where = and(...clauses)!;
+
+    // ORDER BY ordinal (1) — same SELECT DISTINCT constraint as filter-values:
+    // re-emitting valueExpr in ORDER BY would bind a fresh param Postgres rejects.
+    const rows = await db
+      .selectDistinct({ v: valueExpr })
+      .from(entityRecordsTable)
+      .innerJoin(
+        pageRecordValuesTable,
+        and(eq(pageRecordValuesTable.pageId, pageId), eq(pageRecordValuesTable.recordId, entityRecordsTable.id)),
+      )
+      .where(where)
+      .orderBy(sql`1`)
+      .limit(500);
+
+    const values = rows.map((r) => r.v).filter((v): v is string => v != null && v !== "");
     res.json({ values });
   },
 );

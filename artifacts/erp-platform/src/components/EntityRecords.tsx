@@ -15,6 +15,7 @@ import {
   useGetEntity,
   useQueryEntityRecords,
   useGetEntityFilterValues,
+  useGetPageFilterValues,
   useGetFieldDependentValues,
   useRenameFieldValue,
   useArchiveRecord,
@@ -1535,16 +1536,25 @@ export function EntityRecords({
     setPage(1);
   }, []);
 
-  // Page-local filter options are self-contained (no dependent-values server call):
-  // select uses the field's own optionsJson, boolean is a fixed yes/no pair.
+  // Page-local filter options reflect the values actually present in the table:
+  // boolean is a fixed yes/no pair; everything else asks the server for the
+  // distinct EXISTING values (so a select option no record uses is never offered).
+  const pageFilterValuesMutation = useGetPageFilterValues();
+  const fetchPageFilterOptions = pageFilterValuesMutation.mutateAsync;
   const getPageFilterOptions = useCallback(
     async (fieldKey: string): Promise<string[]> => {
       const pf = filterablePageFields.find((f: PageField) => f.fieldKey === fieldKey);
       if (!pf) return [];
       if (pf.fieldType === "boolean") return ["true", "false"];
-      return Array.isArray(pf.optionsJson) ? (pf.optionsJson as string[]) : [];
+      // Page-local fields only exist in a mirror-page context, so permPageId is set here.
+      if (permPageId == null) return [];
+      const res = await fetchPageFilterOptions({
+        entityId,
+        data: { pageId: permPageId, field: fieldKey, archived },
+      });
+      return res.values ?? [];
     },
-    [filterablePageFields],
+    [filterablePageFields, fetchPageFilterOptions, entityId, permPageId, archived],
   );
 
   const toggleStatus = useCallback((id: number) => {

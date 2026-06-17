@@ -2103,6 +2103,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/FilterValuesResult"
 
+  /entities/{entityId}/records/page-filter-values:
+    post:
+      operationId: getPageFilterValues
+      tags: [records]
+      summary: Distinct existing values of a filterable page-local field (mirror-page column)
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PageFilterValuesQuery"
+      responses:
+        "200":
+          description: Distinct values present for this page-local field
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FilterValuesResult"
+
   /entities/{entityId}/fields/{fieldId}/dependent-values:
     post:
       operationId: getFieldDependentValues
@@ -5637,6 +5662,19 @@ components:
             type: integer
         search:
           type: string
+        archived:
+          $ref: "#/components/schemas/ArchiveFilter"
+
+    PageFilterValuesQuery:
+      type: object
+      required: [pageId, field]
+      properties:
+        pageId:
+          type: integer
+          description: The mirror-page context that owns the page-local field.
+        field:
+          type: string
+          description: The page-local field key whose distinct existing values to list.
         archived:
           $ref: "#/components/schemas/ArchiveFilter"
 

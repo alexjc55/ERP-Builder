@@ -119,10 +119,22 @@ export function FormulaEditor({
   value,
   onChange,
   fields,
+  label,
+  placeholder,
+  hint,
+  insertLabel,
 }: {
   value: string;
   onChange: (v: string) => void;
   fields: FormulaFieldRef[];
+  /** Override the field label (default «Формула»). */
+  label?: string;
+  /** Override the textarea placeholder. */
+  placeholder?: string;
+  /** Override the hint shown under the editor. */
+  hint?: string;
+  /** Override the "insert field" chips heading (e.g. «Вставить метрику:»). */
+  insertLabel?: string;
 }) {
   const t = useT();
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -146,18 +158,18 @@ export function FormulaEditor({
 
   return (
     <div className="space-y-1.5">
-      <Label>{t("fields.formula", "Формула")}</Label>
+      <Label>{label ?? t("fields.formula", "Формула")}</Label>
       <Textarea
         ref={ref}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={"{price} * {qty} * (1 + {vat} / 100)"}
+        placeholder={placeholder ?? "{price} * {qty} * (1 + {vat} / 100)"}
         rows={3}
         className="font-mono text-sm"
       />
       {fields.length > 0 && (
         <div className="space-y-1">
-          <p className="text-xs text-slate-500">{t("fields.formulaInsertField", "Вставить поле:")}</p>
+          <p className="text-xs text-slate-500">{insertLabel ?? t("fields.formulaInsertField", "Вставить поле:")}</p>
           <div className="flex flex-wrap gap-1">
             {fields.map((f) => (
               <button
@@ -200,10 +212,11 @@ export function FormulaEditor({
         </div>
       </div>
       <p className="text-xs text-slate-400">
-        {t(
-          "fields.formulaHint",
-          "Ссылайтесь на другие поля этой записи через {ключ_поля}. Операторы: + - * / %, сравнения, && || !, тернарный ?:. Функции: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce. Вычисляется при показе и не хранится.",
-        )}
+        {hint ??
+          t(
+            "fields.formulaHint",
+            "Ссылайтесь на другие поля этой записи через {ключ_поля}. Операторы: + - * / %, сравнения, && || !, тернарный ?:. Функции: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce. Вычисляется при показе и не хранится.",
+          )}
       </p>
     </div>
   );

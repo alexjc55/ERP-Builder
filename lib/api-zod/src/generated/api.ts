@@ -3475,6 +3475,26 @@ export const GetEntityFilterValuesResponse = zod.object({
 
 
 /**
+ * @summary Distinct existing values of a filterable page-local field (mirror-page column)
+ */
+export const GetPageFilterValuesParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const getPageFilterValuesBodyArchivedDefault = `active`;
+
+export const GetPageFilterValuesBody = zod.object({
+  "pageId": zod.number().describe('The mirror-page context that owns the page-local field.'),
+  "field": zod.string().describe('The page-local field key whose distinct existing values to list.'),
+  "archived": zod.enum(['active', 'archived', 'all']).default(getPageFilterValuesBodyArchivedDefault)
+})
+
+export const GetPageFilterValuesResponse = zod.object({
+  "values": zod.array(zod.string())
+})
+
+
+/**
  * @summary Distinct existing values of a dependent field, scoped by its parent-chain values
  */
 export const GetFieldDependentValuesParams = zod.object({

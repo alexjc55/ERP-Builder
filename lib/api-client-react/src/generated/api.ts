@@ -70,6 +70,7 @@ import type {
   PageFieldInput,
   PageFieldUpdate,
   PageFieldsReorderInput,
+  PageFilterValuesQuery,
   PageInput,
   PageRecordValue,
   PageRecordValueInput,
@@ -6951,6 +6952,78 @@ export const useGetEntityFilterValues = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getGetEntityFilterValuesMutationOptions(options));
+    }
+
+export const getGetPageFilterValuesUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/records/page-filter-values`
+}
+
+/**
+ * @summary Distinct existing values of a filterable page-local field (mirror-page column)
+ */
+export const getPageFilterValues = async (entityId: number,
+    pageFilterValuesQuery: PageFilterValuesQuery, options?: RequestInit): Promise<FilterValuesResult> => {
+
+  return customFetch<FilterValuesResult>(getGetPageFilterValuesUrl(entityId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      pageFilterValuesQuery,)
+  }
+);}
+
+
+
+
+export const getGetPageFilterValuesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getPageFilterValues>>, TError,{entityId: number;data: BodyType<PageFilterValuesQuery>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof getPageFilterValues>>, TError,{entityId: number;data: BodyType<PageFilterValuesQuery>}, TContext> => {
+
+const mutationKey = ['getPageFilterValues'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getPageFilterValues>>, {entityId: number;data: BodyType<PageFilterValuesQuery>}> = (props) => {
+          const {entityId,data} = props ?? {};
+
+          return  getPageFilterValues(entityId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GetPageFilterValuesMutationResult = NonNullable<Awaited<ReturnType<typeof getPageFilterValues>>>
+    export type GetPageFilterValuesMutationBody = BodyType<PageFilterValuesQuery>
+    export type GetPageFilterValuesMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Distinct existing values of a filterable page-local field (mirror-page column)
+ */
+export const useGetPageFilterValues = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getPageFilterValues>>, TError,{entityId: number;data: BodyType<PageFilterValuesQuery>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof getPageFilterValues>>,
+        TError,
+        {entityId: number;data: BodyType<PageFilterValuesQuery>},
+        TContext
+      > => {
+      return useMutation(getGetPageFilterValuesMutationOptions(options));
     }
 
 export const getGetFieldDependentValuesUrl = (entityId: number,
