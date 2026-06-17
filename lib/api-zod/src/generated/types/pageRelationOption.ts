@@ -18,6 +18,6 @@ export interface PageRelationOption {
   relatedEntityId: number;
   relatedEntityLabel: MultilingualText;
   fields: PageRelationOptionField[];
-  /** Pages (bound + mirror) of the related entity whose page-local value-backed fields a lookup field can project (via relatedPageId). */
+  /** Pages (bound + mirror) of the related entity whose page-local value-backed fields a relation/lookup field can project (via relatedPageId). */
   pages: PageRelationOptionPage[];
 }

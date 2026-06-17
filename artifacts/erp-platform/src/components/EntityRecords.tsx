@@ -1032,7 +1032,9 @@ export function EntityRecords({
   // values are NOT stored on the page (unlike page-local fields) — they are
   // resolved live from the linked record via a dedicated endpoint that re-applies
   // the related entity's field/row boundary plus this page's per-field role perms.
-  const hasRelationFields = pageFields.some((pf: PageField) => pf.fieldType === "relation");
+  const hasRelationFields = pageFields.some(
+    (pf: PageField) => pf.fieldType === "relation" || pf.fieldType === "lookup",
+  );
   const [relatedColumns, setRelatedColumns] = useState<PageRelatedColumn[]>([]);
   const [relatedByRecord, setRelatedByRecord] = useState<Map<number, Map<string, PageRelatedValue>>>(
     new Map(),
@@ -1530,8 +1532,8 @@ export function EntityRecords({
     () =>
       JSON.stringify(
         pageFields
-          .filter((pf: PageField) => pf.fieldType === "relation")
-          .map((pf: PageField) => [pf.fieldKey, pf.relationConfigJson?.relationId, pf.relationConfigJson?.relatedFieldKey]),
+          .filter((pf: PageField) => pf.fieldType === "relation" || pf.fieldType === "lookup")
+          .map((pf: PageField) => [pf.fieldType, pf.fieldKey, pf.relationConfigJson?.relationId, pf.relationConfigJson?.relatedFieldKey, pf.relationConfigJson?.relatedPageId]),
       ),
     [pageFields],
   );
@@ -1932,7 +1934,7 @@ export function EntityRecords({
     setNewRow(initial);
     const pageInitial: FormState = {};
     for (const pf of pageFields) {
-      if (pf.fieldType === "relation") continue;
+      if (pf.fieldType === "relation" || pf.fieldType === "lookup") continue;
       pageInitial[pf.fieldKey] = emptyForField({ ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field);
     }
     setNewPageRow(pageInitial);
@@ -1960,7 +1962,7 @@ export function EntityRecords({
     const pageValuesJson: Record<string, unknown> = {};
     if (hasPage && pageId != null) {
       for (const pf of pageFields) {
-        if (pf.fieldType === "function" || pf.fieldType === "relation") continue;
+        if (pf.fieldType === "function" || pf.fieldType === "relation" || pf.fieldType === "lookup") continue;
         const val = cellValueForPayload({ ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field, newPageRow[pf.fieldKey] as CellValue);
         if (val !== "" && val !== undefined && val !== null) pageValuesJson[pf.fieldKey] = val;
       }
@@ -2664,7 +2666,7 @@ export function EntityRecords({
                       })}
                       {displayedPageFields.map((pf: PageField) => {
                         const pageFieldAsField = { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
-                        const editable = pf.fieldType !== "function" && pf.fieldType !== "relation";
+                        const editable = pf.fieldType !== "function" && pf.fieldType !== "relation" && pf.fieldType !== "lookup";
                         return (
                           <td key={`pf-${pf.id}`} className="px-2 py-1.5 align-top max-w-[260px]" style={{ ...pinStyle(`pf:${pf.id}`, "#eff6ff"), ...colWidthStyle(`pf:${pf.id}`) }}>
                             {editable ? (
@@ -2980,6 +2982,25 @@ export function EntityRecords({
                                 ) : (
                                   <div className="truncate">{display}</div>
                                 )}
+                              </td>
+                            );
+                          }
+                          if (pf.fieldType === "lookup") {
+                            // Page lookup is a read-only projection of the linked record's
+                            // (entity- or page-source) field, resolved by the same page
+                            // related-values endpoint as relation. It is never assignable.
+                            const meta = relatedColMeta.get(pf.fieldKey);
+                            const rel = relatedByRecord.get(record.id)?.get(pf.fieldKey);
+                            const relField = relationAsField(pf, meta);
+                            const display =
+                              rel?.linkedRecordId == null || rel?.value == null ? (
+                                <span className="text-slate-300">—</span>
+                              ) : (
+                                renderCellValue(relField, rel?.value, t, userNames, cellText)
+                              );
+                            return (
+                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px] truncate" style={{ ...pinStyle(`pf:${pf.id}`, formatting.rowColor || "#ffffff"), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                                <div className="truncate">{display}</div>
                               </td>
                             );
                           }

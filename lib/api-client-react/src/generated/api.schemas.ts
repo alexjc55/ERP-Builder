@@ -1503,7 +1503,7 @@ export interface RelationFieldConfig {
   /** @nullable */
   relatedFieldKey?: string | null;
   /**
-     * Lookup-only. When set, the projected `relatedFieldKey` is read from this PAGE's page-local values (page_record_values keyed by the linked record) instead of the linked entity record's own fields. The page's effective entity must equal the relation's related entity, and `relatedFieldKey` must be a value-backed page field of that page. Page-source lookups are always read-only (no write-through). Ignored for relation fields.
+     * Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE's page-local values (page_record_values keyed by the linked record) instead of the linked entity record's own fields. The page's effective entity must equal the relation's related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field's link itself stays assignable.
      * @nullable
      */
   relatedPageId?: number | null;
@@ -1737,7 +1737,7 @@ export interface PageRelationOption {
   relatedEntityId: number;
   relatedEntityLabel: MultilingualText;
   fields: PageRelationOptionField[];
-  /** Pages (bound + mirror) of the related entity whose page-local value-backed fields a lookup field can project (via relatedPageId). */
+  /** Pages (bound + mirror) of the related entity whose page-local value-backed fields a relation/lookup field can project (via relatedPageId). */
   pages: PageRelationOptionPage[];
 }
 

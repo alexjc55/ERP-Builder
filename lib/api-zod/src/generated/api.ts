@@ -1853,7 +1853,7 @@ export const ListEntityFieldsResponseItem = zod.object({
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
-  "relatedPageId": zod.number().nullish().describe('Lookup-only. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. Page-source lookups are always read-only (no write-through). Ignored for relation fields.'),
+  "relatedPageId": zod.number().nullish().describe('Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field\'s link itself stays assignable.'),
   "writeThrough": zod.boolean().optional().describe('Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record\'s full editor in the related entity (subject to that entity\'s own permissions). The projected value itself stays read-only; ignored for relation fields and for page-source lookups (when relatedPageId is set).')
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "isKey": zod.boolean().optional(),
@@ -1934,7 +1934,7 @@ export const CreateEntityFieldBody = zod.object({
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
-  "relatedPageId": zod.number().nullish().describe('Lookup-only. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. Page-source lookups are always read-only (no write-through). Ignored for relation fields.'),
+  "relatedPageId": zod.number().nullish().describe('Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field\'s link itself stays assignable.'),
   "writeThrough": zod.boolean().optional().describe('Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record\'s full editor in the related entity (subject to that entity\'s own permissions). The projected value itself stays read-only; ignored for relation fields and for page-source lookups (when relatedPageId is set).')
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "isKey": zod.boolean().default(createEntityFieldBodyIsKeyDefault),
@@ -2007,7 +2007,7 @@ export const GetFieldResponse = zod.object({
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
-  "relatedPageId": zod.number().nullish().describe('Lookup-only. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. Page-source lookups are always read-only (no write-through). Ignored for relation fields.'),
+  "relatedPageId": zod.number().nullish().describe('Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field\'s link itself stays assignable.'),
   "writeThrough": zod.boolean().optional().describe('Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record\'s full editor in the related entity (subject to that entity\'s own permissions). The projected value itself stays read-only; ignored for relation fields and for page-source lookups (when relatedPageId is set).')
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "isKey": zod.boolean().optional(),
@@ -2080,7 +2080,7 @@ export const UpdateFieldBody = zod.object({
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
-  "relatedPageId": zod.number().nullish().describe('Lookup-only. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. Page-source lookups are always read-only (no write-through). Ignored for relation fields.'),
+  "relatedPageId": zod.number().nullish().describe('Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field\'s link itself stays assignable.'),
   "writeThrough": zod.boolean().optional().describe('Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record\'s full editor in the related entity (subject to that entity\'s own permissions). The projected value itself stays read-only; ignored for relation fields and for page-source lookups (when relatedPageId is set).')
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "isKey": zod.boolean().optional(),
@@ -2145,7 +2145,7 @@ export const UpdateFieldResponse = zod.object({
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
-  "relatedPageId": zod.number().nullish().describe('Lookup-only. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. Page-source lookups are always read-only (no write-through). Ignored for relation fields.'),
+  "relatedPageId": zod.number().nullish().describe('Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field\'s link itself stays assignable.'),
   "writeThrough": zod.boolean().optional().describe('Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record\'s full editor in the related entity (subject to that entity\'s own permissions). The projected value itself stays read-only; ignored for relation fields and for page-source lookups (when relatedPageId is set).')
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "isKey": zod.boolean().optional(),
@@ -2237,7 +2237,7 @@ export const ListPageFieldsResponseItem = zod.object({
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
-  "relatedPageId": zod.number().nullish().describe('Lookup-only. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. Page-source lookups are always read-only (no write-through). Ignored for relation fields.'),
+  "relatedPageId": zod.number().nullish().describe('Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field\'s link itself stays assignable.'),
   "writeThrough": zod.boolean().optional().describe('Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record\'s full editor in the related entity (subject to that entity\'s own permissions). The projected value itself stays read-only; ignored for relation fields and for page-source lookups (when relatedPageId is set).')
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
@@ -2300,7 +2300,7 @@ export const CreatePageFieldBody = zod.object({
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
-  "relatedPageId": zod.number().nullish().describe('Lookup-only. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. Page-source lookups are always read-only (no write-through). Ignored for relation fields.'),
+  "relatedPageId": zod.number().nullish().describe('Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field\'s link itself stays assignable.'),
   "writeThrough": zod.boolean().optional().describe('Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record\'s full editor in the related entity (subject to that entity\'s own permissions). The projected value itself stays read-only; ignored for relation fields and for page-source lookups (when relatedPageId is set).')
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
@@ -2356,7 +2356,7 @@ export const UpdatePageFieldBody = zod.object({
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
-  "relatedPageId": zod.number().nullish().describe('Lookup-only. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. Page-source lookups are always read-only (no write-through). Ignored for relation fields.'),
+  "relatedPageId": zod.number().nullish().describe('Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field\'s link itself stays assignable.'),
   "writeThrough": zod.boolean().optional().describe('Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record\'s full editor in the related entity (subject to that entity\'s own permissions). The projected value itself stays read-only; ignored for relation fields and for page-source lookups (when relatedPageId is set).')
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
@@ -2406,7 +2406,7 @@ export const UpdatePageFieldResponse = zod.object({
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
-  "relatedPageId": zod.number().nullish().describe('Lookup-only. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. Page-source lookups are always read-only (no write-through). Ignored for relation fields.'),
+  "relatedPageId": zod.number().nullish().describe('Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field\'s link itself stays assignable.'),
   "writeThrough": zod.boolean().optional().describe('Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record\'s full editor in the related entity (subject to that entity\'s own permissions). The projected value itself stays read-only; ignored for relation fields and for page-source lookups (when relatedPageId is set).')
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
@@ -2606,7 +2606,7 @@ export const GetPageRelationOptionsResponse = zod.object({
 }),
   "fieldType": zod.string()
 }))
-}).describe('A page (bound or mirror) of the related entity whose page-local fields a lookup field may project instead of the linked record\'s own fields.')).describe('Pages (bound + mirror) of the related entity whose page-local value-backed fields a lookup field can project (via relatedPageId).')
+}).describe('A page (bound or mirror) of the related entity whose page-local fields a lookup field may project instead of the linked record\'s own fields.')).describe('Pages (bound + mirror) of the related entity whose page-local value-backed fields a relation\/lookup field can project (via relatedPageId).')
 }))
 })
 
@@ -2658,7 +2658,7 @@ export const GetEntityRelationOptionsResponse = zod.object({
 }),
   "fieldType": zod.string()
 }))
-}).describe('A page (bound or mirror) of the related entity whose page-local fields a lookup field may project instead of the linked record\'s own fields.')).describe('Pages (bound + mirror) of the related entity whose page-local value-backed fields a lookup field can project (via relatedPageId).')
+}).describe('A page (bound or mirror) of the related entity whose page-local fields a lookup field may project instead of the linked record\'s own fields.')).describe('Pages (bound + mirror) of the related entity whose page-local value-backed fields a relation\/lookup field can project (via relatedPageId).')
 }))
 })
 
