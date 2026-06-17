@@ -246,6 +246,12 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
     return;
   }
 
+  const createName = parsed.data.nameJson as Record<string, unknown> | null | undefined;
+  if (!createName || !Object.values(createName).some((v) => typeof v === "string" && v.trim() !== "")) {
+    res.status(400).json({ error: "Укажите название хотя бы на одном языке" });
+    return;
+  }
+
   // A "relation" entity field derives its value from a single linked record (via
   // relationConfigJson + a qualifying single-link relation); validate the config
   // against this entity before accepting it. A "lookup" field reuses the same
@@ -522,7 +528,13 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
     }
   }
 
-  if (body.nameJson != null) updateData.nameJson = body.nameJson;
+  if (body.nameJson != null) {
+    if (!Object.values(body.nameJson).some((v) => typeof v === "string" && v.trim() !== "")) {
+      res.status(400).json({ error: "Укажите название хотя бы на одном языке" });
+      return;
+    }
+    updateData.nameJson = body.nameJson;
+  }
   if (body.descriptionJson != null) updateData.descriptionJson = body.descriptionJson;
   if (body.fieldType != null) updateData.fieldType = body.fieldType;
   if (body.isRequired != null) updateData.isRequired = body.isRequired;

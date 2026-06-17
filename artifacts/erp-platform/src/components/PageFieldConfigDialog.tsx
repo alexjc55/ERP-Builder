@@ -333,8 +333,9 @@ export function PageFieldConfigDialog({
   const isPending = createMutation.isPending || updateMutation.isPending;
   const relationIncomplete =
     (fieldType === "relation" || fieldType === "lookup") && (relationId == null || !relatedFieldKey);
+  const hasName = Object.values(nameJson).some((v) => typeof v === "string" && v.trim() !== "");
   const canSubmit =
-    !isPending && FIELD_KEY_RE.test(effectiveKey) && !manualKeyTaken && !keyFormatInvalid && !relationIncomplete;
+    !isPending && hasName && FIELD_KEY_RE.test(effectiveKey) && !manualKeyTaken && !keyFormatInvalid && !relationIncomplete;
 
   return (
     <>

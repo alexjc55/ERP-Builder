@@ -334,7 +334,9 @@ export default function EntityFieldsPage() {
   const relationIncomplete =
     (fieldType === "relation" || fieldType === "lookup") &&
     (relationId == null || !relatedFieldKey);
-  const canSubmit = !isPending && FIELD_KEY_RE.test(effectiveKey) && !manualKeyTaken && !relationIncomplete;
+  const hasName = Object.values(nameJson).some((v) => typeof v === "string" && v.trim() !== "");
+  const canSubmit =
+    !isPending && hasName && FIELD_KEY_RE.test(effectiveKey) && !manualKeyTaken && !relationIncomplete;
 
   return (
     <div className="p-6 space-y-6">

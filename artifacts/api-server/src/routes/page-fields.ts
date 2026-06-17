@@ -392,6 +392,11 @@ router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (
     res.status(400).json({ error: "Select fields require at least one option" });
     return;
   }
+  const createPageName = parsed.data.nameJson as Record<string, unknown> | null | undefined;
+  if (!createPageName || !Object.values(createPageName).some((v) => typeof v === "string" && v.trim() !== "")) {
+    res.status(400).json({ error: "Укажите название хотя бы на одном языке" });
+    return;
+  }
   let relationConfigToInsert: RelationFieldConfig | null | undefined = parsed.data.relationConfigJson;
   if (parsed.data.fieldType === "relation" || parsed.data.fieldType === "lookup") {
     const check = await validateRelationFieldConfig(
@@ -524,7 +529,13 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
     // Switching away from relation/lookup: clear any stored relation config.
     relationConfigToPersist = null;
   }
-  if (body.nameJson != null) updateData.nameJson = body.nameJson;
+  if (body.nameJson != null) {
+    if (!Object.values(body.nameJson).some((v) => typeof v === "string" && v.trim() !== "")) {
+      res.status(400).json({ error: "Укажите название хотя бы на одном языке" });
+      return;
+    }
+    updateData.nameJson = body.nameJson;
+  }
   if (body.descriptionJson != null) updateData.descriptionJson = body.descriptionJson;
   if (body.fieldType != null) updateData.fieldType = body.fieldType;
   if (body.isRequired != null) updateData.isRequired = body.isRequired;
