@@ -147,8 +147,9 @@ export function PageFieldConfigDialog({
   const [formulaDecimals, setFormulaDecimals] = useState("");
   const [relationId, setRelationId] = useState<number | null>(null);
   const [relatedFieldKey, setRelatedFieldKey] = useState("");
-  // lookup-only: when set, the lookup projects a PAGE-LOCAL field of the linked
-  // record instead of one of its entity fields (read-only).
+  // relation + lookup: when set, the field projects a PAGE-LOCAL field of the
+  // linked record instead of one of its entity fields (value read-only; a
+  // relation field's link itself stays assignable).
   const [relatedPageId, setRelatedPageId] = useState<number | null>(null);
   const [permissions, setPermissions] = useState<FieldPermissions>({});
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -268,11 +269,11 @@ export function PageFieldConfigDialog({
   })();
 
   const selectedRelation = relationOptions.find((o) => o.relationId === relationId);
-  // Pages of the related entity whose page-local fields a lookup can project.
+  // Pages of the related entity whose page-local fields a relation/lookup can project.
   const relatedPages = selectedRelation?.pages ?? [];
   const selectedPage = relatedPages.find((p) => p.pageId === relatedPageId);
   const relatedFieldOptions =
-    fieldType === "lookup" && relatedPageId != null ? selectedPage?.fields ?? [] : selectedRelation?.fields ?? [];
+    relatedPageId != null ? selectedPage?.fields ?? [] : selectedRelation?.fields ?? [];
 
   const setRoleAccess = (roleId: number, access: FieldAccess | "inherit") => {
     setPermissions((prev) => {
@@ -317,7 +318,11 @@ export function PageFieldConfigDialog({
         fieldType === "lookup"
           ? { relationId, relatedFieldKey: relatedFieldKey || null, relatedPageId }
           : fieldType === "relation"
-            ? { relationId, relatedFieldKey: relatedFieldKey || null }
+            ? relatedPageId != null
+              ? // Page-source relation fields project a page-local field (read-only
+                // display) while the link itself stays assignable.
+                { relationId, relatedFieldKey: relatedFieldKey || null, relatedPageId }
+              : { relationId, relatedFieldKey: relatedFieldKey || null }
             : {},
       permissionsJson: fieldType === "relation" || fieldType === "lookup" ? permissions : {},
     };
@@ -452,7 +457,7 @@ export function PageFieldConfigDialog({
                     </SelectContent>
                   </Select>
                 </div>
-                {fieldType === "lookup" && relationId != null && relatedPages.length > 0 && (
+                {relationId != null && relatedPages.length > 0 && (
                   <div className="space-y-1.5">
                     <Label>{t("fields.lookupSource", "Источник значения")}</Label>
                     <Select
@@ -479,7 +484,7 @@ export function PageFieldConfigDialog({
                 {relationId != null && (
                   <div className="space-y-1.5">
                     <Label>
-                      {fieldType === "lookup" && relatedPageId != null
+                      {relatedPageId != null
                         ? t("fields.relatedPageField", "Поле страницы")
                         : t("pageFields.relatedField", "Поле связанной сущности")}
                     </Label>

@@ -72,8 +72,11 @@ async function validateEntityRelationConfig(
   entityId: number,
   cfg: RelationFieldConfig | undefined | null,
   allowWriteThrough = false,
-  // Lookup fields may project a PAGE-LOCAL field of the linked record instead of
-  // one of its entity fields (relatedPageId). Assignable relation fields cannot.
+  // Both relation and lookup fields may project a PAGE-LOCAL field of the linked
+  // record instead of one of its entity fields (relatedPageId). For relation
+  // fields this only changes the DISPLAYED/labelled value (the link stays
+  // assignable); for lookup fields the whole cell is read-only. writeThrough is
+  // still lookup-only and is mutually exclusive with relatedPageId.
   allowPageSource = false,
 ): Promise<{ ok: true; cleaned: RelationFieldConfig } | { error: string }> {
   const relationId = cfg?.relationId ?? null;
@@ -254,7 +257,7 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
       params.data.entityId,
       parsed.data.relationConfigJson,
       parsed.data.fieldType === "lookup",
-      parsed.data.fieldType === "lookup",
+      true,
     );
     if (!("ok" in check)) {
       res.status(400).json({ error: check.error });
@@ -445,7 +448,7 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
       current.entityId,
       incoming,
       nextType === "lookup",
-      nextType === "lookup",
+      true,
     );
     if (!("ok" in check)) {
       res.status(400).json({ error: check.error });

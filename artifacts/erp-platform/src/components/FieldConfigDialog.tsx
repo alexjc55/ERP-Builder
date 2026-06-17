@@ -149,9 +149,10 @@ export function FieldConfigDialog({
   // lookup-only: when on, clicking a lookup cell opens the source record's
   // full editor (gated server-side by the viewer's update perm on that entity).
   const [writeThrough, setWriteThrough] = useState(false);
-  // lookup-only: when set, the lookup projects a PAGE-LOCAL field of the linked
-  // record (page_record_values of this page) instead of one of its entity
-  // fields. Page-source lookups are always read-only (no write-through).
+  // relation + lookup: when set, the field projects a PAGE-LOCAL field of the
+  // linked record (page_record_values of that page) instead of one of its
+  // entity fields. The projected value is always read-only (no write-through);
+  // a relation field's link itself stays assignable.
   const [relatedPageId, setRelatedPageId] = useState<number | null>(null);
   const { data: relationOptionsData } = useGetEntityRelationOptions(entityId, {
     query: { enabled: open, queryKey: getGetEntityRelationOptionsQueryKey(entityId) },
@@ -193,13 +194,13 @@ export function FieldConfigDialog({
   const relationFieldOptions = relationOptions.filter((o) => o.direction === "source");
   const canUseRelation = relationFieldOptions.length > 0;
   const selectedRelation = relationFieldOptions.find((o) => o.relationId === relationId);
-  // Pages of the related entity whose page-local fields a lookup can project.
+  // Pages of the related entity whose page-local fields a relation/lookup can project.
   const relatedPages = selectedRelation?.pages ?? [];
   const selectedPage = relatedPages.find((p) => p.pageId === relatedPageId);
   // Field picker draws from the page's value-backed fields when a page source is
-  // chosen (lookup only), otherwise from the related entity's own fields.
+  // chosen (relation or lookup), otherwise from the related entity's own fields.
   const relatedFieldOptions =
-    fieldType === "lookup" && relatedPageId != null ? selectedPage?.fields ?? [] : selectedRelation?.fields ?? [];
+    relatedPageId != null ? selectedPage?.fields ?? [] : selectedRelation?.fields ?? [];
 
   // Sync form state whenever the dialog opens for a given field (or create).
   useEffect(() => {
@@ -416,7 +417,11 @@ export function FieldConfigDialog({
               { relationId, relatedFieldKey: relatedFieldKey || null, relatedPageId }
             : { relationId, relatedFieldKey: relatedFieldKey || null, writeThrough }
           : fieldType === "relation"
-            ? { relationId, relatedFieldKey: relatedFieldKey || null }
+            ? relatedPageId != null
+              ? // Page-source relation fields project a page-local field (read-only
+                // display) while the link itself stays assignable.
+                { relationId, relatedFieldKey: relatedFieldKey || null, relatedPageId }
+              : { relationId, relatedFieldKey: relatedFieldKey || null }
             : {},
       isKey:
         fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup"
@@ -533,7 +538,7 @@ export function FieldConfigDialog({
                     </SelectContent>
                   </Select>
                 </div>
-                {fieldType === "lookup" && relationId != null && relatedPages.length > 0 && (
+                {relationId != null && relatedPages.length > 0 && (
                   <div className="space-y-1.5">
                     <Label>{t("fields.lookupSource", "Источник значения")}</Label>
                     <Select
@@ -567,7 +572,7 @@ export function FieldConfigDialog({
                 {relationId != null && (
                   <div className="space-y-1.5">
                     <Label>
-                      {fieldType === "lookup" && relatedPageId != null
+                      {relatedPageId != null
                         ? t("fields.relatedPageField", "Поле страницы")
                         : t("fields.relatedField", "Поле связанной сущности")}
                     </Label>

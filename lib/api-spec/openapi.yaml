@@ -4863,7 +4863,7 @@ components:
           type: array
           description: >-
             Pages (bound + mirror) of the related entity whose page-local
-            value-backed fields a lookup field can project (via relatedPageId).
+            value-backed fields a relation/lookup field can project (via relatedPageId).
           items:
             $ref: "#/components/schemas/PageRelationOptionPage"
 
