@@ -2613,6 +2613,7 @@ export function EntityRecords({
                                 entityId={entityId}
                                 fieldKey={f.fieldKey}
                                 pageId={permPageId}
+                                pageSource={!!f.relationConfigJson?.relatedPageId}
                                 value={typeof newRow[f.fieldKey] === "number" ? (newRow[f.fieldKey] as number) : null}
                                 onChange={(id) =>
                                   setNewRow((prev) =>
@@ -2840,6 +2841,7 @@ export function EntityRecords({
                                     parentValue={relParentValue}
                                     relatedFilterFieldKey={relDep?.relatedFilterFieldKey ?? null}
                                     pageId={pageId}
+                                    pageSource={!!f.relationConfigJson?.relatedPageId}
                                   />
                                 ) : f.fieldType === "lookup" &&
                                   meta?.writeThrough &&
@@ -3685,6 +3687,7 @@ function EntityRelationLinkPicker({
   parentValue = null,
   relatedFilterFieldKey = null,
   pageId,
+  pageSource = false,
 }: {
   entityId: number;
   fieldKey: string;
@@ -3703,6 +3706,10 @@ function EntityRelationLinkPicker({
   relatedFilterFieldKey?: string | null;
   /** The page the records table is rendered under (RBAC scope for create). */
   pageId?: number;
+  /** True when this relation field projects a page-local value (relatedPageId set):
+   * suppress the "create record" affordance — a freshly created linked record has
+   * no value on that page, so creating from here is meaningless. */
+  pageSource?: boolean;
 }) {
   const t = useT();
   const { toast } = useToast();
@@ -3823,7 +3830,7 @@ function EntityRelationLinkPicker({
               ))}
             </CommandGroup>
           </CommandList>
-          {canCreateRelated && relatedEntityId != null && !gated && (
+          {canCreateRelated && relatedEntityId != null && !gated && !pageSource && (
             // Fixed footer (outside the scrollable CommandList) so "Add record"
             // stays reachable no matter how long the candidate list is.
             <div className="border-t border-slate-200 p-1">
@@ -3877,10 +3884,14 @@ function RelationCreatePicker({
   dependent = false,
   parentValue = null,
   relatedFilterFieldKey = null,
+  pageSource = false,
 }: {
   entityId: number;
   fieldKey: string;
   pageId?: number;
+  /** True when this relation field projects a page-local value (relatedPageId set):
+   * suppress the "create record" affordance (a new linked record has no page value). */
+  pageSource?: boolean;
   /** The selected linked record id (numeric) or null when nothing is chosen. */
   value: number | null;
   onChange: (id: number | null) => void;
@@ -4000,7 +4011,7 @@ function RelationCreatePicker({
               ))}
             </CommandGroup>
           </CommandList>
-          {canCreateRelated && relatedEntityId != null && !gated && (
+          {canCreateRelated && relatedEntityId != null && !gated && !pageSource && (
             // Fixed footer (outside the scrollable CommandList) so "Add record"
             // stays reachable no matter how long the candidate list is.
             <div className="border-t border-slate-200 p-1">
@@ -4303,6 +4314,7 @@ function RecordFormBody({
                     parentValue={dep.parentValue}
                     relatedFilterFieldKey={dep.relatedFilterFieldKey}
                     pageId={pageId}
+                    pageSource={!!field.relationConfigJson?.relatedPageId}
                   />
                 ) : (
                   <RelationCreatePicker
@@ -4318,6 +4330,7 @@ function RecordFormBody({
                     dependent={dep.dependent}
                     parentValue={dep.parentValue}
                     relatedFilterFieldKey={dep.relatedFilterFieldKey}
+                    pageSource={!!field.relationConfigJson?.relatedPageId}
                   />
                 )
               ) : (
