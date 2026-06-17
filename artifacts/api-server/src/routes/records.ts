@@ -38,7 +38,7 @@ import {
   UnarchiveRecordParams,
 } from "@workspace/api-zod";
 import type { EntityField, InsertAuditLog, FileSource, FileFieldConfig } from "@workspace/db";
-import { buildRecordQuery, type RecordQuerySpec } from "./record-query";
+import { buildRecordQuery, buildPageLocalCondition, type RecordQuerySpec, type FilterCondition } from "./record-query";
 import { buildRelationMeta, ownScopeWhere, isRecordOwned } from "./own-scope";
 import { isGoogleDriveModuleEnabled } from "../lib/googleDrive";
 import {
@@ -59,6 +59,23 @@ import {
 } from "../lib/events";
 
 const router: IRouter = Router();
+
+// Page-local field types whose value lives in page_record_values and can be
+// filtered with the standard value operators. Relation/lookup/function have no
+// stored value and `file` stores an object, so they are never filterable.
+const PAGE_LOCAL_FILTERABLE_TYPES = new Set([
+  "text",
+  "textarea",
+  "email",
+  "url",
+  "phone",
+  "select",
+  "number",
+  "boolean",
+  "date",
+  "datetime",
+  "user",
+]);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^[+0-9().\s-]{3,}$/;
@@ -661,6 +678,51 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   // returned, so the role cannot surface them via any filter/status pick either.
   const queryHiddenRowWhere = hiddenRowStatusWhere(hiddenRowStatusIds);
   if (queryHiddenRowWhere) clauses.push(queryHiddenRowWhere);
+
+  // Page-local field filters: conditions on fields stored in page_record_values
+  // (keyed by pageId+recordId), not on the entity, so they bypass the entity
+  // field whitelist above and are validated separately here. A condition is only
+  // accepted for a visible (per-role), filterable, value-backed page-local field
+  // — a field hidden for this role is rejected so its values can't be inferred
+  // from which rows appear. AND-combined with the rest of the query. Requires
+  // pageId (the page context that owns these fields).
+  const pageLocalFilters = (body.data.pageLocalFilters ?? []) as FilterCondition[];
+  if (pageLocalFilters.length > 0) {
+    const plPageId = body.data.pageId;
+    if (plPageId == null) {
+      res.status(400).json({ error: "pageLocalFilters require pageId" });
+      return;
+    }
+    const roleIds = await getUserRoleIds(req);
+    const plRows = await db
+      .select()
+      .from(pageFieldsTable)
+      .where(and(eq(pageFieldsTable.pageId, plPageId), eq(pageFieldsTable.isActive, true)));
+    const plByKey = new Map(
+      plRows
+        .filter(
+          (pf) =>
+            pf.isFilterable &&
+            PAGE_LOCAL_FILTERABLE_TYPES.has(pf.fieldType) &&
+            mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view") !== "hidden",
+        )
+        .map((pf) => [pf.fieldKey, pf] as const),
+    );
+    for (const cond of pageLocalFilters) {
+      const pf = plByKey.get(cond.field);
+      if (!pf) {
+        res.status(400).json({ error: `Unknown or non-filterable page field "${cond.field}"` });
+        return;
+      }
+      const r = buildPageLocalCondition(cond, pf.fieldType, plPageId);
+      if ("error" in r) {
+        res.status(400).json({ error: r.error });
+        return;
+      }
+      clauses.push(r.sql);
+    }
+  }
+
   const where = and(...clauses)!;
 
   const { page, pageSize } = body.data;

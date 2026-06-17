@@ -1110,6 +1110,26 @@ export function EntityRecords({
   // Fields opted-in to filtering (the "участвует в фильтре" flag), restricted to fields the
   // role may see — a hidden field must never surface as a filter.
   const filterableFields = visibleFormFields.filter((f: Field) => f.isFilterable);
+  // Page-local fields opted into filtering, restricted to types whose filter UI is
+  // self-contained on the client (select options / yes-no / date range) so no
+  // dependent-values server call is needed. Also drop any field hidden for every
+  // assigned role (same per-role display-only hide as `tableFields`, applied even
+  // to admins): the /query endpoint rejects a hidden page-local filter as a hard
+  // boundary, so never offer one the server would 400 on.
+  const filterablePageFields = useMemo(
+    () =>
+      pageFields.filter(
+        (pf: PageField) =>
+          pf.isFilterable &&
+          (pf.fieldType === "select" ||
+            pf.fieldType === "boolean" ||
+            pf.fieldType === "date" ||
+            pf.fieldType === "datetime") &&
+          (userRoleIds.length === 0 ||
+            userRoleIds.some((rid) => pf.permissionsJson?.[String(rid)] !== "hidden")),
+      ),
+    [pageFields, userRoleIds],
+  );
   const statusById = new Map(statuses.map((s: Status) => [s.id, s]));
   const isSuperAdmin = user?.permissions?.superAdmin === true;
 
@@ -1322,6 +1342,11 @@ export function EntityRecords({
   const [statusFilter, setStatusFilter] = useState<number[]>([]);
   const [fieldFilters, setFieldFilters] = useState<Record<string, string[]>>({});
   const [dateFilters, setDateFilters] = useState<Record<string, DateRangeFilter>>({});
+  // Page-local field filters (separate from entity-field filters: their keys live in
+  // page_record_values, not the record's own valuesJson, so they ride a dedicated
+  // pageLocalFilters channel on the query).
+  const [pageFieldFilters, setPageFieldFilters] = useState<Record<string, string[]>>({});
+  const [pageDateFilters, setPageDateFilters] = useState<Record<string, DateRangeFilter>>({});
   const [page, setPage] = useState(1);
   const [records, setRecords] = useState<EntityRecord[]>([]);
   const [total, setTotal] = useState(0);
@@ -1342,6 +1367,8 @@ export function EntityRecords({
     setStatusFilter([]);
     setFieldFilters({});
     setDateFilters({});
+    setPageFieldFilters({});
+    setPageDateFilters({});
     setPage(1);
     setViewInitialized(false);
   }, [entityId]);
@@ -1387,6 +1414,28 @@ export function EntityRecords({
   );
   const dateKey = JSON.stringify(dateFilters);
 
+  // Page-local filters mirror the entity ad-hoc/date filters but are sent on the
+  // separate pageLocalFilters channel (validated against page_record_values
+  // server-side), since their keys aren't entity fields.
+  const pageAdHocFilters = useMemo(
+    () =>
+      Object.entries(pageFieldFilters)
+        .filter(([, vals]) => vals.length > 0)
+        .map(([field, vals]) => ({ field, operator: "in" as const, value: vals })),
+    [pageFieldFilters],
+  );
+  const pageDateFilterConditions = useMemo(
+    () =>
+      Object.entries(pageDateFilters).map(([field, range]) => ({
+        field,
+        operator: "between" as const,
+        value: [range.from, formatDate(addDays(parseISO(range.to), 1), DAY_FMT)],
+      })),
+    [pageDateFilters],
+  );
+  const pageAdHocKey = JSON.stringify(pageFieldFilters);
+  const pageDateKey = JSON.stringify(pageDateFilters);
+
   // With no view selected, fall back to the entity's configured default sort
   // (set in the views screen). A selected view's own sorts always take priority.
   // Drop any sort whose field no longer exists on the entity so a deleted field
@@ -1403,6 +1452,7 @@ export function EntityRecords({
     () => ({
       filters: [...(selectedConfig.filters ?? []), ...adHocFilters, ...dateFilterConditions],
       filterConjunction: selectedConfig.filterConjunction ?? "and",
+      pageLocalFilters: [...pageAdHocFilters, ...pageDateFilterConditions],
       statusIds: statusFilter.length > 0 ? statusFilter : undefined,
       sorts: effectiveSorts,
       search: search.trim() || undefined,
@@ -1411,7 +1461,7 @@ export function EntityRecords({
       pageSize: PAGE_SIZE,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedConfig.filters, selectedConfig.filterConjunction, sortsKey, adHocKey, dateKey, statusKey, search, archived, page],
+    [selectedConfig.filters, selectedConfig.filterConjunction, sortsKey, adHocKey, dateKey, pageAdHocKey, pageDateKey, statusKey, search, archived, page],
   );
 
   // Dependent filters: when fetching the option list for a field, we run a query against the
@@ -1465,16 +1515,54 @@ export function EntityRecords({
     setPage(1);
   }, []);
 
+  const setPageFieldFilter = useCallback((fieldKey: string, values: string[]) => {
+    setPageFieldFilters((prev) => {
+      const next = { ...prev };
+      if (values.length === 0) delete next[fieldKey];
+      else next[fieldKey] = values;
+      return next;
+    });
+    setPage(1);
+  }, []);
+
+  const setPageDateFilter = useCallback((fieldKey: string, range: DateRangeFilter | undefined) => {
+    setPageDateFilters((prev) => {
+      const next = { ...prev };
+      if (!range) delete next[fieldKey];
+      else next[fieldKey] = range;
+      return next;
+    });
+    setPage(1);
+  }, []);
+
+  // Page-local filter options are self-contained (no dependent-values server call):
+  // select uses the field's own optionsJson, boolean is a fixed yes/no pair.
+  const getPageFilterOptions = useCallback(
+    async (fieldKey: string): Promise<string[]> => {
+      const pf = filterablePageFields.find((f: PageField) => f.fieldKey === fieldKey);
+      if (!pf) return [];
+      if (pf.fieldType === "boolean") return ["true", "false"];
+      return Array.isArray(pf.optionsJson) ? (pf.optionsJson as string[]) : [];
+    },
+    [filterablePageFields],
+  );
+
   const toggleStatus = useCallback((id: number) => {
     setStatusFilter((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
     setPage(1);
   }, []);
 
   const hasActiveFilters =
-    adHocFilters.length > 0 || statusFilter.length > 0 || Object.keys(dateFilters).length > 0;
+    adHocFilters.length > 0 ||
+    statusFilter.length > 0 ||
+    Object.keys(dateFilters).length > 0 ||
+    Object.keys(pageFieldFilters).length > 0 ||
+    Object.keys(pageDateFilters).length > 0;
   const resetFilters = useCallback(() => {
     setFieldFilters({});
     setDateFilters({});
+    setPageFieldFilters({});
+    setPageDateFilters({});
     setStatusFilter([]);
     setPage(1);
   }, []);
@@ -1905,6 +1993,11 @@ export function EntityRecords({
       entityId: 0,
     }) as unknown as Field;
 
+  // Synthetic Field wrapper so a page-local field can reuse the entity filter
+  // popovers. The render type and select options come straight from the page field.
+  const pageFieldAsFilterField = (pf: PageField): Field =>
+    ({ ...pf, permissionsJson: {}, entityId: 0 }) as unknown as Field;
+
   // Whether workflow enforcement applies to a given row (mirrors the server boundary).
   // When active the status cannot be cleared and only allowed transitions are offered.
   const workflowActiveForRecord = (record: EntityRecord): boolean =>
@@ -2209,7 +2302,7 @@ export function EntityRecords({
         </div>
       </div>
 
-      {!setupMode && (statuses.length > 0 || filterableFields.length > 0) && (
+      {!setupMode && (statuses.length > 0 || filterableFields.length > 0 || filterablePageFields.length > 0) && (
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
           <Filter className="hidden sm:block w-4 h-4 text-slate-400 shrink-0" />
           {filterableStatuses.length > 0 && (
@@ -2285,6 +2378,32 @@ export function EntityRecords({
                     ? ((entityRelatedColMeta.get(f.fieldKey)?.relatedFieldType ?? "text") as Field["fieldType"])
                     : f.fieldType
                 }
+                triggerClassName="w-full justify-between sm:w-auto sm:justify-center"
+              />
+            ),
+          )}
+          {filterablePageFields.map((pf: PageField) =>
+            pf.fieldType === "date" || pf.fieldType === "datetime" ? (
+              <DateFilterPopover
+                key={`pf-${pf.id}`}
+                field={pageFieldAsFilterField(pf)}
+                value={pageDateFilters[pf.fieldKey]}
+                onChange={(range) => setPageDateFilter(pf.fieldKey, range)}
+                ml={ml}
+                t={t}
+                triggerClassName="w-full justify-start sm:w-auto sm:justify-center"
+              />
+            ) : (
+              <FieldFilterPopover
+                key={`pf-${pf.id}`}
+                field={pageFieldAsFilterField(pf)}
+                selected={pageFieldFilters[pf.fieldKey] ?? []}
+                onChange={(vals) => setPageFieldFilter(pf.fieldKey, vals)}
+                getOptions={getPageFilterOptions}
+                ml={ml}
+                t={t}
+                userNames={userNames}
+                effectiveType={pf.fieldType}
                 triggerClassName="w-full justify-between sm:w-auto sm:justify-center"
               />
             ),

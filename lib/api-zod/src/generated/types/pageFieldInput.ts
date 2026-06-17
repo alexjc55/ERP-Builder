@@ -18,6 +18,7 @@ export interface PageFieldInput {
   descriptionJson?: MultilingualText;
   fieldType: FieldType;
   isRequired?: boolean;
+  isFilterable?: boolean;
   /** @nullable */
   defaultValue?: string | null;
   optionsJson?: string[];

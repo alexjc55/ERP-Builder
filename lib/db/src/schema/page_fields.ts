@@ -23,6 +23,7 @@ export const pageFieldsTable = pgTable(
     descriptionJson: jsonb("description_json").default({}),
     fieldType: text("field_type").notNull().default("text"),
     isRequired: boolean("is_required").notNull().default(false),
+    isFilterable: boolean("is_filterable").notNull().default(false),
     defaultValue: text("default_value"),
     optionsJson: jsonb("options_json").notNull().default([]),
     formatRulesJson: jsonb("format_rules_json").$type<FieldFormatRule[]>().notNull().default([]),

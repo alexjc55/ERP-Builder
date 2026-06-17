@@ -80,6 +80,11 @@ const FIELD_ACCESS_OPTIONS: { value: FieldAccess; label: string }[] = [
   { value: "hidden", label: "Скрыто" },
 ];
 
+// Page-local field types that can participate in the records filter bar. Limited
+// to types whose filter options are deterministic on the client (select options,
+// yes/no) or use a date range — so no dependent-values endpoint is needed.
+const PAGE_FILTERABLE_TYPES = new Set<FieldType>(["select", "boolean", "date", "datetime"]);
+
 function extractError(err: unknown): string | undefined {
   if (err && typeof err === "object") {
     const data = (err as { data?: { error?: unknown } }).data;
@@ -133,6 +138,7 @@ export function PageFieldConfigDialog({
   const [descJson, setDescJson] = useState<MLValue>({});
   const [fieldType, setFieldType] = useState<FieldType>("text");
   const [isRequired, setIsRequired] = useState(false);
+  const [isFilterable, setIsFilterable] = useState(false);
   const [defaultValue, setDefaultValue] = useState("");
   const [optionsText, setOptionsText] = useState("");
   const [sortOrder, setSortOrder] = useState(0);
@@ -164,6 +170,7 @@ export function PageFieldConfigDialog({
       setDescJson(typeof d === "object" && d ? { ru: d.ru, en: d.en, he: d.he } : {});
       setFieldType(field.fieldType);
       setIsRequired(field.isRequired);
+      setIsFilterable(field.isFilterable ?? false);
       setDefaultValue(field.defaultValue ?? "");
       setOptionsText((field.optionsJson ?? []).join("\n"));
       setSortOrder(field.sortOrder);
@@ -188,6 +195,7 @@ export function PageFieldConfigDialog({
       setDescJson({});
       setFieldType("text");
       setIsRequired(false);
+      setIsFilterable(false);
       setDefaultValue("");
       setOptionsText("");
       setSortOrder(nextSortOrder);
@@ -295,6 +303,7 @@ export function PageFieldConfigDialog({
       descriptionJson: descJson as MultilingualText,
       fieldType,
       isRequired,
+      isFilterable: PAGE_FILTERABLE_TYPES.has(fieldType) ? isFilterable : false,
       defaultValue: defaultValue.trim() ? defaultValue.trim() : null,
       optionsJson: options,
       sortOrder,
@@ -516,6 +525,12 @@ export function PageFieldConfigDialog({
                 <Switch checked={isActive} onCheckedChange={setIsActive} id="pfcd-active" />
                 <Label htmlFor="pfcd-active">{t("fields.active", "Активно")}</Label>
               </div>
+              {PAGE_FILTERABLE_TYPES.has(fieldType) && (
+                <div className="flex items-center gap-2">
+                  <Switch checked={isFilterable} onCheckedChange={setIsFilterable} id="pfcd-filterable" />
+                  <Label htmlFor="pfcd-filterable">{t("fields.filterable", "Участвует в фильтре")}</Label>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <Switch checked={showInTable} onCheckedChange={setShowInTable} id="pfcd-show-in-table" />
                 <Label htmlFor="pfcd-show-in-table">{t("fields.showInTable", "Показывать в таблице")}</Label>

@@ -70,6 +70,31 @@ filter-values DISTINCT path joins with DIFFERENT aliases `record_links frl` / `e
 avoid shadowing. Pick `frl.source_record_id`=base / `frl.target_record_id`=linked for direction
 "source", inverse for "target".
 
+## Page-local fields participate in the filter bar via a separate channel
+Page-local fields (values live in `page_record_values.values_json`, keyed by fieldKey, NOT the
+record's own `valuesJson`) can opt into filtering with `page_fields.isFilterable` (default false).
+They ride a DEDICATED `RecordQuery.pageLocalFilters: FilterCondition[]` channel, never mixed into the
+normal `filters` array — this keeps page-local vs entity fieldKey collisions harmless (separate code
+paths) and lets the server validate/scope them independently.
+- **Server (`/records/query`)** requires `pageId`, loads active page fields, and accepts a page-local
+  filter ONLY when the field is `isFilterable`, a value-backed type, AND not hidden for the caller's
+  roleIds (`mostPermissiveFieldPerm(...,"view") !== "hidden"` — superAdmin/pages-admin get NO pass
+  here; this is the hard inference-leak boundary). Conditions are built via
+  `buildPageLocalCondition(cond, fieldType, pageId)` → `buildCondition(cond, type, pageLocalValueExpr)`,
+  where `pageLocalValueExpr(pageId,key)` is a CORRELATED subquery
+  `(SELECT prv.values_json ->> key FROM page_record_values prv WHERE prv.page_id=? AND prv.record_id=entity_records.id)`
+  passed as `buildCondition`'s `exprOverride` (default expr is the normal `textExpr(field)`).
+- **Client (EntityRecords)** scopes the page-local filter UI to types whose options are self-contained
+  (`select`/`boolean`/`date`/`datetime`) so NO dependent-values endpoint is needed: select uses the
+  field's own `optionsJson`, boolean is a fixed `["true","false"]`. Date/datetime reuse the same
+  half-open `between` range pattern as entity date filters. There is NO dependent narrowing for
+  page-local options (they're static).
+- **Client visibility must match the server boundary:** `filterablePageFields` ALSO drops any field
+  hidden for every assigned role (same per-role display-only hide as `tableFields`, applied even to
+  admins). Without this, a pages-admin — who receives hidden page-fields from `GET /pages/:id/fields`
+  for setup mode — would see a filter the `/query` endpoint then 400s on. Never offer a page-local
+  filter the server would reject.
+
 ## SELECT DISTINCT + ORDER BY gotcha (the bug that cost the most here)
 Building the distinct query as
 `db.selectDistinct({ v: valueExpr }).orderBy(asc(valueExpr))` FAILS at runtime in Postgres.

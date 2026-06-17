@@ -1,5 +1,5 @@
 import { sql, and, or, asc, desc, inArray, type SQL } from "drizzle-orm";
-import { entityRecordsTable, recordLinksTable } from "@workspace/db";
+import { entityRecordsTable, recordLinksTable, pageRecordValuesTable } from "@workspace/db";
 import type { EntityField } from "@workspace/db";
 
 export type FilterOperator =
@@ -157,8 +157,12 @@ function buildRelationCondition(cond: FilterCondition, meta: RelationFilterMeta)
   return { error: `Unsupported operator "${op}" for relation field "${cond.field}"` };
 }
 
-function buildCondition(cond: FilterCondition, fieldType: string): { sql: SQL } | { error: string } {
-  const expr = textExpr(cond.field);
+function buildCondition(
+  cond: FilterCondition,
+  fieldType: string,
+  exprOverride?: SQL,
+): { sql: SQL } | { error: string } {
+  const expr = exprOverride ?? textExpr(cond.field);
   const op = cond.operator;
 
   if (op === "is_empty") {
@@ -276,6 +280,33 @@ function buildCondition(cond: FilterCondition, fieldType: string): { sql: SQL } 
   }
 
   return { error: `Unsupported operator "${op}"` };
+}
+
+/**
+ * Correlated scalar subquery for a PAGE-LOCAL field's stored value on the outer
+ * `entity_records` row: the value lives in `page_record_values`, keyed by
+ * (pageId, recordId), as `prv.values_json ->> key`. Both pageId and key are
+ * bound params (never interpolated), so the page-field key is safe to pass
+ * straight from the client. Returns NULL when the row has no stored value for
+ * that field — so the same `is_empty` / comparison semantics as a missing
+ * entity-field value apply.
+ */
+export function pageLocalValueExpr(pageId: number, key: string): SQL {
+  return sql`(SELECT prv.values_json ->> ${key} FROM ${pageRecordValuesTable} prv WHERE prv.page_id = ${pageId} AND prv.record_id = ${entityRecordsTable.id})`;
+}
+
+/**
+ * Build a single filter condition against a PAGE-LOCAL field. Reuses the exact
+ * operator/type semantics of {@link buildCondition} by overriding the value
+ * expression with the page_record_values correlated subquery, so date/numeric
+ * casts, `in`, `between`, and empties all behave identically to entity fields.
+ */
+export function buildPageLocalCondition(
+  cond: FilterCondition,
+  fieldType: string,
+  pageId: number,
+): { sql: SQL } | { error: string } {
+  return buildCondition(cond, fieldType, pageLocalValueExpr(pageId, cond.field));
 }
 
 /**

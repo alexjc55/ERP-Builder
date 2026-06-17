@@ -1753,6 +1753,7 @@ export interface PageField {
   descriptionJson?: MultilingualText;
   fieldType: FieldType;
   isRequired: boolean;
+  isFilterable?: boolean;
   /** @nullable */
   defaultValue?: string | null;
   optionsJson: string[];
@@ -1779,6 +1780,7 @@ export interface PageFieldInput {
   descriptionJson?: MultilingualText;
   fieldType: FieldType;
   isRequired?: boolean;
+  isFilterable?: boolean;
   /** @nullable */
   defaultValue?: string | null;
   optionsJson?: string[];
@@ -1803,6 +1805,7 @@ export interface PageFieldUpdate {
   descriptionJson?: MultilingualText;
   fieldType?: FieldType;
   isRequired?: boolean;
+  isFilterable?: boolean;
   /** @nullable */
   defaultValue?: string | null;
   optionsJson?: string[];
@@ -2104,6 +2107,8 @@ export const RecordQueryFilterConjunction = {
 
 export interface RecordQuery {
   filters?: FilterCondition[];
+  /** Filter conditions on PAGE-LOCAL fields (values stored in page_record_values), keyed by page-field fieldKey. Requires pageId. Each condition is AND-combined with the rest of the query. Only visible (per-role) filterable page-local fields are accepted. */
+  pageLocalFilters?: FilterCondition[];
   filterConjunction?: RecordQueryFilterConjunction;
   statusIds?: number[];
   sorts?: SortSpec[];

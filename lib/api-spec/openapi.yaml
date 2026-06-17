@@ -4922,6 +4922,8 @@ components:
           $ref: "#/components/schemas/FieldType"
         isRequired:
           type: boolean
+        isFilterable:
+          type: boolean
         defaultValue:
           type: ["string", "null"]
         optionsJson:
@@ -4974,6 +4976,9 @@ components:
         isRequired:
           type: boolean
           default: false
+        isFilterable:
+          type: boolean
+          default: false
         defaultValue:
           type: ["string", "null"]
         optionsJson:
@@ -5021,6 +5026,8 @@ components:
         fieldType:
           $ref: "#/components/schemas/FieldType"
         isRequired:
+          type: boolean
+        isFilterable:
           type: boolean
         defaultValue:
           type: ["string", "null"]
@@ -5531,6 +5538,15 @@ components:
       properties:
         filters:
           type: array
+          items:
+            $ref: "#/components/schemas/FilterCondition"
+        pageLocalFilters:
+          type: array
+          description: >-
+            Filter conditions on PAGE-LOCAL fields (values stored in
+            page_record_values), keyed by page-field fieldKey. Requires pageId.
+            Each condition is AND-combined with the rest of the query. Only
+            visible (per-role) filterable page-local fields are accepted.
           items:
             $ref: "#/components/schemas/FilterCondition"
         filterConjunction:

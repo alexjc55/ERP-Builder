@@ -2221,6 +2221,7 @@ export const ListPageFieldsResponseItem = zod.object({
 }).optional(),
   "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
   "isRequired": zod.boolean(),
+  "isFilterable": zod.boolean().optional(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
   "formatRulesJson": zod.array(zod.object({
@@ -2262,6 +2263,7 @@ export const CreatePageFieldParams = zod.object({
 })
 
 export const createPageFieldBodyIsRequiredDefault = false;
+export const createPageFieldBodyIsFilterableDefault = false;
 export const createPageFieldBodyFormulaConfigJsonDecimalsMin = 0;
 export const createPageFieldBodyFormulaConfigJsonDecimalsMax = 10;
 
@@ -2284,6 +2286,7 @@ export const CreatePageFieldBody = zod.object({
 }).optional(),
   "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
   "isRequired": zod.boolean().default(createPageFieldBodyIsRequiredDefault),
+  "isFilterable": zod.boolean().default(createPageFieldBodyIsFilterableDefault),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()).optional(),
   "formatRulesJson": zod.array(zod.object({
@@ -2340,6 +2343,7 @@ export const UpdatePageFieldBody = zod.object({
 }).optional(),
   "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']).optional(),
   "isRequired": zod.boolean().optional(),
+  "isFilterable": zod.boolean().optional(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()).optional(),
   "formatRulesJson": zod.array(zod.object({
@@ -2390,6 +2394,7 @@ export const UpdatePageFieldResponse = zod.object({
 }).optional(),
   "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
   "isRequired": zod.boolean(),
+  "isFilterable": zod.boolean().optional(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
   "formatRulesJson": zod.array(zod.object({
@@ -3386,6 +3391,11 @@ export const QueryEntityRecordsBody = zod.object({
   "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
   "value": zod.unknown().optional()
 })).optional(),
+  "pageLocalFilters": zod.array(zod.object({
+  "field": zod.string(),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
+  "value": zod.unknown().optional()
+})).optional().describe('Filter conditions on PAGE-LOCAL fields (values stored in page_record_values), keyed by page-field fieldKey. Requires pageId. Each condition is AND-combined with the rest of the query. Only visible (per-role) filterable page-local fields are accepted.'),
   "filterConjunction": zod.enum(['and', 'or']).default(queryEntityRecordsBodyFilterConjunctionDefault),
   "statusIds": zod.array(zod.number()).optional(),
   "sorts": zod.array(zod.object({
