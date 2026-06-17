@@ -3830,6 +3830,13 @@ components:
           items:
             type: integer
           description: Restrict to records in these statuses; empty/null = all statuses
+        source:
+          type: string
+          enum: [entity, page]
+          description: Value source — "entity" (entity records, the default) or "page" (page-local field values from page_record_values for pageId). When "page", fieldKey refers to a page-local field of pageId and relationId is ignored.
+        pageId:
+          type: ["integer", "null"]
+          description: When source = page, the page whose page-local field is aggregated.
 
     ChartConfig:
       type: object
@@ -3861,6 +3868,13 @@ components:
           items:
             type: integer
           description: Restrict to records in these statuses; empty/null = all statuses
+        source:
+          type: string
+          enum: [entity, page]
+          description: Value source — "entity" (entity records, the default) or "page" (page-local field values from page_record_values for pageId). When "page", groupBy.fieldKey / fieldKey refer to page-local fields of pageId.
+        pageId:
+          type: ["integer", "null"]
+          description: When source = page, the page whose page-local field is aggregated.
         showValues:
           type: ["boolean", "null"]
           description: When true, render numeric value labels directly on the chart; when false/null, values show only on hover

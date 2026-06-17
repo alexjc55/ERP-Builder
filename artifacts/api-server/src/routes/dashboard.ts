@@ -12,6 +12,8 @@ import {
   dashboardWidgetsTable,
   relationsTable,
   recordLinksTable,
+  pageRecordValuesTable,
+  pageFieldsTable,
   type DashboardWidget,
   type Relation,
   type RolePermissions,
@@ -77,6 +79,11 @@ interface WidgetMetricSpec {
   fieldKey?: string | null;
   relationId?: number | null;
   statusIds?: number[] | null;
+  // Value source: "entity" (default) aggregates entity records; "page" aggregates
+  // page-local field values stored in page_record_values for `pageId`. For page
+  // source, `fieldKey` is a page-local field key and `relationId` is ignored.
+  source?: "entity" | "page" | null;
+  pageId?: number | null;
 }
 
 interface TableRelatedColumnSpec {
@@ -92,6 +99,11 @@ interface ChartSpec {
   fieldKey?: string | null;
   statusIds?: number[] | null;
   showValues?: boolean | null;
+  // Value source: "entity" (default) or "page" (page-local field values from
+  // page_record_values for `pageId`). For page source, groupBy.fieldKey / fieldKey
+  // are page-local field keys; group-by status still uses the record's status.
+  source?: "entity" | "page" | null;
+  pageId?: number | null;
 }
 
 interface TableSpec {
@@ -318,6 +330,35 @@ async function validateChartConfig(chart: ChartSpec | null | undefined): Promise
   const validTypes = ["bar", "line", "area", "pie", "donut"];
   if (!validTypes.includes(chart.type)) return `Invalid chart type: ${chart.type}`;
 
+  // Page-local field source: group/aggregate over a page's page-local field values.
+  // Group-by status still uses the record status, so only field keys are page-local.
+  if (chart.source === "page") {
+    if (chart.pageId == null) return "Page chart requires a pageId";
+    const entityId = await resolvePageEntityId(chart.pageId);
+    if (entityId == null) return `Page ${chart.pageId} has no resolvable entity`;
+    const kind = chart.groupBy?.kind;
+    if (kind === "field") {
+      if (!chart.groupBy.fieldKey) return "Group-by field is required";
+      const pf = await resolvePageLocalField(chart.pageId, chart.groupBy.fieldKey);
+      if (!pf) return `Group-by page field "${chart.groupBy.fieldKey}" not found`;
+    } else if (kind !== "status") {
+      return "Invalid groupBy.kind";
+    }
+    if (chart.aggregation !== "sum" && chart.aggregation !== "count") {
+      return "Invalid aggregation";
+    }
+    // Page source always aggregates a specific page-local field: sum needs a
+    // numeric field; count counts records whose value for that field is non-empty
+    // (mirrors page-source metric semantics, never a bare record count).
+    if (!chart.fieldKey) return "Page chart requires a field";
+    const vpf = await resolvePageLocalField(chart.pageId, chart.fieldKey);
+    if (!vpf) return `Page field "${chart.fieldKey}" not found`;
+    if (chart.aggregation === "sum" && vpf.fieldType !== "number") {
+      return `Page field "${chart.fieldKey}" is not numeric`;
+    }
+    return null;
+  }
+
   const [entity] = await db
     .select({ id: entitiesTable.id })
     .from(entitiesTable)
@@ -508,6 +549,41 @@ async function validateNotesConfig(notes: NotesSpec | null | undefined): Promise
 }
 
 /**
+ * Resolve the entity whose records a page shows: a bound entity (entities.pageId =
+ * pageId) or, failing that, a mirror page's mirrorEntityId. page_record_values rows
+ * are keyed by (pageId, recordId) where recordId is an entity_records id of this
+ * entity, so this is the entity to aggregate page-local field values over.
+ */
+async function resolvePageEntityId(pageId: number): Promise<number | null> {
+  const [bound] = await db
+    .select({ id: entitiesTable.id })
+    .from(entitiesTable)
+    .where(eq(entitiesTable.pageId, pageId))
+    .limit(1);
+  if (bound) return bound.id;
+  const [page] = await db
+    .select({ mirrorEntityId: pagesTable.mirrorEntityId })
+    .from(pagesTable)
+    .where(eq(pagesTable.id, pageId))
+    .limit(1);
+  return page?.mirrorEntityId ?? null;
+}
+
+/** Resolve a page-local field's type, or null if it does not exist / is inactive. */
+async function resolvePageLocalField(
+  pageId: number,
+  fieldKey: string,
+): Promise<{ fieldType: string } | null> {
+  const [f] = await db
+    .select({ fieldType: pageFieldsTable.fieldType, isActive: pageFieldsTable.isActive })
+    .from(pageFieldsTable)
+    .where(and(eq(pageFieldsTable.pageId, pageId), eq(pageFieldsTable.fieldKey, fieldKey)))
+    .limit(1);
+  if (!f || !f.isActive) return null;
+  return { fieldType: f.fieldType };
+}
+
+/**
  * Validate the metric-shaped part of a spec (entity existence, related single-link
  * relation, numeric sum field). Shared by widget metrics and notes metric sources;
  * key validity/uniqueness is the caller's responsibility.
@@ -517,7 +593,25 @@ async function validateMetricLike(m: {
   aggregation: "count" | "sum";
   fieldKey?: string | null;
   relationId?: number | null;
+  source?: "entity" | "page" | null;
+  pageId?: number | null;
 }): Promise<string | null> {
+  // Page-local field source: aggregate a page's page-local field, not entity data.
+  // Related metrics are entity-only and cannot combine with a page source.
+  if (m.source === "page") {
+    if (m.relationId != null) return "Related metrics cannot use a page field source";
+    if (m.pageId == null) return "Page metric requires a pageId";
+    const entityId = await resolvePageEntityId(m.pageId);
+    if (entityId == null) return `Page ${m.pageId} has no resolvable entity`;
+    if (!m.fieldKey) return "Page metric requires a page field";
+    const pf = await resolvePageLocalField(m.pageId, m.fieldKey);
+    if (!pf) return `Page field "${m.fieldKey}" not found on page ${m.pageId}`;
+    if (m.aggregation === "sum" && pf.fieldType !== "number") {
+      return `Page field "${m.fieldKey}" is not numeric`;
+    }
+    return null;
+  }
+
   const [entity] = await db
     .select({ id: entitiesTable.id })
     .from(entitiesTable)
@@ -592,6 +686,41 @@ async function validateConfig(config: WidgetConfigShape | undefined): Promise<st
  * roles the admin made the widget visible to.
  */
 async function computeMetric(m: WidgetMetricSpec): Promise<number> {
+  // Page-local field source: aggregate the page's page-local field value over the
+  // page's (resolved) entity records via a LEFT JOIN on page_record_values. count =
+  // records whose page-local value is non-empty; sum = numeric page-local values.
+  if (m.source === "page" && m.pageId != null && m.fieldKey) {
+    const entityId = await resolvePageEntityId(m.pageId);
+    if (entityId == null) return 0;
+    const key = m.fieldKey;
+    const pageId = m.pageId;
+    const conds = [eq(entityRecordsTable.entityId, entityId), isNull(entityRecordsTable.archivedAt)];
+    const statusIds = (m.statusIds ?? []).filter((n) => Number.isInteger(n));
+    if (statusIds.length > 0) conds.push(inArray(entityRecordsTable.statusId, statusIds));
+    const join = and(
+      eq(pageRecordValuesTable.recordId, entityRecordsTable.id),
+      eq(pageRecordValuesTable.pageId, pageId),
+    );
+    if (m.aggregation === "sum") {
+      const [row] = await db
+        .select({
+          v: sql<number>`COALESCE(SUM(CASE WHEN (${pageRecordValuesTable.valuesJson} ->> ${key}) ~ ${NUMERIC_RE} THEN (${pageRecordValuesTable.valuesJson} ->> ${key})::numeric ELSE 0 END), 0)::float8`,
+        })
+        .from(entityRecordsTable)
+        .leftJoin(pageRecordValuesTable, join)
+        .where(and(...conds));
+      return Number(row?.v ?? 0);
+    }
+    const [row] = await db
+      .select({
+        v: sql<number>`COUNT(*) FILTER (WHERE NULLIF(${pageRecordValuesTable.valuesJson} ->> ${key}, '') IS NOT NULL)::int`,
+      })
+      .from(entityRecordsTable)
+      .leftJoin(pageRecordValuesTable, join)
+      .where(and(...conds));
+    return Number(row?.v ?? 0);
+  }
+
   const conds = [eq(entityRecordsTable.entityId, m.entityId), isNull(entityRecordsTable.archivedAt)];
   const statusIds = (m.statusIds ?? []).filter((n) => Number.isInteger(n));
   if (statusIds.length > 0) conds.push(inArray(entityRecordsTable.statusId, statusIds));
@@ -680,6 +809,68 @@ async function computeMetric(m: WidgetMetricSpec): Promise<number> {
 async function computeChartSeries(
   c: ChartSpec,
 ): Promise<Array<{ label: string; value: number; color?: string | null }>> {
+  // Page-local field source: group/aggregate the page's page-local field values over
+  // the page's (resolved) entity records via a LEFT JOIN on page_record_values.
+  // Group-by status still uses the record status; group-by field / sum use the
+  // page-local value.
+  if (c.source === "page" && c.pageId != null) {
+    const entityId = await resolvePageEntityId(c.pageId);
+    if (entityId == null) return [];
+    const pageId = c.pageId;
+    const conds = [eq(entityRecordsTable.entityId, entityId), isNull(entityRecordsTable.archivedAt)];
+    const statusIds = (c.statusIds ?? []).filter((n) => Number.isInteger(n));
+    if (statusIds.length > 0) conds.push(inArray(entityRecordsTable.statusId, statusIds));
+    const join = and(
+      eq(pageRecordValuesTable.recordId, entityRecordsTable.id),
+      eq(pageRecordValuesTable.pageId, pageId),
+    );
+    const valueExpr =
+      c.aggregation === "sum" && c.fieldKey
+        ? sql<number>`COALESCE(SUM(CASE WHEN (${pageRecordValuesTable.valuesJson} ->> ${c.fieldKey}) ~ ${NUMERIC_RE} THEN (${pageRecordValuesTable.valuesJson} ->> ${c.fieldKey})::numeric ELSE 0 END), 0)::float8`
+        : c.fieldKey
+          ? sql<number>`count(*) FILTER (WHERE NULLIF(${pageRecordValuesTable.valuesJson} ->> ${c.fieldKey}, '') IS NOT NULL)::int`
+          : sql<number>`count(*)::int`;
+
+    if (c.groupBy?.kind === "status") {
+      const rows = await db
+        .select({
+          statusId: entityStatusesTable.id,
+          nameJson: entityStatusesTable.nameJson,
+          color: entityStatusesTable.color,
+          sortOrder: entityStatusesTable.sortOrder,
+          v: valueExpr,
+        })
+        .from(entityRecordsTable)
+        .leftJoin(pageRecordValuesTable, join)
+        .leftJoin(entityStatusesTable, eq(entityStatusesTable.id, entityRecordsTable.statusId))
+        .where(and(...conds))
+        .groupBy(
+          entityStatusesTable.id,
+          entityStatusesTable.nameJson,
+          entityStatusesTable.color,
+          entityStatusesTable.sortOrder,
+        )
+        .orderBy(asc(entityStatusesTable.sortOrder));
+      return rows.map((r) => ({
+        label: r.statusId ? resolveML(r.nameJson) || "—" : "—",
+        value: Number(r.v ?? 0),
+        color: r.color ?? null,
+      }));
+    }
+
+    const key = c.groupBy.fieldKey as string;
+    const labelExpr = sql<string>`COALESCE(NULLIF(${pageRecordValuesTable.valuesJson} ->> ${key}, ''), '—')`;
+    const rows = await db
+      .select({ label: labelExpr, v: valueExpr })
+      .from(entityRecordsTable)
+      .leftJoin(pageRecordValuesTable, join)
+      .where(and(...conds))
+      .groupBy(labelExpr)
+      .orderBy(sql`2 desc`)
+      .limit(50);
+    return rows.map((r) => ({ label: String(r.label ?? "—"), value: Number(r.v ?? 0), color: null }));
+  }
+
   const conds = [eq(entityRecordsTable.entityId, c.entityId), isNull(entityRecordsTable.archivedAt)];
   const statusIds = (c.statusIds ?? []).filter((n) => Number.isInteger(n));
   if (statusIds.length > 0) conds.push(inArray(entityRecordsTable.statusId, statusIds));

@@ -1306,7 +1306,9 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum). For related metrics this is the related entity\'s field key.'),
   "relationId": zod.number().nullish().describe('When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).'),
-  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", fieldKey refers to a page-local field of pageId and relationId is ignored.'),
+  "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.')
 })).optional(),
   "notes": zod.object({
   "kind": zod.enum(['richtext', 'table']),
@@ -1342,6 +1344,8 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", groupBy.fieldKey \/ fieldKey refer to page-local fields of pageId.'),
+  "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.'),
   "showValues": zod.boolean().nullish().describe('When true, render numeric value labels directly on the chart; when false\/null, values show only on hover')
 }).optional(),
   "table": zod.object({
@@ -1390,7 +1394,9 @@ export const CreateDashboardWidgetBody = zod.object({
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum). For related metrics this is the related entity\'s field key.'),
   "relationId": zod.number().nullish().describe('When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).'),
-  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", fieldKey refers to a page-local field of pageId and relationId is ignored.'),
+  "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.')
 })).optional(),
   "notes": zod.object({
   "kind": zod.enum(['richtext', 'table']),
@@ -1426,6 +1432,8 @@ export const CreateDashboardWidgetBody = zod.object({
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", groupBy.fieldKey \/ fieldKey refer to page-local fields of pageId.'),
+  "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.'),
   "showValues": zod.boolean().nullish().describe('When true, render numeric value labels directly on the chart; when false\/null, values show only on hover')
 }).optional(),
   "table": zod.object({
@@ -1465,7 +1473,9 @@ export const CreateDashboardWidgetResponse = zod.object({
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum). For related metrics this is the related entity\'s field key.'),
   "relationId": zod.number().nullish().describe('When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).'),
-  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", fieldKey refers to a page-local field of pageId and relationId is ignored.'),
+  "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.')
 })).optional(),
   "notes": zod.object({
   "kind": zod.enum(['richtext', 'table']),
@@ -1501,6 +1511,8 @@ export const CreateDashboardWidgetResponse = zod.object({
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", groupBy.fieldKey \/ fieldKey refer to page-local fields of pageId.'),
+  "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.'),
   "showValues": zod.boolean().nullish().describe('When true, render numeric value labels directly on the chart; when false\/null, values show only on hover')
 }).optional(),
   "table": zod.object({
@@ -1607,7 +1619,9 @@ export const UpdateDashboardWidgetBody = zod.object({
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum). For related metrics this is the related entity\'s field key.'),
   "relationId": zod.number().nullish().describe('When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).'),
-  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", fieldKey refers to a page-local field of pageId and relationId is ignored.'),
+  "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.')
 })).optional(),
   "notes": zod.object({
   "kind": zod.enum(['richtext', 'table']),
@@ -1643,6 +1657,8 @@ export const UpdateDashboardWidgetBody = zod.object({
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", groupBy.fieldKey \/ fieldKey refer to page-local fields of pageId.'),
+  "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.'),
   "showValues": zod.boolean().nullish().describe('When true, render numeric value labels directly on the chart; when false\/null, values show only on hover')
 }).optional(),
   "table": zod.object({
@@ -1682,7 +1698,9 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum). For related metrics this is the related entity\'s field key.'),
   "relationId": zod.number().nullish().describe('When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).'),
-  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", fieldKey refers to a page-local field of pageId and relationId is ignored.'),
+  "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.')
 })).optional(),
   "notes": zod.object({
   "kind": zod.enum(['richtext', 'table']),
@@ -1718,6 +1736,8 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", groupBy.fieldKey \/ fieldKey refer to page-local fields of pageId.'),
+  "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.'),
   "showValues": zod.boolean().nullish().describe('When true, render numeric value labels directly on the chart; when false\/null, values show only on hover')
 }).optional(),
   "table": zod.object({

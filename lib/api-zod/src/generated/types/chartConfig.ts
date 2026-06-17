@@ -7,6 +7,7 @@
  */
 import type { ChartConfigAggregation } from './chartConfigAggregation';
 import type { ChartConfigGroupBy } from './chartConfigGroupBy';
+import type { ChartConfigSource } from './chartConfigSource';
 import type { ChartConfigType } from './chartConfigType';
 
 export interface ChartConfig {
@@ -24,6 +25,13 @@ export interface ChartConfig {
      * @nullable
      */
   statusIds?: number[] | null;
+  /** Value source — "entity" (entity records, the default) or "page" (page-local field values from page_record_values for pageId). When "page", groupBy.fieldKey / fieldKey refer to page-local fields of pageId. */
+  source?: ChartConfigSource;
+  /**
+     * When source = page, the page whose page-local field is aggregated.
+     * @nullable
+     */
+  pageId?: number | null;
   /**
      * When true, render numeric value labels directly on the chart; when false/null, values show only on hover
      * @nullable

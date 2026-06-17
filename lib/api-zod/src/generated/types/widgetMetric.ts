@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { WidgetMetricAggregation } from './widgetMetricAggregation';
+import type { WidgetMetricSource } from './widgetMetricSource';
 
 export interface WidgetMetric {
   /** Identifier referenced from the widget formula as {key} */
@@ -27,4 +28,11 @@ export interface WidgetMetric {
      * @nullable
      */
   statusIds?: number[] | null;
+  /** Value source — "entity" (entity records, the default) or "page" (page-local field values from page_record_values for pageId). When "page", fieldKey refers to a page-local field of pageId and relationId is ignored. */
+  source?: WidgetMetricSource;
+  /**
+     * When source = page, the page whose page-local field is aggregated.
+     * @nullable
+     */
+  pageId?: number | null;
 }

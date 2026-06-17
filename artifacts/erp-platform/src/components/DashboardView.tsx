@@ -18,11 +18,14 @@ import {
   useQueryEntityRecords,
   useListRoles,
   useListPages,
+  useListPageFields,
+  getListPageFieldsQueryKey,
   useUpdatePage,
   getListPagesQueryKey,
   useGetSettings,
   getGetSettingsQueryKey,
   type Page,
+  type PageField,
   type DashboardWidget,
   type DashboardWidgetInput,
   type DashboardWidgetData,
@@ -1415,6 +1418,8 @@ export default function DashboardView({ pageId, embedded = false }: { pageId: nu
   );
 }
 
+type WidgetSource = "entity" | "page";
+
 type DraftMetric = {
   key: string;
   entityId: number | null;
@@ -1422,6 +1427,8 @@ type DraftMetric = {
   fieldKey: string | null;
   statusIds: number[];
   relationId: number | null;
+  source: WidgetSource;
+  pageId: number | null;
 };
 
 type ChartDraft = {
@@ -1433,6 +1440,8 @@ type ChartDraft = {
   fieldKey: string | null;
   statusIds: number[];
   showValues: boolean;
+  source: WidgetSource;
+  pageId: number | null;
 };
 
 type TableRelatedColumnDraft = { relationId: number; relatedFieldKey: string };
@@ -1535,8 +1544,10 @@ function WidgetEditorDialog({
           fieldKey: m.fieldKey ?? null,
           statusIds: m.statusIds ?? [],
           relationId: m.relationId ?? null,
-        }))
-      : [{ key: "m1", entityId: null, aggregation: "count", fieldKey: null, statusIds: [], relationId: null }],
+          source: m.source === "page" ? "page" : "entity",
+          pageId: m.pageId ?? null,
+        } satisfies DraftMetric))
+      : [{ key: "m1", entityId: null, aggregation: "count", fieldKey: null, statusIds: [], relationId: null, source: "entity", pageId: null }],
   );
   const [chart, setChart] = useState<ChartDraft>(() => {
     const c = widget?.config.chart;
@@ -1549,6 +1560,8 @@ function WidgetEditorDialog({
       fieldKey: c?.fieldKey ?? null,
       statusIds: c?.statusIds ?? [],
       showValues: c?.showValues ?? false,
+      source: c?.source === "page" ? "page" : "entity",
+      pageId: c?.pageId ?? null,
     };
   });
   const [table, setTable] = useState<TableDraft>(() => {
@@ -1605,7 +1618,7 @@ function WidgetEditorDialog({
     setMetrics((prev) => prev.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
 
   const addMetric = () =>
-    setMetrics((prev) => [...prev, { key: `m${prev.length + 1}`, entityId: null, aggregation: "count", fieldKey: null, statusIds: [], relationId: null }]);
+    setMetrics((prev) => [...prev, { key: `m${prev.length + 1}`, entityId: null, aggregation: "count", fieldKey: null, statusIds: [], relationId: null, source: "entity", pageId: null }]);
 
   const removeMetric = (i: number) => setMetrics((prev) => prev.filter((_, idx) => idx !== i));
 
@@ -1722,7 +1735,12 @@ function WidgetEditorDialog({
     }
 
     if (widgetType === "chart") {
-      if (chart.entityId == null) {
+      if (chart.source === "page") {
+        if (chart.pageId == null) {
+          toast({ title: t("dash.chartNeedsPage", "Выберите страницу для графика"), variant: "destructive" });
+          return null;
+        }
+      } else if (chart.entityId == null) {
         toast({ title: t("dash.chartNeedsEntity", "Выберите сущность для графика"), variant: "destructive" });
         return null;
       }
@@ -1734,6 +1752,12 @@ function WidgetEditorDialog({
         toast({ title: t("dash.metricNeedsField", "Для суммы выберите числовое поле"), variant: "destructive" });
         return null;
       }
+      // Page source always aggregates a specific page-local field (count = non-empty
+      // count of that field), so a field is required even for count.
+      if (chart.source === "page" && !chart.fieldKey) {
+        toast({ title: t("dash.chartNeedsField", "Выберите поле страницы для графика"), variant: "destructive" });
+        return null;
+      }
       return {
         ...base,
         config: {
@@ -1743,15 +1767,21 @@ function WidgetEditorDialog({
           format: format as WidgetConfigFormat,
           chart: {
             type: chart.type,
-            entityId: chart.entityId,
+            // entityId is ignored by the server for page source (it resolves the
+            // page's entity), but the contract requires it — send 0 as a sentinel.
+            entityId: chart.source === "page" ? 0 : (chart.entityId as number),
             groupBy: {
               kind: chart.groupByKind,
               fieldKey: chart.groupByKind === "field" ? chart.groupByFieldKey : null,
             },
             aggregation: chart.aggregation,
-            fieldKey: chart.aggregation === "sum" ? chart.fieldKey : null,
-            statusIds: chart.statusIds.length > 0 ? chart.statusIds : null,
+            // Page source aggregates a specific field for count (non-empty) and sum
+            // alike; entity source only needs a field for sum.
+            fieldKey: chart.source === "page" ? chart.fieldKey : (chart.aggregation === "sum" ? chart.fieldKey : null),
+            statusIds: chart.source === "page" ? null : (chart.statusIds.length > 0 ? chart.statusIds : null),
             showValues: chart.showValues,
+            source: chart.source,
+            pageId: chart.source === "page" ? chart.pageId : null,
           },
         },
       };
@@ -1794,13 +1824,24 @@ function WidgetEditorDialog({
         return null;
       }
       keys.add(m.key);
-      if (m.entityId == null) {
-        toast({ title: t("dash.metricNeedsEntity", "Выберите сущность для каждой метрики"), variant: "destructive" });
-        return null;
-      }
-      if (m.aggregation === "sum" && !m.fieldKey) {
-        toast({ title: t("dash.metricNeedsField", "Для суммы выберите числовое поле"), variant: "destructive" });
-        return null;
+      if (m.source === "page") {
+        if (m.pageId == null) {
+          toast({ title: t("dash.metricNeedsPage", "Выберите страницу для каждой метрики"), variant: "destructive" });
+          return null;
+        }
+        if (!m.fieldKey) {
+          toast({ title: t("dash.metricNeedsPageField", "Выберите поле страницы для метрики"), variant: "destructive" });
+          return null;
+        }
+      } else {
+        if (m.entityId == null) {
+          toast({ title: t("dash.metricNeedsEntity", "Выберите сущность для каждой метрики"), variant: "destructive" });
+          return null;
+        }
+        if (m.aggregation === "sum" && !m.fieldKey) {
+          toast({ title: t("dash.metricNeedsField", "Для суммы выберите числовое поле"), variant: "destructive" });
+          return null;
+        }
       }
     }
     return {
@@ -1811,14 +1852,19 @@ function WidgetEditorDialog({
         textColor,
         metrics: metrics.map<WidgetMetric>((m) => ({
           key: m.key,
-          entityId: m.entityId as number,
+          // entityId is ignored by the server for page source (it resolves the
+          // page's entity), but the contract requires it — send 0 as a sentinel.
+          entityId: m.source === "page" ? 0 : (m.entityId as number),
           aggregation: m.aggregation,
-          // For related metrics, fieldKey targets the related entity's numeric
-          // field (sum); count keeps no fieldKey. For direct metrics it is the
-          // base entity's numeric field on sum only.
-          fieldKey: m.aggregation === "sum" ? m.fieldKey : null,
-          statusIds: m.statusIds.length > 0 ? m.statusIds : null,
-          relationId: m.relationId ?? null,
+          // Page source: fieldKey is the page-local field for both count (non-empty
+          // count) and sum. For related metrics, fieldKey targets the related
+          // entity's numeric field (sum). For direct metrics it is the base
+          // entity's numeric field on sum only.
+          fieldKey: m.source === "page" ? m.fieldKey : (m.aggregation === "sum" ? m.fieldKey : null),
+          statusIds: m.source === "page" ? null : (m.statusIds.length > 0 ? m.statusIds : null),
+          relationId: m.source === "page" ? null : (m.relationId ?? null),
+          source: m.source,
+          pageId: m.source === "page" ? m.pageId : null,
         })),
         formula: formula.trim() ? formula.trim() : null,
         format: format as WidgetConfigFormat,
@@ -2027,13 +2073,29 @@ function ChartEditor({
   t: (key: string, fallback: string) => string;
 }) {
   const { data: fields = [] } = useListEntityFields(chart.entityId ?? 0, {
-    query: { enabled: chart.entityId != null, queryKey: getListEntityFieldsQueryKey(chart.entityId ?? 0) },
+    query: { enabled: chart.source === "entity" && chart.entityId != null, queryKey: getListEntityFieldsQueryKey(chart.entityId ?? 0) },
   });
   const { data: statuses = [] } = useListEntityStatuses(chart.entityId ?? 0, {
-    query: { enabled: chart.entityId != null, queryKey: getListEntityStatusesQueryKey(chart.entityId ?? 0) },
+    query: { enabled: chart.source === "entity" && chart.entityId != null, queryKey: getListEntityStatusesQueryKey(chart.entityId ?? 0) },
   });
-  const numericFields = fields.filter((f: Field) => f.fieldType === "number");
-  const groupableFields = fields.filter((f: Field) => f.fieldType !== "function" && f.fieldType !== "file");
+  const { data: pages = [] } = useListPages();
+  const { data: pageFields = [] } = useListPageFields(chart.pageId ?? 0, {
+    query: { enabled: chart.source === "page" && chart.pageId != null, queryKey: getListPageFieldsQueryKey(chart.pageId ?? 0) },
+  });
+  const activePageFields = pageFields.filter((f: PageField) => f.isActive !== false);
+  // Normalize entity fields and page-local fields to a common {key,label} shape so
+  // the group-by / sum pickers render identically regardless of value source.
+  const numericFields: { key: string; label: unknown }[] =
+    chart.source === "page"
+      ? activePageFields.filter((f) => f.fieldType === "number").map((f) => ({ key: f.fieldKey, label: f.nameJson }))
+      : fields.filter((f: Field) => f.fieldType === "number").map((f: Field) => ({ key: f.fieldKey, label: f.nameJson }));
+  const groupableFields: { key: string; label: unknown }[] =
+    chart.source === "page"
+      ? activePageFields.filter((f) => f.fieldType !== "function" && f.fieldType !== "file").map((f) => ({ key: f.fieldKey, label: f.nameJson }))
+      : fields.filter((f: Field) => f.fieldType !== "function" && f.fieldType !== "file").map((f: Field) => ({ key: f.fieldKey, label: f.nameJson }));
+  // The aggregation value field: sum → numeric only; page-source count → any
+  // groupable field (counts non-empty values of it). Entity-source count uses no field.
+  const chartValueFields = chart.aggregation === "sum" ? numericFields : groupableFields;
 
   const toggleStatus = (sid: number) => {
     const next = chart.statusIds.includes(sid)
@@ -2068,19 +2130,55 @@ function ChartEditor({
         </div>
       </div>
 
-      <div className="space-y-1.5">
-        <p className="text-xs text-slate-400">{t("dash.selectEntity", "Сущность")}</p>
-        <Select
-          value={chart.entityId != null ? String(chart.entityId) : ""}
-          onValueChange={(v) => onChange({ entityId: Number(v), fieldKey: null, groupByFieldKey: null, statusIds: [] })}
-        >
-          <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectEntity", "Сущность")} /></SelectTrigger>
-          <SelectContent>
-            {entities.filter((e) => e.isActive).map((e) => (
-              <SelectItem key={e.id} value={String(e.id)}>{ml(e.nameJson)}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1.5">
+          <p className="text-xs text-slate-400">{t("dash.valueSource", "Источник данных")}</p>
+          <Select
+            value={chart.source}
+            onValueChange={(v) =>
+              onChange({ source: v as WidgetSource, entityId: null, pageId: null, fieldKey: null, groupByFieldKey: null, statusIds: [] })
+            }
+          >
+            <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="entity">{t("dash.sourceEntity", "Сущность")}</SelectItem>
+              <SelectItem value="page">{t("dash.sourcePage", "Поле страницы")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          {chart.source === "page" ? (
+            <>
+              <p className="text-xs text-slate-400">{t("dash.selectPage", "Страница")}</p>
+              <Select
+                value={chart.pageId != null ? String(chart.pageId) : ""}
+                onValueChange={(v) => onChange({ pageId: Number(v), fieldKey: null, groupByFieldKey: null })}
+              >
+                <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectPage", "Страница")} /></SelectTrigger>
+                <SelectContent>
+                  {pages.filter((p) => p.isActive).map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-slate-400">{t("dash.selectEntity", "Сущность")}</p>
+              <Select
+                value={chart.entityId != null ? String(chart.entityId) : ""}
+                onValueChange={(v) => onChange({ entityId: Number(v), fieldKey: null, groupByFieldKey: null, statusIds: [] })}
+              >
+                <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectEntity", "Сущность")} /></SelectTrigger>
+                <SelectContent>
+                  {entities.filter((e) => e.isActive).map((e) => (
+                    <SelectItem key={e.id} value={String(e.id)}>{ml(e.nameJson)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
@@ -2100,15 +2198,15 @@ function ChartEditor({
             <Select
               value={chart.groupByFieldKey ?? ""}
               onValueChange={(v) => onChange({ groupByFieldKey: v })}
-              disabled={chart.entityId == null}
+              disabled={chart.source === "page" ? chart.pageId == null : chart.entityId == null}
             >
               <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectField", "Поле")} /></SelectTrigger>
               <SelectContent>
                 {groupableFields.length === 0 ? (
                   <div className="px-2 py-1.5 text-xs text-slate-400">{t("dash.noFields", "Нет полей")}</div>
                 ) : (
-                  groupableFields.map((f: Field) => (
-                    <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson)}</SelectItem>
+                  groupableFields.map((f) => (
+                    <SelectItem key={f.key} value={f.key}>{ml(f.label)}</SelectItem>
                   ))
                 )}
               </SelectContent>
@@ -2120,7 +2218,7 @@ function ChartEditor({
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1.5">
           <p className="text-xs text-slate-400">{t("dash.aggregation", "Агрегация")}</p>
-          <Select value={chart.aggregation} onValueChange={(v) => onChange({ aggregation: v as ChartConfigAggregation })}>
+          <Select value={chart.aggregation} onValueChange={(v) => onChange({ aggregation: v as ChartConfigAggregation, fieldKey: null })}>
             <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="count">{t("dash.aggCount", "Количество")}</SelectItem>
@@ -2128,21 +2226,27 @@ function ChartEditor({
             </SelectContent>
           </Select>
         </div>
-        {chart.aggregation === "sum" && (
+        {(chart.aggregation === "sum" || chart.source === "page") && (
           <div className="space-y-1.5">
-            <p className="text-xs text-slate-400">{t("dash.selectField", "Числовое поле")}</p>
+            <p className="text-xs text-slate-400">
+              {chart.aggregation === "sum" ? t("dash.selectField", "Числовое поле") : t("dash.chartCountField", "Поле (непустые значения)")}
+            </p>
             <Select
               value={chart.fieldKey ?? ""}
               onValueChange={(v) => onChange({ fieldKey: v })}
-              disabled={chart.entityId == null}
+              disabled={chart.source === "page" ? chart.pageId == null : chart.entityId == null}
             >
-              <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectField", "Числовое поле")} /></SelectTrigger>
+              <SelectTrigger className="h-8">
+                <SelectValue placeholder={chart.aggregation === "sum" ? t("dash.selectField", "Числовое поле") : t("dash.chartCountField", "Поле (непустые значения)")} />
+              </SelectTrigger>
               <SelectContent>
-                {numericFields.length === 0 ? (
-                  <div className="px-2 py-1.5 text-xs text-slate-400">{t("dash.noNumericFields", "Нет числовых полей")}</div>
+                {chartValueFields.length === 0 ? (
+                  <div className="px-2 py-1.5 text-xs text-slate-400">
+                    {chart.aggregation === "sum" ? t("dash.noNumericFields", "Нет числовых полей") : t("dash.noFields", "Нет полей")}
+                  </div>
                 ) : (
-                  numericFields.map((f: Field) => (
-                    <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson)}</SelectItem>
+                  chartValueFields.map((f) => (
+                    <SelectItem key={f.key} value={f.key}>{ml(f.label)}</SelectItem>
                   ))
                 )}
               </SelectContent>
@@ -2151,7 +2255,7 @@ function ChartEditor({
         )}
       </div>
 
-      {chart.entityId != null && statuses.length > 0 && (
+      {chart.source === "entity" && chart.entityId != null && statuses.length > 0 && (
         <div className="space-y-1">
           <p className="text-xs text-slate-400">{t("dash.statusFilter", "Статусы (пусто = все)")}</p>
           <div className="flex flex-wrap gap-1.5">
@@ -2352,14 +2456,19 @@ function MetricEditor({
   t: (key: string, fallback: string) => string;
 }) {
   const { data: fields = [] } = useListEntityFields(metric.entityId ?? 0, {
-    query: { enabled: metric.entityId != null, queryKey: getListEntityFieldsQueryKey(metric.entityId ?? 0) },
+    query: { enabled: metric.source === "entity" && metric.entityId != null, queryKey: getListEntityFieldsQueryKey(metric.entityId ?? 0) },
   });
   const { data: statuses = [] } = useListEntityStatuses(metric.entityId ?? 0, {
-    query: { enabled: metric.entityId != null, queryKey: getListEntityStatusesQueryKey(metric.entityId ?? 0) },
+    query: { enabled: metric.source === "entity" && metric.entityId != null, queryKey: getListEntityStatusesQueryKey(metric.entityId ?? 0) },
   });
   const { data: relationOptions } = useGetEntityRelationOptions(metric.entityId ?? 0, {
-    query: { enabled: metric.entityId != null, queryKey: getGetEntityRelationOptionsQueryKey(metric.entityId ?? 0) },
+    query: { enabled: metric.source === "entity" && metric.entityId != null, queryKey: getGetEntityRelationOptionsQueryKey(metric.entityId ?? 0) },
   });
+  const { data: pages = [] } = useListPages();
+  const { data: pageFields = [] } = useListPageFields(metric.pageId ?? 0, {
+    query: { enabled: metric.source === "page" && metric.pageId != null, queryKey: getListPageFieldsQueryKey(metric.pageId ?? 0) },
+  });
+  const activePageFields = pageFields.filter((f: PageField) => f.isActive !== false);
   const relations = relationOptions?.options ?? [];
   const selectedRelation = relations.find((r) => r.relationId === metric.relationId);
   // For sum: when a relation is chosen, numeric fields come from the related
@@ -2372,6 +2481,13 @@ function MetricEditor({
       : fields
           .filter((f: Field) => f.fieldType === "number")
           .map((f: Field) => ({ key: f.fieldKey, label: f.nameJson }));
+  // Page source: count picks any non-file/function field (counts non-empty
+  // values); sum is restricted to numeric page-local fields.
+  const pageMetricFields: { key: string; label: unknown }[] = (
+    metric.aggregation === "sum"
+      ? activePageFields.filter((f) => f.fieldType === "number")
+      : activePageFields.filter((f) => f.fieldType !== "function" && f.fieldType !== "file")
+  ).map((f) => ({ key: f.fieldKey, label: f.nameJson }));
 
   const toggleStatus = (sid: number) => {
     const next = metric.statusIds.includes(sid)
@@ -2399,16 +2515,44 @@ function MetricEditor({
       </div>
       <div className="grid grid-cols-2 gap-2">
         <Select
-          value={metric.entityId != null ? String(metric.entityId) : ""}
-          onValueChange={(v) => onChange({ entityId: Number(v), fieldKey: null, statusIds: [], relationId: null })}
+          value={metric.source}
+          onValueChange={(v) =>
+            onChange({ source: v as WidgetSource, entityId: null, pageId: null, fieldKey: null, statusIds: [], relationId: null })
+          }
         >
-          <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectEntity", "Сущность")} /></SelectTrigger>
+          <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
           <SelectContent>
-            {entities.filter((e) => e.isActive).map((e) => (
-              <SelectItem key={e.id} value={String(e.id)}>{ml(e.nameJson)}</SelectItem>
-            ))}
+            <SelectItem value="entity">{t("dash.sourceEntity", "Сущность")}</SelectItem>
+            <SelectItem value="page">{t("dash.sourcePage", "Поле страницы")}</SelectItem>
           </SelectContent>
         </Select>
+        {metric.source === "page" ? (
+          <Select
+            value={metric.pageId != null ? String(metric.pageId) : ""}
+            onValueChange={(v) => onChange({ pageId: Number(v), fieldKey: null })}
+          >
+            <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectPage", "Страница")} /></SelectTrigger>
+            <SelectContent>
+              {pages.filter((p) => p.isActive).map((p) => (
+                <SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <Select
+            value={metric.entityId != null ? String(metric.entityId) : ""}
+            onValueChange={(v) => onChange({ entityId: Number(v), fieldKey: null, statusIds: [], relationId: null })}
+          >
+            <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectEntity", "Сущность")} /></SelectTrigger>
+            <SelectContent>
+              {entities.filter((e) => e.isActive).map((e) => (
+                <SelectItem key={e.id} value={String(e.id)}>{ml(e.nameJson)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-2">
         <Select value={metric.aggregation} onValueChange={(v) => onChange({ aggregation: v as "count" | "sum", fieldKey: null })}>
           <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -2416,8 +2560,28 @@ function MetricEditor({
             <SelectItem value="sum">{t("dash.aggSum", "Сумма")}</SelectItem>
           </SelectContent>
         </Select>
+        {metric.source === "page" && (
+          <Select
+            value={metric.fieldKey ?? ""}
+            onValueChange={(v) => onChange({ fieldKey: v })}
+            disabled={metric.pageId == null}
+          >
+            <SelectTrigger className="h-8">
+              <SelectValue placeholder={metric.aggregation === "sum" ? t("dash.selectField", "Числовое поле") : t("dash.selectField", "Поле")} />
+            </SelectTrigger>
+            <SelectContent>
+              {pageMetricFields.length === 0 ? (
+                <div className="px-2 py-1.5 text-xs text-slate-400">{t("dash.noFields", "Нет полей")}</div>
+              ) : (
+                pageMetricFields.map((f) => (
+                  <SelectItem key={f.key} value={f.key}>{ml(f.label)}</SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+        )}
       </div>
-      {metric.entityId != null && relations.length > 0 && (
+      {metric.source === "entity" && metric.entityId != null && relations.length > 0 && (
         <div className="space-y-1">
           <p className="text-xs text-slate-400">{t("dash.metricRelation", "Связь (необязательно)")}</p>
           <Select
@@ -2443,7 +2607,7 @@ function MetricEditor({
           )}
         </div>
       )}
-      {metric.aggregation === "sum" && (
+      {metric.source === "entity" && metric.aggregation === "sum" && (
         <Select
           value={metric.fieldKey ?? ""}
           onValueChange={(v) => onChange({ fieldKey: v })}
@@ -2465,7 +2629,7 @@ function MetricEditor({
           </SelectContent>
         </Select>
       )}
-      {metric.entityId != null && statuses.length > 0 && (
+      {metric.source === "entity" && metric.entityId != null && statuses.length > 0 && (
         <div className="space-y-1">
           <p className="text-xs text-slate-400">{t("dash.statusFilter", "Статусы (пусто = все)")}</p>
           <div className="flex flex-wrap gap-1.5">

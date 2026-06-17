@@ -770,6 +770,17 @@ export const WidgetMetricAggregation = {
   sum: 'sum',
 } as const;
 
+/**
+ * Value source — "entity" (entity records, the default) or "page" (page-local field values from page_record_values for pageId). When "page", fieldKey refers to a page-local field of pageId and relationId is ignored.
+ */
+export type WidgetMetricSource = typeof WidgetMetricSource[keyof typeof WidgetMetricSource];
+
+
+export const WidgetMetricSource = {
+  entity: 'entity',
+  page: 'page',
+} as const;
+
 export interface WidgetMetric {
   /** Identifier referenced from the widget formula as {key} */
   key: string;
@@ -790,6 +801,13 @@ export interface WidgetMetric {
      * @nullable
      */
   statusIds?: number[] | null;
+  /** Value source — "entity" (entity records, the default) or "page" (page-local field values from page_record_values for pageId). When "page", fieldKey refers to a page-local field of pageId and relationId is ignored. */
+  source?: WidgetMetricSource;
+  /**
+     * When source = page, the page whose page-local field is aggregated.
+     * @nullable
+     */
+  pageId?: number | null;
 }
 
 export type ChartConfigType = typeof ChartConfigType[keyof typeof ChartConfigType];
@@ -828,6 +846,17 @@ export const ChartConfigAggregation = {
   sum: 'sum',
 } as const;
 
+/**
+ * Value source — "entity" (entity records, the default) or "page" (page-local field values from page_record_values for pageId). When "page", groupBy.fieldKey / fieldKey refer to page-local fields of pageId.
+ */
+export type ChartConfigSource = typeof ChartConfigSource[keyof typeof ChartConfigSource];
+
+
+export const ChartConfigSource = {
+  entity: 'entity',
+  page: 'page',
+} as const;
+
 export interface ChartConfig {
   type: ChartConfigType;
   entityId: number;
@@ -843,6 +872,13 @@ export interface ChartConfig {
      * @nullable
      */
   statusIds?: number[] | null;
+  /** Value source — "entity" (entity records, the default) or "page" (page-local field values from page_record_values for pageId). When "page", groupBy.fieldKey / fieldKey refer to page-local fields of pageId. */
+  source?: ChartConfigSource;
+  /**
+     * When source = page, the page whose page-local field is aggregated.
+     * @nullable
+     */
+  pageId?: number | null;
   /**
      * When true, render numeric value labels directly on the chart; when false/null, values show only on hover
      * @nullable

@@ -419,7 +419,7 @@ router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (
       .values({
         ...parsed.data,
         formulaConfigJson: clampFormulaDecimals(parsed.data.formulaConfigJson),
-        relationConfigJson: relationConfigToInsert,
+        relationConfigJson: relationConfigToInsert ?? {},
         fieldKey: key,
         pageId: params.data.pageId,
       })
@@ -546,11 +546,11 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
   if (body.formulaConfigJson != null)
     updateData.formulaConfigJson = clampFormulaDecimals(body.formulaConfigJson);
   if (relationConfigToPersist !== undefined) {
-    updateData.relationConfigJson = relationConfigToPersist;
+    updateData.relationConfigJson = relationConfigToPersist ?? {};
   } else if ("relationConfigJson" in body) {
-    updateData.relationConfigJson = body.relationConfigJson ?? null;
+    updateData.relationConfigJson = body.relationConfigJson ?? {};
   }
-  if ("permissionsJson" in body) updateData.permissionsJson = body.permissionsJson ?? null;
+  if ("permissionsJson" in body) updateData.permissionsJson = body.permissionsJson ?? {};
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
   if (body.isActive != null) updateData.isActive = body.isActive;
   if (body.showInTable != null) updateData.showInTable = body.showInTable;
