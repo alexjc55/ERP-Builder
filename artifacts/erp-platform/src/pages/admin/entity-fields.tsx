@@ -76,6 +76,7 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "user", label: "Пользователь" },
   { value: "file", label: "Файл" },
   { value: "relation", label: "Связанное поле" },
+  { value: "lookup", label: "Поле подстановки" },
 ];
 
 
@@ -120,6 +121,8 @@ export default function EntityFieldsPage() {
   const [allowedRoleIds, setAllowedRoleIds] = useState<number[]>([]);
   const [relationId, setRelationId] = useState<number | null>(null);
   const [relatedFieldKey, setRelatedFieldKey] = useState("");
+  const [relatedPageId, setRelatedPageId] = useState<number | null>(null);
+  const [writeThrough, setWriteThrough] = useState(false);
 
   const { data: entities = [] } = useListEntities();
   const { data: roles = [] } = useListRoles();
@@ -135,7 +138,13 @@ export default function EntityFieldsPage() {
   const relationFieldOptions = relationOptions.filter((o) => o.direction === "source");
   const canUseRelation = relationFieldOptions.length > 0;
   const selectedRelation = relationFieldOptions.find((o) => o.relationId === relationId);
-  const relatedFieldOptions = selectedRelation?.fields ?? [];
+  // Lookup/relation fields can project either a related-entity field or a
+  // page-local field of the linked record (relatedPageId). The picker source
+  // follows the selected page when one is chosen.
+  const relatedPages = selectedRelation?.pages ?? [];
+  const selectedPage = relatedPages.find((p) => p.pageId === relatedPageId);
+  const relatedFieldOptions =
+    relatedPageId != null ? selectedPage?.fields ?? [] : selectedRelation?.fields ?? [];
 
   const { data: fields = [], isLoading } = useListEntityFields(entityId);
 
@@ -206,6 +215,8 @@ export default function EntityFieldsPage() {
     setAllowedRoleIds([]);
     setRelationId(null);
     setRelatedFieldKey("");
+    setRelatedPageId(null);
+    setWriteThrough(false);
     setDialogOpen(true);
   };
 
@@ -237,6 +248,8 @@ export default function EntityFieldsPage() {
     );
     setRelationId(field.relationConfigJson?.relationId ?? null);
     setRelatedFieldKey(field.relationConfigJson?.relatedFieldKey ?? "");
+    setRelatedPageId(field.relationConfigJson?.relatedPageId ?? null);
+    setWriteThrough(field.relationConfigJson?.writeThrough ?? false);
     setDialogOpen(true);
   };
 
@@ -273,7 +286,18 @@ export default function EntityFieldsPage() {
           : {},
       userConfigJson: fieldType === "user" ? { allowedRoleIds } : {},
       relationConfigJson:
-        fieldType === "relation" ? { relationId, relatedFieldKey: relatedFieldKey || null } : {},
+        fieldType === "lookup"
+          ? relatedPageId != null
+            ? // Page-source lookups are read-only — never carry write-through.
+              { relationId, relatedFieldKey: relatedFieldKey || null, relatedPageId }
+            : { relationId, relatedFieldKey: relatedFieldKey || null, writeThrough }
+          : fieldType === "relation"
+            ? relatedPageId != null
+              ? // Page-source relation fields project a page-local field (read-only
+                // value), but the relation link itself stays assignable.
+                { relationId, relatedFieldKey: relatedFieldKey || null, relatedPageId }
+              : { relationId, relatedFieldKey: relatedFieldKey || null }
+            : {},
     };
     if (editingField) {
       updateMutation.mutate({ id: editingField.id, data: payload });
@@ -307,7 +331,9 @@ export default function EntityFieldsPage() {
   const keyFormatInvalid = trimmedKey !== "" && !FIELD_KEY_RE.test(trimmedKey);
   const manualKeyTaken = trimmedKey !== "" && existingKeys.has(trimmedKey);
   const effectiveKey = trimmedKey || generatedKey;
-  const relationIncomplete = fieldType === "relation" && (relationId == null || !relatedFieldKey);
+  const relationIncomplete =
+    (fieldType === "relation" || fieldType === "lookup") &&
+    (relationId == null || !relatedFieldKey);
   const canSubmit = !isPending && FIELD_KEY_RE.test(effectiveKey) && !manualKeyTaken && !relationIncomplete;
 
   return (
@@ -465,8 +491,10 @@ export default function EntityFieldsPage() {
                 <Select value={fieldType} onValueChange={(v) => setFieldType(v as FieldType)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {FIELD_TYPES.filter(
-                      (ft) => ft.value !== "relation" || canUseRelation || fieldType === "relation",
+                    {FIELD_TYPES.filter((ft) =>
+                      ft.value === "relation" || ft.value === "lookup"
+                        ? canUseRelation || fieldType === ft.value
+                        : true,
                     ).map((ft) => (
                       <SelectItem key={ft.value} value={ft.value}>{t(`fields.type.${ft.value}`, ft.label)}</SelectItem>
                     ))}
@@ -535,13 +563,18 @@ export default function EntityFieldsPage() {
                 )}
               </div>
             )}
-            {fieldType === "relation" && (
+            {(fieldType === "relation" || fieldType === "lookup") && (
               <div className="rounded-md border border-slate-100 bg-slate-50/50 p-3 space-y-3">
                 <p className="text-xs text-slate-500">
-                  {t(
-                    "fields.relationHint",
-                    "Связанное поле показывает значение из единственной связанной записи. Доступны связи «один к одному» и «многие к одному», где эта сущность — источник.",
-                  )}
+                  {fieldType === "lookup"
+                    ? t(
+                        "fields.lookupHint",
+                        "Поле подстановки показывает значение из уже связанной записи (только для чтения). Выберите ту же связь, что и у связанного поля, и поле, значение которого нужно подставить.",
+                      )
+                    : t(
+                        "fields.relationHint",
+                        "Связанное поле показывает значение из единственной связанной записи. Доступны связи «один к одному» и «многие к одному», где эта сущность — источник.",
+                      )}
                 </p>
                 <div className="space-y-1.5">
                   <Label>{t("fields.relation", "Связь")}</Label>
@@ -550,6 +583,8 @@ export default function EntityFieldsPage() {
                     onValueChange={(v) => {
                       setRelationId(Number(v));
                       setRelatedFieldKey("");
+                      setRelatedPageId(null);
+                      setWriteThrough(false);
                     }}
                   >
                     <SelectTrigger><SelectValue placeholder={t("fields.relationPlaceholder", "Выберите связь")} /></SelectTrigger>
@@ -568,9 +603,44 @@ export default function EntityFieldsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                {relationId != null && relatedPages.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label>{t("fields.lookupSource", "Источник значения")}</Label>
+                    <Select
+                      value={relatedPageId != null ? String(relatedPageId) : "__entity__"}
+                      onValueChange={(v) => {
+                        setRelatedPageId(v === "__entity__" ? null : Number(v));
+                        setRelatedFieldKey("");
+                        setWriteThrough(false);
+                      }}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__entity__">
+                          {t("fields.lookupSourceEntity", "Поля связанной сущности")}
+                        </SelectItem>
+                        {relatedPages.map((p) => (
+                          <SelectItem key={p.pageId} value={String(p.pageId)}>
+                            {t("fields.lookupSourcePagePrefix", "Страница")}: {ml(p.pageLabel)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-slate-400">
+                      {t(
+                        "fields.lookupSourceHint",
+                        "Подстановка может брать значение из поля связанной сущности или из поля страницы связанной записи (только для чтения).",
+                      )}
+                    </p>
+                  </div>
+                )}
                 {relationId != null && (
                   <div className="space-y-1.5">
-                    <Label>{t("fields.relatedField", "Поле связанной сущности")}</Label>
+                    <Label>
+                      {relatedPageId != null
+                        ? t("fields.relatedPageField", "Поле страницы")
+                        : t("fields.relatedField", "Поле связанной сущности")}
+                    </Label>
                     <Select value={relatedFieldKey} onValueChange={setRelatedFieldKey}>
                       <SelectTrigger><SelectValue placeholder={t("fields.relatedFieldPlaceholder", "Выберите поле")} /></SelectTrigger>
                       <SelectContent>
@@ -581,9 +651,25 @@ export default function EntityFieldsPage() {
                     </Select>
                   </div>
                 )}
+                {fieldType === "lookup" && relationId != null && relatedFieldKey && relatedPageId == null && (
+                  <div className="space-y-1.5 border-t border-slate-100 pt-3">
+                    <div className="flex items-center gap-2">
+                      <Switch checked={writeThrough} onCheckedChange={setWriteThrough} id="ef-lookup-write-through" />
+                      <Label htmlFor="ef-lookup-write-through">
+                        {t("fields.lookupWriteThrough", "Разрешить редактирование исходной записи")}
+                      </Label>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      {t(
+                        "fields.lookupWriteThroughHint",
+                        "При клике по ячейке откроется окно исходной записи для редактирования (если у пользователя есть права на изменение исходной сущности).",
+                      )}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
-            {fieldType !== "relation" && (
+            {fieldType !== "relation" && fieldType !== "lookup" && (
               <div className="space-y-1.5">
                 <Label>{t("fields.defaultValue", "Значение по умолчанию")}</Label>
                 <Input
