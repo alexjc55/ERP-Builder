@@ -1003,7 +1003,9 @@ function EditWidgetCell({
       ? `${t("dash.chartWidget", "График")} · ${w.config.chart?.type ?? ""}`
       : widgetType === "table"
         ? `${t("dash.tableWidget", "Таблица")} · ${t("dash.columnsCount", "Колонок")}: ${w.config.table?.fieldKeys?.length ?? 0}`
-        : `${t("dash.metricsCount", "Метрик")}: ${w.config.metrics?.length ?? 0}${w.config.formula ? ` · ${t("dash.hasFormula", "формула")}` : ""}`;
+        : widgetType === "formula"
+          ? `${t("dash.typeFormula", "Формула")} · ${t("dash.fieldsCount", "Полей")}: ${w.config.metrics?.length ?? 0}`
+          : `${t("dash.metricsCount", "Метрик")}: ${w.config.metrics?.length ?? 0}${w.config.formula ? ` · ${t("dash.hasFormula", "формула")}` : ""}`;
   return (
     <div
       className={cn("min-w-0", isDragSource && "opacity-40")}
@@ -1455,7 +1457,7 @@ type TableDraft = {
   relatedColumns: TableRelatedColumnDraft[];
 };
 
-type WidgetTypeChoice = "metric" | "chart" | "table" | "notes";
+type WidgetTypeChoice = "metric" | "formula" | "chart" | "table" | "notes";
 
 type NoteSourceDraft = {
   key: string;
@@ -1524,7 +1526,9 @@ function WidgetEditorDialog({
         ? "table"
         : widget?.config.widgetType === "notes"
           ? "notes"
-          : "metric",
+          : widget?.config.widgetType === "formula"
+            ? "formula"
+            : "metric",
   );
   const [icon, setIcon] = useState(widget ? (widget.icon ?? "") : "");
   const [color, setColor] = useState(widget?.color || DEFAULT_COLOR);
@@ -1848,7 +1852,7 @@ function WidgetEditorDialog({
     return {
       ...base,
       config: {
-        widgetType: "metric",
+        widgetType: widgetType === "formula" ? "formula" : "metric",
         colorStyle,
         textColor,
         metrics: metrics.map<WidgetMetric>((m) => ({
@@ -1896,6 +1900,7 @@ function WidgetEditorDialog({
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="metric">{t("dash.typeMetric", "Показатель")}</SelectItem>
+                  <SelectItem value="formula">{t("dash.typeFormula", "Формула")}</SelectItem>
                   <SelectItem value="chart">{t("dash.typeChart", "График")}</SelectItem>
                   <SelectItem value="table">{t("dash.typeTable", "Таблица")}</SelectItem>
                   <SelectItem value="notes">{t("dash.typeNotes", "Заметки")}</SelectItem>
@@ -1937,7 +1942,7 @@ function WidgetEditorDialog({
             </div>
           </div>
 
-          {widgetType === "metric" && (
+          {(widgetType === "metric" || widgetType === "formula") && (
             <div className="space-y-1.5">
               <Label>{t("dash.colorStyle", "Применение цвета")}</Label>
               <div className="grid grid-cols-3 gap-2">
@@ -1997,12 +2002,20 @@ function WidgetEditorDialog({
             <TableEditor table={table} entities={entities} onChange={(patch) => setTable((prev) => ({ ...prev, ...patch }))} ml={ml} t={t} />
           ) : (
             <>
+              {widgetType === "formula" && (
+                <p className="text-xs text-slate-500">
+                  {t(
+                    "dash.formulaWidgetHint",
+                    "Добавьте поля из разных сущностей и полей страниц как слагаемые, затем объедините их в формуле.",
+                  )}
+                </p>
+              )}
               <div className="space-y-2 rounded-md border border-slate-200 p-3">
                 <div className="flex items-center justify-between">
-                  <Label>{t("dash.metrics", "Метрики")}</Label>
+                  <Label>{widgetType === "formula" ? t("dash.formulaTerms", "Поля формулы") : t("dash.metrics", "Метрики")}</Label>
                   <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={addMetric}>
                     <Plus className="w-3.5 h-3.5" />
-                    {t("dash.addMetric", "Метрика")}
+                    {widgetType === "formula" ? t("dash.addTerm", "Поле") : t("dash.addMetric", "Метрика")}
                   </Button>
                 </div>
                 {metrics.map((m, i) => (
@@ -2024,10 +2037,14 @@ function WidgetEditorDialog({
                 value={formula}
                 onChange={setFormula}
                 fields={metrics.filter((m) => m.key.trim()).map((m) => ({ key: m.key, label: m.key }))}
-                label={t("dash.formula", "Формула (необязательно)")}
+                label={widgetType === "formula" ? t("dash.formulaRequired", "Формула") : t("dash.formula", "Формула (необязательно)")}
                 placeholder="{m1} / {m2} * 100"
-                insertLabel={t("dash.formulaInsertMetric", "Вставить метрику:")}
-                hint={t("dash.formulaHint", "Комбинируйте метрики по ключу: {m1}. Без формулы показывается первая метрика.")}
+                insertLabel={widgetType === "formula" ? t("dash.formulaInsertTerm", "Вставить поле:") : t("dash.formulaInsertMetric", "Вставить метрику:")}
+                hint={
+                  widgetType === "formula"
+                    ? t("dash.formulaWidgetFormulaHint", "Комбинируйте поля по ключу: {m1}. Без формулы показывается первое поле.")
+                    : t("dash.formulaHint", "Комбинируйте метрики по ключу: {m1}. Без формулы показывается первая метрика.")
+                }
               />
             </>
           )}

@@ -4025,8 +4025,8 @@ components:
       properties:
         widgetType:
           type: ["string", "null"]
-          enum: [metric, chart, table, notes, null]
-          description: metric (default) = number cards; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.
+          enum: [metric, formula, chart, table, notes, null]
+          description: metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.
         metrics:
           type: array
           items:
@@ -4202,7 +4202,7 @@ components:
           type: integer
         widgetType:
           type: ["string", "null"]
-          enum: [metric, chart, table, notes, null]
+          enum: [metric, formula, chart, table, notes, null]
         chartType:
           type: ["string", "null"]
         showValues:

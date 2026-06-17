@@ -16,7 +16,7 @@ import type { WidgetMetric } from './widgetMetric';
 
 export interface WidgetConfig {
   /**
-     * metric (default) = number cards; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.
+     * metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.
      * @nullable
      */
   widgetType?: WidgetConfigWidgetType;

@@ -1048,7 +1048,7 @@ export interface NotesConfig {
 }
 
 /**
- * metric (default) = number cards; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.
+ * metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.
  * @nullable
  */
 export type WidgetConfigWidgetType = typeof WidgetConfigWidgetType[keyof typeof WidgetConfigWidgetType] | null;
@@ -1056,6 +1056,7 @@ export type WidgetConfigWidgetType = typeof WidgetConfigWidgetType[keyof typeof 
 
 export const WidgetConfigWidgetType = {
   metric: 'metric',
+  formula: 'formula',
   chart: 'chart',
   table: 'table',
   notes: 'notes',
@@ -1100,7 +1101,7 @@ export const WidgetConfigTextColor = {
 
 export interface WidgetConfig {
   /**
-     * metric (default) = number cards; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.
+     * metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.
      * @nullable
      */
   widgetType?: WidgetConfigWidgetType;
@@ -1258,6 +1259,7 @@ export type DashboardWidgetDataWidgetType = typeof DashboardWidgetDataWidgetType
 
 export const DashboardWidgetDataWidgetType = {
   metric: 'metric',
+  formula: 'formula',
   chart: 'chart',
   table: 'table',
   notes: 'notes',

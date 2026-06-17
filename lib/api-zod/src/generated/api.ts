@@ -1299,7 +1299,7 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -1387,7 +1387,7 @@ export const CreateDashboardWidgetBody = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -1466,7 +1466,7 @@ export const CreateDashboardWidgetResponse = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -1558,7 +1558,7 @@ export const GetDashboardDataResponseItem = zod.object({
   "gridW": zod.number(),
   "gridH": zod.number(),
   "sortOrder": zod.number(),
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish(),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish(),
   "chartType": zod.string().nullish(),
   "showValues": zod.boolean().nullish().describe('When true, the chart widget renders numeric value labels directly on the chart'),
   "series": zod.array(zod.object({
@@ -1612,7 +1612,7 @@ export const UpdateDashboardWidgetBody = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -1691,7 +1691,7 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish().describe('metric (default) = number cards; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),

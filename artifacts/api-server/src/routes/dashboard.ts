@@ -142,7 +142,7 @@ interface NotesSpec {
 }
 
 interface WidgetConfigShape {
-  widgetType?: "metric" | "chart" | "table" | "notes" | null;
+  widgetType?: "metric" | "formula" | "chart" | "table" | "notes" | null;
   metrics?: WidgetMetricSpec[];
   formula?: string | null;
   format?: string | null;
@@ -1464,13 +1464,16 @@ router.get("/pages/:id/dashboard/data", requireAuth, async (req, res): Promise<v
           metrics: {},
         };
       }
+      // Metric and formula widgets share the same compute model (field-terms +
+      // optional formula + format). They differ only as distinct widget types so
+      // the client can render a formula-first editor; both produce a number card.
       const metrics: Record<string, number> = {};
       for (const m of config.metrics ?? []) {
         metrics[m.key] = await computeMetric(m);
       }
       return {
         ...base,
-        widgetType: "metric" as const,
+        widgetType: config.widgetType === "formula" ? ("formula" as const) : ("metric" as const),
         formula: config.formula ?? null,
         format: config.format ?? null,
         metrics,

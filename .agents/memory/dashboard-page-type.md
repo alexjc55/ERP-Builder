@@ -37,6 +37,12 @@ Must be enforced on **every** path that can change page type, against the **effe
 ## RBAC
 - Widget CRUD/reorder is gated by the existing **`pages`** admin cap — managing dashboards == managing pages. No new RBAC cap was added.
 
+## Formula widget (`widgetType: "formula"`)
+- A `formula` widget shares the metric model entirely: same `config.metrics` (treated as formula "terms"), same `config.formula` + `config.format`, same server `computeMetric`. It exists only as a distinct widgetType so the client renders a formula-first editor (relabeled "Поля формулы"/"Вставить поле", formula non-optional in copy) and viewers see a single number card.
+- **Why a new type rather than just using metric+formula:** the user wanted a dedicated card whose purpose is "combine fields across entities/pages into one number". The metric widget already supports per-term independent entity/page source + a formula, so the new type is a UX wrapper, not new compute.
+- **Round-trip rule:** the metric serialize path sets `widgetType = widgetType === "formula" ? "formula" : "metric"`, and the data endpoint mirrors that on read — both must stay in lockstep or an edited formula widget silently reverts to metric. `validateConfig` deliberately falls through to the metric path (≥1 term required); do NOT add a separate formula branch unless the model diverges.
+- The viewer needs NO formula branch: it falls through to the metric number-card render (`resolveValue`/`formatValue`). Any code reading `config.metrics.length` must still guard (`?? 0`) — same caveat as charts.
+
 ## Chart widgets
 - A widget is either `widgetType: "metric"` (number cards, the default/legacy shape) or `widgetType: "chart"`. `config.metrics` may be absent for charts — any edit-mode UI reading `config.metrics.length` MUST guard (`config.metrics?.length ?? 0`) or it crashes on chart widgets.
 - Chart config = `{type: bar|line|area|pie|donut, entityId, groupBy:{kind: status|field, fieldKey?}, aggregation: count|sum, fieldKey?, statusIds?}`. Server computes a `series` of `{label, value, color?}` buckets, **admin-authoritative** exactly like metric values (same two auth gates before compute; same regex-guarded numeric cast for sum).
