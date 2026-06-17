@@ -89,6 +89,16 @@ non-editable (no inline edit, read-only placeholder in the add-row draft).
 only (entity + page merged values of the same row). Cross-entity / cross-record
 references are deferred (tracked as a follow-up), not implemented.
 
+## Non-value-backed page field types: function, relation, lookup
+
+`validatePageValues` (page_record_values writes) SKIPS `function`, `relation`, and
+`lookup` page fields — none of them is ever stored in the page value map. `lookup`
+is the newest: a read-only projection of a linked record's field (see
+`page-relation-fields.md` for the full relation/lookup + page-source `relatedPageId`
+contract). When adding any future derived/read-only page field type, add it to the
+`validatePageValues` skip set AND keep it out of the page-local totals/formula merge,
+mirroring how `function`/`relation` are handled.
+
 ## Formula-helper chips must mirror the eval context exactly
 
 The formula editor's clickable field chips (insert `{key}` at caret) must offer

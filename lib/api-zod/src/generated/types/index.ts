@@ -131,6 +131,7 @@ export * from './pageRelatedValuesInput';
 export * from './pageRelationOption';
 export * from './pageRelationOptionDirection';
 export * from './pageRelationOptionField';
+export * from './pageRelationOptionPage';
 export * from './pageRelationOptions';
 export * from './pageUpdate';
 export * from './pageUpdateMirrorFieldLabelsJson';

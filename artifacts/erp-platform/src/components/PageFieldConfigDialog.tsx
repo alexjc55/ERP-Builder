@@ -71,6 +71,7 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "phone", label: "Телефон" },
   { value: "function", label: "Формула (вычисляемое)" },
   { value: "relation", label: "Связанное поле" },
+  { value: "lookup", label: "Поле подстановки" },
 ];
 
 const FIELD_ACCESS_OPTIONS: { value: FieldAccess; label: string }[] = [
@@ -146,6 +147,9 @@ export function PageFieldConfigDialog({
   const [formulaDecimals, setFormulaDecimals] = useState("");
   const [relationId, setRelationId] = useState<number | null>(null);
   const [relatedFieldKey, setRelatedFieldKey] = useState("");
+  // lookup-only: when set, the lookup projects a PAGE-LOCAL field of the linked
+  // record instead of one of its entity fields (read-only).
+  const [relatedPageId, setRelatedPageId] = useState<number | null>(null);
   const [permissions, setPermissions] = useState<FieldPermissions>({});
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -175,6 +179,7 @@ export function PageFieldConfigDialog({
       );
       setRelationId(field.relationConfigJson?.relationId ?? null);
       setRelatedFieldKey(field.relationConfigJson?.relatedFieldKey ?? "");
+      setRelatedPageId(field.relationConfigJson?.relatedPageId ?? null);
       setPermissions(field.permissionsJson ? { ...field.permissionsJson } : {});
     } else {
       setFieldKey("");
@@ -196,6 +201,7 @@ export function PageFieldConfigDialog({
       setFormulaDecimals("");
       setRelationId(null);
       setRelatedFieldKey("");
+      setRelatedPageId(null);
       setPermissions({});
     }
   }, [open, field, nextSortOrder]);
@@ -262,7 +268,11 @@ export function PageFieldConfigDialog({
   })();
 
   const selectedRelation = relationOptions.find((o) => o.relationId === relationId);
-  const relatedFieldOptions = selectedRelation?.fields ?? [];
+  // Pages of the related entity whose page-local fields a lookup can project.
+  const relatedPages = selectedRelation?.pages ?? [];
+  const selectedPage = relatedPages.find((p) => p.pageId === relatedPageId);
+  const relatedFieldOptions =
+    fieldType === "lookup" && relatedPageId != null ? selectedPage?.fields ?? [] : selectedRelation?.fields ?? [];
 
   const setRoleAccess = (roleId: number, access: FieldAccess | "inherit") => {
     setPermissions((prev) => {
@@ -304,15 +314,20 @@ export function PageFieldConfigDialog({
             }
           : {},
       relationConfigJson:
-        fieldType === "relation" ? { relationId, relatedFieldKey: relatedFieldKey || null } : {},
-      permissionsJson: fieldType === "relation" ? permissions : {},
+        fieldType === "lookup"
+          ? { relationId, relatedFieldKey: relatedFieldKey || null, relatedPageId }
+          : fieldType === "relation"
+            ? { relationId, relatedFieldKey: relatedFieldKey || null }
+            : {},
+      permissionsJson: fieldType === "relation" || fieldType === "lookup" ? permissions : {},
     };
     if (field) updateMutation.mutate({ id: field.id, data: payload });
     else createMutation.mutate({ pageId, data: payload });
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
-  const relationIncomplete = fieldType === "relation" && (relationId == null || !relatedFieldKey);
+  const relationIncomplete =
+    (fieldType === "relation" || fieldType === "lookup") && (relationId == null || !relatedFieldKey);
   const canSubmit =
     !isPending && FIELD_KEY_RE.test(effectiveKey) && !manualKeyTaken && !keyFormatInvalid && !relationIncomplete;
 
@@ -398,13 +413,18 @@ export function PageFieldConfigDialog({
                 </div>
               </div>
             )}
-            {fieldType === "relation" && (
+            {(fieldType === "relation" || fieldType === "lookup") && (
               <div className="rounded-md border border-slate-100 bg-slate-50/50 p-3 space-y-3">
                 <p className="text-xs text-slate-500">
-                  {t(
-                    "pageFields.relationHint",
-                    "Связанное поле показывает значение из единственной связанной записи. Доступны связи «один к одному» и «многие к одному» (а также обратная сторона «один ко многим»).",
-                  )}
+                  {fieldType === "lookup"
+                    ? t(
+                        "pageFields.lookupHint",
+                        "Поле подстановки показывает значение из единственной связанной записи (только для чтения). Источником может быть поле связанной сущности или поле страницы связанной записи.",
+                      )
+                    : t(
+                        "pageFields.relationHint",
+                        "Связанное поле показывает значение из единственной связанной записи. Доступны связи «один к одному» и «многие к одному» (а также обратная сторона «один ко многим»).",
+                      )}
                 </p>
                 <div className="space-y-1.5">
                   <Label>{t("pageFields.relation", "Связь")}</Label>
@@ -413,6 +433,7 @@ export function PageFieldConfigDialog({
                     onValueChange={(v) => {
                       setRelationId(Number(v));
                       setRelatedFieldKey("");
+                      setRelatedPageId(null);
                     }}
                   >
                     <SelectTrigger><SelectValue placeholder={t("pageFields.relationPlaceholder", "Выберите связь")} /></SelectTrigger>
@@ -431,9 +452,37 @@ export function PageFieldConfigDialog({
                     </SelectContent>
                   </Select>
                 </div>
+                {fieldType === "lookup" && relationId != null && relatedPages.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label>{t("fields.lookupSource", "Источник значения")}</Label>
+                    <Select
+                      value={relatedPageId != null ? String(relatedPageId) : "__entity__"}
+                      onValueChange={(v) => {
+                        setRelatedPageId(v === "__entity__" ? null : Number(v));
+                        setRelatedFieldKey("");
+                      }}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__entity__">
+                          {t("fields.lookupSourceEntity", "Поля связанной сущности")}
+                        </SelectItem>
+                        {relatedPages.map((p) => (
+                          <SelectItem key={p.pageId} value={String(p.pageId)}>
+                            {t("fields.lookupSourcePagePrefix", "Страница")}: {ml(p.pageLabel)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 {relationId != null && (
                   <div className="space-y-1.5">
-                    <Label>{t("pageFields.relatedField", "Поле связанной сущности")}</Label>
+                    <Label>
+                      {fieldType === "lookup" && relatedPageId != null
+                        ? t("fields.relatedPageField", "Поле страницы")
+                        : t("pageFields.relatedField", "Поле связанной сущности")}
+                    </Label>
                     <Select value={relatedFieldKey} onValueChange={setRelatedFieldKey}>
                       <SelectTrigger><SelectValue placeholder={t("pageFields.relatedFieldPlaceholder", "Выберите поле")} /></SelectTrigger>
                       <SelectContent>
@@ -446,7 +495,7 @@ export function PageFieldConfigDialog({
                 )}
               </div>
             )}
-            {fieldType !== "function" && fieldType !== "relation" && (
+            {fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup" && (
               <div className="space-y-1.5">
                 <Label>{t("fields.defaultValue", "Значение по умолчанию")}</Label>
                 <Input value={defaultValue} onChange={(e) => setDefaultValue(e.target.value)} placeholder="—" />
@@ -495,7 +544,7 @@ export function PageFieldConfigDialog({
               </div>
             )}
 
-            {fieldType === "relation" && (
+            {(fieldType === "relation" || fieldType === "lookup") && (
               <div className="border-t border-slate-100 pt-4 space-y-2">
                 <Label>{t("fields.accessByRoles", "Доступ к полю по ролям")}</Label>
                 <p className="text-xs text-slate-400">

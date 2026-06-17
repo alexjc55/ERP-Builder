@@ -83,6 +83,10 @@ export type RelationFieldConfig = {
   relationId?: number | null;
   relatedFieldKey?: string | null;
   writeThrough?: boolean;
+  // Lookup-only: project a PAGE-LOCAL field (page_record_values) of the linked
+  // record instead of one of its entity fields. Null/absent = project an entity
+  // field. Page-source lookups are read-only (never writeThrough).
+  relatedPageId?: number | null;
 };
 
 export const entityFieldsTable = pgTable(

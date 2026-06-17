@@ -138,7 +138,10 @@ function relatedEntityIdFor(relation: Relation, direction: LinkDirection): numbe
 async function validateRelationFieldConfig(
   pageId: number,
   cfg: RelationFieldConfig | undefined | null,
-): Promise<{ ok: true } | { error: string }> {
+  // Lookup page fields may project a PAGE-LOCAL field of the linked record via
+  // relatedPageId. Assignable relation page fields cannot.
+  isLookup = false,
+): Promise<{ ok: true; cleaned: RelationFieldConfig } | { error: string }> {
   const eff = await effectiveEntityForPage(pageId);
   if (!eff.found) return { error: "Page not found" };
   if (eff.entityId == null) return { error: "Relation fields require the page to be bound to an entity" };
@@ -150,6 +153,17 @@ async function validateRelationFieldConfig(
   const direction = relationDirection(relation, eff.entityId);
   if (!direction) return { error: "Relation does not yield a single linked record for this page's entity" };
   const relatedEntityId = relatedEntityIdFor(relation, direction);
+
+  // Page-source lookup: project a page-local field of the related entity's page.
+  // Page-source is lookup-only and always read-only — the cleaned config never
+  // carries writeThrough (page lookups have no single source record to open).
+  const relatedPageId = isLookup ? cfg?.relatedPageId ?? null : null;
+  if (relatedPageId != null) {
+    const pageCheck = await validateRelatedPageSource(relatedPageId, relatedEntityId, relatedFieldKey);
+    if ("error" in pageCheck) return pageCheck;
+    return { ok: true, cleaned: { relationId, relatedFieldKey, relatedPageId } };
+  }
+
   const [rf] = await db
     .select({ id: entityFieldsTable.id })
     .from(entityFieldsTable)
@@ -161,6 +175,40 @@ async function validateRelationFieldConfig(
       ),
     );
   if (!rf) return { error: "Related field not found on the related entity" };
+  // Entity-source: strip any stray relatedPageId/writeThrough. Page fields never
+  // offer write-through (no per-page nav affordance), so it is always dropped.
+  return { ok: true, cleaned: { relationId, relatedFieldKey } };
+}
+
+/**
+ * Validate that a lookup's `relatedPageId` page belongs to the relation's
+ * related entity and that `relatedFieldKey` is an active value-backed page field
+ * of that page (function/relation/lookup page fields cannot be projected).
+ */
+async function validateRelatedPageSource(
+  relatedPageId: number,
+  relatedEntityId: number,
+  relatedFieldKey: string,
+): Promise<{ ok: true } | { error: string }> {
+  const pageEff = await effectiveEntityForPage(relatedPageId);
+  if (!pageEff.found || pageEff.entityId == null) return { error: "Lookup page not found" };
+  if (pageEff.entityId !== relatedEntityId) {
+    return { error: "Lookup page does not belong to the related entity" };
+  }
+  const [pf] = await db
+    .select({ fieldType: pageFieldsTable.fieldType })
+    .from(pageFieldsTable)
+    .where(
+      and(
+        eq(pageFieldsTable.pageId, relatedPageId),
+        eq(pageFieldsTable.fieldKey, relatedFieldKey),
+        eq(pageFieldsTable.isActive, true),
+      ),
+    );
+  if (!pf) return { error: "Lookup page field not found" };
+  if (pf.fieldType === "function" || pf.fieldType === "relation" || pf.fieldType === "lookup") {
+    return { error: "This page field cannot be used as a lookup source" };
+  }
   return { ok: true };
 }
 
@@ -221,9 +269,15 @@ function validatePageValues(
   }
   const cleaned: Record<string, unknown> = {};
   for (const field of fields) {
-    // `function` (computed) and `relation` (derived from a linked record and
-    // written back to that record, never stored here) are never persisted.
-    if (field.fieldType === "function" || field.fieldType === "relation") continue;
+    // `function` (computed), `relation` (derived from a linked record and
+    // written back to that record), and `lookup` (read-only projection of a
+    // linked record's field) are never stored as page-local values.
+    if (
+      field.fieldType === "function" ||
+      field.fieldType === "relation" ||
+      field.fieldType === "lookup"
+    )
+      continue;
     const raw = values[field.fieldKey];
     if (isEmpty(raw)) {
       if (field.isRequired) return { error: `Field "${field.fieldKey}" is required` };
@@ -341,12 +395,18 @@ router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (
     res.status(400).json({ error: "Select fields require at least one option" });
     return;
   }
-  if (parsed.data.fieldType === "relation") {
-    const check = await validateRelationFieldConfig(params.data.pageId, parsed.data.relationConfigJson);
+  let relationConfigToInsert: RelationFieldConfig | null | undefined = parsed.data.relationConfigJson;
+  if (parsed.data.fieldType === "relation" || parsed.data.fieldType === "lookup") {
+    const check = await validateRelationFieldConfig(
+      params.data.pageId,
+      parsed.data.relationConfigJson,
+      parsed.data.fieldType === "lookup",
+    );
     if ("error" in check) {
       res.status(400).json({ error: check.error });
       return;
     }
+    relationConfigToInsert = check.cleaned;
   }
   if (await pageFieldKeyTaken(params.data.pageId, key, null)) {
     res.status(409).json({ error: "A page field with this key already exists on this page" });
@@ -358,6 +418,7 @@ router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (
       .values({
         ...parsed.data,
         formulaConfigJson: clampFormulaDecimals(parsed.data.formulaConfigJson),
+        relationConfigJson: relationConfigToInsert,
         fieldKey: key,
         pageId: params.data.pageId,
       })
@@ -451,16 +512,21 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
       return;
     }
   }
-  if (nextType === "relation") {
+  let relationConfigToPersist: RelationFieldConfig | null | undefined;
+  if (nextType === "relation" || nextType === "lookup") {
     const nextCfg =
       "relationConfigJson" in body
         ? body.relationConfigJson
         : (current.relationConfigJson as RelationFieldConfig | null);
-    const check = await validateRelationFieldConfig(current.pageId, nextCfg);
+    const check = await validateRelationFieldConfig(current.pageId, nextCfg, nextType === "lookup");
     if ("error" in check) {
       res.status(400).json({ error: check.error });
       return;
     }
+    relationConfigToPersist = check.cleaned;
+  } else if (body.fieldType != null) {
+    // Switching away from relation/lookup: clear any stored relation config.
+    relationConfigToPersist = null;
   }
   if (body.nameJson != null) updateData.nameJson = body.nameJson;
   if (body.descriptionJson != null) updateData.descriptionJson = body.descriptionJson;
@@ -471,7 +537,11 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
   if (body.formatRulesJson != null) updateData.formatRulesJson = body.formatRulesJson;
   if (body.formulaConfigJson != null)
     updateData.formulaConfigJson = clampFormulaDecimals(body.formulaConfigJson);
-  if ("relationConfigJson" in body) updateData.relationConfigJson = body.relationConfigJson ?? null;
+  if (relationConfigToPersist !== undefined) {
+    updateData.relationConfigJson = relationConfigToPersist;
+  } else if ("relationConfigJson" in body) {
+    updateData.relationConfigJson = body.relationConfigJson ?? null;
+  }
   if ("permissionsJson" in body) updateData.permissionsJson = body.permissionsJson ?? null;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
   if (body.isActive != null) updateData.isActive = body.isActive;
@@ -685,7 +755,7 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
         and(
           eq(pageFieldsTable.pageId, params.data.pageId),
           eq(pageFieldsTable.isActive, true),
-          eq(pageFieldsTable.fieldType, "relation"),
+          inArray(pageFieldsTable.fieldType, ["relation", "lookup"]),
         ),
       )
       .orderBy(asc(pageFieldsTable.sortOrder))
@@ -751,6 +821,9 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
     const relationId = cfg?.relationId ?? null;
     const relatedFieldKey = cfg?.relatedFieldKey ?? null;
     if (relationId == null || !relatedFieldKey) continue;
+    // Page-source lookup: project a PAGE-LOCAL field of the linked record from
+    // page_record_values, not one of the linked entity record's own fields.
+    const relatedPageId = pf.fieldType === "lookup" ? cfg?.relatedPageId ?? null : null;
 
     const [relation] = await db.select().from(relationsTable).where(eq(relationsTable.id, relationId));
     if (!relation) continue;
@@ -758,42 +831,75 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
     if (!direction) continue;
     const relatedEntityId = relatedEntityIdFor(relation, direction);
 
-    const [relatedField] = await db
-      .select()
-      .from(entityFieldsTable)
-      .where(
-        and(
-          eq(entityFieldsTable.entityId, relatedEntityId),
-          eq(entityFieldsTable.fieldKey, relatedFieldKey),
-          eq(entityFieldsTable.isActive, true),
-        ),
-      );
-    if (!relatedField) continue;
-
     // Re-apply the related entity's RECORD-VIEW boundary first: a viewer with no
-    // view permission on the related entity must get nothing from it, even though
-    // resolveFieldAccess defaults to "view" when no explicit field perm exists.
-    // Treat lack of related-entity view as hidden (no type, no value, no id).
+    // view permission on the related entity must get nothing from it.
     const canViewRelated = canRecord(perms, relatedEntityId, "view");
-    const access = canViewRelated
-      ? resolveFieldAccess(relatedField, perms, roleIds, relatedEntityId)
-      : "hidden";
-    const pagePerm = mostPermissiveFieldPerm(pf.permissionsJson as FieldPermissions | null, roleIds, "edit");
     const relScope = effectiveScope(perms, relatedEntityId);
-    // The column now ASSIGNS the link (not edits the related value): a cell is
+
+    // Resolve the projected field's metadata + visibility from the right source:
+    // a page field (page-source lookup) or the linked entity's own field.
+    let access: "hidden" | "view" | "edit";
+    let relatedFieldType: string | null;
+    let optionsJson: string[];
+    if (relatedPageId != null) {
+      const [relatedPageField] = await db
+        .select({
+          fieldType: pageFieldsTable.fieldType,
+          optionsJson: pageFieldsTable.optionsJson,
+          permissionsJson: pageFieldsTable.permissionsJson,
+        })
+        .from(pageFieldsTable)
+        .where(
+          and(
+            eq(pageFieldsTable.pageId, relatedPageId),
+            eq(pageFieldsTable.fieldKey, relatedFieldKey),
+            eq(pageFieldsTable.isActive, true),
+          ),
+        );
+      if (!relatedPageField) continue;
+      const projPerm = mostPermissiveFieldPerm(
+        relatedPageField.permissionsJson as FieldPermissions | null,
+        roleIds,
+        "view",
+      );
+      access = canViewRelated && projPerm !== "hidden" ? "view" : "hidden";
+      relatedFieldType = access === "hidden" ? null : relatedPageField.fieldType;
+      optionsJson = access === "hidden" ? [] : ((relatedPageField.optionsJson as string[]) ?? []);
+    } else {
+      const [relatedField] = await db
+        .select()
+        .from(entityFieldsTable)
+        .where(
+          and(
+            eq(entityFieldsTable.entityId, relatedEntityId),
+            eq(entityFieldsTable.fieldKey, relatedFieldKey),
+            eq(entityFieldsTable.isActive, true),
+          ),
+        );
+      if (!relatedField) continue;
+      // resolveFieldAccess defaults to "view" when no explicit field perm exists,
+      // so treat lack of related-entity view as hidden (no type, value, or id).
+      access = canViewRelated ? resolveFieldAccess(relatedField, perms, roleIds, relatedEntityId) : "hidden";
+      relatedFieldType = access === "hidden" ? null : relatedField.fieldType;
+      optionsJson = access === "hidden" ? [] : ((relatedField.optionsJson as string[]) ?? []);
+    }
+
+    const pagePerm = mostPermissiveFieldPerm(pf.permissionsJson as FieldPermissions | null, roleIds, "edit");
+    // The column ASSIGNS the link (not edits the related value): a cell is
     // assignable when the viewer may edit this page-field column, can update the
     // base entity's records (links belong to the base record), and the related
-    // field is not hidden (so the chosen record's label is meaningful). This is
-    // column-wide, independent of whether a link currently exists, so EMPTY cells
-    // are assignable too.
+    // field is not hidden. Column-wide, so EMPTY cells are assignable too.
+    // A lookup page field is read-only: it projects a field of the linked record
+    // and never assigns the link, so its column is never editable.
     const columnEditable =
+      pf.fieldType !== "lookup" &&
       pagePerm === "edit" && access !== "hidden" && canRecord(perms, entityId, "update");
 
     columns.push({
       fieldKey: pf.fieldKey,
       relatedFieldKey,
-      relatedFieldType: access === "hidden" ? null : relatedField.fieldType,
-      optionsJson: access === "hidden" ? [] : ((relatedField.optionsJson as string[]) ?? []),
+      relatedFieldType,
+      optionsJson,
       editableColumn: columnEditable,
     });
 
@@ -811,9 +917,12 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
     const linkMap = new Map<number, number>();
     for (const l of linkRows) linkMap.set(l.from, l.to);
 
-    // Load the linked records once for value + related own-scope checks.
+    // Load the linked records once for related own-scope + row-hidden gating.
+    // For page-source lookups linkedMap carries only membership; the projected
+    // value comes from pageValuesMap.
     const linkedIds = Array.from(new Set(linkRows.map((l) => l.to)));
     const linkedMap = new Map<number, Record<string, unknown>>();
+    const pageValuesMap = new Map<number, Record<string, unknown>>();
     if (linkedIds.length > 0 && access !== "hidden") {
       // Hard boundary: a linked record sitting in a row-hidden status (for the
       // related entity) must not surface its value here either.
@@ -838,6 +947,21 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
         .from(entityRecordsTable)
         .where(and(...linkedConds));
       for (const lr of linkedRecords) linkedMap.set(lr.id, (lr.valuesJson as Record<string, unknown>) ?? {});
+      if (relatedPageId != null) {
+        const allowedLinkedIds = Array.from(linkedMap.keys());
+        if (allowedLinkedIds.length > 0) {
+          const prv = await db
+            .select({ recordId: pageRecordValuesTable.recordId, valuesJson: pageRecordValuesTable.valuesJson })
+            .from(pageRecordValuesTable)
+            .where(
+              and(
+                eq(pageRecordValuesTable.pageId, relatedPageId),
+                inArray(pageRecordValuesTable.recordId, allowedLinkedIds),
+              ),
+            );
+          for (const r of prv) pageValuesMap.set(r.recordId, (r.valuesJson as Record<string, unknown>) ?? {});
+        }
+      }
     }
 
     for (const recordId of allowedIds) {
@@ -853,13 +977,16 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
         const linkedValues = linkedMap.get(rawLinkedId);
         if (linkedValues != null) {
           visible = true;
-          value = linkedValues[relatedFieldKey] ?? null;
+          value =
+            relatedPageId != null
+              ? pageValuesMap.get(rawLinkedId)?.[relatedFieldKey] ?? null
+              : linkedValues[relatedFieldKey] ?? null;
         }
       }
       // Do not leak the linked record's identifier when its content is not
       // visible (hidden field access or related own-scope): the id is only
-      // exposed for cells the viewer can actually read (and, when editable,
-      // write back through). Existence of restricted related rows stays hidden.
+      // exposed for cells the viewer can actually read. Existence of restricted
+      // related rows stays hidden.
       values.push({ recordId, fieldKey: pf.fieldKey, value, linkedRecordId: visible ? rawLinkedId : null, editable });
     }
   }
@@ -1229,29 +1356,66 @@ router.get("/pages/:pageId/relation-options", requireAuth, requireAdmin("pages")
  * directions), each with its related entity's active fields. Shared by the
  * page- and entity-keyed relation-options endpoints.
  */
-async function buildRelationOptions(entityId: number): Promise<
-  {
-    relationId: number;
-    label: unknown;
-    direction: LinkDirection;
-    relatedEntityId: number;
-    relatedEntityLabel: unknown;
-    fields: { key: string; label: unknown; fieldType: string }[];
-  }[]
-> {
+type RelationOptionPage = {
+  pageId: number;
+  pageLabel: unknown;
+  fields: { key: string; label: unknown; fieldType: string }[];
+};
+type RelationOption = {
+  relationId: number;
+  label: unknown;
+  direction: LinkDirection;
+  relatedEntityId: number;
+  relatedEntityLabel: unknown;
+  fields: { key: string; label: unknown; fieldType: string }[];
+  pages: RelationOptionPage[];
+};
+
+/**
+ * Pages (bound + mirror) of an entity whose page-local, value-backed fields a
+ * lookup field can project (via relatedPageId). Excludes computed/relation/lookup
+ * page fields, which have no stored value to project. Pages with no eligible
+ * field are omitted.
+ */
+async function pageSourcesForEntity(entityId: number): Promise<RelationOptionPage[]> {
+  const bound = await db
+    .select({ id: pagesTable.id, nameJson: pagesTable.nameJson })
+    .from(pagesTable)
+    .innerJoin(entitiesTable, eq(entitiesTable.pageId, pagesTable.id))
+    .where(eq(entitiesTable.id, entityId));
+  const mirrors = await db
+    .select({ id: pagesTable.id, nameJson: pagesTable.nameJson })
+    .from(pagesTable)
+    .where(eq(pagesTable.mirrorEntityId, entityId));
+  const byId = new Map<number, { id: number; nameJson: unknown }>();
+  for (const p of [...bound, ...mirrors]) byId.set(p.id, p);
+  const result: RelationOptionPage[] = [];
+  for (const page of byId.values()) {
+    const fields = await db
+      .select({ fieldKey: pageFieldsTable.fieldKey, nameJson: pageFieldsTable.nameJson, fieldType: pageFieldsTable.fieldType })
+      .from(pageFieldsTable)
+      .where(and(eq(pageFieldsTable.pageId, page.id), eq(pageFieldsTable.isActive, true)))
+      .orderBy(asc(pageFieldsTable.sortOrder));
+    const valueBacked = fields.filter(
+      (f) => f.fieldType !== "function" && f.fieldType !== "relation" && f.fieldType !== "lookup",
+    );
+    if (valueBacked.length === 0) continue;
+    result.push({
+      pageId: page.id,
+      pageLabel: page.nameJson,
+      fields: valueBacked.map((f) => ({ key: f.fieldKey, label: f.nameJson, fieldType: f.fieldType })),
+    });
+  }
+  return result;
+}
+
+async function buildRelationOptions(entityId: number): Promise<RelationOption[]> {
   const relations = await db
     .select()
     .from(relationsTable)
     .where(or(eq(relationsTable.sourceEntityId, entityId), eq(relationsTable.targetEntityId, entityId)));
 
-  const options: {
-    relationId: number;
-    label: unknown;
-    direction: LinkDirection;
-    relatedEntityId: number;
-    relatedEntityLabel: unknown;
-    fields: { key: string; label: unknown; fieldType: string }[];
-  }[] = [];
+  const options: RelationOption[] = [];
 
   for (const relation of relations) {
     const direction = relationDirection(relation, entityId);
@@ -1276,6 +1440,7 @@ async function buildRelationOptions(entityId: number): Promise<
       relatedEntityId,
       relatedEntityLabel: relatedEntity.nameJson,
       fields: fields.map((f) => ({ key: f.fieldKey, label: f.nameJson, fieldType: f.fieldType })),
+      pages: await pageSourcesForEntity(relatedEntityId),
     });
   }
   return options;
@@ -1584,6 +1749,9 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
     const relationId = cfg?.relationId ?? null;
     const relatedFieldKey = cfg?.relatedFieldKey ?? null;
     if (relationId == null || !relatedFieldKey) continue;
+    // Page-source lookup: project a PAGE-LOCAL field of the linked record from
+    // page_record_values, not one of the linked entity record's own fields.
+    const relatedPageId = f.fieldType === "lookup" ? cfg?.relatedPageId ?? null : null;
 
     const [relation] = await db.select().from(relationsTable).where(eq(relationsTable.id, relationId));
     if (!relation) continue;
@@ -1591,27 +1759,61 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
     if (!direction) continue;
     const relatedEntityId = relatedEntityIdFor(relation, direction);
 
-    const [relatedField] = await db
-      .select()
-      .from(entityFieldsTable)
-      .where(
-        and(
-          eq(entityFieldsTable.entityId, relatedEntityId),
-          eq(entityFieldsTable.fieldKey, relatedFieldKey),
-          eq(entityFieldsTable.isActive, true),
-        ),
-      );
-    if (!relatedField) continue;
-
-    // Re-apply the related entity's RECORD-VIEW boundary first (resolveFieldAccess
-    // defaults to "view" when no explicit perm exists, so treat no related-entity
-    // view as hidden). The relation field's OWN access decides assignability.
-    const canViewRelated = canRecord(perms, relatedEntityId, "view");
-    const access = canViewRelated
-      ? resolveFieldAccess(relatedField, perms, roleIds, relatedEntityId)
-      : "hidden";
     const ownAccess = resolveFieldAccess(f, perms, roleIds, entityId);
+    const canViewRelated = canRecord(perms, relatedEntityId, "view");
     const relScope = effectiveScope(perms, relatedEntityId);
+
+    // Resolve the projected field's metadata + visibility from the right source:
+    // a page field (page-source lookup) or the linked entity's own field.
+    let access: "hidden" | "view" | "edit";
+    let relatedFieldType: string | null;
+    let optionsJson: string[];
+    if (relatedPageId != null) {
+      const [relatedPageField] = await db
+        .select({
+          fieldType: pageFieldsTable.fieldType,
+          optionsJson: pageFieldsTable.optionsJson,
+          permissionsJson: pageFieldsTable.permissionsJson,
+        })
+        .from(pageFieldsTable)
+        .where(
+          and(
+            eq(pageFieldsTable.pageId, relatedPageId),
+            eq(pageFieldsTable.fieldKey, relatedFieldKey),
+            eq(pageFieldsTable.isActive, true),
+          ),
+        );
+      if (!relatedPageField) continue;
+      // Page-field visibility decides access; the related entity's record-view
+      // boundary still gates whether anything is shown at all.
+      const pagePerm = mostPermissiveFieldPerm(
+        relatedPageField.permissionsJson as FieldPermissions | null,
+        roleIds,
+        "view",
+      );
+      access = canViewRelated && pagePerm !== "hidden" ? "view" : "hidden";
+      relatedFieldType = access === "hidden" ? null : relatedPageField.fieldType;
+      optionsJson = access === "hidden" ? [] : ((relatedPageField.optionsJson as string[]) ?? []);
+    } else {
+      const [relatedField] = await db
+        .select()
+        .from(entityFieldsTable)
+        .where(
+          and(
+            eq(entityFieldsTable.entityId, relatedEntityId),
+            eq(entityFieldsTable.fieldKey, relatedFieldKey),
+            eq(entityFieldsTable.isActive, true),
+          ),
+        );
+      if (!relatedField) continue;
+      // Re-apply the related entity's RECORD-VIEW boundary first (resolveFieldAccess
+      // defaults to "view" when no explicit perm exists, so treat no related-entity
+      // view as hidden). The relation field's OWN access decides assignability.
+      access = canViewRelated ? resolveFieldAccess(relatedField, perms, roleIds, relatedEntityId) : "hidden";
+      relatedFieldType = access === "hidden" ? null : relatedField.fieldType;
+      optionsJson = access === "hidden" ? [] : ((relatedField.optionsJson as string[]) ?? []);
+    }
+
     // The cell ASSIGNS the link (not edits the related value): assignable when
     // the relation field is editable for the role, the viewer can update the base
     // entity, and the related field is not hidden. Column-wide, so empty cells are
@@ -1627,14 +1829,16 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
     // client opens the linked record's full editor in the related entity. We
     // surface the related entity id + flag so the client knows where to navigate;
     // the real write boundary is enforced by that entity's own record PUT.
+    // Page-source lookups are never write-through (the value lives on a page, not
+    // a directly-editable entity field).
     const writeThrough =
-      f.fieldType === "lookup" && cfg?.writeThrough === true && access !== "hidden";
+      f.fieldType === "lookup" && relatedPageId == null && cfg?.writeThrough === true && access !== "hidden";
 
     columns.push({
       fieldKey: f.fieldKey,
       relatedFieldKey,
-      relatedFieldType: access === "hidden" ? null : relatedField.fieldType,
-      optionsJson: access === "hidden" ? [] : ((relatedField.optionsJson as string[]) ?? []),
+      relatedFieldType,
+      optionsJson,
       editableColumn: columnEditable,
       relatedEntityId: access === "hidden" ? undefined : relatedEntityId,
       writeThrough,
@@ -1654,7 +1858,11 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
     for (const l of linkRows) linkMap.set(l.from, l.to);
 
     const linkedIds = Array.from(new Set(linkRows.map((l) => l.to)));
+    // linkedMap gates which linked records are viewable (row-hidden status +
+    // related own-scope on the ENTITY record). For page-source lookups it carries
+    // no value, only membership; the projected value comes from pageValuesMap.
     const linkedMap = new Map<number, Record<string, unknown>>();
+    const pageValuesMap = new Map<number, Record<string, unknown>>();
     if (linkedIds.length > 0 && access !== "hidden") {
       const relHiddenRowWhere = hiddenRowStatusWhere(
         effectiveStatusVisibility(perms, relatedEntityId).hiddenRowStatusIds,
@@ -1675,6 +1883,21 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
         .from(entityRecordsTable)
         .where(and(...linkedConds));
       for (const lr of linkedRecords) linkedMap.set(lr.id, (lr.valuesJson as Record<string, unknown>) ?? {});
+      if (relatedPageId != null) {
+        const allowedLinkedIds = Array.from(linkedMap.keys());
+        if (allowedLinkedIds.length > 0) {
+          const prv = await db
+            .select({ recordId: pageRecordValuesTable.recordId, valuesJson: pageRecordValuesTable.valuesJson })
+            .from(pageRecordValuesTable)
+            .where(
+              and(
+                eq(pageRecordValuesTable.pageId, relatedPageId),
+                inArray(pageRecordValuesTable.recordId, allowedLinkedIds),
+              ),
+            );
+          for (const r of prv) pageValuesMap.set(r.recordId, (r.valuesJson as Record<string, unknown>) ?? {});
+        }
+      }
     }
 
     for (const recordId of allowedIds) {
@@ -1683,12 +1906,15 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
       const editable = columnEditable;
       let visible = false;
       if (rawLinkedId != null && access !== "hidden") {
-        // linkedMap already excludes non-owned linked records (own-scope applied
-        // in the query above), so presence here means the value is viewable.
+        // linkedMap already excludes non-owned/row-hidden linked records, so
+        // presence here means the linked record itself is viewable.
         const linkedValues = linkedMap.get(rawLinkedId);
         if (linkedValues != null) {
           visible = true;
-          value = linkedValues[relatedFieldKey] ?? null;
+          value =
+            relatedPageId != null
+              ? pageValuesMap.get(rawLinkedId)?.[relatedFieldKey] ?? null
+              : linkedValues[relatedFieldKey] ?? null;
         }
       }
       // Do not leak the linked record's id when its content is not visible.

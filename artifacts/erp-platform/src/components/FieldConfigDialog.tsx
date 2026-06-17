@@ -149,17 +149,14 @@ export function FieldConfigDialog({
   // lookup-only: when on, clicking a lookup cell opens the source record's
   // full editor (gated server-side by the viewer's update perm on that entity).
   const [writeThrough, setWriteThrough] = useState(false);
+  // lookup-only: when set, the lookup projects a PAGE-LOCAL field of the linked
+  // record (page_record_values of this page) instead of one of its entity
+  // fields. Page-source lookups are always read-only (no write-through).
+  const [relatedPageId, setRelatedPageId] = useState<number | null>(null);
   const { data: relationOptionsData } = useGetEntityRelationOptions(entityId, {
     query: { enabled: open, queryKey: getGetEntityRelationOptionsQueryKey(entityId) },
   });
   const relationOptions = relationOptionsData?.options ?? [];
-  // Entity relation fields surface a single linked record's value and only
-  // make sense from the SOURCE side of a to-one relation (mirrors the Fields
-  // Builder). Target-side / N:N relations are not eligible here.
-  const relationFieldOptions = relationOptions.filter((o) => o.direction === "source");
-  const canUseRelation = relationFieldOptions.length > 0;
-  const selectedRelation = relationFieldOptions.find((o) => o.relationId === relationId);
-  const relatedFieldOptions = selectedRelation?.fields ?? [];
 
   const [fieldKey, setFieldKey] = useState("");
   const [nameJson, setNameJson] = useState<MLValue>({});
@@ -189,6 +186,20 @@ export function FieldConfigDialog({
   const [isKey, setIsKey] = useState(false);
   const [lockAfterCreate, setLockAfterCreate] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Entity relation fields surface a single linked record's value and only
+  // make sense from the SOURCE side of a to-one relation (mirrors the Fields
+  // Builder). Target-side / N:N relations are not eligible here.
+  const relationFieldOptions = relationOptions.filter((o) => o.direction === "source");
+  const canUseRelation = relationFieldOptions.length > 0;
+  const selectedRelation = relationFieldOptions.find((o) => o.relationId === relationId);
+  // Pages of the related entity whose page-local fields a lookup can project.
+  const relatedPages = selectedRelation?.pages ?? [];
+  const selectedPage = relatedPages.find((p) => p.pageId === relatedPageId);
+  // Field picker draws from the page's value-backed fields when a page source is
+  // chosen (lookup only), otherwise from the related entity's own fields.
+  const relatedFieldOptions =
+    fieldType === "lookup" && relatedPageId != null ? selectedPage?.fields ?? [] : selectedRelation?.fields ?? [];
 
   // Sync form state whenever the dialog opens for a given field (or create).
   useEffect(() => {
@@ -233,6 +244,7 @@ export function FieldConfigDialog({
       setRelationId(field.relationConfigJson?.relationId ?? null);
       setRelatedFieldKey(field.relationConfigJson?.relatedFieldKey ?? "");
       setWriteThrough(field.relationConfigJson?.writeThrough ?? false);
+      setRelatedPageId(field.relationConfigJson?.relatedPageId ?? null);
     } else {
       setFieldKey("");
       setNameJson({});
@@ -264,6 +276,7 @@ export function FieldConfigDialog({
       setRelationId(null);
       setRelatedFieldKey("");
       setWriteThrough(false);
+      setRelatedPageId(null);
     }
   }, [open, field, nextSortOrder]);
 
@@ -398,7 +411,10 @@ export function FieldConfigDialog({
             : {},
       relationConfigJson:
         fieldType === "lookup"
-          ? { relationId, relatedFieldKey: relatedFieldKey || null, writeThrough }
+          ? relatedPageId != null
+            ? // Page-source lookups are read-only — never carry write-through.
+              { relationId, relatedFieldKey: relatedFieldKey || null, relatedPageId }
+            : { relationId, relatedFieldKey: relatedFieldKey || null, writeThrough }
           : fieldType === "relation"
             ? { relationId, relatedFieldKey: relatedFieldKey || null }
             : {},
@@ -497,6 +513,8 @@ export function FieldConfigDialog({
                     onValueChange={(v) => {
                       setRelationId(Number(v));
                       setRelatedFieldKey("");
+                      setRelatedPageId(null);
+                      setWriteThrough(false);
                     }}
                   >
                     <SelectTrigger><SelectValue placeholder={t("fields.relationPlaceholder", "Выберите связь")} /></SelectTrigger>
@@ -515,9 +533,44 @@ export function FieldConfigDialog({
                     </SelectContent>
                   </Select>
                 </div>
+                {fieldType === "lookup" && relationId != null && relatedPages.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label>{t("fields.lookupSource", "Источник значения")}</Label>
+                    <Select
+                      value={relatedPageId != null ? String(relatedPageId) : "__entity__"}
+                      onValueChange={(v) => {
+                        setRelatedPageId(v === "__entity__" ? null : Number(v));
+                        setRelatedFieldKey("");
+                        setWriteThrough(false);
+                      }}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__entity__">
+                          {t("fields.lookupSourceEntity", "Поля связанной сущности")}
+                        </SelectItem>
+                        {relatedPages.map((p) => (
+                          <SelectItem key={p.pageId} value={String(p.pageId)}>
+                            {t("fields.lookupSourcePagePrefix", "Страница")}: {ml(p.pageLabel)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-slate-400">
+                      {t(
+                        "fields.lookupSourceHint",
+                        "Подстановка может брать значение из поля связанной сущности или из поля страницы связанной записи (только для чтения).",
+                      )}
+                    </p>
+                  </div>
+                )}
                 {relationId != null && (
                   <div className="space-y-1.5">
-                    <Label>{t("fields.relatedField", "Поле связанной сущности")}</Label>
+                    <Label>
+                      {fieldType === "lookup" && relatedPageId != null
+                        ? t("fields.relatedPageField", "Поле страницы")
+                        : t("fields.relatedField", "Поле связанной сущности")}
+                    </Label>
                     <Select value={relatedFieldKey} onValueChange={setRelatedFieldKey}>
                       <SelectTrigger><SelectValue placeholder={t("fields.relatedFieldPlaceholder", "Выберите поле")} /></SelectTrigger>
                       <SelectContent>
@@ -528,7 +581,7 @@ export function FieldConfigDialog({
                     </Select>
                   </div>
                 )}
-                {fieldType === "lookup" && relationId != null && relatedFieldKey && (
+                {fieldType === "lookup" && relationId != null && relatedFieldKey && relatedPageId == null && (
                   <div className="space-y-1.5 border-t border-slate-100 pt-3">
                     <div className="flex items-center gap-2">
                       <Switch checked={writeThrough} onCheckedChange={setWriteThrough} id="fcd-lookup-write-through" />

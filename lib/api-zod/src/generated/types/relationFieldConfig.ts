@@ -14,6 +14,11 @@ export interface RelationFieldConfig {
   relationId?: number | null;
   /** @nullable */
   relatedFieldKey?: string | null;
-  /** Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record's full editor in the related entity (subject to that entity's own permissions). The projected value itself stays read-only; ignored for relation fields. */
+  /**
+     * Lookup-only. When set, the projected `relatedFieldKey` is read from this PAGE's page-local values (page_record_values keyed by the linked record) instead of the linked entity record's own fields. The page's effective entity must equal the relation's related entity, and `relatedFieldKey` must be a value-backed page field of that page. Page-source lookups are always read-only (no write-through). Ignored for relation fields.
+     * @nullable
+     */
+  relatedPageId?: number | null;
+  /** Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record's full editor in the related entity (subject to that entity's own permissions). The projected value itself stays read-only; ignored for relation fields and for page-source lookups (when relatedPageId is set). */
   writeThrough?: boolean;
 }

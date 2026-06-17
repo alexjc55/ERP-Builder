@@ -4819,9 +4819,25 @@ components:
         fieldType:
           type: string
 
+    PageRelationOptionPage:
+      type: object
+      description: >-
+        A page (bound or mirror) of the related entity whose page-local fields a
+        lookup field may project instead of the linked record's own fields.
+      required: [pageId, pageLabel, fields]
+      properties:
+        pageId:
+          type: integer
+        pageLabel:
+          $ref: "#/components/schemas/MultilingualText"
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/PageRelationOptionField"
+
     PageRelationOption:
       type: object
-      required: [relationId, label, direction, relatedEntityId, relatedEntityLabel, fields]
+      required: [relationId, label, direction, relatedEntityId, relatedEntityLabel, fields, pages]
       properties:
         relationId:
           type: integer
@@ -4843,6 +4859,13 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PageRelationOptionField"
+        pages:
+          type: array
+          description: >-
+            Pages (bound + mirror) of the related entity whose page-local
+            value-backed fields a lookup field can project (via relatedPageId).
+          items:
+            $ref: "#/components/schemas/PageRelationOptionPage"
 
     PageRelationOptions:
       type: object
@@ -4861,13 +4884,24 @@ components:
           type: ["integer", "null"]
         relatedFieldKey:
           type: ["string", "null"]
+        relatedPageId:
+          type: ["integer", "null"]
+          description: >-
+            Lookup-only. When set, the projected `relatedFieldKey` is read from
+            this PAGE's page-local values (page_record_values keyed by the linked
+            record) instead of the linked entity record's own fields. The page's
+            effective entity must equal the relation's related entity, and
+            `relatedFieldKey` must be a value-backed page field of that page.
+            Page-source lookups are always read-only (no write-through). Ignored
+            for relation fields.
         writeThrough:
           type: boolean
           description: >-
             Lookup-only. When true, a lookup field becomes an editable gateway:
             clicking the cell opens the LINKED record's full editor in the
             related entity (subject to that entity's own permissions). The
-            projected value itself stays read-only; ignored for relation fields.
+            projected value itself stays read-only; ignored for relation fields
+            and for page-source lookups (when relatedPageId is set).
 
     PageField:
       type: object

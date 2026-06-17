@@ -6738,6 +6738,12 @@
     "he": "שדה מקושר"
   },
   {
+    "key": "fields.type.lookup",
+    "ru": "Поле подстановки",
+    "en": "Lookup field",
+    "he": "שדה חיפוש"
+  },
+  {
     "key": "fields.relation",
     "ru": "Связь",
     "en": "Relation",
@@ -6772,5 +6778,59 @@
     "ru": "Выберите поле",
     "en": "Select a field",
     "he": "בחרו שדה"
+  },
+  {
+    "key": "fields.lookupHint",
+    "ru": "Поле подстановки показывает значение из единственной связанной записи (только для чтения). Источником может быть поле связанной сущности или поле страницы связанной записи.",
+    "en": "A lookup field shows a value from the single linked record (read-only). The source can be a field of the related entity or a page-local field of the linked record.",
+    "he": "שדה חיפוש מציג ערך מהרשומה המקושרת היחידה (לקריאה בלבד). המקור יכול להיות שדה של הישות המקושרת או שדה מקומי של עמוד הרשומה המקושרת."
+  },
+  {
+    "key": "fields.lookupSource",
+    "ru": "Источник значения",
+    "en": "Value source",
+    "he": "מקור הערך"
+  },
+  {
+    "key": "fields.lookupSourceEntity",
+    "ru": "Поля связанной сущности",
+    "en": "Related entity fields",
+    "he": "שדות הישות המקושרת"
+  },
+  {
+    "key": "fields.lookupSourcePagePrefix",
+    "ru": "Страница",
+    "en": "Page",
+    "he": "עמוד"
+  },
+  {
+    "key": "fields.lookupSourceHint",
+    "ru": "Подстановка может брать значение из поля связанной сущности или из поля страницы связанной записи (только для чтения).",
+    "en": "A lookup can take its value from a field of the related entity or from a page-local field of the linked record (read-only).",
+    "he": "חיפוש יכול לקחת את ערכו משדה של הישות המקושרת או משדה מקומי של עמוד הרשומה המקושרת (לקריאה בלבד)."
+  },
+  {
+    "key": "fields.relatedPageField",
+    "ru": "Поле страницы",
+    "en": "Page field",
+    "he": "שדה עמוד"
+  },
+  {
+    "key": "fields.lookupWriteThrough",
+    "ru": "Разрешить редактирование исходной записи",
+    "en": "Allow editing the source record",
+    "he": "אפשר עריכת רשומת המקור"
+  },
+  {
+    "key": "fields.lookupWriteThroughHint",
+    "ru": "При клике по ячейке откроется окно исходной записи для редактирования (если у пользователя есть права на изменение исходной сущности).",
+    "en": "Clicking the cell opens the source record for editing (if the user has permission to modify the source entity).",
+    "he": "לחיצה על התא תפתח את רשומת המקור לעריכה (אם למשתמש יש הרשאה לשנות את ישות המקור)."
+  },
+  {
+    "key": "pageFields.lookupHint",
+    "ru": "Поле подстановки показывает значение из единственной связанной записи (только для чтения). Источником может быть поле связанной сущности или поле страницы связанной записи.",
+    "en": "A lookup field shows a value from the single linked record (read-only). The source can be a field of the related entity or a page-local field of the linked record.",
+    "he": "שדה חיפוש מציג ערך מהרשומה המקושרת היחידה (לקריאה בלבד). המקור יכול להיות שדה של הישות המקושרת או שדה מקומי של עמוד הרשומה המקושרת."
   }
 ]

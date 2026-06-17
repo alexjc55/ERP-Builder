@@ -8,6 +8,7 @@
 import type { MultilingualText } from './multilingualText';
 import type { PageRelationOptionDirection } from './pageRelationOptionDirection';
 import type { PageRelationOptionField } from './pageRelationOptionField';
+import type { PageRelationOptionPage } from './pageRelationOptionPage';
 
 export interface PageRelationOption {
   relationId: number;
@@ -17,4 +18,6 @@ export interface PageRelationOption {
   relatedEntityId: number;
   relatedEntityLabel: MultilingualText;
   fields: PageRelationOptionField[];
+  /** Pages (bound + mirror) of the related entity whose page-local value-backed fields a lookup field can project (via relatedPageId). */
+  pages: PageRelationOptionPage[];
 }

@@ -5,6 +5,8 @@ import {
   entitiesTable,
   entityRecordsTable,
   relationsTable,
+  pagesTable,
+  pageFieldsTable,
   type Relation,
   type RelationFieldConfig,
 } from "@workspace/db";
@@ -70,6 +72,9 @@ async function validateEntityRelationConfig(
   entityId: number,
   cfg: RelationFieldConfig | undefined | null,
   allowWriteThrough = false,
+  // Lookup fields may project a PAGE-LOCAL field of the linked record instead of
+  // one of its entity fields (relatedPageId). Assignable relation fields cannot.
+  allowPageSource = false,
 ): Promise<{ ok: true; cleaned: RelationFieldConfig } | { error: string }> {
   const relationId = cfg?.relationId ?? null;
   const relatedFieldKey = cfg?.relatedFieldKey ?? null;
@@ -84,6 +89,17 @@ async function validateEntityRelationConfig(
   const direction = relationDirection(relation, entityId);
   if (!direction) return { error: "Связь не даёт одну связанную запись для этой сущности" };
   const relatedEntityId = direction === "source" ? relation.targetEntityId : relation.sourceEntityId;
+
+  // Page-source lookup: the projected value comes from a page of the related
+  // entity (page_record_values), not the linked entity record's own fields.
+  const relatedPageId = allowPageSource ? cfg?.relatedPageId ?? null : null;
+  if (relatedPageId != null) {
+    const pageCheck = await validateRelatedPageSource(relatedPageId, relatedEntityId, relatedFieldKey);
+    if ("error" in pageCheck) return pageCheck;
+    // Page-source lookups are always read-only — never carry writeThrough.
+    return { ok: true, cleaned: { relationId, relatedFieldKey, relatedPageId } };
+  }
+
   const [rf] = await db
     .select({ id: entityFieldsTable.id })
     .from(entityFieldsTable)
@@ -102,6 +118,54 @@ async function validateEntityRelationConfig(
   // allowWriteThrough and we never persist it otherwise.
   if (allowWriteThrough && cfg?.writeThrough === true) cleaned.writeThrough = true;
   return { ok: true, cleaned };
+}
+
+/**
+ * Effective entity behind a page (mirror entity, else the entity bound to the
+ * page). Local copy of the page-fields helper so the Fields Builder can validate
+ * a lookup field's page-source projection without importing the page router.
+ */
+async function effectiveEntityForPage(pageId: number): Promise<number | null> {
+  const [p] = await db
+    .select({ id: pagesTable.id, mirrorEntityId: pagesTable.mirrorEntityId })
+    .from(pagesTable)
+    .where(eq(pagesTable.id, pageId));
+  if (!p) return null;
+  if (p.mirrorEntityId != null) return p.mirrorEntityId;
+  const [e] = await db.select({ id: entitiesTable.id }).from(entitiesTable).where(eq(entitiesTable.pageId, pageId));
+  return e ? e.id : null;
+}
+
+/**
+ * Validate that a lookup's `relatedPageId` page belongs to the relation's
+ * related entity and that `relatedFieldKey` is an active value-backed page
+ * field of that page (function/relation/lookup page fields cannot be projected).
+ */
+async function validateRelatedPageSource(
+  relatedPageId: number,
+  relatedEntityId: number,
+  relatedFieldKey: string,
+): Promise<{ ok: true } | { error: string }> {
+  const pageEntityId = await effectiveEntityForPage(relatedPageId);
+  if (pageEntityId == null) return { error: "Страница подстановки не найдена" };
+  if (pageEntityId !== relatedEntityId) {
+    return { error: "Страница подстановки не относится к связанной сущности" };
+  }
+  const [pf] = await db
+    .select({ fieldType: pageFieldsTable.fieldType })
+    .from(pageFieldsTable)
+    .where(
+      and(
+        eq(pageFieldsTable.pageId, relatedPageId),
+        eq(pageFieldsTable.fieldKey, relatedFieldKey),
+        eq(pageFieldsTable.isActive, true),
+      ),
+    );
+  if (!pf) return { error: "Поле страницы для подстановки не найдено" };
+  if (pf.fieldType === "function" || pf.fieldType === "relation" || pf.fieldType === "lookup") {
+    return { error: "Это поле страницы нельзя использовать для подстановки" };
+  }
+  return { ok: true };
 }
 
 async function entityExists(entityId: number): Promise<boolean> {
@@ -189,6 +253,7 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
     const check = await validateEntityRelationConfig(
       params.data.entityId,
       parsed.data.relationConfigJson,
+      parsed.data.fieldType === "lookup",
       parsed.data.fieldType === "lookup",
     );
     if (!("ok" in check)) {
@@ -376,7 +441,12 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
       "relationConfigJson" in body
         ? (body.relationConfigJson as RelationFieldConfig | null | undefined)
         : (current.relationConfigJson as RelationFieldConfig | null);
-    const check = await validateEntityRelationConfig(current.entityId, incoming, nextType === "lookup");
+    const check = await validateEntityRelationConfig(
+      current.entityId,
+      incoming,
+      nextType === "lookup",
+      nextType === "lookup",
+    );
     if (!("ok" in check)) {
       res.status(400).json({ error: check.error });
       return;
