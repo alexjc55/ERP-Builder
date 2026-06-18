@@ -35,6 +35,30 @@ must receive IDENTICAL shared props (`projectedTypeByField`, `getOptions`, …).
 conjunction handlers, so they are easy to edit out of sync — any new shared prop must be wired to BOTH
 or behavior silently diverges between the two dialogs.
 
+### Filter operators must be scoped by EFFECTIVE field type
+The operator dropdown must not offer operators that are meaningless for the field's
+type (a `user`/`select`/`boolean` filter offering "содержит"/"больше" is nonsense).
+`operatorsForType(effectiveType)` filters the master `FILTER_OPERATORS` list: closed
+types (user/select/boolean) → equality only (eq/neq/in/empty); number/date → ranges
+(gt/gte/lt/lte) but no substring; text/unmapped → the full set. Effective type resolves
+relation/lookup → projected linked-field type (fallback `text`). Both `FilterRowsEditor`
+instances compute it per row. **Invariant:** when the row's FIELD changes, reset the
+operator to `eq` if the current operator isn't in the new type's allowed set, and clear
+the value — otherwise a stale invalid operator (e.g. "содержит" carried onto a user field)
+survives. `eq` is in every type's list, so it's always a safe reset target.
+**Edge:** projected types load async; before they resolve a relation field falls back to
+`text` (full operator set). Accepted — operators don't auto-correct after load, only on
+explicit field change.
+
+### shadcn Select popper Viewport clips scroll
+The shadcn `ui/select.tsx` `SelectPrimitive.Viewport` shipped with
+`h-[var(--radix-select-trigger-height)]` in its `position==="popper"` class. That pins the
+list height to the TRIGGER height (~32px), so long dropdowns are clipped and unscrollable
+even though `SelectContent` has `max-h-[--radix-select-content-available-height]` +
+`overflow-y-auto`. Fix = drop the `h-[…]` token (keep `w-full min-w-[…trigger-width]`).
+**Why:** the Content's overflow can only scroll if the Viewport is allowed to grow taller
+than the trigger. This is app-wide (every `Select`), not filter-specific.
+
 ### View-editor pickers offer the FULL domain, not existing values
 A saved view filter is a RULE that must also match records created LATER, so the view-config value
 picker must NOT be limited to values already present in the data (that's the live-bar's dependent

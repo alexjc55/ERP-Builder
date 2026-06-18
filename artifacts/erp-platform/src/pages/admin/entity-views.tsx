@@ -127,6 +127,26 @@ function operatorIsArray(op: FilterOperator): boolean {
 // checklist as the live records bar; substring/range operators keep a free text input.
 const DISCRETE_OPERATORS = new Set<FilterOperator>(["eq", "neq", "in"]);
 
+// Which operators make sense for a given EFFECTIVE field type. Closed / equality-only
+// types (user, select, boolean) must NOT offer substring or numeric-range operators
+// — "Производитель больше Hamada" is nonsense. Numeric/date types offer ranges but
+// not substring; text-like types (and anything unmapped) offer the full set.
+const TEXT_OPERATORS: FilterOperator[] = [
+  "eq", "neq", "contains", "not_contains", "starts_with", "ends_with", "in", "is_empty", "is_not_empty",
+];
+const OPERATORS_BY_TYPE: Record<string, FilterOperator[]> = {
+  user: ["eq", "neq", "in", "is_empty", "is_not_empty"],
+  select: ["eq", "neq", "in", "is_empty", "is_not_empty"],
+  boolean: ["eq", "neq", "is_empty", "is_not_empty"],
+  number: ["eq", "neq", "gt", "gte", "lt", "lte", "in", "is_empty", "is_not_empty"],
+  date: ["eq", "neq", "gt", "gte", "lt", "lte", "is_empty", "is_not_empty"],
+  datetime: ["eq", "neq", "gt", "gte", "lt", "lte", "is_empty", "is_not_empty"],
+};
+function operatorsForType(type?: string): typeof FILTER_OPERATORS {
+  const allowed = (type && OPERATORS_BY_TYPE[type]) ?? TEXT_OPERATORS;
+  return FILTER_OPERATORS.filter((o) => allowed.includes(o.value));
+}
+
 function extractError(err: unknown): string | undefined {
   if (err && typeof err === "object") {
     const data = (err as { data?: { error?: unknown } }).data;
@@ -467,39 +487,66 @@ function FilterRowsEditor({
         <p className="text-xs text-slate-400">{t("views.noFiltersHint", "Без фильтров показываются все записи.")}</p>
       ) : (
         <div className="space-y-2">
-          {filters.map((f, idx) => (
-            <div key={idx} className="flex items-center gap-2">
-              <Select value={f.field} onValueChange={(v) => onUpdate(idx, { field: v, valueText: "" })}>
-                <SelectTrigger className="h-8 text-sm flex-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {fields.map((fld: Field) => (
-                    <SelectItem key={fld.fieldKey} value={fld.fieldKey}>{ml(fld.nameJson)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={f.operator} onValueChange={(v) => onUpdate(idx, { operator: v as FilterOperator })}>
-                <SelectTrigger className="h-8 text-sm w-44"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {FILTER_OPERATORS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{t(`views.op_${o.value}`, o.label)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FilterValueEditor
-                field={fields.find((x: Field) => x.fieldKey === f.field)}
-                operator={f.operator}
-                valueText={f.valueText}
-                onChange={(text) => onUpdate(idx, { valueText: text })}
-                t={t}
-                userOptions={userOptions}
-                getOptions={getOptions}
-                projectedType={projectedTypeByField?.get(f.field)}
-              />
-              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-500 shrink-0" onClick={() => onRemove(idx)}>
-                <X className="w-3.5 h-3.5" />
-              </Button>
-            </div>
-          ))}
+          {filters.map((f, idx) => {
+            const rowField = fields.find((x: Field) => x.fieldKey === f.field);
+            const rowFt = rowField?.fieldType;
+            const rowEff =
+              rowFt === "relation" || rowFt === "lookup"
+                ? (projectedTypeByField?.get(f.field) ?? "text")
+                : rowFt;
+            const rowOps = operatorsForType(rowEff);
+            return (
+              <div key={idx} className="flex items-center gap-2">
+                <Select
+                  value={f.field}
+                  onValueChange={(v) => {
+                    const nf = fields.find((x: Field) => x.fieldKey === v);
+                    const nft = nf?.fieldType;
+                    const neff =
+                      nft === "relation" || nft === "lookup"
+                        ? (projectedTypeByField?.get(v) ?? "text")
+                        : nft;
+                    const allowed = operatorsForType(neff).map((o) => o.value);
+                    // Reset to "равно" if the current operator is meaningless for the new
+                    // field type (e.g. switching a "содержит" text filter to a user field).
+                    onUpdate(idx, {
+                      field: v,
+                      valueText: "",
+                      ...(allowed.includes(f.operator) ? {} : { operator: "eq" as FilterOperator }),
+                    });
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-sm flex-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {fields.map((fld: Field) => (
+                      <SelectItem key={fld.fieldKey} value={fld.fieldKey}>{ml(fld.nameJson)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={f.operator} onValueChange={(v) => onUpdate(idx, { operator: v as FilterOperator })}>
+                  <SelectTrigger className="h-8 text-sm w-44"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {rowOps.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{t(`views.op_${o.value}`, o.label)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FilterValueEditor
+                  field={rowField}
+                  operator={f.operator}
+                  valueText={f.valueText}
+                  onChange={(text) => onUpdate(idx, { valueText: text })}
+                  t={t}
+                  userOptions={userOptions}
+                  getOptions={getOptions}
+                  projectedType={projectedTypeByField?.get(f.field)}
+                />
+                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-500 shrink-0" onClick={() => onRemove(idx)}>
+                  <X className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
