@@ -151,6 +151,19 @@ export function PivotMeasuresEditor({
 
   const multi = measures.length > 1;
 
+  // Human-readable fallback label for a measure that has no explicit name yet —
+  // mirrors the server-side default column header so calc-ref chips never show a
+  // bare generated key (e.g. "Цена" / "Количество" instead of m_mqjx1rf3_55).
+  const measureDefaultLabel = (o: DraftMeasure): string => {
+    if (o.agg === "sum") {
+      const f = sumFields.find((s) => s.fieldKey === o.fieldKey);
+      return (f && ml(f.nameJson)) || t("pivot.aggSum", "Сумма поля");
+    }
+    if (o.agg === "formula") return t("pivot.aggFormula", "Формула");
+    if (o.agg === "calc") return t("pivot.aggCalc", "Вычисление по мерам");
+    return t("pivot.aggCount", "Количество записей");
+  };
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
@@ -161,10 +174,14 @@ export function PivotMeasuresEditor({
       </div>
       <div className="space-y-3">
         {measures.map((m, idx) => {
-          // calc may reference any OTHER measure by its key; its label falls back to its key.
+          // calc may reference any value measure plus any calc defined EARLIER in
+          // config order (matches the server's per-row eval order, which rejects
+          // self/forward refs). Label = the measure's name, falling back to a
+          // human-readable default — never the bare generated key.
           const calcRefs: FormulaFieldRef[] = measures
-            .filter((o) => o.key !== m.key)
-            .map((o) => ({ key: o.key, label: ml(cleanML(o.nameJson)) || o.key }));
+            .map((o, oi) => ({ o, oi }))
+            .filter(({ o, oi }) => o.key !== m.key && (o.agg !== "calc" || oi < idx))
+            .map(({ o }) => ({ key: o.key, label: ml(cleanML(o.nameJson)) || measureDefaultLabel(o) }));
           return (
             <div key={m.key} className="space-y-2 rounded-md border border-slate-200 bg-slate-50/50 p-2.5">
               <div className="flex items-center gap-2">
