@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { FilterCondition } from './filterCondition';
 import type { MultilingualText } from './multilingualText';
 import type { SortSpec } from './sortSpec';
 
@@ -17,6 +18,8 @@ export interface Entity {
   /** @nullable */
   pageId?: number | null;
   defaultSortJson: SortSpec[];
+  /** Filters applied to the records page when no view is selected (the main view). */
+  defaultFilterJson?: FilterCondition[];
   /** Enables the "Сводная таблица" (pivot) report mode for this entity's records page. */
   pivotEnabled?: boolean;
   sortOrder: number;

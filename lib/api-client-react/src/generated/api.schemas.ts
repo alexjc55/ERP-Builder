@@ -1383,6 +1383,32 @@ export interface SortSpec {
   direction?: SortSpecDirection;
 }
 
+export type FilterOperator = typeof FilterOperator[keyof typeof FilterOperator];
+
+
+export const FilterOperator = {
+  eq: 'eq',
+  neq: 'neq',
+  contains: 'contains',
+  not_contains: 'not_contains',
+  starts_with: 'starts_with',
+  ends_with: 'ends_with',
+  gt: 'gt',
+  gte: 'gte',
+  lt: 'lt',
+  lte: 'lte',
+  is_empty: 'is_empty',
+  is_not_empty: 'is_not_empty',
+  in: 'in',
+  between: 'between',
+} as const;
+
+export interface FilterCondition {
+  field: string;
+  operator: FilterOperator;
+  value?: unknown;
+}
+
 export interface Entity {
   id: number;
   entityKey: string;
@@ -1392,6 +1418,8 @@ export interface Entity {
   /** @nullable */
   pageId?: number | null;
   defaultSortJson: SortSpec[];
+  /** Filters applied to the records page when no view is selected (the main view). */
+  defaultFilterJson?: FilterCondition[];
   /** Enables the "Сводная таблица" (pivot) report mode for this entity's records page. */
   pivotEnabled?: boolean;
   sortOrder: number;
@@ -1408,6 +1436,7 @@ export interface EntityInput {
   /** @nullable */
   pageId?: number | null;
   defaultSortJson?: SortSpec[];
+  defaultFilterJson?: FilterCondition[];
   pivotEnabled?: boolean;
   sortOrder?: number;
   isActive?: boolean;
@@ -1421,6 +1450,7 @@ export interface EntityUpdate {
   /** @nullable */
   pageId?: number | null;
   defaultSortJson?: SortSpec[];
+  defaultFilterJson?: FilterCondition[];
   pivotEnabled?: boolean;
   sortOrder?: number;
   isActive?: boolean;
@@ -2060,32 +2090,6 @@ export interface RecordUpdate {
   statusId?: number | null;
   /** Optional mirror-page context (see RecordInput.pageId): applies the mirror page's update-rights override when editing through it. */
   pageId?: number;
-}
-
-export type FilterOperator = typeof FilterOperator[keyof typeof FilterOperator];
-
-
-export const FilterOperator = {
-  eq: 'eq',
-  neq: 'neq',
-  contains: 'contains',
-  not_contains: 'not_contains',
-  starts_with: 'starts_with',
-  ends_with: 'ends_with',
-  gt: 'gt',
-  gte: 'gte',
-  lt: 'lt',
-  lte: 'lte',
-  is_empty: 'is_empty',
-  is_not_empty: 'is_not_empty',
-  in: 'in',
-  between: 'between',
-} as const;
-
-export interface FilterCondition {
-  field: string;
-  operator: FilterOperator;
-  value?: unknown;
 }
 
 export type ViewConfigFilterConjunction = typeof ViewConfigFilterConjunction[keyof typeof ViewConfigFilterConjunction];

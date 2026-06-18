@@ -4318,6 +4318,11 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SortSpec"
+        defaultFilterJson:
+          type: array
+          description: Filters applied to the records page when no view is selected (the main view).
+          items:
+            $ref: "#/components/schemas/FilterCondition"
         pivotEnabled:
           type: boolean
           description: Enables the "Сводная таблица" (pivot) report mode for this entity's records page.
@@ -4350,6 +4355,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SortSpec"
+        defaultFilterJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/FilterCondition"
         pivotEnabled:
           type: boolean
         sortOrder:
@@ -4375,6 +4384,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SortSpec"
+        defaultFilterJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/FilterCondition"
         pivotEnabled:
           type: boolean
         sortOrder:

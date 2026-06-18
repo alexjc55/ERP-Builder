@@ -4163,6 +4163,11 @@ export const ListEntitiesResponseItem = zod.object({
   "field": zod.string(),
   "direction": zod.enum(['asc', 'desc']).default(listEntitiesResponseDefaultSortJsonItemDirectionDefault)
 })),
+  "defaultFilterJson": zod.array(zod.object({
+  "field": zod.string(),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
+  "value": zod.unknown().optional()
+})).optional().describe('Filters applied to the records page when no view is selected (the main view).'),
   "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
@@ -4195,6 +4200,11 @@ export const CreateEntityBody = zod.object({
   "defaultSortJson": zod.array(zod.object({
   "field": zod.string(),
   "direction": zod.enum(['asc', 'desc']).default(createEntityBodyDefaultSortJsonItemDirectionDefault)
+})).optional(),
+  "defaultFilterJson": zod.array(zod.object({
+  "field": zod.string(),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
+  "value": zod.unknown().optional()
 })).optional(),
   "pivotEnabled": zod.boolean().optional(),
   "sortOrder": zod.number().optional(),
@@ -4230,6 +4240,11 @@ export const GetEntityResponse = zod.object({
   "field": zod.string(),
   "direction": zod.enum(['asc', 'desc']).default(getEntityResponseDefaultSortJsonItemDirectionDefault)
 })),
+  "defaultFilterJson": zod.array(zod.object({
+  "field": zod.string(),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
+  "value": zod.unknown().optional()
+})).optional().describe('Filters applied to the records page when no view is selected (the main view).'),
   "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
@@ -4265,6 +4280,11 @@ export const UpdateEntityBody = zod.object({
   "field": zod.string(),
   "direction": zod.enum(['asc', 'desc']).default(updateEntityBodyDefaultSortJsonItemDirectionDefault)
 })).optional(),
+  "defaultFilterJson": zod.array(zod.object({
+  "field": zod.string(),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
+  "value": zod.unknown().optional()
+})).optional(),
   "pivotEnabled": zod.boolean().optional(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
@@ -4291,6 +4311,11 @@ export const UpdateEntityResponse = zod.object({
   "field": zod.string(),
   "direction": zod.enum(['asc', 'desc']).default(updateEntityResponseDefaultSortJsonItemDirectionDefault)
 })),
+  "defaultFilterJson": zod.array(zod.object({
+  "field": zod.string(),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
+  "value": zod.unknown().optional()
+})).optional().describe('Filters applied to the records page when no view is selected (the main view).'),
   "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),

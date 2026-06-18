@@ -11,6 +11,8 @@ import {
   useListEntityFields,
   useUpdateField,
   useListRoles,
+  useListUserOptions,
+  type UserOption,
   type View,
   type ViewConfig,
   type FilterCondition,
@@ -250,10 +252,100 @@ function OptionPicker({
   );
 }
 
+/** Restrict user options to a `user`-field's allowed roles (empty/unset = all).
+ * Matches on the user's FULL role set (primary + additional), mirroring the
+ * records value picker so a user holding the role as a secondary role appears. */
+function filterUserOptionsByRoles(field: Field, options: UserOption[]): UserOption[] {
+  const allowed = field.userConfigJson?.allowedRoleIds;
+  if (!Array.isArray(allowed) || allowed.length === 0) return options;
+  const allowedSet = new Set(allowed);
+  return options.filter((u) => {
+    const userRoles = u.roleIds && u.roleIds.length > 0 ? u.roleIds : [u.roleId];
+    return userRoles.some((rid) => allowedSet.has(rid));
+  });
+}
+
 /**
- * Adaptive value editor for a filter condition: a select field offers an option
- * picker (multi when the operator is "one of"), every other field type keeps a
- * plain text input. Operators that take no value render a dash.
+ * Value picker for a `user` field's filter condition. The committed value is the
+ * user id (comma-joined ids for the "one of" operator), matching how user values
+ * are stored on records; display shows the user names.
+ */
+function UserFilterPicker({
+  options,
+  valueText,
+  onChange,
+  multiple,
+  t,
+}: {
+  options: UserOption[];
+  valueText: string;
+  onChange: (text: string) => void;
+  multiple: boolean;
+  t: (key: string, def: string) => string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedIds = valueText.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+  const nameById = new Map(options.map((u) => [String(u.id), u.name]));
+  const commit = (ids: string[]) => onChange(multiple ? ids.join(", ") : ids[0] ?? "");
+  const toggle = (id: string) => {
+    if (multiple) {
+      commit(selectedIds.includes(id) ? selectedIds.filter((s) => s !== id) : [...selectedIds, id]);
+    } else {
+      commit([id]);
+      setOpen(false);
+    }
+  };
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" className="h-8 flex-1 justify-between text-sm font-normal">
+          <span className="truncate text-left">
+            {selectedIds.length === 0 ? (
+              <span className="text-slate-400">{t("views.selectUser", "выберите пользователя")}</span>
+            ) : (
+              selectedIds.map((id) => nameById.get(id) ?? `#${id}`).join(", ")
+            )}
+          </span>
+          <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-60" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-64 p-0">
+        <div className="max-h-52 overflow-y-auto p-1">
+          {options.length === 0 ? (
+            <p className="px-2 py-1.5 text-xs text-slate-400">{t("views.noUsers", "Нет пользователей")}</p>
+          ) : (
+            options.map((u) => {
+              const id = String(u.id);
+              const isSel = selectedIds.includes(id);
+              return (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => toggle(id)}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-slate-100"
+                >
+                  <span className={`flex h-4 w-4 items-center justify-center rounded border ${isSel ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300"}`}>
+                    {isSel && <Check className="w-3 h-3" />}
+                  </span>
+                  <span className="truncate">{u.name}</span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * Adaptive value editor for a filter condition, keyed by the field type:
+ * - select → option checklist picker
+ * - user   → user picker (RBAC-filtered, stores user ids)
+ * - boolean→ yes/no dropdown
+ * - date / datetime → native date pickers (single-value operators only)
+ * - everything else → plain text input.
+ * Operators that take no value render a dash; "one of" switches pickers to multi.
  */
 function FilterValueEditor({
   field,
@@ -261,20 +353,46 @@ function FilterValueEditor({
   valueText,
   onChange,
   t,
+  userOptions,
 }: {
   field: Field | undefined;
   operator: FilterOperator;
   valueText: string;
   onChange: (text: string) => void;
   t: (key: string, def: string) => string;
+  userOptions: UserOption[];
 }) {
   if (!operatorNeedsValue(operator)) {
     return <div className="flex h-8 flex-1 items-center px-2 text-xs text-slate-400">—</div>;
   }
   const options = field && Array.isArray(field.optionsJson) ? (field.optionsJson as string[]) : [];
   const isArray = operatorIsArray(operator);
-  if (field?.fieldType === "select" && options.length > 0) {
+  const ft = field?.fieldType;
+  if (ft === "select" && options.length > 0) {
     return <OptionPicker options={options} valueText={valueText} onChange={onChange} multiple={isArray} t={t} />;
+  }
+  if (ft === "user") {
+    const opts = field ? filterUserOptionsByRoles(field, userOptions) : userOptions;
+    return <UserFilterPicker options={opts} valueText={valueText} onChange={onChange} multiple={isArray} t={t} />;
+  }
+  if (ft === "boolean" && !isArray) {
+    return (
+      <Select value={valueText} onValueChange={onChange}>
+        <SelectTrigger className="h-8 flex-1 text-sm">
+          <SelectValue placeholder={t("views.selectValue", "выберите значение")} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="true">{t("views.boolTrue", "Да")}</SelectItem>
+          <SelectItem value="false">{t("views.boolFalse", "Нет")}</SelectItem>
+        </SelectContent>
+      </Select>
+    );
+  }
+  if (ft === "date" && !isArray) {
+    return <Input type="date" className="h-8 flex-1 text-sm" value={valueText} onChange={(e) => onChange(e.target.value)} />;
+  }
+  if (ft === "datetime" && !isArray) {
+    return <Input type="datetime-local" className="h-8 flex-1 text-sm" value={valueText} onChange={(e) => onChange(e.target.value)} />;
   }
   return (
     <Input
@@ -283,6 +401,100 @@ function FilterValueEditor({
       placeholder={isArray ? "a, b, c" : t("views.value", "значение")}
       onChange={(e) => onChange(e.target.value)}
     />
+  );
+}
+
+/**
+ * Reusable "Фильтры" section: a list of filter-condition rows (field / operator /
+ * type-aware value) shared by the view editor dialog and the default-view dialog.
+ * Changing a row's field clears its value (value editors are type-specific). The
+ * AND/OR conjunction selector renders only when both conjunction props are given.
+ */
+function FilterRowsEditor({
+  filters,
+  fields,
+  userOptions,
+  ml,
+  t,
+  onAdd,
+  onUpdate,
+  onRemove,
+  conjunction,
+  onConjunctionChange,
+}: {
+  filters: DraftFilter[];
+  fields: Field[];
+  userOptions: UserOption[];
+  ml: (val: MultilingualText | string | undefined | null) => string;
+  t: (key: string, def: string) => string;
+  onAdd: () => void;
+  onUpdate: (idx: number, patch: Partial<DraftFilter>) => void;
+  onRemove: (idx: number) => void;
+  conjunction?: "and" | "or";
+  onConjunctionChange?: (v: "and" | "or") => void;
+}) {
+  return (
+    <div className="space-y-2 border-t border-slate-100 pt-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+          <Filter className="w-4 h-4 text-blue-600" />
+          {t("views.filters", "Фильтры")}
+        </div>
+        <div className="flex items-center gap-2">
+          {conjunction && onConjunctionChange && filters.length > 1 && (
+            <Select value={conjunction} onValueChange={(v) => onConjunctionChange(v as "and" | "or")}>
+              <SelectTrigger className="h-8 w-28 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="and">{t("views.condAll", "Все условия (И)")}</SelectItem>
+                <SelectItem value="or">{t("views.condAny", "Любое (ИЛИ)")}</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+          <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5" onClick={onAdd}>
+            <Plus className="w-3.5 h-3.5" /> {t("views.condition", "Условие")}
+          </Button>
+        </div>
+      </div>
+      {filters.length === 0 ? (
+        <p className="text-xs text-slate-400">{t("views.noFiltersHint", "Без фильтров показываются все записи.")}</p>
+      ) : (
+        <div className="space-y-2">
+          {filters.map((f, idx) => (
+            <div key={idx} className="flex items-center gap-2">
+              <Select value={f.field} onValueChange={(v) => onUpdate(idx, { field: v, valueText: "" })}>
+                <SelectTrigger className="h-8 text-sm flex-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {fields.map((fld: Field) => (
+                    <SelectItem key={fld.fieldKey} value={fld.fieldKey}>{ml(fld.nameJson)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={f.operator} onValueChange={(v) => onUpdate(idx, { operator: v as FilterOperator })}>
+                <SelectTrigger className="h-8 text-sm w-44"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {FILTER_OPERATORS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{t(`views.op_${o.value}`, o.label)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FilterValueEditor
+                field={fields.find((x: Field) => x.fieldKey === f.field)}
+                operator={f.operator}
+                valueText={f.valueText}
+                onChange={(text) => onUpdate(idx, { valueText: text })}
+                t={t}
+                userOptions={userOptions}
+              />
+              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-500 shrink-0" onClick={() => onRemove(idx)}>
+                <X className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -369,6 +581,7 @@ export default function EntityViewsPage() {
   };
 
   const { data: roles = [] } = useListRoles();
+  const { data: userOptions = [] } = useListUserOptions();
   // Fields the admin has opted into as pivot dims/measures.
   const pivotDimFields = fields.filter((f: Field) => f.pivotEnabled && PIVOT_DIM_TYPES.has(f.fieldType));
   const pivotSumFields = fields.filter((f: Field) => f.pivotEnabled && f.fieldType === "number");
@@ -400,8 +613,12 @@ export default function EntityViewsPage() {
   // "По умолчанию"). Stored on the entity itself, configured via its own dialog.
   const [defaultSortDialogOpen, setDefaultSortDialogOpen] = useState(false);
   const [defaultSorts, setDefaultSorts] = useState<DraftSort[]>([]);
+  const [defaultFilters, setDefaultFilters] = useState<DraftFilter[]>([]);
   const entityDefaultSorts: SortSpec[] = Array.isArray(entity?.defaultSortJson)
     ? (entity.defaultSortJson as SortSpec[])
+    : [];
+  const entityDefaultFilters: FilterCondition[] = Array.isArray(entity?.defaultFilterJson)
+    ? (entity.defaultFilterJson as FilterCondition[])
     : [];
 
   const invalidate = () =>
@@ -552,6 +769,13 @@ export default function EntityViewsPage() {
 
   const openDefaultSort = () => {
     setDefaultSorts(entityDefaultSorts.map((s) => ({ field: s.field, direction: s.direction ?? "asc" })));
+    setDefaultFilters(
+      entityDefaultFilters.map((f) => ({
+        field: f.field,
+        operator: f.operator,
+        valueText: filterValueToText(f.value),
+      })),
+    );
     setDefaultSortDialogOpen(true);
   };
   const addDefaultSort = () => {
@@ -562,9 +786,26 @@ export default function EntityViewsPage() {
     setDefaultSorts((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
   };
   const removeDefaultSort = (idx: number) => setDefaultSorts((prev) => prev.filter((_, i) => i !== idx));
+  const addDefaultFilter = () => {
+    const field = fields[0]?.fieldKey ?? "";
+    setDefaultFilters((prev) => [...prev, { field, operator: "eq", valueText: "" }]);
+  };
+  const updateDefaultFilter = (idx: number, patch: Partial<DraftFilter>) => {
+    setDefaultFilters((prev) => prev.map((f, i) => (i === idx ? { ...f, ...patch } : f)));
+  };
+  const removeDefaultFilter = (idx: number) => setDefaultFilters((prev) => prev.filter((_, i) => i !== idx));
   const saveDefaultSort = () => {
     const builtSorts: SortSpec[] = defaultSorts.map((s) => ({ field: s.field, direction: s.direction }));
-    updateEntityMutation.mutate({ id: entityId, data: { defaultSortJson: builtSorts } });
+    const builtFilters: FilterCondition[] = defaultFilters.map((f) => {
+      const cond: FilterCondition = { field: f.field, operator: f.operator };
+      const value = textToFilterValue(f.operator, f.valueText);
+      if (value !== undefined) cond.value = value;
+      return cond;
+    });
+    updateEntityMutation.mutate({
+      id: entityId,
+      data: { defaultSortJson: builtSorts, defaultFilterJson: builtFilters },
+    });
   };
 
   const buildConfig = (): ViewConfig => {
@@ -672,17 +913,27 @@ export default function EntityViewsPage() {
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
                 <ArrowDownUp className="w-4 h-4 text-blue-600" />
-                {t("views.defaultSortTitle", "Сортировка по умолчанию")}
+                {t("views.defaultViewCardTitle", "Фильтры и сортировка по умолчанию")}
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                {t("views.defaultSortDesc", "Применяется, когда вид не выбран. Без настройки — по дате создания (сначала новые).")}
+                {t("views.defaultViewCardDesc", "Применяются, когда вид не выбран. Без настройки — все записи по дате создания (сначала новые).")}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {entityDefaultFilters.length === 0 ? (
+                  <span className="text-xs text-slate-400">{t("views.defaultFiltersNone", "Без фильтров")}</span>
+                ) : (
+                  entityDefaultFilters.map((f, i) => (
+                    <Badge key={`f${i}`} className="bg-blue-50 text-blue-700 border-0 font-normal">
+                      <Filter className="w-3 h-3 mr-1" />
+                      {fieldLabel(f.field)}
+                    </Badge>
+                  ))
+                )}
                 {entityDefaultSorts.length === 0 ? (
                   <span className="text-xs text-slate-400">{t("views.defaultSortNone", "По дате создания (сначала новые)")}</span>
                 ) : (
                   entityDefaultSorts.map((s, i) => (
-                    <Badge key={i} className="bg-slate-100 text-slate-600 border-0 font-normal">
+                    <Badge key={`s${i}`} className="bg-slate-100 text-slate-600 border-0 font-normal">
                       {fieldLabel(s.field)} · {s.direction === "desc" ? t("views.descShort", "↓") : t("views.ascShort", "↑")}
                     </Badge>
                   ))
@@ -915,66 +1166,18 @@ export default function EntityViewsPage() {
               )}
             </div>
 
-            <div className="space-y-2 border-t border-slate-100 pt-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
-                  <Filter className="w-4 h-4 text-blue-600" />
-                  {t("views.filters", "Фильтры")}
-                </div>
-                <div className="flex items-center gap-2">
-                  {filters.length > 1 && (
-                    <Select value={filterConjunction} onValueChange={(v) => setFilterConjunction(v as "and" | "or")}>
-                      <SelectTrigger className="h-8 w-28 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="and">{t("views.condAll", "Все условия (И)")}</SelectItem>
-                        <SelectItem value="or">{t("views.condAny", "Любое (ИЛИ)")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                  <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5" onClick={addFilter}>
-                    <Plus className="w-3.5 h-3.5" /> {t("views.condition", "Условие")}
-                  </Button>
-                </div>
-              </div>
-              {filters.length === 0 ? (
-                <p className="text-xs text-slate-400">{t("views.noFiltersHint", "Без фильтров показываются все записи.")}</p>
-              ) : (
-                <div className="space-y-2">
-                  {filters.map((f, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <Select value={f.field} onValueChange={(v) => updateFilter(idx, { field: v })}>
-                        <SelectTrigger className="h-8 text-sm flex-1"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {fields.map((fld: Field) => (
-                            <SelectItem key={fld.fieldKey} value={fld.fieldKey}>{ml(fld.nameJson)}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Select value={f.operator} onValueChange={(v) => updateFilter(idx, { operator: v as FilterOperator })}>
-                        <SelectTrigger className="h-8 text-sm w-44"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {FILTER_OPERATORS.map((o) => (
-                            <SelectItem key={o.value} value={o.value}>{t(`views.op_${o.value}`, o.label)}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FilterValueEditor
-                        field={fields.find((x: Field) => x.fieldKey === f.field)}
-                        operator={f.operator}
-                        valueText={f.valueText}
-                        onChange={(text) => updateFilter(idx, { valueText: text })}
-                        t={t}
-                      />
-                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-500 shrink-0" onClick={() => removeFilter(idx)}>
-                        <X className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <FilterRowsEditor
+              filters={filters}
+              fields={fields}
+              userOptions={userOptions}
+              ml={ml}
+              t={t}
+              onAdd={addFilter}
+              onUpdate={updateFilter}
+              onRemove={removeFilter}
+              conjunction={filterConjunction}
+              onConjunctionChange={setFilterConjunction}
+            />
 
             {viewType === "pivot" && (
               <div className="space-y-3 border-t border-slate-100 pt-4">
@@ -1091,13 +1294,23 @@ export default function EntityViewsPage() {
       <Dialog open={defaultSortDialogOpen} onOpenChange={setDefaultSortDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{t("views.defaultSortTitle", "Сортировка по умолчанию")}</DialogTitle>
+            <DialogTitle>{t("views.defaultViewTitle", "Настройки по умолчанию")}</DialogTitle>
             <DialogDescription>
-              {t("views.defaultSortDialogDesc", "Эта сортировка применяется к записям, когда вид не выбран. Выбранный вид использует свою собственную сортировку.")}
+              {t("views.defaultViewDialogDesc", "Эти фильтры и сортировка применяются к записям, когда вид не выбран. Выбранный вид использует свои собственные настройки.")}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2 py-2">
-            <div className="flex items-center justify-between">
+          <div className="space-y-4 py-2">
+            <FilterRowsEditor
+              filters={defaultFilters}
+              fields={fields}
+              userOptions={userOptions}
+              ml={ml}
+              t={t}
+              onAdd={addDefaultFilter}
+              onUpdate={updateDefaultFilter}
+              onRemove={removeDefaultFilter}
+            />
+            <div className="flex items-center justify-between border-t border-slate-100 pt-4">
               <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
                 <ArrowDownUp className="w-4 h-4 text-blue-600" />
                 {t("views.sorting", "Сортировка")}

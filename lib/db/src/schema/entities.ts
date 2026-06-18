@@ -11,6 +11,9 @@ export const entitiesTable = pgTable("entities", {
   icon: text("icon").notNull().default("table"),
   pageId: integer("page_id").references(() => pagesTable.id, { onDelete: "set null" }),
   defaultSortJson: jsonb("default_sort_json").notNull().default([]),
+  // Filters applied to the records page when NO view is selected (the "main"
+  // view). Same shape as a view's configJson.filters (FilterCondition[]).
+  defaultFilterJson: jsonb("default_filter_json").notNull().default([]),
   // Enables the per-entity "Сводная таблица" (pivot) report mode on the records
   // page. Off by default; admins opt in per entity.
   pivotEnabled: boolean("pivot_enabled").notNull().default(false),

@@ -55,6 +55,7 @@ import {
   type PivotQuery,
   type PivotConfig,
   type SortSpec,
+  type FilterCondition,
   type UserOption,
   type Role,
   type FieldAccess,
@@ -1452,9 +1453,19 @@ export function EntityRecords({
   const effectiveSorts = selectedView ? (selectedConfig.sorts ?? []) : entityDefaultSorts;
   const sortsKey = JSON.stringify(effectiveSorts);
 
+  // When no view is selected, the entity's default filters (configured on the
+  // Views admin screen) act as the base filters, mirroring entityDefaultSorts.
+  const entityDefaultFilters = useMemo(() => {
+    const raw = Array.isArray(entity?.defaultFilterJson) ? (entity.defaultFilterJson as FilterCondition[]) : [];
+    const known = new Set(allFields.filter((f: Field) => f.isActive).map((f: Field) => f.fieldKey));
+    return raw.filter((c) => known.has(c.field));
+  }, [entity?.defaultFilterJson, allFields]);
+  const baseFilters = selectedView ? (selectedConfig.filters ?? []) : entityDefaultFilters;
+  const baseFiltersKey = JSON.stringify(baseFilters);
+
   const recordQuery: RecordQuery = useMemo(
     () => ({
-      filters: [...(selectedConfig.filters ?? []), ...adHocFilters, ...dateFilterConditions],
+      filters: [...baseFilters, ...adHocFilters, ...dateFilterConditions],
       filterConjunction: selectedConfig.filterConjunction ?? "and",
       pageLocalFilters: [...pageAdHocFilters, ...pageDateFilterConditions],
       statusIds: statusFilter.length > 0 ? statusFilter : undefined,
@@ -1465,7 +1476,7 @@ export function EntityRecords({
       pageSize: PAGE_SIZE,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedConfig.filters, selectedConfig.filterConjunction, sortsKey, adHocKey, dateKey, pageAdHocKey, pageDateKey, statusKey, search, archived, page],
+    [baseFiltersKey, selectedConfig.filterConjunction, sortsKey, adHocKey, dateKey, pageAdHocKey, pageDateKey, statusKey, search, archived, page],
   );
 
   // Pivot (Сводная таблица): a view whose configJson.viewType is "pivot" carries a
@@ -1484,7 +1495,7 @@ export function EntityRecords({
 
   const pivotQuery: PivotQuery = useMemo(
     () => ({
-      filters: [...(selectedConfig.filters ?? []), ...adHocFilters, ...dateFilterConditions],
+      filters: [...baseFilters, ...adHocFilters, ...dateFilterConditions],
       filterConjunction: selectedConfig.filterConjunction ?? "and",
       pageLocalFilters: [...pageAdHocFilters, ...pageDateFilterConditions],
       statusIds: statusFilter.length > 0 ? statusFilter : undefined,
@@ -1494,7 +1505,7 @@ export function EntityRecords({
       pivot: (pivotConfig ?? { rows: { source: "status" }, measure: { agg: "count" } }) as PivotConfig,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedConfig.filters, selectedConfig.filterConjunction, adHocKey, dateKey, pageAdHocKey, pageDateKey, statusKey, search, archived, JSON.stringify(pivotConfig)],
+    [baseFiltersKey, selectedConfig.filterConjunction, adHocKey, dateKey, pageAdHocKey, pageDateKey, statusKey, search, archived, JSON.stringify(pivotConfig)],
   );
 
   // Dependent filters: when fetching the option list for a field, we run a query against the
@@ -1513,7 +1524,7 @@ export function EntityRecords({
         data: {
           pageId: permPageId,
           field: fieldKey,
-          filters: [...(selectedConfig.filters ?? []), ...others, ...dateOthers],
+          filters: [...baseFilters, ...others, ...dateOthers],
           // Mirror the records query's conjunction so option lists stay consistent with the
           // rows actually shown (a view may be configured with OR logic).
           filterConjunction: selectedConfig.filterConjunction ?? "and",
@@ -1525,7 +1536,7 @@ export function EntityRecords({
       return res.values ?? [];
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [entityId, adHocKey, dateKey, statusKey, search, archived, selectedConfig.filters, selectedConfig.filterConjunction, fetchFilterOptions],
+    [entityId, adHocKey, dateKey, statusKey, search, archived, baseFiltersKey, selectedConfig.filterConjunction, fetchFilterOptions],
   );
 
   const setFieldFilter = useCallback((fieldKey: string, values: string[]) => {

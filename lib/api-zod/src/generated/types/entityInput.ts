@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { FilterCondition } from './filterCondition';
 import type { MultilingualText } from './multilingualText';
 import type { SortSpec } from './sortSpec';
 
@@ -16,6 +17,7 @@ export interface EntityInput {
   /** @nullable */
   pageId?: number | null;
   defaultSortJson?: SortSpec[];
+  defaultFilterJson?: FilterCondition[];
   pivotEnabled?: boolean;
   sortOrder?: number;
   isActive?: boolean;
