@@ -102,6 +102,21 @@ function relationValueExists(meta: RelationFilterMeta, valueCond: (linkedVal: SQ
 }
 
 /**
+ * Scalar correlated subquery returning the projected value of the base row's
+ * SINGLE linked record for a `relation`/`lookup` field: `lt.values_json ->>
+ * relatedFieldKey`. Mirrors {@link relationValueExists}'s join/direction logic
+ * but SELECTs the linked value instead of testing existence, so it can be used
+ * as a pivot GROUP BY dimension. `LIMIT 1` keeps it scalar; only single-link
+ * relations ever reach here (RelationFilterMeta is built only for them). All
+ * identifiers are literal; only relationId and relatedFieldKey are bound params.
+ */
+export function relationValueScalar(meta: RelationFilterMeta): SQL {
+  const baseCol = meta.direction === "source" ? sql`rl.source_record_id` : sql`rl.target_record_id`;
+  const linkedCol = meta.direction === "source" ? sql`rl.target_record_id` : sql`rl.source_record_id`;
+  return sql`(SELECT lt.values_json ->> ${meta.relatedFieldKey} FROM ${recordLinksTable} rl JOIN ${entityRecordsTable} lt ON lt.id = ${linkedCol} WHERE rl.relation_id = ${meta.relationId} AND ${baseCol} = ${entityRecordsTable.id} LIMIT 1)`;
+}
+
+/**
  * Row-ownership EXISTS for a `relation`/`lookup` owner field: the base row has a
  * single linked record whose projected (user-type) `relatedFieldKey` equals
  * `userId`. Used by the own-scope ("Только свои") boundary so ownership can be

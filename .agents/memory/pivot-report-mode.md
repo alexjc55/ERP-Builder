@@ -42,6 +42,27 @@ This replaces the old "clone a page per role" approach — one view, role-scoped
 pivot endpoint 400s at query time with no save-time error. **Why this bit us:** `phone` was added to
 the client set but not the server set. Any change to one list must be made to the other in lockstep
 (or refactored to a single shared constant).
+**Important asymmetry:** the server `PIVOT_DIM_TYPES` set does NOT contain `relation`/`lookup` — those
+are handled by an explicit branch BEFORE the whitelist check (see below). The client set DOES list
+`relation`/`lookup`/`user` (it's only used to decide which fields to *offer* in the picker). So the two
+sets are intentionally not identical for relation/lookup; keep `user` in both, and never "fix" the
+server set by adding relation/lookup to it (that would route them through the wrong scalar expr).
+
+## user / relation / lookup dimensions
+- **user** dim: value is a scalar user id in `values_json`; `user` is in the server whitelist. A `user`
+  DimMeta kind resolves ids → display names (`first last` || email) AFTER grouping (collect the row/col
+  key sets, one `usersTable` lookup), and sorts by the resolved name. Falls back to the raw id.
+- **relation / lookup** dims: these types store NOTHING in `values_json` — the displayed value is the
+  projected `relatedFieldKey` of the single linked record. Use `relationValueScalar(meta)` (sibling of
+  `relationValueExists` in `record-query.ts`) as the dim expr — a scalar correlated subquery with
+  `LIMIT 1`. Built from `buildRelationMeta(entityId, visibleFields)` so (a) hidden relation fields are
+  excluded (boundary) and (b) only SINGLE-link relations resolve (multi-link → clear Russian 400, since
+  a scalar dim can't represent many links). Label = the projected value itself (key === label).
+- **No new leak:** the projected value is already shown in the records table and already filterable via
+  `relationValueExists`; pivoting on a *visible* relation field exposes nothing new. Page-local
+  relation/lookup are explicitly rejected (their value isn't in `page_record_values`).
+- This needed NO OpenAPI/codegen change: the pivot dim schema is `{source,fieldKey,datePeriod}` with no
+  field-type enum, so new dim types are purely a server+client-picker concern.
 
 ## Measure / grouping mechanics
 - Measure is `count` (rows) or `sum` (over a numeric field); sum uses a regex-guarded numeric cast

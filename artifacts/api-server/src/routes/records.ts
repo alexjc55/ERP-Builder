@@ -42,7 +42,7 @@ import {
   PivotEntityRecordsBody,
 } from "@workspace/api-zod";
 import type { EntityField, InsertAuditLog, FileSource, FileFieldConfig } from "@workspace/db";
-import { buildRecordQuery, buildPageLocalCondition, pageLocalValueExpr, type RecordQuerySpec, type FilterCondition } from "./record-query";
+import { buildRecordQuery, buildPageLocalCondition, pageLocalValueExpr, relationValueScalar, type RecordQuerySpec, type FilterCondition } from "./record-query";
 import { buildRelationMeta, ownScopeWhere, isRecordOwned } from "./own-scope";
 import { isGoogleDriveModuleEnabled } from "../lib/googleDrive";
 import {
@@ -914,6 +914,7 @@ const PIVOT_DIM_TYPES = new Set([
   "email",
   "url",
   "phone",
+  "user",
 ]);
 const PIVOT_DATE_TYPES = new Set(["date", "datetime"]);
 const PIVOT_PERIOD_UNITS = new Set(["year", "quarter", "month", "day"]);
@@ -988,9 +989,16 @@ router.post(
       return;
     }
 
+    // Relation/lookup dims project the SINGLE linked record's value (these types
+    // store nothing in values_json). Built from visibleFields so hidden relation
+    // fields are excluded, and only single-link relations resolve to a meta entry.
+    // Reused below as the records/query read-boundary relation meta.
+    const relationMeta = await buildRelationMeta(entityId, visibleFields);
+
     type DimMeta =
       | { kind: "status" }
       | { kind: "plain"; expr: SQL }
+      | { kind: "user"; expr: SQL }
       | { kind: "date"; expr: SQL; period: string };
 
     const resolveDim = (dim: {
@@ -1007,6 +1015,14 @@ router.post(
         const f = entFieldByKey.get(key);
         if (!f) return { error: `Unknown or hidden pivot field: ${key}` };
         if (!f.pivotEnabled) return { error: `Field is not enabled for pivot: ${key}` };
+        // relation/lookup: group by the linked record's projected value. Only
+        // single-link relations have a meta entry; multi-link can't be a scalar dim.
+        if (f.fieldType === "relation" || f.fieldType === "lookup") {
+          const rmeta = relationMeta.get(key);
+          if (!rmeta)
+            return { error: `Поле «${key}» нельзя использовать как измерение сводной таблицы (множественная связь)` };
+          return { kind: "plain", expr: relationValueScalar(rmeta) };
+        }
         if (!PIVOT_DIM_TYPES.has(f.fieldType))
           return { error: `Field type cannot be a pivot dimension: ${key}` };
         ftype = f.fieldType;
@@ -1015,6 +1031,10 @@ router.post(
         const pf = pageFieldByKey.get(key);
         if (!pf) return { error: `Unknown or hidden page pivot field: ${key}` };
         if (!pf.pivotEnabled) return { error: `Page field is not enabled for pivot: ${key}` };
+        // Page-local relation/lookup values aren't stored in page_record_values
+        // (they project through links), so they can't be a page pivot dim here.
+        if (pf.fieldType === "relation" || pf.fieldType === "lookup")
+          return { error: `Связанные поля страницы пока не поддерживаются как измерение сводной таблицы: ${key}` };
         if (!PIVOT_DIM_TYPES.has(pf.fieldType))
           return { error: `Page field type cannot be a pivot dimension: ${key}` };
         ftype = pf.fieldType;
@@ -1022,6 +1042,8 @@ router.post(
       } else {
         return { error: `Invalid pivot dimension source: ${dim.source}` };
       }
+      // user dim: value is a scalar user id; labels resolved to names post-query.
+      if (ftype === "user") return { kind: "user", expr: ve };
       if (PIVOT_DATE_TYPES.has(ftype) && dim.datePeriod) {
         if (!PIVOT_PERIOD_UNITS.has(dim.datePeriod))
           return { error: `Invalid date period: ${dim.datePeriod}` };
@@ -1084,7 +1106,7 @@ router.post(
     }
 
     // ---- Read boundary (identical to records/query) ----
-    const relationMeta = await buildRelationMeta(entityId, visibleFields);
+    // `relationMeta` is built once above (also used for relation/lookup dims).
     const spec: RecordQuerySpec = {
       filters: (body.data.filters ?? []) as FilterCondition[],
       filterConjunction: body.data.filterConjunction,
@@ -1184,9 +1206,13 @@ router.post(
       if (period === "month") return `${y}-${m}`;
       return iso;
     };
+    // user dims store a scalar user id; resolve ids → display names (populated
+    // after the key sets are known). Falls back to the raw id if not found.
+    const userName = new Map<string, string>();
     const labelFor = (meta: DimMeta, key: string): string => {
       if (key === "") return meta.kind === "status" ? "(без статуса)" : "(пусто)";
       if (meta.kind === "status") return statusName.get(Number(key)) ?? key;
+      if (meta.kind === "user") return userName.get(key) ?? key;
       if (meta.kind === "date") return formatPeriod(key, meta.period);
       return key;
     };
@@ -1197,6 +1223,8 @@ router.post(
         if (b === "") return -1;
         if (meta.kind === "status") return (statusOrder.get(Number(a)) ?? 0) - (statusOrder.get(Number(b)) ?? 0);
         if (meta.kind === "date") return a < b ? -1 : a > b ? 1 : 0;
+        if (meta.kind === "user")
+          return (userName.get(a) ?? a).localeCompare(userName.get(b) ?? b, undefined, { numeric: true });
         return a.localeCompare(b, undefined, { numeric: true });
       });
 
@@ -1210,6 +1238,33 @@ router.post(
       colKeySet.add(ck);
       const ck2 = rk + "\u0000" + ck;
       cellMap.set(ck2, (cellMap.get(ck2) ?? 0) + Number(g.v ?? 0));
+    }
+
+    if (rowMeta.kind === "user" || colMeta?.kind === "user") {
+      const ids = new Set<number>();
+      const collect = (keys: Iterable<string>) => {
+        for (const k of keys) {
+          const n = Number(k);
+          if (k !== "" && Number.isInteger(n)) ids.add(n);
+        }
+      };
+      if (rowMeta.kind === "user") collect(rowKeySet);
+      if (colMeta?.kind === "user") collect(colKeySet);
+      if (ids.size > 0) {
+        const urows = await db
+          .select({
+            id: usersTable.id,
+            firstName: usersTable.firstName,
+            lastName: usersTable.lastName,
+            email: usersTable.email,
+          })
+          .from(usersTable)
+          .where(inArray(usersTable.id, [...ids]));
+        for (const u of urows) {
+          const nm = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || u.email;
+          userName.set(String(u.id), nm);
+        }
+      }
     }
 
     const rowKeys = sortKeys([...rowKeySet], rowMeta);

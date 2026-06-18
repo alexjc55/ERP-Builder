@@ -135,7 +135,7 @@ type DraftSort = { field: string; direction: SortSpecDirection };
 type DraftDim = { source: "entity" | "status"; fieldKey: string; datePeriod: PivotDimensionDatePeriod };
 
 // Field types eligible as a pivot grouping dimension (discrete-ish values).
-const PIVOT_DIM_TYPES = new Set(["text", "textarea", "number", "boolean", "date", "datetime", "select", "email", "url", "phone"]);
+const PIVOT_DIM_TYPES = new Set(["text", "textarea", "number", "boolean", "date", "datetime", "select", "email", "url", "phone", "user", "relation", "lookup"]);
 const isDateLikeType = (t: string) => t === "date" || t === "datetime";
 
 // Reserved sort keys mapping to the record's system columns (creation date / id).
