@@ -11,7 +11,10 @@ import type { PivotMeasure } from './pivotMeasure';
 export interface PivotConfig {
   rows: PivotDimension;
   cols?: PivotDimension;
-  measure: PivotMeasure;
+  /** Single-measure mode (the cell value). Required unless `measures` is present and non-empty (multi-measure mode), in which case it is ignored. Server validation enforces that exactly one of the two modes is supplied. */
+  measure?: PivotMeasure;
+  /** Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`. */
+  measures?: PivotMeasure[];
   /** Roles allowed to use this pivot when it is an entity's DEFAULT pivot (entity.defaultPivotJson). Empty/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view's own visibleRoleIds. */
   visibleRoleIds?: number[];
 }

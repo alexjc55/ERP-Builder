@@ -64,6 +64,39 @@ server set by adding relation/lookup to it (that would route them through the wr
 - This needed NO OpenAPI/codegen change: the pivot dim schema is `{source,fieldKey,datePeriod}` with no
   field-type enum, so new dim types are purely a server+client-picker concern.
 
+## Multi-measure mode (several value columns) XOR a column dimension
+A pivot can carry `measures: PivotMeasure[]` instead of a single `measure` + `cols`. The two are
+**mutually exclusive by design** (user-approved): when `measures.length > 0`, multi-measure mode wins
+and any `cols` dimension is ignored. Each measure becomes its own column.
+- **Save/load round-trip rule (back-compat):** clients always edit as a `measures[]` draft list, but
+  SAVE collapses `length === 1` → single `measure` (+ optional `cols`), and `length > 1` → `measures`
+  (no cols). LOAD reads `config.measures ?? [config.measure]`. This keeps every pre-existing
+  single-measure pivot byte-identical. The shared `PivotMeasuresEditor` + its
+  `measuresFromConfig`/`buildMeasureConfig` helpers are the single source of this rule across all three
+  surfaces (named view, entity default pivot, dashboard widget).
+- `PivotConfig.measure` is therefore **optional** in OpenAPI + `PivotConfigInput` (absent in multi
+  mode). The single path defaults to `{agg:"count"}` defensively so an empty/legacy config never throws.
+- Each measure has a `key` (stable colKey + calc ref target; defaults to `m${i}`) and an optional
+  multilingual `nameJson` column-label override (falls back to per-agg default; legacy `formulaName`
+  still honored). Duplicate keys are rejected server-side.
+- **`multiMeasure: true` suppresses row totals + grand total** (columns are heterogeneous measures, so
+  a cross-measure row sum is meaningless). Per-measure **column** totals ARE kept. Frontend hides the
+  row-total column and grand-total cell when `result.multiMeasure`.
+
+### `calc` measure = formula over OTHER measures' aggregated per-row values
+A new `calc` agg computes per row using a formula that references other measures by their colKey via
+`{colKey}` (the same `{...}` token the formula evaluator uses). Evaluated AFTER all value
+(count/sum/formula) measures are aggregated, in config order, so a calc may reference any value measure
+(any position) plus any calc defined EARLIER in config order; its result is then itself referenceable.
+- `calc` is valid ONLY in multi-measure mode (single-measure `calc` is rejected on every surface).
+- **Fail-fast ref validation is the single boundary in `computePivot` (covers BOTH the records pivot
+  route — which has NO save-time validator — and the dashboard widget).** Reject: all-calc configs (no
+  value measure to compute over), self-references, and unknown/forward references. **Why:** an unknown
+  `{ref}` silently collapses to 0 at eval time → wrong totals with no error. `pivotFormulaRefs(expr)`
+  (exported from `pivot-compute.ts`) extracts `{...}` refs; `dashboard.ts validatePivotConfig` reuses it
+  for earlier save-time feedback, but compute-time is the authoritative gate.
+- calc column total = sum of its per-row calc values (consistent with other measures' column totals).
+
 ## Measure / grouping mechanics
 - Measure is `count` (rows), `sum` (over a numeric field), or `formula` (per-record expression).
   sum uses a regex-guarded numeric cast (`PIVOT_NUMERIC_RE`) so non-numeric JSONB values can't throw

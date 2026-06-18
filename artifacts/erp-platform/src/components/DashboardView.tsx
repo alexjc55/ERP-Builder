@@ -110,6 +110,13 @@ import {
 } from "@/components/ui/select";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { FormulaEditor } from "@/components/FormulaEditor";
+import {
+  PivotMeasuresEditor,
+  type DraftMeasure,
+  newDraftMeasure,
+  measuresFromConfig,
+  buildMeasureConfig,
+} from "@/components/PivotMeasuresEditor";
 import { IconPicker } from "@/components/IconPicker";
 import { getIconComponent } from "@/lib/icons";
 import { cn } from "@/lib/utils";
@@ -1507,10 +1514,7 @@ type PivotDraft = {
   rows: PivotDraftDim;
   colsOn: boolean;
   cols: PivotDraftDim;
-  agg: "count" | "sum" | "formula";
-  measureField: string;
-  measureFormula: string;
-  measureFormulaName: MLValue;
+  measures: DraftMeasure[];
   statusIds: number[];
 };
 
@@ -1527,10 +1531,7 @@ function emptyPivotDraft(): PivotDraft {
     rows: { source: "status", fieldKey: "", datePeriod: null },
     colsOn: false,
     cols: { source: "status", fieldKey: "", datePeriod: null },
-    agg: "count",
-    measureField: "",
-    measureFormula: "",
-    measureFormulaName: {},
+    measures: [newDraftMeasure()],
     statusIds: [],
   };
 }
@@ -1544,12 +1545,9 @@ function pivotDraftFromConfig(spec: { entityId: number; pivot: PivotConfig; stat
   return {
     entityId: spec.entityId,
     rows: dimToDraft(spec.pivot.rows),
-    colsOn: !!spec.pivot.cols,
+    colsOn: !!spec.pivot.cols && !(spec.pivot.measures && spec.pivot.measures.length > 1),
     cols: spec.pivot.cols ? dimToDraft(spec.pivot.cols) : { source: "status", fieldKey: "", datePeriod: null },
-    agg: spec.pivot.measure?.agg === "sum" ? "sum" : spec.pivot.measure?.agg === "formula" ? "formula" : "count",
-    measureField: spec.pivot.measure?.fieldKey ?? "",
-    measureFormula: spec.pivot.measure?.formula ?? "",
-    measureFormulaName: (spec.pivot.measure?.formulaName as MLValue | null | undefined) ?? {},
+    measures: measuresFromConfig(spec.pivot),
     statusIds: spec.statusIds ?? [],
   };
 }
@@ -1846,16 +1844,14 @@ function WidgetEditorDialog({
         toast({ title: t("dash.pivotNeedsRows", "Выберите поле для строк сводной таблицы"), variant: "destructive" });
         return null;
       }
-      if (pivot.colsOn && pivot.cols.source === "entity" && !pivot.cols.fieldKey) {
+      const pvMulti = pivot.measures.length > 1;
+      if (pivot.colsOn && !pvMulti && pivot.cols.source === "entity" && !pivot.cols.fieldKey) {
         toast({ title: t("dash.pivotNeedsCols", "Выберите поле для столбцов сводной таблицы"), variant: "destructive" });
         return null;
       }
-      if (pivot.agg === "sum" && !pivot.measureField) {
-        toast({ title: t("dash.pivotNeedsMeasure", "Для суммы выберите числовое поле"), variant: "destructive" });
-        return null;
-      }
-      if (pivot.agg === "formula" && !pivot.measureFormula.trim()) {
-        toast({ title: t("pivot.needFormula", "Введите формулу для меры"), variant: "destructive" });
+      const builtMeasures = buildMeasureConfig(pivot.measures, t);
+      if ("error" in builtMeasures) {
+        toast({ title: builtMeasures.error, variant: "destructive" });
         return null;
       }
       // The PivotEditor keeps datePeriod non-null only for date-like dims, so the
@@ -1868,14 +1864,9 @@ function WidgetEditorDialog({
               fieldKey: d.fieldKey,
               datePeriod: d.datePeriod,
             };
-      const measure: PivotMeasure =
-        pivot.agg === "sum"
-          ? { agg: "sum", source: "entity", fieldKey: pivot.measureField }
-          : pivot.agg === "formula"
-            ? { agg: "formula", formula: pivot.measureFormula.trim(), formulaName: cleanML(pivot.measureFormulaName) }
-            : { agg: "count" };
-      const pivotConfig: PivotConfig = { rows: draftToDim(pivot.rows), measure };
-      if (pivot.colsOn) pivotConfig.cols = draftToDim(pivot.cols);
+      const pivotConfig: PivotConfig = { rows: draftToDim(pivot.rows), ...builtMeasures };
+      // cols and multiple measures are mutually exclusive.
+      if (pivot.colsOn && !builtMeasures.measures) pivotConfig.cols = draftToDim(pivot.cols);
       return {
         ...base,
         config: {
@@ -2336,8 +2327,7 @@ function PivotEditor({
               rows: { source: "status", fieldKey: "", datePeriod: null },
               colsOn: false,
               cols: { source: "status", fieldKey: "", datePeriod: null },
-              agg: "count",
-              measureField: "",
+              measures: [newDraftMeasure()],
               statusIds: [],
             })
           }
@@ -2367,64 +2357,32 @@ function PivotEditor({
             ml={ml}
             t={t}
           />
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={pivot.colsOn} onCheckedChange={(v) => onChange({ colsOn: v === true })} />
-            {t("pivot.enableCols", "Добавить измерение столбцов")}
-          </label>
-          {pivot.colsOn && (
-            <PivotWidgetDimEditor
-              label={t("pivot.cols", "Столбцы")}
-              dim={pivot.cols}
-              onChange={(d) => onChange({ cols: d })}
-              dimFields={dimFields}
-              ml={ml}
-              t={t}
-            />
-          )}
-          <div className="space-y-1.5">
-            <p className="text-xs text-slate-400">{t("pivot.measure", "Мера (значение в ячейках)")}</p>
-            <div className="flex items-center gap-2">
-              <Select value={pivot.agg} onValueChange={(v) => onChange({ agg: v as "count" | "sum" | "formula", measureField: "" })}>
-                <SelectTrigger className="h-8 text-sm w-40"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="count">{t("pivot.aggCount", "Количество записей")}</SelectItem>
-                  <SelectItem value="sum">{t("pivot.aggSum", "Сумма поля")}</SelectItem>
-                  <SelectItem value="formula">{t("pivot.aggFormula", "Формула")}</SelectItem>
-                </SelectContent>
-              </Select>
-              {pivot.agg === "sum" && (
-                <Select value={pivot.measureField} onValueChange={(v) => onChange({ measureField: v })}>
-                  <SelectTrigger className="h-8 text-sm flex-1">
-                    <SelectValue placeholder={t("pivot.selectNumberField", "числовое поле…")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sumFields.length === 0 ? (
-                      <div className="px-2 py-1.5 text-xs text-slate-400">{t("pivot.noNumberFields", "Нет числовых полей в сводных")}</div>
-                    ) : (
-                      sumFields.map((f: Field) => (
-                        <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson)}</SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-            {pivot.agg === "formula" && (
-              <>
-                <FormulaEditor
-                  value={pivot.measureFormula}
-                  onChange={(v) => onChange({ measureFormula: v })}
-                  fields={sumFields.map((f: Field) => ({ key: f.fieldKey, label: ml(f.nameJson) }))}
-                  label={t("pivot.formulaMeasureLabel", "Формула меры")}
-                  hint={t("pivot.formulaMeasureHint", "Вычисляется для каждой записи, затем суммируется по ячейкам. Ссылайтесь на поля через {ключ_поля} (доступны поля, включённые в сводные).")}
+          {pivot.measures.length === 1 && (
+            <>
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox checked={pivot.colsOn} onCheckedChange={(v) => onChange({ colsOn: v === true })} />
+                {t("pivot.enableCols", "Добавить измерение столбцов")}
+              </label>
+              {pivot.colsOn && (
+                <PivotWidgetDimEditor
+                  label={t("pivot.cols", "Столбцы")}
+                  dim={pivot.cols}
+                  onChange={(d) => onChange({ cols: d })}
+                  dimFields={dimFields}
+                  ml={ml}
+                  t={t}
                 />
-                <div className="space-y-1.5">
-                  <p className="text-xs text-slate-400">{t("pivot.formulaNameLabel", "Название меры (заголовок столбца)")}</p>
-                  <MultilingualInput label={t("pivot.formulaNamePlaceholder", "Формула")} value={pivot.measureFormulaName} onChange={(v) => onChange({ measureFormulaName: v })} />
-                </div>
-              </>
-            )}
-          </div>
+              )}
+            </>
+          )}
+          <PivotMeasuresEditor
+            measures={pivot.measures}
+            onChange={(next) => onChange({ measures: next })}
+            sumFields={sumFields.map((f: Field) => ({ fieldKey: f.fieldKey, nameJson: f.nameJson }))}
+            formulaRefs={sumFields.map((f: Field) => ({ key: f.fieldKey, label: ml(f.nameJson) }))}
+            ml={ml}
+            t={t}
+          />
 
           {statuses.length > 0 && (
             <div className="space-y-1">

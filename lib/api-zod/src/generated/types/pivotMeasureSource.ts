@@ -7,7 +7,7 @@
  */
 
 /**
- * For agg=sum, where the numeric field lives. Ignored for agg=count/formula.
+ * For agg=sum, where the numeric field lives. Ignored for agg=count/formula/calc.
  * @nullable
  */
 export type PivotMeasureSource = typeof PivotMeasureSource[keyof typeof PivotMeasureSource] | null;

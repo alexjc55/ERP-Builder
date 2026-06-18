@@ -6900,6 +6900,84 @@
     "he": "נוסחה"
   },
   {
+    "key": "pivot.aggCalc",
+    "ru": "Вычисление по мерам",
+    "en": "Calc over measures",
+    "he": "חישוב לפי מדדים"
+  },
+  {
+    "key": "pivot.measures",
+    "ru": "Меры (столбцы значений)",
+    "en": "Measures (value columns)",
+    "he": "מדדים (עמודות ערכים)"
+  },
+  {
+    "key": "pivot.addMeasure",
+    "ru": "Мера",
+    "en": "Measure",
+    "he": "מדד"
+  },
+  {
+    "key": "pivot.measureName",
+    "ru": "Название меры (заголовок столбца)",
+    "en": "Measure name (column header)",
+    "he": "שם המדד (כותרת עמודה)"
+  },
+  {
+    "key": "pivot.measureNamePlaceholder",
+    "ru": "Название",
+    "en": "Name",
+    "he": "שם"
+  },
+  {
+    "key": "pivot.calcFormulaLabel",
+    "ru": "Формула по мерам",
+    "en": "Formula over measures",
+    "he": "נוסחה לפי מדדים"
+  },
+  {
+    "key": "pivot.calcFormulaHint",
+    "ru": "Вычисляется для каждой строки по уже посчитанным значениям ДРУГИХ мер. Ссылайтесь на меру через {ключ_меры}.",
+    "en": "Computed per row from the already-aggregated values of the OTHER measures. Reference a measure via {measure_key}.",
+    "he": "מחושב לכל שורה מתוך הערכים המצרפיים של המדדים האחרים. הפנו למדד באמצעות {measure_key}."
+  },
+  {
+    "key": "pivot.multiMeasureHint",
+    "ru": "Несколько мер: каждая мера — отдельный столбец. Измерение столбцов недоступно, итоги по строкам не считаются.",
+    "en": "Multiple measures: each measure is its own column. The column dimension is unavailable and row totals are not computed.",
+    "he": "מספר מדדים: כל מדד הוא עמודה נפרדת. ממד העמודות אינו זמין וסיכומי שורות אינם מחושבים."
+  },
+  {
+    "key": "pivot.needMeasure",
+    "ru": "Добавьте хотя бы одну меру",
+    "en": "Add at least one measure",
+    "he": "הוסיפו לפחות מדד אחד"
+  },
+  {
+    "key": "pivot.needCalcFormula",
+    "ru": "Введите формулу вычисляемой меры",
+    "en": "Enter the calc measure formula",
+    "he": "הזינו את נוסחת מדד החישוב"
+  },
+  {
+    "key": "pivot.calcNeedsOthers",
+    "ru": "Вычисляемая мера требует других мер",
+    "en": "A calc measure requires other measures",
+    "he": "מדד חישוב דורש מדדים אחרים"
+  },
+  {
+    "key": "pivot.dupMeasureKey",
+    "ru": "Дублирующийся ключ меры",
+    "en": "Duplicate measure key",
+    "he": "מפתח מדד כפול"
+  },
+  {
+    "key": "pivot.needValueMeasure",
+    "ru": "Добавьте хотя бы одну невычисляемую меру",
+    "en": "Add at least one non-calc measure",
+    "he": "הוסיפו לפחות מדד אחד שאינו חישוב"
+  },
+  {
     "key": "pivot.formulaMeasureLabel",
     "ru": "Формула меры",
     "en": "Measure formula",

@@ -960,10 +960,11 @@ export const PivotMeasureAgg = {
   count: 'count',
   sum: 'sum',
   formula: 'formula',
+  calc: 'calc',
 } as const;
 
 /**
- * For agg=sum, where the numeric field lives. Ignored for agg=count/formula.
+ * For agg=sum, where the numeric field lives. Ignored for agg=count/formula/calc.
  * @nullable
  */
 export type PivotMeasureSource = typeof PivotMeasureSource[keyof typeof PivotMeasureSource] | null;
@@ -977,28 +978,38 @@ export const PivotMeasureSource = {
 export interface PivotMeasure {
   agg: PivotMeasureAgg;
   /**
-     * For agg=sum, where the numeric field lives. Ignored for agg=count/formula.
+     * Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.
+     * @nullable
+     */
+  key?: string | null;
+  /**
+     * For agg=sum, where the numeric field lives. Ignored for agg=count/formula/calc.
      * @nullable
      */
   source?: PivotMeasureSource;
   /**
-     * Numeric field key for agg=sum. Ignored for agg=count/formula.
+     * Numeric field key for agg=sum. Ignored for agg=count/formula/calc.
      * @nullable
      */
   fieldKey?: string | null;
   /**
-     * For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden/non-opted fields cannot leak. Ignored for agg=count/sum.
+     * For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures' aggregated values, referenced via {measure_key}. Ignored for agg=count/sum.
      * @nullable
      */
   formula?: string | null;
-  /** For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to "Формула" when empty. Ignored for agg=count/sum. */
+  /** Optional multilingual display name used as this measure's column header (all agg types). Falls back to a per-agg default (the field name for sum, "Количество" for count, "Формула" for formula/calc). */
+  nameJson?: MultilingualText | null;
+  /** Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson. */
   formulaName?: MultilingualText | null;
 }
 
 export interface PivotConfig {
   rows: PivotDimension;
   cols?: PivotDimension;
-  measure: PivotMeasure;
+  /** Single-measure mode (the cell value). Required unless `measures` is present and non-empty (multi-measure mode), in which case it is ignored. Server validation enforces that exactly one of the two modes is supplied. */
+  measure?: PivotMeasure;
+  /** Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`. */
+  measures?: PivotMeasure[];
   /** Roles allowed to use this pivot when it is an entity's DEFAULT pivot (entity.defaultPivotJson). Empty/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view's own visibleRoleIds. */
   visibleRoleIds?: number[];
 }
@@ -1424,6 +1435,8 @@ export interface PivotResult {
   colTotals: PivotTotal[];
   grandTotal: number;
   measureLabel: string;
+  /** True when each column is a distinct measure (multi-measure mode). In that case rowTotals/grandTotal are not meaningful (heterogeneous columns) and are omitted/zero; only colTotals (per-measure totals) apply. The client hides the row-total column and grand total. */
+  multiMeasure?: boolean;
 }
 
 export interface DashboardWidgetData {

@@ -24,6 +24,7 @@ import { requireAuth } from "../middlewares/auth";
 import { buildRelationMeta } from "./own-scope";
 import {
   computePivot,
+  pivotFormulaRefs,
   type PivotConfigInput,
   type PivotResultShape,
 } from "./pivot-compute";
@@ -683,13 +684,61 @@ async function validatePivotConfig(spec: PivotSpec | null | undefined): Promise<
   if (!entity) return `Entity ${spec.entityId} not found`;
   if (!entity.pivotEnabled) return "Pivot mode is not enabled for this entity";
   if (!spec.pivot.rows || !spec.pivot.rows.source) return "Pivot requires a rows dimension";
-  if (!spec.pivot.measure || !spec.pivot.measure.agg) return "Pivot requires a measure";
   // Dashboard pivot widgets compute over a plain entity boundary with no page-local
   // context (unlike the records-page pivot), so page-sourced dimensions/measures
   // cannot resolve here — reject them rather than persist a config that computes to null.
   if (spec.pivot.rows.source === "page" || spec.pivot.cols?.source === "page") {
     return "Dashboard pivot dimensions must be an entity field or status";
   }
+  const measures = spec.pivot.measures;
+  if (measures && measures.length > 0) {
+    // Multi-measure mode: each measure is a column; the `cols` dimension is ignored.
+    const seen = new Set<string>();
+    const valueKeys = new Set<string>();
+    const calcs: { key: string; formula: string }[] = [];
+    let hasValue = false;
+    for (let i = 0; i < measures.length; i++) {
+      const m = measures[i];
+      if (!m || !m.agg) return "Each pivot measure requires an aggregation";
+      const key = (m.key && m.key.trim()) || `m${i}`;
+      if (seen.has(key)) return `Duplicate measure key: ${key}`;
+      seen.add(key);
+      if (m.agg === "sum") {
+        if (m.source === "page") return "Dashboard pivot measure must be an entity field";
+        if (!m.fieldKey) return "Pivot sum measure requires a numeric field";
+        valueKeys.add(key);
+        hasValue = true;
+      } else if (m.agg === "formula") {
+        if (!m.formula?.trim()) return "Pivot formula measure requires a formula";
+        valueKeys.add(key);
+        hasValue = true;
+      } else if (m.agg === "calc") {
+        if (!m.formula?.trim()) return "Pivot calc measure requires a formula";
+        calcs.push({ key, formula: m.formula });
+      } else {
+        // count
+        valueKeys.add(key);
+        hasValue = true;
+      }
+    }
+    // A pivot of only calc measures has nothing to compute over.
+    if (!hasValue) return "Pivot requires at least one non-calc measure";
+    // Calc refs must point at value measures or calcs defined EARLIER in config
+    // order (mirrors computePivot's per-row eval order). Reject self/unknown refs
+    // at save time so the widget can never persist a silently-wrong formula.
+    const availableForCalc = new Set(valueKeys);
+    for (const c of calcs) {
+      for (const ref of pivotFormulaRefs(c.formula)) {
+        if (ref === c.key) return `Pivot calc measure cannot reference itself: ${c.key}`;
+        if (!availableForCalc.has(ref)) return `Pivot calc measure references unknown measure: ${ref}`;
+      }
+      availableForCalc.add(c.key);
+    }
+    return null;
+  }
+  // Single-measure mode (back-compat).
+  if (!spec.pivot.measure || !spec.pivot.measure.agg) return "Pivot requires a measure";
+  if (spec.pivot.measure.agg === "calc") return "Вычисляемая мера доступна только при нескольких мерах";
   if (spec.pivot.measure.agg === "sum" && spec.pivot.measure.source === "page") {
     return "Dashboard pivot measure must be an entity field";
   }

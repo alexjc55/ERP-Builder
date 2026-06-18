@@ -34,6 +34,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FormulaEditor, type FormulaFieldRef } from "@/components/FormulaEditor";
+import {
+  PivotMeasuresEditor,
+  type DraftMeasure,
+  newDraftMeasure,
+  measuresFromConfig,
+  buildMeasureConfig,
+} from "@/components/PivotMeasuresEditor";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent } from "@/components/ui/card";
@@ -686,10 +693,7 @@ export default function EntityViewsPage() {
   const [pivotRows, setPivotRows] = useState<DraftDim>({ source: "status", fieldKey: "", datePeriod: null });
   const [pivotColsOn, setPivotColsOn] = useState(false);
   const [pivotCols, setPivotCols] = useState<DraftDim>({ source: "status", fieldKey: "", datePeriod: null });
-  const [pivotAgg, setPivotAgg] = useState<"count" | "sum" | "formula">("count");
-  const [pivotMeasureField, setPivotMeasureField] = useState<string>("");
-  const [pivotFormula, setPivotFormula] = useState<string>("");
-  const [pivotFormulaName, setPivotFormulaName] = useState<MLValue>({});
+  const [pivotMeasures, setPivotMeasures] = useState<DraftMeasure[]>([newDraftMeasure()]);
   // Per-view role visibility (empty = visible to everyone with record access).
   const [visibleRoleIds, setVisibleRoleIds] = useState<number[]>([]);
 
@@ -704,10 +708,7 @@ export default function EntityViewsPage() {
   const [defaultPivotRows, setDefaultPivotRows] = useState<DraftDim>({ source: "status", fieldKey: "", datePeriod: null });
   const [defaultPivotColsOn, setDefaultPivotColsOn] = useState(false);
   const [defaultPivotCols, setDefaultPivotCols] = useState<DraftDim>({ source: "status", fieldKey: "", datePeriod: null });
-  const [defaultPivotAgg, setDefaultPivotAgg] = useState<"count" | "sum" | "formula">("count");
-  const [defaultPivotMeasureField, setDefaultPivotMeasureField] = useState<string>("");
-  const [defaultPivotFormula, setDefaultPivotFormula] = useState<string>("");
-  const [defaultPivotFormulaName, setDefaultPivotFormulaName] = useState<MLValue>({});
+  const [defaultPivotMeasures, setDefaultPivotMeasures] = useState<DraftMeasure[]>([newDraftMeasure()]);
   // Roles allowed to use the DEFAULT pivot (the Таблица/Сводная toggle on the
   // records page when no view is selected). Empty = everyone with record access.
   const [defaultPivotRoleIds, setDefaultPivotRoleIds] = useState<number[]>([]);
@@ -804,10 +805,7 @@ export default function EntityViewsPage() {
     setPivotRows({ source: pivotDimFields[0] ? "entity" : "status", fieldKey: pivotDimFields[0]?.fieldKey ?? "", datePeriod: null });
     setPivotColsOn(false);
     setPivotCols({ source: "status", fieldKey: "", datePeriod: null });
-    setPivotAgg("count");
-    setPivotMeasureField(pivotSumFields[0]?.fieldKey ?? "");
-    setPivotFormula("");
-    setPivotFormulaName({});
+    setPivotMeasures([newDraftMeasure(pivotSumFields[0]?.fieldKey ?? "")]);
     setVisibleRoleIds([]);
     setDialogOpen(true);
   };
@@ -838,12 +836,12 @@ export default function EntityViewsPage() {
         : { source: "status", fieldKey: "", datePeriod: null };
     const p = cfg.pivot;
     setPivotRows(p ? dimToDraft(p.rows) : { source: pivotDimFields[0] ? "entity" : "status", fieldKey: pivotDimFields[0]?.fieldKey ?? "", datePeriod: null });
-    setPivotColsOn(!!p?.cols);
+    // cols is only honored in single-measure mode; in multi-measure mode the
+    // measures ARE the columns, so don't restore a stale cols toggle.
+    const hasMulti = !!p?.measures && p.measures.length > 1;
+    setPivotColsOn(!!p?.cols && !hasMulti);
     setPivotCols(p?.cols ? dimToDraft(p.cols) : { source: "status", fieldKey: "", datePeriod: null });
-    setPivotAgg(p?.measure?.agg === "sum" ? "sum" : p?.measure?.agg === "formula" ? "formula" : "count");
-    setPivotMeasureField(p?.measure?.fieldKey ?? pivotSumFields[0]?.fieldKey ?? "");
-    setPivotFormula(p?.measure?.formula ?? "");
-    setPivotFormulaName((p?.measure?.formulaName as MLValue | null | undefined) ?? {});
+    setPivotMeasures(p ? measuresFromConfig(p) : [newDraftMeasure(pivotSumFields[0]?.fieldKey ?? "")]);
     setDialogOpen(true);
   };
 
@@ -885,14 +883,12 @@ export default function EntityViewsPage() {
       d && d.source !== "status"
         ? { source: "entity", fieldKey: d.fieldKey ?? "", datePeriod: d.datePeriod ?? null }
         : { source: "status", fieldKey: "", datePeriod: null };
+    const dpMulti = !!dp?.measures && dp.measures.length > 1;
     setDefaultPivotOn(!!dp);
     setDefaultPivotRows(dp ? dimToDraft(dp.rows) : { source: pivotDimFields[0] ? "entity" : "status", fieldKey: pivotDimFields[0]?.fieldKey ?? "", datePeriod: null });
-    setDefaultPivotColsOn(!!dp?.cols);
+    setDefaultPivotColsOn(!!dp?.cols && !dpMulti);
     setDefaultPivotCols(dp?.cols ? dimToDraft(dp.cols) : { source: "status", fieldKey: "", datePeriod: null });
-    setDefaultPivotAgg(dp?.measure?.agg === "sum" ? "sum" : dp?.measure?.agg === "formula" ? "formula" : "count");
-    setDefaultPivotMeasureField(dp?.measure?.fieldKey ?? pivotSumFields[0]?.fieldKey ?? "");
-    setDefaultPivotFormula(dp?.measure?.formula ?? "");
-    setDefaultPivotFormulaName((dp?.measure?.formulaName as MLValue | null | undefined) ?? {});
+    setDefaultPivotMeasures(dp ? measuresFromConfig(dp) : [newDraftMeasure(pivotSumFields[0]?.fieldKey ?? "")]);
     setDefaultPivotRoleIds(Array.isArray(dp?.visibleRoleIds) ? dp.visibleRoleIds : []);
     setDefaultSortDialogOpen(true);
   };
@@ -934,26 +930,19 @@ export default function EntityViewsPage() {
         toast({ title: t("pivot.needRowField", "Выберите поле строк сводной таблицы"), variant: "destructive" });
         return;
       }
-      if (defaultPivotColsOn && defaultPivotCols.source === "entity" && !defaultPivotCols.fieldKey) {
+      const dpMulti = defaultPivotMeasures.length > 1;
+      if (defaultPivotColsOn && !dpMulti && defaultPivotCols.source === "entity" && !defaultPivotCols.fieldKey) {
         toast({ title: t("pivot.needColField", "Выберите поле столбцов сводной таблицы"), variant: "destructive" });
         return;
       }
-      if (defaultPivotAgg === "sum" && !defaultPivotMeasureField) {
-        toast({ title: t("pivot.needMeasureField", "Выберите числовое поле для суммы"), variant: "destructive" });
+      const built = buildMeasureConfig(defaultPivotMeasures, t);
+      if ("error" in built) {
+        toast({ title: built.error, variant: "destructive" });
         return;
       }
-      if (defaultPivotAgg === "formula" && !defaultPivotFormula.trim()) {
-        toast({ title: t("pivot.needFormula", "Введите формулу для меры"), variant: "destructive" });
-        return;
-      }
-      const measure: PivotMeasure =
-        defaultPivotAgg === "sum"
-          ? { agg: "sum", source: "entity", fieldKey: defaultPivotMeasureField }
-          : defaultPivotAgg === "formula"
-            ? { agg: "formula", formula: defaultPivotFormula.trim(), formulaName: cleanML(defaultPivotFormulaName) }
-            : { agg: "count" };
-      const pivot: PivotConfig = { rows: draftToDim(defaultPivotRows), measure };
-      if (defaultPivotColsOn) pivot.cols = draftToDim(defaultPivotCols);
+      const pivot: PivotConfig = { rows: draftToDim(defaultPivotRows), ...built };
+      // cols and multiple measures are mutually exclusive.
+      if (defaultPivotColsOn && !built.measures) pivot.cols = draftToDim(defaultPivotCols);
       if (defaultPivotRoleIds.length > 0) pivot.visibleRoleIds = defaultPivotRoleIds;
       defaultPivotJson = pivot;
     }
@@ -987,14 +976,17 @@ export default function EntityViewsPage() {
             fieldKey: d.fieldKey,
             datePeriod: isDateLikeType(fields.find((f: Field) => f.fieldKey === d.fieldKey)?.fieldType ?? "") ? d.datePeriod : null,
           };
-    const measure: PivotMeasure =
-      pivotAgg === "sum"
-        ? { agg: "sum", source: "entity", fieldKey: pivotMeasureField }
-        : pivotAgg === "formula"
-          ? { agg: "formula", formula: pivotFormula.trim(), formulaName: cleanML(pivotFormulaName) }
-          : { agg: "count" };
-    const pivot: PivotConfig = { rows: draftToDim(pivotRows), measure };
-    if (pivotColsOn) pivot.cols = draftToDim(pivotCols);
+    const built = buildMeasureConfig(pivotMeasures, t);
+    if ("error" in built) {
+      // Surface via handleSubmit's validation; build a placeholder so the type is
+      // satisfied (handleSubmit re-runs the same check and toasts before saving).
+      const pivot: PivotConfig = { rows: draftToDim(pivotRows), measure: { agg: "count" } };
+      if (pivotColsOn) pivot.cols = draftToDim(pivotCols);
+      return { ...base, viewType: "pivot", pivot };
+    }
+    const pivot: PivotConfig = { rows: draftToDim(pivotRows), ...built };
+    // cols and multiple measures are mutually exclusive.
+    if (pivotColsOn && !built.measures) pivot.cols = draftToDim(pivotCols);
     return { ...base, viewType: "pivot", pivot };
   };
 
@@ -1012,12 +1004,9 @@ export default function EntityViewsPage() {
         toast({ title: t("pivot.needColField", "Выберите поле столбцов сводной таблицы"), variant: "destructive" });
         return;
       }
-      if (pivotAgg === "sum" && !pivotMeasureField) {
-        toast({ title: t("pivot.needMeasureField", "Выберите числовое поле для суммы"), variant: "destructive" });
-        return;
-      }
-      if (pivotAgg === "formula" && !pivotFormula.trim()) {
-        toast({ title: t("pivot.needFormula", "Введите формулу для меры"), variant: "destructive" });
+      const builtMeasures = buildMeasureConfig(pivotMeasures, t);
+      if ("error" in builtMeasures) {
+        toast({ title: builtMeasures.error, variant: "destructive" });
         return;
       }
     }
@@ -1355,64 +1344,32 @@ export default function EntityViewsPage() {
                   ml={ml}
                   t={t}
                 />
-                <div className="flex items-center gap-2">
-                  <Switch checked={pivotColsOn} onCheckedChange={setPivotColsOn} />
-                  <Label className="cursor-pointer text-sm">{t("pivot.enableCols", "Добавить измерение столбцов")}</Label>
-                </div>
-                {pivotColsOn && (
-                  <PivotDimEditor
-                    label={t("pivot.cols", "Столбцы")}
-                    dim={pivotCols}
-                    onChange={setPivotCols}
-                    dimFields={pivotDimFields}
-                    ml={ml}
-                    t={t}
-                  />
-                )}
-                <div className="space-y-1.5">
-                  <Label className="text-sm">{t("pivot.measure", "Мера (значение в ячейках)")}</Label>
-                  <div className="flex items-center gap-2">
-                    <Select value={pivotAgg} onValueChange={(v) => setPivotAgg(v as "count" | "sum" | "formula")}>
-                      <SelectTrigger className="h-8 text-sm w-40"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="count">{t("pivot.aggCount", "Количество записей")}</SelectItem>
-                        <SelectItem value="sum">{t("pivot.aggSum", "Сумма поля")}</SelectItem>
-                        <SelectItem value="formula">{t("pivot.aggFormula", "Формула")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {pivotAgg === "sum" && (
-                      <Select value={pivotMeasureField} onValueChange={setPivotMeasureField}>
-                        <SelectTrigger className="h-8 text-sm flex-1">
-                          <SelectValue placeholder={t("pivot.selectNumberField", "числовое поле…")} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {pivotSumFields.length === 0 ? (
-                            <div className="px-2 py-1.5 text-xs text-slate-400">{t("pivot.noNumberFields", "Нет числовых полей в сводных")}</div>
-                          ) : (
-                            pivotSumFields.map((f: Field) => (
-                              <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson)}</SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </div>
-                  {pivotAgg === "formula" && (
-                    <>
-                      <FormulaEditor
-                        value={pivotFormula}
-                        onChange={setPivotFormula}
-                        fields={pivotFormulaRefs}
-                        label={t("pivot.formulaMeasureLabel", "Формула меры")}
-                        hint={t("pivot.formulaMeasureHint", "Вычисляется для каждой записи, затем суммируется по ячейкам. Ссылайтесь на поля через {ключ_поля} (доступны поля, включённые в сводные).")}
+                {pivotMeasures.length === 1 && (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <Switch checked={pivotColsOn} onCheckedChange={setPivotColsOn} />
+                      <Label className="cursor-pointer text-sm">{t("pivot.enableCols", "Добавить измерение столбцов")}</Label>
+                    </div>
+                    {pivotColsOn && (
+                      <PivotDimEditor
+                        label={t("pivot.cols", "Столбцы")}
+                        dim={pivotCols}
+                        onChange={setPivotCols}
+                        dimFields={pivotDimFields}
+                        ml={ml}
+                        t={t}
                       />
-                      <div className="space-y-1.5">
-                        <Label className="text-sm">{t("pivot.formulaNameLabel", "Название меры (заголовок столбца)")}</Label>
-                        <MultilingualInput label={t("pivot.formulaNamePlaceholder", "Формула")} value={pivotFormulaName} onChange={setPivotFormulaName} />
-                      </div>
-                    </>
-                  )}
-                </div>
+                    )}
+                  </>
+                )}
+                <PivotMeasuresEditor
+                  measures={pivotMeasures}
+                  onChange={setPivotMeasures}
+                  sumFields={pivotSumFields.map((f: Field) => ({ fieldKey: f.fieldKey, nameJson: f.nameJson }))}
+                  formulaRefs={pivotFormulaRefs}
+                  ml={ml}
+                  t={t}
+                />
               </div>
             )}
 
@@ -1551,64 +1508,32 @@ export default function EntityViewsPage() {
                     ml={ml}
                     t={t}
                   />
-                  <div className="flex items-center gap-2">
-                    <Switch checked={defaultPivotColsOn} onCheckedChange={setDefaultPivotColsOn} />
-                    <Label className="cursor-pointer text-sm">{t("pivot.enableCols", "Добавить измерение столбцов")}</Label>
-                  </div>
-                  {defaultPivotColsOn && (
-                    <PivotDimEditor
-                      label={t("pivot.cols", "Столбцы")}
-                      dim={defaultPivotCols}
-                      onChange={setDefaultPivotCols}
-                      dimFields={pivotDimFields}
-                      ml={ml}
-                      t={t}
-                    />
-                  )}
-                  <div className="space-y-1.5">
-                    <Label className="text-sm">{t("pivot.measure", "Мера (значение в ячейках)")}</Label>
-                    <div className="flex items-center gap-2">
-                      <Select value={defaultPivotAgg} onValueChange={(v) => setDefaultPivotAgg(v as "count" | "sum" | "formula")}>
-                        <SelectTrigger className="h-8 text-sm w-40"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="count">{t("pivot.aggCount", "Количество записей")}</SelectItem>
-                          <SelectItem value="sum">{t("pivot.aggSum", "Сумма поля")}</SelectItem>
-                          <SelectItem value="formula">{t("pivot.aggFormula", "Формула")}</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {defaultPivotAgg === "sum" && (
-                        <Select value={defaultPivotMeasureField} onValueChange={setDefaultPivotMeasureField}>
-                          <SelectTrigger className="h-8 text-sm flex-1">
-                            <SelectValue placeholder={t("pivot.selectNumberField", "числовое поле…")} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {pivotSumFields.length === 0 ? (
-                              <div className="px-2 py-1.5 text-xs text-slate-400">{t("pivot.noNumberFields", "Нет числовых полей в сводных")}</div>
-                            ) : (
-                              pivotSumFields.map((f: Field) => (
-                                <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson)}</SelectItem>
-                              ))
-                            )}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </div>
-                    {defaultPivotAgg === "formula" && (
-                      <>
-                        <FormulaEditor
-                          value={defaultPivotFormula}
-                          onChange={setDefaultPivotFormula}
-                          fields={pivotFormulaRefs}
-                          label={t("pivot.formulaMeasureLabel", "Формула меры")}
-                          hint={t("pivot.formulaMeasureHint", "Вычисляется для каждой записи, затем суммируется по ячейкам. Ссылайтесь на поля через {ключ_поля} (доступны поля, включённые в сводные).")}
+                  {defaultPivotMeasures.length === 1 && (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <Switch checked={defaultPivotColsOn} onCheckedChange={setDefaultPivotColsOn} />
+                        <Label className="cursor-pointer text-sm">{t("pivot.enableCols", "Добавить измерение столбцов")}</Label>
+                      </div>
+                      {defaultPivotColsOn && (
+                        <PivotDimEditor
+                          label={t("pivot.cols", "Столбцы")}
+                          dim={defaultPivotCols}
+                          onChange={setDefaultPivotCols}
+                          dimFields={pivotDimFields}
+                          ml={ml}
+                          t={t}
                         />
-                        <div className="space-y-1.5">
-                          <Label className="text-sm">{t("pivot.formulaNameLabel", "Название меры (заголовок столбца)")}</Label>
-                          <MultilingualInput label={t("pivot.formulaNamePlaceholder", "Формула")} value={defaultPivotFormulaName} onChange={setDefaultPivotFormulaName} />
-                        </div>
-                      </>
-                    )}
-                  </div>
+                      )}
+                    </>
+                  )}
+                  <PivotMeasuresEditor
+                    measures={defaultPivotMeasures}
+                    onChange={setDefaultPivotMeasures}
+                    sumFields={pivotSumFields.map((f: Field) => ({ fieldKey: f.fieldKey, nameJson: f.nameJson }))}
+                    formulaRefs={pivotFormulaRefs}
+                    ml={ml}
+                    t={t}
+                  />
                   <div className="space-y-2 border-t border-slate-100 pt-3">
                     <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
                       <Shield className="w-4 h-4 text-blue-600" />

@@ -47,6 +47,22 @@ export function pivotRound(v: number): number {
   return Math.round(v * 1e6) / 1e6;
 }
 
+// Extract `{ref}` measure references from a calc formula. The formula language
+// references other measures by their colKey via `{colKey}` syntax (same `{...}`
+// field-ref token the evaluator uses), so a simple scan is sufficient to check
+// a calc only points at keys that exist.
+const PIVOT_FORMULA_REF_RE = /\{([^}]*)\}/g;
+export function pivotFormulaRefs(expr: string): string[] {
+  const out: string[] = [];
+  let m: RegExpExecArray | null;
+  PIVOT_FORMULA_REF_RE.lastIndex = 0;
+  while ((m = PIVOT_FORMULA_REF_RE.exec(expr)) !== null) {
+    const ref = m[1].trim();
+    if (ref) out.push(ref);
+  }
+  return out;
+}
+
 export interface PivotDimInput {
   source: string;
   fieldKey?: string | null;
@@ -54,17 +70,24 @@ export interface PivotDimInput {
 }
 export interface PivotMeasureInput {
   agg: string;
+  /** Stable id within a multi-measure pivot (column key + calc ref target). */
+  key?: string | null;
   source?: string | null;
   fieldKey?: string | null;
-  /** For agg=formula: per-record expression (function-field syntax), summed. */
+  /** agg=formula: per-record expr (summed). agg=calc: per-row expr over measures. */
   formula?: string | null;
-  /** For agg=formula: optional multilingual display name (single-column header). */
+  /** Multilingual column-header override for any agg. */
+  nameJson?: unknown;
+  /** Deprecated alias of nameJson for a single formula measure. */
   formulaName?: unknown;
 }
 export interface PivotConfigInput {
   rows: PivotDimInput;
   cols?: PivotDimInput | null;
-  measure: PivotMeasureInput;
+  /** Single-measure mode. Absent in multi-measure mode (see `measures`). */
+  measure?: PivotMeasureInput | null;
+  /** Multi-measure mode: each measure becomes a column. Takes precedence over `measure`. */
+  measures?: PivotMeasureInput[] | null;
 }
 
 /** Minimal shape of a page-local field needed for pivot dim/measure resolution. */
@@ -97,6 +120,8 @@ export interface PivotResultShape {
   colTotals: { key: string; value: number }[];
   grandTotal: number;
   measureLabel: string;
+  /** True when each column is a distinct measure (multi-measure mode). */
+  multiMeasure?: boolean;
 }
 
 export type PivotComputeOutcome =
@@ -119,10 +144,19 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
   const entFieldByKey = new Map(entityFields.map((f) => [f.fieldKey, f]));
   const pageFieldByKey = new Map((input.pageFields ?? []).map((pf) => [pf.fieldKey, pf] as const));
 
+  // In multi-measure mode any sum measure may target a page-local field; in
+  // single mode only `pivot.measure` matters. Check both shapes safely.
+  const anyMeasureNeedsPage =
+    (pivot.measures && pivot.measures.length > 0
+      ? pivot.measures
+      : pivot.measure
+        ? [pivot.measure]
+        : []
+    ).some((m) => m.agg === "sum" && m.source === "page");
   const needPage =
     pivot.rows.source === "page" ||
     pivot.cols?.source === "page" ||
-    (pivot.measure.agg === "sum" && pivot.measure.source === "page");
+    anyMeasureNeedsPage;
   if (needPage && pageId == null) {
     return { ok: false, error: "pageId is required for page-local pivot dimensions/measures" };
   }
@@ -179,17 +213,30 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
   };
 
   // A measure is either resolved to a SQL aggregate (count / sum-of-field) that
-  // GROUP BYs in Postgres, or to a per-record `formula` expression evaluated in
-  // JS (SQL can't run the formula language) and summed into each cell.
+  // GROUP BYs in Postgres, a per-record `formula` expression evaluated in JS (SQL
+  // can't run the formula language) and summed into each cell, or a `calc`
+  // expression evaluated PER ROW over the OTHER measures' aggregated values
+  // (multi-measure mode only).
   type MeasurePlan =
     | { kind: "sql"; expr: SQL; label: string }
-    | { kind: "formula"; expr: string; label: string; allowedKeys: string[] };
-  const resolveMeasure = (): MeasurePlan | { error: string } => {
-    if (pivot.measure.agg === "count") {
-      return { kind: "sql", expr: sql`count(*)::float8`, label: "Количество" };
+    | { kind: "formula"; expr: string; label: string; allowedKeys: string[] }
+    | { kind: "calc"; expr: string; label: string };
+  // Only pivot-enabled, viewer-visible entity fields may feed a formula measure.
+  // `entityFields` is already the viewer's visible set (or all-active for the
+  // admin widget); restricting the per-record value map to these keys keeps
+  // hidden / non-opted field values out of the expression — a hard field
+  // boundary, NOT a cosmetic filter (a crafted formula cannot leak them).
+  const allowedKeysAll = entityFields.filter((f) => f.pivotEnabled).map((f) => f.fieldKey);
+  // Column-header label: explicit nameJson override, then the deprecated
+  // formulaName alias (back-compat), then a per-agg default.
+  const measureLabel = (m: PivotMeasureInput, dflt: string): string =>
+    pivotMLName(m.nameJson) || pivotMLName(m.formulaName) || dflt;
+  const resolveMeasure = (m: PivotMeasureInput, allowCalc: boolean): MeasurePlan | { error: string } => {
+    if (m.agg === "count") {
+      return { kind: "sql", expr: sql`count(*)::float8`, label: measureLabel(m, "Количество") };
     }
-    if (pivot.measure.agg === "formula") {
-      const expr = (pivot.measure.formula ?? "").trim();
+    if (m.agg === "formula") {
+      const expr = (m.formula ?? "").trim();
       if (!expr) return { error: "Formula measure requires a formula expression" };
       // Validate syntax once. Missing field refs resolve to null (they don't
       // throw), so an empty value map only surfaces parse / unknown-function
@@ -199,19 +246,21 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
       } catch (e) {
         return { error: `Некорректная формула: ${e instanceof Error ? e.message : String(e)}` };
       }
-      // Only pivot-enabled, viewer-visible entity fields may feed the formula.
-      // `entityFields` is already the viewer's visible set (or all-active for the
-      // admin widget); restricting the per-record value map to these keys keeps
-      // hidden / non-opted field values out of the expression — a hard field
-      // boundary, NOT a cosmetic filter (a crafted formula cannot leak them).
-      const allowedKeys = entityFields.filter((f) => f.pivotEnabled).map((f) => f.fieldKey);
-      // A formula has no field name of its own, so an admin-supplied multilingual
-      // name (if any) becomes the single-column header; else fall back to "Формула".
-      const label = pivotMLName(pivot.measure.formulaName) || "Формула";
-      return { kind: "formula", expr, label, allowedKeys };
+      return { kind: "formula", expr, label: measureLabel(m, "Формула"), allowedKeys: allowedKeysAll };
     }
-    const src = pivot.measure.source;
-    const key = pivot.measure.fieldKey ?? "";
+    if (m.agg === "calc") {
+      if (!allowCalc) return { error: "Вычисляемая мера доступна только при нескольких мерах" };
+      const expr = (m.formula ?? "").trim();
+      if (!expr) return { error: "Calc measure requires a formula expression" };
+      try {
+        evaluateFormula(expr, {});
+      } catch (e) {
+        return { error: `Некорректная формула: ${e instanceof Error ? e.message : String(e)}` };
+      }
+      return { kind: "calc", expr, label: measureLabel(m, "Формула") };
+    }
+    const src = m.source;
+    const key = m.fieldKey ?? "";
     if ((src !== "entity" && src !== "page") || !key)
       return { error: "Sum measure requires source (entity|page) and fieldKey" };
     let ve: SQL;
@@ -222,14 +271,14 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
       if (!f.pivotEnabled) return { error: `Field is not enabled for pivot: ${key}` };
       if (f.fieldType !== "number") return { error: `Measure field must be numeric: ${key}` };
       ve = sql`(${entityRecordsTable.valuesJson} ->> ${key})`;
-      label = pivotMLName(f.nameJson);
+      label = measureLabel(m, pivotMLName(f.nameJson));
     } else {
       const pf = pageFieldByKey.get(key);
       if (!pf) return { error: `Unknown or hidden page measure field: ${key}` };
       if (!pf.pivotEnabled) return { error: `Page field is not enabled for pivot: ${key}` };
       if (pf.fieldType !== "number") return { error: `Measure field must be numeric: ${key}` };
       ve = pageLocalValueExpr(pageId!, key);
-      label = pivotMLName(pf.nameJson);
+      label = measureLabel(m, pivotMLName(pf.nameJson));
     }
     return {
       kind: "sql",
@@ -240,61 +289,170 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
 
   const rowMeta = resolveDim(pivot.rows);
   if ("error" in rowMeta) return { ok: false, error: rowMeta.error };
-  const colMeta = pivot.cols ? resolveDim(pivot.cols) : null;
-  if (colMeta && "error" in colMeta) return { ok: false, error: colMeta.error };
-  const measure = resolveMeasure();
-  if ("error" in measure) return { ok: false, error: measure.error };
+
+  const rowKeyExpr = rowMeta.kind === "status" ? sql`${entityRecordsTable.statusId}::text` : rowMeta.expr;
+
+  // Multi-measure mode (each measure is a column) takes precedence over the
+  // single `measure` + optional `cols` dimension. The two are mutually exclusive
+  // by design, so any `cols` dimension is ignored when `measures` is present.
+  const measuresInput = pivot.measures && pivot.measures.length > 0 ? pivot.measures : null;
 
   // ---- Aggregation ----
-  const rowKeyExpr = rowMeta.kind === "status" ? sql`${entityRecordsTable.statusId}::text` : rowMeta.expr;
-  const colKeyExpr = !colMeta
-    ? null
-    : colMeta.kind === "status"
-      ? sql`${entityRecordsTable.statusId}::text`
-      : colMeta.expr;
-
+  // Shared output: `grouped` is a flat list of {rk, ck, v} the assembly loop sums
+  // per (row, col). In single mode ck = the column dimension key (or __all__); in
+  // multi mode ck = the measure's column key.
   let grouped: { rk: string | null; ck: string | null; v: number }[];
-  if (measure.kind === "formula") {
-    // SQL can't compute the formula language, so pull per-record keys + the raw
-    // values map (NO GROUP BY), evaluate in JS against the allowed-key-scoped
-    // values, and emit one {rk,ck,v} per record. The shared loop below then
-    // sums duplicates per (row,col) exactly like the SQL path.
-    const allowed = measure.allowedKeys;
-    const raw = await db
-      .select({
-        rk: sql<string | null>`${rowKeyExpr}`,
-        ck: colKeyExpr ? sql<string | null>`${colKeyExpr}` : sql<string>`${PIVOT_COL_ALL}`,
-        vals: entityRecordsTable.valuesJson,
-      })
-      .from(entityRecordsTable)
-      .where(where);
-    grouped = raw.map((r) => {
-      const src = (r.vals ?? {}) as Record<string, unknown>;
-      const scoped: Record<string, unknown> = {};
-      for (const k of allowed) scoped[k] = src[k];
-      let v = 0;
-      try {
-        const res = evaluateFormula(measure.expr, scoped);
-        if (typeof res === "number" && Number.isFinite(res)) v = res;
-      } catch {
-        v = 0;
+  let colMeta: DimMeta | null = null;
+  let multiMeasure = false;
+  let measureLabelSingle = "";
+  // Multi mode: fixed column order (measure keys) + per-column labels + the calc
+  // plans to inject after the SQL/formula cells are assembled.
+  let colKeysFixed: string[] | null = null;
+  const colLabel = new Map<string, string>();
+  const calcPlans: { colKey: string; expr: string }[] = [];
+  const valueColKeys: string[] = [];
+
+  if (measuresInput) {
+    multiMeasure = true;
+    const sqlPlans: { colKey: string; expr: SQL }[] = [];
+    const formulaPlans: { colKey: string; expr: string; allowedKeys: string[] }[] = [];
+    const seen = new Set<string>();
+    for (let i = 0; i < measuresInput.length; i++) {
+      const m = measuresInput[i];
+      const plan = resolveMeasure(m, true);
+      if ("error" in plan) return { ok: false, error: plan.error };
+      const colKey = (m.key && m.key.trim()) || `m${i}`;
+      if (seen.has(colKey)) return { ok: false, error: `Дублирующийся ключ меры: ${colKey}` };
+      seen.add(colKey);
+      colKeysFixed = colKeysFixed ?? [];
+      colKeysFixed.push(colKey);
+      colLabel.set(colKey, plan.label);
+      if (plan.kind === "sql") {
+        sqlPlans.push({ colKey, expr: plan.expr });
+        valueColKeys.push(colKey);
+      } else if (plan.kind === "formula") {
+        formulaPlans.push({ colKey, expr: plan.expr, allowedKeys: plan.allowedKeys });
+        valueColKeys.push(colKey);
+      } else {
+        calcPlans.push({ colKey, expr: plan.expr });
       }
-      return { rk: r.rk, ck: r.ck, v };
-    });
+    }
+
+    // Validate calc references fail-fast. This is the single boundary for BOTH
+    // the records pivot route (no save-time validator) and the dashboard widget.
+    // A calc may reference any value measure (count/sum/formula) plus any calc
+    // defined EARLIER in config order — exactly the per-row eval order below.
+    // Self / unknown / forward refs would silently collapse missing vars to 0
+    // and produce wrong totals, so reject them here instead.
+    if (calcPlans.length > 0) {
+      if (valueColKeys.length === 0)
+        return { ok: false, error: "Вычисляемая мера требует хотя бы одну обычную меру" };
+      const availableForCalc = new Set(valueColKeys);
+      for (const cp of calcPlans) {
+        for (const ref of pivotFormulaRefs(cp.expr)) {
+          if (ref === cp.colKey)
+            return { ok: false, error: `Вычисляемая мера не может ссылаться на саму себя: ${cp.colKey}` };
+          if (!availableForCalc.has(ref))
+            return { ok: false, error: `Вычисляемая мера ссылается на неизвестную меру: ${ref}` };
+        }
+        availableForCalc.add(cp.colKey);
+      }
+    }
+
+    grouped = [];
+    // One grouped query for all SQL measures (count / sum), aggregated per row.
+    if (sqlPlans.length > 0) {
+      const sel: Record<string, SQL> = { __rk: sql`${rowKeyExpr}` };
+      for (const p of sqlPlans) sel[p.colKey] = p.expr;
+      const sqlRows = (await db
+        .select(sel)
+        .from(entityRecordsTable)
+        .where(where)
+        .groupBy(sql`1`)) as Record<string, unknown>[];
+      for (const r of sqlRows) {
+        const rk = r.__rk == null ? null : String(r.__rk);
+        for (const p of sqlPlans) grouped.push({ rk, ck: p.colKey, v: Number(r[p.colKey] ?? 0) });
+      }
+    }
+    // One per-record pull for all formula measures, evaluated in JS and summed.
+    if (formulaPlans.length > 0) {
+      const raw = await db
+        .select({ rk: sql<string | null>`${rowKeyExpr}`, vals: entityRecordsTable.valuesJson })
+        .from(entityRecordsTable)
+        .where(where);
+      for (const r of raw) {
+        const srcVals = (r.vals ?? {}) as Record<string, unknown>;
+        for (const p of formulaPlans) {
+          const scoped: Record<string, unknown> = {};
+          for (const k of p.allowedKeys) scoped[k] = srcVals[k];
+          let v = 0;
+          try {
+            const res = evaluateFormula(p.expr, scoped);
+            if (typeof res === "number" && Number.isFinite(res)) v = res;
+          } catch {
+            v = 0;
+          }
+          grouped.push({ rk: r.rk, ck: p.colKey, v });
+        }
+      }
+    }
   } else {
-    grouped = await db
-      .select({
-        rk: sql<string | null>`${rowKeyExpr}`,
-        ck: colKeyExpr ? sql<string | null>`${colKeyExpr}` : sql<string>`${PIVOT_COL_ALL}`,
-        v: sql<number>`${measure.expr}`,
-      })
-      .from(entityRecordsTable)
-      .where(where)
-      // Group by SELECT output ordinals (1 = row key, 2 = col key), NOT by
-      // re-embedding rowKeyExpr/colKeyExpr. Re-embedding the same sql fragment
-      // re-binds its placeholders ($1 in SELECT vs $10 in GROUP BY), so Postgres
-      // sees two different expressions and rejects the non-aggregated column.
-      .groupBy(...(colKeyExpr ? [sql`1`, sql`2`] : [sql`1`]));
+    const resolvedCol = pivot.cols ? resolveDim(pivot.cols) : null;
+    if (resolvedCol && "error" in resolvedCol) return { ok: false, error: resolvedCol.error };
+    colMeta = resolvedCol;
+    // Single-measure path: `measure` is guaranteed present by validation; default
+    // to count defensively so an empty config never throws here.
+    const measure = resolveMeasure(pivot.measure ?? { agg: "count" }, false);
+    if ("error" in measure) return { ok: false, error: measure.error };
+    measureLabelSingle = measure.label;
+    const colKeyExpr = !colMeta
+      ? null
+      : colMeta.kind === "status"
+        ? sql`${entityRecordsTable.statusId}::text`
+        : colMeta.expr;
+
+    if (measure.kind === "formula") {
+      // SQL can't compute the formula language, so pull per-record keys + the raw
+      // values map (NO GROUP BY), evaluate in JS against the allowed-key-scoped
+      // values, and emit one {rk,ck,v} per record. The shared loop below then
+      // sums duplicates per (row,col) exactly like the SQL path.
+      const allowed = measure.allowedKeys;
+      const raw = await db
+        .select({
+          rk: sql<string | null>`${rowKeyExpr}`,
+          ck: colKeyExpr ? sql<string | null>`${colKeyExpr}` : sql<string>`${PIVOT_COL_ALL}`,
+          vals: entityRecordsTable.valuesJson,
+        })
+        .from(entityRecordsTable)
+        .where(where);
+      grouped = raw.map((r) => {
+        const srcVals = (r.vals ?? {}) as Record<string, unknown>;
+        const scoped: Record<string, unknown> = {};
+        for (const k of allowed) scoped[k] = srcVals[k];
+        let v = 0;
+        try {
+          const res = evaluateFormula(measure.expr, scoped);
+          if (typeof res === "number" && Number.isFinite(res)) v = res;
+        } catch {
+          v = 0;
+        }
+        return { rk: r.rk, ck: r.ck, v };
+      });
+    } else {
+      grouped = await db
+        .select({
+          rk: sql<string | null>`${rowKeyExpr}`,
+          ck: colKeyExpr ? sql<string | null>`${colKeyExpr}` : sql<string>`${PIVOT_COL_ALL}`,
+          v: sql<number>`${measure.expr}`,
+        })
+        .from(entityRecordsTable)
+        .where(where)
+        // Group by SELECT output ordinals (1 = row key, 2 = col key), NOT by
+        // re-embedding rowKeyExpr/colKeyExpr. Re-embedding the same sql fragment
+        // re-binds its placeholders ($1 in SELECT vs $10 in GROUP BY), so Postgres
+        // sees two different expressions and rejects the non-aggregated column.
+        .groupBy(...(colKeyExpr ? [sql`1`, sql`2`] : [sql`1`]));
+    }
   }
 
   // ---- Label resolution ----
@@ -380,7 +538,35 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
   }
 
   const rowKeys = sortKeys([...rowKeySet], rowMeta);
-  const colKeys = colMeta ? sortKeys([...colKeySet], colMeta) : [PIVOT_COL_ALL];
+
+  // Multi mode: inject calc measures. Each calc is evaluated PER ROW over the
+  // other measures' already-aggregated per-row values (referenced by their colKey
+  // via {colKey}), in config order so a later calc can reference an earlier one.
+  if (multiMeasure && calcPlans.length > 0) {
+    for (const cp of calcPlans) {
+      for (const rk of rowKeys) {
+        const scoped: Record<string, unknown> = {};
+        for (const vk of valueColKeys) scoped[vk] = cellMap.get(rk + "\u0000" + vk) ?? 0;
+        let v = 0;
+        try {
+          const res = evaluateFormula(cp.expr, scoped);
+          if (typeof res === "number" && Number.isFinite(res)) v = res;
+        } catch {
+          v = 0;
+        }
+        cellMap.set(rk + "\u0000" + cp.colKey, v);
+      }
+      valueColKeys.push(cp.colKey);
+    }
+  }
+
+  // Column order: multi mode uses the fixed measure order (incl. calc); single
+  // mode sorts the col-dimension keys (or the synthetic __all__ column).
+  const colKeys = multiMeasure
+    ? (colKeysFixed ?? [])
+    : colMeta
+      ? sortKeys([...colKeySet], colMeta)
+      : [PIVOT_COL_ALL];
 
   const cells: { rowKey: string; colKey: string; value: number }[] = [];
   const rowTotals: { key: string; value: number }[] = [];
@@ -394,22 +580,29 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
       rt += v;
       colTotal.set(ck, (colTotal.get(ck) ?? 0) + v);
     }
-    rowTotals.push({ key: rk, value: pivotRound(rt) });
-    grandTotal += rt;
+    // In multi mode columns are heterogeneous measures, so a row total (sum
+    // across measures) is meaningless — omit it. colTotals (per measure) stay.
+    if (!multiMeasure) {
+      rowTotals.push({ key: rk, value: pivotRound(rt) });
+      grandTotal += rt;
+    }
   }
 
   return {
     ok: true,
     result: {
       rows: rowKeys.map((k) => ({ key: k, label: labelFor(rowMeta, k) })),
-      cols: colMeta
-        ? colKeys.map((k) => ({ key: k, label: labelFor(colMeta, k) }))
-        : [{ key: PIVOT_COL_ALL, label: measure.label }],
+      cols: multiMeasure
+        ? colKeys.map((k) => ({ key: k, label: colLabel.get(k) ?? k }))
+        : colMeta
+          ? colKeys.map((k) => ({ key: k, label: labelFor(colMeta, k) }))
+          : [{ key: PIVOT_COL_ALL, label: measureLabelSingle }],
       cells,
       rowTotals,
       colTotals: colKeys.map((k) => ({ key: k, value: pivotRound(colTotal.get(k) ?? 0) })),
       grandTotal: pivotRound(grandTotal),
-      measureLabel: measure.label,
+      measureLabel: measureLabelSingle,
+      multiMeasure,
     },
   };
 }

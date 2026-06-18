@@ -12,20 +12,27 @@ import type { PivotMeasureSource } from './pivotMeasureSource';
 export interface PivotMeasure {
   agg: PivotMeasureAgg;
   /**
-     * For agg=sum, where the numeric field lives. Ignored for agg=count/formula.
+     * Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.
+     * @nullable
+     */
+  key?: string | null;
+  /**
+     * For agg=sum, where the numeric field lives. Ignored for agg=count/formula/calc.
      * @nullable
      */
   source?: PivotMeasureSource;
   /**
-     * Numeric field key for agg=sum. Ignored for agg=count/formula.
+     * Numeric field key for agg=sum. Ignored for agg=count/formula/calc.
      * @nullable
      */
   fieldKey?: string | null;
   /**
-     * For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden/non-opted fields cannot leak. Ignored for agg=count/sum.
+     * For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures' aggregated values, referenced via {measure_key}. Ignored for agg=count/sum.
      * @nullable
      */
   formula?: string | null;
-  /** For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to "Формула" when empty. Ignored for agg=count/sum. */
+  /** Optional multilingual display name used as this measure's column header (all agg types). Falls back to a per-agg default (the field name for sum, "Количество" for count, "Формула" for formula/calc). */
+  nameJson?: MultilingualText | null;
+  /** Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson. */
   formulaName?: MultilingualText | null;
 }

@@ -1372,16 +1372,39 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
-  "agg": zod.enum(['count', 'sum', 'formula']),
-  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
   "formulaName": zod.union([zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
-}),
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+}).optional().describe('Single-measure mode (the cell value). Required unless `measures` is present and non-empty (multi-measure mode), in which case it is ignored. Server validation enforces that exactly one of the two modes is supplied.'),
+  "measures": zod.array(zod.object({
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+})).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
@@ -1488,16 +1511,39 @@ export const CreateDashboardWidgetBody = zod.object({
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
-  "agg": zod.enum(['count', 'sum', 'formula']),
-  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
   "formulaName": zod.union([zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
-}),
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+}).optional().describe('Single-measure mode (the cell value). Required unless `measures` is present and non-empty (multi-measure mode), in which case it is ignored. Server validation enforces that exactly one of the two modes is supplied.'),
+  "measures": zod.array(zod.object({
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+})).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
@@ -1595,16 +1641,39 @@ export const CreateDashboardWidgetResponse = zod.object({
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
-  "agg": zod.enum(['count', 'sum', 'formula']),
-  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
   "formulaName": zod.union([zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
-}),
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+}).optional().describe('Single-measure mode (the cell value). Required unless `measures` is present and non-empty (multi-measure mode), in which case it is ignored. Server validation enforces that exactly one of the two modes is supplied.'),
+  "measures": zod.array(zod.object({
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+})).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
@@ -1683,7 +1752,8 @@ export const GetDashboardDataResponseItem = zod.object({
   "value": zod.number()
 })),
   "grandTotal": zod.number(),
-  "measureLabel": zod.string()
+  "measureLabel": zod.string(),
+  "multiMeasure": zod.boolean().optional().describe('True when each column is a distinct measure (multi-measure mode). In that case rowTotals\/grandTotal are not meaningful (heterogeneous columns) and are omitted\/zero; only colTotals (per-measure totals) apply. The client hides the row-total column and grand total.')
 }),zod.null()]).optional().describe('Computed cross-tab for pivot widgets (admin-authoritative real totals, status-filtered). Null for other widget types.'),
   "formula": zod.string().nullish(),
   "format": zod.string().nullish(),
@@ -1794,16 +1864,39 @@ export const UpdateDashboardWidgetBody = zod.object({
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
-  "agg": zod.enum(['count', 'sum', 'formula']),
-  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
   "formulaName": zod.union([zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
-}),
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+}).optional().describe('Single-measure mode (the cell value). Required unless `measures` is present and non-empty (multi-measure mode), in which case it is ignored. Server validation enforces that exactly one of the two modes is supplied.'),
+  "measures": zod.array(zod.object({
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+})).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
@@ -1901,16 +1994,39 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
-  "agg": zod.enum(['count', 'sum', 'formula']),
-  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
   "formulaName": zod.union([zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
-}),
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+}).optional().describe('Single-measure mode (the cell value). Required unless `measures` is present and non-empty (multi-measure mode), in which case it is ignored. Server validation enforces that exactly one of the two modes is supplied.'),
+  "measures": zod.array(zod.object({
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+})).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
@@ -3660,16 +3776,39 @@ export const PivotEntityRecordsBody = zod.object({
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
-  "agg": zod.enum(['count', 'sum', 'formula']),
-  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
   "formulaName": zod.union([zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
-}),
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+}).optional().describe('Single-measure mode (the cell value). Required unless `measures` is present and non-empty (multi-measure mode), in which case it is ignored. Server validation enforces that exactly one of the two modes is supplied.'),
+  "measures": zod.array(zod.object({
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+})).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 })
 })
@@ -3697,7 +3836,8 @@ export const PivotEntityRecordsResponse = zod.object({
   "value": zod.number()
 })),
   "grandTotal": zod.number(),
-  "measureLabel": zod.string()
+  "measureLabel": zod.string(),
+  "multiMeasure": zod.boolean().optional().describe('True when each column is a distinct measure (multi-measure mode). In that case rowTotals\/grandTotal are not meaningful (heterogeneous columns) and are omitted\/zero; only colTotals (per-measure totals) apply. The client hides the row-total column and grand total.')
 })
 
 
@@ -4032,16 +4172,39 @@ export const ListEntityViewsResponseItem = zod.object({
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
-  "agg": zod.enum(['count', 'sum', 'formula']),
-  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
   "formulaName": zod.union([zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
-}),
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+}).optional().describe('Single-measure mode (the cell value). Required unless `measures` is present and non-empty (multi-measure mode), in which case it is ignored. Server validation enforces that exactly one of the two modes is supplied.'),
+  "measures": zod.array(zod.object({
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+})).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }).optional()
 }),
@@ -4101,16 +4264,39 @@ export const CreateEntityViewBody = zod.object({
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
-  "agg": zod.enum(['count', 'sum', 'formula']),
-  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
   "formulaName": zod.union([zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
-}),
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+}).optional().describe('Single-measure mode (the cell value). Required unless `measures` is present and non-empty (multi-measure mode), in which case it is ignored. Server validation enforces that exactly one of the two modes is supplied.'),
+  "measures": zod.array(zod.object({
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+})).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }).optional()
 }).optional(),
@@ -4167,16 +4353,39 @@ export const GetViewResponse = zod.object({
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
-  "agg": zod.enum(['count', 'sum', 'formula']),
-  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
   "formulaName": zod.union([zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
-}),
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+}).optional().describe('Single-measure mode (the cell value). Required unless `measures` is present and non-empty (multi-measure mode), in which case it is ignored. Server validation enforces that exactly one of the two modes is supplied.'),
+  "measures": zod.array(zod.object({
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+})).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }).optional()
 }),
@@ -4233,16 +4442,39 @@ export const UpdateViewBody = zod.object({
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
-  "agg": zod.enum(['count', 'sum', 'formula']),
-  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
   "formulaName": zod.union([zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
-}),
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+}).optional().describe('Single-measure mode (the cell value). Required unless `measures` is present and non-empty (multi-measure mode), in which case it is ignored. Server validation enforces that exactly one of the two modes is supplied.'),
+  "measures": zod.array(zod.object({
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+})).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }).optional()
 }).optional(),
@@ -4291,16 +4523,39 @@ export const UpdateViewResponse = zod.object({
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
-  "agg": zod.enum(['count', 'sum', 'formula']),
-  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
   "formulaName": zod.union([zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
-}),
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+}).optional().describe('Single-measure mode (the cell value). Required unless `measures` is present and non-empty (multi-measure mode), in which case it is ignored. Server validation enforces that exactly one of the two modes is supplied.'),
+  "measures": zod.array(zod.object({
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+})).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }).optional()
 }),
@@ -4388,16 +4643,39 @@ export const ListEntitiesResponseItem = zod.object({
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
-  "agg": zod.enum(['count', 'sum', 'formula']),
-  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
   "formulaName": zod.union([zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
-}),
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+}).optional().describe('Single-measure mode (the cell value). Required unless `measures` is present and non-empty (multi-measure mode), in which case it is ignored. Server validation enforces that exactly one of the two modes is supplied.'),
+  "measures": zod.array(zod.object({
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+})).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot.'),
   "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
@@ -4450,16 +4728,39 @@ export const CreateEntityBody = zod.object({
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
-  "agg": zod.enum(['count', 'sum', 'formula']),
-  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
   "formulaName": zod.union([zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
-}),
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+}).optional().describe('Single-measure mode (the cell value). Required unless `measures` is present and non-empty (multi-measure mode), in which case it is ignored. Server validation enforces that exactly one of the two modes is supplied.'),
+  "measures": zod.array(zod.object({
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+})).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot config for the records page when no view is selected. Null = no default pivot.'),
   "pivotEnabled": zod.boolean().optional(),
@@ -4513,16 +4814,39 @@ export const GetEntityResponse = zod.object({
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
-  "agg": zod.enum(['count', 'sum', 'formula']),
-  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
   "formulaName": zod.union([zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
-}),
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+}).optional().describe('Single-measure mode (the cell value). Required unless `measures` is present and non-empty (multi-measure mode), in which case it is ignored. Server validation enforces that exactly one of the two modes is supplied.'),
+  "measures": zod.array(zod.object({
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+})).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot.'),
   "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
@@ -4577,16 +4901,39 @@ export const UpdateEntityBody = zod.object({
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
-  "agg": zod.enum(['count', 'sum', 'formula']),
-  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
   "formulaName": zod.union([zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
-}),
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+}).optional().describe('Single-measure mode (the cell value). Required unless `measures` is present and non-empty (multi-measure mode), in which case it is ignored. Server validation enforces that exactly one of the two modes is supplied.'),
+  "measures": zod.array(zod.object({
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+})).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot config for the records page when no view is selected. Null = no default pivot.'),
   "pivotEnabled": zod.boolean().optional(),
@@ -4632,16 +4979,39 @@ export const UpdateEntityResponse = zod.object({
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
-  "agg": zod.enum(['count', 'sum', 'formula']),
-  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
   "formulaName": zod.union([zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
-}),
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+}).optional().describe('Single-measure mode (the cell value). Required unless `measures` is present and non-empty (multi-measure mode), in which case it is ignored. Server validation enforces that exactly one of the two modes is supplied.'),
+  "measures": zod.array(zod.object({
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+})).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot.'),
   "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),

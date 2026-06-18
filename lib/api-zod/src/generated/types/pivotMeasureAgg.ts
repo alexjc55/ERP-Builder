@@ -13,4 +13,5 @@ export const PivotMeasureAgg = {
   count: 'count',
   sum: 'sum',
   formula: 'formula',
+  calc: 'calc',
 } as const;

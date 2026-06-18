@@ -118,6 +118,9 @@ export function PivotResultTable({
   const rowTotal = new Map(result.rowTotals.map((r) => [r.key, r.value]));
   const colTotal = new Map(result.colTotals.map((c) => [c.key, c.value]));
   const hasCols = result.cols.length > 1 || (result.cols[0]?.key ?? "") !== "__all__";
+  // Multi-measure pivots have heterogeneous columns, so a per-row total and a
+  // grand total are meaningless — the server omits them and we hide the column.
+  const showRowTotal = !result.multiMeasure;
 
   return (
     <div className="relative overflow-auto rounded-lg border border-slate-200">
@@ -141,9 +144,11 @@ export function PivotResultTable({
                 {c.label}
               </th>
             ))}
-            <th className="border-b border-l-2 border-slate-300 bg-slate-100 px-3 py-2 text-right font-semibold text-slate-700">
-              {t("pivot.rowTotal", "Итого")}
-            </th>
+            {showRowTotal && (
+              <th className="border-b border-l-2 border-slate-300 bg-slate-100 px-3 py-2 text-right font-semibold text-slate-700">
+                {t("pivot.rowTotal", "Итого")}
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -163,9 +168,11 @@ export function PivotResultTable({
                   </td>
                 );
               })}
-              <td className="border-l-2 border-slate-300 bg-slate-50 px-3 py-2 text-right font-semibold tabular-nums text-slate-800">
-                {fmt(rowTotal.get(r.key) ?? 0)}
-              </td>
+              {showRowTotal && (
+                <td className="border-l-2 border-slate-300 bg-slate-50 px-3 py-2 text-right font-semibold tabular-nums text-slate-800">
+                  {fmt(rowTotal.get(r.key) ?? 0)}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -182,9 +189,11 @@ export function PivotResultTable({
                 {fmt(colTotal.get(c.key) ?? 0)}
               </td>
             ))}
-            <td className="border-l-2 border-slate-300 bg-slate-200 px-3 py-2 text-right font-bold tabular-nums text-slate-900">
-              {fmt(result.grandTotal)}
-            </td>
+            {showRowTotal && (
+              <td className="border-l-2 border-slate-300 bg-slate-200 px-3 py-2 text-right font-bold tabular-nums text-slate-900">
+                {fmt(result.grandTotal)}
+              </td>
+            )}
           </tr>
         </tfoot>
       </table>

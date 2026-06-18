@@ -5617,14 +5617,21 @@ components:
       properties:
         agg:
           type: string
-          enum: [count, sum, formula]
+          enum: [count, sum, formula, calc]
+        key:
+          type: ["string", "null"]
+          description: >-
+            Stable identifier for this measure within a multi-measure pivot. Used
+            as the column key and as the reference target for calc measures
+            ({key}). Required (unique) in multi-measure mode; ignored for a
+            single measure.
         source:
           type: ["string", "null"]
           enum: [entity, page, null]
-          description: For agg=sum, where the numeric field lives. Ignored for agg=count/formula.
+          description: For agg=sum, where the numeric field lives. Ignored for agg=count/formula/calc.
         fieldKey:
           type: ["string", "null"]
-          description: Numeric field key for agg=sum. Ignored for agg=count/formula.
+          description: Numeric field key for agg=sum. Ignored for agg=count/formula/calc.
         formula:
           type: ["string", "null"]
           description: >-
@@ -5632,27 +5639,49 @@ components:
             evaluated per record and SUMMED into each cell. References entity
             fields via {field_key}; only pivot-enabled, viewer-visible fields
             resolve (others are null), so hidden/non-opted fields cannot leak.
-            Ignored for agg=count/sum.
+            For agg=calc, an expression evaluated PER ROW over the other measures'
+            aggregated values, referenced via {measure_key}. Ignored for
+            agg=count/sum.
+        nameJson:
+          oneOf:
+            - $ref: "#/components/schemas/MultilingualText"
+            - type: "null"
+          description: >-
+            Optional multilingual display name used as this measure's column
+            header (all agg types). Falls back to a per-agg default (the field
+            name for sum, "Количество" for count, "Формула" for formula/calc).
         formulaName:
           oneOf:
             - $ref: "#/components/schemas/MultilingualText"
             - type: "null"
           description: >-
-            For agg=formula, an optional multilingual display name for the
-            measure. Used as the single column header when no column dimension is
-            set (a formula has no field name of its own). Falls back to "Формула"
-            when empty. Ignored for agg=count/sum.
+            Deprecated alias of nameJson for a single formula measure (still
+            honored as a fallback for already-saved configs). Prefer nameJson.
 
     PivotConfig:
       type: object
-      required: [rows, measure]
+      required: [rows]
       properties:
         rows:
           $ref: "#/components/schemas/PivotDimension"
         cols:
           $ref: "#/components/schemas/PivotDimension"
         measure:
+          description: >-
+            Single-measure mode (the cell value). Required unless `measures` is
+            present and non-empty (multi-measure mode), in which case it is
+            ignored. Server validation enforces that exactly one of the two
+            modes is supplied.
           $ref: "#/components/schemas/PivotMeasure"
+        measures:
+          type: array
+          description: >-
+            Multi-measure mode: each measure becomes its own value column. When
+            present and non-empty, this takes precedence over `measure` and any
+            `cols` dimension is ignored (multiple measures XOR a column
+            dimension). A `calc` measure references the others by their `key`.
+          items:
+            $ref: "#/components/schemas/PivotMeasure"
         visibleRoleIds:
           type: array
           description: >-
@@ -5755,6 +5784,13 @@ components:
           type: number
         measureLabel:
           type: string
+        multiMeasure:
+          type: boolean
+          description: >-
+            True when each column is a distinct measure (multi-measure mode). In
+            that case rowTotals/grandTotal are not meaningful (heterogeneous
+            columns) and are omitted/zero; only colTotals (per-measure totals)
+            apply. The client hides the row-total column and grand total.
 
     View:
       type: object
