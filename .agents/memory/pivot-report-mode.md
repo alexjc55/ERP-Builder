@@ -115,3 +115,19 @@ records-page context). The client `PivotEditor` only ever emits entity/status di
 trusts the editor-maintained invariant that `datePeriod` is non-null only for date-like dims (no field-type
 re-resolution in the parent `buildData`). `PivotResultTable` (presentational, extracted from `PivotView.tsx`)
 is shared between the records pivot and the widget render branch.
+
+## Default-pivot role visibility — viewId is a server-validated capability token
+The entity DEFAULT pivot (`entities.defaultPivotJson`, the Таблица⇄Сводная toggle with no named
+view) carries its own `visibleRoleIds` (super passes; empty = everyone with record access), enforced
+in the `POST /entities/{id}/records/pivot` endpoint. The request's `viewId` is **untrusted** and must
+NEVER be used as the mere branch condition (presence of `viewId` to skip the default gate is a bypass:
+a disallowed caller could send a bogus/foreign/non-pivot `viewId`). The endpoint MUST:
+- `viewId != null` → load the view and require ALL of: `view.entityId === entityId`, the view is a
+  pivot view (`configJson.viewType === "pivot"` && `configJson.pivot != null`), AND role-visibility
+  (super OR empty `visibleRoleIdsJson` OR intersection with the viewer's `roleIds`); else **404**.
+- `viewId == null` → enforce `defaultPivotJson.visibleRoleIds` (else 403).
+**Why:** so `viewId` acts as a server-validated capability token for "named-pivot mode"; only a visible
+pivot view (an admin-authored, role-gated pivot surface) lets a caller out of the default-pivot gate.
+Body `pivot` is intentionally NOT required to equal `view.configJson.pivot` — this endpoint is
+permission-scoped at compute, so it leaks nothing the viewer can't already read, and the live filter
+bar is meant to drive the config. Role visibility here is a PRESENTATION gate, not a data boundary.

@@ -688,6 +688,9 @@ export default function EntityViewsPage() {
   const [defaultPivotCols, setDefaultPivotCols] = useState<DraftDim>({ source: "status", fieldKey: "", datePeriod: null });
   const [defaultPivotAgg, setDefaultPivotAgg] = useState<"count" | "sum">("count");
   const [defaultPivotMeasureField, setDefaultPivotMeasureField] = useState<string>("");
+  // Roles allowed to use the DEFAULT pivot (the Таблица/Сводная toggle on the
+  // records page when no view is selected). Empty = everyone with record access.
+  const [defaultPivotRoleIds, setDefaultPivotRoleIds] = useState<number[]>([]);
   const entityDefaultSorts: SortSpec[] = Array.isArray(entity?.defaultSortJson)
     ? (entity.defaultSortJson as SortSpec[])
     : [];
@@ -823,6 +826,9 @@ export default function EntityViewsPage() {
   const toggleVisibleRole = (roleId: number) =>
     setVisibleRoleIds((prev) => (prev.includes(roleId) ? prev.filter((r) => r !== roleId) : [...prev, roleId]));
 
+  const toggleDefaultPivotRole = (roleId: number) =>
+    setDefaultPivotRoleIds((prev) => (prev.includes(roleId) ? prev.filter((r) => r !== roleId) : [...prev, roleId]));
+
   const addFilter = () => {
     const field = fields[0]?.fieldKey ?? "";
     setFilters((prev) => [...prev, { field, operator: "eq", valueText: "" }]);
@@ -861,6 +867,7 @@ export default function EntityViewsPage() {
     setDefaultPivotCols(dp?.cols ? dimToDraft(dp.cols) : { source: "status", fieldKey: "", datePeriod: null });
     setDefaultPivotAgg(dp?.measure?.agg === "sum" ? "sum" : "count");
     setDefaultPivotMeasureField(dp?.measure?.fieldKey ?? pivotSumFields[0]?.fieldKey ?? "");
+    setDefaultPivotRoleIds(Array.isArray(dp?.visibleRoleIds) ? dp.visibleRoleIds : []);
     setDefaultSortDialogOpen(true);
   };
   const addDefaultSort = () => {
@@ -915,6 +922,7 @@ export default function EntityViewsPage() {
           : { agg: "count" };
       const pivot: PivotConfig = { rows: draftToDim(defaultPivotRows), measure };
       if (defaultPivotColsOn) pivot.cols = draftToDim(defaultPivotCols);
+      if (defaultPivotRoleIds.length > 0) pivot.visibleRoleIds = defaultPivotRoleIds;
       defaultPivotJson = pivot;
     }
     updateEntityMutation.mutate({
@@ -1530,6 +1538,39 @@ export default function EntityViewsPage() {
                         </Select>
                       )}
                     </div>
+                  </div>
+                  <div className="space-y-2 border-t border-slate-100 pt-3">
+                    <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+                      <Shield className="w-4 h-4 text-blue-600" />
+                      {t("pivot.defaultRoleVisibility", "Видимость сводной по ролям")}
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      {t("pivot.defaultRoleVisibilityHint", "Если роли не выбраны, переключатель «Сводная» виден всем, у кого есть доступ к записям. Иначе — только выбранным ролям (суперадмин видит всегда). Обычная таблица остаётся доступна по правам на записи.")}
+                    </p>
+                    {roles.length === 0 ? (
+                      <p className="text-xs text-slate-400">{t("pivot.noRoles", "Роли не настроены.")}</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {roles.map((r: Role) => {
+                          const on = defaultPivotRoleIds.includes(r.id);
+                          return (
+                            <button
+                              key={r.id}
+                              type="button"
+                              onClick={() => toggleDefaultPivotRole(r.id)}
+                              className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition ${
+                                on ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-500 hover:border-slate-300"
+                              }`}
+                            >
+                              <span className={`flex h-3.5 w-3.5 items-center justify-center rounded-sm border ${on ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300"}`}>
+                                {on && <Check className="w-2.5 h-2.5" />}
+                              </span>
+                              {ml(r.nameJson)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

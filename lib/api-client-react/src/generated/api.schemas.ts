@@ -991,6 +991,8 @@ export interface PivotConfig {
   rows: PivotDimension;
   cols?: PivotDimension;
   measure: PivotMeasure;
+  /** Roles allowed to use this pivot when it is an entity's DEFAULT pivot (entity.defaultPivotJson). Empty/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view's own visibleRoleIds. */
+  visibleRoleIds?: number[];
 }
 
 /**
@@ -2265,6 +2267,8 @@ export interface PivotQuery {
   search?: string;
   archived?: ArchiveFilter;
   pageId?: number;
+  /** The named view this pivot belongs to, when one is selected. Absent means the entity's default pivot — the server then enforces the default pivot's role visibility (defaultPivotJson.visibleRoleIds). */
+  viewId?: number;
   pivot: PivotConfig;
 }
 

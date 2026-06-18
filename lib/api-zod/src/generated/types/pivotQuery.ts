@@ -18,5 +18,7 @@ export interface PivotQuery {
   search?: string;
   archived?: ArchiveFilter;
   pageId?: number;
+  /** The named view this pivot belongs to, when one is selected. Absent means the entity's default pivot — the server then enforces the default pivot's role visibility (defaultPivotJson.visibleRoleIds). */
+  viewId?: number;
   pivot: PivotConfig;
 }

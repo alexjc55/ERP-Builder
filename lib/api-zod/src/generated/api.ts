@@ -1375,7 +1375,8 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "agg": zod.enum(['count', 'sum']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
-})
+}),
+  "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
 }).optional().describe('Pivot (cross-tab) widget config. The pivot is computed admin-authoritatively over the entity\'s non-archived records (independent of the viewing role\'s data permissions); access is governed by the widget\'s role visibility. The entity must have pivot enabled and dimensions\/measures must reference pivot-enabled fields.'),
@@ -1484,7 +1485,8 @@ export const CreateDashboardWidgetBody = zod.object({
   "agg": zod.enum(['count', 'sum']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
-})
+}),
+  "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
 }).optional().describe('Pivot (cross-tab) widget config. The pivot is computed admin-authoritatively over the entity\'s non-archived records (independent of the viewing role\'s data permissions); access is governed by the widget\'s role visibility. The entity must have pivot enabled and dimensions\/measures must reference pivot-enabled fields.'),
@@ -1584,7 +1586,8 @@ export const CreateDashboardWidgetResponse = zod.object({
   "agg": zod.enum(['count', 'sum']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
-})
+}),
+  "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
 }).optional().describe('Pivot (cross-tab) widget config. The pivot is computed admin-authoritatively over the entity\'s non-archived records (independent of the viewing role\'s data permissions); access is governed by the widget\'s role visibility. The entity must have pivot enabled and dimensions\/measures must reference pivot-enabled fields.'),
@@ -1776,7 +1779,8 @@ export const UpdateDashboardWidgetBody = zod.object({
   "agg": zod.enum(['count', 'sum']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
-})
+}),
+  "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
 }).optional().describe('Pivot (cross-tab) widget config. The pivot is computed admin-authoritatively over the entity\'s non-archived records (independent of the viewing role\'s data permissions); access is governed by the widget\'s role visibility. The entity must have pivot enabled and dimensions\/measures must reference pivot-enabled fields.'),
@@ -1876,7 +1880,8 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "agg": zod.enum(['count', 'sum']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
-})
+}),
+  "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
 }).optional().describe('Pivot (cross-tab) widget config. The pivot is computed admin-authoritatively over the entity\'s non-archived records (independent of the viewing role\'s data permissions); access is governed by the widget\'s role visibility. The entity must have pivot enabled and dimensions\/measures must reference pivot-enabled fields.'),
@@ -3612,6 +3617,7 @@ export const PivotEntityRecordsBody = zod.object({
   "search": zod.string().optional(),
   "archived": zod.enum(['active', 'archived', 'all']).default(pivotEntityRecordsBodyArchivedDefault),
   "pageId": zod.number().optional(),
+  "viewId": zod.number().optional().describe('The named view this pivot belongs to, when one is selected. Absent means the entity\'s default pivot — the server then enforces the default pivot\'s role visibility (defaultPivotJson.visibleRoleIds).'),
   "pivot": zod.object({
   "rows": zod.object({
   "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
@@ -3627,7 +3633,8 @@ export const PivotEntityRecordsBody = zod.object({
   "agg": zod.enum(['count', 'sum']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
-})
+}),
+  "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 })
 })
 
@@ -3992,7 +3999,8 @@ export const ListEntityViewsResponseItem = zod.object({
   "agg": zod.enum(['count', 'sum']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
-})
+}),
+  "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }).optional()
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
@@ -4054,7 +4062,8 @@ export const CreateEntityViewBody = zod.object({
   "agg": zod.enum(['count', 'sum']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
-})
+}),
+  "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }).optional()
 }).optional(),
   "visibleRoleIds": zod.array(zod.number()).nullish().describe('Role ids that may select this view; null\/empty = all roles with record access.'),
@@ -4113,7 +4122,8 @@ export const GetViewResponse = zod.object({
   "agg": zod.enum(['count', 'sum']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
-})
+}),
+  "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }).optional()
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
@@ -4172,7 +4182,8 @@ export const UpdateViewBody = zod.object({
   "agg": zod.enum(['count', 'sum']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
-})
+}),
+  "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }).optional()
 }).optional(),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
@@ -4223,7 +4234,8 @@ export const UpdateViewResponse = zod.object({
   "agg": zod.enum(['count', 'sum']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
-})
+}),
+  "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }).optional()
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
@@ -4313,7 +4325,8 @@ export const ListEntitiesResponseItem = zod.object({
   "agg": zod.enum(['count', 'sum']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
-})
+}),
+  "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot.'),
   "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
   "sortOrder": zod.number(),
@@ -4368,7 +4381,8 @@ export const CreateEntityBody = zod.object({
   "agg": zod.enum(['count', 'sum']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
-})
+}),
+  "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot config for the records page when no view is selected. Null = no default pivot.'),
   "pivotEnabled": zod.boolean().optional(),
   "sortOrder": zod.number().optional(),
@@ -4424,7 +4438,8 @@ export const GetEntityResponse = zod.object({
   "agg": zod.enum(['count', 'sum']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
-})
+}),
+  "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot.'),
   "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
   "sortOrder": zod.number(),
@@ -4481,7 +4496,8 @@ export const UpdateEntityBody = zod.object({
   "agg": zod.enum(['count', 'sum']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
-})
+}),
+  "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot config for the records page when no view is selected. Null = no default pivot.'),
   "pivotEnabled": zod.boolean().optional(),
   "sortOrder": zod.number().optional(),
@@ -4529,7 +4545,8 @@ export const UpdateEntityResponse = zod.object({
   "agg": zod.enum(['count', 'sum']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
-})
+}),
+  "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot.'),
   "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
   "sortOrder": zod.number(),

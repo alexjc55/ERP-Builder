@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable, pageFieldsTable, pageRecordValuesTable, relationsTable, recordLinksTable } from "@workspace/db";
+import { db, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable, pageFieldsTable, pageRecordValuesTable, relationsTable, recordLinksTable, viewsTable } from "@workspace/db";
 import { eq, asc, desc, and, or, sql, inArray, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { evaluateFormula, normalizeDecimals } from "@workspace/formula";
@@ -974,6 +974,46 @@ router.post(
     }
 
     const perms = await getPermissions(req);
+
+    // Pivot role visibility. The request's viewId is UNTRUSTED, so we never use its
+    // mere presence as the branch condition (that would let a caller dodge the
+    // default-pivot gate by sending a bogus viewId). Instead:
+    //  - viewId given → load the view, verify it belongs to this entity AND is
+    //    visible to the viewer (mirrors the views-list boundary: invisible → 404).
+    //    A named pivot view that the viewer may see is its own role gate.
+    //  - no viewId → this is the entity DEFAULT pivot, so enforce
+    //    defaultPivotJson.visibleRoleIds as a hard boundary.
+    // superAdmin always passes; empty/absent visibleRoleIds = everyone with access.
+    if (body.data.viewId != null) {
+      const [view] = await db
+        .select({ entityId: viewsTable.entityId, visibleRoleIdsJson: viewsTable.visibleRoleIdsJson, configJson: viewsTable.configJson })
+        .from(viewsTable)
+        .where(eq(viewsTable.id, body.data.viewId))
+        .limit(1);
+      const ids = view?.visibleRoleIdsJson;
+      const cfg = view?.configJson as { viewType?: string; pivot?: unknown } | null | undefined;
+      // The named-view branch is the role gate for named pivots, so the view must
+      // (a) belong to this entity, (b) actually BE a pivot view (else a visible
+      // table view could be used to enter this branch and skip the default gate),
+      // and (c) be visible to the viewer. Otherwise 404 (mirrors the views list).
+      const viewVisible =
+        view != null &&
+        view.entityId === entityId &&
+        cfg?.viewType === "pivot" &&
+        cfg.pivot != null &&
+        (perms.superAdmin || !ids || ids.length === 0 || ids.some((id) => roleIds.includes(id)));
+      if (!viewVisible) {
+        res.status(404).json({ error: "View not found" });
+        return;
+      }
+    } else {
+      const dpv = (entity.defaultPivotJson as { visibleRoleIds?: number[] } | null)?.visibleRoleIds;
+      if (!perms.superAdmin && dpv && dpv.length > 0 && !dpv.some((id) => roleIds.includes(id))) {
+        res.status(403).json({ error: "Сводная таблица недоступна для вашей роли" });
+        return;
+      }
+    }
+
     const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, entityId, pageId);
     const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, entityId);
 

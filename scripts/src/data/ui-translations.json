@@ -7074,6 +7074,18 @@
     "he": "אם לא נבחרו תפקידים, התצוגה גלויה לכל מי שיש לו גישה לרשומות. אחרת רק לתפקידים שנבחרו (מנהל-על תמיד רואה)."
   },
   {
+    "key": "pivot.defaultRoleVisibility",
+    "ru": "Видимость сводной по ролям",
+    "en": "Pivot role visibility",
+    "he": "נראות הטבלה המסכמת לפי תפקיד"
+  },
+  {
+    "key": "pivot.defaultRoleVisibilityHint",
+    "ru": "Если роли не выбраны, переключатель «Сводная» виден всем, у кого есть доступ к записям. Иначе — только выбранным ролям (суперадмин видит всегда). Обычная таблица остаётся доступна по правам на записи.",
+    "en": "If no roles are selected, the Pivot toggle is visible to everyone with record access. Otherwise only to the selected roles (super admin always sees it). The plain table stays available per record permissions.",
+    "he": "אם לא נבחרו תפקידים, מתג «טבלה מסכמת» גלוי לכל מי שיש לו גישה לרשומות. אחרת רק לתפקידים שנבחרו (מנהל-על תמיד רואה). הטבלה הרגילה נשארת זמינה לפי הרשאות הרשומות."
+  },
+  {
     "key": "pivot.rows",
     "ru": "Строки",
     "en": "Rows",

@@ -12,4 +12,6 @@ export interface PivotConfig {
   rows: PivotDimension;
   cols?: PivotDimension;
   measure: PivotMeasure;
+  /** Roles allowed to use this pivot when it is an entity's DEFAULT pivot (entity.defaultPivotJson). Empty/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view's own visibleRoleIds. */
+  visibleRoleIds?: number[];
 }

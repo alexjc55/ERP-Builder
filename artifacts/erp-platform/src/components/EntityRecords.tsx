@@ -1427,7 +1427,16 @@ export function EntityRecords({
   const pivotConfig: PivotConfig | undefined = selectedView
     ? (selectedConfig.viewType === "pivot" && selectedConfig.pivot ? selectedConfig.pivot : undefined)
     : ((entity?.defaultPivotJson ?? undefined) as PivotConfig | undefined);
-  const pivotAvailable = !!entity?.pivotEnabled && pivotConfig != null;
+  // Default-pivot role visibility (cosmetic mirror of the server boundary): when
+  // no named view is selected, the entity's default pivot may restrict the
+  // Таблица/Сводная toggle to certain roles. Named-view pivots are gated by the
+  // view's own visibility (the view itself is hidden upstream when not allowed).
+  const defaultPivotVisible =
+    selectedView != null ||
+    isSuperAdmin ||
+    !pivotConfig?.visibleRoleIds?.length ||
+    pivotConfig.visibleRoleIds.some((rid) => userRoleIds.includes(rid));
+  const pivotAvailable = !!entity?.pivotEnabled && pivotConfig != null && defaultPivotVisible;
   const [pivotMode, setPivotMode] = useState(false);
   // Default to pivot rendering whenever a pivot view is selected; reset on switch.
   useEffect(() => {
@@ -1445,10 +1454,11 @@ export function EntityRecords({
       search: search.trim() || undefined,
       archived,
       pageId: permPageId,
+      viewId: selectedView?.id,
       pivot: (pivotConfig ?? { rows: { source: "status" }, measure: { agg: "count" } }) as PivotConfig,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [baseFiltersKey, selectedConfig.filterConjunction, adHocKey, dateKey, pageAdHocKey, pageDateKey, statusKey, search, archived, JSON.stringify(pivotConfig)],
+    [baseFiltersKey, selectedConfig.filterConjunction, adHocKey, dateKey, pageAdHocKey, pageDateKey, statusKey, search, archived, selectedView?.id, JSON.stringify(pivotConfig)],
   );
 
   // Dependent filters: when fetching the option list for a field, we run a query against the
