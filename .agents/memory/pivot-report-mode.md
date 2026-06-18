@@ -49,3 +49,13 @@ the client set but not the server set. Any change to one list must be made to th
 - Date/datetime dims expose a period bucket (year/quarter/month/day) via `date_trunc`.
 - Optional second (column) dimension makes it a 2D cross-tab; `__all__` sentinel is the single-column
   case. Row totals, column totals, and a grand total are computed.
+
+## GROUP BY must use SELECT output ordinals, never re-embedded fragments
+The grouped aggregation MUST `groupBy(sql\`1\`[, sql\`2\`])` (output-position ordinals), NOT
+`groupBy(rowKeyExpr, colKeyExpr)`. **Why this bit us:** a dim like `values_json ->> key` is a Drizzle
+`sql` fragment with a bound placeholder. Embedding the SAME fragment in both SELECT and GROUP BY
+re-binds it to a *different* `$N` each time (`->> $1` in SELECT vs `->> $10` in GROUP BY), so Postgres
+treats them as two different expressions → `column ... must appear in the GROUP BY clause`. The bug was
+invisible for status dims (a bare column ref, `statusId::text`, has no placeholder to re-number) so only
+entity-field/page-field dimension pivots 500'd. Same family as the dependent-filters "reused sql frag
+re-binds params" gotcha — prefer ordinal references when the same dim expr must appear twice.

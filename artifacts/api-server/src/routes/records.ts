@@ -1157,7 +1157,11 @@ router.post(
       })
       .from(entityRecordsTable)
       .where(where)
-      .groupBy(...(colKeyExpr ? [rowKeyExpr, colKeyExpr] : [rowKeyExpr]));
+      // Group by SELECT output ordinals (1 = row key, 2 = col key), NOT by
+      // re-embedding rowKeyExpr/colKeyExpr. Re-embedding the same sql fragment
+      // re-binds its placeholders ($1 in SELECT vs $10 in GROUP BY), so Postgres
+      // sees two different expressions and rejects the non-aggregated column.
+      .groupBy(...(colKeyExpr ? [sql`1`, sql`2`] : [sql`1`]));
 
     // ---- Label resolution ----
     const statusName = new Map<number, string>();
