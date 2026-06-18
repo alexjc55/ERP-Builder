@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, viewsTable, entitiesTable } from "@workspace/db";
 import { eq, asc, and, ne, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
-import { requireAdmin } from "../middlewares/permissions";
+import { requireAdmin, getPermissions, getUserRoleIds } from "../middlewares/permissions";
 import {
   ListEntityViewsParams,
   CreateEntityViewParams,
@@ -18,6 +18,26 @@ import {
 const router: IRouter = Router();
 
 const VIEW_KEY_RE = /^[a-z][a-z0-9_]*$/;
+
+type ViewRow = typeof viewsTable.$inferSelect;
+
+/** Serialize a stored view row into the API shape (visibleRoleIdsJson → visibleRoleIds). */
+function serializeView(v: ViewRow) {
+  const { visibleRoleIdsJson, ...rest } = v;
+  return { ...rest, visibleRoleIds: visibleRoleIdsJson ?? null };
+}
+
+/**
+ * View role visibility (NOT a data boundary — record/field/row perms still apply):
+ * null/empty visibleRoleIds = visible to every role; otherwise only the listed
+ * roles. superAdmin always sees every view so it can be managed/edited.
+ */
+function viewVisibleToRole(v: ViewRow, roleIds: number[], superAdmin: boolean): boolean {
+  if (superAdmin) return true;
+  const ids = v.visibleRoleIdsJson;
+  if (!ids || ids.length === 0) return true;
+  return ids.some((id) => roleIds.includes(id));
+}
 
 // Drizzle wraps the pg driver error, so the original code/constraint can live on
 // err.cause rather than the top-level error. Walk the cause chain to find it.
@@ -70,7 +90,9 @@ router.get("/entities/:entityId/views", requireAuth, async (req, res): Promise<v
     .from(viewsTable)
     .where(eq(viewsTable.entityId, params.data.entityId))
     .orderBy(asc(viewsTable.sortOrder));
-  res.json(views);
+  const perms = await getPermissions(req);
+  const roleIds = await getUserRoleIds(req);
+  res.json(views.filter((v) => viewVisibleToRole(v, roleIds, perms.superAdmin)).map(serializeView));
 });
 
 router.post("/entities/:entityId/views", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
@@ -107,13 +129,14 @@ router.post("/entities/:entityId/views", requireAuth, requireAdmin("entities"), 
       if (parsed.data.isDefault) {
         await tx.update(viewsTable).set({ isDefault: false }).where(eq(viewsTable.entityId, entityId));
       }
+      const { visibleRoleIds, ...rest } = parsed.data;
       const [created] = await tx
         .insert(viewsTable)
-        .values({ ...parsed.data, viewKey: key, entityId })
+        .values({ ...rest, viewKey: key, entityId, visibleRoleIdsJson: visibleRoleIds ?? null })
         .returning();
       return created;
     });
-    res.status(201).json(view);
+    res.status(201).json(serializeView(view));
   } catch (err) {
     const constraint = uniqueViolationConstraint(err);
     if (constraint !== null) {
@@ -190,7 +213,13 @@ router.get("/views/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(404).json({ error: "View not found" });
     return;
   }
-  res.json(view);
+  const perms = await getPermissions(req);
+  const roleIds = await getUserRoleIds(req);
+  if (!viewVisibleToRole(view, roleIds, perms.superAdmin)) {
+    res.status(404).json({ error: "View not found" });
+    return;
+  }
+  res.json(serializeView(view));
 });
 
 router.put("/views/:id", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
@@ -231,6 +260,7 @@ router.put("/views/:id", requireAuth, requireAdmin("entities"), async (req, res)
 
   if (body.nameJson != null) updateData.nameJson = body.nameJson;
   if (body.configJson != null) updateData.configJson = body.configJson;
+  if (body.visibleRoleIds !== undefined) updateData.visibleRoleIdsJson = body.visibleRoleIds ?? null;
   if (body.isDefault != null) updateData.isDefault = body.isDefault;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
   if (body.isActive != null) updateData.isActive = body.isActive;
@@ -255,7 +285,7 @@ router.put("/views/:id", requireAuth, requireAdmin("entities"), async (req, res)
         .returning();
       return updated;
     });
-    res.json(view);
+    res.json(serializeView(view));
   } catch (err) {
     const constraint = uniqueViolationConstraint(err);
     if (constraint !== null) {

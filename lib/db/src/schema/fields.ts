@@ -119,6 +119,9 @@ export const entityFieldsTable = pgTable(
     // no superAdmin exception). Used e.g. to make an order's Project unchangeable.
     lockAfterCreate: boolean("lock_after_create").notNull().default(false),
     isFilterable: boolean("is_filterable").notNull().default(false),
+    // Opt-in: this field may be used as a pivot (Сводная таблица) dimension/measure.
+    // Restricts what appears in the pivot builder so not every field is exposed.
+    pivotEnabled: boolean("pivot_enabled").notNull().default(false),
     showInTable: boolean("show_in_table").notNull().default(true),
     isPinned: boolean("is_pinned").notNull().default(false),
     showColumnTotal: boolean("show_column_total").notNull().default(false),

@@ -1879,6 +1879,7 @@ export const ListEntityFieldsResponseItem = zod.object({
   "isKey": zod.boolean().optional(),
   "lockAfterCreate": zod.boolean().optional(),
   "isFilterable": zod.boolean().optional(),
+  "pivotEnabled": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
@@ -1906,6 +1907,7 @@ export const createEntityFieldBodyFormulaConfigJsonDecimalsMax = 10;
 export const createEntityFieldBodyIsKeyDefault = false;
 export const createEntityFieldBodyLockAfterCreateDefault = false;
 export const createEntityFieldBodyIsFilterableDefault = false;
+export const createEntityFieldBodyPivotEnabledDefault = false;
 export const createEntityFieldBodyShowInTableDefault = true;
 export const createEntityFieldBodyIsPinnedDefault = false;
 export const createEntityFieldBodyShowColumnTotalDefault = false;
@@ -1960,6 +1962,7 @@ export const CreateEntityFieldBody = zod.object({
   "isKey": zod.boolean().default(createEntityFieldBodyIsKeyDefault),
   "lockAfterCreate": zod.boolean().default(createEntityFieldBodyLockAfterCreateDefault),
   "isFilterable": zod.boolean().default(createEntityFieldBodyIsFilterableDefault),
+  "pivotEnabled": zod.boolean().default(createEntityFieldBodyPivotEnabledDefault),
   "showInTable": zod.boolean().default(createEntityFieldBodyShowInTableDefault),
   "isPinned": zod.boolean().default(createEntityFieldBodyIsPinnedDefault),
   "showColumnTotal": zod.boolean().default(createEntityFieldBodyShowColumnTotalDefault),
@@ -2033,6 +2036,7 @@ export const GetFieldResponse = zod.object({
   "isKey": zod.boolean().optional(),
   "lockAfterCreate": zod.boolean().optional(),
   "isFilterable": zod.boolean().optional(),
+  "pivotEnabled": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
@@ -2106,6 +2110,7 @@ export const UpdateFieldBody = zod.object({
   "isKey": zod.boolean().optional(),
   "lockAfterCreate": zod.boolean().optional(),
   "isFilterable": zod.boolean().optional(),
+  "pivotEnabled": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
@@ -2171,6 +2176,7 @@ export const UpdateFieldResponse = zod.object({
   "isKey": zod.boolean().optional(),
   "lockAfterCreate": zod.boolean().optional(),
   "isFilterable": zod.boolean().optional(),
+  "pivotEnabled": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
@@ -2242,6 +2248,7 @@ export const ListPageFieldsResponseItem = zod.object({
   "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
   "isRequired": zod.boolean(),
   "isFilterable": zod.boolean().optional(),
+  "pivotEnabled": zod.boolean().optional(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
   "formatRulesJson": zod.array(zod.object({
@@ -2284,6 +2291,7 @@ export const CreatePageFieldParams = zod.object({
 
 export const createPageFieldBodyIsRequiredDefault = false;
 export const createPageFieldBodyIsFilterableDefault = false;
+export const createPageFieldBodyPivotEnabledDefault = false;
 export const createPageFieldBodyFormulaConfigJsonDecimalsMin = 0;
 export const createPageFieldBodyFormulaConfigJsonDecimalsMax = 10;
 
@@ -2307,6 +2315,7 @@ export const CreatePageFieldBody = zod.object({
   "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
   "isRequired": zod.boolean().default(createPageFieldBodyIsRequiredDefault),
   "isFilterable": zod.boolean().default(createPageFieldBodyIsFilterableDefault),
+  "pivotEnabled": zod.boolean().default(createPageFieldBodyPivotEnabledDefault),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()).optional(),
   "formatRulesJson": zod.array(zod.object({
@@ -2364,6 +2373,7 @@ export const UpdatePageFieldBody = zod.object({
   "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']).optional(),
   "isRequired": zod.boolean().optional(),
   "isFilterable": zod.boolean().optional(),
+  "pivotEnabled": zod.boolean().optional(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()).optional(),
   "formatRulesJson": zod.array(zod.object({
@@ -2415,6 +2425,7 @@ export const UpdatePageFieldResponse = zod.object({
   "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
   "isRequired": zod.boolean(),
   "isFilterable": zod.boolean().optional(),
+  "pivotEnabled": zod.boolean().optional(),
   "defaultValue": zod.string().nullish(),
   "optionsJson": zod.array(zod.string()),
   "formatRulesJson": zod.array(zod.object({
@@ -3446,6 +3457,78 @@ export const QueryEntityRecordsResponse = zod.object({
 
 
 /**
+ * @summary Compute a permission-scoped pivot (cross-tab) aggregation over an entity's records
+ */
+export const PivotEntityRecordsParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const pivotEntityRecordsBodyFilterConjunctionDefault = `and`;
+export const pivotEntityRecordsBodyArchivedDefault = `active`;
+
+export const PivotEntityRecordsBody = zod.object({
+  "filters": zod.array(zod.object({
+  "field": zod.string(),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
+  "value": zod.unknown().optional()
+})).optional(),
+  "pageLocalFilters": zod.array(zod.object({
+  "field": zod.string(),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
+  "value": zod.unknown().optional()
+})).optional(),
+  "filterConjunction": zod.enum(['and', 'or']).default(pivotEntityRecordsBodyFilterConjunctionDefault),
+  "statusIds": zod.array(zod.number()).optional(),
+  "search": zod.string().optional(),
+  "archived": zod.enum(['active', 'archived', 'all']).default(pivotEntityRecordsBodyArchivedDefault),
+  "pageId": zod.number().optional(),
+  "pivot": zod.object({
+  "rows": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}),
+  "cols": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}).optional(),
+  "measure": zod.object({
+  "agg": zod.enum(['count', 'sum']),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
+})
+})
+})
+
+export const PivotEntityRecordsResponse = zod.object({
+  "rows": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.string()
+})),
+  "cols": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.string()
+})),
+  "cells": zod.array(zod.object({
+  "rowKey": zod.string(),
+  "colKey": zod.string(),
+  "value": zod.number()
+})),
+  "rowTotals": zod.array(zod.object({
+  "key": zod.string(),
+  "value": zod.number()
+})),
+  "colTotals": zod.array(zod.object({
+  "key": zod.string(),
+  "value": zod.number()
+})),
+  "grandTotal": zod.number(),
+  "measureLabel": zod.string()
+})
+
+
+/**
  * @summary Distinct values of a filterable field among records matching the other active filters
  */
 export const GetEntityFilterValuesParams = zod.object({
@@ -3739,6 +3822,7 @@ export const ListEntityViewsParams = zod.object({
 
 export const listEntityViewsResponseConfigJsonFilterConjunctionDefault = `and`;
 export const listEntityViewsResponseConfigJsonSortsItemDirectionDefault = `asc`;
+export const listEntityViewsResponseConfigJsonViewTypeDefault = `table`;
 
 export const ListEntityViewsResponseItem = zod.object({
   "id": zod.number(),
@@ -3761,8 +3845,27 @@ export const ListEntityViewsResponseItem = zod.object({
   "direction": zod.enum(['asc', 'desc']).default(listEntityViewsResponseConfigJsonSortsItemDirectionDefault)
 })).optional(),
   "search": zod.string().optional(),
-  "visibleFields": zod.array(zod.string()).optional()
+  "visibleFields": zod.array(zod.string()).optional(),
+  "viewType": zod.enum(['table', 'pivot']).default(listEntityViewsResponseConfigJsonViewTypeDefault),
+  "pivot": zod.object({
+  "rows": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
+  "cols": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}).optional(),
+  "measure": zod.object({
+  "agg": zod.enum(['count', 'sum']),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
+})
+}).optional()
+}),
+  "visibleRoleIds": zod.array(zod.number()).nullish(),
   "isDefault": zod.boolean(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
@@ -3781,6 +3884,7 @@ export const CreateEntityViewParams = zod.object({
 
 export const createEntityViewBodyConfigJsonFilterConjunctionDefault = `and`;
 export const createEntityViewBodyConfigJsonSortsItemDirectionDefault = `asc`;
+export const createEntityViewBodyConfigJsonViewTypeDefault = `table`;
 export const createEntityViewBodyIsDefaultDefault = false;
 export const createEntityViewBodyIsActiveDefault = true;
 
@@ -3803,8 +3907,27 @@ export const CreateEntityViewBody = zod.object({
   "direction": zod.enum(['asc', 'desc']).default(createEntityViewBodyConfigJsonSortsItemDirectionDefault)
 })).optional(),
   "search": zod.string().optional(),
-  "visibleFields": zod.array(zod.string()).optional()
+  "visibleFields": zod.array(zod.string()).optional(),
+  "viewType": zod.enum(['table', 'pivot']).default(createEntityViewBodyConfigJsonViewTypeDefault),
+  "pivot": zod.object({
+  "rows": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}),
+  "cols": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
+  "measure": zod.object({
+  "agg": zod.enum(['count', 'sum']),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
+})
+}).optional()
+}).optional(),
+  "visibleRoleIds": zod.array(zod.number()).nullish().describe('Role ids that may select this view; null\/empty = all roles with record access.'),
   "isDefault": zod.boolean().default(createEntityViewBodyIsDefaultDefault),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createEntityViewBodyIsActiveDefault)
@@ -3820,6 +3943,7 @@ export const GetViewParams = zod.object({
 
 export const getViewResponseConfigJsonFilterConjunctionDefault = `and`;
 export const getViewResponseConfigJsonSortsItemDirectionDefault = `asc`;
+export const getViewResponseConfigJsonViewTypeDefault = `table`;
 
 export const GetViewResponse = zod.object({
   "id": zod.number(),
@@ -3842,8 +3966,27 @@ export const GetViewResponse = zod.object({
   "direction": zod.enum(['asc', 'desc']).default(getViewResponseConfigJsonSortsItemDirectionDefault)
 })).optional(),
   "search": zod.string().optional(),
-  "visibleFields": zod.array(zod.string()).optional()
+  "visibleFields": zod.array(zod.string()).optional(),
+  "viewType": zod.enum(['table', 'pivot']).default(getViewResponseConfigJsonViewTypeDefault),
+  "pivot": zod.object({
+  "rows": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
+  "cols": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}).optional(),
+  "measure": zod.object({
+  "agg": zod.enum(['count', 'sum']),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
+})
+}).optional()
+}),
+  "visibleRoleIds": zod.array(zod.number()).nullish(),
   "isDefault": zod.boolean(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
@@ -3861,6 +4004,7 @@ export const UpdateViewParams = zod.object({
 
 export const updateViewBodyConfigJsonFilterConjunctionDefault = `and`;
 export const updateViewBodyConfigJsonSortsItemDirectionDefault = `asc`;
+export const updateViewBodyConfigJsonViewTypeDefault = `table`;
 
 export const UpdateViewBody = zod.object({
   "viewKey": zod.string().optional(),
@@ -3881,8 +4025,27 @@ export const UpdateViewBody = zod.object({
   "direction": zod.enum(['asc', 'desc']).default(updateViewBodyConfigJsonSortsItemDirectionDefault)
 })).optional(),
   "search": zod.string().optional(),
-  "visibleFields": zod.array(zod.string()).optional()
+  "visibleFields": zod.array(zod.string()).optional(),
+  "viewType": zod.enum(['table', 'pivot']).default(updateViewBodyConfigJsonViewTypeDefault),
+  "pivot": zod.object({
+  "rows": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}),
+  "cols": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
+  "measure": zod.object({
+  "agg": zod.enum(['count', 'sum']),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
+})
+}).optional()
+}).optional(),
+  "visibleRoleIds": zod.array(zod.number()).nullish(),
   "isDefault": zod.boolean().optional(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
@@ -3890,6 +4053,7 @@ export const UpdateViewBody = zod.object({
 
 export const updateViewResponseConfigJsonFilterConjunctionDefault = `and`;
 export const updateViewResponseConfigJsonSortsItemDirectionDefault = `asc`;
+export const updateViewResponseConfigJsonViewTypeDefault = `table`;
 
 export const UpdateViewResponse = zod.object({
   "id": zod.number(),
@@ -3912,8 +4076,27 @@ export const UpdateViewResponse = zod.object({
   "direction": zod.enum(['asc', 'desc']).default(updateViewResponseConfigJsonSortsItemDirectionDefault)
 })).optional(),
   "search": zod.string().optional(),
-  "visibleFields": zod.array(zod.string()).optional()
+  "visibleFields": zod.array(zod.string()).optional(),
+  "viewType": zod.enum(['table', 'pivot']).default(updateViewResponseConfigJsonViewTypeDefault),
+  "pivot": zod.object({
+  "rows": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
+  "cols": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}).optional(),
+  "measure": zod.object({
+  "agg": zod.enum(['count', 'sum']),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
+})
+}).optional()
+}),
+  "visibleRoleIds": zod.array(zod.number()).nullish(),
   "isDefault": zod.boolean(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
@@ -3980,6 +4163,7 @@ export const ListEntitiesResponseItem = zod.object({
   "field": zod.string(),
   "direction": zod.enum(['asc', 'desc']).default(listEntitiesResponseDefaultSortJsonItemDirectionDefault)
 })),
+  "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -4012,6 +4196,7 @@ export const CreateEntityBody = zod.object({
   "field": zod.string(),
   "direction": zod.enum(['asc', 'desc']).default(createEntityBodyDefaultSortJsonItemDirectionDefault)
 })).optional(),
+  "pivotEnabled": zod.boolean().optional(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createEntityBodyIsActiveDefault)
 })
@@ -4045,6 +4230,7 @@ export const GetEntityResponse = zod.object({
   "field": zod.string(),
   "direction": zod.enum(['asc', 'desc']).default(getEntityResponseDefaultSortJsonItemDirectionDefault)
 })),
+  "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -4079,6 +4265,7 @@ export const UpdateEntityBody = zod.object({
   "field": zod.string(),
   "direction": zod.enum(['asc', 'desc']).default(updateEntityBodyDefaultSortJsonItemDirectionDefault)
 })).optional(),
+  "pivotEnabled": zod.boolean().optional(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
@@ -4104,6 +4291,7 @@ export const UpdateEntityResponse = zod.object({
   "field": zod.string(),
   "direction": zod.enum(['asc', 'desc']).default(updateEntityResponseDefaultSortJsonItemDirectionDefault)
 })),
+  "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),

@@ -17,6 +17,8 @@ export interface Entity {
   /** @nullable */
   pageId?: number | null;
   defaultSortJson: SortSpec[];
+  /** Enables the "Сводная таблица" (pivot) report mode for this entity's records page. */
+  pivotEnabled?: boolean;
   sortOrder: number;
   isActive: boolean;
   createdAt: Date;

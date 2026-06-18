@@ -34,3 +34,4 @@
 - [System sort keys](system-sort-keys.md) — reserved sort keys (__created_at__/__record_id__) sort by record system columns, never shown as columns; matched before the field whitelist, literals duplicated in 3 files.
 - [Inline create-user-from-field](inline-create-user-from-field.md) — field allowCreate uses its own POST /fields/:id/users (record-editor gated, not users-admin); must hard-block privileged roles + enforce allowedRoleIds server-side; UI role list is cosmetic.
 - [File trash](file-trash.md) — recycle bin for LOCAL record files only (never gdrive/link); best-effort trash never blocks the record op; superAdmin-only; restore=download; purge drops row only after physical delete.
+- [Pivot report mode](pivot-report-mode.md) — pivot is a viewType (not a page); permission-scoped (NOT admin-authoritative), 3 server-enforced opt-in gates, role-visible views (404 not 403), PIVOT_DIM_TYPES must stay in sync client↔server.

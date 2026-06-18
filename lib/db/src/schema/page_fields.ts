@@ -24,6 +24,8 @@ export const pageFieldsTable = pgTable(
     fieldType: text("field_type").notNull().default("text"),
     isRequired: boolean("is_required").notNull().default(false),
     isFilterable: boolean("is_filterable").notNull().default(false),
+    // Opt-in: this page-local field may be used as a pivot dimension/measure.
+    pivotEnabled: boolean("pivot_enabled").notNull().default(false),
     defaultValue: text("default_value"),
     optionsJson: jsonb("options_json").notNull().default([]),
     formatRulesJson: jsonb("format_rules_json").$type<FieldFormatRule[]>().notNull().default([]),

@@ -82,6 +82,8 @@ import type {
   PageRelatedValuesInput,
   PageRelationOptions,
   PageUpdate,
+  PivotQuery,
+  PivotResult,
   RecordDelete,
   RecordInput,
   RecordLink,
@@ -6880,6 +6882,78 @@ export const useQueryEntityRecords = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getQueryEntityRecordsMutationOptions(options));
+    }
+
+export const getPivotEntityRecordsUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/records/pivot`
+}
+
+/**
+ * @summary Compute a permission-scoped pivot (cross-tab) aggregation over an entity's records
+ */
+export const pivotEntityRecords = async (entityId: number,
+    pivotQuery: PivotQuery, options?: RequestInit): Promise<PivotResult> => {
+
+  return customFetch<PivotResult>(getPivotEntityRecordsUrl(entityId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      pivotQuery,)
+  }
+);}
+
+
+
+
+export const getPivotEntityRecordsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pivotEntityRecords>>, TError,{entityId: number;data: BodyType<PivotQuery>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof pivotEntityRecords>>, TError,{entityId: number;data: BodyType<PivotQuery>}, TContext> => {
+
+const mutationKey = ['pivotEntityRecords'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof pivotEntityRecords>>, {entityId: number;data: BodyType<PivotQuery>}> = (props) => {
+          const {entityId,data} = props ?? {};
+
+          return  pivotEntityRecords(entityId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PivotEntityRecordsMutationResult = NonNullable<Awaited<ReturnType<typeof pivotEntityRecords>>>
+    export type PivotEntityRecordsMutationBody = BodyType<PivotQuery>
+    export type PivotEntityRecordsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Compute a permission-scoped pivot (cross-tab) aggregation over an entity's records
+ */
+export const usePivotEntityRecords = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pivotEntityRecords>>, TError,{entityId: number;data: BodyType<PivotQuery>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof pivotEntityRecords>>,
+        TError,
+        {entityId: number;data: BodyType<PivotQuery>},
+        TContext
+      > => {
+      return useMutation(getPivotEntityRecordsMutationOptions(options));
     }
 
 export const getGetEntityFilterValuesUrl = (entityId: number,) => {

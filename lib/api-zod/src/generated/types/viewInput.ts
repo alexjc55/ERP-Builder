@@ -12,6 +12,11 @@ export interface ViewInput {
   viewKey: string;
   nameJson: MultilingualText;
   configJson?: ViewConfig;
+  /**
+     * Role ids that may select this view; null/empty = all roles with record access.
+     * @nullable
+     */
+  visibleRoleIds?: number[] | null;
   isDefault?: boolean;
   sortOrder?: number;
   isActive?: boolean;

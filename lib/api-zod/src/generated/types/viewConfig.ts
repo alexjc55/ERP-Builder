@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { FilterCondition } from './filterCondition';
+import type { PivotConfig } from './pivotConfig';
 import type { SortSpec } from './sortSpec';
 import type { ViewConfigFilterConjunction } from './viewConfigFilterConjunction';
+import type { ViewConfigViewType } from './viewConfigViewType';
 
 export interface ViewConfig {
   filters?: FilterCondition[];
@@ -15,4 +17,6 @@ export interface ViewConfig {
   sorts?: SortSpec[];
   search?: string;
   visibleFields?: string[];
+  viewType?: ViewConfigViewType;
+  pivot?: PivotConfig;
 }

@@ -16,6 +16,7 @@ export interface EntityUpdate {
   /** @nullable */
   pageId?: number | null;
   defaultSortJson?: SortSpec[];
+  pivotEnabled?: boolean;
   sortOrder?: number;
   isActive?: boolean;
 }

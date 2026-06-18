@@ -2078,6 +2078,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/RecordQueryResult"
 
+  /entities/{entityId}/records/pivot:
+    post:
+      operationId: pivotEntityRecords
+      tags: [records]
+      summary: Compute a permission-scoped pivot (cross-tab) aggregation over an entity's records
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PivotQuery"
+      responses:
+        "200":
+          description: Pivot result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PivotResult"
+
   /entities/{entityId}/records/filter-values:
     post:
       operationId: getEntityFilterValues
@@ -4293,6 +4318,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SortSpec"
+        pivotEnabled:
+          type: boolean
+          description: Enables the "Сводная таблица" (pivot) report mode for this entity's records page.
         sortOrder:
           type: integer
         isActive:
@@ -4322,6 +4350,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SortSpec"
+        pivotEnabled:
+          type: boolean
         sortOrder:
           type: integer
         isActive:
@@ -4345,6 +4375,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SortSpec"
+        pivotEnabled:
+          type: boolean
         sortOrder:
           type: integer
         isActive:
@@ -4538,6 +4570,8 @@ components:
           type: boolean
         isFilterable:
           type: boolean
+        pivotEnabled:
+          type: boolean
         showInTable:
           type: boolean
         isPinned:
@@ -4603,6 +4637,9 @@ components:
           type: boolean
           default: false
         isFilterable:
+          type: boolean
+          default: false
+        pivotEnabled:
           type: boolean
           default: false
         showInTable:
@@ -4681,6 +4718,8 @@ components:
         lockAfterCreate:
           type: boolean
         isFilterable:
+          type: boolean
+        pivotEnabled:
           type: boolean
         showInTable:
           type: boolean
@@ -4963,6 +5002,8 @@ components:
           type: boolean
         isFilterable:
           type: boolean
+        pivotEnabled:
+          type: boolean
         defaultValue:
           type: ["string", "null"]
         optionsJson:
@@ -5018,6 +5059,9 @@ components:
         isFilterable:
           type: boolean
           default: false
+        pivotEnabled:
+          type: boolean
+          default: false
         defaultValue:
           type: ["string", "null"]
         optionsJson:
@@ -5067,6 +5111,8 @@ components:
         isRequired:
           type: boolean
         isFilterable:
+          type: boolean
+        pivotEnabled:
           type: boolean
         defaultValue:
           type: ["string", "null"]
@@ -5492,6 +5538,141 @@ components:
           type: array
           items:
             type: string
+        viewType:
+          type: string
+          enum: [table, pivot]
+          default: table
+        pivot:
+          $ref: "#/components/schemas/PivotConfig"
+
+    PivotDimension:
+      type: object
+      required: [source]
+      properties:
+        source:
+          type: string
+          enum: [entity, page, status]
+          description: Grouping key source — an entity field, a page-local field, or the record status.
+        fieldKey:
+          type: ["string", "null"]
+          description: Field key for source=entity|page. Ignored for source=status.
+        datePeriod:
+          type: ["string", "null"]
+          enum: [year, quarter, month, day, null]
+          description: When the field is date/datetime, bucket values by this period.
+
+    PivotMeasure:
+      type: object
+      required: [agg]
+      properties:
+        agg:
+          type: string
+          enum: [count, sum]
+        source:
+          type: ["string", "null"]
+          enum: [entity, page, null]
+          description: For agg=sum, where the numeric field lives. Ignored for agg=count.
+        fieldKey:
+          type: ["string", "null"]
+          description: Numeric field key for agg=sum. Ignored for agg=count.
+
+    PivotConfig:
+      type: object
+      required: [rows, measure]
+      properties:
+        rows:
+          $ref: "#/components/schemas/PivotDimension"
+        cols:
+          $ref: "#/components/schemas/PivotDimension"
+        measure:
+          $ref: "#/components/schemas/PivotMeasure"
+
+    PivotQuery:
+      type: object
+      required: [pivot]
+      properties:
+        filters:
+          type: array
+          items:
+            $ref: "#/components/schemas/FilterCondition"
+        pageLocalFilters:
+          type: array
+          items:
+            $ref: "#/components/schemas/FilterCondition"
+        filterConjunction:
+          type: string
+          enum: [and, or]
+          default: and
+        statusIds:
+          type: array
+          items:
+            type: integer
+        search:
+          type: string
+        archived:
+          $ref: "#/components/schemas/ArchiveFilter"
+        pageId:
+          type: integer
+        pivot:
+          $ref: "#/components/schemas/PivotConfig"
+
+    PivotAxisItem:
+      type: object
+      required: [key, label]
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+
+    PivotCell:
+      type: object
+      required: [rowKey, colKey, value]
+      properties:
+        rowKey:
+          type: string
+        colKey:
+          type: string
+        value:
+          type: number
+
+    PivotTotal:
+      type: object
+      required: [key, value]
+      properties:
+        key:
+          type: string
+        value:
+          type: number
+
+    PivotResult:
+      type: object
+      required: [rows, cols, cells, rowTotals, colTotals, grandTotal, measureLabel]
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/PivotAxisItem"
+        cols:
+          type: array
+          items:
+            $ref: "#/components/schemas/PivotAxisItem"
+        cells:
+          type: array
+          items:
+            $ref: "#/components/schemas/PivotCell"
+        rowTotals:
+          type: array
+          items:
+            $ref: "#/components/schemas/PivotTotal"
+        colTotals:
+          type: array
+          items:
+            $ref: "#/components/schemas/PivotTotal"
+        grandTotal:
+          type: number
+        measureLabel:
+          type: string
 
     View:
       type: object
@@ -5507,6 +5688,10 @@ components:
           $ref: "#/components/schemas/MultilingualText"
         configJson:
           $ref: "#/components/schemas/ViewConfig"
+        visibleRoleIds:
+          type: ["array", "null"]
+          items:
+            type: integer
         isDefault:
           type: boolean
         sortOrder:
@@ -5530,6 +5715,11 @@ components:
           $ref: "#/components/schemas/MultilingualText"
         configJson:
           $ref: "#/components/schemas/ViewConfig"
+        visibleRoleIds:
+          type: ["array", "null"]
+          items:
+            type: integer
+          description: Role ids that may select this view; null/empty = all roles with record access.
         isDefault:
           type: boolean
           default: false
@@ -5548,6 +5738,10 @@ components:
           $ref: "#/components/schemas/MultilingualText"
         configJson:
           $ref: "#/components/schemas/ViewConfig"
+        visibleRoleIds:
+          type: ["array", "null"]
+          items:
+            type: integer
         isDefault:
           type: boolean
         sortOrder:

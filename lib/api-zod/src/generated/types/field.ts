@@ -36,6 +36,7 @@ export interface Field {
   isKey?: boolean;
   lockAfterCreate?: boolean;
   isFilterable?: boolean;
+  pivotEnabled?: boolean;
   showInTable?: boolean;
   isPinned?: boolean;
   showColumnTotal?: boolean;

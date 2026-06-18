@@ -561,6 +561,7 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   if (body.isActive != null) updateData.isActive = body.isActive;
   if (body.permissionsJson != null) updateData.permissionsJson = body.permissionsJson;
   if (body.isFilterable != null) updateData.isFilterable = body.isFilterable;
+  if (body.pivotEnabled != null) updateData.pivotEnabled = body.pivotEnabled;
   if (body.showInTable != null) updateData.showInTable = body.showInTable;
   if (body.isPinned != null) updateData.isPinned = body.isPinned;
   if (body.showColumnTotal != null) updateData.showColumnTotal = body.showColumnTotal;

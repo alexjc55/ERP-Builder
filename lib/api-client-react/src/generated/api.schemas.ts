@@ -1392,6 +1392,8 @@ export interface Entity {
   /** @nullable */
   pageId?: number | null;
   defaultSortJson: SortSpec[];
+  /** Enables the "Сводная таблица" (pivot) report mode for this entity's records page. */
+  pivotEnabled?: boolean;
   sortOrder: number;
   isActive: boolean;
   createdAt: string;
@@ -1406,6 +1408,7 @@ export interface EntityInput {
   /** @nullable */
   pageId?: number | null;
   defaultSortJson?: SortSpec[];
+  pivotEnabled?: boolean;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -1418,6 +1421,7 @@ export interface EntityUpdate {
   /** @nullable */
   pageId?: number | null;
   defaultSortJson?: SortSpec[];
+  pivotEnabled?: boolean;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -1570,6 +1574,7 @@ export interface Field {
   isKey?: boolean;
   lockAfterCreate?: boolean;
   isFilterable?: boolean;
+  pivotEnabled?: boolean;
   showInTable?: boolean;
   isPinned?: boolean;
   showColumnTotal?: boolean;
@@ -1602,6 +1607,7 @@ export interface FieldInput {
   isKey?: boolean;
   lockAfterCreate?: boolean;
   isFilterable?: boolean;
+  pivotEnabled?: boolean;
   showInTable?: boolean;
   isPinned?: boolean;
   showColumnTotal?: boolean;
@@ -1642,6 +1648,7 @@ export interface FieldUpdate {
   isKey?: boolean;
   lockAfterCreate?: boolean;
   isFilterable?: boolean;
+  pivotEnabled?: boolean;
   showInTable?: boolean;
   isPinned?: boolean;
   showColumnTotal?: boolean;
@@ -1792,6 +1799,7 @@ export interface PageField {
   fieldType: FieldType;
   isRequired: boolean;
   isFilterable?: boolean;
+  pivotEnabled?: boolean;
   /** @nullable */
   defaultValue?: string | null;
   optionsJson: string[];
@@ -1819,6 +1827,7 @@ export interface PageFieldInput {
   fieldType: FieldType;
   isRequired?: boolean;
   isFilterable?: boolean;
+  pivotEnabled?: boolean;
   /** @nullable */
   defaultValue?: string | null;
   optionsJson?: string[];
@@ -1844,6 +1853,7 @@ export interface PageFieldUpdate {
   fieldType?: FieldType;
   isRequired?: boolean;
   isFilterable?: boolean;
+  pivotEnabled?: boolean;
   /** @nullable */
   defaultValue?: string | null;
   optionsJson?: string[];
@@ -2086,12 +2096,148 @@ export const ViewConfigFilterConjunction = {
   or: 'or',
 } as const;
 
+export type ViewConfigViewType = typeof ViewConfigViewType[keyof typeof ViewConfigViewType];
+
+
+export const ViewConfigViewType = {
+  table: 'table',
+  pivot: 'pivot',
+} as const;
+
+/**
+ * Grouping key source — an entity field, a page-local field, or the record status.
+ */
+export type PivotDimensionSource = typeof PivotDimensionSource[keyof typeof PivotDimensionSource];
+
+
+export const PivotDimensionSource = {
+  entity: 'entity',
+  page: 'page',
+  status: 'status',
+} as const;
+
+/**
+ * When the field is date/datetime, bucket values by this period.
+ * @nullable
+ */
+export type PivotDimensionDatePeriod = typeof PivotDimensionDatePeriod[keyof typeof PivotDimensionDatePeriod] | null;
+
+
+export const PivotDimensionDatePeriod = {
+  year: 'year',
+  quarter: 'quarter',
+  month: 'month',
+  day: 'day',
+} as const;
+
+export interface PivotDimension {
+  /** Grouping key source — an entity field, a page-local field, or the record status. */
+  source: PivotDimensionSource;
+  /**
+     * Field key for source=entity|page. Ignored for source=status.
+     * @nullable
+     */
+  fieldKey?: string | null;
+  /**
+     * When the field is date/datetime, bucket values by this period.
+     * @nullable
+     */
+  datePeriod?: PivotDimensionDatePeriod;
+}
+
+export type PivotMeasureAgg = typeof PivotMeasureAgg[keyof typeof PivotMeasureAgg];
+
+
+export const PivotMeasureAgg = {
+  count: 'count',
+  sum: 'sum',
+} as const;
+
+/**
+ * For agg=sum, where the numeric field lives. Ignored for agg=count.
+ * @nullable
+ */
+export type PivotMeasureSource = typeof PivotMeasureSource[keyof typeof PivotMeasureSource] | null;
+
+
+export const PivotMeasureSource = {
+  entity: 'entity',
+  page: 'page',
+} as const;
+
+export interface PivotMeasure {
+  agg: PivotMeasureAgg;
+  /**
+     * For agg=sum, where the numeric field lives. Ignored for agg=count.
+     * @nullable
+     */
+  source?: PivotMeasureSource;
+  /**
+     * Numeric field key for agg=sum. Ignored for agg=count.
+     * @nullable
+     */
+  fieldKey?: string | null;
+}
+
+export interface PivotConfig {
+  rows: PivotDimension;
+  cols?: PivotDimension;
+  measure: PivotMeasure;
+}
+
 export interface ViewConfig {
   filters?: FilterCondition[];
   filterConjunction?: ViewConfigFilterConjunction;
   sorts?: SortSpec[];
   search?: string;
   visibleFields?: string[];
+  viewType?: ViewConfigViewType;
+  pivot?: PivotConfig;
+}
+
+export type PivotQueryFilterConjunction = typeof PivotQueryFilterConjunction[keyof typeof PivotQueryFilterConjunction];
+
+
+export const PivotQueryFilterConjunction = {
+  and: 'and',
+  or: 'or',
+} as const;
+
+export interface PivotQuery {
+  filters?: FilterCondition[];
+  pageLocalFilters?: FilterCondition[];
+  filterConjunction?: PivotQueryFilterConjunction;
+  statusIds?: number[];
+  search?: string;
+  archived?: ArchiveFilter;
+  pageId?: number;
+  pivot: PivotConfig;
+}
+
+export interface PivotAxisItem {
+  key: string;
+  label: string;
+}
+
+export interface PivotCell {
+  rowKey: string;
+  colKey: string;
+  value: number;
+}
+
+export interface PivotTotal {
+  key: string;
+  value: number;
+}
+
+export interface PivotResult {
+  rows: PivotAxisItem[];
+  cols: PivotAxisItem[];
+  cells: PivotCell[];
+  rowTotals: PivotTotal[];
+  colTotals: PivotTotal[];
+  grandTotal: number;
+  measureLabel: string;
 }
 
 export interface View {
@@ -2100,6 +2246,8 @@ export interface View {
   viewKey: string;
   nameJson: MultilingualText;
   configJson: ViewConfig;
+  /** @nullable */
+  visibleRoleIds?: number[] | null;
   isDefault: boolean;
   sortOrder: number;
   isActive: boolean;
@@ -2111,6 +2259,11 @@ export interface ViewInput {
   viewKey: string;
   nameJson: MultilingualText;
   configJson?: ViewConfig;
+  /**
+     * Role ids that may select this view; null/empty = all roles with record access.
+     * @nullable
+     */
+  visibleRoleIds?: number[] | null;
   isDefault?: boolean;
   sortOrder?: number;
   isActive?: boolean;
@@ -2120,6 +2273,8 @@ export interface ViewUpdate {
   viewKey?: string;
   nameJson?: MultilingualText;
   configJson?: ViewConfig;
+  /** @nullable */
+  visibleRoleIds?: number[] | null;
   isDefault?: boolean;
   sortOrder?: number;
   isActive?: boolean;

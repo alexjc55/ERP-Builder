@@ -540,6 +540,7 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
   if (body.fieldType != null) updateData.fieldType = body.fieldType;
   if (body.isRequired != null) updateData.isRequired = body.isRequired;
   if (body.isFilterable != null) updateData.isFilterable = body.isFilterable;
+  if (body.pivotEnabled != null) updateData.pivotEnabled = body.pivotEnabled;
   if ("defaultValue" in body) updateData.defaultValue = body.defaultValue ?? null;
   if (body.optionsJson != null) updateData.optionsJson = body.optionsJson;
   if (body.formatRulesJson != null) updateData.formatRulesJson = body.formatRulesJson;

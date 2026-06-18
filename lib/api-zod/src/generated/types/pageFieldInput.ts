@@ -19,6 +19,7 @@ export interface PageFieldInput {
   fieldType: FieldType;
   isRequired?: boolean;
   isFilterable?: boolean;
+  pivotEnabled?: boolean;
   /** @nullable */
   defaultValue?: string | null;
   optionsJson?: string[];

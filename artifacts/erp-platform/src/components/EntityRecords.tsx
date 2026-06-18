@@ -52,11 +52,14 @@ import {
   type ViewConfig,
   type Transition,
   type RecordQuery,
+  type PivotQuery,
+  type PivotConfig,
   type SortSpec,
   type UserOption,
   type Role,
   type FieldAccess,
 } from "@workspace/api-client-react";
+import { PivotView } from "./PivotView";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1465,6 +1468,35 @@ export function EntityRecords({
     [selectedConfig.filters, selectedConfig.filterConjunction, sortsKey, adHocKey, dateKey, pageAdHocKey, pageDateKey, statusKey, search, archived, page],
   );
 
+  // Pivot (Сводная таблица): a view whose configJson.viewType is "pivot" carries a
+  // pivot config. It renders as a cross-tab instead of the row table, fed by the
+  // SAME live filter/search/status/archive state (so users slice interactively).
+  const pivotConfig: PivotConfig | undefined =
+    selectedConfig.viewType === "pivot" && selectedConfig.pivot ? selectedConfig.pivot : undefined;
+  const pivotAvailable = !!entity?.pivotEnabled && pivotConfig != null;
+  const [pivotMode, setPivotMode] = useState(false);
+  // Default to pivot rendering whenever a pivot view is selected; reset on switch.
+  useEffect(() => {
+    setPivotMode(selectedConfig.viewType === "pivot" && !!selectedConfig.pivot);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedViewId]);
+  const showPivot = pivotAvailable && pivotMode && !setupMode;
+
+  const pivotQuery: PivotQuery = useMemo(
+    () => ({
+      filters: [...(selectedConfig.filters ?? []), ...adHocFilters, ...dateFilterConditions],
+      filterConjunction: selectedConfig.filterConjunction ?? "and",
+      pageLocalFilters: [...pageAdHocFilters, ...pageDateFilterConditions],
+      statusIds: statusFilter.length > 0 ? statusFilter : undefined,
+      search: search.trim() || undefined,
+      archived,
+      pageId: permPageId,
+      pivot: (pivotConfig ?? { rows: { source: "status" }, measure: { agg: "count" } }) as PivotConfig,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedConfig.filters, selectedConfig.filterConjunction, adHocKey, dateKey, pageAdHocKey, pageDateKey, statusKey, search, archived, JSON.stringify(pivotConfig)],
+  );
+
   // Dependent filters: when fetching the option list for a field, we run a query against the
   // records matching the OTHER active filters (this field's own picks excluded) so co-occurring
   // values narrow each other (e.g. pick «Отдел» ⇒ «Сотрудник» lists only that department's staff).
@@ -2292,6 +2324,25 @@ export function EntityRecords({
           </div>
         </div>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+          {pivotAvailable && !setupMode && (
+            <div className="flex items-center justify-center w-full sm:w-auto rounded-md border border-slate-200 p-0.5 bg-white">
+              {([
+                [false, t("pivot.modeTable", "Таблица")],
+                [true, t("pivot.modePivot", "Сводная")],
+              ] as [boolean, string][]).map(([value, label]) => (
+                <button
+                  key={String(value)}
+                  type="button"
+                  onClick={() => setPivotMode(value)}
+                  className={`px-2.5 h-8 text-xs rounded-[5px] transition ${
+                    pivotMode === value ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           {(canConfigureColumns || canEditMirrorLabels) && (
             <Button
               type="button"
@@ -2459,6 +2510,14 @@ export function EntityRecords({
         </div>
       )}
 
+      {showPivot ? (
+        <Card className="border-slate-200 shadow-sm">
+          <CardContent className="p-3 sm:p-4">
+            <PivotView entityId={entityId} query={pivotQuery} refreshTick={refreshTick} />
+          </CardContent>
+        </Card>
+      ) : (
+      <>
       <Card className="border-slate-200 shadow-sm">
         <CardContent className="p-0">
           {recordsLoading ? (
@@ -3323,6 +3382,8 @@ export function EntityRecords({
             </div>
           )}
         </div>
+      )}
+      </>
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

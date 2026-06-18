@@ -14,6 +14,12 @@ export const viewsTable = pgTable(
     viewKey: text("view_key").notNull(),
     nameJson: jsonb("name_json").notNull().default({}),
     configJson: jsonb("config_json").notNull().default({}),
+    // Role-based visibility for the view itself: null/empty = visible to every role
+    // that can access the entity's records; otherwise the explicit set of role ids
+    // that may select this view. Lets one page serve different roles different views
+    // instead of cloning pages per role. NOT a data boundary — record/field/row
+    // permissions still apply on top.
+    visibleRoleIdsJson: jsonb("visible_role_ids_json").$type<number[]>(),
     isDefault: boolean("is_default").notNull().default(false),
     sortOrder: integer("sort_order").notNull().default(0),
     isActive: boolean("is_active").notNull().default(true),

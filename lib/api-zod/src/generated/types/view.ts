@@ -14,6 +14,8 @@ export interface View {
   viewKey: string;
   nameJson: MultilingualText;
   configJson: ViewConfig;
+  /** @nullable */
+  visibleRoleIds?: number[] | null;
   isDefault: boolean;
   sortOrder: number;
   isActive: boolean;

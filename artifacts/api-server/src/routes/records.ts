@@ -38,9 +38,11 @@ import {
   RenameFieldValueBody,
   ArchiveRecordParams,
   UnarchiveRecordParams,
+  PivotEntityRecordsParams,
+  PivotEntityRecordsBody,
 } from "@workspace/api-zod";
 import type { EntityField, InsertAuditLog, FileSource, FileFieldConfig } from "@workspace/db";
-import { buildRecordQuery, buildPageLocalCondition, type RecordQuerySpec, type FilterCondition } from "./record-query";
+import { buildRecordQuery, buildPageLocalCondition, pageLocalValueExpr, type RecordQuerySpec, type FilterCondition } from "./record-query";
 import { buildRelationMeta, ownScopeWhere, isRecordOwned } from "./own-scope";
 import { isGoogleDriveModuleEnabled } from "../lib/googleDrive";
 import {
@@ -893,6 +895,351 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     ...(numericTotals ? { numericTotals } : {}),
   });
 });
+
+// ---- Pivot (Сводная таблица) ------------------------------------------------
+// Permission-scoped cross-tab aggregation. Reuses the SAME read boundary as the
+// records query (entity scope + filters + archival + own-row + hidden-status +
+// page-local filters). Dimensions/measures are restricted to the viewer's
+// NON-hidden, pivot-enabled fields so an aggregate can never leak a hidden field.
+// Deliberately NOT admin-authoritative (unlike dashboard widgets): the totals
+// reflect only what this viewer is permitted to see.
+const PIVOT_DIM_TYPES = new Set([
+  "text",
+  "textarea",
+  "select",
+  "number",
+  "date",
+  "datetime",
+  "boolean",
+  "email",
+  "url",
+  "phone",
+]);
+const PIVOT_DATE_TYPES = new Set(["date", "datetime"]);
+const PIVOT_PERIOD_UNITS = new Set(["year", "quarter", "month", "day"]);
+const PIVOT_NUMERIC_RE = "^-?[0-9]+(\\.[0-9]+)?$";
+const PIVOT_COL_ALL = "__all__";
+
+function pivotMLName(nameJson: unknown): string {
+  const n = (nameJson ?? {}) as Record<string, string>;
+  return n.ru || n.en || n.he || "";
+}
+function pivotRound(v: number): number {
+  return Math.round(v * 1e6) / 1e6;
+}
+
+router.post(
+  "/entities/:entityId/records/pivot",
+  requireAuth,
+  requireRecordParam("view"),
+  async (req, res): Promise<void> => {
+    const params = PivotEntityRecordsParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const body = PivotEntityRecordsBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+    const { entityId } = params.data;
+
+    const [entity] = await db.select().from(entitiesTable).where(eq(entitiesTable.id, entityId));
+    if (!entity) {
+      res.status(404).json({ error: "Entity not found" });
+      return;
+    }
+    if (!entity.pivotEnabled) {
+      res.status(400).json({ error: "Pivot mode is not enabled for this entity" });
+      return;
+    }
+
+    const pivot = body.data.pivot;
+    const pageId = body.data.pageId ?? undefined;
+
+    const fields = await loadActiveFields(entityId);
+    const { hidden } = await fieldAccessContext(req, entityId, fields, pageId);
+    const visibleFields = fields.filter((f) => !hidden.has(f.fieldKey));
+    const entFieldByKey = new Map(visibleFields.map((f) => [f.fieldKey, f]));
+
+    // Page-local fields: load once when a page context is supplied. `pageFieldByKey`
+    // holds the per-role VISIBLE ones (for dims/measures); `plFilterByKey` holds the
+    // filterable subset (for pageLocalFilters), mirroring the records/query rules.
+    const roleIds = await getUserRoleIds(req);
+    const plAll =
+      pageId != null
+        ? await db
+            .select()
+            .from(pageFieldsTable)
+            .where(and(eq(pageFieldsTable.pageId, pageId), eq(pageFieldsTable.isActive, true)))
+        : [];
+    const visiblePl = plAll.filter(
+      (pf) => mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view") !== "hidden",
+    );
+    const pageFieldByKey = new Map(visiblePl.map((pf) => [pf.fieldKey, pf] as const));
+
+    const needPage =
+      pivot.rows.source === "page" ||
+      pivot.cols?.source === "page" ||
+      (pivot.measure.agg === "sum" && pivot.measure.source === "page");
+    if (needPage && pageId == null) {
+      res.status(400).json({ error: "pageId is required for page-local pivot dimensions/measures" });
+      return;
+    }
+
+    type DimMeta =
+      | { kind: "status" }
+      | { kind: "plain"; expr: SQL }
+      | { kind: "date"; expr: SQL; period: string };
+
+    const resolveDim = (dim: {
+      source: string;
+      fieldKey?: string | null;
+      datePeriod?: string | null;
+    }): DimMeta | { error: string } => {
+      if (dim.source === "status") return { kind: "status" };
+      const key = dim.fieldKey ?? "";
+      if (!key) return { error: "Pivot dimension requires fieldKey" };
+      let ftype: string;
+      let ve: SQL;
+      if (dim.source === "entity") {
+        const f = entFieldByKey.get(key);
+        if (!f) return { error: `Unknown or hidden pivot field: ${key}` };
+        if (!f.pivotEnabled) return { error: `Field is not enabled for pivot: ${key}` };
+        if (!PIVOT_DIM_TYPES.has(f.fieldType))
+          return { error: `Field type cannot be a pivot dimension: ${key}` };
+        ftype = f.fieldType;
+        ve = sql`(${entityRecordsTable.valuesJson} ->> ${key})`;
+      } else if (dim.source === "page") {
+        const pf = pageFieldByKey.get(key);
+        if (!pf) return { error: `Unknown or hidden page pivot field: ${key}` };
+        if (!pf.pivotEnabled) return { error: `Page field is not enabled for pivot: ${key}` };
+        if (!PIVOT_DIM_TYPES.has(pf.fieldType))
+          return { error: `Page field type cannot be a pivot dimension: ${key}` };
+        ftype = pf.fieldType;
+        ve = pageLocalValueExpr(pageId!, key);
+      } else {
+        return { error: `Invalid pivot dimension source: ${dim.source}` };
+      }
+      if (PIVOT_DATE_TYPES.has(ftype) && dim.datePeriod) {
+        if (!PIVOT_PERIOD_UNITS.has(dim.datePeriod))
+          return { error: `Invalid date period: ${dim.datePeriod}` };
+        const period = dim.datePeriod;
+        // Guard the cast: only ISO-prefixed values are truncated; anything else
+        // (empty/garbage) collapses to NULL instead of throwing on ::timestamptz.
+        const expr = sql`CASE WHEN (${ve}) ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' THEN to_char(date_trunc(${period}, (${ve})::timestamptz), 'YYYY-MM-DD') ELSE NULL END`;
+        return { kind: "date", expr, period };
+      }
+      return { kind: "plain", expr: ve };
+    };
+
+    const resolveMeasure = ():
+      | { expr: SQL; label: string }
+      | { error: string } => {
+      if (pivot.measure.agg === "count") {
+        return { expr: sql`count(*)::float8`, label: "Количество" };
+      }
+      const src = pivot.measure.source;
+      const key = pivot.measure.fieldKey ?? "";
+      if ((src !== "entity" && src !== "page") || !key)
+        return { error: "Sum measure requires source (entity|page) and fieldKey" };
+      let ve: SQL;
+      let label: string;
+      if (src === "entity") {
+        const f = entFieldByKey.get(key);
+        if (!f) return { error: `Unknown or hidden measure field: ${key}` };
+        if (!f.pivotEnabled) return { error: `Field is not enabled for pivot: ${key}` };
+        if (f.fieldType !== "number") return { error: `Measure field must be numeric: ${key}` };
+        ve = sql`(${entityRecordsTable.valuesJson} ->> ${key})`;
+        label = pivotMLName(f.nameJson);
+      } else {
+        const pf = pageFieldByKey.get(key);
+        if (!pf) return { error: `Unknown or hidden page measure field: ${key}` };
+        if (!pf.pivotEnabled) return { error: `Page field is not enabled for pivot: ${key}` };
+        if (pf.fieldType !== "number") return { error: `Measure field must be numeric: ${key}` };
+        ve = pageLocalValueExpr(pageId!, key);
+        label = pivotMLName(pf.nameJson);
+      }
+      return {
+        expr: sql`COALESCE(SUM(CASE WHEN (${ve}) ~ ${PIVOT_NUMERIC_RE} THEN (${ve})::numeric ELSE 0 END), 0)::float8`,
+        label,
+      };
+    };
+
+    const rowMeta = resolveDim(pivot.rows);
+    if ("error" in rowMeta) {
+      res.status(400).json({ error: rowMeta.error });
+      return;
+    }
+    const colMeta = pivot.cols ? resolveDim(pivot.cols) : null;
+    if (colMeta && "error" in colMeta) {
+      res.status(400).json({ error: colMeta.error });
+      return;
+    }
+    const measure = resolveMeasure();
+    if ("error" in measure) {
+      res.status(400).json({ error: measure.error });
+      return;
+    }
+
+    // ---- Read boundary (identical to records/query) ----
+    const relationMeta = await buildRelationMeta(entityId, visibleFields);
+    const spec: RecordQuerySpec = {
+      filters: (body.data.filters ?? []) as FilterCondition[],
+      filterConjunction: body.data.filterConjunction,
+      statusIds: body.data.statusIds ?? undefined,
+      search: body.data.search ?? undefined,
+    };
+    const built = buildRecordQuery(visibleFields, spec, relationMeta);
+    if ("error" in built) {
+      res.status(400).json({ error: built.error });
+      return;
+    }
+
+    const perms = await getPermissions(req);
+    const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, entityId, pageId);
+    const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, entityId);
+
+    if (!req.user?.guest) await runAutoArchiveSweep(entityId);
+    const archived = (body.data.archived ?? "active") as ArchiveFilterValue;
+
+    const clauses: SQL[] = [eq(entityRecordsTable.entityId, entityId)];
+    if (built.where) clauses.push(built.where);
+    const archWhere = archivedWhere(archived);
+    if (archWhere) clauses.push(archWhere);
+    if (scope === "own")
+      clauses.push(await ownScopeWhere(entityId, scopeFieldKeys, req.user!.userId, fields));
+    const queryHiddenRowWhere = hiddenRowStatusWhere(hiddenRowStatusIds);
+    if (queryHiddenRowWhere) clauses.push(queryHiddenRowWhere);
+
+    const pageLocalFilters = (body.data.pageLocalFilters ?? []) as FilterCondition[];
+    if (pageLocalFilters.length > 0) {
+      if (pageId == null) {
+        res.status(400).json({ error: "pageLocalFilters require pageId" });
+        return;
+      }
+      const plFilterByKey = new Map(
+        visiblePl
+          .filter((pf) => pf.isFilterable && PAGE_LOCAL_FILTERABLE_TYPES.has(pf.fieldType))
+          .map((pf) => [pf.fieldKey, pf] as const),
+      );
+      for (const cond of pageLocalFilters) {
+        const pf = plFilterByKey.get(cond.field);
+        if (!pf) {
+          res.status(400).json({ error: `Unknown or non-filterable page field "${cond.field}"` });
+          return;
+        }
+        const r = buildPageLocalCondition(cond, pf.fieldType, pageId);
+        if ("error" in r) {
+          res.status(400).json({ error: r.error });
+          return;
+        }
+        clauses.push(r.sql);
+      }
+    }
+
+    const where = and(...clauses)!;
+
+    // ---- Grouped aggregation ----
+    const rowKeyExpr = rowMeta.kind === "status" ? sql`${entityRecordsTable.statusId}::text` : rowMeta.expr;
+    const colKeyExpr = !colMeta
+      ? null
+      : colMeta.kind === "status"
+        ? sql`${entityRecordsTable.statusId}::text`
+        : colMeta.expr;
+
+    const grouped = await db
+      .select({
+        rk: sql<string | null>`${rowKeyExpr}`,
+        ck: colKeyExpr ? sql<string | null>`${colKeyExpr}` : sql<string>`${PIVOT_COL_ALL}`,
+        v: sql<number>`${measure.expr}`,
+      })
+      .from(entityRecordsTable)
+      .where(where)
+      .groupBy(...(colKeyExpr ? [rowKeyExpr, colKeyExpr] : [rowKeyExpr]));
+
+    // ---- Label resolution ----
+    const statusName = new Map<number, string>();
+    const statusOrder = new Map<number, number>();
+    if (rowMeta.kind === "status" || colMeta?.kind === "status") {
+      const sts = await db
+        .select()
+        .from(entityStatusesTable)
+        .where(eq(entityStatusesTable.entityId, entityId));
+      for (const s of sts) {
+        statusName.set(s.id, pivotMLName(s.nameJson) || s.statusKey);
+        statusOrder.set(s.id, s.sortOrder);
+      }
+    }
+
+    const formatPeriod = (iso: string, period: string): string => {
+      const [y, m] = iso.split("-");
+      if (period === "year") return y;
+      if (period === "quarter") return `${y} Q${Math.floor((Number(m) - 1) / 3) + 1}`;
+      if (period === "month") return `${y}-${m}`;
+      return iso;
+    };
+    const labelFor = (meta: DimMeta, key: string): string => {
+      if (key === "") return meta.kind === "status" ? "(без статуса)" : "(пусто)";
+      if (meta.kind === "status") return statusName.get(Number(key)) ?? key;
+      if (meta.kind === "date") return formatPeriod(key, meta.period);
+      return key;
+    };
+    const sortKeys = (keys: string[], meta: DimMeta): string[] =>
+      keys.sort((a, b) => {
+        if (a === "" && b === "") return 0;
+        if (a === "") return 1;
+        if (b === "") return -1;
+        if (meta.kind === "status") return (statusOrder.get(Number(a)) ?? 0) - (statusOrder.get(Number(b)) ?? 0);
+        if (meta.kind === "date") return a < b ? -1 : a > b ? 1 : 0;
+        return a.localeCompare(b, undefined, { numeric: true });
+      });
+
+    const rowKeySet = new Set<string>();
+    const colKeySet = new Set<string>();
+    const cellMap = new Map<string, number>();
+    for (const g of grouped) {
+      const rk = g.rk == null ? "" : String(g.rk);
+      const ck = g.ck == null ? "" : String(g.ck);
+      rowKeySet.add(rk);
+      colKeySet.add(ck);
+      const ck2 = rk + "\u0000" + ck;
+      cellMap.set(ck2, (cellMap.get(ck2) ?? 0) + Number(g.v ?? 0));
+    }
+
+    const rowKeys = sortKeys([...rowKeySet], rowMeta);
+    const colKeys = colMeta ? sortKeys([...colKeySet], colMeta) : [PIVOT_COL_ALL];
+
+    const cells: { rowKey: string; colKey: string; value: number }[] = [];
+    const rowTotals: { key: string; value: number }[] = [];
+    const colTotal = new Map<string, number>();
+    let grandTotal = 0;
+    for (const rk of rowKeys) {
+      let rt = 0;
+      for (const ck of colKeys) {
+        const v = cellMap.get(rk + "\u0000" + ck) ?? 0;
+        if (v !== 0) cells.push({ rowKey: rk, colKey: ck, value: pivotRound(v) });
+        rt += v;
+        colTotal.set(ck, (colTotal.get(ck) ?? 0) + v);
+      }
+      rowTotals.push({ key: rk, value: pivotRound(rt) });
+      grandTotal += rt;
+    }
+
+    res.json({
+      rows: rowKeys.map((k) => ({ key: k, label: labelFor(rowMeta, k) })),
+      cols: colMeta
+        ? colKeys.map((k) => ({ key: k, label: labelFor(colMeta, k) }))
+        : [{ key: PIVOT_COL_ALL, label: measure.label }],
+      cells,
+      rowTotals,
+      colTotals: colKeys.map((k) => ({ key: k, value: pivotRound(colTotal.get(k) ?? 0) })),
+      grandTotal: pivotRound(grandTotal),
+      measureLabel: measure.label,
+    });
+  },
+);
 
 router.post(
   "/entities/:entityId/records/filter-values",

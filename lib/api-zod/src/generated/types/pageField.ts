@@ -21,6 +21,7 @@ export interface PageField {
   fieldType: FieldType;
   isRequired: boolean;
   isFilterable?: boolean;
+  pivotEnabled?: boolean;
   /** @nullable */
   defaultValue?: string | null;
   optionsJson: string[];

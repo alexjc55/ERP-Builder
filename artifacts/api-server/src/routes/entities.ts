@@ -177,6 +177,7 @@ router.put("/entities/:id", requireAuth, requireAdmin("entities"), async (req, r
     updateData.pageId = newPageId;
   }
   if (body.defaultSortJson != null) updateData.defaultSortJson = body.defaultSortJson;
+  if (body.pivotEnabled != null) updateData.pivotEnabled = body.pivotEnabled;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
   if (body.isActive != null) updateData.isActive = body.isActive;
 

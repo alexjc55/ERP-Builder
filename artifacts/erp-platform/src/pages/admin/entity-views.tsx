@@ -9,6 +9,8 @@ import {
   useListEntities,
   useUpdateEntity,
   useListEntityFields,
+  useUpdateField,
+  useListRoles,
   type View,
   type ViewConfig,
   type FilterCondition,
@@ -17,7 +19,13 @@ import {
   type SortSpecDirection,
   type Entity,
   type Field,
+  type Role,
   type MultilingualText,
+  type PivotConfig,
+  type PivotDimension,
+  type PivotMeasure,
+  type PivotDimensionSource,
+  type PivotDimensionDatePeriod,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,7 +63,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, ArrowLeft, LayoutList, Star, Filter, ArrowDownUp, X, ChevronUp, ChevronDown, Check } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, ArrowLeft, LayoutList, Star, Filter, ArrowDownUp, X, ChevronUp, ChevronDown, Check, Table2, Shield } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
 import { slugifyKey, uniqueKey } from "@/lib/keys";
 
@@ -120,6 +128,13 @@ function textToFilterValue(op: FilterOperator, text: string): unknown {
 
 type DraftFilter = { field: string; operator: FilterOperator; valueText: string };
 type DraftSort = { field: string; direction: SortSpecDirection };
+// Pivot dimension draft (entity-scoped editor: only entity fields or record status —
+// page-local dims are an engine capability but have no page context in this admin screen).
+type DraftDim = { source: "entity" | "status"; fieldKey: string; datePeriod: PivotDimensionDatePeriod };
+
+// Field types eligible as a pivot grouping dimension (discrete-ish values).
+const PIVOT_DIM_TYPES = new Set(["text", "textarea", "number", "boolean", "date", "datetime", "select", "email", "url", "phone"]);
+const isDateLikeType = (t: string) => t === "date" || t === "datetime";
 
 // Reserved sort keys mapping to the record's system columns (creation date / id).
 // They are sortable but never shown as table columns; kept in lockstep with the
@@ -271,6 +286,68 @@ function FilterValueEditor({
   );
 }
 
+/**
+ * Editor for a single pivot grouping dimension (rows or cols). The admin picks
+ * either the record status or an opted-in entity field; date/datetime fields
+ * additionally expose a bucketing period (year/quarter/month/day).
+ */
+function PivotDimEditor({
+  label,
+  dim,
+  onChange,
+  dimFields,
+  ml,
+  t,
+}: {
+  label: string;
+  dim: DraftDim;
+  onChange: (d: DraftDim) => void;
+  dimFields: Field[];
+  ml: (val: MultilingualText | string | undefined | null) => string;
+  t: (key: string, def: string) => string;
+}) {
+  const selectedField = dim.source === "entity" ? dimFields.find((f) => f.fieldKey === dim.fieldKey) : undefined;
+  const isDate = selectedField ? isDateLikeType(selectedField.fieldType) : false;
+  const selectValue = dim.source === "status" ? "__status__" : dim.fieldKey;
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-sm">{label}</Label>
+      <div className="flex items-center gap-2">
+        <Select
+          value={selectValue}
+          onValueChange={(v) => {
+            if (v === "__status__") {
+              onChange({ source: "status", fieldKey: "", datePeriod: null });
+            } else {
+              const f = dimFields.find((x) => x.fieldKey === v);
+              onChange({ source: "entity", fieldKey: v, datePeriod: f && isDateLikeType(f.fieldType) ? (dim.datePeriod ?? "month") : null });
+            }
+          }}
+        >
+          <SelectTrigger className="h-8 text-sm flex-1"><SelectValue placeholder={t("pivot.selectDim", "поле…")} /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__status__">{t("pivot.dimStatus", "Статус записи")}</SelectItem>
+            {dimFields.map((f) => (
+              <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {isDate && (
+          <Select value={dim.datePeriod ?? "month"} onValueChange={(v) => onChange({ ...dim, datePeriod: v as PivotDimensionDatePeriod })}>
+            <SelectTrigger className="h-8 text-sm w-32"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="year">{t("pivot.periodYear", "Год")}</SelectItem>
+              <SelectItem value="quarter">{t("pivot.periodQuarter", "Квартал")}</SelectItem>
+              <SelectItem value="month">{t("pivot.periodMonth", "Месяц")}</SelectItem>
+              <SelectItem value="day">{t("pivot.periodDay", "День")}</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function EntityViewsPage() {
   const params = useParams();
   const entityId = Number(params.entityId);
@@ -291,6 +368,11 @@ export default function EntityViewsPage() {
     return f ? ml(f.nameJson) : key;
   };
 
+  const { data: roles = [] } = useListRoles();
+  // Fields the admin has opted into as pivot dims/measures.
+  const pivotDimFields = fields.filter((f: Field) => f.pivotEnabled && PIVOT_DIM_TYPES.has(f.fieldType));
+  const pivotSumFields = fields.filter((f: Field) => f.pivotEnabled && f.fieldType === "number");
+
   const { data: views = [], isLoading } = useListEntityViews(entityId);
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -304,6 +386,15 @@ export default function EntityViewsPage() {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<DraftFilter[]>([]);
   const [sorts, setSorts] = useState<DraftSort[]>([]);
+  // Pivot view editor state.
+  const [viewType, setViewType] = useState<"table" | "pivot">("table");
+  const [pivotRows, setPivotRows] = useState<DraftDim>({ source: "status", fieldKey: "", datePeriod: null });
+  const [pivotColsOn, setPivotColsOn] = useState(false);
+  const [pivotCols, setPivotCols] = useState<DraftDim>({ source: "status", fieldKey: "", datePeriod: null });
+  const [pivotAgg, setPivotAgg] = useState<"count" | "sum">("count");
+  const [pivotMeasureField, setPivotMeasureField] = useState<string>("");
+  // Per-view role visibility (empty = visible to everyone with record access).
+  const [visibleRoleIds, setVisibleRoleIds] = useState<number[]>([]);
 
   // Default sort: the row ordering applied when no view is selected (the implicit
   // "По умолчанию"). Stored on the entity itself, configured via its own dialog.
@@ -352,6 +443,23 @@ export default function EntityViewsPage() {
     },
   });
 
+  // Per-entity pivot opt-in and per-field allowed toggles.
+  const pivotEntityMutation = useUpdateEntity({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/entities`] });
+      },
+      onError: (err) => toast({ title: t("pivot.settingsError", "Ошибка настройки сводных"), description: extractError(err), variant: "destructive" }),
+    },
+  });
+  const pivotFieldMutation = useUpdateField({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/fields`] }),
+      onError: (err) => toast({ title: t("pivot.fieldError", "Ошибка настройки поля"), description: extractError(err), variant: "destructive" }),
+    },
+  });
+
   const move = (list: View[], index: number, direction: -1 | 1) => {
     const target = index + direction;
     if (target < 0 || target >= list.length) return;
@@ -378,6 +486,13 @@ export default function EntityViewsPage() {
     setSearch("");
     setFilters([]);
     setSorts([]);
+    setViewType("table");
+    setPivotRows({ source: pivotDimFields[0] ? "entity" : "status", fieldKey: pivotDimFields[0]?.fieldKey ?? "", datePeriod: null });
+    setPivotColsOn(false);
+    setPivotCols({ source: "status", fieldKey: "", datePeriod: null });
+    setPivotAgg("count");
+    setPivotMeasureField(pivotSumFields[0]?.fieldKey ?? "");
+    setVisibleRoleIds([]);
     setDialogOpen(true);
   };
 
@@ -398,8 +513,24 @@ export default function EntityViewsPage() {
       })),
     );
     setSorts((cfg.sorts ?? []).map((s) => ({ field: s.field, direction: s.direction ?? "asc" })));
+    setVisibleRoleIds(Array.isArray(view.visibleRoleIds) ? view.visibleRoleIds : []);
+    const isPivot = cfg.viewType === "pivot" && !!cfg.pivot;
+    setViewType(isPivot ? "pivot" : "table");
+    const dimToDraft = (d: PivotDimension | undefined): DraftDim =>
+      d && d.source !== "status"
+        ? { source: "entity", fieldKey: d.fieldKey ?? "", datePeriod: d.datePeriod ?? null }
+        : { source: "status", fieldKey: "", datePeriod: null };
+    const p = cfg.pivot;
+    setPivotRows(p ? dimToDraft(p.rows) : { source: pivotDimFields[0] ? "entity" : "status", fieldKey: pivotDimFields[0]?.fieldKey ?? "", datePeriod: null });
+    setPivotColsOn(!!p?.cols);
+    setPivotCols(p?.cols ? dimToDraft(p.cols) : { source: "status", fieldKey: "", datePeriod: null });
+    setPivotAgg(p?.measure?.agg === "sum" ? "sum" : "count");
+    setPivotMeasureField(p?.measure?.fieldKey ?? pivotSumFields[0]?.fieldKey ?? "");
     setDialogOpen(true);
   };
+
+  const toggleVisibleRole = (roleId: number) =>
+    setVisibleRoleIds((prev) => (prev.includes(roleId) ? prev.filter((r) => r !== roleId) : [...prev, roleId]));
 
   const addFilter = () => {
     const field = fields[0]?.fieldKey ?? "";
@@ -444,12 +575,29 @@ export default function EntityViewsPage() {
       return cond;
     });
     const builtSorts: SortSpec[] = sorts.map((s) => ({ field: s.field, direction: s.direction }));
-    return {
+    const base: ViewConfig = {
       filters: builtFilters,
       filterConjunction,
       sorts: builtSorts,
       search: search.trim() || undefined,
     };
+    if (viewType !== "pivot") return base;
+
+    const draftToDim = (d: DraftDim): PivotDimension =>
+      d.source === "status"
+        ? { source: "status" as PivotDimensionSource }
+        : {
+            source: "entity" as PivotDimensionSource,
+            fieldKey: d.fieldKey,
+            datePeriod: isDateLikeType(fields.find((f: Field) => f.fieldKey === d.fieldKey)?.fieldType ?? "") ? d.datePeriod : null,
+          };
+    const measure: PivotMeasure =
+      pivotAgg === "sum"
+        ? { agg: "sum", source: "entity", fieldKey: pivotMeasureField }
+        : { agg: "count" };
+    const pivot: PivotConfig = { rows: draftToDim(pivotRows), measure };
+    if (pivotColsOn) pivot.cols = draftToDim(pivotCols);
+    return { ...base, viewType: "pivot", pivot };
   };
 
   const handleSubmit = () => {
@@ -457,17 +605,32 @@ export default function EntityViewsPage() {
     const existingKeys = new Set(
       views.filter((v: View) => v.id !== editing?.id).map((v: View) => v.viewKey),
     );
+    if (viewType === "pivot") {
+      if (configJson.pivot?.rows.source === "entity" && !configJson.pivot.rows.fieldKey) {
+        toast({ title: t("pivot.needRowField", "Выберите поле строк сводной таблицы"), variant: "destructive" });
+        return;
+      }
+      if (pivotColsOn && configJson.pivot?.cols?.source === "entity" && !configJson.pivot.cols.fieldKey) {
+        toast({ title: t("pivot.needColField", "Выберите поле столбцов сводной таблицы"), variant: "destructive" });
+        return;
+      }
+      if (pivotAgg === "sum" && !pivotMeasureField) {
+        toast({ title: t("pivot.needMeasureField", "Выберите числовое поле для суммы"), variant: "destructive" });
+        return;
+      }
+    }
     const nameForKey = (nameJson.en || nameJson.ru || nameJson.he || "").toString();
     const resolvedKey = viewKey.trim() || uniqueKey(slugifyKey(nameForKey) || "view", existingKeys);
+    const roleVisibility = visibleRoleIds.length > 0 ? visibleRoleIds : null;
     if (editing) {
       updateMutation.mutate({
         id: editing.id,
-        data: { viewKey: resolvedKey, nameJson: nameJson as MultilingualText, configJson, isDefault },
+        data: { viewKey: resolvedKey, nameJson: nameJson as MultilingualText, configJson, isDefault, visibleRoleIds: roleVisibility },
       });
     } else {
       createMutation.mutate({
         entityId,
-        data: { viewKey: resolvedKey, nameJson: nameJson as MultilingualText, configJson, isDefault },
+        data: { viewKey: resolvedKey, nameJson: nameJson as MultilingualText, configJson, isDefault, visibleRoleIds: roleVisibility },
       });
     }
   };
@@ -531,6 +694,62 @@ export default function EntityViewsPage() {
               {t("views.configure", "Настроить")}
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-slate-200 shadow-sm">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+                <Table2 className="w-4 h-4 text-blue-600" />
+                {t("pivot.entitySettingsTitle", "Сводные таблицы")}
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {t("pivot.entitySettingsDesc", "Разрешите режим сводной таблицы для этой сущности и выберите поля, доступные как измерения и меры.")}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Switch
+                checked={!!entity?.pivotEnabled}
+                disabled={!entity || pivotEntityMutation.isPending}
+                onCheckedChange={(checked) => entity && pivotEntityMutation.mutate({ id: entityId, data: { pivotEnabled: checked } })}
+              />
+              <Label className="cursor-pointer text-sm">{t("pivot.entityEnable", "Включить сводные")}</Label>
+            </div>
+          </div>
+          {entity?.pivotEnabled && (
+            <div className="border-t border-slate-100 pt-3">
+              <p className="text-xs font-medium text-slate-600 mb-2">{t("pivot.allowedFields", "Поля, доступные в сводных")}</p>
+              {fields.filter((f: Field) => PIVOT_DIM_TYPES.has(f.fieldType)).length === 0 ? (
+                <p className="text-xs text-slate-400">{t("pivot.noEligibleFields", "Нет подходящих полей (текст, число, дата, список, логическое).")}</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {fields
+                    .filter((f: Field) => PIVOT_DIM_TYPES.has(f.fieldType))
+                    .map((f: Field) => {
+                      const on = !!f.pivotEnabled;
+                      return (
+                        <button
+                          key={f.id}
+                          type="button"
+                          disabled={pivotFieldMutation.isPending}
+                          onClick={() => pivotFieldMutation.mutate({ id: f.id, data: { pivotEnabled: !on } })}
+                          className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition disabled:opacity-50 ${
+                            on ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-500 hover:border-slate-300"
+                          }`}
+                        >
+                          <span className={`flex h-3.5 w-3.5 items-center justify-center rounded-sm border ${on ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300"}`}>
+                            {on && <Check className="w-2.5 h-2.5" />}
+                          </span>
+                          {ml(f.nameJson)}
+                        </button>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -634,9 +853,66 @@ export default function EntityViewsPage() {
               <Label className="cursor-pointer">{t("views.defaultView", "Вид по умолчанию")}</Label>
             </div>
 
+            {entity?.pivotEnabled && (
+              <div className="space-y-1.5">
+                <Label>{t("pivot.viewMode", "Тип отображения")}</Label>
+                <div className="inline-flex items-center rounded-md border border-slate-200 p-0.5">
+                  {([
+                    ["table", t("pivot.modeTable", "Таблица")],
+                    ["pivot", t("pivot.modePivot", "Сводная")],
+                  ] as ["table" | "pivot", string][]).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setViewType(value)}
+                      className={`px-3 h-8 text-xs rounded-[5px] transition ${
+                        viewType === value ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-700"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label>{t("views.textSearch", "Поиск по тексту")}</Label>
               <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("views.searchPlaceholder", "Подстрока по текстовым полям")} />
+            </div>
+
+            <div className="space-y-2 border-t border-slate-100 pt-4">
+              <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+                <Shield className="w-4 h-4 text-blue-600" />
+                {t("pivot.roleVisibility", "Видимость по ролям")}
+              </div>
+              <p className="text-xs text-slate-400">
+                {t("pivot.roleVisibilityHint", "Если роли не выбраны, вид виден всем, у кого есть доступ к записям. Иначе — только выбранным ролям (суперадмин видит всегда).")}
+              </p>
+              {roles.length === 0 ? (
+                <p className="text-xs text-slate-400">{t("pivot.noRoles", "Роли не настроены.")}</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {roles.map((r: Role) => {
+                    const on = visibleRoleIds.includes(r.id);
+                    return (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => toggleVisibleRole(r.id)}
+                        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition ${
+                          on ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-500 hover:border-slate-300"
+                        }`}
+                      >
+                        <span className={`flex h-3.5 w-3.5 items-center justify-center rounded-sm border ${on ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300"}`}>
+                          {on && <Check className="w-2.5 h-2.5" />}
+                        </span>
+                        {ml(r.nameJson)}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2 border-t border-slate-100 pt-4">
@@ -700,6 +976,66 @@ export default function EntityViewsPage() {
               )}
             </div>
 
+            {viewType === "pivot" && (
+              <div className="space-y-3 border-t border-slate-100 pt-4">
+                <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+                  <Table2 className="w-4 h-4 text-blue-600" />
+                  {t("pivot.configTitle", "Конфигурация сводной таблицы")}
+                </div>
+                <PivotDimEditor
+                  label={t("pivot.rows", "Строки")}
+                  dim={pivotRows}
+                  onChange={setPivotRows}
+                  dimFields={pivotDimFields}
+                  ml={ml}
+                  t={t}
+                />
+                <div className="flex items-center gap-2">
+                  <Switch checked={pivotColsOn} onCheckedChange={setPivotColsOn} />
+                  <Label className="cursor-pointer text-sm">{t("pivot.enableCols", "Добавить измерение столбцов")}</Label>
+                </div>
+                {pivotColsOn && (
+                  <PivotDimEditor
+                    label={t("pivot.cols", "Столбцы")}
+                    dim={pivotCols}
+                    onChange={setPivotCols}
+                    dimFields={pivotDimFields}
+                    ml={ml}
+                    t={t}
+                  />
+                )}
+                <div className="space-y-1.5">
+                  <Label className="text-sm">{t("pivot.measure", "Мера (значение в ячейках)")}</Label>
+                  <div className="flex items-center gap-2">
+                    <Select value={pivotAgg} onValueChange={(v) => setPivotAgg(v as "count" | "sum")}>
+                      <SelectTrigger className="h-8 text-sm w-40"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="count">{t("pivot.aggCount", "Количество записей")}</SelectItem>
+                        <SelectItem value="sum">{t("pivot.aggSum", "Сумма поля")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {pivotAgg === "sum" && (
+                      <Select value={pivotMeasureField} onValueChange={setPivotMeasureField}>
+                        <SelectTrigger className="h-8 text-sm flex-1">
+                          <SelectValue placeholder={t("pivot.selectNumberField", "числовое поле…")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {pivotSumFields.length === 0 ? (
+                            <div className="px-2 py-1.5 text-xs text-slate-400">{t("pivot.noNumberFields", "Нет числовых полей в сводных")}</div>
+                          ) : (
+                            pivotSumFields.map((f: Field) => (
+                              <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson)}</SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {viewType === "table" && (
             <div className="space-y-2 border-t border-slate-100 pt-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
@@ -741,6 +1077,7 @@ export default function EntityViewsPage() {
                 </div>
               )}
             </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("views.cancel", "Отмена")}</Button>

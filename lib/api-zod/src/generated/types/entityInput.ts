@@ -16,6 +16,7 @@ export interface EntityInput {
   /** @nullable */
   pageId?: number | null;
   defaultSortJson?: SortSpec[];
+  pivotEnabled?: boolean;
   sortOrder?: number;
   isActive?: boolean;
 }
