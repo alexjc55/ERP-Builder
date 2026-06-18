@@ -7114,5 +7114,365 @@
     "ru": "Тип отображения",
     "en": "Display type",
     "he": "סוג תצוגה"
+  },
+  {
+    "key": "common.create",
+    "ru": "Создать",
+    "en": "Create",
+    "he": "צור"
+  },
+  {
+    "key": "common.loading",
+    "ru": "Загрузка...",
+    "en": "Loading...",
+    "he": "טוען..."
+  },
+  {
+    "key": "dash.addTerm",
+    "ru": "Поле",
+    "en": "Field",
+    "he": "שדה"
+  },
+  {
+    "key": "dash.chartCountField",
+    "ru": "Поле (непустые значения)",
+    "en": "Field (non-empty values)",
+    "he": "שדה (ערכים לא ריקים)"
+  },
+  {
+    "key": "dash.chartNeedsField",
+    "ru": "Выберите поле страницы для графика",
+    "en": "Select a page field for the chart",
+    "he": "בחר שדה עמוד לתרשים"
+  },
+  {
+    "key": "dash.chartNeedsPage",
+    "ru": "Выберите страницу для графика",
+    "en": "Select a page for the chart",
+    "he": "בחר עמוד לתרשים"
+  },
+  {
+    "key": "dash.fieldsCount",
+    "ru": "Полей",
+    "en": "Fields",
+    "he": "שדות"
+  },
+  {
+    "key": "dash.formulaInsertMetric",
+    "ru": "Вставить метрику:",
+    "en": "Insert metric:",
+    "he": "הוסף מדד:"
+  },
+  {
+    "key": "dash.formulaInsertTerm",
+    "ru": "Вставить поле:",
+    "en": "Insert field:",
+    "he": "הוסף שדה:"
+  },
+  {
+    "key": "dash.formulaInsertValue",
+    "ru": "Вставить значение:",
+    "en": "Insert value:",
+    "he": "הוסף ערך:"
+  },
+  {
+    "key": "dash.formulaRequired",
+    "ru": "Формула",
+    "en": "Formula",
+    "he": "נוסחה"
+  },
+  {
+    "key": "dash.formulaTerms",
+    "ru": "Поля формулы",
+    "en": "Formula fields",
+    "he": "שדות הנוסחה"
+  },
+  {
+    "key": "dash.formulaWidgetFormulaHint",
+    "ru": "Комбинируйте поля по ключу: {m1}. Без формулы показывается первое поле.",
+    "en": "Combine fields by key: {m1}. Without a formula the first field is shown.",
+    "he": "שלב שדות לפי מפתח: {m1}. ללא נוסחה מוצג השדה הראשון."
+  },
+  {
+    "key": "dash.formulaWidgetHint",
+    "ru": "Добавьте поля из разных сущностей и полей страниц как слагаемые, затем объедините их в формуле.",
+    "en": "Add fields from different entities and page fields as terms, then combine them in a formula.",
+    "he": "הוסף שדות מישויות שונות ומשדות עמוד כאיברים, ואז שלב אותם בנוסחה."
+  },
+  {
+    "key": "dash.metricNeedsPage",
+    "ru": "Выберите страницу для каждой метрики",
+    "en": "Select a page for each metric",
+    "he": "בחר עמוד לכל מדד"
+  },
+  {
+    "key": "dash.metricNeedsPageField",
+    "ru": "Выберите поле страницы для метрики",
+    "en": "Select a page field for the metric",
+    "he": "בחר שדה עמוד למדד"
+  },
+  {
+    "key": "dash.selectPage",
+    "ru": "Страница",
+    "en": "Page",
+    "he": "עמוד"
+  },
+  {
+    "key": "dash.sourceEntity",
+    "ru": "Сущность",
+    "en": "Entity",
+    "he": "ישות"
+  },
+  {
+    "key": "dash.sourcePage",
+    "ru": "Поле страницы",
+    "en": "Page field",
+    "he": "שדה עמוד"
+  },
+  {
+    "key": "dash.typeFormula",
+    "ru": "Формула",
+    "en": "Formula",
+    "he": "נוסחה"
+  },
+  {
+    "key": "dash.valueSource",
+    "ru": "Источник данных",
+    "en": "Data source",
+    "he": "מקור נתונים"
+  },
+  {
+    "key": "fields.isKey",
+    "ru": "Ключевое поле (уникальное)",
+    "en": "Key field (unique)",
+    "he": "שדה מפתח (ייחודי)"
+  },
+  {
+    "key": "fields.lockAfterCreate",
+    "ru": "Запрет изменения после создания",
+    "en": "Lock after creation",
+    "he": "נעילה לאחר יצירה"
+  },
+  {
+    "key": "fields.lockAfterCreateRelationHint",
+    "ru": "Для связанного поля: после того как связь установлена, её нельзя будет изменить или очистить.",
+    "en": "For a linked field: once the link is set, it cannot be changed or cleared.",
+    "he": "לשדה מקושר: לאחר שהקישור נקבע, לא ניתן לשנות או לנקות אותו."
+  },
+  {
+    "key": "fields.relatedFilterField",
+    "ru": "Поле фильтрации в связанной сущности",
+    "en": "Filter field in the related entity",
+    "he": "שדה סינון בישות המקושרת"
+  },
+  {
+    "key": "fields.relatedFilterFieldPlaceholder",
+    "ru": "Выберите поле",
+    "en": "Select a field",
+    "he": "בחר שדה"
+  },
+  {
+    "key": "fields.relatedFilterHint",
+    "ru": "Список связанных записей будет сужен до тех, у кого это поле совпадает со значением родительского поля в текущей строке.",
+    "en": "The list of related records is narrowed to those whose this field matches the parent field value in the current row.",
+    "he": "רשימת הרשומות המקושרות מצומצמת לאלה ששדה זה בהן תואם לערך שדה האב בשורה הנוכחית."
+  },
+  {
+    "key": "fields.relatedFilterNone",
+    "ru": "Без фильтра",
+    "en": "No filter",
+    "he": "ללא סינון"
+  },
+  {
+    "key": "pages.mirrorLabelInlineHint",
+    "ru": "Переименовать заголовки полей можно прямо на странице: «Режим настройки» → клик по заголовку.",
+    "en": "You can rename field headers right on the page: «Setup mode» → click a header.",
+    "he": "ניתן לשנות שמות כותרות שדות ישירות בעמוד: «מצב הגדרה» ← לחיצה על כותרת."
+  },
+  {
+    "key": "records.editLinkedTitle",
+    "ru": "Редактировать связанную запись",
+    "en": "Edit linked record",
+    "he": "ערוך רשומה מקושרת"
+  },
+  {
+    "key": "records.loading",
+    "ru": "Загрузка...",
+    "en": "Loading...",
+    "he": "טוען..."
+  },
+  {
+    "key": "records.mirrorLabelDesc",
+    "ru": "Переименование действует только на этой зеркальной странице. Исходное поле сущности не меняется.",
+    "en": "The rename applies only to this mirror page. The source entity field is not changed.",
+    "he": "שינוי השם חל רק על עמוד שיקוף זה. שדה הישות המקורי אינו משתנה."
+  },
+  {
+    "key": "records.mirrorLabelEdit",
+    "ru": "Переименовать заголовок на этой странице",
+    "en": "Rename header on this page",
+    "he": "שנה שם כותרת בעמוד זה"
+  },
+  {
+    "key": "records.mirrorLabelInput",
+    "ru": "Новый заголовок (пусто = как в источнике)",
+    "en": "New header (empty = same as source)",
+    "he": "כותרת חדשה (ריק = כמו במקור)"
+  },
+  {
+    "key": "records.mirrorLabelSaveError",
+    "ru": "Не удалось сохранить заголовок",
+    "en": "Failed to save header",
+    "he": "שמירת הכותרת נכשלה"
+  },
+  {
+    "key": "records.mirrorLabelSaved",
+    "ru": "Заголовок обновлён",
+    "en": "Header updated",
+    "he": "הכותרת עודכנה"
+  },
+  {
+    "key": "records.mirrorLabelSource",
+    "ru": "В источнике",
+    "en": "In source",
+    "he": "במקור"
+  },
+  {
+    "key": "records.mirrorLabelTitle",
+    "ru": "Заголовок поля на этой странице",
+    "en": "Field header on this page",
+    "he": "כותרת השדה בעמוד זה"
+  },
+  {
+    "key": "records.numberDotHint",
+    "ru": "Используйте точку как десятичный разделитель, например 11.6",
+    "en": "Use a dot as the decimal separator, e.g. 11.6",
+    "he": "השתמש בנקודה כמפריד עשרוני, לדוגמה 11.6"
+  },
+  {
+    "key": "records.numberPlaceholder",
+    "ru": "Например: 11.6",
+    "en": "For example: 11.6",
+    "he": "לדוגמה: 11.6"
+  },
+  {
+    "key": "records.openLinkedRecord",
+    "ru": "Открыть связанную запись",
+    "en": "Open linked record",
+    "he": "פתח רשומה מקושרת"
+  },
+  {
+    "key": "records.relatedCreate",
+    "ru": "Добавить запись",
+    "en": "Add record",
+    "he": "הוסף רשומה"
+  },
+  {
+    "key": "records.relatedCreateFailed",
+    "ru": "Не удалось создать запись",
+    "en": "Failed to create record",
+    "he": "יצירת הרשומה נכשלה"
+  },
+  {
+    "key": "records.relatedCreateNoFields",
+    "ru": "Нет полей для заполнения",
+    "en": "No fields to fill in",
+    "he": "אין שדות למילוי"
+  },
+  {
+    "key": "records.relatedCreateTitle",
+    "ru": "Новая связанная запись",
+    "en": "New linked record",
+    "he": "רשומה מקושרת חדשה"
+  },
+  {
+    "key": "records.relatedCreatedNotLinked",
+    "ru": "Запись создана, но не привязана",
+    "en": "Record created but not linked",
+    "he": "הרשומה נוצרה אך לא קושרה"
+  },
+  {
+    "key": "records.relatedPickParentFirst",
+    "ru": "Сначала заполните родительское поле",
+    "en": "Fill in the parent field first",
+    "he": "מלא תחילה את שדה האב"
+  },
+  {
+    "key": "records.relatedSelect",
+    "ru": "Выберите запись",
+    "en": "Select a record",
+    "he": "בחר רשומה"
+  },
+  {
+    "key": "roles.hideActionsColumn",
+    "ru": "Скрыть колонку «Действия»",
+    "en": "Hide the «Actions» column",
+    "he": "הסתר את עמודת «פעולות»"
+  },
+  {
+    "key": "roles.hideStatusColumn",
+    "ru": "Скрыть колонку «Статус»",
+    "en": "Hide the «Status» column",
+    "he": "הסתר את עמודת «סטטוס»"
+  },
+  {
+    "key": "roles.ownerViaRelation",
+    "ru": "по связи",
+    "en": "via relation",
+    "he": "דרך קשר"
+  },
+  {
+    "key": "views.boolFalse",
+    "ru": "Нет",
+    "en": "No",
+    "he": "לא"
+  },
+  {
+    "key": "views.boolTrue",
+    "ru": "Да",
+    "en": "Yes",
+    "he": "כן"
+  },
+  {
+    "key": "views.defaultFiltersNone",
+    "ru": "Без фильтров",
+    "en": "No filters",
+    "he": "ללא סינונים"
+  },
+  {
+    "key": "views.defaultViewCardDesc",
+    "ru": "Применяются, когда вид не выбран. Без настройки — все записи по дате создания (сначала новые).",
+    "en": "Applied when no view is selected. Without configuration — all records by creation date (newest first).",
+    "he": "חלים כאשר לא נבחרה תצוגה. ללא הגדרה — כל הרשומות לפי תאריך יצירה (החדשות תחילה)."
+  },
+  {
+    "key": "views.defaultViewCardTitle",
+    "ru": "Фильтры и сортировка по умолчанию",
+    "en": "Default filters and sorting",
+    "he": "סינון ומיון ברירת מחדל"
+  },
+  {
+    "key": "views.defaultViewDialogDesc",
+    "ru": "Эти фильтры и сортировка применяются к записям, когда вид не выбран. Выбранный вид использует свои собственные настройки.",
+    "en": "These filters and sorting apply to records when no view is selected. A selected view uses its own settings.",
+    "he": "סינון ומיון אלה חלים על הרשומות כאשר לא נבחרה תצוגה. תצוגה שנבחרה משתמשת בהגדרות שלה."
+  },
+  {
+    "key": "views.defaultViewTitle",
+    "ru": "Настройки по умолчанию",
+    "en": "Default settings",
+    "he": "הגדרות ברירת מחדל"
+  },
+  {
+    "key": "views.noUsers",
+    "ru": "Нет пользователей",
+    "en": "No users",
+    "he": "אין משתמשים"
+  },
+  {
+    "key": "views.selectUser",
+    "ru": "выберите пользователя",
+    "en": "select a user",
+    "he": "בחר משתמש"
   }
 ]
