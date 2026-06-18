@@ -50,7 +50,14 @@ import {
   type Status,
   type Role,
   type MultilingualText,
+  type PivotConfig,
+  type PivotDimension,
+  type PivotMeasure,
+  type PivotDimensionSource,
+  type PivotDimensionDatePeriod,
+  type PivotResult,
 } from "@workspace/api-client-react";
+import { PivotResultTable } from "./PivotView";
 import {
   ResponsiveContainer,
   BarChart,
@@ -874,6 +881,27 @@ function WidgetCard({
     );
   }
 
+  if (w.widgetType === "pivot") {
+    const pivot = w.pivot;
+    const hasData = !!pivot && pivot.rows.length > 0;
+    return (
+      <Card className="h-full border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+        <CardContent className="flex h-full flex-col p-4">
+          <p className="text-sm font-medium text-slate-500 truncate">{ml(w.titleJson)}</p>
+          <div className="flex-1 min-h-0 mt-2 overflow-auto">
+            {hasData ? (
+              <PivotResultTable result={pivot} />
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-slate-400">
+                {t("dash.noData", "Нет данных")}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const Icon = w.icon ? getIconComponent(w.icon, LayoutDashboard) : null;
   const value = resolveValue(w);
   const colorClass = w.color || DEFAULT_COLOR;
@@ -1003,6 +1031,8 @@ function EditWidgetCell({
       ? `${t("dash.chartWidget", "График")} · ${w.config.chart?.type ?? ""}`
       : widgetType === "table"
         ? `${t("dash.tableWidget", "Таблица")} · ${t("dash.columnsCount", "Колонок")}: ${w.config.table?.fieldKeys?.length ?? 0}`
+        : widgetType === "pivot"
+        ? t("dash.pivotWidget", "Сводная таблица")
         : widgetType === "formula"
           ? `${t("dash.typeFormula", "Формула")} · ${t("dash.fieldsCount", "Полей")}: ${w.config.metrics?.length ?? 0}`
           : `${t("dash.metricsCount", "Метрик")}: ${w.config.metrics?.length ?? 0}${w.config.formula ? ` · ${t("dash.hasFormula", "формула")}` : ""}`;
@@ -1457,7 +1487,55 @@ type TableDraft = {
   relatedColumns: TableRelatedColumnDraft[];
 };
 
-type WidgetTypeChoice = "metric" | "formula" | "chart" | "table" | "notes";
+type WidgetTypeChoice = "metric" | "formula" | "chart" | "table" | "notes" | "pivot";
+
+// Pivot dimension draft (dashboard widget editor: entity field or record status).
+type PivotDraftDim = { source: "entity" | "status"; fieldKey: string; datePeriod: PivotDimensionDatePeriod };
+type PivotDraft = {
+  entityId: number | null;
+  rows: PivotDraftDim;
+  colsOn: boolean;
+  cols: PivotDraftDim;
+  agg: "count" | "sum";
+  measureField: string;
+  statusIds: number[];
+};
+
+// Field types eligible as a pivot grouping dimension (mirrors entity-views).
+const PIVOT_DIM_TYPES = new Set([
+  "text", "textarea", "number", "boolean", "date", "datetime",
+  "select", "email", "url", "phone", "user", "relation", "lookup",
+]);
+const isPivotDateType = (t: string) => t === "date" || t === "datetime";
+
+function emptyPivotDraft(): PivotDraft {
+  return {
+    entityId: null,
+    rows: { source: "status", fieldKey: "", datePeriod: null },
+    colsOn: false,
+    cols: { source: "status", fieldKey: "", datePeriod: null },
+    agg: "count",
+    measureField: "",
+    statusIds: [],
+  };
+}
+
+function pivotDraftFromConfig(spec: { entityId: number; pivot: PivotConfig; statusIds?: number[] | null } | null | undefined): PivotDraft {
+  if (!spec) return emptyPivotDraft();
+  const dimToDraft = (d: PivotDimension | undefined): PivotDraftDim =>
+    d && d.source === "entity"
+      ? { source: "entity", fieldKey: d.fieldKey ?? "", datePeriod: d.datePeriod ?? null }
+      : { source: "status", fieldKey: "", datePeriod: null };
+  return {
+    entityId: spec.entityId,
+    rows: dimToDraft(spec.pivot.rows),
+    colsOn: !!spec.pivot.cols,
+    cols: spec.pivot.cols ? dimToDraft(spec.pivot.cols) : { source: "status", fieldKey: "", datePeriod: null },
+    agg: spec.pivot.measure?.agg === "sum" ? "sum" : "count",
+    measureField: spec.pivot.measure?.fieldKey ?? "",
+    statusIds: spec.statusIds ?? [],
+  };
+}
 
 type NoteSourceDraft = {
   key: string;
@@ -1526,9 +1604,11 @@ function WidgetEditorDialog({
         ? "table"
         : widget?.config.widgetType === "notes"
           ? "notes"
-          : widget?.config.widgetType === "formula"
-            ? "formula"
-            : "metric",
+          : widget?.config.widgetType === "pivot"
+            ? "pivot"
+            : widget?.config.widgetType === "formula"
+              ? "formula"
+              : "metric",
   );
   const [icon, setIcon] = useState(widget ? (widget.icon ?? "") : "");
   const [color, setColor] = useState(widget?.color || DEFAULT_COLOR);
@@ -1569,6 +1649,7 @@ function WidgetEditorDialog({
       pageId: c?.pageId ?? null,
     };
   });
+  const [pivot, setPivot] = useState<PivotDraft>(() => pivotDraftFromConfig(widget?.config.pivot));
   const [table, setTable] = useState<TableDraft>(() => {
     const tb = widget?.config.table;
     return {
@@ -1739,6 +1820,54 @@ function WidgetEditorDialog({
       };
     }
 
+    if (widgetType === "pivot") {
+      if (pivot.entityId == null) {
+        toast({ title: t("dash.pivotNeedsEntity", "Выберите сущность для сводной таблицы"), variant: "destructive" });
+        return null;
+      }
+      if (pivot.rows.source === "entity" && !pivot.rows.fieldKey) {
+        toast({ title: t("dash.pivotNeedsRows", "Выберите поле для строк сводной таблицы"), variant: "destructive" });
+        return null;
+      }
+      if (pivot.colsOn && pivot.cols.source === "entity" && !pivot.cols.fieldKey) {
+        toast({ title: t("dash.pivotNeedsCols", "Выберите поле для столбцов сводной таблицы"), variant: "destructive" });
+        return null;
+      }
+      if (pivot.agg === "sum" && !pivot.measureField) {
+        toast({ title: t("dash.pivotNeedsMeasure", "Для суммы выберите числовое поле"), variant: "destructive" });
+        return null;
+      }
+      // The PivotEditor keeps datePeriod non-null only for date-like dims, so the
+      // draft value can be trusted here without re-resolving the field type.
+      const draftToDim = (d: PivotDraftDim): PivotDimension =>
+        d.source === "status"
+          ? { source: "status" as PivotDimensionSource }
+          : {
+              source: "entity" as PivotDimensionSource,
+              fieldKey: d.fieldKey,
+              datePeriod: d.datePeriod,
+            };
+      const measure: PivotMeasure =
+        pivot.agg === "sum"
+          ? { agg: "sum", source: "entity", fieldKey: pivot.measureField }
+          : { agg: "count" };
+      const pivotConfig: PivotConfig = { rows: draftToDim(pivot.rows), measure };
+      if (pivot.colsOn) pivotConfig.cols = draftToDim(pivot.cols);
+      return {
+        ...base,
+        config: {
+          widgetType: "pivot",
+          colorStyle,
+          textColor,
+          pivot: {
+            entityId: pivot.entityId,
+            pivot: pivotConfig,
+            statusIds: pivot.statusIds.length > 0 ? pivot.statusIds : null,
+          },
+        },
+      };
+    }
+
     if (widgetType === "chart") {
       if (chart.source === "page") {
         if (chart.pageId == null) {
@@ -1903,6 +2032,7 @@ function WidgetEditorDialog({
                   <SelectItem value="formula">{t("dash.typeFormula", "Формула")}</SelectItem>
                   <SelectItem value="chart">{t("dash.typeChart", "График")}</SelectItem>
                   <SelectItem value="table">{t("dash.typeTable", "Таблица")}</SelectItem>
+                  <SelectItem value="pivot">{t("dash.typePivot", "Сводная таблица")}</SelectItem>
                   <SelectItem value="notes">{t("dash.typeNotes", "Заметки")}</SelectItem>
                 </SelectContent>
               </Select>
@@ -2000,6 +2130,8 @@ function WidgetEditorDialog({
             <ChartEditor chart={chart} entities={entities} onChange={(patch) => setChart((prev) => ({ ...prev, ...patch }))} ml={ml} t={t} />
           ) : widgetType === "table" ? (
             <TableEditor table={table} entities={entities} onChange={(patch) => setTable((prev) => ({ ...prev, ...patch }))} ml={ml} t={t} />
+          ) : widgetType === "pivot" ? (
+            <PivotEditor pivot={pivot} entities={entities} onChange={(patch) => setPivot((prev) => ({ ...prev, ...patch }))} ml={ml} t={t} />
           ) : (
             <>
               {widgetType === "formula" && (
@@ -2076,6 +2208,207 @@ function WidgetEditorDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Row/column dimension picker for the pivot widget editor (entity field or status). */
+function PivotWidgetDimEditor({
+  label,
+  dim,
+  onChange,
+  dimFields,
+  ml,
+  t,
+}: {
+  label: string;
+  dim: PivotDraftDim;
+  onChange: (d: PivotDraftDim) => void;
+  dimFields: Field[];
+  ml: (v: unknown) => string;
+  t: (key: string, fallback: string) => string;
+}) {
+  const selectedField = dim.source === "entity" ? dimFields.find((f) => f.fieldKey === dim.fieldKey) : undefined;
+  const isDate = selectedField ? isPivotDateType(selectedField.fieldType) : false;
+  const selectValue = dim.source === "status" ? "__status__" : dim.fieldKey;
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs text-slate-400">{label}</p>
+      <div className="flex items-center gap-2">
+        <Select
+          value={selectValue}
+          onValueChange={(v) => {
+            if (v === "__status__") {
+              onChange({ source: "status", fieldKey: "", datePeriod: null });
+            } else {
+              const f = dimFields.find((x) => x.fieldKey === v);
+              onChange({ source: "entity", fieldKey: v, datePeriod: f && isPivotDateType(f.fieldType) ? (dim.datePeriod ?? "month") : null });
+            }
+          }}
+        >
+          <SelectTrigger className="h-8 text-sm flex-1"><SelectValue placeholder={t("pivot.selectDim", "поле…")} /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__status__">{t("pivot.dimStatus", "Статус записи")}</SelectItem>
+            {dimFields.map((f) => (
+              <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {isDate && (
+          <Select value={dim.datePeriod ?? "month"} onValueChange={(v) => onChange({ ...dim, datePeriod: v as PivotDimensionDatePeriod })}>
+            <SelectTrigger className="h-8 text-sm w-32"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="year">{t("pivot.periodYear", "Год")}</SelectItem>
+              <SelectItem value="quarter">{t("pivot.periodQuarter", "Квартал")}</SelectItem>
+              <SelectItem value="month">{t("pivot.periodMonth", "Месяц")}</SelectItem>
+              <SelectItem value="day">{t("pivot.periodDay", "День")}</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PivotEditor({
+  pivot,
+  entities,
+  onChange,
+  ml,
+  t,
+}: {
+  pivot: PivotDraft;
+  entities: Entity[];
+  onChange: (patch: Partial<PivotDraft>) => void;
+  ml: (v: unknown) => string;
+  t: (key: string, fallback: string) => string;
+}) {
+  const { data: fields = [] } = useListEntityFields(pivot.entityId ?? 0, {
+    query: { enabled: pivot.entityId != null, queryKey: getListEntityFieldsQueryKey(pivot.entityId ?? 0) },
+  });
+  const { data: statuses = [] } = useListEntityStatuses(pivot.entityId ?? 0, {
+    query: { enabled: pivot.entityId != null, queryKey: getListEntityStatusesQueryKey(pivot.entityId ?? 0) },
+  });
+  const activeFields = fields.filter((f: Field) => f.isActive);
+  const dimFields = activeFields.filter((f: Field) => f.pivotEnabled && PIVOT_DIM_TYPES.has(f.fieldType));
+  const sumFields = activeFields.filter((f: Field) => f.pivotEnabled && f.fieldType === "number");
+  const pivotEnabledEntity = entities.find((e) => e.id === pivot.entityId)?.pivotEnabled ?? false;
+
+  const toggleStatus = (sid: number) => {
+    const next = pivot.statusIds.includes(sid)
+      ? pivot.statusIds.filter((s) => s !== sid)
+      : [...pivot.statusIds, sid];
+    onChange({ statusIds: next });
+  };
+
+  return (
+    <div className="space-y-3 rounded-md border border-slate-200 p-3">
+      <Label>{t("dash.pivotSettings", "Настройки сводной таблицы")}</Label>
+      <div className="space-y-1.5">
+        <p className="text-xs text-slate-400">{t("dash.selectEntity", "Сущность")}</p>
+        <Select
+          value={pivot.entityId != null ? String(pivot.entityId) : ""}
+          onValueChange={(v) =>
+            onChange({
+              entityId: Number(v),
+              rows: { source: "status", fieldKey: "", datePeriod: null },
+              colsOn: false,
+              cols: { source: "status", fieldKey: "", datePeriod: null },
+              agg: "count",
+              measureField: "",
+              statusIds: [],
+            })
+          }
+        >
+          <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectEntity", "Сущность")} /></SelectTrigger>
+          <SelectContent>
+            {entities.filter((e) => e.isActive).map((e) => (
+              <SelectItem key={e.id} value={String(e.id)}>{ml(e.nameJson)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {pivot.entityId != null && !pivotEnabledEntity && (
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-700">
+          {t("dash.pivotNotEnabled", "Для этой сущности не включён режим сводной таблицы. Включите его в настройках сущности.")}
+        </p>
+      )}
+
+      {pivot.entityId != null && pivotEnabledEntity && (
+        <>
+          <PivotWidgetDimEditor
+            label={t("pivot.rows", "Строки")}
+            dim={pivot.rows}
+            onChange={(d) => onChange({ rows: d })}
+            dimFields={dimFields}
+            ml={ml}
+            t={t}
+          />
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox checked={pivot.colsOn} onCheckedChange={(v) => onChange({ colsOn: v === true })} />
+            {t("pivot.enableCols", "Добавить измерение столбцов")}
+          </label>
+          {pivot.colsOn && (
+            <PivotWidgetDimEditor
+              label={t("pivot.cols", "Столбцы")}
+              dim={pivot.cols}
+              onChange={(d) => onChange({ cols: d })}
+              dimFields={dimFields}
+              ml={ml}
+              t={t}
+            />
+          )}
+          <div className="space-y-1.5">
+            <p className="text-xs text-slate-400">{t("pivot.measure", "Мера (значение в ячейках)")}</p>
+            <div className="flex items-center gap-2">
+              <Select value={pivot.agg} onValueChange={(v) => onChange({ agg: v as "count" | "sum", measureField: "" })}>
+                <SelectTrigger className="h-8 text-sm w-40"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="count">{t("pivot.aggCount", "Количество записей")}</SelectItem>
+                  <SelectItem value="sum">{t("pivot.aggSum", "Сумма поля")}</SelectItem>
+                </SelectContent>
+              </Select>
+              {pivot.agg === "sum" && (
+                <Select value={pivot.measureField} onValueChange={(v) => onChange({ measureField: v })}>
+                  <SelectTrigger className="h-8 text-sm flex-1">
+                    <SelectValue placeholder={t("pivot.selectNumberField", "числовое поле…")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sumFields.length === 0 ? (
+                      <div className="px-2 py-1.5 text-xs text-slate-400">{t("pivot.noNumberFields", "Нет числовых полей в сводных")}</div>
+                    ) : (
+                      sumFields.map((f: Field) => (
+                        <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson)}</SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </div>
+
+          {statuses.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs text-slate-400">{t("dash.statusFilter", "Статусы (пусто = все)")}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {statuses.map((s: Status) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => toggleStatus(s.id)}
+                    className={pivot.statusIds.includes(s.id) ? "" : "opacity-50"}
+                  >
+                    <Badge style={{ backgroundColor: s.color }} className="border-0 text-white font-normal cursor-pointer">
+                      {ml(s.nameJson)}
+                    </Badge>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 

@@ -3963,6 +3963,21 @@ components:
         relatedFieldKey:
           type: string
 
+    WidgetPivotConfig:
+      type: object
+      required: [entityId, pivot]
+      description: Pivot (cross-tab) widget config. The pivot is computed admin-authoritatively over the entity's non-archived records (independent of the viewing role's data permissions); access is governed by the widget's role visibility. The entity must have pivot enabled and dimensions/measures must reference pivot-enabled fields.
+      properties:
+        entityId:
+          type: integer
+        pivot:
+          $ref: "#/components/schemas/PivotConfig"
+        statusIds:
+          type: ["array", "null"]
+          items:
+            type: integer
+          description: Restrict to records in these statuses; empty/null = all statuses
+
     NoteCellSource:
       type: object
       required: [key, sourceKind, entityId]
@@ -4050,8 +4065,8 @@ components:
       properties:
         widgetType:
           type: ["string", "null"]
-          enum: [metric, formula, chart, table, notes, null]
-          description: metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.
+          enum: [metric, formula, chart, table, notes, pivot, null]
+          description: metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab.
         metrics:
           type: array
           items:
@@ -4068,6 +4083,8 @@ components:
           $ref: "#/components/schemas/ChartConfig"
         table:
           $ref: "#/components/schemas/TableConfig"
+        pivot:
+          $ref: "#/components/schemas/WidgetPivotConfig"
         colorStyle:
           type: ["string", "null"]
           enum: [icon, border, fill, null]
@@ -4227,7 +4244,7 @@ components:
           type: integer
         widgetType:
           type: ["string", "null"]
-          enum: [metric, formula, chart, table, notes, null]
+          enum: [metric, formula, chart, table, notes, pivot, null]
         chartType:
           type: ["string", "null"]
         showValues:
@@ -4251,6 +4268,11 @@ components:
         tableEntityId:
           type: ["integer", "null"]
           description: For table widgets, the source entity id (lets the client link rows to the entity's page)
+        pivot:
+          description: Computed cross-tab for pivot widgets (admin-authoritative real totals, status-filtered). Null for other widget types.
+          oneOf:
+            - $ref: "#/components/schemas/PivotResult"
+            - type: "null"
         formula:
           type: ["string", "null"]
         format:
@@ -4323,6 +4345,11 @@ components:
           description: Filters applied to the records page when no view is selected (the main view).
           items:
             $ref: "#/components/schemas/FilterCondition"
+        defaultPivotJson:
+          description: Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot.
+          anyOf:
+            - $ref: "#/components/schemas/PivotConfig"
+            - type: "null"
         pivotEnabled:
           type: boolean
           description: Enables the "Сводная таблица" (pivot) report mode for this entity's records page.
@@ -4359,6 +4386,11 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FilterCondition"
+        defaultPivotJson:
+          description: Default pivot config for the records page when no view is selected. Null = no default pivot.
+          anyOf:
+            - $ref: "#/components/schemas/PivotConfig"
+            - type: "null"
         pivotEnabled:
           type: boolean
         sortOrder:
@@ -4388,6 +4420,11 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FilterCondition"
+        defaultPivotJson:
+          description: Default pivot config for the records page when no view is selected. Null = no default pivot.
+          anyOf:
+            - $ref: "#/components/schemas/PivotConfig"
+            - type: "null"
         pivotEnabled:
           type: boolean
         sortOrder:

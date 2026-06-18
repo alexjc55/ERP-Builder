@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import {
   useListEntityViews,
@@ -8,6 +8,7 @@ import {
   useReorderViews,
   useListEntities,
   useUpdateEntity,
+  useGetEntityFilterValues,
   useListEntityFields,
   useUpdateField,
   useListRoles,
@@ -68,6 +69,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Loader2, ArrowLeft, LayoutList, Star, Filter, ArrowDownUp, X, ChevronUp, ChevronDown, Check, Table2, Shield } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
 import { slugifyKey, uniqueKey } from "@/lib/keys";
+import { ValueChecklistPicker } from "@/components/FilterValuePicker";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
@@ -98,6 +100,11 @@ function operatorNeedsValue(op: FilterOperator): boolean {
 function operatorIsArray(op: FilterOperator): boolean {
   return FILTER_OPERATORS.find((o) => o.value === op)?.arrayValue ?? false;
 }
+
+// Operators whose value is one or more discrete equality matches (not a substring
+// or numeric range). For these the editor offers the same searchable existing-values
+// checklist as the live records bar; substring/range operators keep a free text input.
+const DISCRETE_OPERATORS = new Set<FilterOperator>(["eq", "neq", "in"]);
 
 function extractError(err: unknown): string | undefined {
   if (err && typeof err === "object") {
@@ -354,6 +361,7 @@ function FilterValueEditor({
   onChange,
   t,
   userOptions,
+  getOptions,
 }: {
   field: Field | undefined;
   operator: FilterOperator;
@@ -361,6 +369,7 @@ function FilterValueEditor({
   onChange: (text: string) => void;
   t: (key: string, def: string) => string;
   userOptions: UserOption[];
+  getOptions?: (fieldKey: string) => Promise<string[]>;
 }) {
   if (!operatorNeedsValue(operator)) {
     return <div className="flex h-8 flex-1 items-center px-2 text-xs text-slate-400">—</div>;
@@ -394,6 +403,45 @@ function FilterValueEditor({
   if (ft === "datetime" && !isArray) {
     return <Input type="datetime-local" className="h-8 flex-1 text-sm" value={valueText} onChange={(e) => onChange(e.target.value)} />;
   }
+  // Discrete equality operators on any remaining field type: offer the SAME
+  // searchable existing-values checklist as the live records bar (shared component).
+  // Manual entry stays allowed so authors can target a value not yet present.
+  if (field && getOptions && DISCRETE_OPERATORS.has(operator)) {
+    const selectedVals = isArray
+      ? valueText.split(",").map((s) => s.trim()).filter((s) => s.length > 0)
+      : valueText.trim()
+        ? [valueText.trim()]
+        : [];
+    const commit = (vals: string[]) => onChange(isArray ? vals.join(", ") : vals[0] ?? "");
+    const labelFor =
+      ft === "boolean"
+        ? (v: string) => (v === "true" ? t("views.boolTrue", "Да") : t("views.boolFalse", "Нет"))
+        : undefined;
+    return (
+      <ValueChecklistPicker
+        fieldKey={field.fieldKey}
+        selected={selectedVals}
+        onChange={commit}
+        getOptions={getOptions}
+        labelFor={labelFor}
+        multiple={isArray}
+        allowManual
+        t={t}
+        trigger={
+          <Button type="button" variant="outline" className="h-8 flex-1 justify-between text-sm font-normal">
+            <span className="truncate text-left">
+              {selectedVals.length === 0 ? (
+                <span className="text-slate-400">{t("views.selectValue", "выберите значение")}</span>
+              ) : (
+                selectedVals.map((v) => (labelFor ? labelFor(v) : v)).join(", ")
+              )}
+            </span>
+            <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-60" />
+          </Button>
+        }
+      />
+    );
+  }
   return (
     <Input
       className="h-8 flex-1 text-sm"
@@ -421,6 +469,7 @@ function FilterRowsEditor({
   onRemove,
   conjunction,
   onConjunctionChange,
+  getOptions,
 }: {
   filters: DraftFilter[];
   fields: Field[];
@@ -432,6 +481,7 @@ function FilterRowsEditor({
   onRemove: (idx: number) => void;
   conjunction?: "and" | "or";
   onConjunctionChange?: (v: "and" | "or") => void;
+  getOptions?: (fieldKey: string) => Promise<string[]>;
 }) {
   return (
     <div className="space-y-2 border-t border-slate-100 pt-4">
@@ -486,6 +536,7 @@ function FilterRowsEditor({
                 onChange={(text) => onUpdate(idx, { valueText: text })}
                 t={t}
                 userOptions={userOptions}
+                getOptions={getOptions}
               />
               <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-500 shrink-0" onClick={() => onRemove(idx)}>
                 <X className="w-3.5 h-3.5" />
@@ -582,6 +633,21 @@ export default function EntityViewsPage() {
 
   const { data: roles = [] } = useListRoles();
   const { data: userOptions = [] } = useListUserOptions();
+  // Searchable existing-values lookup for filter editors — same endpoint the live
+  // records bar uses, so the value picker is consistent. No active-filter context
+  // here (admin authoring), so it lists distinct values across all records.
+  const filterValuesMutation = useGetEntityFilterValues();
+  const getFilterOptions = useCallback(
+    async (fieldKey: string): Promise<string[]> => {
+      const res = await filterValuesMutation.mutateAsync({
+        entityId,
+        data: { field: fieldKey, filters: [] },
+      });
+      return res.values ?? [];
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [entityId],
+  );
   // Fields the admin has opted into as pivot dims/measures.
   const pivotDimFields = fields.filter((f: Field) => f.pivotEnabled && PIVOT_DIM_TYPES.has(f.fieldType));
   const pivotSumFields = fields.filter((f: Field) => f.pivotEnabled && f.fieldType === "number");
@@ -614,6 +680,14 @@ export default function EntityViewsPage() {
   const [defaultSortDialogOpen, setDefaultSortDialogOpen] = useState(false);
   const [defaultSorts, setDefaultSorts] = useState<DraftSort[]>([]);
   const [defaultFilters, setDefaultFilters] = useState<DraftFilter[]>([]);
+  // Default pivot (Сводная таблица): the pivot config used on the records page when
+  // no view is selected. Stored on the entity (defaultPivotJson), gated on pivotEnabled.
+  const [defaultPivotOn, setDefaultPivotOn] = useState(false);
+  const [defaultPivotRows, setDefaultPivotRows] = useState<DraftDim>({ source: "status", fieldKey: "", datePeriod: null });
+  const [defaultPivotColsOn, setDefaultPivotColsOn] = useState(false);
+  const [defaultPivotCols, setDefaultPivotCols] = useState<DraftDim>({ source: "status", fieldKey: "", datePeriod: null });
+  const [defaultPivotAgg, setDefaultPivotAgg] = useState<"count" | "sum">("count");
+  const [defaultPivotMeasureField, setDefaultPivotMeasureField] = useState<string>("");
   const entityDefaultSorts: SortSpec[] = Array.isArray(entity?.defaultSortJson)
     ? (entity.defaultSortJson as SortSpec[])
     : [];
@@ -776,6 +850,17 @@ export default function EntityViewsPage() {
         valueText: filterValueToText(f.value),
       })),
     );
+    const dp = (entity?.defaultPivotJson ?? null) as PivotConfig | null;
+    const dimToDraft = (d: PivotDimension | undefined): DraftDim =>
+      d && d.source !== "status"
+        ? { source: "entity", fieldKey: d.fieldKey ?? "", datePeriod: d.datePeriod ?? null }
+        : { source: "status", fieldKey: "", datePeriod: null };
+    setDefaultPivotOn(!!dp);
+    setDefaultPivotRows(dp ? dimToDraft(dp.rows) : { source: pivotDimFields[0] ? "entity" : "status", fieldKey: pivotDimFields[0]?.fieldKey ?? "", datePeriod: null });
+    setDefaultPivotColsOn(!!dp?.cols);
+    setDefaultPivotCols(dp?.cols ? dimToDraft(dp.cols) : { source: "status", fieldKey: "", datePeriod: null });
+    setDefaultPivotAgg(dp?.measure?.agg === "sum" ? "sum" : "count");
+    setDefaultPivotMeasureField(dp?.measure?.fieldKey ?? pivotSumFields[0]?.fieldKey ?? "");
     setDefaultSortDialogOpen(true);
   };
   const addDefaultSort = () => {
@@ -802,9 +887,39 @@ export default function EntityViewsPage() {
       if (value !== undefined) cond.value = value;
       return cond;
     });
+    let defaultPivotJson: PivotConfig | null = null;
+    if (entity?.pivotEnabled && defaultPivotOn) {
+      const draftToDim = (d: DraftDim): PivotDimension =>
+        d.source === "status"
+          ? { source: "status" as PivotDimensionSource }
+          : {
+              source: "entity" as PivotDimensionSource,
+              fieldKey: d.fieldKey,
+              datePeriod: isDateLikeType(fields.find((f: Field) => f.fieldKey === d.fieldKey)?.fieldType ?? "") ? d.datePeriod : null,
+            };
+      if (defaultPivotRows.source === "entity" && !defaultPivotRows.fieldKey) {
+        toast({ title: t("pivot.needRowField", "Выберите поле строк сводной таблицы"), variant: "destructive" });
+        return;
+      }
+      if (defaultPivotColsOn && defaultPivotCols.source === "entity" && !defaultPivotCols.fieldKey) {
+        toast({ title: t("pivot.needColField", "Выберите поле столбцов сводной таблицы"), variant: "destructive" });
+        return;
+      }
+      if (defaultPivotAgg === "sum" && !defaultPivotMeasureField) {
+        toast({ title: t("pivot.needMeasureField", "Выберите числовое поле для суммы"), variant: "destructive" });
+        return;
+      }
+      const measure: PivotMeasure =
+        defaultPivotAgg === "sum"
+          ? { agg: "sum", source: "entity", fieldKey: defaultPivotMeasureField }
+          : { agg: "count" };
+      const pivot: PivotConfig = { rows: draftToDim(defaultPivotRows), measure };
+      if (defaultPivotColsOn) pivot.cols = draftToDim(defaultPivotCols);
+      defaultPivotJson = pivot;
+    }
     updateEntityMutation.mutate({
       id: entityId,
-      data: { defaultSortJson: builtSorts, defaultFilterJson: builtFilters },
+      data: { defaultSortJson: builtSorts, defaultFilterJson: builtFilters, defaultPivotJson },
     });
   };
 
@@ -1177,6 +1292,7 @@ export default function EntityViewsPage() {
               onRemove={removeFilter}
               conjunction={filterConjunction}
               onConjunctionChange={setFilterConjunction}
+              getOptions={getFilterOptions}
             />
 
             {viewType === "pivot" && (
@@ -1309,6 +1425,7 @@ export default function EntityViewsPage() {
               onAdd={addDefaultFilter}
               onUpdate={updateDefaultFilter}
               onRemove={removeDefaultFilter}
+              getOptions={getFilterOptions}
             />
             <div className="flex items-center justify-between border-t border-slate-100 pt-4">
               <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
@@ -1350,6 +1467,74 @@ export default function EntityViewsPage() {
               </div>
             )}
           </div>
+          {entity?.pivotEnabled && (
+            <div className="space-y-3 border-t border-slate-100 pt-4">
+              <div className="flex items-center gap-2">
+                <Switch checked={defaultPivotOn} onCheckedChange={setDefaultPivotOn} />
+                <Label className="cursor-pointer text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                  <Table2 className="w-4 h-4 text-blue-600" />
+                  {t("pivot.defaultEnable", "Сводная таблица по умолчанию")}
+                </Label>
+              </div>
+              <p className="text-xs text-slate-400 -mt-1">
+                {t("pivot.defaultHint", "Добавляет переключатель «Таблица/Сводная» на странице записей, когда вид не выбран.")}
+              </p>
+              {defaultPivotOn && (
+                <div className="space-y-3">
+                  <PivotDimEditor
+                    label={t("pivot.rows", "Строки")}
+                    dim={defaultPivotRows}
+                    onChange={setDefaultPivotRows}
+                    dimFields={pivotDimFields}
+                    ml={ml}
+                    t={t}
+                  />
+                  <div className="flex items-center gap-2">
+                    <Switch checked={defaultPivotColsOn} onCheckedChange={setDefaultPivotColsOn} />
+                    <Label className="cursor-pointer text-sm">{t("pivot.enableCols", "Добавить измерение столбцов")}</Label>
+                  </div>
+                  {defaultPivotColsOn && (
+                    <PivotDimEditor
+                      label={t("pivot.cols", "Столбцы")}
+                      dim={defaultPivotCols}
+                      onChange={setDefaultPivotCols}
+                      dimFields={pivotDimFields}
+                      ml={ml}
+                      t={t}
+                    />
+                  )}
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">{t("pivot.measure", "Мера (значение в ячейках)")}</Label>
+                    <div className="flex items-center gap-2">
+                      <Select value={defaultPivotAgg} onValueChange={(v) => setDefaultPivotAgg(v as "count" | "sum")}>
+                        <SelectTrigger className="h-8 text-sm w-40"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="count">{t("pivot.aggCount", "Количество записей")}</SelectItem>
+                          <SelectItem value="sum">{t("pivot.aggSum", "Сумма поля")}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {defaultPivotAgg === "sum" && (
+                        <Select value={defaultPivotMeasureField} onValueChange={setDefaultPivotMeasureField}>
+                          <SelectTrigger className="h-8 text-sm flex-1">
+                            <SelectValue placeholder={t("pivot.selectNumberField", "числовое поле…")} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {pivotSumFields.length === 0 ? (
+                              <div className="px-2 py-1.5 text-xs text-slate-400">{t("pivot.noNumberFields", "Нет числовых полей в сводных")}</div>
+                            ) : (
+                              pivotSumFields.map((f: Field) => (
+                                <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson)}</SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDefaultSortDialogOpen(false)}>{t("views.cancel", "Отмена")}</Button>
             <Button onClick={saveDefaultSort} disabled={updateEntityMutation.isPending} className="bg-blue-600 hover:bg-blue-700">

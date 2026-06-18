@@ -912,6 +912,100 @@ export interface TableConfig {
   limit?: number | null;
 }
 
+/**
+ * Grouping key source — an entity field, a page-local field, or the record status.
+ */
+export type PivotDimensionSource = typeof PivotDimensionSource[keyof typeof PivotDimensionSource];
+
+
+export const PivotDimensionSource = {
+  entity: 'entity',
+  page: 'page',
+  status: 'status',
+} as const;
+
+/**
+ * When the field is date/datetime, bucket values by this period.
+ * @nullable
+ */
+export type PivotDimensionDatePeriod = typeof PivotDimensionDatePeriod[keyof typeof PivotDimensionDatePeriod] | null;
+
+
+export const PivotDimensionDatePeriod = {
+  year: 'year',
+  quarter: 'quarter',
+  month: 'month',
+  day: 'day',
+} as const;
+
+export interface PivotDimension {
+  /** Grouping key source — an entity field, a page-local field, or the record status. */
+  source: PivotDimensionSource;
+  /**
+     * Field key for source=entity|page. Ignored for source=status.
+     * @nullable
+     */
+  fieldKey?: string | null;
+  /**
+     * When the field is date/datetime, bucket values by this period.
+     * @nullable
+     */
+  datePeriod?: PivotDimensionDatePeriod;
+}
+
+export type PivotMeasureAgg = typeof PivotMeasureAgg[keyof typeof PivotMeasureAgg];
+
+
+export const PivotMeasureAgg = {
+  count: 'count',
+  sum: 'sum',
+} as const;
+
+/**
+ * For agg=sum, where the numeric field lives. Ignored for agg=count.
+ * @nullable
+ */
+export type PivotMeasureSource = typeof PivotMeasureSource[keyof typeof PivotMeasureSource] | null;
+
+
+export const PivotMeasureSource = {
+  entity: 'entity',
+  page: 'page',
+} as const;
+
+export interface PivotMeasure {
+  agg: PivotMeasureAgg;
+  /**
+     * For agg=sum, where the numeric field lives. Ignored for agg=count.
+     * @nullable
+     */
+  source?: PivotMeasureSource;
+  /**
+     * Numeric field key for agg=sum. Ignored for agg=count.
+     * @nullable
+     */
+  fieldKey?: string | null;
+}
+
+export interface PivotConfig {
+  rows: PivotDimension;
+  cols?: PivotDimension;
+  measure: PivotMeasure;
+}
+
+/**
+ * Pivot (cross-tab) widget config. The pivot is computed admin-authoritatively over the entity's non-archived records (independent of the viewing role's data permissions); access is governed by the widget's role visibility. The entity must have pivot enabled and dimensions/measures must reference pivot-enabled fields.
+ */
+export interface WidgetPivotConfig {
+  entityId: number;
+  pivot: PivotConfig;
+  /**
+     * Restrict to records in these statuses; empty/null = all statuses
+     * @nullable
+     */
+  statusIds?: number[] | null;
+}
+
 export type NoteCellSourceSourceKind = typeof NoteCellSourceSourceKind[keyof typeof NoteCellSourceSourceKind];
 
 
@@ -1048,7 +1142,7 @@ export interface NotesConfig {
 }
 
 /**
- * metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.
+ * metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab.
  * @nullable
  */
 export type WidgetConfigWidgetType = typeof WidgetConfigWidgetType[keyof typeof WidgetConfigWidgetType] | null;
@@ -1060,6 +1154,7 @@ export const WidgetConfigWidgetType = {
   chart: 'chart',
   table: 'table',
   notes: 'notes',
+  pivot: 'pivot',
 } as const;
 
 /**
@@ -1101,7 +1196,7 @@ export const WidgetConfigTextColor = {
 
 export interface WidgetConfig {
   /**
-     * metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.
+     * metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab.
      * @nullable
      */
   widgetType?: WidgetConfigWidgetType;
@@ -1116,6 +1211,7 @@ export interface WidgetConfig {
   format?: WidgetConfigFormat;
   chart?: ChartConfig;
   table?: TableConfig;
+  pivot?: WidgetPivotConfig;
   /**
      * How the widget color is applied — icon box (default), card border, or full fill.
      * @nullable
@@ -1263,6 +1359,7 @@ export const DashboardWidgetDataWidgetType = {
   chart: 'chart',
   table: 'table',
   notes: 'notes',
+  pivot: 'pivot',
 } as const;
 
 /**
@@ -1293,6 +1390,32 @@ export const DashboardWidgetDataTextColor = {
  */
 export type DashboardWidgetDataMetrics = {[key: string]: number};
 
+export interface PivotAxisItem {
+  key: string;
+  label: string;
+}
+
+export interface PivotCell {
+  rowKey: string;
+  colKey: string;
+  value: number;
+}
+
+export interface PivotTotal {
+  key: string;
+  value: number;
+}
+
+export interface PivotResult {
+  rows: PivotAxisItem[];
+  cols: PivotAxisItem[];
+  cells: PivotCell[];
+  rowTotals: PivotTotal[];
+  colTotals: PivotTotal[];
+  grandTotal: number;
+  measureLabel: string;
+}
+
 export interface DashboardWidgetData {
   id: number;
   titleJson: MultilingualText;
@@ -1321,6 +1444,8 @@ export interface DashboardWidgetData {
      * @nullable
      */
   tableEntityId?: number | null;
+  /** Computed cross-tab for pivot widgets (admin-authoritative real totals, status-filtered). Null for other widget types. */
+  pivot?: PivotResult | null;
   /** @nullable */
   formula?: string | null;
   /** @nullable */
@@ -1420,6 +1545,8 @@ export interface Entity {
   defaultSortJson: SortSpec[];
   /** Filters applied to the records page when no view is selected (the main view). */
   defaultFilterJson?: FilterCondition[];
+  /** Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot. */
+  defaultPivotJson?: PivotConfig | null;
   /** Enables the "Сводная таблица" (pivot) report mode for this entity's records page. */
   pivotEnabled?: boolean;
   sortOrder: number;
@@ -1437,6 +1564,8 @@ export interface EntityInput {
   pageId?: number | null;
   defaultSortJson?: SortSpec[];
   defaultFilterJson?: FilterCondition[];
+  /** Default pivot config for the records page when no view is selected. Null = no default pivot. */
+  defaultPivotJson?: PivotConfig | null;
   pivotEnabled?: boolean;
   sortOrder?: number;
   isActive?: boolean;
@@ -1451,6 +1580,8 @@ export interface EntityUpdate {
   pageId?: number | null;
   defaultSortJson?: SortSpec[];
   defaultFilterJson?: FilterCondition[];
+  /** Default pivot config for the records page when no view is selected. Null = no default pivot. */
+  defaultPivotJson?: PivotConfig | null;
   pivotEnabled?: boolean;
   sortOrder?: number;
   isActive?: boolean;
@@ -2108,87 +2239,6 @@ export const ViewConfigViewType = {
   pivot: 'pivot',
 } as const;
 
-/**
- * Grouping key source — an entity field, a page-local field, or the record status.
- */
-export type PivotDimensionSource = typeof PivotDimensionSource[keyof typeof PivotDimensionSource];
-
-
-export const PivotDimensionSource = {
-  entity: 'entity',
-  page: 'page',
-  status: 'status',
-} as const;
-
-/**
- * When the field is date/datetime, bucket values by this period.
- * @nullable
- */
-export type PivotDimensionDatePeriod = typeof PivotDimensionDatePeriod[keyof typeof PivotDimensionDatePeriod] | null;
-
-
-export const PivotDimensionDatePeriod = {
-  year: 'year',
-  quarter: 'quarter',
-  month: 'month',
-  day: 'day',
-} as const;
-
-export interface PivotDimension {
-  /** Grouping key source — an entity field, a page-local field, or the record status. */
-  source: PivotDimensionSource;
-  /**
-     * Field key for source=entity|page. Ignored for source=status.
-     * @nullable
-     */
-  fieldKey?: string | null;
-  /**
-     * When the field is date/datetime, bucket values by this period.
-     * @nullable
-     */
-  datePeriod?: PivotDimensionDatePeriod;
-}
-
-export type PivotMeasureAgg = typeof PivotMeasureAgg[keyof typeof PivotMeasureAgg];
-
-
-export const PivotMeasureAgg = {
-  count: 'count',
-  sum: 'sum',
-} as const;
-
-/**
- * For agg=sum, where the numeric field lives. Ignored for agg=count.
- * @nullable
- */
-export type PivotMeasureSource = typeof PivotMeasureSource[keyof typeof PivotMeasureSource] | null;
-
-
-export const PivotMeasureSource = {
-  entity: 'entity',
-  page: 'page',
-} as const;
-
-export interface PivotMeasure {
-  agg: PivotMeasureAgg;
-  /**
-     * For agg=sum, where the numeric field lives. Ignored for agg=count.
-     * @nullable
-     */
-  source?: PivotMeasureSource;
-  /**
-     * Numeric field key for agg=sum. Ignored for agg=count.
-     * @nullable
-     */
-  fieldKey?: string | null;
-}
-
-export interface PivotConfig {
-  rows: PivotDimension;
-  cols?: PivotDimension;
-  measure: PivotMeasure;
-}
-
 export interface ViewConfig {
   filters?: FilterCondition[];
   filterConjunction?: ViewConfigFilterConjunction;
@@ -2216,32 +2266,6 @@ export interface PivotQuery {
   archived?: ArchiveFilter;
   pageId?: number;
   pivot: PivotConfig;
-}
-
-export interface PivotAxisItem {
-  key: string;
-  label: string;
-}
-
-export interface PivotCell {
-  rowKey: string;
-  colKey: string;
-  value: number;
-}
-
-export interface PivotTotal {
-  key: string;
-  value: number;
-}
-
-export interface PivotResult {
-  rows: PivotAxisItem[];
-  cols: PivotAxisItem[];
-  cells: PivotCell[];
-  rowTotals: PivotTotal[];
-  colTotals: PivotTotal[];
-  grandTotal: number;
-  measureLabel: string;
 }
 
 export interface View {

@@ -18,4 +18,5 @@ export const DashboardWidgetDataWidgetType = {
   chart: 'chart',
   table: 'table',
   notes: 'notes',
+  pivot: 'pivot',
 } as const;

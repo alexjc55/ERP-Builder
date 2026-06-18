@@ -18,9 +18,15 @@ import {
   type Relation,
   type RolePermissions,
 } from "@workspace/db";
-import { eq, sql, gte, and, isNull, inArray, asc } from "drizzle-orm";
+import { eq, sql, gte, and, isNull, inArray, asc, type SQL } from "drizzle-orm";
 import sanitizeHtml from "sanitize-html";
 import { requireAuth } from "../middlewares/auth";
+import { buildRelationMeta } from "./own-scope";
+import {
+  computePivot,
+  type PivotConfigInput,
+  type PivotResultShape,
+} from "./pivot-compute";
 import { requireAdmin, getPermissions, getUserRoleIds } from "../middlewares/permissions";
 import {
   ListDashboardWidgetsParams,
@@ -141,14 +147,21 @@ interface NotesSpec {
   editableRoleIds?: number[] | null;
 }
 
+interface PivotSpec {
+  entityId: number;
+  pivot: PivotConfigInput;
+  statusIds?: number[] | null;
+}
+
 interface WidgetConfigShape {
-  widgetType?: "metric" | "formula" | "chart" | "table" | "notes" | null;
+  widgetType?: "metric" | "formula" | "chart" | "table" | "notes" | "pivot" | null;
   metrics?: WidgetMetricSpec[];
   formula?: string | null;
   format?: string | null;
   chart?: ChartSpec | null;
   table?: TableSpec | null;
   notes?: NotesSpec | null;
+  pivot?: PivotSpec | null;
   colorStyle?: "icon" | "border" | "fill" | null;
   textColor?: "light" | "dark" | null;
 }
@@ -654,6 +667,76 @@ async function validateMetricLike(m: {
   return null;
 }
 
+/**
+ * Validate a pivot widget config: the entity must exist and have pivot enabled,
+ * and the row/measure shapes must be present. Deep per-field validation (pivot
+ * opt-in, type) is enforced by computePivot at render time, mirroring how chart
+ * field checks stay shallow here.
+ */
+async function validatePivotConfig(spec: PivotSpec | null | undefined): Promise<string | null> {
+  if (!spec || !spec.pivot) return "Pivot config is required";
+  const [entity] = await db
+    .select({ id: entitiesTable.id, pivotEnabled: entitiesTable.pivotEnabled })
+    .from(entitiesTable)
+    .where(eq(entitiesTable.id, spec.entityId))
+    .limit(1);
+  if (!entity) return `Entity ${spec.entityId} not found`;
+  if (!entity.pivotEnabled) return "Pivot mode is not enabled for this entity";
+  if (!spec.pivot.rows || !spec.pivot.rows.source) return "Pivot requires a rows dimension";
+  if (!spec.pivot.measure || !spec.pivot.measure.agg) return "Pivot requires a measure";
+  // Dashboard pivot widgets compute over a plain entity boundary with no page-local
+  // context (unlike the records-page pivot), so page-sourced dimensions/measures
+  // cannot resolve here — reject them rather than persist a config that computes to null.
+  if (spec.pivot.rows.source === "page" || spec.pivot.cols?.source === "page") {
+    return "Dashboard pivot dimensions must be an entity field or status";
+  }
+  if (spec.pivot.measure.agg === "sum" && spec.pivot.measure.source === "page") {
+    return "Dashboard pivot measure must be an entity field";
+  }
+  return null;
+}
+
+/**
+ * Compute a pivot widget's cross-tab. ADMIN-AUTHORITATIVE like computeMetric /
+ * computeChartSeries: the totals are the real aggregates over the entity's
+ * non-archived records, independent of the viewing role's row/field data
+ * permissions (access is governed by per-widget role visibility). Uses ALL active
+ * entity fields (not a viewer-visible subset) and a plain entity + non-archived
+ * (+ optional status) boundary — no own-row / hidden-status / page-local scoping.
+ * Returns null if the pivot config is invalid (e.g. a field lost its pivot opt-in).
+ */
+async function computePivotWidget(spec: PivotSpec): Promise<PivotResultShape | null> {
+  // Re-check the entity's pivot opt-in at compute time, not just at widget
+  // create/update: if pivot mode is later disabled for the entity, existing pivot
+  // widgets must stop computing (degrade to null), mirroring how computePivot
+  // returns null when an individual field loses its pivot opt-in.
+  const [entity] = await db
+    .select({ pivotEnabled: entitiesTable.pivotEnabled })
+    .from(entitiesTable)
+    .where(eq(entitiesTable.id, spec.entityId))
+    .limit(1);
+  if (!entity || !entity.pivotEnabled) return null;
+  const fields = await db
+    .select()
+    .from(entityFieldsTable)
+    .where(and(eq(entityFieldsTable.entityId, spec.entityId), eq(entityFieldsTable.isActive, true)));
+  const relationMeta = await buildRelationMeta(spec.entityId, fields);
+  const conds: SQL[] = [
+    eq(entityRecordsTable.entityId, spec.entityId),
+    isNull(entityRecordsTable.archivedAt),
+  ];
+  const statusIds = (spec.statusIds ?? []).filter((n) => Number.isInteger(n));
+  if (statusIds.length > 0) conds.push(inArray(entityRecordsTable.statusId, statusIds));
+  const outcome = await computePivot({
+    entityId: spec.entityId,
+    pivot: spec.pivot,
+    entityFields: fields,
+    relationMeta,
+    where: and(...conds)!,
+  });
+  return outcome.ok ? outcome.result : null;
+}
+
 async function validateConfig(config: WidgetConfigShape | undefined): Promise<string | null> {
   if (config?.widgetType === "chart") {
     return validateChartConfig(config.chart);
@@ -663,6 +746,9 @@ async function validateConfig(config: WidgetConfigShape | undefined): Promise<st
   }
   if (config?.widgetType === "notes") {
     return validateNotesConfig(config.notes);
+  }
+  if (config?.widgetType === "pivot") {
+    return validatePivotConfig(config.pivot);
   }
   const metrics = config?.metrics ?? [];
   if (metrics.length === 0) return "At least one metric is required";
@@ -1459,6 +1545,17 @@ router.get("/pages/:id/dashboard/data", requireAuth, async (req, res): Promise<v
           widgetType: "notes" as const,
           notes,
           canEditNotes: canEditNotesContent(perms, roleIds, w.pageId, w.visibleRoleIdsJson ?? null, config.notes),
+          formula: null,
+          format: config.format ?? null,
+          metrics: {},
+        };
+      }
+      if (config.widgetType === "pivot" && config.pivot) {
+        const pivot = await computePivotWidget(config.pivot);
+        return {
+          ...base,
+          widgetType: "pivot" as const,
+          pivot,
           formula: null,
           format: config.format ?? null,
           metrics: {},

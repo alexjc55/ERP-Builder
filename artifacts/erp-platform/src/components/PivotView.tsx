@@ -90,6 +90,28 @@ export function PivotView({
     );
   }
 
+  return <PivotResultTable result={result} loading={loading} />;
+}
+
+/**
+ * Presentational cross-tab table for a fully-computed {@link PivotResult}. Shared
+ * by {@link PivotView} (records page, permission-scoped fetch) and the dashboard
+ * pivot widget (admin-authoritative result shipped with the widget data). Pure
+ * render: no fetching, no permission logic.
+ */
+export function PivotResultTable({
+  result,
+  loading = false,
+}: {
+  result: PivotResult;
+  loading?: boolean;
+}) {
+  const t = useT();
+  const fmt = (v: number): string => {
+    if (!Number.isFinite(v)) return "";
+    return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(v);
+  };
+
   // Sparse cells → quick lookup keyed by "rowKey\u0000colKey".
   const cellMap = new Map<string, number>();
   for (const c of result.cells) cellMap.set(c.rowKey + "\u0000" + c.colKey, c.value);

@@ -1299,7 +1299,7 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal('pivot'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -1358,6 +1358,27 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional(),
+  "pivot": zod.object({
+  "entityId": zod.number(),
+  "pivot": zod.object({
+  "rows": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}),
+  "cols": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}).optional(),
+  "measure": zod.object({
+  "agg": zod.enum(['count', 'sum']),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
+})
+}),
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+}).optional().describe('Pivot (cross-tab) widget config. The pivot is computed admin-authoritatively over the entity\'s non-archived records (independent of the viewing role\'s data permissions); access is governed by the widget\'s role visibility. The entity must have pivot enabled and dimensions\/measures must reference pivot-enabled fields.'),
   "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish().describe('How the widget color is applied — icon box (default), card border, or full fill.'),
   "textColor": zod.union([zod.literal('light'),zod.literal('dark'),zod.literal(null)]).nullish().describe('Font color when colorStyle is \"fill\" (light = white text, dark = dark text).')
 }),
@@ -1387,7 +1408,7 @@ export const CreateDashboardWidgetBody = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal('pivot'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -1446,6 +1467,27 @@ export const CreateDashboardWidgetBody = zod.object({
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional(),
+  "pivot": zod.object({
+  "entityId": zod.number(),
+  "pivot": zod.object({
+  "rows": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}),
+  "cols": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}).optional(),
+  "measure": zod.object({
+  "agg": zod.enum(['count', 'sum']),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
+})
+}),
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+}).optional().describe('Pivot (cross-tab) widget config. The pivot is computed admin-authoritatively over the entity\'s non-archived records (independent of the viewing role\'s data permissions); access is governed by the widget\'s role visibility. The entity must have pivot enabled and dimensions\/measures must reference pivot-enabled fields.'),
   "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish().describe('How the widget color is applied — icon box (default), card border, or full fill.'),
   "textColor": zod.union([zod.literal('light'),zod.literal('dark'),zod.literal(null)]).nullish().describe('Font color when colorStyle is \"fill\" (light = white text, dark = dark text).')
 }),
@@ -1466,7 +1508,7 @@ export const CreateDashboardWidgetResponse = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal('pivot'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -1525,6 +1567,27 @@ export const CreateDashboardWidgetResponse = zod.object({
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional(),
+  "pivot": zod.object({
+  "entityId": zod.number(),
+  "pivot": zod.object({
+  "rows": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}),
+  "cols": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}).optional(),
+  "measure": zod.object({
+  "agg": zod.enum(['count', 'sum']),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
+})
+}),
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+}).optional().describe('Pivot (cross-tab) widget config. The pivot is computed admin-authoritatively over the entity\'s non-archived records (independent of the viewing role\'s data permissions); access is governed by the widget\'s role visibility. The entity must have pivot enabled and dimensions\/measures must reference pivot-enabled fields.'),
   "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish().describe('How the widget color is applied — icon box (default), card border, or full fill.'),
   "textColor": zod.union([zod.literal('light'),zod.literal('dark'),zod.literal(null)]).nullish().describe('Font color when colorStyle is \"fill\" (light = white text, dark = dark text).')
 }),
@@ -1558,7 +1621,7 @@ export const GetDashboardDataResponseItem = zod.object({
   "gridW": zod.number(),
   "gridH": zod.number(),
   "sortOrder": zod.number(),
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish(),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal('pivot'),zod.literal(null)]).nullish(),
   "chartType": zod.string().nullish(),
   "showValues": zod.boolean().nullish().describe('When true, the chart widget renders numeric value labels directly on the chart'),
   "series": zod.array(zod.object({
@@ -1576,6 +1639,31 @@ export const GetDashboardDataResponseItem = zod.object({
   "values": zod.record(zod.string(), zod.unknown()).describe('fieldKey to stored value map (only the widget\'s columns)')
 })).optional().describe('Rows for table widgets (admin-authoritative, status-filtered, limited)'),
   "tableEntityId": zod.number().nullish().describe('For table widgets, the source entity id (lets the client link rows to the entity\'s page)'),
+  "pivot": zod.union([zod.object({
+  "rows": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.string()
+})),
+  "cols": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.string()
+})),
+  "cells": zod.array(zod.object({
+  "rowKey": zod.string(),
+  "colKey": zod.string(),
+  "value": zod.number()
+})),
+  "rowTotals": zod.array(zod.object({
+  "key": zod.string(),
+  "value": zod.number()
+})),
+  "colTotals": zod.array(zod.object({
+  "key": zod.string(),
+  "value": zod.number()
+})),
+  "grandTotal": zod.number(),
+  "measureLabel": zod.string()
+}),zod.null()]).optional().describe('Computed cross-tab for pivot widgets (admin-authoritative real totals, status-filtered). Null for other widget types.'),
   "formula": zod.string().nullish(),
   "format": zod.string().nullish(),
   "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish(),
@@ -1612,7 +1700,7 @@ export const UpdateDashboardWidgetBody = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal('pivot'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -1671,6 +1759,27 @@ export const UpdateDashboardWidgetBody = zod.object({
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional(),
+  "pivot": zod.object({
+  "entityId": zod.number(),
+  "pivot": zod.object({
+  "rows": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}),
+  "cols": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}).optional(),
+  "measure": zod.object({
+  "agg": zod.enum(['count', 'sum']),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
+})
+}),
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+}).optional().describe('Pivot (cross-tab) widget config. The pivot is computed admin-authoritatively over the entity\'s non-archived records (independent of the viewing role\'s data permissions); access is governed by the widget\'s role visibility. The entity must have pivot enabled and dimensions\/measures must reference pivot-enabled fields.'),
   "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish().describe('How the widget color is applied — icon box (default), card border, or full fill.'),
   "textColor": zod.union([zod.literal('light'),zod.literal('dark'),zod.literal(null)]).nullish().describe('Font color when colorStyle is \"fill\" (light = white text, dark = dark text).')
 }),
@@ -1691,7 +1800,7 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal('pivot'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -1750,6 +1859,27 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional(),
+  "pivot": zod.object({
+  "entityId": zod.number(),
+  "pivot": zod.object({
+  "rows": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}),
+  "cols": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}).optional(),
+  "measure": zod.object({
+  "agg": zod.enum(['count', 'sum']),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
+})
+}),
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+}).optional().describe('Pivot (cross-tab) widget config. The pivot is computed admin-authoritatively over the entity\'s non-archived records (independent of the viewing role\'s data permissions); access is governed by the widget\'s role visibility. The entity must have pivot enabled and dimensions\/measures must reference pivot-enabled fields.'),
   "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish().describe('How the widget color is applied — icon box (default), card border, or full fill.'),
   "textColor": zod.union([zod.literal('light'),zod.literal('dark'),zod.literal(null)]).nullish().describe('Font color when colorStyle is \"fill\" (light = white text, dark = dark text).')
 }),
@@ -4168,6 +4298,23 @@ export const ListEntitiesResponseItem = zod.object({
   "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
   "value": zod.unknown().optional()
 })).optional().describe('Filters applied to the records page when no view is selected (the main view).'),
+  "defaultPivotJson": zod.union([zod.object({
+  "rows": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}),
+  "cols": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}).optional(),
+  "measure": zod.object({
+  "agg": zod.enum(['count', 'sum']),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
+})
+}),zod.null()]).optional().describe('Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot.'),
   "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
@@ -4206,6 +4353,23 @@ export const CreateEntityBody = zod.object({
   "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
   "value": zod.unknown().optional()
 })).optional(),
+  "defaultPivotJson": zod.union([zod.object({
+  "rows": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}),
+  "cols": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}).optional(),
+  "measure": zod.object({
+  "agg": zod.enum(['count', 'sum']),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
+})
+}),zod.null()]).optional().describe('Default pivot config for the records page when no view is selected. Null = no default pivot.'),
   "pivotEnabled": zod.boolean().optional(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createEntityBodyIsActiveDefault)
@@ -4245,6 +4409,23 @@ export const GetEntityResponse = zod.object({
   "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
   "value": zod.unknown().optional()
 })).optional().describe('Filters applied to the records page when no view is selected (the main view).'),
+  "defaultPivotJson": zod.union([zod.object({
+  "rows": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}),
+  "cols": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}).optional(),
+  "measure": zod.object({
+  "agg": zod.enum(['count', 'sum']),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
+})
+}),zod.null()]).optional().describe('Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot.'),
   "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
@@ -4285,6 +4466,23 @@ export const UpdateEntityBody = zod.object({
   "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
   "value": zod.unknown().optional()
 })).optional(),
+  "defaultPivotJson": zod.union([zod.object({
+  "rows": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}),
+  "cols": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}).optional(),
+  "measure": zod.object({
+  "agg": zod.enum(['count', 'sum']),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
+})
+}),zod.null()]).optional().describe('Default pivot config for the records page when no view is selected. Null = no default pivot.'),
   "pivotEnabled": zod.boolean().optional(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
@@ -4316,6 +4514,23 @@ export const UpdateEntityResponse = zod.object({
   "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
   "value": zod.unknown().optional()
 })).optional().describe('Filters applied to the records page when no view is selected (the main view).'),
+  "defaultPivotJson": zod.union([zod.object({
+  "rows": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}),
+  "cols": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}).optional(),
+  "measure": zod.object({
+  "agg": zod.enum(['count', 'sum']),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count.')
+})
+}),zod.null()]).optional().describe('Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot.'),
   "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),

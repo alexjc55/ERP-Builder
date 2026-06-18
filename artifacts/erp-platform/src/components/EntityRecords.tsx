@@ -107,6 +107,7 @@ import { cn } from "@/lib/utils";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ValueChecklistPicker } from "@/components/FilterValuePicker";
 import {
   uploadFile,
   openObjectInNewTab,
@@ -558,11 +559,6 @@ function FieldFilterPopover({
   effectiveType?: Field["fieldType"];
   triggerClassName?: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const [options, setOptions] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [optSearch, setOptSearch] = useState("");
-
   const ft = effectiveType ?? field.fieldType;
   const labelFor = (v: string): string => {
     if (ft === "user") return userNames.get(Number(v)) ?? `#${v}`;
@@ -570,26 +566,15 @@ function FieldFilterPopover({
     return v;
   };
 
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    setLoading(true);
-    getOptions(field.fieldKey)
-      .then((vals) => { if (!cancelled) setOptions(vals); })
-      .catch(() => { if (!cancelled) setOptions([]); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [open, getOptions, field.fieldKey]);
-
-  const toggle = (v: string) =>
-    onChange(selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]);
-
-  const q = optSearch.toLowerCase();
-  const filtered = options.filter((v) => labelFor(v).toLowerCase().includes(q));
-
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+    <ValueChecklistPicker
+      fieldKey={field.fieldKey}
+      selected={selected}
+      onChange={onChange}
+      getOptions={getOptions}
+      labelFor={labelFor}
+      t={t}
+      trigger={
         <Button
           type="button"
           variant="outline"
@@ -602,54 +587,8 @@ function FieldFilterPopover({
           )}
           <ChevronDown className="w-3.5 h-3.5 opacity-60 shrink-0 sm:ml-0 ml-auto" />
         </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-64 p-0">
-        <div className="p-2 border-b border-slate-100">
-          <Input
-            value={optSearch}
-            onChange={(e) => setOptSearch(e.target.value)}
-            placeholder={t("records.filterSearchValues", "Поиск значений…")}
-            className="h-8 text-sm"
-          />
-        </div>
-        <ScrollArea className="max-h-64">
-          <div className="p-1">
-            {loading ? (
-              <div className="flex items-center justify-center py-6 text-slate-400">
-                <Loader2 className="w-4 h-4 animate-spin" />
-              </div>
-            ) : filtered.length === 0 ? (
-              <p className="px-2 py-4 text-center text-xs text-slate-400">
-                {t("records.filterNoValues", "Нет значений")}
-              </p>
-            ) : (
-              filtered.map((v) => (
-                <label
-                  key={v}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 cursor-pointer text-sm"
-                >
-                  <Checkbox checked={selected.includes(v)} onCheckedChange={() => toggle(v)} />
-                  <span className="truncate">{labelFor(v)}</span>
-                </label>
-              ))
-            )}
-          </div>
-        </ScrollArea>
-        {selected.length > 0 && (
-          <div className="p-1.5 border-t border-slate-100">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="w-full h-7 text-xs text-slate-500"
-              onClick={() => onChange([])}
-            >
-              {t("records.filterClearField", "Очистить")}
-            </Button>
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
+      }
+    />
   );
 }
 
@@ -1482,8 +1421,12 @@ export function EntityRecords({
   // Pivot (Сводная таблица): a view whose configJson.viewType is "pivot" carries a
   // pivot config. It renders as a cross-tab instead of the row table, fed by the
   // SAME live filter/search/status/archive state (so users slice interactively).
-  const pivotConfig: PivotConfig | undefined =
-    selectedConfig.viewType === "pivot" && selectedConfig.pivot ? selectedConfig.pivot : undefined;
+  // When a named view is selected, its config drives the pivot. With no view (the
+  // default view), fall back to the entity's default pivot config so a pivot can be
+  // shown without creating a named view.
+  const pivotConfig: PivotConfig | undefined = selectedView
+    ? (selectedConfig.viewType === "pivot" && selectedConfig.pivot ? selectedConfig.pivot : undefined)
+    : ((entity?.defaultPivotJson ?? undefined) as PivotConfig | undefined);
   const pivotAvailable = !!entity?.pivotEnabled && pivotConfig != null;
   const [pivotMode, setPivotMode] = useState(false);
   // Default to pivot rendering whenever a pivot view is selected; reset on switch.

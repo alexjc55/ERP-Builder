@@ -7,7 +7,7 @@
  */
 
 /**
- * metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.
+ * metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab.
  * @nullable
  */
 export type WidgetConfigWidgetType = typeof WidgetConfigWidgetType[keyof typeof WidgetConfigWidgetType] | null;
@@ -19,4 +19,5 @@ export const WidgetConfigWidgetType = {
   chart: 'chart',
   table: 'table',
   notes: 'notes',
+  pivot: 'pivot',
 } as const;

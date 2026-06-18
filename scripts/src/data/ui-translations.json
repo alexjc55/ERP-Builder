@@ -6832,5 +6832,287 @@
     "ru": "Поле подстановки показывает значение из единственной связанной записи (только для чтения). Источником может быть поле связанной сущности или поле страницы связанной записи.",
     "en": "A lookup field shows a value from the single linked record (read-only). The source can be a field of the related entity or a page-local field of the linked record.",
     "he": "שדה חיפוש מציג ערך מהרשומה המקושרת היחידה (לקריאה בלבד). המקור יכול להיות שדה של הישות המקושרת או שדה מקומי של עמוד הרשומה המקושרת."
+  },
+  {
+    "key": "dash.typePivot",
+    "ru": "Сводная таблица",
+    "en": "Pivot table",
+    "he": "טבלת ציר"
+  },
+  {
+    "key": "dash.pivotWidget",
+    "ru": "Сводная таблица",
+    "en": "Pivot table",
+    "he": "טבלת ציר"
+  },
+  {
+    "key": "dash.pivotSettings",
+    "ru": "Настройки сводной таблицы",
+    "en": "Pivot table settings",
+    "he": "הגדרות טבלת ציר"
+  },
+  {
+    "key": "dash.pivotNeedsEntity",
+    "ru": "Выберите сущность для сводной таблицы",
+    "en": "Select an entity for the pivot table",
+    "he": "בחר ישות לטבלת הציר"
+  },
+  {
+    "key": "dash.pivotNeedsRows",
+    "ru": "Выберите поле для строк сводной таблицы",
+    "en": "Select a field for the pivot rows",
+    "he": "בחר שדה לשורות הציר"
+  },
+  {
+    "key": "dash.pivotNeedsCols",
+    "ru": "Выберите поле для столбцов сводной таблицы",
+    "en": "Select a field for the pivot columns",
+    "he": "בחר שדה לעמודות הציר"
+  },
+  {
+    "key": "dash.pivotNeedsMeasure",
+    "ru": "Для суммы выберите числовое поле",
+    "en": "Select a numeric field to sum",
+    "he": "בחר שדה מספרי לסיכום"
+  },
+  {
+    "key": "dash.pivotNotEnabled",
+    "ru": "Для этой сущности не включён режим сводной таблицы. Включите его в настройках сущности.",
+    "en": "Pivot mode is not enabled for this entity. Enable it in the entity settings.",
+    "he": "מצב ציר אינו מופעל לישות זו. הפעל אותו בהגדרות הישות."
+  },
+  {
+    "key": "pivot.aggCount",
+    "ru": "Количество записей",
+    "en": "Record count",
+    "he": "מספר רשומות"
+  },
+  {
+    "key": "pivot.aggSum",
+    "ru": "Сумма поля",
+    "en": "Field sum",
+    "he": "סכום שדה"
+  },
+  {
+    "key": "pivot.allowedFields",
+    "ru": "Поля, доступные в сводных",
+    "en": "Fields available in pivots",
+    "he": "שדות זמינים בטבלאות ציר"
+  },
+  {
+    "key": "pivot.cols",
+    "ru": "Столбцы",
+    "en": "Columns",
+    "he": "עמודות"
+  },
+  {
+    "key": "pivot.colTotal",
+    "ru": "Итого",
+    "en": "Total",
+    "he": "סך הכול"
+  },
+  {
+    "key": "pivot.configTitle",
+    "ru": "Конфигурация сводной таблицы",
+    "en": "Pivot table configuration",
+    "he": "תצורת טבלת ציר"
+  },
+  {
+    "key": "pivot.defaultEnable",
+    "ru": "Сводная таблица по умолчанию",
+    "en": "Default pivot table",
+    "he": "טבלת ציר ברירת מחדל"
+  },
+  {
+    "key": "pivot.defaultHint",
+    "ru": "Добавляет переключатель «Таблица/Сводная» на странице записей, когда вид не выбран.",
+    "en": "Adds a Table/Pivot toggle on the records page when no view is selected.",
+    "he": "מוסיף מתג טבלה/ציר בעמוד הרשומות כאשר לא נבחרה תצוגה."
+  },
+  {
+    "key": "pivot.dimStatus",
+    "ru": "Статус записи",
+    "en": "Record status",
+    "he": "סטטוס רשומה"
+  },
+  {
+    "key": "pivot.empty",
+    "ru": "Нет данных для сводной таблицы",
+    "en": "No data for the pivot table",
+    "he": "אין נתונים לטבלת הציר"
+  },
+  {
+    "key": "pivot.enableCols",
+    "ru": "Добавить измерение столбцов",
+    "en": "Add a column dimension",
+    "he": "הוסף מימד עמודות"
+  },
+  {
+    "key": "pivot.entityEnable",
+    "ru": "Включить сводные",
+    "en": "Enable pivots",
+    "he": "הפעל טבלאות ציר"
+  },
+  {
+    "key": "pivot.entitySettingsDesc",
+    "ru": "Разрешите режим сводной таблицы для этой сущности и выберите поля, доступные как измерения и меры.",
+    "en": "Allow pivot mode for this entity and choose the fields available as dimensions and measures.",
+    "he": "אפשר מצב טבלת ציר לישות זו ובחר את השדות הזמינים כמימדים ומדדים."
+  },
+  {
+    "key": "pivot.entitySettingsTitle",
+    "ru": "Сводные таблицы",
+    "en": "Pivot tables",
+    "he": "טבלאות ציר"
+  },
+  {
+    "key": "pivot.error",
+    "ru": "Не удалось построить сводную таблицу",
+    "en": "Failed to build the pivot table",
+    "he": "בניית טבלת הציר נכשלה"
+  },
+  {
+    "key": "pivot.fieldError",
+    "ru": "Ошибка настройки поля",
+    "en": "Field configuration error",
+    "he": "שגיאת הגדרת שדה"
+  },
+  {
+    "key": "pivot.loading",
+    "ru": "Строим сводную…",
+    "en": "Building pivot…",
+    "he": "בונה ציר…"
+  },
+  {
+    "key": "pivot.measure",
+    "ru": "Мера (значение в ячейках)",
+    "en": "Measure (cell value)",
+    "he": "מדד (ערך בתאים)"
+  },
+  {
+    "key": "pivot.modePivot",
+    "ru": "Сводная",
+    "en": "Pivot",
+    "he": "ציר"
+  },
+  {
+    "key": "pivot.modeTable",
+    "ru": "Таблица",
+    "en": "Table",
+    "he": "טבלה"
+  },
+  {
+    "key": "pivot.needColField",
+    "ru": "Выберите поле столбцов сводной таблицы",
+    "en": "Select the pivot column field",
+    "he": "בחר את שדה עמודות הציר"
+  },
+  {
+    "key": "pivot.needMeasureField",
+    "ru": "Выберите числовое поле для суммы",
+    "en": "Select a numeric field to sum",
+    "he": "בחר שדה מספרי לסיכום"
+  },
+  {
+    "key": "pivot.needRowField",
+    "ru": "Выберите поле строк сводной таблицы",
+    "en": "Select the pivot row field",
+    "he": "בחר את שדה שורות הציר"
+  },
+  {
+    "key": "pivot.noEligibleFields",
+    "ru": "Нет подходящих полей (текст, число, дата, список, логическое).",
+    "en": "No eligible fields (text, number, date, select, boolean).",
+    "he": "אין שדות מתאימים (טקסט, מספר, תאריך, רשימה, בוליאני)."
+  },
+  {
+    "key": "pivot.noNumberFields",
+    "ru": "Нет числовых полей в сводных",
+    "en": "No numeric fields in pivots",
+    "he": "אין שדות מספריים בטבלאות ציר"
+  },
+  {
+    "key": "pivot.noRoles",
+    "ru": "Роли не настроены.",
+    "en": "No roles configured.",
+    "he": "לא הוגדרו תפקידים."
+  },
+  {
+    "key": "pivot.periodDay",
+    "ru": "День",
+    "en": "Day",
+    "he": "יום"
+  },
+  {
+    "key": "pivot.periodMonth",
+    "ru": "Месяц",
+    "en": "Month",
+    "he": "חודש"
+  },
+  {
+    "key": "pivot.periodQuarter",
+    "ru": "Квартал",
+    "en": "Quarter",
+    "he": "רבעון"
+  },
+  {
+    "key": "pivot.periodYear",
+    "ru": "Год",
+    "en": "Year",
+    "he": "שנה"
+  },
+  {
+    "key": "pivot.roleVisibility",
+    "ru": "Видимость по ролям",
+    "en": "Role visibility",
+    "he": "נראות לפי תפקיד"
+  },
+  {
+    "key": "pivot.roleVisibilityHint",
+    "ru": "Если роли не выбраны, вид виден всем, у кого есть доступ к записям. Иначе — только выбранным ролям (суперадмин видит всегда).",
+    "en": "If no roles are selected, the view is visible to everyone with record access. Otherwise only to the selected roles (super admin always sees it).",
+    "he": "אם לא נבחרו תפקידים, התצוגה גלויה לכל מי שיש לו גישה לרשומות. אחרת רק לתפקידים שנבחרו (מנהל-על תמיד רואה)."
+  },
+  {
+    "key": "pivot.rows",
+    "ru": "Строки",
+    "en": "Rows",
+    "he": "שורות"
+  },
+  {
+    "key": "pivot.rowTotal",
+    "ru": "Итого",
+    "en": "Total",
+    "he": "סך הכול"
+  },
+  {
+    "key": "pivot.selectDim",
+    "ru": "поле…",
+    "en": "field…",
+    "he": "שדה…"
+  },
+  {
+    "key": "pivot.selectNumberField",
+    "ru": "числовое поле…",
+    "en": "numeric field…",
+    "he": "שדה מספרי…"
+  },
+  {
+    "key": "pivot.settingsError",
+    "ru": "Ошибка настройки сводных",
+    "en": "Pivot settings error",
+    "he": "שגיאת הגדרות ציר"
+  },
+  {
+    "key": "pivot.updating",
+    "ru": "Обновление…",
+    "en": "Updating…",
+    "he": "מעדכן…"
+  },
+  {
+    "key": "pivot.viewMode",
+    "ru": "Тип отображения",
+    "en": "Display type",
+    "he": "סוג תצוגה"
   }
 ]

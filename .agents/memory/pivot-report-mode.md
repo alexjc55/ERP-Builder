@@ -80,3 +80,38 @@ treats them as two different expressions → `column ... must appear in the GROU
 invisible for status dims (a bare column ref, `statusId::text`, has no placeholder to re-number) so only
 entity-field/page-field dimension pivots 500'd. Same family as the dependent-filters "reused sql frag
 re-binds params" gotcha — prefer ordinal references when the same dim expr must appear twice.
+
+## Pivot as a DASHBOARD WIDGET — admin-authoritative twin of the records pivot
+A `widgetType: "pivot"` dashboard widget renders the same cross-tab, but with the OPPOSITE
+permission model from the records-page pivot above. Config = `WidgetPivotConfig {entityId, pivot:
+PivotConfig, statusIds?}` on `WidgetConfig.pivot`.
+
+**Shared compute core.** Both paths call the SAME `computePivot()` in `pivot-compute.ts` (extracted
+from the old inline records handler). The caller supplies the boundary via the `where` SQL + the
+`entityFields` list:
+- Records path (`records.ts`): perm-scoped — visible fields only, own-scope, hidden-status, page-local.
+- Dashboard path (`computePivotWidget` in `dashboard.ts`): **admin-authoritative** — ALL active fields,
+  `buildRelationMeta(entityId, allFields)`, `where = entityId + isNull(archivedAt) + optional statusIds`.
+  No own-row / hidden-field / hidden-status scoping (like `computeMetric`/`computeChartSeries`).
+
+**Access is gated BEFORE compute, not inside it.** The GET dashboard/data handler checks page access +
+per-widget `visibleRoleIds` and only computes widgets the viewer may see. So the widget's real totals
+never reach an unauthorized viewer even though compute itself bypasses data RBAC.
+
+**The entity `pivotEnabled` opt-in must be re-checked at COMPUTE time, not only at create/update.**
+`validatePivotConfig` checks `entities.pivotEnabled` when saving a widget, but `computePivotWidget` MUST
+also re-load and re-check it (return `null` ⇒ `pivot:null`) so that disabling pivot for an entity later
+stops existing widgets from computing. Same spirit as `computePivot` returning null when a field loses
+its per-field opt-in.
+**Why:** create-time validation is not a durable boundary — entity config changes after the widget is
+saved, and a stale opt-in would otherwise keep producing pivots over a now-disabled entity.
+
+**Dashboard pivots reject page-local sources.** `computePivotWidget` builds a plain entity boundary with
+NO page context, so `source:"page"` dims/measures can't resolve there. `validatePivotConfig` hard-rejects
+page-sourced rows/cols/measure for dashboard widgets (the records pivot still accepts page-local from the
+records-page context). The client `PivotEditor` only ever emits entity/status dims + entity sum measures.
+
+**Client (`DashboardView.tsx`).** `PivotEditor` mirrors the entity-views `PivotDimEditor`; `draftToDim`
+trusts the editor-maintained invariant that `datePeriod` is non-null only for date-like dims (no field-type
+re-resolution in the parent `buildData`). `PivotResultTable` (presentational, extracted from `PivotView.tsx`)
+is shared between the records pivot and the widget render branch.

@@ -7,6 +7,7 @@
  */
 import type { FilterCondition } from './filterCondition';
 import type { MultilingualText } from './multilingualText';
+import type { PivotConfig } from './pivotConfig';
 import type { SortSpec } from './sortSpec';
 
 export interface EntityUpdate {
@@ -18,6 +19,8 @@ export interface EntityUpdate {
   pageId?: number | null;
   defaultSortJson?: SortSpec[];
   defaultFilterJson?: FilterCondition[];
+  /** Default pivot config for the records page when no view is selected. Null = no default pivot. */
+  defaultPivotJson?: PivotConfig | null;
   pivotEnabled?: boolean;
   sortOrder?: number;
   isActive?: boolean;

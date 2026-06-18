@@ -17,6 +17,10 @@ export const entitiesTable = pgTable("entities", {
   // Enables the per-entity "Сводная таблица" (pivot) report mode on the records
   // page. Off by default; admins opt in per entity.
   pivotEnabled: boolean("pivot_enabled").notNull().default(false),
+  // Default pivot (Сводная таблица) config for the records page when no view is
+  // selected. Same shape as a view's configJson.pivot (PivotConfig). Null = the
+  // default view offers no pivot.
+  defaultPivotJson: jsonb("default_pivot_json"),
   sortOrder: integer("sort_order").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

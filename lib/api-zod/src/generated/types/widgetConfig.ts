@@ -13,10 +13,11 @@ import type { WidgetConfigFormat } from './widgetConfigFormat';
 import type { WidgetConfigTextColor } from './widgetConfigTextColor';
 import type { WidgetConfigWidgetType } from './widgetConfigWidgetType';
 import type { WidgetMetric } from './widgetMetric';
+import type { WidgetPivotConfig } from './widgetPivotConfig';
 
 export interface WidgetConfig {
   /**
-     * metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table.
+     * metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab.
      * @nullable
      */
   widgetType?: WidgetConfigWidgetType;
@@ -31,6 +32,7 @@ export interface WidgetConfig {
   format?: WidgetConfigFormat;
   chart?: ChartConfig;
   table?: TableConfig;
+  pivot?: WidgetPivotConfig;
   /**
      * How the widget color is applied — icon box (default), card border, or full fill.
      * @nullable

@@ -7,6 +7,7 @@
  */
 import type { FilterCondition } from './filterCondition';
 import type { MultilingualText } from './multilingualText';
+import type { PivotConfig } from './pivotConfig';
 import type { SortSpec } from './sortSpec';
 
 export interface Entity {
@@ -20,6 +21,8 @@ export interface Entity {
   defaultSortJson: SortSpec[];
   /** Filters applied to the records page when no view is selected (the main view). */
   defaultFilterJson?: FilterCondition[];
+  /** Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot. */
+  defaultPivotJson?: PivotConfig | null;
   /** Enables the "Сводная таблица" (pivot) report mode for this entity's records page. */
   pivotEnabled?: boolean;
   sortOrder: number;

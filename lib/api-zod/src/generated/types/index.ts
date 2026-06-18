@@ -244,3 +244,4 @@ export * from './widgetConfigWidgetType';
 export * from './widgetMetric';
 export * from './widgetMetricAggregation';
 export * from './widgetMetricSource';
+export * from './widgetPivotConfig';

@@ -12,6 +12,7 @@ import type { DashboardWidgetDataTextColor } from './dashboardWidgetDataTextColo
 import type { DashboardWidgetDataWidgetType } from './dashboardWidgetDataWidgetType';
 import type { MultilingualText } from './multilingualText';
 import type { NotesData } from './notesData';
+import type { PivotResult } from './pivotResult';
 import type { TableColumn } from './tableColumn';
 import type { TableRow } from './tableRow';
 
@@ -43,6 +44,8 @@ export interface DashboardWidgetData {
      * @nullable
      */
   tableEntityId?: number | null;
+  /** Computed cross-tab for pivot widgets (admin-authoritative real totals, status-filtered). Null for other widget types. */
+  pivot?: PivotResult | null;
   /** @nullable */
   formula?: string | null;
   /** @nullable */
