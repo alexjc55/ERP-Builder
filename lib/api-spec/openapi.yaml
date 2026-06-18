@@ -5633,6 +5633,15 @@ components:
             fields via {field_key}; only pivot-enabled, viewer-visible fields
             resolve (others are null), so hidden/non-opted fields cannot leak.
             Ignored for agg=count/sum.
+        formulaName:
+          oneOf:
+            - $ref: "#/components/schemas/MultilingualText"
+            - type: "null"
+          description: >-
+            For agg=formula, an optional multilingual display name for the
+            measure. Used as the single column header when no column dimension is
+            set (a formula has no field name of its own). Falls back to "Формула"
+            when empty. Ignored for agg=count/sum.
 
     PivotConfig:
       type: object

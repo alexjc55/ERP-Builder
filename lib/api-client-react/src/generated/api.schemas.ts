@@ -991,6 +991,8 @@ export interface PivotMeasure {
      * @nullable
      */
   formula?: string | null;
+  /** For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to "Формула" when empty. Ignored for agg=count/sum. */
+  formulaName?: MultilingualText | null;
 }
 
 export interface PivotConfig {

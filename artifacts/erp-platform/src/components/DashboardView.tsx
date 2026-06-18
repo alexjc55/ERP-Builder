@@ -131,6 +131,17 @@ import { useLocation } from "wouter";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
+// Trim a multilingual value, dropping empty strings. Returns null when no locale
+// has content so an empty formula name is stored as null (→ server "Формула" fallback).
+function cleanML(v: MLValue): MultilingualText | null {
+  const out: MLValue = {};
+  for (const lang of ["ru", "en", "he"] as const) {
+    const s = (v[lang] ?? "").trim();
+    if (s) out[lang] = s;
+  }
+  return Object.keys(out).length > 0 ? (out as MultilingualText) : null;
+}
+
 const COLOR_PRESETS = [
   "bg-blue-600",
   "bg-violet-600",
@@ -1499,6 +1510,7 @@ type PivotDraft = {
   agg: "count" | "sum" | "formula";
   measureField: string;
   measureFormula: string;
+  measureFormulaName: MLValue;
   statusIds: number[];
 };
 
@@ -1518,6 +1530,7 @@ function emptyPivotDraft(): PivotDraft {
     agg: "count",
     measureField: "",
     measureFormula: "",
+    measureFormulaName: {},
     statusIds: [],
   };
 }
@@ -1536,6 +1549,7 @@ function pivotDraftFromConfig(spec: { entityId: number; pivot: PivotConfig; stat
     agg: spec.pivot.measure?.agg === "sum" ? "sum" : spec.pivot.measure?.agg === "formula" ? "formula" : "count",
     measureField: spec.pivot.measure?.fieldKey ?? "",
     measureFormula: spec.pivot.measure?.formula ?? "",
+    measureFormulaName: (spec.pivot.measure?.formulaName as MLValue | null | undefined) ?? {},
     statusIds: spec.statusIds ?? [],
   };
 }
@@ -1858,7 +1872,7 @@ function WidgetEditorDialog({
         pivot.agg === "sum"
           ? { agg: "sum", source: "entity", fieldKey: pivot.measureField }
           : pivot.agg === "formula"
-            ? { agg: "formula", formula: pivot.measureFormula.trim() }
+            ? { agg: "formula", formula: pivot.measureFormula.trim(), formulaName: cleanML(pivot.measureFormulaName) }
             : { agg: "count" };
       const pivotConfig: PivotConfig = { rows: draftToDim(pivot.rows), measure };
       if (pivot.colsOn) pivotConfig.cols = draftToDim(pivot.cols);
@@ -2396,13 +2410,19 @@ function PivotEditor({
               )}
             </div>
             {pivot.agg === "formula" && (
-              <FormulaEditor
-                value={pivot.measureFormula}
-                onChange={(v) => onChange({ measureFormula: v })}
-                fields={sumFields.map((f: Field) => ({ key: f.fieldKey, label: ml(f.nameJson) }))}
-                label={t("pivot.formulaMeasureLabel", "Формула меры")}
-                hint={t("pivot.formulaMeasureHint", "Вычисляется для каждой записи, затем суммируется по ячейкам. Ссылайтесь на поля через {ключ_поля} (доступны поля, включённые в сводные).")}
-              />
+              <>
+                <FormulaEditor
+                  value={pivot.measureFormula}
+                  onChange={(v) => onChange({ measureFormula: v })}
+                  fields={sumFields.map((f: Field) => ({ key: f.fieldKey, label: ml(f.nameJson) }))}
+                  label={t("pivot.formulaMeasureLabel", "Формула меры")}
+                  hint={t("pivot.formulaMeasureHint", "Вычисляется для каждой записи, затем суммируется по ячейкам. Ссылайтесь на поля через {ключ_поля} (доступны поля, включённые в сводные).")}
+                />
+                <div className="space-y-1.5">
+                  <p className="text-xs text-slate-400">{t("pivot.formulaNameLabel", "Название меры (заголовок столбца)")}</p>
+                  <MultilingualInput label={t("pivot.formulaNamePlaceholder", "Формула")} value={pivot.measureFormulaName} onChange={(v) => onChange({ measureFormulaName: v })} />
+                </div>
+              </>
             )}
           </div>
 

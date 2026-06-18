@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { MultilingualText } from './multilingualText';
 import type { PivotMeasureAgg } from './pivotMeasureAgg';
 import type { PivotMeasureSource } from './pivotMeasureSource';
 
@@ -25,4 +26,6 @@ export interface PivotMeasure {
      * @nullable
      */
   formula?: string | null;
+  /** For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to "Формула" when empty. Ignored for agg=count/sum. */
+  formulaName?: MultilingualText | null;
 }

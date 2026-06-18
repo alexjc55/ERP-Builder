@@ -6918,6 +6918,18 @@
     "he": "הזינו נוסחה עבור המדד"
   },
   {
+    "key": "pivot.formulaNameLabel",
+    "ru": "Название меры (заголовок столбца)",
+    "en": "Measure name (column header)",
+    "he": "שם המדד (כותרת עמודה)"
+  },
+  {
+    "key": "pivot.formulaNamePlaceholder",
+    "ru": "Формула",
+    "en": "Formula",
+    "he": "נוסחה"
+  },
+  {
     "key": "pivot.allowedFields",
     "ru": "Поля, доступные в сводных",
     "en": "Fields available in pivots",

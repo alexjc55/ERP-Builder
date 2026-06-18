@@ -74,6 +74,17 @@ import { ValueChecklistPicker } from "@/components/FilterValuePicker";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
+// Trim a multilingual value, dropping empty strings. Returns null when no locale
+// has content so an empty formula name is stored as null (→ server "Формула" fallback).
+function cleanML(v: MLValue): MultilingualText | null {
+  const out: MLValue = {};
+  for (const lang of ["ru", "en", "he"] as const) {
+    const s = (v[lang] ?? "").trim();
+    if (s) out[lang] = s;
+  }
+  return Object.keys(out).length > 0 ? (out as MultilingualText) : null;
+}
+
 export const FILTER_OPERATORS: { value: FilterOperator; label: string; needsValue: boolean; arrayValue?: boolean }[] = [
   { value: "eq", label: "равно", needsValue: true },
   { value: "neq", label: "не равно", needsValue: true },
@@ -678,6 +689,7 @@ export default function EntityViewsPage() {
   const [pivotAgg, setPivotAgg] = useState<"count" | "sum" | "formula">("count");
   const [pivotMeasureField, setPivotMeasureField] = useState<string>("");
   const [pivotFormula, setPivotFormula] = useState<string>("");
+  const [pivotFormulaName, setPivotFormulaName] = useState<MLValue>({});
   // Per-view role visibility (empty = visible to everyone with record access).
   const [visibleRoleIds, setVisibleRoleIds] = useState<number[]>([]);
 
@@ -695,6 +707,7 @@ export default function EntityViewsPage() {
   const [defaultPivotAgg, setDefaultPivotAgg] = useState<"count" | "sum" | "formula">("count");
   const [defaultPivotMeasureField, setDefaultPivotMeasureField] = useState<string>("");
   const [defaultPivotFormula, setDefaultPivotFormula] = useState<string>("");
+  const [defaultPivotFormulaName, setDefaultPivotFormulaName] = useState<MLValue>({});
   // Roles allowed to use the DEFAULT pivot (the Таблица/Сводная toggle on the
   // records page when no view is selected). Empty = everyone with record access.
   const [defaultPivotRoleIds, setDefaultPivotRoleIds] = useState<number[]>([]);
@@ -794,6 +807,7 @@ export default function EntityViewsPage() {
     setPivotAgg("count");
     setPivotMeasureField(pivotSumFields[0]?.fieldKey ?? "");
     setPivotFormula("");
+    setPivotFormulaName({});
     setVisibleRoleIds([]);
     setDialogOpen(true);
   };
@@ -829,6 +843,7 @@ export default function EntityViewsPage() {
     setPivotAgg(p?.measure?.agg === "sum" ? "sum" : p?.measure?.agg === "formula" ? "formula" : "count");
     setPivotMeasureField(p?.measure?.fieldKey ?? pivotSumFields[0]?.fieldKey ?? "");
     setPivotFormula(p?.measure?.formula ?? "");
+    setPivotFormulaName((p?.measure?.formulaName as MLValue | null | undefined) ?? {});
     setDialogOpen(true);
   };
 
@@ -877,6 +892,7 @@ export default function EntityViewsPage() {
     setDefaultPivotAgg(dp?.measure?.agg === "sum" ? "sum" : dp?.measure?.agg === "formula" ? "formula" : "count");
     setDefaultPivotMeasureField(dp?.measure?.fieldKey ?? pivotSumFields[0]?.fieldKey ?? "");
     setDefaultPivotFormula(dp?.measure?.formula ?? "");
+    setDefaultPivotFormulaName((dp?.measure?.formulaName as MLValue | null | undefined) ?? {});
     setDefaultPivotRoleIds(Array.isArray(dp?.visibleRoleIds) ? dp.visibleRoleIds : []);
     setDefaultSortDialogOpen(true);
   };
@@ -934,7 +950,7 @@ export default function EntityViewsPage() {
         defaultPivotAgg === "sum"
           ? { agg: "sum", source: "entity", fieldKey: defaultPivotMeasureField }
           : defaultPivotAgg === "formula"
-            ? { agg: "formula", formula: defaultPivotFormula.trim() }
+            ? { agg: "formula", formula: defaultPivotFormula.trim(), formulaName: cleanML(defaultPivotFormulaName) }
             : { agg: "count" };
       const pivot: PivotConfig = { rows: draftToDim(defaultPivotRows), measure };
       if (defaultPivotColsOn) pivot.cols = draftToDim(defaultPivotCols);
@@ -975,7 +991,7 @@ export default function EntityViewsPage() {
       pivotAgg === "sum"
         ? { agg: "sum", source: "entity", fieldKey: pivotMeasureField }
         : pivotAgg === "formula"
-          ? { agg: "formula", formula: pivotFormula.trim() }
+          ? { agg: "formula", formula: pivotFormula.trim(), formulaName: cleanML(pivotFormulaName) }
           : { agg: "count" };
     const pivot: PivotConfig = { rows: draftToDim(pivotRows), measure };
     if (pivotColsOn) pivot.cols = draftToDim(pivotCols);
@@ -1382,13 +1398,19 @@ export default function EntityViewsPage() {
                     )}
                   </div>
                   {pivotAgg === "formula" && (
-                    <FormulaEditor
-                      value={pivotFormula}
-                      onChange={setPivotFormula}
-                      fields={pivotFormulaRefs}
-                      label={t("pivot.formulaMeasureLabel", "Формула меры")}
-                      hint={t("pivot.formulaMeasureHint", "Вычисляется для каждой записи, затем суммируется по ячейкам. Ссылайтесь на поля через {ключ_поля} (доступны поля, включённые в сводные).")}
-                    />
+                    <>
+                      <FormulaEditor
+                        value={pivotFormula}
+                        onChange={setPivotFormula}
+                        fields={pivotFormulaRefs}
+                        label={t("pivot.formulaMeasureLabel", "Формула меры")}
+                        hint={t("pivot.formulaMeasureHint", "Вычисляется для каждой записи, затем суммируется по ячейкам. Ссылайтесь на поля через {ключ_поля} (доступны поля, включённые в сводные).")}
+                      />
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">{t("pivot.formulaNameLabel", "Название меры (заголовок столбца)")}</Label>
+                        <MultilingualInput label={t("pivot.formulaNamePlaceholder", "Формула")} value={pivotFormulaName} onChange={setPivotFormulaName} />
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -1572,13 +1594,19 @@ export default function EntityViewsPage() {
                       )}
                     </div>
                     {defaultPivotAgg === "formula" && (
-                      <FormulaEditor
-                        value={defaultPivotFormula}
-                        onChange={setDefaultPivotFormula}
-                        fields={pivotFormulaRefs}
-                        label={t("pivot.formulaMeasureLabel", "Формула меры")}
-                        hint={t("pivot.formulaMeasureHint", "Вычисляется для каждой записи, затем суммируется по ячейкам. Ссылайтесь на поля через {ключ_поля} (доступны поля, включённые в сводные).")}
-                      />
+                      <>
+                        <FormulaEditor
+                          value={defaultPivotFormula}
+                          onChange={setDefaultPivotFormula}
+                          fields={pivotFormulaRefs}
+                          label={t("pivot.formulaMeasureLabel", "Формула меры")}
+                          hint={t("pivot.formulaMeasureHint", "Вычисляется для каждой записи, затем суммируется по ячейкам. Ссылайтесь на поля через {ключ_поля} (доступны поля, включённые в сводные).")}
+                        />
+                        <div className="space-y-1.5">
+                          <Label className="text-sm">{t("pivot.formulaNameLabel", "Название меры (заголовок столбца)")}</Label>
+                          <MultilingualInput label={t("pivot.formulaNamePlaceholder", "Формула")} value={defaultPivotFormulaName} onChange={setDefaultPivotFormulaName} />
+                        </div>
+                      </>
                     )}
                   </div>
                   <div className="space-y-2 border-t border-slate-100 pt-3">

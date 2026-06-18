@@ -58,6 +58,8 @@ export interface PivotMeasureInput {
   fieldKey?: string | null;
   /** For agg=formula: per-record expression (function-field syntax), summed. */
   formula?: string | null;
+  /** For agg=formula: optional multilingual display name (single-column header). */
+  formulaName?: unknown;
 }
 export interface PivotConfigInput {
   rows: PivotDimInput;
@@ -203,7 +205,10 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
       // hidden / non-opted field values out of the expression — a hard field
       // boundary, NOT a cosmetic filter (a crafted formula cannot leak them).
       const allowedKeys = entityFields.filter((f) => f.pivotEnabled).map((f) => f.fieldKey);
-      return { kind: "formula", expr, label: "Формула", allowedKeys };
+      // A formula has no field name of its own, so an admin-supplied multilingual
+      // name (if any) becomes the single-column header; else fall back to "Формула".
+      const label = pivotMLName(pivot.measure.formulaName) || "Формула";
+      return { kind: "formula", expr, label, allowedKeys };
     }
     const src = pivot.measure.source;
     const key = pivot.measure.fieldKey ?? "";

@@ -88,6 +88,11 @@ server set by adding relation/lookup to it (that would route them through the wr
   entity-views, and the dashboard `PivotEditor`) AND server (`computePivot` + dashboard
   `validatePivotConfig`). The agg select offers `Формула` on all three surfaces; refs come from the
   pivot-enabled numeric/visible field set (`pivotSumFields` / `sumFields`).
+- A formula measure has no field, so its single-column header (the `__all__` no-cols case) would read
+  the literal "Формула". The measure carries an optional multilingual `formulaName` (oneOf
+  MultilingualText|null) used as that header, falling back to "Формула" when empty. It is a pure
+  DISPLAY label (becomes `measure.label`) — never touches SQL/filtering/auth, so no boundary concern.
+  Persisted via a `cleanML()` helper on each client surface that drops empty locales → null.
 - Date/datetime dims expose a period bucket (year/quarter/month/day) via `date_trunc`.
 - Optional second (column) dimension makes it a 2D cross-tab; `__all__` sentinel is the single-column
   case. Row totals, column totals, and a grand total are computed.

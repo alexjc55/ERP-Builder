@@ -1375,7 +1375,12 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.')
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
 }),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
@@ -1486,7 +1491,12 @@ export const CreateDashboardWidgetBody = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.')
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
 }),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
@@ -1588,7 +1598,12 @@ export const CreateDashboardWidgetResponse = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.')
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
 }),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
@@ -1782,7 +1797,12 @@ export const UpdateDashboardWidgetBody = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.')
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
 }),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
@@ -1884,7 +1904,12 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.')
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
 }),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
@@ -3638,7 +3663,12 @@ export const PivotEntityRecordsBody = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.')
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
 }),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 })
@@ -4005,7 +4035,12 @@ export const ListEntityViewsResponseItem = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.')
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
 }),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }).optional()
@@ -4069,7 +4104,12 @@ export const CreateEntityViewBody = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.')
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
 }),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }).optional()
@@ -4130,7 +4170,12 @@ export const GetViewResponse = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.')
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
 }),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }).optional()
@@ -4191,7 +4236,12 @@ export const UpdateViewBody = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.')
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
 }),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }).optional()
@@ -4244,7 +4294,12 @@ export const UpdateViewResponse = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.')
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
 }),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }).optional()
@@ -4336,7 +4391,12 @@ export const ListEntitiesResponseItem = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.')
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
 }),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot.'),
@@ -4393,7 +4453,12 @@ export const CreateEntityBody = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.')
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
 }),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot config for the records page when no view is selected. Null = no default pivot.'),
@@ -4451,7 +4516,12 @@ export const GetEntityResponse = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.')
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
 }),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot.'),
@@ -4510,7 +4580,12 @@ export const UpdateEntityBody = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.')
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
 }),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot config for the records page when no view is selected. Null = no default pivot.'),
@@ -4560,7 +4635,12 @@ export const UpdateEntityResponse = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula']),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula.'),
   "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula.'),
-  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.')
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. Ignored for agg=count\/sum.'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('For agg=formula, an optional multilingual display name for the measure. Used as the single column header when no column dimension is set (a formula has no field name of its own). Falls back to \"Формула\" when empty. Ignored for agg=count\/sum.')
 }),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot.'),
