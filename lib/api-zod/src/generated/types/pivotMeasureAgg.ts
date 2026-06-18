@@ -12,4 +12,5 @@ export type PivotMeasureAgg = typeof PivotMeasureAgg[keyof typeof PivotMeasureAg
 export const PivotMeasureAgg = {
   count: 'count',
   sum: 'sum',
+  formula: 'formula',
 } as const;

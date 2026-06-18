@@ -1496,8 +1496,9 @@ type PivotDraft = {
   rows: PivotDraftDim;
   colsOn: boolean;
   cols: PivotDraftDim;
-  agg: "count" | "sum";
+  agg: "count" | "sum" | "formula";
   measureField: string;
+  measureFormula: string;
   statusIds: number[];
 };
 
@@ -1516,6 +1517,7 @@ function emptyPivotDraft(): PivotDraft {
     cols: { source: "status", fieldKey: "", datePeriod: null },
     agg: "count",
     measureField: "",
+    measureFormula: "",
     statusIds: [],
   };
 }
@@ -1531,8 +1533,9 @@ function pivotDraftFromConfig(spec: { entityId: number; pivot: PivotConfig; stat
     rows: dimToDraft(spec.pivot.rows),
     colsOn: !!spec.pivot.cols,
     cols: spec.pivot.cols ? dimToDraft(spec.pivot.cols) : { source: "status", fieldKey: "", datePeriod: null },
-    agg: spec.pivot.measure?.agg === "sum" ? "sum" : "count",
+    agg: spec.pivot.measure?.agg === "sum" ? "sum" : spec.pivot.measure?.agg === "formula" ? "formula" : "count",
     measureField: spec.pivot.measure?.fieldKey ?? "",
+    measureFormula: spec.pivot.measure?.formula ?? "",
     statusIds: spec.statusIds ?? [],
   };
 }
@@ -1837,6 +1840,10 @@ function WidgetEditorDialog({
         toast({ title: t("dash.pivotNeedsMeasure", "Для суммы выберите числовое поле"), variant: "destructive" });
         return null;
       }
+      if (pivot.agg === "formula" && !pivot.measureFormula.trim()) {
+        toast({ title: t("pivot.needFormula", "Введите формулу для меры"), variant: "destructive" });
+        return null;
+      }
       // The PivotEditor keeps datePeriod non-null only for date-like dims, so the
       // draft value can be trusted here without re-resolving the field type.
       const draftToDim = (d: PivotDraftDim): PivotDimension =>
@@ -1850,7 +1857,9 @@ function WidgetEditorDialog({
       const measure: PivotMeasure =
         pivot.agg === "sum"
           ? { agg: "sum", source: "entity", fieldKey: pivot.measureField }
-          : { agg: "count" };
+          : pivot.agg === "formula"
+            ? { agg: "formula", formula: pivot.measureFormula.trim() }
+            : { agg: "count" };
       const pivotConfig: PivotConfig = { rows: draftToDim(pivot.rows), measure };
       if (pivot.colsOn) pivotConfig.cols = draftToDim(pivot.cols);
       return {
@@ -2361,11 +2370,12 @@ function PivotEditor({
           <div className="space-y-1.5">
             <p className="text-xs text-slate-400">{t("pivot.measure", "Мера (значение в ячейках)")}</p>
             <div className="flex items-center gap-2">
-              <Select value={pivot.agg} onValueChange={(v) => onChange({ agg: v as "count" | "sum", measureField: "" })}>
+              <Select value={pivot.agg} onValueChange={(v) => onChange({ agg: v as "count" | "sum" | "formula", measureField: "" })}>
                 <SelectTrigger className="h-8 text-sm w-40"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="count">{t("pivot.aggCount", "Количество записей")}</SelectItem>
                   <SelectItem value="sum">{t("pivot.aggSum", "Сумма поля")}</SelectItem>
+                  <SelectItem value="formula">{t("pivot.aggFormula", "Формула")}</SelectItem>
                 </SelectContent>
               </Select>
               {pivot.agg === "sum" && (
@@ -2385,6 +2395,15 @@ function PivotEditor({
                 </Select>
               )}
             </div>
+            {pivot.agg === "formula" && (
+              <FormulaEditor
+                value={pivot.measureFormula}
+                onChange={(v) => onChange({ measureFormula: v })}
+                fields={sumFields.map((f: Field) => ({ key: f.fieldKey, label: ml(f.nameJson) }))}
+                label={t("pivot.formulaMeasureLabel", "Формула меры")}
+                hint={t("pivot.formulaMeasureHint", "Вычисляется для каждой записи, затем суммируется по ячейкам. Ссылайтесь на поля через {ключ_поля} (доступны поля, включённые в сводные).")}
+              />
+            )}
           </div>
 
           {statuses.length > 0 && (

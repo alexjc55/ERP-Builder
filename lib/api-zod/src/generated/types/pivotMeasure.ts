@@ -11,13 +11,18 @@ import type { PivotMeasureSource } from './pivotMeasureSource';
 export interface PivotMeasure {
   agg: PivotMeasureAgg;
   /**
-     * For agg=sum, where the numeric field lives. Ignored for agg=count.
+     * For agg=sum, where the numeric field lives. Ignored for agg=count/formula.
      * @nullable
      */
   source?: PivotMeasureSource;
   /**
-     * Numeric field key for agg=sum. Ignored for agg=count.
+     * Numeric field key for agg=sum. Ignored for agg=count/formula.
      * @nullable
      */
   fieldKey?: string | null;
+  /**
+     * For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden/non-opted fields cannot leak. Ignored for agg=count/sum.
+     * @nullable
+     */
+  formula?: string | null;
 }

@@ -5617,14 +5617,22 @@ components:
       properties:
         agg:
           type: string
-          enum: [count, sum]
+          enum: [count, sum, formula]
         source:
           type: ["string", "null"]
           enum: [entity, page, null]
-          description: For agg=sum, where the numeric field lives. Ignored for agg=count.
+          description: For agg=sum, where the numeric field lives. Ignored for agg=count/formula.
         fieldKey:
           type: ["string", "null"]
-          description: Numeric field key for agg=sum. Ignored for agg=count.
+          description: Numeric field key for agg=sum. Ignored for agg=count/formula.
+        formula:
+          type: ["string", "null"]
+          description: >-
+            For agg=formula, an expression (same syntax as function fields)
+            evaluated per record and SUMMED into each cell. References entity
+            fields via {field_key}; only pivot-enabled, viewer-visible fields
+            resolve (others are null), so hidden/non-opted fields cannot leak.
+            Ignored for agg=count/sum.
 
     PivotConfig:
       type: object

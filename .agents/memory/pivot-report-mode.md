@@ -65,8 +65,29 @@ server set by adding relation/lookup to it (that would route them through the wr
   field-type enum, so new dim types are purely a server+client-picker concern.
 
 ## Measure / grouping mechanics
-- Measure is `count` (rows) or `sum` (over a numeric field); sum uses a regex-guarded numeric cast
-  (`PIVOT_NUMERIC_RE`) so non-numeric JSONB values can't throw `::numeric` errors.
+- Measure is `count` (rows), `sum` (over a numeric field), or `formula` (per-record expression).
+  sum uses a regex-guarded numeric cast (`PIVOT_NUMERIC_RE`) so non-numeric JSONB values can't throw
+  `::numeric` errors.
+
+### Formula measure — evaluate-per-record-then-sum (NOT a SQL aggregate)
+- A `formula` measure does NOT push into Postgres. It runs a NON-grouped query selecting (rowKey,
+  colKey, valuesJson), evaluates the admin's expression once per record (same `evaluateFormula` engine
+  as `function` fields), sums the finite numeric results into each (rk,ck) cell client-side in the
+  handler. **Why:** the use case is `metres * pricePerUnit` per item, then SUM of per-item totals —
+  this is impossible as a single SQL sum because the product is computed per row first.
+- **Hard field boundary is the per-row value map, NOT SQL.** Build the eval value map restricted to
+  `allowedKeys` = the pivot-enabled keys of the `entityFields` list passed in. Because `entityFields`
+  is already the caller's boundary (viewer-visible set on the records path; all-active on the
+  admin-authoritative dashboard path), hidden/non-opted fields are simply ABSENT from the eval context
+  → a `{key}` reference to them returns null, never leaks a value. Do not feed raw `valuesJson` to the
+  evaluator.
+- Validate the expression ONCE up front via `evaluateFormula(expr, {})` (missing fields return null;
+  only true parse errors throw → reject the whole request). Per-record runtime anomalies must NOT
+  fail the request — a non-finite/throwing record contributes 0, keeping the pivot resilient.
+- Empty formula is rejected at three layers: both client editors (named-view + default pivot in
+  entity-views, and the dashboard `PivotEditor`) AND server (`computePivot` + dashboard
+  `validatePivotConfig`). The agg select offers `Формула` on all three surfaces; refs come from the
+  pivot-enabled numeric/visible field set (`pivotSumFields` / `sumFields`).
 - Date/datetime dims expose a period bucket (year/quarter/month/day) via `date_trunc`.
 - Optional second (column) dimension makes it a 2D cross-tab; `__all__` sentinel is the single-column
   case. Row totals, column totals, and a grand total are computed.

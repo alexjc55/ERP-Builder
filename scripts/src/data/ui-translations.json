@@ -6894,6 +6894,30 @@
     "he": "סכום שדה"
   },
   {
+    "key": "pivot.aggFormula",
+    "ru": "Формула",
+    "en": "Formula",
+    "he": "נוסחה"
+  },
+  {
+    "key": "pivot.formulaMeasureLabel",
+    "ru": "Формула меры",
+    "en": "Measure formula",
+    "he": "נוסחת מדד"
+  },
+  {
+    "key": "pivot.formulaMeasureHint",
+    "ru": "Вычисляется для каждой записи, затем суммируется по ячейкам. Ссылайтесь на поля через {ключ_поля} (доступны поля, включённые в сводные).",
+    "en": "Evaluated per record, then summed into each cell. Reference fields via {field_key} (only pivot-enabled fields are available).",
+    "he": "מחושב לכל רשומה ואז מסוכם לכל תא. הפנו לשדות באמצעות {field_key} (זמינים רק שדות שהופעלו בטבלת ציר)."
+  },
+  {
+    "key": "pivot.needFormula",
+    "ru": "Введите формулу для меры",
+    "en": "Enter a formula for the measure",
+    "he": "הזינו נוסחה עבור המדד"
+  },
+  {
     "key": "pivot.allowedFields",
     "ru": "Поля, доступные в сводных",
     "en": "Fields available in pivots",

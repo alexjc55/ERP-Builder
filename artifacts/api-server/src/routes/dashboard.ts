@@ -693,6 +693,9 @@ async function validatePivotConfig(spec: PivotSpec | null | undefined): Promise<
   if (spec.pivot.measure.agg === "sum" && spec.pivot.measure.source === "page") {
     return "Dashboard pivot measure must be an entity field";
   }
+  if (spec.pivot.measure.agg === "formula" && !spec.pivot.measure.formula?.trim()) {
+    return "Pivot formula measure requires a formula";
+  }
   return null;
 }
 

@@ -18,6 +18,7 @@ import {
   type EntityField,
 } from "@workspace/db";
 import { eq, sql, inArray, type SQL } from "drizzle-orm";
+import { evaluateFormula } from "@workspace/formula";
 import { relationValueScalar, pageLocalValueExpr, type RelationFilterMeta } from "./record-query";
 
 export const PIVOT_DIM_TYPES = new Set([
@@ -55,6 +56,8 @@ export interface PivotMeasureInput {
   agg: string;
   source?: string | null;
   fieldKey?: string | null;
+  /** For agg=formula: per-record expression (function-field syntax), summed. */
+  formula?: string | null;
 }
 export interface PivotConfigInput {
   rows: PivotDimInput;
@@ -173,9 +176,34 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
     return { kind: "plain", expr: ve };
   };
 
-  const resolveMeasure = (): { expr: SQL; label: string } | { error: string } => {
+  // A measure is either resolved to a SQL aggregate (count / sum-of-field) that
+  // GROUP BYs in Postgres, or to a per-record `formula` expression evaluated in
+  // JS (SQL can't run the formula language) and summed into each cell.
+  type MeasurePlan =
+    | { kind: "sql"; expr: SQL; label: string }
+    | { kind: "formula"; expr: string; label: string; allowedKeys: string[] };
+  const resolveMeasure = (): MeasurePlan | { error: string } => {
     if (pivot.measure.agg === "count") {
-      return { expr: sql`count(*)::float8`, label: "Количество" };
+      return { kind: "sql", expr: sql`count(*)::float8`, label: "Количество" };
+    }
+    if (pivot.measure.agg === "formula") {
+      const expr = (pivot.measure.formula ?? "").trim();
+      if (!expr) return { error: "Formula measure requires a formula expression" };
+      // Validate syntax once. Missing field refs resolve to null (they don't
+      // throw), so an empty value map only surfaces parse / unknown-function
+      // errors here — not "field not provided" false positives.
+      try {
+        evaluateFormula(expr, {});
+      } catch (e) {
+        return { error: `Некорректная формула: ${e instanceof Error ? e.message : String(e)}` };
+      }
+      // Only pivot-enabled, viewer-visible entity fields may feed the formula.
+      // `entityFields` is already the viewer's visible set (or all-active for the
+      // admin widget); restricting the per-record value map to these keys keeps
+      // hidden / non-opted field values out of the expression — a hard field
+      // boundary, NOT a cosmetic filter (a crafted formula cannot leak them).
+      const allowedKeys = entityFields.filter((f) => f.pivotEnabled).map((f) => f.fieldKey);
+      return { kind: "formula", expr, label: "Формула", allowedKeys };
     }
     const src = pivot.measure.source;
     const key = pivot.measure.fieldKey ?? "";
@@ -199,6 +227,7 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
       label = pivotMLName(pf.nameJson);
     }
     return {
+      kind: "sql",
       expr: sql`COALESCE(SUM(CASE WHEN (${ve}) ~ ${PIVOT_NUMERIC_RE} THEN (${ve})::numeric ELSE 0 END), 0)::float8`,
       label,
     };
@@ -211,7 +240,7 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
   const measure = resolveMeasure();
   if ("error" in measure) return { ok: false, error: measure.error };
 
-  // ---- Grouped aggregation ----
+  // ---- Aggregation ----
   const rowKeyExpr = rowMeta.kind === "status" ? sql`${entityRecordsTable.statusId}::text` : rowMeta.expr;
   const colKeyExpr = !colMeta
     ? null
@@ -219,19 +248,49 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
       ? sql`${entityRecordsTable.statusId}::text`
       : colMeta.expr;
 
-  const grouped = await db
-    .select({
-      rk: sql<string | null>`${rowKeyExpr}`,
-      ck: colKeyExpr ? sql<string | null>`${colKeyExpr}` : sql<string>`${PIVOT_COL_ALL}`,
-      v: sql<number>`${measure.expr}`,
-    })
-    .from(entityRecordsTable)
-    .where(where)
-    // Group by SELECT output ordinals (1 = row key, 2 = col key), NOT by
-    // re-embedding rowKeyExpr/colKeyExpr. Re-embedding the same sql fragment
-    // re-binds its placeholders ($1 in SELECT vs $10 in GROUP BY), so Postgres
-    // sees two different expressions and rejects the non-aggregated column.
-    .groupBy(...(colKeyExpr ? [sql`1`, sql`2`] : [sql`1`]));
+  let grouped: { rk: string | null; ck: string | null; v: number }[];
+  if (measure.kind === "formula") {
+    // SQL can't compute the formula language, so pull per-record keys + the raw
+    // values map (NO GROUP BY), evaluate in JS against the allowed-key-scoped
+    // values, and emit one {rk,ck,v} per record. The shared loop below then
+    // sums duplicates per (row,col) exactly like the SQL path.
+    const allowed = measure.allowedKeys;
+    const raw = await db
+      .select({
+        rk: sql<string | null>`${rowKeyExpr}`,
+        ck: colKeyExpr ? sql<string | null>`${colKeyExpr}` : sql<string>`${PIVOT_COL_ALL}`,
+        vals: entityRecordsTable.valuesJson,
+      })
+      .from(entityRecordsTable)
+      .where(where);
+    grouped = raw.map((r) => {
+      const src = (r.vals ?? {}) as Record<string, unknown>;
+      const scoped: Record<string, unknown> = {};
+      for (const k of allowed) scoped[k] = src[k];
+      let v = 0;
+      try {
+        const res = evaluateFormula(measure.expr, scoped);
+        if (typeof res === "number" && Number.isFinite(res)) v = res;
+      } catch {
+        v = 0;
+      }
+      return { rk: r.rk, ck: r.ck, v };
+    });
+  } else {
+    grouped = await db
+      .select({
+        rk: sql<string | null>`${rowKeyExpr}`,
+        ck: colKeyExpr ? sql<string | null>`${colKeyExpr}` : sql<string>`${PIVOT_COL_ALL}`,
+        v: sql<number>`${measure.expr}`,
+      })
+      .from(entityRecordsTable)
+      .where(where)
+      // Group by SELECT output ordinals (1 = row key, 2 = col key), NOT by
+      // re-embedding rowKeyExpr/colKeyExpr. Re-embedding the same sql fragment
+      // re-binds its placeholders ($1 in SELECT vs $10 in GROUP BY), so Postgres
+      // sees two different expressions and rejects the non-aggregated column.
+      .groupBy(...(colKeyExpr ? [sql`1`, sql`2`] : [sql`1`]));
+  }
 
   // ---- Label resolution ----
   const statusName = new Map<number, string>();
