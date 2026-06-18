@@ -135,6 +135,7 @@ import { CreateUserDialog } from "@/components/CreateUserDialog";
 import { PageFieldConfigDialog } from "@/components/PageFieldConfigDialog";
 import { formatFormulaResult, evaluateFormula } from "@workspace/formula";
 import { computeRowFormatting, type FormatField } from "@/lib/formatRules";
+import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus } from "lucide-react";
 import { Link, useLocation, useSearch } from "wouter";
@@ -3694,19 +3695,6 @@ function RecordHistoryList({
       </table>
     </div>
   );
-}
-
-/** Restrict user options to a `user`-field's allowed roles (empty/unset = all).
- * Matches on the user's FULL role set (primary + additional), so a user who
- * holds the required role as a secondary role still appears in the picker. */
-function filterUserOptionsByRoles(field: Field, options: UserOption[]): UserOption[] {
-  const allowed = field.userConfigJson?.allowedRoleIds;
-  if (!Array.isArray(allowed) || allowed.length === 0) return options;
-  const allowedSet = new Set(allowed);
-  return options.filter((u) => {
-    const userRoles = u.roleIds && u.roleIds.length > 0 ? u.roleIds : [u.roleId];
-    return userRoles.some((rid) => allowedSet.has(rid));
-  });
 }
 
 /**

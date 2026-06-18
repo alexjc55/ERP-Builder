@@ -13,5 +13,6 @@ A `user`-type field can restrict its picker to certain roles via `userConfigJson
 
 **How to apply:**
 - `GET /users/options` returns `roleIds` (deduped `[primary, ...userRoles]`) per option, not just `roleId`. `UserOption` schema carries both (`roleId` kept for back-compat).
-- The client filter (`filterUserOptionsByRoles` in `EntityRecords.tsx`) intersects `allowedRoleIds` with the user's `roleIds` (falls back to `[roleId]` if `roleIds` absent). Empty/unset `allowedRoleIds` = all users.
-- If you add any other "filter users by role" surface, reuse the full-role-set logic — don't reintroduce a primary-only check.
+- The shared client filter `filterUserOptionsByRoles(field, options)` lives in `lib/userFieldRoles.ts` and intersects `allowedRoleIds` with the user's `roleIds` (falls back to `[roleId]` if `roleIds` absent). Empty/unset `allowedRoleIds` = all users. It is reused by record editors, the records filter bar, AND the view-config filter editor.
+- The view-config value picker (`getDomainOptions`) must apply this too: a `user` filter offers the FULL allowed-role domain (not just users present in records), so resolve the field's `allowedRoleIds` and filter — for relation/lookup the config lives on the PROJECTED linked field, so pass that field, not the relation field itself.
+- If you add any other "filter users by role" surface, reuse `filterUserOptionsByRoles` — don't reintroduce a primary-only check or a local copy.

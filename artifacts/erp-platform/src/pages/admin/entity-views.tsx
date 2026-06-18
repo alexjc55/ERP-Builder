@@ -79,6 +79,7 @@ import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Loader2, ArrowLeft, LayoutList, Star, Filter, ArrowDownUp, X, ChevronUp, ChevronDown, Check, Table2, Shield } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
 import { slugifyKey, uniqueKey } from "@/lib/keys";
+import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 import { ValueChecklistPicker } from "@/components/FilterValuePicker";
 
 type MLValue = { ru?: string; en?: string; he?: string };
@@ -714,7 +715,14 @@ export default function EntityViewsPage() {
       const f = d.fields.find((x: Field) => x.fieldKey === fieldKey);
       const ft = f?.fieldType;
       const eff = ft === "relation" || ft === "lookup" ? (d.projectedTypeByField.get(fieldKey) ?? "text") : ft;
-      if (eff === "user") return d.userOptions.map((u) => String(u.id));
+      if (eff === "user") {
+        // Only offer users whose roles satisfy the field's allowedRoleIds (full role
+        // set, not just primary) — for relation/lookup the config lives on the linked
+        // field, so resolve via the projected field. Empty/unset = all users.
+        const src = ft === "relation" || ft === "lookup" ? d.projectedFieldByField.get(fieldKey) : f;
+        const users = src ? filterUserOptionsByRoles(src, d.userOptions) : d.userOptions;
+        return users.map((u) => String(u.id));
+      }
       if (eff === "boolean") return ["true", "false"];
       if (eff === "select") {
         const src = ft === "relation" || ft === "lookup" ? d.projectedFieldByField.get(fieldKey) : f;
