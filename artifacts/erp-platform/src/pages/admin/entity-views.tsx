@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import {
   useListEntityViews,
@@ -345,11 +345,11 @@ function FilterValueEditor({
     return <Input type="datetime-local" className="h-8 flex-1 text-sm" value={valueText} onChange={(e) => onChange(e.target.value)} />;
   }
   // user / relation / lookup / any remaining field type under a discrete operator:
-  // offer the SAME searchable existing-values checklist as the live records bar
-  // (shared component). Labels resolve by the EFFECTIVE type so user ids show as
-  // names and relation/lookup-surfaced users/booleans read correctly instead of raw
-  // ids. The values come straight from the records, so the list is complete (every
-  // value that actually appears) and never role-restricted.
+  // offer the SAME searchable checklist as the live records bar (shared component).
+  // Options come from getOptions, which for CLOSED-domain effective types (user /
+  // select / boolean) returns the FULL domain — not just values present in existing
+  // records — so a view filter can target a value no record uses YET. Labels resolve
+  // by the EFFECTIVE type so user ids show as names and booleans read as Да/Нет.
   if (field && getOptions && DISCRETE_OPERATORS.has(operator)) {
     const selectedVals = isArray
       ? valueText.split(",").map((s) => s.trim()).filter((s) => s.length > 0)
@@ -364,10 +364,13 @@ function FilterValueEditor({
         : effectiveType === "boolean"
           ? (v: string) => (v === "true" ? t("views.boolTrue", "Да") : t("views.boolFalse", "Нет"))
           : undefined;
-    // Id-backed (user) and boolean values must be picked from the resolved list —
-    // typing a raw id/value by hand is meaningless. Text-like values keep manual
-    // entry so authors can target a value not yet present in the data.
-    const allowManual = !(effectiveType === "user" || effectiveType === "boolean");
+    // Closed-domain values (user ids, booleans, select options) must be picked from
+    // the full resolved list — typing one by hand is meaningless. Open-domain
+    // (text-like) values keep manual entry so authors can target a value not yet
+    // present in the data.
+    const allowManual = !(
+      effectiveType === "user" || effectiveType === "boolean" || effectiveType === "select"
+    );
     return (
       <ValueChecklistPicker
         fieldKey={field.fieldKey}
@@ -587,21 +590,10 @@ export default function EntityViewsPage() {
 
   const { data: roles = [] } = useListRoles();
   const { data: userOptions = [] } = useListUserOptions();
-  // Searchable existing-values lookup for filter editors — same endpoint the live
-  // records bar uses, so the value picker is consistent. No active-filter context
-  // here (admin authoring), so it lists distinct values across all records.
+  // Distinct EXISTING values lookup (the live records bar's endpoint). Used only as
+  // *suggestions* for open-domain fields; closed-domain fields use their full domain
+  // (see getDomainOptions below).
   const filterValuesMutation = useGetEntityFilterValues();
-  const getFilterOptions = useCallback(
-    async (fieldKey: string): Promise<string[]> => {
-      const res = await filterValuesMutation.mutateAsync({
-        entityId,
-        data: { field: fieldKey, filters: [] },
-      });
-      return res.values ?? [];
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [entityId],
-  );
   // Projected field TYPE for relation/lookup fields (the linked field whose values
   // they surface). The raw filter values of a relation/lookup field ARE the linked
   // field's values, so the EFFECTIVE type for labeling is the linked field's type.
@@ -633,24 +625,61 @@ export default function EntityViewsPage() {
   const linkedFieldQueries = useQueries({
     queries: linkedEntityIds.map((eid) => getListEntityFieldsQueryOptions(eid)),
   });
-  const projectedTypeByField = useMemo(() => {
+  const projectedFieldByField = useMemo(() => {
     const fieldsByEntity = new Map<number, Field[]>();
     linkedEntityIds.forEach((eid, i) => {
       const d = linkedFieldQueries[i]?.data as Field[] | undefined;
       if (d) fieldsByEntity.set(eid, d);
     });
-    const m = new Map<string, Field["fieldType"]>();
+    const m = new Map<string, Field>();
     for (const f of relLookupFields) {
       const eid = linkedEntityIdByRelationId.get(f.relationConfigJson!.relationId!);
       if (eid == null) continue;
       const lf = fieldsByEntity
         .get(eid)
         ?.find((x) => x.fieldKey === f.relationConfigJson!.relatedFieldKey);
-      if (lf) m.set(f.fieldKey, lf.fieldType);
+      if (lf) m.set(f.fieldKey, lf);
     }
     return m;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkedEntityIds, linkedFieldQueries, linkedEntityIdByRelationId, allFields]);
+  const projectedTypeByField = useMemo(() => {
+    const m = new Map<string, Field["fieldType"]>();
+    for (const [k, lf] of projectedFieldByField) m.set(k, lf.fieldType);
+    return m;
+  }, [projectedFieldByField]);
+  // Value-picker domain for the view filter editors. A saved view filter is a RULE
+  // that must also match records created LATER, so for CLOSED-domain types
+  // (user / select / boolean) we offer the FULL set of possible values — not just
+  // the values already present in the data. OPEN-domain types (text, numbers,
+  // relation/lookup → text …) list the distinct EXISTING values as suggestions,
+  // with manual entry still enabled so an author can target a not-yet-present value.
+  // Mutable inputs read by getDomainOptions are kept in a ref so the callback can
+  // stay referentially STABLE (deps [entityId] only). `fields` is rebuilt every
+  // render ([...allFields].filter().sort()) and the projection maps churn too, so
+  // depending on them directly would change getDomainOptions each render and make
+  // ValueChecklistPicker's getOptions-keyed fetch effect re-run in a loop while open.
+  const domainDataRef = useRef({ fields, userOptions, projectedTypeByField, projectedFieldByField });
+  domainDataRef.current = { fields, userOptions, projectedTypeByField, projectedFieldByField };
+  const getDomainOptions = useCallback(
+    async (fieldKey: string): Promise<string[]> => {
+      const d = domainDataRef.current;
+      const f = d.fields.find((x: Field) => x.fieldKey === fieldKey);
+      const ft = f?.fieldType;
+      const eff = ft === "relation" || ft === "lookup" ? (d.projectedTypeByField.get(fieldKey) ?? "text") : ft;
+      if (eff === "user") return d.userOptions.map((u) => String(u.id));
+      if (eff === "boolean") return ["true", "false"];
+      if (eff === "select") {
+        const src = ft === "relation" || ft === "lookup" ? d.projectedFieldByField.get(fieldKey) : f;
+        const opts = src && Array.isArray(src.optionsJson) ? (src.optionsJson as string[]) : [];
+        if (opts.length > 0) return opts;
+      }
+      const res = await filterValuesMutation.mutateAsync({ entityId, data: { field: fieldKey, filters: [] } });
+      return res.values ?? [];
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [entityId],
+  );
   // Fields the admin has opted into as pivot dims/measures.
   const pivotDimFields = fields.filter((f: Field) => f.pivotEnabled && PIVOT_DIM_TYPES.has(f.fieldType));
   const pivotSumFields = fields.filter((f: Field) => f.pivotEnabled && f.fieldType === "number");
@@ -1311,7 +1340,7 @@ export default function EntityViewsPage() {
               onRemove={removeFilter}
               conjunction={filterConjunction}
               onConjunctionChange={setFilterConjunction}
-              getOptions={getFilterOptions}
+              getOptions={getDomainOptions}
               projectedTypeByField={projectedTypeByField}
             />
 
@@ -1429,7 +1458,7 @@ export default function EntityViewsPage() {
               onAdd={addDefaultFilter}
               onUpdate={updateDefaultFilter}
               onRemove={removeDefaultFilter}
-              getOptions={getFilterOptions}
+              getOptions={getDomainOptions}
               projectedTypeByField={projectedTypeByField}
             />
             <div className="flex items-center justify-between border-t border-slate-100 pt-4">

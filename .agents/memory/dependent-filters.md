@@ -30,10 +30,27 @@ not with a bespoke picker:
 - Route user / relation / lookup / any discrete-operator field through the SHARED `ValueChecklistPicker`
   (same component the live bar uses) with `labelFor` resolving user id→name (via the userOptions map) and
   boolean→Да/Нет; `allowManual` disabled for user/boolean. select→OptionPicker, date→calendar as before.
-**Gotcha:** there are TWO `FilterRowsEditor` call sites (default-view + named-view) with DIFFERENT
-conjunction handlers, so a `replace_all` keyed on the conjunction prop only patches one. The
-`projectedTypeByField` prop must be passed to BOTH, or relation/lookup user-id→name resolution silently
-falls back to `text` in whichever dialog was missed.
+**Invariant:** the editor renders TWO `FilterRowsEditor` instances (default-view + named-view) that
+must receive IDENTICAL shared props (`projectedTypeByField`, `getOptions`, …). They have different
+conjunction handlers, so they are easy to edit out of sync — any new shared prop must be wired to BOTH
+or behavior silently diverges between the two dialogs.
+
+### View-editor pickers offer the FULL domain, not existing values
+A saved view filter is a RULE that must also match records created LATER, so the view-config value
+picker must NOT be limited to values already present in the data (that's the live-bar's dependent
+semantics, which is wrong for authoring). The page passes a single `getDomainOptions(fieldKey)` to the
+editors that branches on the EFFECTIVE type (relation/lookup → projected linked-field type):
+- **Closed domains** return the full set, ignoring records: `user` → all `userOptions` ids;
+  `boolean` → `["true","false"]`; `select` → the field's (or projected linked field's) `optionsJson`.
+- **Open domains** (text, number, relation/lookup→text) fall back to the distinct EXISTING values
+  endpoint as mere SUGGESTIONS, and `allowManual` stays ON so an author can type a not-yet-present value.
+`allowManual` is OFF for closed domains (user/boolean/select) — picking from the full list is the point.
+Native `select`/`boolean` short-circuit to OptionPicker / Да-Нет before the checklist; `getDomainOptions`
+only matters for `user` and relation/lookup-projected closed domains.
+**Why this mattered:** an admin couldn't build a view filtering by a manufacturer (a `user` lookup) that
+had no records yet — the picker only listed users already used, with manual entry disabled.
+**Stability:** `getDomainOptions` must be a stable `useCallback` (ValueChecklistPicker's fetch effect
+depends on it); building it per-render would refetch in a loop while the popover is open.
 
 ## Dependent option lists
 Endpoint `POST /entities/{entityId}/records/filter-values` (operationId `getEntityFilterValues`,
