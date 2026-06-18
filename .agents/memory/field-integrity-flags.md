@@ -3,7 +3,12 @@ name: Field integrity flags (isKey / lockAfterCreate)
 description: Durable rules for per-entity-field uniqueness and immutability enforcement on the records write path.
 ---
 
-Two per-entity-field boolean flags on `entity_fields`: `isKey` (value unique within the entity) and `lockAfterCreate` (value immutable once a non-empty value is stored). Both are invalid for `file`/`function` field types (rejected on field create + PUT, and the UI hides the toggles).
+Two per-entity-field boolean flags on `entity_fields`: `isKey` (value unique within the entity) and `lockAfterCreate` (value immutable once a non-empty value is stored).
+
+- `isKey` is invalid for `file`/`function`/`relation`/`lookup` — it needs a stored JSONB scalar to dedupe, which none of those have.
+- `lockAfterCreate` is invalid for `file`/`function`/`lookup` only. It **IS valid for `relation`**: relation immutability is enforced on the `record_links` row in `relations.ts` (not via the JSONB scalar), so locking a relation field is a real, supported feature (with its own UI hint).
+
+**Inherited-flag pitfall (caused a real bug):** the PUT path computes `nextLock = body.lockAfterCreate ?? current.lockAfterCreate`, so an unrelated update (e.g. toggling `pivotEnabled`) on an already-locked field re-runs the type guard against the *inherited* flag. Any type that can legitimately hold the flag must therefore be excluded from that guard, or every future edit to such a field 400s. (This is why `relation` had to be removed from the `lockAfterCreate` guard, not just made settable.)
 
 ## isKey uniqueness
 - Case-insensitive (trim+lower), global **within the entity**, with **no archive/visibility filter** — a key must stay unique even against archived/hidden rows, otherwise unarchiving could resurrect a duplicate.
