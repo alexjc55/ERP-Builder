@@ -1100,9 +1100,15 @@ router.post(
     const visibleFields = fields.filter((f) => !hidden.has(f.fieldKey));
 
     const target = visibleFields.find((f) => f.fieldKey === body.data.field);
-    // Only fields opted-in to filtering and visible to this role can have their values listed.
-    if (!target || !target.isFilterable) {
-      res.status(400).json({ error: `Field is not filterable: ${body.data.field}` });
+    // The real boundary for listing distinct values is field VISIBILITY (hidden) +
+    // row scope + hidden statuses, all applied below — `isFilterable` is only a
+    // LIVE-bar UI opt-in (which fields surface as interactive dropdowns), NOT a
+    // security boundary. The admin view/default-view editor authors persistent
+    // filters on ANY visible field (incl. non-filterable lookups), so list values
+    // for any field the caller can already see. The live bar only ever requests
+    // filterable fields, so this relaxation doesn't change its behavior.
+    if (!target) {
+      res.status(400).json({ error: `Field not found or not visible: ${body.data.field}` });
       return;
     }
 

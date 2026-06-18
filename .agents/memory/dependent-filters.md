@@ -9,9 +9,31 @@ The records page has a filter bar: free-text search, a status quick-filter (mult
 `entityRecords.statusId`), and one dependent dropdown per field opted into filtering.
 
 ## Opt-in
-A field appears as a filter only when `entity_fields.isFilterable = true` (default false), toggled
-from the field config dialog. Hidden fields never appear (filterable list derives from the visible-form
-fields).
+A field appears in the live records filter BAR only when `entity_fields.isFilterable = true` (default
+false), toggled from the field config dialog. Hidden fields never appear (filterable list derives from
+the visible-form fields).
+
+**`isFilterable` is a live-bar UI opt-in, NOT a security boundary.** `/records/filter-values` gates on
+`!target` (field must be VISIBLE), not `!target.isFilterable`. The real boundaries are field visibility
+(`visibleFields`/hidden) + row scope (own) + hidden-status — all applied below regardless. The live bar
+only ever requests filterable fields so its behavior is unchanged, but the admin VIEW-CONFIG editor
+needs distinct values for ANY visible field (incl. non-filterable relation/lookup fields like a `file`
+lookup), so it must not be blocked by the `isFilterable` flag.
+
+## View-config editor value pickers must mirror the live bar
+The `/admin/entity-views` editor (both DEFAULT-view and named/additional-view dialogs) renders a
+per-field filter value picker. It MUST resolve the same way as the live records bar (EntityRecords),
+not with a bespoke picker:
+- Compute `effectiveType`: relation/lookup field → the PROJECTED linked-field type (looked up via a
+  `projectedTypeByField: Map<fieldKey,fieldType>` built from `useListEntityRelations` +
+  `useQueries(getListEntityFieldsQueryOptions)` over the linked entities); otherwise the field's own type.
+- Route user / relation / lookup / any discrete-operator field through the SHARED `ValueChecklistPicker`
+  (same component the live bar uses) with `labelFor` resolving user id→name (via the userOptions map) and
+  boolean→Да/Нет; `allowManual` disabled for user/boolean. select→OptionPicker, date→calendar as before.
+**Gotcha:** there are TWO `FilterRowsEditor` call sites (default-view + named-view) with DIFFERENT
+conjunction handlers, so a `replace_all` keyed on the conjunction prop only patches one. The
+`projectedTypeByField` prop must be passed to BOTH, or relation/lookup user-id→name resolution silently
+falls back to `text` in whichever dialog was missed.
 
 ## Dependent option lists
 Endpoint `POST /entities/{entityId}/records/filter-values` (operationId `getEntityFilterValues`,

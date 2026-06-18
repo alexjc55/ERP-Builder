@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
 import {
   useListEntityViews,
@@ -13,6 +13,8 @@ import {
   useUpdateField,
   useListRoles,
   useListUserOptions,
+  useListEntityRelations,
+  getListEntityFieldsQueryOptions,
   type UserOption,
   type View,
   type ViewConfig,
@@ -73,7 +75,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Loader2, ArrowLeft, LayoutList, Star, Filter, ArrowDownUp, X, ChevronUp, ChevronDown, Check, Table2, Shield } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
 import { slugifyKey, uniqueKey } from "@/lib/keys";
@@ -278,98 +280,15 @@ function OptionPicker({
   );
 }
 
-/** Restrict user options to a `user`-field's allowed roles (empty/unset = all).
- * Matches on the user's FULL role set (primary + additional), mirroring the
- * records value picker so a user holding the role as a secondary role appears. */
-function filterUserOptionsByRoles(field: Field, options: UserOption[]): UserOption[] {
-  const allowed = field.userConfigJson?.allowedRoleIds;
-  if (!Array.isArray(allowed) || allowed.length === 0) return options;
-  const allowedSet = new Set(allowed);
-  return options.filter((u) => {
-    const userRoles = u.roleIds && u.roleIds.length > 0 ? u.roleIds : [u.roleId];
-    return userRoles.some((rid) => allowedSet.has(rid));
-  });
-}
-
-/**
- * Value picker for a `user` field's filter condition. The committed value is the
- * user id (comma-joined ids for the "one of" operator), matching how user values
- * are stored on records; display shows the user names.
- */
-function UserFilterPicker({
-  options,
-  valueText,
-  onChange,
-  multiple,
-  t,
-}: {
-  options: UserOption[];
-  valueText: string;
-  onChange: (text: string) => void;
-  multiple: boolean;
-  t: (key: string, def: string) => string;
-}) {
-  const [open, setOpen] = useState(false);
-  const selectedIds = valueText.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
-  const nameById = new Map(options.map((u) => [String(u.id), u.name]));
-  const commit = (ids: string[]) => onChange(multiple ? ids.join(", ") : ids[0] ?? "");
-  const toggle = (id: string) => {
-    if (multiple) {
-      commit(selectedIds.includes(id) ? selectedIds.filter((s) => s !== id) : [...selectedIds, id]);
-    } else {
-      commit([id]);
-      setOpen(false);
-    }
-  };
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button type="button" variant="outline" className="h-8 flex-1 justify-between text-sm font-normal">
-          <span className="truncate text-left">
-            {selectedIds.length === 0 ? (
-              <span className="text-slate-400">{t("views.selectUser", "выберите пользователя")}</span>
-            ) : (
-              selectedIds.map((id) => nameById.get(id) ?? `#${id}`).join(", ")
-            )}
-          </span>
-          <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-60" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-64 p-0">
-        <div className="max-h-52 overflow-y-auto p-1">
-          {options.length === 0 ? (
-            <p className="px-2 py-1.5 text-xs text-slate-400">{t("views.noUsers", "Нет пользователей")}</p>
-          ) : (
-            options.map((u) => {
-              const id = String(u.id);
-              const isSel = selectedIds.includes(id);
-              return (
-                <button
-                  key={u.id}
-                  type="button"
-                  onClick={() => toggle(id)}
-                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-slate-100"
-                >
-                  <span className={`flex h-4 w-4 items-center justify-center rounded border ${isSel ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300"}`}>
-                    {isSel && <Check className="w-3 h-3" />}
-                  </span>
-                  <span className="truncate">{u.name}</span>
-                </button>
-              );
-            })
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
 /**
  * Adaptive value editor for a filter condition, keyed by the field type:
- * - select → option checklist picker
- * - user   → user picker (RBAC-filtered, stores user ids)
+ * - select → option checklist picker (static field options)
  * - boolean→ yes/no dropdown
  * - date / datetime → native date pickers (single-value operators only)
+ * - user / relation / lookup / everything else (discrete operator) → the SAME
+ *   searchable existing-values checklist as the live records bar, with labels
+ *   resolved by the EFFECTIVE type (relation/lookup surface a linked field, so
+ *   `projectedType` carries that field's type): user ids → names, booleans → Да/Нет.
  * - everything else → plain text input.
  * Operators that take no value render a dash; "one of" switches pickers to multi.
  */
@@ -381,6 +300,7 @@ function FilterValueEditor({
   t,
   userOptions,
   getOptions,
+  projectedType,
 }: {
   field: Field | undefined;
   operator: FilterOperator;
@@ -389,6 +309,8 @@ function FilterValueEditor({
   t: (key: string, def: string) => string;
   userOptions: UserOption[];
   getOptions?: (fieldKey: string) => Promise<string[]>;
+  /** For relation/lookup fields: the type of the linked field they surface. */
+  projectedType?: Field["fieldType"];
 }) {
   if (!operatorNeedsValue(operator)) {
     return <div className="flex h-8 flex-1 items-center px-2 text-xs text-slate-400">—</div>;
@@ -396,12 +318,12 @@ function FilterValueEditor({
   const options = field && Array.isArray(field.optionsJson) ? (field.optionsJson as string[]) : [];
   const isArray = operatorIsArray(operator);
   const ft = field?.fieldType;
+  // A relation/lookup field's raw values ARE the linked field's values, so labels
+  // must be resolved by that linked field's type, not "relation"/"lookup".
+  const effectiveType: Field["fieldType"] | undefined =
+    ft === "relation" || ft === "lookup" ? (projectedType ?? "text") : ft;
   if (ft === "select" && options.length > 0) {
     return <OptionPicker options={options} valueText={valueText} onChange={onChange} multiple={isArray} t={t} />;
-  }
-  if (ft === "user") {
-    const opts = field ? filterUserOptionsByRoles(field, userOptions) : userOptions;
-    return <UserFilterPicker options={opts} valueText={valueText} onChange={onChange} multiple={isArray} t={t} />;
   }
   if (ft === "boolean" && !isArray) {
     return (
@@ -422,9 +344,12 @@ function FilterValueEditor({
   if (ft === "datetime" && !isArray) {
     return <Input type="datetime-local" className="h-8 flex-1 text-sm" value={valueText} onChange={(e) => onChange(e.target.value)} />;
   }
-  // Discrete equality operators on any remaining field type: offer the SAME
-  // searchable existing-values checklist as the live records bar (shared component).
-  // Manual entry stays allowed so authors can target a value not yet present.
+  // user / relation / lookup / any remaining field type under a discrete operator:
+  // offer the SAME searchable existing-values checklist as the live records bar
+  // (shared component). Labels resolve by the EFFECTIVE type so user ids show as
+  // names and relation/lookup-surfaced users/booleans read correctly instead of raw
+  // ids. The values come straight from the records, so the list is complete (every
+  // value that actually appears) and never role-restricted.
   if (field && getOptions && DISCRETE_OPERATORS.has(operator)) {
     const selectedVals = isArray
       ? valueText.split(",").map((s) => s.trim()).filter((s) => s.length > 0)
@@ -432,10 +357,17 @@ function FilterValueEditor({
         ? [valueText.trim()]
         : [];
     const commit = (vals: string[]) => onChange(isArray ? vals.join(", ") : vals[0] ?? "");
+    const userNameById = new Map(userOptions.map((u) => [String(u.id), u.name] as const));
     const labelFor =
-      ft === "boolean"
-        ? (v: string) => (v === "true" ? t("views.boolTrue", "Да") : t("views.boolFalse", "Нет"))
-        : undefined;
+      effectiveType === "user"
+        ? (v: string) => userNameById.get(v) ?? `#${v}`
+        : effectiveType === "boolean"
+          ? (v: string) => (v === "true" ? t("views.boolTrue", "Да") : t("views.boolFalse", "Нет"))
+          : undefined;
+    // Id-backed (user) and boolean values must be picked from the resolved list —
+    // typing a raw id/value by hand is meaningless. Text-like values keep manual
+    // entry so authors can target a value not yet present in the data.
+    const allowManual = !(effectiveType === "user" || effectiveType === "boolean");
     return (
       <ValueChecklistPicker
         fieldKey={field.fieldKey}
@@ -444,7 +376,7 @@ function FilterValueEditor({
         getOptions={getOptions}
         labelFor={labelFor}
         multiple={isArray}
-        allowManual
+        allowManual={allowManual}
         t={t}
         trigger={
           <Button type="button" variant="outline" className="h-8 flex-1 justify-between text-sm font-normal">
@@ -489,6 +421,7 @@ function FilterRowsEditor({
   conjunction,
   onConjunctionChange,
   getOptions,
+  projectedTypeByField,
 }: {
   filters: DraftFilter[];
   fields: Field[];
@@ -501,6 +434,7 @@ function FilterRowsEditor({
   conjunction?: "and" | "or";
   onConjunctionChange?: (v: "and" | "or") => void;
   getOptions?: (fieldKey: string) => Promise<string[]>;
+  projectedTypeByField?: Map<string, Field["fieldType"]>;
 }) {
   return (
     <div className="space-y-2 border-t border-slate-100 pt-4">
@@ -556,6 +490,7 @@ function FilterRowsEditor({
                 t={t}
                 userOptions={userOptions}
                 getOptions={getOptions}
+                projectedType={projectedTypeByField?.get(f.field)}
               />
               <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-500 shrink-0" onClick={() => onRemove(idx)}>
                 <X className="w-3.5 h-3.5" />
@@ -667,6 +602,55 @@ export default function EntityViewsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [entityId],
   );
+  // Projected field TYPE for relation/lookup fields (the linked field whose values
+  // they surface). The raw filter values of a relation/lookup field ARE the linked
+  // field's values, so the EFFECTIVE type for labeling is the linked field's type.
+  // This lets the value picker resolve user ids → names and booleans → Да/Нет the
+  // same way the live records bar does, instead of showing raw ids.
+  const { data: entityRelations = [] } = useListEntityRelations(entityId);
+  const linkedEntityIdByRelationId = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const r of entityRelations) {
+      m.set(r.id, r.sourceEntityId === entityId ? r.targetEntityId : r.sourceEntityId);
+    }
+    return m;
+  }, [entityRelations, entityId]);
+  const relLookupFields = fields.filter(
+    (f: Field) =>
+      (f.fieldType === "relation" || f.fieldType === "lookup") &&
+      f.relationConfigJson?.relationId != null &&
+      !!f.relationConfigJson?.relatedFieldKey,
+  );
+  const linkedEntityIds = useMemo(() => {
+    const s = new Set<number>();
+    for (const f of relLookupFields) {
+      const eid = linkedEntityIdByRelationId.get(f.relationConfigJson!.relationId!);
+      if (eid != null) s.add(eid);
+    }
+    return [...s];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allFields, linkedEntityIdByRelationId]);
+  const linkedFieldQueries = useQueries({
+    queries: linkedEntityIds.map((eid) => getListEntityFieldsQueryOptions(eid)),
+  });
+  const projectedTypeByField = useMemo(() => {
+    const fieldsByEntity = new Map<number, Field[]>();
+    linkedEntityIds.forEach((eid, i) => {
+      const d = linkedFieldQueries[i]?.data as Field[] | undefined;
+      if (d) fieldsByEntity.set(eid, d);
+    });
+    const m = new Map<string, Field["fieldType"]>();
+    for (const f of relLookupFields) {
+      const eid = linkedEntityIdByRelationId.get(f.relationConfigJson!.relationId!);
+      if (eid == null) continue;
+      const lf = fieldsByEntity
+        .get(eid)
+        ?.find((x) => x.fieldKey === f.relationConfigJson!.relatedFieldKey);
+      if (lf) m.set(f.fieldKey, lf.fieldType);
+    }
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedEntityIds, linkedFieldQueries, linkedEntityIdByRelationId, allFields]);
   // Fields the admin has opted into as pivot dims/measures.
   const pivotDimFields = fields.filter((f: Field) => f.pivotEnabled && PIVOT_DIM_TYPES.has(f.fieldType));
   const pivotSumFields = fields.filter((f: Field) => f.pivotEnabled && f.fieldType === "number");
@@ -1328,6 +1312,7 @@ export default function EntityViewsPage() {
               conjunction={filterConjunction}
               onConjunctionChange={setFilterConjunction}
               getOptions={getFilterOptions}
+              projectedTypeByField={projectedTypeByField}
             />
 
             {viewType === "pivot" && (
@@ -1445,6 +1430,7 @@ export default function EntityViewsPage() {
               onUpdate={updateDefaultFilter}
               onRemove={removeDefaultFilter}
               getOptions={getFilterOptions}
+              projectedTypeByField={projectedTypeByField}
             />
             <div className="flex items-center justify-between border-t border-slate-100 pt-4">
               <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
