@@ -178,8 +178,11 @@ function evalConditions(
   values: Record<string, unknown>,
   statusId: number | null,
   fieldByKey: Map<string, EntityField>,
+  conjunction: "and" | "or" = "and",
 ): boolean {
-  return conditions.every((c) => evalCondition(c, values, statusId, fieldByKey));
+  if (conditions.length === 0) return true;
+  const test = (c: AutomationCondition) => evalCondition(c, values, statusId, fieldByKey);
+  return conjunction === "or" ? conditions.some(test) : conditions.every(test);
 }
 
 // ---------------------------------------------------------------------------
@@ -648,7 +651,8 @@ async function runOne(
     const values = (record.valuesJson as Record<string, unknown>) ?? {};
 
     const conditions = safeConditions(automation.conditionsJson);
-    if (!evalConditions(conditions, values, record.statusId ?? null, fieldByKey)) {
+    const conjunction = automation.conditionConjunction === "or" ? "or" : "and";
+    if (!evalConditions(conditions, values, record.statusId ?? null, fieldByKey, conjunction)) {
       await writeRun({ automationId: automation.id, entityId, recordId, status: "skipped", triggerName, detail: { reason: "conditions not met" }, dedupeKey }, log);
       return;
     }
@@ -760,14 +764,28 @@ export async function runDateSweep(now: Date = new Date()): Promise<void> {
 
 let initialized = false;
 
+/**
+ * Schedule an automation dispatch OFF the user mutation path. The event-bus
+ * subscriber must return synchronously (void, not a promise) so `emitEvent` does
+ * not await action execution — automations are best-effort and must never add
+ * latency to (or fail) the request that triggered them. `setImmediate` runs the
+ * work on the next tick; Node's AsyncLocalStorage propagates the cascade context
+ * across it, so depth/chain guards still apply when a cascade re-emits events.
+ */
+function scheduleDispatch(kind: EventKind, ev: { entityId: number | null; recordId: number | null; payloadJson: unknown }): void {
+  setImmediate(() => {
+    dispatchEvent(kind, ev).catch((err) => logger.error({ err, kind }, "Automation dispatch failed"));
+  });
+}
+
 /** Subscribe to the event bus and start the date scheduler. Idempotent. */
 export function initAutomations(): void {
   if (initialized) return;
   initialized = true;
 
-  subscribe(EVENT_RECORD_CREATED, (ev) => dispatchEvent("record.created", ev));
-  subscribe(EVENT_RECORD_UPDATED, (ev) => dispatchEvent("record.updated", ev));
-  subscribe(EVENT_STATUS_CHANGED, (ev) => dispatchEvent("status.changed", ev));
+  subscribe(EVENT_RECORD_CREATED, (ev) => scheduleDispatch("record.created", ev));
+  subscribe(EVENT_RECORD_UPDATED, (ev) => scheduleDispatch("record.updated", ev));
+  subscribe(EVENT_STATUS_CHANGED, (ev) => scheduleDispatch("status.changed", ev));
 
   schedulerTimer = setInterval(() => {
     runDateSweep().catch((err) => logger.error({ err }, "Date sweep crashed"));

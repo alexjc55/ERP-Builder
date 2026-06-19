@@ -11,6 +11,13 @@ Per-entity automation: a trigger, optional type-aware conditions, and an ordered
 - **Actions run AS SYSTEM** — admin-authoritative. They use `systemCreateRecord/systemUpdateRecord` and intentionally bypass the *initiator's* RBAC (row/field perms). The only access boundary is on the **management routes**, gated by the new RBAC cap `automations` (superAdmin bypasses via the shared `requireAdmin`). Do not "fix" actions to re-apply the initiator's records boundary — that contradicts the design.
 - **`change_status` OVERRIDES «Процессы» (workflow)** — it sets any status directly, ignoring the transition graph / required-field rules. This is deliberate; it is the escape hatch above the workflow engine.
 
+## Execution is OFF the request path (non-blocking)
+- The record mutation request must NOT await automation execution. Subscribers return `void` synchronously and the engine dispatch is deferred via `setImmediate` (`scheduleDispatch`). **Why:** the event bus awaits subscribers, so running actions inline made record create/update block on (potentially cascading) automation work.
+- The `AsyncLocalStorage` cascade context is captured and re-entered across the `setImmediate` boundary, so depth/chain dedupe guards still apply to deferred runs. Do not "simplify" back to inline `await` execution.
+
+## Conditions conjunction (AND/OR)
+- Top-level conditions are combined by `conditionConjunction` (`"and"` default | `"or"`), a column on `entity_automations`. `evalConditions(list, ctx, conjunction)` short-circuits accordingly. Routes (create+update) and the UI (a selector shown only when >1 condition) carry it; `update_records_where.match` stays AND-only.
+
 ## Safety guards (do not weaken)
 - **Cascade guard**: `AsyncLocalStorage` chain context + `MAX_CASCADE_DEPTH=8` + per-`(automationId,recordId)` dedupe in the chain, so create/update actions can't infinitely re-trigger automations.
 - **SSRF guard** on the `webhook` action: http/https only, DNS lookup, deny private/loopback ranges, `redirect: error`, timeout.

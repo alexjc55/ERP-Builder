@@ -2343,6 +2343,14 @@ export interface AutomationAction {
   includeRecord?: boolean;
 }
 
+export type AutomationConditionConjunction = typeof AutomationConditionConjunction[keyof typeof AutomationConditionConjunction];
+
+
+export const AutomationConditionConjunction = {
+  and: 'and',
+  or: 'or',
+} as const;
+
 export interface Automation {
   id: number;
   entityId: number;
@@ -2350,26 +2358,45 @@ export interface Automation {
   isActive: boolean;
   triggerJson: AutomationTrigger;
   conditionsJson: AutomationCondition[];
+  conditionConjunction: AutomationConditionConjunction;
   actionsJson: AutomationAction[];
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
 }
 
+export type AutomationInputConditionConjunction = typeof AutomationInputConditionConjunction[keyof typeof AutomationInputConditionConjunction];
+
+
+export const AutomationInputConditionConjunction = {
+  and: 'and',
+  or: 'or',
+} as const;
+
 export interface AutomationInput {
   nameJson?: MultilingualText;
   isActive?: boolean;
   triggerJson: AutomationTrigger;
   conditionsJson?: AutomationCondition[];
+  conditionConjunction?: AutomationInputConditionConjunction;
   actionsJson?: AutomationAction[];
   sortOrder?: number;
 }
+
+export type AutomationUpdateConditionConjunction = typeof AutomationUpdateConditionConjunction[keyof typeof AutomationUpdateConditionConjunction];
+
+
+export const AutomationUpdateConditionConjunction = {
+  and: 'and',
+  or: 'or',
+} as const;
 
 export interface AutomationUpdate {
   nameJson?: MultilingualText;
   isActive?: boolean;
   triggerJson?: AutomationTrigger;
   conditionsJson?: AutomationCondition[];
+  conditionConjunction?: AutomationUpdateConditionConjunction;
   actionsJson?: AutomationAction[];
   sortOrder?: number;
 }

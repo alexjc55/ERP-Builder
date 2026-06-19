@@ -177,6 +177,7 @@ export default function EntityAutomationsPage() {
   const [trigTo, setTrigTo] = useState<string>(ANY);
   const [trigOffset, setTrigOffset] = useState("0");
   const [conditions, setConditions] = useState<ConditionDraft[]>([]);
+  const [conditionConjunction, setConditionConjunction] = useState<"and" | "or">("and");
   const [actions, setActions] = useState<ActionDraft[]>([]);
 
   const { data: entities = [] } = useListEntities();
@@ -262,6 +263,7 @@ export default function EntityAutomationsPage() {
     setTrigTo(ANY);
     setTrigOffset("0");
     setConditions([]);
+    setConditionConjunction("and");
     setActions([emptyAction(fields[0]?.fieldKey ?? "")]);
     setDialogOpen(true);
   };
@@ -278,6 +280,7 @@ export default function EntityAutomationsPage() {
     setTrigTo(trig.toStatusId == null ? ANY : String(trig.toStatusId));
     setTrigOffset(String(trig.offsetDays ?? 0));
     setConditions((a.conditionsJson ?? []).map((c) => ({ fieldKey: c.fieldKey, operator: c.operator, value: c.value == null ? "" : String(c.value) })));
+    setConditionConjunction(a.conditionConjunction === "or" ? "or" : "and");
     setActions((a.actionsJson ?? []).map(actionToDraft));
     setDialogOpen(true);
   };
@@ -378,6 +381,7 @@ export default function EntityAutomationsPage() {
       isActive,
       triggerJson: trigger,
       conditionsJson: buildConditions(conditions, fieldByKey),
+      conditionConjunction,
       actionsJson: builtActions,
     };
     if (editing) updateMutation.mutate({ id: editing.id, data: payload });
@@ -482,6 +486,8 @@ export default function EntityAutomationsPage() {
     fmap,
     sts,
     allowStatus,
+    conjunction,
+    onConjunctionChange,
   }: {
     list: ConditionDraft[];
     onChange: (next: ConditionDraft[]) => void;
@@ -489,12 +495,26 @@ export default function EntityAutomationsPage() {
     fmap: Map<string, Field>;
     sts: Status[];
     allowStatus: boolean;
+    conjunction?: "and" | "or";
+    onConjunctionChange?: (next: "and" | "or") => void;
   }): ReactElement => {
     const upd = (i: number, patch: Partial<ConditionDraft>) => onChange(list.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
     const add = () => onChange([...list, { fieldKey: allowStatus ? STATUS_KEY : fopts[0]?.fieldKey ?? "", operator: "eq", value: "" }]);
     const rm = (i: number) => onChange(list.filter((_, idx) => idx !== i));
     return (
       <div className="space-y-2">
+        {onConjunctionChange && list.length > 1 && (
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span>{t("auto.matchLabel", "Срабатывает, когда выполняется")}</span>
+            <Select value={conjunction ?? "and"} onValueChange={(v) => onConjunctionChange(v as "and" | "or")}>
+              <SelectTrigger className="h-7 w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="and">{t("auto.matchAll", "все условия (И)")}</SelectItem>
+                <SelectItem value="or">{t("auto.matchAny", "любое условие (ИЛИ)")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         {list.map((c, i) => (
           <div key={i} className="flex items-center gap-1.5">
             <Select value={c.fieldKey} onValueChange={(v) => upd(i, { fieldKey: v, value: "" })}>
@@ -683,8 +703,8 @@ export default function EntityAutomationsPage() {
 
             {/* Conditions */}
             <div className="space-y-2 rounded-md border border-slate-200 p-3">
-              <Label className="text-sm font-semibold">{t("auto.conditions", "Условия (все должны выполняться)")}</Label>
-              <ConditionsEditor list={conditions} onChange={setConditions} fopts={fields} fmap={fieldByKey} sts={statuses} allowStatus />
+              <Label className="text-sm font-semibold">{t("auto.conditions", "Условия")}</Label>
+              <ConditionsEditor list={conditions} onChange={setConditions} fopts={fields} fmap={fieldByKey} sts={statuses} allowStatus conjunction={conditionConjunction} onConjunctionChange={setConditionConjunction} />
             </div>
 
             {/* Actions */}
@@ -809,6 +829,8 @@ type ConditionsEditorComp = (props: {
   fmap: Map<string, Field>;
   sts: Status[];
   allowStatus: boolean;
+  conjunction?: "and" | "or";
+  onConjunctionChange?: (next: "and" | "or") => void;
 }) => ReactElement;
 
 /**

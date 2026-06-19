@@ -7,6 +7,7 @@
  */
 import type { AutomationAction } from './automationAction';
 import type { AutomationCondition } from './automationCondition';
+import type { AutomationInputConditionConjunction } from './automationInputConditionConjunction';
 import type { AutomationTrigger } from './automationTrigger';
 import type { MultilingualText } from './multilingualText';
 
@@ -15,6 +16,7 @@ export interface AutomationInput {
   isActive?: boolean;
   triggerJson: AutomationTrigger;
   conditionsJson?: AutomationCondition[];
+  conditionConjunction?: AutomationInputConditionConjunction;
   actionsJson?: AutomationAction[];
   sortOrder?: number;
 }

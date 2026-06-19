@@ -33,6 +33,10 @@ export const automationConditionSchema = z.object({
 });
 export type AutomationCondition = z.infer<typeof automationConditionSchema>;
 
+/** How multiple conditions combine: all (AND) or any (OR). */
+export const conditionConjunctionSchema = z.enum(["and", "or"]);
+export type ConditionConjunction = z.infer<typeof conditionConjunctionSchema>;
+
 /** Trigger: exactly one per automation. */
 export const automationTriggerSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("record_created") }),
@@ -107,6 +111,8 @@ export const entityAutomationsTable = pgTable(
     isActive: boolean("is_active").notNull().default(true),
     triggerJson: jsonb("trigger_json").notNull(),
     conditionsJson: jsonb("conditions_json").notNull().default([]),
+    /** How conditionsJson combine: "and" (all) or "or" (any). */
+    conditionConjunction: text("condition_conjunction").notNull().default("and"),
     actionsJson: jsonb("actions_json").notNull().default([]),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -152,6 +158,7 @@ export const entityAutomationRunsTable = pgTable(
 export const insertEntityAutomationSchema = createInsertSchema(entityAutomationsTable, {
   triggerJson: automationTriggerSchema,
   conditionsJson: z.array(automationConditionSchema),
+  conditionConjunction: conditionConjunctionSchema,
   actionsJson: z.array(automationActionSchema),
 }).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertEntityAutomation = z.infer<typeof insertEntityAutomationSchema>;

@@ -5727,7 +5727,7 @@ components:
 
     Automation:
       type: object
-      required: [id, entityId, nameJson, isActive, triggerJson, conditionsJson, actionsJson, sortOrder, createdAt, updatedAt]
+      required: [id, entityId, nameJson, isActive, triggerJson, conditionsJson, conditionConjunction, actionsJson, sortOrder, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -5743,6 +5743,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AutomationCondition"
+        conditionConjunction:
+          type: string
+          enum: [and, or]
         actionsJson:
           type: array
           items:
@@ -5771,6 +5774,10 @@ components:
           items:
             $ref: "#/components/schemas/AutomationCondition"
           default: []
+        conditionConjunction:
+          type: string
+          enum: [and, or]
+          default: and
         actionsJson:
           type: array
           items:
@@ -5792,6 +5799,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AutomationCondition"
+        conditionConjunction:
+          type: string
+          enum: [and, or]
         actionsJson:
           type: array
           items:

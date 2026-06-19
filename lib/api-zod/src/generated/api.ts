@@ -3803,6 +3803,7 @@ export const ListEntityAutomationsResponseItem = zod.object({
   "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
   "value": zod.unknown().optional()
 })),
+  "conditionConjunction": zod.enum(['and', 'or']),
   "actionsJson": zod.array(zod.object({
   "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook']),
   "fieldKey": zod.string().optional(),
@@ -3838,6 +3839,7 @@ export const CreateEntityAutomationParams = zod.object({
 })
 
 export const createEntityAutomationBodyConditionsJsonDefault = [];
+export const createEntityAutomationBodyConditionConjunctionDefault = `and`;
 export const createEntityAutomationBodyActionsJsonDefault = [];
 
 export const CreateEntityAutomationBody = zod.object({
@@ -3859,6 +3861,7 @@ export const CreateEntityAutomationBody = zod.object({
   "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
   "value": zod.unknown().optional()
 })).default(createEntityAutomationBodyConditionsJsonDefault),
+  "conditionConjunction": zod.enum(['and', 'or']).default(createEntityAutomationBodyConditionConjunctionDefault),
   "actionsJson": zod.array(zod.object({
   "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook']),
   "fieldKey": zod.string().optional(),
@@ -3932,6 +3935,7 @@ export const GetAutomationResponse = zod.object({
   "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
   "value": zod.unknown().optional()
 })),
+  "conditionConjunction": zod.enum(['and', 'or']),
   "actionsJson": zod.array(zod.object({
   "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook']),
   "fieldKey": zod.string().optional(),
@@ -3984,6 +3988,7 @@ export const UpdateAutomationBody = zod.object({
   "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
   "value": zod.unknown().optional()
 })).optional(),
+  "conditionConjunction": zod.enum(['and', 'or']).optional(),
   "actionsJson": zod.array(zod.object({
   "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook']),
   "fieldKey": zod.string().optional(),
@@ -4028,6 +4033,7 @@ export const UpdateAutomationResponse = zod.object({
   "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
   "value": zod.unknown().optional()
 })),
+  "conditionConjunction": zod.enum(['and', 'or']),
   "actionsJson": zod.array(zod.object({
   "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook']),
   "fieldKey": zod.string().optional(),

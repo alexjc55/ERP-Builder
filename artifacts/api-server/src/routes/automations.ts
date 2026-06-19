@@ -191,6 +191,7 @@ router.post("/entities/:entityId/automations", requireAuth, requireAdmin("automa
       isActive: parsed.data.isActive ?? true,
       triggerJson: trigger.data,
       conditionsJson: conditions.data,
+      conditionConjunction: parsed.data.conditionConjunction ?? "and",
       actionsJson: actions.data,
       sortOrder: parsed.data.sortOrder ?? 0,
     })
@@ -324,6 +325,7 @@ router.put("/automations/:id", requireAuth, requireAdmin("automations"), async (
   if (body.isActive != null) updateData.isActive = body.isActive;
   if (trigger) updateData.triggerJson = trigger.data;
   if (conditions) updateData.conditionsJson = conditions.data;
+  if (body.conditionConjunction != null) updateData.conditionConjunction = body.conditionConjunction;
   if (actions) updateData.actionsJson = actions.data;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
   if (Object.keys(updateData).length === 0) {
