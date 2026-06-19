@@ -207,11 +207,23 @@ function evalCondition(
   values: Record<string, unknown>,
   statusId: number | null,
   fieldByKey: Map<string, EntityField>,
+  triggerValues: Record<string, unknown>,
 ): boolean {
   const isStatus = cond.fieldKey === CONDITION_STATUS_KEY;
   const actual = isStatus ? statusId : values[cond.fieldKey];
   const field = fieldByKey.get(cond.fieldKey);
   const type = isStatus ? "status" : field?.fieldType ?? "text";
+
+  // The comparison value is either a fixed literal or pulled from the TRIGGERING
+  // record's field (`valueSource: "field"`), resolved here at run time. The
+  // resolved raw value is then compared exactly like a literal would be. A
+  // relation/lookup projection in `triggerValues` is a string[]; collapse it to
+  // its first entry so a scalar comparison still works.
+  let condValue = cond.value;
+  if (cond.valueSource === "field") {
+    const tv = cond.valueFieldKey ? triggerValues[cond.valueFieldKey] : undefined;
+    condValue = Array.isArray(tv) ? tv[0] : tv;
+  }
 
   // Relation / lookup fields have no value in `values_json`: their value is the
   // projected `relatedFieldKey` of the linked record(s), pre-resolved by
@@ -226,11 +238,11 @@ function evalCondition(
       case "notEmpty":
         return arr.length > 0;
       case "eq":
-        return arr.includes(String(cond.value ?? ""));
+        return arr.includes(String(condValue ?? ""));
       case "neq":
-        return !arr.includes(String(cond.value ?? ""));
+        return !arr.includes(String(condValue ?? ""));
       case "contains": {
-        const needle = String(cond.value ?? "").toLowerCase();
+        const needle = String(condValue ?? "").toLowerCase();
         return arr.some((v) => v.toLowerCase().includes(needle));
       }
       default:
@@ -247,21 +259,21 @@ function evalCondition(
     case "neq": {
       let equal: boolean;
       if (isStatus || type === "number") {
-        equal = toNumber(actual) === toNumber(cond.value);
+        equal = toNumber(actual) === toNumber(condValue);
       } else {
-        equal = String(actual ?? "") === String(cond.value ?? "");
+        equal = String(actual ?? "") === String(condValue ?? "");
       }
       return cond.operator === "eq" ? equal : !equal;
     }
     case "contains":
-      return String(actual ?? "").toLowerCase().includes(String(cond.value ?? "").toLowerCase());
+      return String(actual ?? "").toLowerCase().includes(String(condValue ?? "").toLowerCase());
     case "gt":
     case "lt":
     case "gte":
     case "lte": {
       const useTime = type === "date" || type === "datetime";
       const a = useTime ? toTime(actual) : toNumber(actual);
-      const b = useTime ? toTime(cond.value) : toNumber(cond.value);
+      const b = useTime ? toTime(condValue) : toNumber(condValue);
       if (a == null || b == null) return false;
       if (cond.operator === "gt") return a > b;
       if (cond.operator === "lt") return a < b;
@@ -279,9 +291,16 @@ function evalConditions(
   statusId: number | null,
   fieldByKey: Map<string, EntityField>,
   conjunction: "and" | "or" = "and",
+  /**
+   * Values of the record that fired the automation. For top-level conditions
+   * this is the same record being tested; for an `update_records_where` match it
+   * is the triggering record (distinct from each candidate target row). Used to
+   * resolve conditions whose `valueSource` is "field".
+   */
+  triggerValues: Record<string, unknown> = values,
 ): boolean {
   if (conditions.length === 0) return true;
-  const test = (c: AutomationCondition) => evalCondition(c, values, statusId, fieldByKey);
+  const test = (c: AutomationCondition) => evalCondition(c, values, statusId, fieldByKey, triggerValues);
   return conjunction === "or" ? conditions.some(test) : conditions.every(test);
 }
 
@@ -621,7 +640,7 @@ async function runActions(
         let allOk = true;
         for (const row of rows) {
           const rv = { ...((row.valuesJson as Record<string, unknown>) ?? {}), ...(relValues.get(row.id) ?? {}) };
-          if (!evalConditions(action.match ?? [], rv, row.statusId ?? null, fieldByKey)) continue;
+          if (!evalConditions(action.match ?? [], rv, row.statusId ?? null, fieldByKey, "and", ctx.values)) continue;
           const updated = await systemUpdateRecord(row.id, mappedValues, undefined, ctx.actorUserId, log);
           if (!updated) allOk = false;
         }

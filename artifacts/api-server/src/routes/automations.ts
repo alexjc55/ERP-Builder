@@ -72,6 +72,13 @@ async function validateSpec(
   }
 
   const checkCondition = (c: AutomationCondition, validKeys: Set<string>): string | null => {
+    // A dynamic value reads a field of the TRIGGERING record, so its source field
+    // must exist on this automation's own entity (`keys`), regardless of which
+    // entity the condition's `fieldKey` belongs to.
+    if (c.valueSource === "field") {
+      if (!c.valueFieldKey) return "Missing valueFieldKey for field-sourced condition";
+      if (!keys.has(c.valueFieldKey)) return `Unknown condition value field: ${c.valueFieldKey}`;
+    }
     if (c.fieldKey === CONDITION_STATUS_KEY) return null;
     if (!validKeys.has(c.fieldKey)) return `Unknown condition field: ${c.fieldKey}`;
     return null;

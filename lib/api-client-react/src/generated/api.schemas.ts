@@ -2280,11 +2280,26 @@ export const AutomationConditionOperator = {
   notEmpty: 'notEmpty',
 } as const;
 
+/**
+ * How the comparison value is sourced. "literal" (default when absent) uses the fixed `value`. "field" reads the triggering record's `valueFieldKey` at run time, scoping the rule to the record that fired it.
+ */
+export type AutomationConditionValueSource = typeof AutomationConditionValueSource[keyof typeof AutomationConditionValueSource];
+
+
+export const AutomationConditionValueSource = {
+  literal: 'literal',
+  field: 'field',
+} as const;
+
 export interface AutomationCondition {
   /** A real field key, or "__status__" to compare the record's statusId. */
   fieldKey: string;
   operator: AutomationConditionOperator;
+  /** How the comparison value is sourced. "literal" (default when absent) uses the fixed `value`. "field" reads the triggering record's `valueFieldKey` at run time, scoping the rule to the record that fired it. */
+  valueSource?: AutomationConditionValueSource;
   value?: unknown;
+  /** The triggering record's field key to read when valueSource is "field". */
+  valueFieldKey?: string;
 }
 
 export type AutomationTriggerType = typeof AutomationTriggerType[keyof typeof AutomationTriggerType];

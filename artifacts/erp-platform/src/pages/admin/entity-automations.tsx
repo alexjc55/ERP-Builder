@@ -92,6 +92,7 @@ import {
   XCircle,
   MinusCircle,
   ChevronsUpDown,
+  AlertTriangle,
 } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
@@ -103,7 +104,14 @@ const STATUS_KEY = "__status__";
 /** Sentinel for the "any" status wildcard in status_changed trigger selects. */
 const ANY = "__any__";
 
-type ConditionDraft = { fieldKey: string; operator: AutomationConditionOperator; value: string };
+type ConditionDraft = {
+  fieldKey: string;
+  operator: AutomationConditionOperator;
+  value: string;
+  /** "literal" = fixed value; "field" = read from the triggering record's field. */
+  valueSource: "literal" | "field";
+  valueFieldKey: string;
+};
 type MappingDraft = { targetFieldKey: string; sourceType: "literal" | "field"; value: string; sourceFieldKey: string };
 type ActionDraft = {
   type: AutomationActionType;
@@ -115,6 +123,8 @@ type ActionDraft = {
   match: ConditionDraft[];
   url: string;
   includeRecord: boolean;
+  /** Transient (not persisted): explicit ack that an empty-match update hits ALL records. */
+  confirmAllRecords: boolean;
 };
 
 function extractError(err: unknown): string {
@@ -168,6 +178,7 @@ function emptyAction(defaultFieldKey: string): ActionDraft {
     match: [],
     url: "",
     includeRecord: true,
+    confirmAllRecords: false,
   };
 }
 
@@ -414,11 +425,19 @@ export default function EntityAutomationsPage() {
     setTrigFrom(trig.fromStatusId == null ? ANY : String(trig.fromStatusId));
     setTrigTo(trig.toStatusId == null ? ANY : String(trig.toStatusId));
     setTrigOffset(String(trig.offsetDays ?? 0));
-    setConditions((a.conditionsJson ?? []).map((c) => ({ fieldKey: c.fieldKey, operator: c.operator, value: c.value == null ? "" : String(c.value) })));
+    setConditions((a.conditionsJson ?? []).map(conditionToDraft));
     setConditionConjunction(a.conditionConjunction === "or" ? "or" : "and");
     setActions((a.actionsJson ?? []).map(actionToDraft));
     setDialogOpen(true);
   };
+
+  const conditionToDraft = (c: AutomationCondition): ConditionDraft => ({
+    fieldKey: c.fieldKey,
+    operator: c.operator,
+    value: c.value == null ? "" : String(c.value),
+    valueSource: c.valueSource === "field" ? "field" : "literal",
+    valueFieldKey: c.valueFieldKey ?? "",
+  });
 
   const actionToDraft = (a: AutomationAction): ActionDraft => ({
     type: a.type,
@@ -432,9 +451,10 @@ export default function EntityAutomationsPage() {
       value: m.value == null ? "" : String(m.value),
       sourceFieldKey: m.sourceFieldKey ?? "",
     })),
-    match: (a.match ?? []).map((c) => ({ fieldKey: c.fieldKey, operator: c.operator, value: c.value == null ? "" : String(c.value) })),
+    match: (a.match ?? []).map(conditionToDraft),
     url: a.url ?? "",
     includeRecord: a.includeRecord ?? true,
+    confirmAllRecords: false,
   });
 
   /** Coerce a string to a field's stored type for conditions/values. */
@@ -460,7 +480,15 @@ export default function EntityAutomationsPage() {
       .map((c) => {
         const isStatus = c.fieldKey === STATUS_KEY;
         const out: AutomationCondition = { fieldKey: c.fieldKey, operator: c.operator };
-        if (!noValueOp(c.operator)) out.value = coerce(c.fieldKey, c.value, fmap, isStatus);
+        if (!noValueOp(c.operator)) {
+          if (c.valueSource === "field" && c.valueFieldKey) {
+            // Dynamic: compare against the triggering record's field at run time.
+            out.valueSource = "field";
+            out.valueFieldKey = c.valueFieldKey;
+          } else {
+            out.value = coerce(c.fieldKey, c.value, fmap, isStatus);
+          }
+        }
         return out;
       });
 
@@ -488,6 +516,10 @@ export default function EntityAutomationsPage() {
         builtActions.push({ type: "change_status", statusId: Number(a.statusId) });
       } else if (a.type === "create_record" || a.type === "update_records_where") {
         if (!a.targetEntityId) { toast({ title: t("auto.specifyTarget", "Укажите целевую сущность"), variant: "destructive" }); return; }
+        if (a.type === "update_records_where" && a.match.some((c) => c.fieldKey && c.valueSource === "field" && !c.valueFieldKey)) {
+          toast({ title: t("auto.specifySourceField", "Выберите поле-источник"), description: t("auto.specifySourceFieldDesc", "Для условия со значением «Из поля записи» нужно выбрать поле-источник."), variant: "destructive" });
+          return;
+        }
         const targetId = Number(a.targetEntityId);
         const tMap = new Map((targetFieldsCache[targetId] ?? []).map((f) => [f.fieldKey, f] as const));
         const mapping: AutomationMapping[] = a.mapping
@@ -502,7 +534,18 @@ export default function EntityAutomationsPage() {
           if (a.statusId) action.statusId = Number(a.statusId);
           builtActions.push(action);
         } else {
-          builtActions.push({ type: "update_records_where", targetEntityId: targetId, mapping, match: buildConditions(a.match, tMap) });
+          const match = buildConditions(a.match, tMap);
+          // Safety gate: an empty match updates EVERY record of the target entity.
+          // Require an explicit acknowledgement before allowing such a save.
+          if (match.length === 0 && !a.confirmAllRecords) {
+            toast({
+              title: t("auto.confirmAllNeeded", "Подтвердите изменение всех записей"),
+              description: t("auto.confirmAllNeededDesc", "Действие «Обновить записи» без условий выбора изменит ВСЕ записи сущности. Отметьте подтверждение, что вы это понимаете."),
+              variant: "destructive",
+            });
+            return;
+          }
+          builtActions.push({ type: "update_records_where", targetEntityId: targetId, mapping, match });
         }
       } else if (a.type === "webhook") {
         if (!a.url) { toast({ title: t("auto.specifyUrl", "Укажите URL"), variant: "destructive" }); return; }
@@ -630,6 +673,7 @@ export default function EntityAutomationsPage() {
     conjunction,
     onConjunctionChange,
     ownerEntityId,
+    fieldSourceOptions,
   }: {
     list: ConditionDraft[];
     onChange: (next: ConditionDraft[]) => void;
@@ -640,9 +684,11 @@ export default function EntityAutomationsPage() {
     conjunction?: "and" | "or";
     onConjunctionChange?: (next: "and" | "or") => void;
     ownerEntityId?: number;
+    /** When set, the value may be sourced from one of these triggering-record fields. */
+    fieldSourceOptions?: Field[];
   }): ReactElement => {
     const upd = (i: number, patch: Partial<ConditionDraft>) => onChange(list.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
-    const add = () => onChange([...list, { fieldKey: allowStatus ? STATUS_KEY : fopts[0]?.fieldKey ?? "", operator: "eq", value: "" }]);
+    const add = () => onChange([...list, { fieldKey: allowStatus ? STATUS_KEY : fopts[0]?.fieldKey ?? "", operator: "eq", value: "", valueSource: "literal", valueFieldKey: "" }]);
     const rm = (i: number) => onChange(list.filter((_, idx) => idx !== i));
     return (
       <div className="space-y-2">
@@ -671,8 +717,24 @@ export default function EntityAutomationsPage() {
               <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
               <SelectContent>{OPERATORS.map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent>
             </Select>
+            {!noValueOp(c.operator) && fieldSourceOptions && (
+              <Select value={c.valueSource} onValueChange={(v) => upd(i, { valueSource: v as "literal" | "field", value: "", valueFieldKey: "" })}>
+                <SelectTrigger className="w-32 shrink-0"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="literal">{t("auto.literal", "Значение")}</SelectItem>
+                  <SelectItem value="field">{t("auto.fromTriggerField", "Из поля записи")}</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
             {!noValueOp(c.operator) && (
-              <ValueControl fieldKey={c.fieldKey} raw={c.value} onChange={(v) => upd(i, { value: v })} fmap={fmap} sts={sts} statusKey={c.fieldKey === STATUS_KEY} ownerEntityId={ownerEntityId} />
+              fieldSourceOptions && c.valueSource === "field" ? (
+                <Select value={c.valueFieldKey} onValueChange={(v) => upd(i, { valueFieldKey: v })}>
+                  <SelectTrigger className="flex-1"><SelectValue placeholder={t("auto.sourceField", "Поле-источник")} /></SelectTrigger>
+                  <SelectContent>{fieldSourceOptions.map((f) => (<SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson) || f.fieldKey}</SelectItem>))}</SelectContent>
+                </Select>
+              ) : (
+                <ValueControl fieldKey={c.fieldKey} raw={c.value} onChange={(v) => upd(i, { value: v })} fmap={fmap} sts={sts} statusKey={c.fieldKey === STATUS_KEY} ownerEntityId={ownerEntityId} />
+              )
             )}
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-400 shrink-0" onClick={() => rm(i)}>
               <X className="w-3.5 h-3.5" />
@@ -977,6 +1039,7 @@ type ConditionsEditorComp = (props: {
   conjunction?: "and" | "or";
   onConjunctionChange?: (next: "and" | "or") => void;
   ownerEntityId?: number;
+  fieldSourceOptions?: Field[];
 }) => ReactElement;
 
 /**
@@ -1097,7 +1160,19 @@ function ActionCard({
           {draft.type === "update_records_where" && targetId > 0 && (
             <div className="space-y-1.5">
               <Label className="text-xs text-slate-500">{t("auto.matchConditions", "Условия выбора записей")}</Label>
-              <ConditionsEditor list={draft.match} onChange={(next) => onChange({ match: next })} fopts={targetFields} fmap={targetFieldByKey} sts={targetStatuses} allowStatus ownerEntityId={targetId} />
+              <ConditionsEditor list={draft.match} onChange={(next) => onChange({ match: next })} fopts={targetFields} fmap={targetFieldByKey} sts={targetStatuses} allowStatus ownerEntityId={targetId} fieldSourceOptions={currentFields} />
+              {draft.match.filter((c) => c.fieldKey).length === 0 && (
+                <div className="rounded-md border border-red-300 bg-red-50 p-2.5 space-y-2">
+                  <div className="flex items-start gap-2 text-xs text-red-700">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{t("auto.allRecordsWarn", "Без условий выбора это действие изменит ВСЕ записи выбранной сущности. Существующие значения будут перезаписаны без возможности отмены.")}</span>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs font-medium text-red-700 cursor-pointer">
+                    <Checkbox checked={draft.confirmAllRecords} onCheckedChange={(v) => onChange({ confirmAllRecords: v === true })} />
+                    {t("auto.allRecordsConfirm", "Я понимаю, что изменятся все записи")}
+                  </label>
+                </div>
+              )}
             </div>
           )}
 

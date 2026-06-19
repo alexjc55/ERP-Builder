@@ -3805,7 +3805,9 @@ export const ListEntityAutomationsResponseItem = zod.object({
   "conditionsJson": zod.array(zod.object({
   "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
   "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
-  "value": zod.unknown().optional()
+  "valueSource": zod.enum(['literal', 'field']).optional().describe('How the comparison value is sourced. \"literal\" (default when absent) uses the fixed `value`. \"field\" reads the triggering record\'s `valueFieldKey` at run time, scoping the rule to the record that fired it.'),
+  "value": zod.unknown().optional(),
+  "valueFieldKey": zod.string().optional().describe('The triggering record\'s field key to read when valueSource is \"field\".')
 })),
   "conditionConjunction": zod.enum(['and', 'or']),
   "actionsJson": zod.array(zod.object({
@@ -3823,7 +3825,9 @@ export const ListEntityAutomationsResponseItem = zod.object({
   "match": zod.array(zod.object({
   "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
   "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
-  "value": zod.unknown().optional()
+  "valueSource": zod.enum(['literal', 'field']).optional().describe('How the comparison value is sourced. \"literal\" (default when absent) uses the fixed `value`. \"field\" reads the triggering record\'s `valueFieldKey` at run time, scoping the rule to the record that fired it.'),
+  "value": zod.unknown().optional(),
+  "valueFieldKey": zod.string().optional().describe('The triggering record\'s field key to read when valueSource is \"field\".')
 })).optional(),
   "url": zod.string().optional(),
   "includeRecord": zod.boolean().optional()
@@ -3863,7 +3867,9 @@ export const CreateEntityAutomationBody = zod.object({
   "conditionsJson": zod.array(zod.object({
   "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
   "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
-  "value": zod.unknown().optional()
+  "valueSource": zod.enum(['literal', 'field']).optional().describe('How the comparison value is sourced. \"literal\" (default when absent) uses the fixed `value`. \"field\" reads the triggering record\'s `valueFieldKey` at run time, scoping the rule to the record that fired it.'),
+  "value": zod.unknown().optional(),
+  "valueFieldKey": zod.string().optional().describe('The triggering record\'s field key to read when valueSource is \"field\".')
 })).default(createEntityAutomationBodyConditionsJsonDefault),
   "conditionConjunction": zod.enum(['and', 'or']).default(createEntityAutomationBodyConditionConjunctionDefault),
   "actionsJson": zod.array(zod.object({
@@ -3881,7 +3887,9 @@ export const CreateEntityAutomationBody = zod.object({
   "match": zod.array(zod.object({
   "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
   "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
-  "value": zod.unknown().optional()
+  "valueSource": zod.enum(['literal', 'field']).optional().describe('How the comparison value is sourced. \"literal\" (default when absent) uses the fixed `value`. \"field\" reads the triggering record\'s `valueFieldKey` at run time, scoping the rule to the record that fired it.'),
+  "value": zod.unknown().optional(),
+  "valueFieldKey": zod.string().optional().describe('The triggering record\'s field key to read when valueSource is \"field\".')
 })).optional(),
   "url": zod.string().optional(),
   "includeRecord": zod.boolean().optional()
@@ -3937,7 +3945,9 @@ export const GetAutomationResponse = zod.object({
   "conditionsJson": zod.array(zod.object({
   "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
   "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
-  "value": zod.unknown().optional()
+  "valueSource": zod.enum(['literal', 'field']).optional().describe('How the comparison value is sourced. \"literal\" (default when absent) uses the fixed `value`. \"field\" reads the triggering record\'s `valueFieldKey` at run time, scoping the rule to the record that fired it.'),
+  "value": zod.unknown().optional(),
+  "valueFieldKey": zod.string().optional().describe('The triggering record\'s field key to read when valueSource is \"field\".')
 })),
   "conditionConjunction": zod.enum(['and', 'or']),
   "actionsJson": zod.array(zod.object({
@@ -3955,7 +3965,9 @@ export const GetAutomationResponse = zod.object({
   "match": zod.array(zod.object({
   "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
   "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
-  "value": zod.unknown().optional()
+  "valueSource": zod.enum(['literal', 'field']).optional().describe('How the comparison value is sourced. \"literal\" (default when absent) uses the fixed `value`. \"field\" reads the triggering record\'s `valueFieldKey` at run time, scoping the rule to the record that fired it.'),
+  "value": zod.unknown().optional(),
+  "valueFieldKey": zod.string().optional().describe('The triggering record\'s field key to read when valueSource is \"field\".')
 })).optional(),
   "url": zod.string().optional(),
   "includeRecord": zod.boolean().optional()
@@ -3990,7 +4002,9 @@ export const UpdateAutomationBody = zod.object({
   "conditionsJson": zod.array(zod.object({
   "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
   "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
-  "value": zod.unknown().optional()
+  "valueSource": zod.enum(['literal', 'field']).optional().describe('How the comparison value is sourced. \"literal\" (default when absent) uses the fixed `value`. \"field\" reads the triggering record\'s `valueFieldKey` at run time, scoping the rule to the record that fired it.'),
+  "value": zod.unknown().optional(),
+  "valueFieldKey": zod.string().optional().describe('The triggering record\'s field key to read when valueSource is \"field\".')
 })).optional(),
   "conditionConjunction": zod.enum(['and', 'or']).optional(),
   "actionsJson": zod.array(zod.object({
@@ -4008,7 +4022,9 @@ export const UpdateAutomationBody = zod.object({
   "match": zod.array(zod.object({
   "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
   "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
-  "value": zod.unknown().optional()
+  "valueSource": zod.enum(['literal', 'field']).optional().describe('How the comparison value is sourced. \"literal\" (default when absent) uses the fixed `value`. \"field\" reads the triggering record\'s `valueFieldKey` at run time, scoping the rule to the record that fired it.'),
+  "value": zod.unknown().optional(),
+  "valueFieldKey": zod.string().optional().describe('The triggering record\'s field key to read when valueSource is \"field\".')
 })).optional(),
   "url": zod.string().optional(),
   "includeRecord": zod.boolean().optional()
@@ -4035,7 +4051,9 @@ export const UpdateAutomationResponse = zod.object({
   "conditionsJson": zod.array(zod.object({
   "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
   "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
-  "value": zod.unknown().optional()
+  "valueSource": zod.enum(['literal', 'field']).optional().describe('How the comparison value is sourced. \"literal\" (default when absent) uses the fixed `value`. \"field\" reads the triggering record\'s `valueFieldKey` at run time, scoping the rule to the record that fired it.'),
+  "value": zod.unknown().optional(),
+  "valueFieldKey": zod.string().optional().describe('The triggering record\'s field key to read when valueSource is \"field\".')
 })),
   "conditionConjunction": zod.enum(['and', 'or']),
   "actionsJson": zod.array(zod.object({
@@ -4053,7 +4071,9 @@ export const UpdateAutomationResponse = zod.object({
   "match": zod.array(zod.object({
   "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
   "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
-  "value": zod.unknown().optional()
+  "valueSource": zod.enum(['literal', 'field']).optional().describe('How the comparison value is sourced. \"literal\" (default when absent) uses the fixed `value`. \"field\" reads the triggering record\'s `valueFieldKey` at run time, scoping the rule to the record that fired it.'),
+  "value": zod.unknown().optional(),
+  "valueFieldKey": zod.string().optional().describe('The triggering record\'s field key to read when valueSource is \"field\".')
 })).optional(),
   "url": zod.string().optional(),
   "includeRecord": zod.boolean().optional()

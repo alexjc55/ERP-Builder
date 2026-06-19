@@ -19,6 +19,7 @@ export * from './automationActionType';
 export * from './automationCondition';
 export * from './automationConditionConjunction';
 export * from './automationConditionOperator';
+export * from './automationConditionValueSource';
 export * from './automationInput';
 export * from './automationInputConditionConjunction';
 export * from './automationMapping';

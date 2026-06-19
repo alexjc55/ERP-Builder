@@ -37,6 +37,14 @@ Per-entity automation: a trigger, optional type-aware conditions, and an ordered
 - **How to apply:** any new code that evaluates conditions over a record must run `loadRelationValues` and spread it into `values` first. Page-source projections (`relationConfigJson.relatedPageId != null`) are intentionally NOT resolved (different store the engine doesn't read) → they read as empty.
 - UI: relation/lookup condition value uses `RelationValueControl` (candidate-label combobox via `useGetEntityRelatedCandidates`, free-typed values allowed); requires `ownerEntityId` threaded `ConditionsEditor → ValueControl` (page `entityId` top-level, target `entityId` for `update_records_where.match`).
 
+## Dynamic condition value (from the triggering record)
+- A condition value may be a fixed literal (`value`) OR sourced from a field of the **triggering** record (`valueSource: "field"` + `valueFieldKey`). `evalCondition` takes a `triggerValues` map and resolves `condValue` from it (collapsing a relation `string[]` to `[0]`); all comparisons use `condValue`, never `cond.value` directly.
+- `evalConditions` carries `triggerValues` (defaults to the row's own `values`). For `update_records_where` it is called with the TRIGGERING `ctx.values`, so each target row's `fieldKey` is matched against the trigger record's `valueFieldKey` — this is what makes "update rows where target.X == trigger.Y" possible.
+- **Validation:** `valueSource:"field"` ⇒ `valueFieldKey` must be non-empty AND exist on the automation's OWN entity (the trigger entity's `keys`), enforced in `validateSpec.checkCondition` regardless of which entity `fieldKey` targets. UI only exposes the literal/field toggle for the `update_records_where.match` editor.
+
+## Empty-match safety gate (update_records_where)
+- An `update_records_where` action with an empty `match` updates EVERY non-archived target record (`evalConditions` returns true on empty). This is intentional but dangerous, so the UI requires an explicit transient `confirmAllRecords` acknowledgement (red warning + checkbox) before save; `handleSubmit` hard-blocks the save with a destructive toast otherwise. `confirmAllRecords` is NOT persisted — re-editing an all-records automation forces re-confirmation.
+
 ## Trigger/action vocabulary
 - Triggers: `record_created`, `record_updated`, `field_changed`, `status_changed`, `date_reached` (offsetDays).
 - Actions: `set_field`, `change_status`, `create_record`, `update_records_where`, `webhook`.

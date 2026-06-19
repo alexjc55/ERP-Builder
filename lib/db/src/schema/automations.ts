@@ -29,7 +29,19 @@ export const automationConditionSchema = z.object({
   /** A real field key, or `__status__` to compare the record's statusId. */
   fieldKey: z.string().min(1),
   operator: z.enum(["eq", "neq", "contains", "gt", "lt", "gte", "lte", "empty", "notEmpty"]),
+  /**
+   * How the comparison value is sourced.
+   * - "literal" (default when absent): compare against the fixed `value`.
+   * - "field": compare against the TRIGGERING record's `valueFieldKey` value,
+   *   resolved at run time. Lets one rule scope to the record that fired it
+   *   (e.g. `update_records_where` match "order_number == trigger.order_number")
+   *   instead of needing a separate automation per literal value.
+   */
+  valueSource: z.enum(["literal", "field"]).optional(),
+  /** A fixed comparison value (used when `valueSource` is "literal"/absent). */
   value: z.unknown().optional(),
+  /** The triggering record's field key to read (used when `valueSource` is "field"). */
+  valueFieldKey: z.string().optional(),
 });
 export type AutomationCondition = z.infer<typeof automationConditionSchema>;
 

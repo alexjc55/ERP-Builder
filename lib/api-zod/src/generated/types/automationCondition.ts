@@ -6,10 +6,15 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AutomationConditionOperator } from './automationConditionOperator';
+import type { AutomationConditionValueSource } from './automationConditionValueSource';
 
 export interface AutomationCondition {
   /** A real field key, or "__status__" to compare the record's statusId. */
   fieldKey: string;
   operator: AutomationConditionOperator;
+  /** How the comparison value is sourced. "literal" (default when absent) uses the fixed `value`. "field" reads the triggering record's `valueFieldKey` at run time, scoping the rule to the record that fired it. */
+  valueSource?: AutomationConditionValueSource;
   value?: unknown;
+  /** The triggering record's field key to read when valueSource is "field". */
+  valueFieldKey?: string;
 }
