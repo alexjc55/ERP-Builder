@@ -7,6 +7,8 @@ import {
   entityAutomationRunsTable,
   entityRecordsTable,
   entityStatusesTable,
+  relationsTable,
+  recordLinksTable,
   type EntityAutomation,
   type EntityField,
   type AutomationTrigger,
@@ -19,7 +21,8 @@ import {
   automationActionSchema,
   CONDITION_STATUS_KEY,
 } from "@workspace/db";
-import { eq, and, asc, sql } from "drizzle-orm";
+import { eq, and, asc, sql, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import {
   loadActiveFields,
   validateValues,
@@ -126,6 +129,78 @@ function toTime(v: unknown): number | null {
   return Number.isNaN(t) ? null : t;
 }
 
+/**
+ * Resolve relation/lookup fields' linked values for a set of base records.
+ *
+ * Relation/lookup fields store no value in `values_json`; their displayed value
+ * is the projected `relatedFieldKey` of the linked record(s), reached through
+ * `record_links`. This loads, per base record, the array of those projected
+ * values (one entry per link, empty entries dropped) so `evalCondition` can
+ * evaluate relation conditions with EXISTS-any semantics — exactly matching the
+ * records-query relation filter. Only entity-source relations are resolved here;
+ * page-source projections (`relatedPageId`) are read from a different store the
+ * engine does not evaluate, so they yield an empty array (condition won't match).
+ */
+async function loadRelationValues(
+  entityId: number,
+  recordIds: number[],
+  fields: EntityField[],
+): Promise<Map<number, Record<string, string[]>>> {
+  const out = new Map<number, Record<string, string[]>>();
+  if (recordIds.length === 0) return out;
+  const relFields = fields.filter(
+    (f) =>
+      (f.fieldType === "relation" || f.fieldType === "lookup") &&
+      f.relationConfigJson?.relationId != null &&
+      !!f.relationConfigJson?.relatedFieldKey &&
+      f.relationConfigJson?.relatedPageId == null,
+  );
+  if (relFields.length === 0) return out;
+
+  const relationIds = [...new Set(relFields.map((f) => f.relationConfigJson!.relationId as number))];
+  const relations = await db.select().from(relationsTable).where(inArray(relationsTable.id, relationIds));
+  const relById = new Map(relations.map((r) => [r.id, r]));
+
+  for (const f of relFields) {
+    const cfg = f.relationConfigJson!;
+    const relation = relById.get(cfg.relationId as number);
+    if (!relation) continue;
+    const relatedFieldKey = cfg.relatedFieldKey as string;
+    // Which link column points at the base record vs. the linked one. Mirrors
+    // record-query's direction logic by the base entity's side of the relation.
+    const baseIsSource = relation.sourceEntityId === entityId;
+    const baseCol = baseIsSource ? recordLinksTable.sourceRecordId : recordLinksTable.targetRecordId;
+    const linkedCol = baseIsSource ? recordLinksTable.targetRecordId : recordLinksTable.sourceRecordId;
+    const lt = alias(entityRecordsTable, "lt");
+
+    let linkRows: { base: number; v: string | null }[];
+    try {
+      linkRows = await db
+        .select({ base: baseCol, v: sql<string | null>`(${lt.valuesJson} ->> ${relatedFieldKey})` })
+        .from(recordLinksTable)
+        .innerJoin(lt, eq(lt.id, linkedCol))
+        .where(and(eq(recordLinksTable.relationId, relation.id), inArray(baseCol, recordIds)));
+    } catch (err) {
+      logger.error({ err, relationId: relation.id, fieldKey: f.fieldKey }, "Failed to resolve relation values for automation conditions");
+      linkRows = [];
+    }
+
+    // Seed an empty array for every record so an unlinked record reads as empty.
+    for (const rid of recordIds) {
+      const rec = out.get(rid) ?? {};
+      if (!(f.fieldKey in rec)) rec[f.fieldKey] = [];
+      out.set(rid, rec);
+    }
+    for (const row of linkRows) {
+      if (row.v == null || row.v === "") continue;
+      const rec = out.get(row.base) ?? {};
+      (rec[f.fieldKey] ??= []).push(String(row.v));
+      out.set(row.base, rec);
+    }
+  }
+  return out;
+}
+
 /** True when `record` satisfies a single condition. */
 function evalCondition(
   cond: AutomationCondition,
@@ -137,6 +212,31 @@ function evalCondition(
   const actual = isStatus ? statusId : values[cond.fieldKey];
   const field = fieldByKey.get(cond.fieldKey);
   const type = isStatus ? "status" : field?.fieldType ?? "text";
+
+  // Relation / lookup fields have no value in `values_json`: their value is the
+  // projected `relatedFieldKey` of the linked record(s), pre-resolved by
+  // `loadRelationValues` into `values[fieldKey]` as a string[] (one entry per
+  // link). Matching uses EXISTS-any semantics, identical to the records query's
+  // relation filter, so a condition holds when ANY linked value matches.
+  if (type === "relation" || type === "lookup") {
+    const arr = Array.isArray(actual) ? (actual as unknown[]).map((x) => String(x)).filter((s) => s !== "") : [];
+    switch (cond.operator) {
+      case "empty":
+        return arr.length === 0;
+      case "notEmpty":
+        return arr.length > 0;
+      case "eq":
+        return arr.includes(String(cond.value ?? ""));
+      case "neq":
+        return !arr.includes(String(cond.value ?? ""));
+      case "contains": {
+        const needle = String(cond.value ?? "").toLowerCase();
+        return arr.some((v) => v.toLowerCase().includes(needle));
+      }
+      default:
+        return false; // ordering operators are not meaningful for relations
+    }
+  }
 
   switch (cond.operator) {
     case "empty":
@@ -517,9 +617,10 @@ async function runActions(
           .from(entityRecordsTable)
           .where(and(eq(entityRecordsTable.entityId, action.targetEntityId), sql`${entityRecordsTable.archivedAt} is null`));
         const mappedValues = buildMappedValues(action.mapping ?? [], ctx.values);
+        const relValues = await loadRelationValues(action.targetEntityId, rows.map((r) => r.id), targetFields);
         let allOk = true;
         for (const row of rows) {
-          const rv = (row.valuesJson as Record<string, unknown>) ?? {};
+          const rv = { ...((row.valuesJson as Record<string, unknown>) ?? {}), ...(relValues.get(row.id) ?? {}) };
           if (!evalConditions(action.match ?? [], rv, row.statusId ?? null, fieldByKey)) continue;
           const updated = await systemUpdateRecord(row.id, mappedValues, undefined, ctx.actorUserId, log);
           if (!updated) allOk = false;
@@ -648,7 +749,8 @@ async function runOne(
     if (!record) return;
     const fields = await loadActiveFields(entityId);
     const fieldByKey = new Map(fields.map((f) => [f.fieldKey, f]));
-    const values = (record.valuesJson as Record<string, unknown>) ?? {};
+    const relValues = await loadRelationValues(entityId, [recordId], fields);
+    const values = { ...((record.valuesJson as Record<string, unknown>) ?? {}), ...(relValues.get(recordId) ?? {}) };
 
     const conditions = safeConditions(automation.conditionsJson);
     const conjunction = automation.conditionConjunction === "or" ? "or" : "and";

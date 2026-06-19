@@ -30,6 +30,13 @@ Per-entity automation: a trigger, optional type-aware conditions, and an ordered
 - The literal mapping editor itself should be the type-aware `ValueControl` bound to the **target** field, not a plain text `Input`.
 **Why:** without this, any automation writing a literal into a numeric/boolean target field fails at runtime with a validation error and the action is marked failed.
 
+## Relation/lookup conditions must be pre-resolved (engine can't read them from values_json)
+- Relation/lookup fields have NO value in `values_json` — their value is the linked record's projected `relatedFieldKey`, stored only in `record_links`. So the in-memory `evalCondition` cannot evaluate them unless the value is injected first.
+- `loadRelationValues(entityId, recordIds, fields)` resolves entity-source relation/lookup fields into `values[fieldKey]` as a **string[]** (one entry per link), merged into the context in BOTH `runOne` (top-level conditions) and `update_records_where` (batched over all target rows — never per-row, to avoid N+1). `evalCondition` then matches with **EXISTS-any** semantics (eq=`includes`, contains=`some(substring)`, empty/notEmpty by length), matching the records-query relation filter.
+- **Why:** keeps relation-condition semantics identical to view/record filters (compare the linked record's projected value, NOT a record id) and is the only way the JS engine can see relation values.
+- **How to apply:** any new code that evaluates conditions over a record must run `loadRelationValues` and spread it into `values` first. Page-source projections (`relationConfigJson.relatedPageId != null`) are intentionally NOT resolved (different store the engine doesn't read) → they read as empty.
+- UI: relation/lookup condition value uses `RelationValueControl` (candidate-label combobox via `useGetEntityRelatedCandidates`, free-typed values allowed); requires `ownerEntityId` threaded `ConditionsEditor → ValueControl` (page `entityId` top-level, target `entityId` for `update_records_where.match`).
+
 ## Trigger/action vocabulary
 - Triggers: `record_created`, `record_updated`, `field_changed`, `status_changed`, `date_reached` (offsetDays).
 - Actions: `set_field`, `change_status`, `create_record`, `update_records_where`, `webhook`.

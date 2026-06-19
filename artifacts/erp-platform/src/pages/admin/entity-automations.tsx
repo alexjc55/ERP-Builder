@@ -14,6 +14,7 @@ import {
   getListEntityFieldsQueryKey,
   useListEntities,
   useListUserOptions,
+  useGetEntityRelatedCandidates,
   type Automation,
   type AutomationTrigger,
   type AutomationCondition,
@@ -61,6 +62,19 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -77,6 +91,7 @@ import {
   CheckCircle2,
   XCircle,
   MinusCircle,
+  ChevronsUpDown,
 } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
 
@@ -153,6 +168,112 @@ function emptyAction(defaultFieldKey: string): ActionDraft {
     url: "",
     includeRecord: true,
   };
+}
+
+/**
+ * Value control for a `relation`/`lookup` condition field. A relation condition
+ * compares against the LINKED record's projected value (`relatedFieldKey`) — the
+ * same value the records-query relation filter matches on — not a record id. So
+ * this offers a searchable dropdown of the available linked values (candidate
+ * labels) for the owning entity's relation field, while still letting the admin
+ * commit a free-typed value (needed for `contains`/`starts_with`-style matches).
+ */
+function RelationValueControl({
+  entityId,
+  fieldKey,
+  value,
+  onChange,
+  t,
+}: {
+  entityId: number;
+  fieldKey: string;
+  value: string;
+  onChange: (v: string) => void;
+  t: (k: string, d: string) => string;
+}): ReactElement {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [candidates, setCandidates] = useState<{ id: number; label: string }[]>([]);
+  const fetchCandidates = useGetEntityRelatedCandidates().mutateAsync;
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const h = setTimeout(() => {
+      fetchCandidates({ entityId, data: { fieldKey, q: search.trim() || undefined } })
+        .then((res) => {
+          if (!cancelled) setCandidates(res.candidates ?? []);
+        })
+        .catch(() => {
+          if (!cancelled) setCandidates([]);
+        });
+    }, 200);
+    return () => {
+      cancelled = true;
+      clearTimeout(h);
+    };
+  }, [open, search, entityId, fieldKey, fetchCandidates]);
+
+  const labels = [...new Set(candidates.map((c) => c.label).filter((l) => l !== ""))];
+  const trimmed = search.trim();
+  const showFreeValue = trimmed !== "" && !labels.some((l) => l.toLowerCase() === trimmed.toLowerCase());
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          className="flex-1 justify-between font-normal min-w-0"
+        >
+          <span className="truncate">{value || t("auto.pickValue", "Выберите значение")}</span>
+          <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-[260px]" align="start">
+        <Command shouldFilter={false}>
+          <CommandInput
+            value={search}
+            onValueChange={setSearch}
+            placeholder={t("auto.searchValue", "Поиск значения…")}
+          />
+          <CommandList>
+            <CommandEmpty>{t("auto.noValues", "Значения не найдены")}</CommandEmpty>
+            {showFreeValue && (
+              <CommandGroup>
+                <CommandItem
+                  value={`__free__${trimmed}`}
+                  onSelect={() => {
+                    onChange(trimmed);
+                    setOpen(false);
+                  }}
+                >
+                  {t("auto.useTyped", "Использовать")}: «{trimmed}»
+                </CommandItem>
+              </CommandGroup>
+            )}
+            {labels.length > 0 && (
+              <CommandGroup>
+                {labels.map((l) => (
+                  <CommandItem
+                    key={l}
+                    value={l}
+                    onSelect={() => {
+                      onChange(l);
+                      setOpen(false);
+                    }}
+                  >
+                    {l}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export default function EntityAutomationsPage() {
@@ -423,6 +544,7 @@ export default function EntityAutomationsPage() {
     fmap,
     sts,
     statusKey,
+    ownerEntityId,
   }: {
     fieldKey: string;
     raw: string;
@@ -430,6 +552,7 @@ export default function EntityAutomationsPage() {
     fmap: Map<string, Field>;
     sts: Status[];
     statusKey: boolean;
+    ownerEntityId?: number;
   }): ReactElement => {
     const ph = t("auto.valuePlaceholder", "значение");
     if (statusKey) {
@@ -444,6 +567,9 @@ export default function EntityAutomationsPage() {
     }
     const f = fmap.get(fieldKey);
     const type = f?.fieldType;
+    if ((type === "relation" || type === "lookup") && ownerEntityId) {
+      return <RelationValueControl entityId={ownerEntityId} fieldKey={fieldKey} value={raw} onChange={onChange} t={t} />;
+    }
     if (type === "select") {
       const options = Array.isArray(f?.optionsJson) ? (f!.optionsJson as string[]) : [];
       return (
@@ -488,6 +614,7 @@ export default function EntityAutomationsPage() {
     allowStatus,
     conjunction,
     onConjunctionChange,
+    ownerEntityId,
   }: {
     list: ConditionDraft[];
     onChange: (next: ConditionDraft[]) => void;
@@ -497,6 +624,7 @@ export default function EntityAutomationsPage() {
     allowStatus: boolean;
     conjunction?: "and" | "or";
     onConjunctionChange?: (next: "and" | "or") => void;
+    ownerEntityId?: number;
   }): ReactElement => {
     const upd = (i: number, patch: Partial<ConditionDraft>) => onChange(list.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
     const add = () => onChange([...list, { fieldKey: allowStatus ? STATUS_KEY : fopts[0]?.fieldKey ?? "", operator: "eq", value: "" }]);
@@ -529,7 +657,7 @@ export default function EntityAutomationsPage() {
               <SelectContent>{OPERATORS.map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent>
             </Select>
             {!noValueOp(c.operator) && (
-              <ValueControl fieldKey={c.fieldKey} raw={c.value} onChange={(v) => upd(i, { value: v })} fmap={fmap} sts={sts} statusKey={c.fieldKey === STATUS_KEY} />
+              <ValueControl fieldKey={c.fieldKey} raw={c.value} onChange={(v) => upd(i, { value: v })} fmap={fmap} sts={sts} statusKey={c.fieldKey === STATUS_KEY} ownerEntityId={ownerEntityId} />
             )}
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-400 shrink-0" onClick={() => rm(i)}>
               <X className="w-3.5 h-3.5" />
@@ -704,7 +832,7 @@ export default function EntityAutomationsPage() {
             {/* Conditions */}
             <div className="space-y-2 rounded-md border border-slate-200 p-3">
               <Label className="text-sm font-semibold">{t("auto.conditions", "Условия")}</Label>
-              <ConditionsEditor list={conditions} onChange={setConditions} fopts={fields} fmap={fieldByKey} sts={statuses} allowStatus conjunction={conditionConjunction} onConjunctionChange={setConditionConjunction} />
+              <ConditionsEditor list={conditions} onChange={setConditions} fopts={fields} fmap={fieldByKey} sts={statuses} allowStatus conjunction={conditionConjunction} onConjunctionChange={setConditionConjunction} ownerEntityId={entityId} />
             </div>
 
             {/* Actions */}
@@ -820,6 +948,7 @@ type ValueControlComp = (props: {
   fmap: Map<string, Field>;
   sts: Status[];
   statusKey: boolean;
+  ownerEntityId?: number;
 }) => ReactElement;
 
 type ConditionsEditorComp = (props: {
@@ -831,6 +960,7 @@ type ConditionsEditorComp = (props: {
   allowStatus: boolean;
   conjunction?: "and" | "or";
   onConjunctionChange?: (next: "and" | "or") => void;
+  ownerEntityId?: number;
 }) => ReactElement;
 
 /**
@@ -949,7 +1079,7 @@ function ActionCard({
           {draft.type === "update_records_where" && targetId > 0 && (
             <div className="space-y-1.5">
               <Label className="text-xs text-slate-500">{t("auto.matchConditions", "Условия выбора записей")}</Label>
-              <ConditionsEditor list={draft.match} onChange={(next) => onChange({ match: next })} fopts={targetFields} fmap={targetFieldByKey} sts={targetStatuses} allowStatus />
+              <ConditionsEditor list={draft.match} onChange={(next) => onChange({ match: next })} fopts={targetFields} fmap={targetFieldByKey} sts={targetStatuses} allowStatus ownerEntityId={targetId} />
             </div>
           )}
 
