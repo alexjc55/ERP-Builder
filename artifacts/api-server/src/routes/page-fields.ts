@@ -1057,6 +1057,18 @@ function resolveRelatedAccess(
  * label + search read the related PAGE field from page_record_values; otherwise
  * they read the related entity record's own field.
  */
+/**
+ * Render a candidate's projected value as a label. Only scalar (string / number
+ * / boolean) projections yield a label; object-valued projections (e.g. a lookup
+ * pointing at a `file` or relation field whose JSONB value is an object) render
+ * empty so the picker drops them instead of showing "[object Object]".
+ */
+function candidateLabel(v: unknown): string {
+  if (v == null) return "";
+  const t = typeof v;
+  return t === "string" || t === "number" || t === "boolean" ? String(v) : "";
+}
+
 async function loadCandidateRows(
   relatedEntityId: number,
   relatedFieldKey: string,
@@ -1099,7 +1111,7 @@ async function loadCandidateRows(
     }
     return rows.map((r) => {
       const v = pvMap.get(r.id)?.[relatedFieldKey];
-      return { id: r.id, label: v == null ? "" : String(v) };
+      return { id: r.id, label: candidateLabel(v) };
     });
   }
   const searchConds = q
@@ -1113,7 +1125,7 @@ async function loadCandidateRows(
     .limit(50);
   return rows.map((r) => {
     const v = ((r.valuesJson as Record<string, unknown>) ?? {})[relatedFieldKey];
-    return { id: r.id, label: v == null ? "" : String(v) };
+    return { id: r.id, label: candidateLabel(v) };
   });
 }
 
@@ -1633,6 +1645,7 @@ router.get("/entities/:entityId/relation-options", requireAuth, async (req, res)
 async function resolveRelationEntityField(
   entityId: number,
   fieldKey: string,
+  allowLookup = false,
 ): Promise<
   | { ok: false; status: number; error: string }
   | {
@@ -1661,7 +1674,7 @@ async function resolveRelationEntityField(
         eq(entityFieldsTable.entityId, entityId),
         eq(entityFieldsTable.fieldKey, fieldKey),
         eq(entityFieldsTable.isActive, true),
-        eq(entityFieldsTable.fieldType, "relation"),
+        inArray(entityFieldsTable.fieldType, allowLookup ? ["relation", "lookup"] : ["relation"]),
       ),
     );
   if (!field) return { ok: false, status: 404, error: "Relation field not found" };
@@ -2131,7 +2144,10 @@ router.post("/entities/:entityId/related-candidates", requireAuth, async (req, r
     res.status(400).json({ error: body.error.message });
     return;
   }
-  const resolved = await resolveRelationEntityField(params.data.entityId, body.data.fieldKey);
+  // allowLookup: the conditions/value picker (e.g. automations) can read
+  // candidates for a `lookup` field too; the WRITE path keeps the default
+  // (relation-only) so lookups can never be used to mutate a link.
+  const resolved = await resolveRelationEntityField(params.data.entityId, body.data.fieldKey, true);
   if (!resolved.ok) {
     res.status(resolved.status).json({ error: resolved.error });
     return;
@@ -2172,7 +2188,7 @@ router.post("/entities/:entityId/related-candidates", requireAuth, async (req, r
   const dep = field.dependencyConfigJson as DependencyFieldConfig | null;
   const dependsOnFieldKey = dep?.dependsOnFieldKey?.trim();
   const relatedFilterFieldKey = dep?.relatedFilterFieldKey?.trim();
-  if (dependsOnFieldKey && relatedFilterFieldKey) {
+  if (!body.data.ignoreDependency && dependsOnFieldKey && relatedFilterFieldKey) {
     const parentValue = body.data.parentValue?.trim() ?? "";
     if (!parentValue) {
       res.json({ candidates: [] });

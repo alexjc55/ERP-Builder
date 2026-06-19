@@ -3205,7 +3205,8 @@ export const GetPageRelatedCandidatesParams = zod.object({
 export const GetPageRelatedCandidatesBody = zod.object({
   "fieldKey": zod.string().describe('The relation page-field\'s own key (identifies which relation to list candidates for).'),
   "q": zod.string().optional().describe('Optional case-insensitive search over the candidate label (related field value).'),
-  "parentValue": zod.string().nullish().describe('For a dependent (cascading) relation field, the current row\'s parent-field value used to narrow candidates: a scalar value, or a linked record id (as a string) when the parent is itself a relation field. Empty\/omitted yields no candidates when the field is dependent.')
+  "parentValue": zod.string().nullish().describe('For a dependent (cascading) relation field, the current row\'s parent-field value used to narrow candidates: a scalar value, or a linked record id (as a string) when the parent is itself a relation field. Empty\/omitted yields no candidates when the field is dependent.'),
+  "ignoreDependency": zod.boolean().optional().describe('When true, skip the dependent (cascading) parent-value narrowing and return all RBAC-visible candidates regardless of any dependencyConfig. Used by contexts without a row\/parent chain (e.g. the automations conditions editor) so a dependent relation field can still offer its full value list.')
 })
 
 export const GetPageRelatedCandidatesResponse = zod.object({
@@ -3384,7 +3385,8 @@ export const GetEntityRelatedCandidatesParams = zod.object({
 export const GetEntityRelatedCandidatesBody = zod.object({
   "fieldKey": zod.string().describe('The relation page-field\'s own key (identifies which relation to list candidates for).'),
   "q": zod.string().optional().describe('Optional case-insensitive search over the candidate label (related field value).'),
-  "parentValue": zod.string().nullish().describe('For a dependent (cascading) relation field, the current row\'s parent-field value used to narrow candidates: a scalar value, or a linked record id (as a string) when the parent is itself a relation field. Empty\/omitted yields no candidates when the field is dependent.')
+  "parentValue": zod.string().nullish().describe('For a dependent (cascading) relation field, the current row\'s parent-field value used to narrow candidates: a scalar value, or a linked record id (as a string) when the parent is itself a relation field. Empty\/omitted yields no candidates when the field is dependent.'),
+  "ignoreDependency": zod.boolean().optional().describe('When true, skip the dependent (cascading) parent-value narrowing and return all RBAC-visible candidates regardless of any dependencyConfig. Used by contexts without a row\/parent chain (e.g. the automations conditions editor) so a dependent relation field can still offer its full value list.')
 })
 
 export const GetEntityRelatedCandidatesResponse = zod.object({

@@ -13,4 +13,6 @@ export interface PageRelatedCandidatesInput {
   q?: string;
   /** For a dependent (cascading) relation field, the current row's parent-field value used to narrow candidates: a scalar value, or a linked record id (as a string) when the parent is itself a relation field. Empty/omitted yields no candidates when the field is dependent. */
   parentValue?: string | null;
+  /** When true, skip the dependent (cascading) parent-value narrowing and return all RBAC-visible candidates regardless of any dependencyConfig. Used by contexts without a row/parent chain (e.g. the automations conditions editor) so a dependent relation field can still offer its full value list. */
+  ignoreDependency?: boolean;
 }

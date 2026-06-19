@@ -94,6 +94,7 @@ import {
   ChevronsUpDown,
 } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
+import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
@@ -200,7 +201,7 @@ function RelationValueControl({
     if (!open) return;
     let cancelled = false;
     const h = setTimeout(() => {
-      fetchCandidates({ entityId, data: { fieldKey, q: search.trim() || undefined } })
+      fetchCandidates({ entityId, data: { fieldKey, q: search.trim() || undefined, ignoreDependency: true } })
         .then((res) => {
           if (!cancelled) setCandidates(res.candidates ?? []);
         })
@@ -591,10 +592,11 @@ export default function EntityAutomationsPage() {
       );
     }
     if (type === "user") {
+      const allowedUsers = f ? filterUserOptionsByRoles(f, userOptions) : userOptions;
       return (
         <Select value={raw || ""} onValueChange={onChange}>
           <SelectTrigger className="flex-1"><SelectValue placeholder={t("auto.selectUser", "Пользователь")} /></SelectTrigger>
-          <SelectContent>{userOptions.map((u: UserOption) => (<SelectItem key={u.id} value={String(u.id)}>{u.name || `#${u.id}`}</SelectItem>))}</SelectContent>
+          <SelectContent>{allowedUsers.map((u: UserOption) => (<SelectItem key={u.id} value={String(u.id)}>{u.name || `#${u.id}`}</SelectItem>))}</SelectContent>
         </Select>
       );
     }

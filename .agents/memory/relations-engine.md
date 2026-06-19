@@ -23,5 +23,10 @@ The pg error `code`/`constraint` are NOT always on the top-level error thrown by
 ## Pre-insert existence checks are not enough under concurrency — also catch the FK violation
 Checking that the source/target records exist *before* the insert does not prevent a concurrent delete between the check and the insert; the FK fires (`23503`) and would surface as a 500. The catch block must walk the cause chain for `23503`, inspect the constraint name to tell which column failed (`source_record_id` → 404, `target_record_id`/`relation_id` → 400), and return a deterministic 4xx. **Why:** records are CASCADE-linked and deletable any time; only the DB FK is authoritative at insert time.
 
+## resolveRelationEntityField is shared by READ and WRITE paths — gate lookup acceptance
+`resolveRelationEntityField` backs both the read picker (`POST /entities/:id/related-candidates`) and the write `PUT /entities/:id/related-link`, plus dependent-field resolution. Relaxing its field-type filter to accept `lookup` for the read picker silently leaked into the write path, letting a read-only `lookup` field mutate a link.
+**Why:** lookups are read-only projections through a relation; they must never be a write target.
+**How to apply:** the resolver defaults to relation-only; lookup is opt-in via an `allowLookup` flag passed ONLY by the candidates read handler. Any new caller defaults to relation-only — never widen the resolver's type filter unconditionally.
+
 ## OpenAPI: avoid path + query params on the same endpoint
 In this repo's Orval setup, an endpoint with BOTH a path param AND a query param triggers a TS2308 duplicate-export collision between `generated/api.ts` and `generated/types/`. Keep list endpoints path-only; filter client-side instead (e.g. record links return all links, each carrying its relationId).
