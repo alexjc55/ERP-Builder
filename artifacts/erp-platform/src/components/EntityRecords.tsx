@@ -138,7 +138,7 @@ import { formatFormulaResult, evaluateFormula } from "@workspace/formula";
 import { computeRowFormatting, type FormatField } from "@/lib/formatRules";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus, Zap } from "lucide-react";
 import { Link, useLocation, useSearch } from "wouter";
 import { Calendar } from "@/components/ui/calendar";
 import type { DateRange } from "react-day-picker";
@@ -2515,6 +2515,7 @@ export function EntityRecords({
               { to: `/admin/entities/${entityId}/relations`, icon: Share2, label: t("records.manageRelations", "Связи") },
               { to: `/admin/entities/${entityId}/views`, icon: LayoutList, label: t("records.manageViews", "Виды") },
               { to: `/admin/entities/${entityId}/workflow`, icon: Workflow, label: t("records.manageProcesses", "Процессы") },
+              { to: `/admin/entities/${entityId}/automations`, icon: Zap, label: t("records.manageAutomations", "Автоматизации") },
             ].map(({ to, icon: Icon, label }) => (
               <Button key={to} asChild variant="outline" size="sm" className="h-8 gap-1.5">
                 <Link href={to}>

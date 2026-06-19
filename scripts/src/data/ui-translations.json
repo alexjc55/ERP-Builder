@@ -4188,6 +4188,12 @@
     "he": "תהליכים"
   },
   {
+    "key": "records.manageAutomations",
+    "ru": "Автоматизации",
+    "en": "Automations",
+    "he": "אוטומציות"
+  },
+  {
     "key": "records.manageRelations",
     "ru": "Связи",
     "en": "Relations",
