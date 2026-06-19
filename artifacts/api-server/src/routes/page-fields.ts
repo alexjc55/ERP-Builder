@@ -9,6 +9,7 @@ import {
   entityRecordsTable,
   relationsTable,
   recordLinksTable,
+  usersTable,
   type PageField,
   type Relation,
   type RelationFieldConfig,
@@ -2238,11 +2239,31 @@ router.post("/entities/:entityId/related-candidates", requireAuth, async (req, r
   }
 
   const candidates = await loadCandidateRows(relatedEntityId, relatedFieldKey, relatedPageId, conds, q);
+  // A projected `user` field stores the user id as its value; resolve those ids
+  // to display names so the picker shows the user's name instead of a raw id
+  // (e.g. "14"). Only entity-source projections expose the related field type.
+  let finalCandidates = candidates;
+  if (resolved.relatedField?.fieldType === "user") {
+    const ids = [...new Set(candidates.map((c) => Number(c.label)).filter((n) => Number.isInteger(n)))];
+    if (ids.length > 0) {
+      const users = await db
+        .select({ id: usersTable.id, firstName: usersTable.firstName, lastName: usersTable.lastName, email: usersTable.email })
+        .from(usersTable)
+        .where(inArray(usersTable.id, ids));
+      const nameById = new Map(
+        users.map((u) => [u.id, [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || u.email] as const),
+      );
+      finalCandidates = candidates.map((c) => {
+        const nm = nameById.get(Number(c.label));
+        return nm ? { ...c, label: nm } : c;
+      });
+    }
+  }
   // Surface the related entity id + create permission so the client can offer an
   // in-place "add record" affordance (create a record in the related entity and
   // link it without leaving the picker).
   res.json({
-    candidates,
+    candidates: finalCandidates,
     relatedEntityId,
     relatedFieldKey,
     canCreate: canRecord(perms, relatedEntityId, "create"),

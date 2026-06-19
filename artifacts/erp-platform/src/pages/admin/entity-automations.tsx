@@ -846,6 +846,7 @@ export default function EntityAutomationsPage() {
                   index={i}
                   total={actions.length}
                   draft={a}
+                  currentEntityId={entityId}
                   currentFields={fields}
                   currentFieldByKey={fieldByKey}
                   currentStatuses={statuses}
@@ -974,6 +975,7 @@ function ActionCard({
   index,
   total,
   draft,
+  currentEntityId,
   currentFields,
   currentFieldByKey,
   currentStatuses,
@@ -990,6 +992,7 @@ function ActionCard({
   index: number;
   total: number;
   draft: ActionDraft;
+  currentEntityId: number;
   currentFields: Field[];
   currentFieldByKey: Map<string, Field>;
   currentStatuses: Status[];
@@ -1042,7 +1045,7 @@ function ActionCard({
             <SelectContent>{currentFields.map((f) => (<SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson) || f.fieldKey}</SelectItem>))}</SelectContent>
           </Select>
           <span className="text-slate-400">=</span>
-          <ValueControl fieldKey={draft.fieldKey} raw={draft.value} onChange={(v) => onChange({ value: v })} fmap={currentFieldByKey} sts={currentStatuses} statusKey={false} />
+          <ValueControl fieldKey={draft.fieldKey} raw={draft.value} onChange={(v) => onChange({ value: v })} fmap={currentFieldByKey} sts={currentStatuses} statusKey={false} ownerEntityId={currentEntityId} />
         </div>
       )}
 
@@ -1108,7 +1111,7 @@ function ActionCard({
                       <SelectContent>{currentFields.map((f) => (<SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson) || f.fieldKey}</SelectItem>))}</SelectContent>
                     </Select>
                   ) : (
-                    <ValueControl fieldKey={m.targetFieldKey} raw={m.value} onChange={(v) => updMapping(i, { value: v })} fmap={targetFieldByKey} sts={targetStatuses} statusKey={false} />
+                    <ValueControl fieldKey={m.targetFieldKey} raw={m.value} onChange={(v) => updMapping(i, { value: v })} fmap={targetFieldByKey} sts={targetStatuses} statusKey={false} ownerEntityId={targetId} />
                   )}
                   <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-400 shrink-0" onClick={() => rmMapping(i)}><X className="w-3.5 h-3.5" /></Button>
                 </div>

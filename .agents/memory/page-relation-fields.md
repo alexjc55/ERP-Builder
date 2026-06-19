@@ -14,6 +14,15 @@ Page-fields of type `relation` (config `{relationId, relatedFieldKey}` in `relat
 
 **How to apply:** in `dashboard.ts` `computeMetric` related branch, fetch the related field value into a `Map<linkedId, value>` over the *unique* linked ids (one query), then accumulate by iterating `map.values()` (the per-base-record linked ids, with duplicates). Never return `Set(map.values()).length`.
 
+## A projected `user` field must be resolved id→name in candidate labels
+**Rule:** the relation/lookup candidates endpoint labels each candidate by the projected related field's stored value. When that projected field is type `user`, the stored value is a user *id* (e.g. `14`), so the label must be resolved to the user's display name (`[firstName,lastName].join(" ").trim() || email`) before returning. Only entity-source projections expose the related field type (`resolved.relatedField`); page-source does not.
+**Why:** without resolution the picker shows raw ids; same trap as rendering a user cell — an id is not a label.
+**How to apply:** after `loadCandidateRows`, if `resolved.relatedField?.fieldType === "user"`, batch-fetch the ids and remap labels. (Search `q` still matches on the raw id; acceptable.)
+
+## Set_field / mapping value controls in automations are type-aware ONLY if given ownerEntityId
+**Rule:** the shared `ValueControl` renders a relation/lookup picker only when `ownerEntityId` is passed; without it those types silently fall through to a plain text input. The set_field action's control must pass the automation's entity id; cross-entity mapping controls must pass the action's target entity id.
+**Why:** a lookup/relation set-field showed a manual text box instead of a picker because the action card omitted `ownerEntityId`.
+
 ## Count metric must NOT resolve a related field
 **Rule:** for a related metric, `count` sends `fieldKey: null` by design (it counts links, no field needed). The compute path must resolve only the relation *direction* (via `relationDirection`) for count; calling `resolveRelationField(..., fieldKey ?? "")` errors (field "" not found) → silently returns 0. Only `sum` resolves the related field. Validation already allows count-without-field; the bug was compute-side.
 
