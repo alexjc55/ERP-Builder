@@ -11,4 +11,6 @@ export interface PageRelatedCandidate {
   id: number;
   /** Display label (the related field value as text). */
   label: string;
+  /** Optional matching value distinct from the display label. Used when the projected related field is a `user` field: `label` is the user's display name while `value` is the user id (as a string), which is the raw projected value that automation conditions match against. When omitted the consumer should fall back to `label`. */
+  value?: string;
 }

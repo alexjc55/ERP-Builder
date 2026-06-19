@@ -10,6 +10,7 @@ import {
   relationsTable,
   recordLinksTable,
   usersTable,
+  userRolesTable,
   type PageField,
   type Relation,
   type RelationFieldConfig,
@@ -2238,25 +2239,77 @@ router.post("/entities/:entityId/related-candidates", requireAuth, async (req, r
     }
   }
 
-  const candidates = await loadCandidateRows(relatedEntityId, relatedFieldKey, relatedPageId, conds, q);
-  // A projected `user` field stores the user id as its value; resolve those ids
-  // to display names so the picker shows the user's name instead of a raw id
-  // (e.g. "14"). Only entity-source projections expose the related field type.
-  let finalCandidates = candidates;
-  if (resolved.relatedField?.fieldType === "user") {
-    const ids = [...new Set(candidates.map((c) => Number(c.label)).filter((n) => Number.isInteger(n)))];
-    if (ids.length > 0) {
-      const users = await db
-        .select({ id: usersTable.id, firstName: usersTable.firstName, lastName: usersTable.lastName, email: usersTable.email })
-        .from(usersTable)
-        .where(inArray(usersTable.id, ids));
-      const nameById = new Map(
-        users.map((u) => [u.id, [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || u.email] as const),
-      );
-      finalCandidates = candidates.map((c) => {
-        const nm = nameById.get(Number(c.label));
-        return nm ? { ...c, label: nm } : c;
-      });
+  // A projected `user` field stores the user id as its raw value (what automation
+  // conditions match against via the engine). For such fields the picker must
+  // show the user's display NAME (label) while emitting the user ID (value) — a
+  // value/label split — so matching keeps working. Two cases:
+  //  - condition context (ignoreDependency, no row/parent chain): offer ALL users
+  //    the projected field's `allowedRoleIds` permits, not just users that happen
+  //    to appear in existing records, so automations can target FUTURE records.
+  //  - records-linking context: keep the existing-record-derived candidates (the
+  //    relation picker links by record id) but resolve labels to names.
+  const userProjection = resolved.relatedField?.fieldType === "user";
+  let finalCandidates: { id: number; label: string; value?: string }[];
+  if (userProjection && body.data.ignoreDependency) {
+    const allowed = (resolved.relatedField!.userConfigJson as { allowedRoleIds?: number[] } | null)
+      ?.allowedRoleIds;
+    const allUsers = await db
+      .select({
+        id: usersTable.id,
+        firstName: usersTable.firstName,
+        lastName: usersTable.lastName,
+        email: usersTable.email,
+        roleId: usersTable.roleId,
+      })
+      .from(usersTable);
+    const urRows = await db
+      .select({ userId: userRolesTable.userId, roleId: userRolesTable.roleId })
+      .from(userRolesTable);
+    const rolesByUser = new Map<number, number[]>();
+    for (const r of urRows) {
+      const list = rolesByUser.get(r.userId);
+      if (list) list.push(r.roleId);
+      else rolesByUser.set(r.userId, [r.roleId]);
+    }
+    // Match on the user's FULL role set (primary roleId + additional via
+    // user_roles), identical to the client's filterUserOptionsByRoles.
+    const allowedSet =
+      Array.isArray(allowed) && allowed.length > 0 ? new Set(allowed) : null;
+    const needle = q?.toLowerCase();
+    finalCandidates = allUsers
+      .filter((u) => {
+        if (!allowedSet) return true;
+        const rs = rolesByUser.get(u.id);
+        const set = rs && rs.length > 0 ? rs : [u.roleId];
+        return set.some((rid) => allowedSet.has(rid));
+      })
+      .map((u) => ({
+        id: u.id,
+        label: [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || u.email,
+        value: String(u.id),
+      }))
+      .filter((c) => (needle ? c.label.toLowerCase().includes(needle) : true));
+  } else {
+    const candidates = await loadCandidateRows(relatedEntityId, relatedFieldKey, relatedPageId, conds, q);
+    if (userProjection) {
+      const ids = [...new Set(candidates.map((c) => Number(c.label)).filter((n) => Number.isInteger(n)))];
+      if (ids.length > 0) {
+        const users = await db
+          .select({ id: usersTable.id, firstName: usersTable.firstName, lastName: usersTable.lastName, email: usersTable.email })
+          .from(usersTable)
+          .where(inArray(usersTable.id, ids));
+        const nameById = new Map(
+          users.map((u) => [u.id, [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || u.email] as const),
+        );
+        finalCandidates = candidates.map((c) => {
+          const nm = nameById.get(Number(c.label));
+          return nm ? { ...c, label: nm, value: c.label } : c;
+        });
+      } else {
+        finalCandidates = candidates;
+      }
+    } else {
+      finalCandidates = candidates;
     }
   }
   // Surface the related entity id + create permission so the client can offer an

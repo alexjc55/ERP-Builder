@@ -194,11 +194,13 @@ function RelationValueControl({
 }): ReactElement {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [candidates, setCandidates] = useState<{ id: number; label: string }[]>([]);
+  const [candidates, setCandidates] = useState<{ id: number; label: string; value?: string }[]>([]);
   const fetchCandidates = useGetEntityRelatedCandidates().mutateAsync;
 
+  // Fetch on mount (q empty) as well as while open: a projected `user` field
+  // emits the user id as the stored value, so the candidate list is also needed
+  // to resolve that id back to a display name for the collapsed trigger.
   useEffect(() => {
-    if (!open) return;
     let cancelled = false;
     const h = setTimeout(() => {
       fetchCandidates({ entityId, data: { fieldKey, q: search.trim() || undefined, ignoreDependency: true } })
@@ -208,16 +210,27 @@ function RelationValueControl({
         .catch(() => {
           if (!cancelled) setCandidates([]);
         });
-    }, 200);
+    }, open ? 200 : 0);
     return () => {
       cancelled = true;
       clearTimeout(h);
     };
   }, [open, search, entityId, fieldKey, fetchCandidates]);
 
-  const labels = [...new Set(candidates.map((c) => c.label).filter((l) => l !== ""))];
+  // Options carry a matching value (what the condition stores) distinct from the
+  // display label; for non-user projections value === label. Dedupe by value.
+  const options: { value: string; label: string }[] = [];
+  const seen = new Set<string>();
+  for (const c of candidates) {
+    const v = c.value ?? c.label;
+    if (v === "" || seen.has(v)) continue;
+    seen.add(v);
+    options.push({ value: v, label: c.label });
+  }
+  const selectedLabel = options.find((o) => o.value === value)?.label ?? value;
   const trimmed = search.trim();
-  const showFreeValue = trimmed !== "" && !labels.some((l) => l.toLowerCase() === trimmed.toLowerCase());
+  const showFreeValue =
+    trimmed !== "" && !options.some((o) => o.label.toLowerCase() === trimmed.toLowerCase());
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -228,7 +241,7 @@ function RelationValueControl({
           role="combobox"
           className="flex-1 justify-between font-normal min-w-0"
         >
-          <span className="truncate">{value || t("auto.pickValue", "Выберите значение")}</span>
+          <span className="truncate">{selectedLabel || t("auto.pickValue", "Выберите значение")}</span>
           <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -254,18 +267,18 @@ function RelationValueControl({
                 </CommandItem>
               </CommandGroup>
             )}
-            {labels.length > 0 && (
+            {options.length > 0 && (
               <CommandGroup>
-                {labels.map((l) => (
+                {options.map((o) => (
                   <CommandItem
-                    key={l}
-                    value={l}
+                    key={o.value}
+                    value={o.value}
                     onSelect={() => {
-                      onChange(l);
+                      onChange(o.value);
                       setOpen(false);
                     }}
                   >
-                    {l}
+                    {o.label}
                   </CommandItem>
                 ))}
               </CommandGroup>
