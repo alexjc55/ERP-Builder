@@ -1775,6 +1775,150 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  # AUTOMATIONS (Automations Engine)
+  /automations/reorder:
+    post:
+      operationId: reorderAutomations
+      tags: [automations]
+      summary: Reorder automations within an entity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutomationsReorderInput"
+      responses:
+        "200":
+          description: Reordered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /entities/{entityId}/automations:
+    get:
+      operationId: listEntityAutomations
+      tags: [automations]
+      summary: List automations for an entity
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of automations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Automation"
+    post:
+      operationId: createEntityAutomation
+      tags: [automations]
+      summary: Create an automation on an entity
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutomationInput"
+      responses:
+        "201":
+          description: Automation created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Automation"
+
+  /entities/{entityId}/automation-runs:
+    get:
+      operationId: listEntityAutomationRuns
+      tags: [automations]
+      summary: List recent automation runs for an entity
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of automation runs (most recent first)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AutomationRun"
+
+  /automations/{id}:
+    get:
+      operationId: getAutomation
+      tags: [automations]
+      summary: Get automation by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Automation found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Automation"
+    put:
+      operationId: updateAutomation
+      tags: [automations]
+      summary: Update automation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutomationUpdate"
+      responses:
+        "200":
+          description: Automation updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Automation"
+    delete:
+      operationId: deleteAutomation
+      tags: [automations]
+      summary: Delete automation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
   # RECORDS
   /entities/{entityId}/records:
     get:
@@ -3666,7 +3810,7 @@ components:
 
     RoleAdminCaps:
       type: object
-      required: [pages, entities, roles, users, translations, events, modules, googleDrive, settings]
+      required: [pages, entities, roles, users, translations, events, modules, automations, googleDrive, settings]
       properties:
         pages:
           type: boolean
@@ -3681,6 +3825,8 @@ components:
         events:
           type: boolean
         modules:
+          type: boolean
+        automations:
           type: boolean
         googleDrive:
           type: boolean
@@ -5509,6 +5655,191 @@ components:
             $ref: "#/components/schemas/TransitionAction"
         sortOrder:
           type: integer
+
+    # AUTOMATIONS (Automations Engine)
+    AutomationCondition:
+      type: object
+      required: [fieldKey, operator]
+      properties:
+        fieldKey:
+          type: string
+          description: A real field key, or "__status__" to compare the record's statusId.
+        operator:
+          type: string
+          enum: [eq, neq, contains, gt, lt, gte, lte, empty, notEmpty]
+        value: {}
+
+    AutomationTrigger:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [record_created, record_updated, field_changed, status_changed, date_reached]
+        fieldKey:
+          type: string
+        fromStatusId:
+          type: ["integer", "null"]
+        toStatusId:
+          type: ["integer", "null"]
+        offsetDays:
+          type: integer
+
+    AutomationMapping:
+      type: object
+      required: [targetFieldKey, sourceType]
+      properties:
+        targetFieldKey:
+          type: string
+        sourceType:
+          type: string
+          enum: [literal, field]
+        value: {}
+        sourceFieldKey:
+          type: string
+
+    AutomationAction:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [set_field, change_status, create_record, update_records_where, webhook]
+        fieldKey:
+          type: string
+        value: {}
+        statusId:
+          type: ["integer", "null"]
+        targetEntityId:
+          type: integer
+        mapping:
+          type: array
+          items:
+            $ref: "#/components/schemas/AutomationMapping"
+        match:
+          type: array
+          items:
+            $ref: "#/components/schemas/AutomationCondition"
+        url:
+          type: string
+        includeRecord:
+          type: boolean
+
+    Automation:
+      type: object
+      required: [id, entityId, nameJson, isActive, triggerJson, conditionsJson, actionsJson, sortOrder, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        entityId:
+          type: integer
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        isActive:
+          type: boolean
+        triggerJson:
+          $ref: "#/components/schemas/AutomationTrigger"
+        conditionsJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/AutomationCondition"
+        actionsJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/AutomationAction"
+        sortOrder:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    AutomationInput:
+      type: object
+      required: [triggerJson]
+      properties:
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        isActive:
+          type: boolean
+        triggerJson:
+          $ref: "#/components/schemas/AutomationTrigger"
+        conditionsJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/AutomationCondition"
+          default: []
+        actionsJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/AutomationAction"
+          default: []
+        sortOrder:
+          type: integer
+
+    AutomationUpdate:
+      type: object
+      properties:
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        isActive:
+          type: boolean
+        triggerJson:
+          $ref: "#/components/schemas/AutomationTrigger"
+        conditionsJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/AutomationCondition"
+        actionsJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/AutomationAction"
+        sortOrder:
+          type: integer
+
+    AutomationsReorderInput:
+      type: object
+      required: [entityId, items]
+      properties:
+        entityId:
+          type: integer
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, sortOrder]
+            properties:
+              id:
+                type: integer
+              sortOrder:
+                type: integer
+
+    AutomationRun:
+      type: object
+      required: [id, automationId, entityId, recordId, status, triggerName, detailJson, createdAt]
+      properties:
+        id:
+          type: integer
+        automationId:
+          type: integer
+        entityId:
+          type: integer
+        recordId:
+          type: ["integer", "null"]
+        status:
+          type: string
+        triggerName:
+          type: ["string", "null"]
+        detailJson:
+          type: object
+          additionalProperties: true
+        dedupeKey:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
 
     # RECORDS
     EntityRecord:

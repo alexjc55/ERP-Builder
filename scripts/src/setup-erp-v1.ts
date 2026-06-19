@@ -346,8 +346,8 @@ async function main() {
 
     // ── 8. Roles permissions ─────────────────────────────────────────────────
     const allPages = [mainPage.id, logisticsPage.id, productionPage.id];
-    const fullCaps = { pages: true, entities: true, roles: true, users: true, translations: true, events: true, modules: true, googleDrive: true, settings: true };
-    const noCaps = { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, googleDrive: false, settings: false };
+    const fullCaps = { pages: true, entities: true, roles: true, users: true, translations: true, events: true, modules: true, googleDrive: true, settings: true, automations: true };
+    const noCaps = { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, googleDrive: false, settings: false, automations: false };
 
     const adminPerms: RolePermissions = {
       superAdmin: true,

@@ -9,6 +9,7 @@ export function adminCapForPath(path: string): keyof RoleAdminCaps | null {
   if (path.startsWith("/admin/roles")) return "roles";
   if (path.startsWith("/admin/pages")) return "pages";
   if (path.startsWith("/admin/translations")) return "translations";
+  if (/\/admin\/entities\/\d+\/automations/.test(path)) return "automations";
   if (path.startsWith("/admin/entities")) return "entities";
   if (path.startsWith("/admin/events")) return "events";
   if (path.startsWith("/admin/modules")) return "modules";

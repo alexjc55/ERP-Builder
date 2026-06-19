@@ -248,6 +248,7 @@ export interface RoleAdminCaps {
   translations: boolean;
   events: boolean;
   modules: boolean;
+  automations: boolean;
   googleDrive: boolean;
   settings: boolean;
 }
@@ -2258,6 +2259,146 @@ export interface TransitionUpdate {
   requiredFieldKeys?: string[];
   actionsJson?: TransitionAction[];
   sortOrder?: number;
+}
+
+export type AutomationConditionOperator = typeof AutomationConditionOperator[keyof typeof AutomationConditionOperator];
+
+
+export const AutomationConditionOperator = {
+  eq: 'eq',
+  neq: 'neq',
+  contains: 'contains',
+  gt: 'gt',
+  lt: 'lt',
+  gte: 'gte',
+  lte: 'lte',
+  empty: 'empty',
+  notEmpty: 'notEmpty',
+} as const;
+
+export interface AutomationCondition {
+  /** A real field key, or "__status__" to compare the record's statusId. */
+  fieldKey: string;
+  operator: AutomationConditionOperator;
+  value?: unknown;
+}
+
+export type AutomationTriggerType = typeof AutomationTriggerType[keyof typeof AutomationTriggerType];
+
+
+export const AutomationTriggerType = {
+  record_created: 'record_created',
+  record_updated: 'record_updated',
+  field_changed: 'field_changed',
+  status_changed: 'status_changed',
+  date_reached: 'date_reached',
+} as const;
+
+export interface AutomationTrigger {
+  type: AutomationTriggerType;
+  fieldKey?: string;
+  /** @nullable */
+  fromStatusId?: number | null;
+  /** @nullable */
+  toStatusId?: number | null;
+  offsetDays?: number;
+}
+
+export type AutomationMappingSourceType = typeof AutomationMappingSourceType[keyof typeof AutomationMappingSourceType];
+
+
+export const AutomationMappingSourceType = {
+  literal: 'literal',
+  field: 'field',
+} as const;
+
+export interface AutomationMapping {
+  targetFieldKey: string;
+  sourceType: AutomationMappingSourceType;
+  value?: unknown;
+  sourceFieldKey?: string;
+}
+
+export type AutomationActionType = typeof AutomationActionType[keyof typeof AutomationActionType];
+
+
+export const AutomationActionType = {
+  set_field: 'set_field',
+  change_status: 'change_status',
+  create_record: 'create_record',
+  update_records_where: 'update_records_where',
+  webhook: 'webhook',
+} as const;
+
+export interface AutomationAction {
+  type: AutomationActionType;
+  fieldKey?: string;
+  value?: unknown;
+  /** @nullable */
+  statusId?: number | null;
+  targetEntityId?: number;
+  mapping?: AutomationMapping[];
+  match?: AutomationCondition[];
+  url?: string;
+  includeRecord?: boolean;
+}
+
+export interface Automation {
+  id: number;
+  entityId: number;
+  nameJson: MultilingualText;
+  isActive: boolean;
+  triggerJson: AutomationTrigger;
+  conditionsJson: AutomationCondition[];
+  actionsJson: AutomationAction[];
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AutomationInput {
+  nameJson?: MultilingualText;
+  isActive?: boolean;
+  triggerJson: AutomationTrigger;
+  conditionsJson?: AutomationCondition[];
+  actionsJson?: AutomationAction[];
+  sortOrder?: number;
+}
+
+export interface AutomationUpdate {
+  nameJson?: MultilingualText;
+  isActive?: boolean;
+  triggerJson?: AutomationTrigger;
+  conditionsJson?: AutomationCondition[];
+  actionsJson?: AutomationAction[];
+  sortOrder?: number;
+}
+
+export type AutomationsReorderInputItemsItem = {
+  id: number;
+  sortOrder: number;
+};
+
+export interface AutomationsReorderInput {
+  entityId: number;
+  items: AutomationsReorderInputItemsItem[];
+}
+
+export type AutomationRunDetailJson = { [key: string]: unknown };
+
+export interface AutomationRun {
+  id: number;
+  automationId: number;
+  entityId: number;
+  /** @nullable */
+  recordId: number | null;
+  status: string;
+  /** @nullable */
+  triggerName: string | null;
+  detailJson: AutomationRunDetailJson;
+  /** @nullable */
+  dedupeKey?: string | null;
+  createdAt: string;
 }
 
 export type EntityRecordValuesJson = { [key: string]: unknown };

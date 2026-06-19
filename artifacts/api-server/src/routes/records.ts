@@ -94,7 +94,7 @@ async function entityExists(entityId: number): Promise<boolean> {
   return Boolean(entity);
 }
 
-function isEmpty(value: unknown): boolean {
+export function isEmpty(value: unknown): boolean {
   return value === undefined || value === null || (typeof value === "string" && value.trim() === "");
 }
 
@@ -200,7 +200,7 @@ function validateFileValue(field: EntityField, raw: unknown, gdriveModuleEnabled
   return out;
 }
 
-function validateValues(fields: EntityField[], values: Record<string, unknown>, gdriveModuleEnabled: boolean, prevValues: Record<string, unknown> = {}): { values: Record<string, unknown> } | { error: string } {
+export function validateValues(fields: EntityField[], values: Record<string, unknown>, gdriveModuleEnabled: boolean, prevValues: Record<string, unknown> = {}): { values: Record<string, unknown> } | { error: string } {
   const fieldByKey = new Map(fields.map((f) => [f.fieldKey, f]));
 
   // Reject unknown keys (metadata-driven integrity: no junk columns).
@@ -322,7 +322,7 @@ function validateValues(fields: EntityField[], values: Record<string, unknown>, 
   return { values: cleaned };
 }
 
-async function loadActiveFields(entityId: number): Promise<EntityField[]> {
+export async function loadActiveFields(entityId: number): Promise<EntityField[]> {
   return db
     .select()
     .from(entityFieldsTable)
@@ -331,7 +331,7 @@ async function loadActiveFields(entityId: number): Promise<EntityField[]> {
 }
 
 /** Verify that every value for a `user`-type field references an existing user. */
-async function validateUserRefs(fields: EntityField[], values: Record<string, unknown>): Promise<string | null> {
+export async function validateUserRefs(fields: EntityField[], values: Record<string, unknown>): Promise<string | null> {
   const userKeys = fields.filter((f) => f.fieldType === "user").map((f) => f.fieldKey);
   const ids = userKeys
     .map((k) => values[k])
@@ -411,7 +411,7 @@ function dependencyAncestorKeys(field: EntityField, fields: EntityField[]): stri
  * parent. `excludeRecordId` skips the record being updated so it never collides
  * with its own stored value.
  */
-async function checkDependentValues(
+export async function checkDependentValues(
   entityId: number,
   fields: EntityField[],
   values: Record<string, unknown>,
@@ -451,10 +451,10 @@ async function checkDependentValues(
 }
 
 /** Arbitrary advisory-lock namespace for serializing unique-key checks per entity. */
-const UNIQUE_KEY_LOCK_NS = 415943;
+export const UNIQUE_KEY_LOCK_NS = 415943;
 
 /** Thrown inside a write transaction when an isKey value collides; mapped to 409. */
-class UniqueKeyError extends Error {}
+export class UniqueKeyError extends Error {}
 
 /** A db handle that works for both the pool and a transaction. */
 type DbExecutor = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -467,7 +467,7 @@ type DbExecutor = Parameters<Parameters<typeof db.transaction>[0]>[0];
  * unarchiving could resurrect a duplicate). `excludeRecordId` skips the row being
  * updated so it never collides with its own stored value.
  */
-async function checkUniqueKeys(
+export async function checkUniqueKeys(
   exec: DbExecutor,
   entityId: number,
   keyFields: EntityField[],
@@ -515,7 +515,7 @@ function checkImmutableFields(
 }
 
 /** Returns true if the status belongs to the given entity. */
-async function statusBelongsToEntity(statusId: number, entityId: number): Promise<boolean> {
+export async function statusBelongsToEntity(statusId: number, entityId: number): Promise<boolean> {
   const [status] = await db
     .select({ id: entityStatusesTable.id })
     .from(entityStatusesTable)
@@ -524,7 +524,7 @@ async function statusBelongsToEntity(statusId: number, entityId: number): Promis
   return Boolean(status);
 }
 
-async function defaultStatusId(entityId: number): Promise<number | null> {
+export async function defaultStatusId(entityId: number): Promise<number | null> {
   const [status] = await db
     .select({ id: entityStatusesTable.id })
     .from(entityStatusesTable)
@@ -2030,12 +2030,18 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
     );
   }
 
+  // changedFields lets field_changed automations gate on the specific field(s)
+  // that actually changed; derived from the persisted diff (post set_field).
+  const changedFields =
+    update.valuesJson !== undefined
+      ? diffValues(existingValues, record.valuesJson as Record<string, unknown>, fields.map((f) => f.fieldKey)).map((c) => c.fieldKey)
+      : [];
   const events: Parameters<typeof emitEvent>[0] = [
     {
       eventName: EVENT_RECORD_UPDATED,
       entityId: existing.entityId,
       recordId: record.id,
-      payload: { actorUserId: userId },
+      payload: { actorUserId: userId, changedFields },
     },
   ];
   if (statusChanging) {

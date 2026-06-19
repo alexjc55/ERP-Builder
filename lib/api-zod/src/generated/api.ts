@@ -147,6 +147,7 @@ export const LoginResponse = zod.object({
   "translations": zod.boolean(),
   "events": zod.boolean(),
   "modules": zod.boolean(),
+  "automations": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean()
 }),
@@ -211,6 +212,7 @@ export const GetMeResponse = zod.object({
   "translations": zod.boolean(),
   "events": zod.boolean(),
   "modules": zod.boolean(),
+  "automations": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean()
 }),
@@ -273,6 +275,7 @@ export const UpdateMeResponse = zod.object({
   "translations": zod.boolean(),
   "events": zod.boolean(),
   "modules": zod.boolean(),
+  "automations": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean()
 }),
@@ -333,6 +336,7 @@ export const ImpersonateResponse = zod.object({
   "translations": zod.boolean(),
   "events": zod.boolean(),
   "modules": zod.boolean(),
+  "automations": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean()
 }),
@@ -390,6 +394,7 @@ export const StopImpersonationResponse = zod.object({
   "translations": zod.boolean(),
   "events": zod.boolean(),
   "modules": zod.boolean(),
+  "automations": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean()
 }),
@@ -451,6 +456,7 @@ export const RedeemGuestLinkResponse = zod.object({
   "translations": zod.boolean(),
   "events": zod.boolean(),
   "modules": zod.boolean(),
+  "automations": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean()
 }),
@@ -854,6 +860,7 @@ export const ListRolesResponseItem = zod.object({
   "translations": zod.boolean(),
   "events": zod.boolean(),
   "modules": zod.boolean(),
+  "automations": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean()
 }),
@@ -902,6 +909,7 @@ export const CreateRoleBody = zod.object({
   "translations": zod.boolean(),
   "events": zod.boolean(),
   "modules": zod.boolean(),
+  "automations": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean()
 }),
@@ -951,6 +959,7 @@ export const GetRoleResponse = zod.object({
   "translations": zod.boolean(),
   "events": zod.boolean(),
   "modules": zod.boolean(),
+  "automations": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean()
 }),
@@ -1002,6 +1011,7 @@ export const UpdateRoleBody = zod.object({
   "translations": zod.boolean(),
   "events": zod.boolean(),
   "modules": zod.boolean(),
+  "automations": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean()
 }),
@@ -1043,6 +1053,7 @@ export const UpdateRoleResponse = zod.object({
   "translations": zod.boolean(),
   "events": zod.boolean(),
   "modules": zod.boolean(),
+  "automations": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean()
 }),
@@ -3742,6 +3753,315 @@ export const DeleteTransitionParams = zod.object({
 })
 
 export const DeleteTransitionResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
+ * @summary Reorder automations within an entity
+ */
+export const ReorderAutomationsBody = zod.object({
+  "entityId": zod.number(),
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "sortOrder": zod.number()
+}))
+})
+
+export const ReorderAutomationsResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
+ * @summary List automations for an entity
+ */
+export const ListEntityAutomationsParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const ListEntityAutomationsResponseItem = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "isActive": zod.boolean(),
+  "triggerJson": zod.object({
+  "type": zod.enum(['record_created', 'record_updated', 'field_changed', 'status_changed', 'date_reached']),
+  "fieldKey": zod.string().optional(),
+  "fromStatusId": zod.number().nullish(),
+  "toStatusId": zod.number().nullish(),
+  "offsetDays": zod.number().optional()
+}),
+  "conditionsJson": zod.array(zod.object({
+  "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
+  "value": zod.unknown().optional()
+})),
+  "actionsJson": zod.array(zod.object({
+  "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook']),
+  "fieldKey": zod.string().optional(),
+  "value": zod.unknown().optional(),
+  "statusId": zod.number().nullish(),
+  "targetEntityId": zod.number().optional(),
+  "mapping": zod.array(zod.object({
+  "targetFieldKey": zod.string(),
+  "sourceType": zod.enum(['literal', 'field']),
+  "value": zod.unknown().optional(),
+  "sourceFieldKey": zod.string().optional()
+})).optional(),
+  "match": zod.array(zod.object({
+  "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
+  "value": zod.unknown().optional()
+})).optional(),
+  "url": zod.string().optional(),
+  "includeRecord": zod.boolean().optional()
+})),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListEntityAutomationsResponse = zod.array(ListEntityAutomationsResponseItem)
+
+
+/**
+ * @summary Create an automation on an entity
+ */
+export const CreateEntityAutomationParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const createEntityAutomationBodyConditionsJsonDefault = [];
+export const createEntityAutomationBodyActionsJsonDefault = [];
+
+export const CreateEntityAutomationBody = zod.object({
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "isActive": zod.boolean().optional(),
+  "triggerJson": zod.object({
+  "type": zod.enum(['record_created', 'record_updated', 'field_changed', 'status_changed', 'date_reached']),
+  "fieldKey": zod.string().optional(),
+  "fromStatusId": zod.number().nullish(),
+  "toStatusId": zod.number().nullish(),
+  "offsetDays": zod.number().optional()
+}),
+  "conditionsJson": zod.array(zod.object({
+  "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
+  "value": zod.unknown().optional()
+})).default(createEntityAutomationBodyConditionsJsonDefault),
+  "actionsJson": zod.array(zod.object({
+  "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook']),
+  "fieldKey": zod.string().optional(),
+  "value": zod.unknown().optional(),
+  "statusId": zod.number().nullish(),
+  "targetEntityId": zod.number().optional(),
+  "mapping": zod.array(zod.object({
+  "targetFieldKey": zod.string(),
+  "sourceType": zod.enum(['literal', 'field']),
+  "value": zod.unknown().optional(),
+  "sourceFieldKey": zod.string().optional()
+})).optional(),
+  "match": zod.array(zod.object({
+  "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
+  "value": zod.unknown().optional()
+})).optional(),
+  "url": zod.string().optional(),
+  "includeRecord": zod.boolean().optional()
+})).default(createEntityAutomationBodyActionsJsonDefault),
+  "sortOrder": zod.number().optional()
+})
+
+
+/**
+ * @summary List recent automation runs for an entity
+ */
+export const ListEntityAutomationRunsParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const ListEntityAutomationRunsResponseItem = zod.object({
+  "id": zod.number(),
+  "automationId": zod.number(),
+  "entityId": zod.number(),
+  "recordId": zod.number().nullable(),
+  "status": zod.string(),
+  "triggerName": zod.string().nullable(),
+  "detailJson": zod.record(zod.string(), zod.unknown()),
+  "dedupeKey": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListEntityAutomationRunsResponse = zod.array(ListEntityAutomationRunsResponseItem)
+
+
+/**
+ * @summary Get automation by ID
+ */
+export const GetAutomationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetAutomationResponse = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "isActive": zod.boolean(),
+  "triggerJson": zod.object({
+  "type": zod.enum(['record_created', 'record_updated', 'field_changed', 'status_changed', 'date_reached']),
+  "fieldKey": zod.string().optional(),
+  "fromStatusId": zod.number().nullish(),
+  "toStatusId": zod.number().nullish(),
+  "offsetDays": zod.number().optional()
+}),
+  "conditionsJson": zod.array(zod.object({
+  "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
+  "value": zod.unknown().optional()
+})),
+  "actionsJson": zod.array(zod.object({
+  "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook']),
+  "fieldKey": zod.string().optional(),
+  "value": zod.unknown().optional(),
+  "statusId": zod.number().nullish(),
+  "targetEntityId": zod.number().optional(),
+  "mapping": zod.array(zod.object({
+  "targetFieldKey": zod.string(),
+  "sourceType": zod.enum(['literal', 'field']),
+  "value": zod.unknown().optional(),
+  "sourceFieldKey": zod.string().optional()
+})).optional(),
+  "match": zod.array(zod.object({
+  "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
+  "value": zod.unknown().optional()
+})).optional(),
+  "url": zod.string().optional(),
+  "includeRecord": zod.boolean().optional()
+})),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update automation
+ */
+export const UpdateAutomationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateAutomationBody = zod.object({
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "isActive": zod.boolean().optional(),
+  "triggerJson": zod.object({
+  "type": zod.enum(['record_created', 'record_updated', 'field_changed', 'status_changed', 'date_reached']),
+  "fieldKey": zod.string().optional(),
+  "fromStatusId": zod.number().nullish(),
+  "toStatusId": zod.number().nullish(),
+  "offsetDays": zod.number().optional()
+}).optional(),
+  "conditionsJson": zod.array(zod.object({
+  "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
+  "value": zod.unknown().optional()
+})).optional(),
+  "actionsJson": zod.array(zod.object({
+  "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook']),
+  "fieldKey": zod.string().optional(),
+  "value": zod.unknown().optional(),
+  "statusId": zod.number().nullish(),
+  "targetEntityId": zod.number().optional(),
+  "mapping": zod.array(zod.object({
+  "targetFieldKey": zod.string(),
+  "sourceType": zod.enum(['literal', 'field']),
+  "value": zod.unknown().optional(),
+  "sourceFieldKey": zod.string().optional()
+})).optional(),
+  "match": zod.array(zod.object({
+  "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
+  "value": zod.unknown().optional()
+})).optional(),
+  "url": zod.string().optional(),
+  "includeRecord": zod.boolean().optional()
+})).optional(),
+  "sortOrder": zod.number().optional()
+})
+
+export const UpdateAutomationResponse = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "isActive": zod.boolean(),
+  "triggerJson": zod.object({
+  "type": zod.enum(['record_created', 'record_updated', 'field_changed', 'status_changed', 'date_reached']),
+  "fieldKey": zod.string().optional(),
+  "fromStatusId": zod.number().nullish(),
+  "toStatusId": zod.number().nullish(),
+  "offsetDays": zod.number().optional()
+}),
+  "conditionsJson": zod.array(zod.object({
+  "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
+  "value": zod.unknown().optional()
+})),
+  "actionsJson": zod.array(zod.object({
+  "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook']),
+  "fieldKey": zod.string().optional(),
+  "value": zod.unknown().optional(),
+  "statusId": zod.number().nullish(),
+  "targetEntityId": zod.number().optional(),
+  "mapping": zod.array(zod.object({
+  "targetFieldKey": zod.string(),
+  "sourceType": zod.enum(['literal', 'field']),
+  "value": zod.unknown().optional(),
+  "sourceFieldKey": zod.string().optional()
+})).optional(),
+  "match": zod.array(zod.object({
+  "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'gt', 'lt', 'gte', 'lte', 'empty', 'notEmpty']),
+  "value": zod.unknown().optional()
+})).optional(),
+  "url": zod.string().optional(),
+  "includeRecord": zod.boolean().optional()
+})),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete automation
+ */
+export const DeleteAutomationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteAutomationResponse = zod.object({
   "success": zod.boolean(),
   "message": zod.string().optional()
 })

@@ -18,6 +18,7 @@ import EntityStatusesPage from "@/pages/admin/entity-statuses";
 import EntityRelationsPage from "@/pages/admin/entity-relations";
 import EntityViewsPage from "@/pages/admin/entity-views";
 import EntityWorkflowPage from "@/pages/admin/entity-workflow";
+import EntityAutomationsPage from "@/pages/admin/entity-automations";
 import EntityRecordsPage from "@/pages/admin/entity-records";
 import TranslationsPage from "@/pages/admin/translations";
 import EventsPage from "@/pages/admin/events";
@@ -217,6 +218,12 @@ function Router() {
       <Route path="/admin/entities/:entityId/workflow">
         <ProtectedRoute adminCap="entities">
           <EntityWorkflowPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/entities/:entityId/automations">
+        <ProtectedRoute adminCap="automations">
+          <EntityAutomationsPage />
         </ProtectedRoute>
       </Route>
 

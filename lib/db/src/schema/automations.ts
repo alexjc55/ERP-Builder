@@ -1,0 +1,159 @@
+import { pgTable, serial, jsonb, integer, boolean, text, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { entitiesTable } from "./entities";
+
+/**
+ * Stage 16 — Automations Engine.
+ *
+ * A per-entity automation is a rule: a single TRIGGER, optional type-aware
+ * CONDITIONS (all must hold), and an ordered list of ACTIONS executed AS THE
+ * SYSTEM (admin-authoritative — like workflow `set_field` and dashboard
+ * widgets: it ignores the initiating user's RBAC and may move a record into any
+ * status, overriding the «Процессы» transition graph). Automations are managed
+ * under the `automations` RBAC capability (superAdmin bypasses).
+ *
+ * Event-based triggers (record.created / record.updated / field.changed /
+ * status.changed) hook the existing in-process event bus. Date-based triggers
+ * (date.reached) are evaluated by a periodic scheduler sweep; idempotency is
+ * guaranteed by the partial-unique `dedupeKey` on the run log (one run per
+ * record per due-instant).
+ */
+
+/** A condition's special "field" keys, alongside real entity field keys. */
+export const CONDITION_STATUS_KEY = "__status__";
+
+/** Comparison operators for conditions (type-aware on the client). */
+export const automationConditionSchema = z.object({
+  /** A real field key, or `__status__` to compare the record's statusId. */
+  fieldKey: z.string().min(1),
+  operator: z.enum(["eq", "neq", "contains", "gt", "lt", "gte", "lte", "empty", "notEmpty"]),
+  value: z.unknown().optional(),
+});
+export type AutomationCondition = z.infer<typeof automationConditionSchema>;
+
+/** Trigger: exactly one per automation. */
+export const automationTriggerSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("record_created") }),
+  z.object({ type: z.literal("record_updated") }),
+  /** Fires only when the named field's value changes. */
+  z.object({ type: z.literal("field_changed"), fieldKey: z.string().min(1) }),
+  /** Fires on a status change; optionally constrained to a specific from/to. */
+  z.object({
+    type: z.literal("status_changed"),
+    fromStatusId: z.number().int().nullable().optional(),
+    toStatusId: z.number().int().nullable().optional(),
+  }),
+  /**
+   * Fires when the date in `fieldKey` is reached (optionally +/- `offsetDays`).
+   * Evaluated by the scheduler sweep, not the event bus.
+   */
+  z.object({
+    type: z.literal("date_reached"),
+    fieldKey: z.string().min(1),
+    offsetDays: z.number().int().optional(),
+  }),
+]);
+export type AutomationTrigger = z.infer<typeof automationTriggerSchema>;
+
+/** How a target field's value is sourced when creating/updating records. */
+export const automationMappingSchema = z.object({
+  targetFieldKey: z.string().min(1),
+  /** "literal": use `value` as-is; "field": copy from the triggering record's `sourceFieldKey`. */
+  sourceType: z.enum(["literal", "field"]),
+  value: z.unknown().optional(),
+  sourceFieldKey: z.string().optional(),
+});
+export type AutomationMapping = z.infer<typeof automationMappingSchema>;
+
+/** Actions: executed in order, as the system. */
+export const automationActionSchema = z.discriminatedUnion("type", [
+  /** Set a field on the triggering record. */
+  z.object({ type: z.literal("set_field"), fieldKey: z.string().min(1), value: z.unknown() }),
+  /** Move the triggering record to a status directly (overrides «Процессы»). */
+  z.object({ type: z.literal("change_status"), statusId: z.number().int() }),
+  /** Create a new record on `targetEntityId` (this or another entity). */
+  z.object({
+    type: z.literal("create_record"),
+    targetEntityId: z.number().int(),
+    mapping: z.array(automationMappingSchema).default([]),
+    statusId: z.number().int().nullable().optional(),
+  }),
+  /** Update every record of `targetEntityId` matching `match` (all conditions). */
+  z.object({
+    type: z.literal("update_records_where"),
+    targetEntityId: z.number().int(),
+    match: z.array(automationConditionSchema).default([]),
+    mapping: z.array(automationMappingSchema).default([]),
+  }),
+  /** POST the (optional) record payload to an external URL (SSRF-guarded). */
+  z.object({
+    type: z.literal("webhook"),
+    url: z.string().url(),
+    includeRecord: z.boolean().optional(),
+  }),
+]);
+export type AutomationAction = z.infer<typeof automationActionSchema>;
+
+export const entityAutomationsTable = pgTable(
+  "entity_automations",
+  {
+    id: serial("id").primaryKey(),
+    entityId: integer("entity_id")
+      .notNull()
+      .references(() => entitiesTable.id, { onDelete: "cascade" }),
+    nameJson: jsonb("name_json").notNull().default({}),
+    isActive: boolean("is_active").notNull().default(true),
+    triggerJson: jsonb("trigger_json").notNull(),
+    conditionsJson: jsonb("conditions_json").notNull().default([]),
+    actionsJson: jsonb("actions_json").notNull().default([]),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [index("entity_automation_entity_idx").on(t.entityId)],
+);
+
+export const entityAutomationRunsTable = pgTable(
+  "entity_automation_runs",
+  {
+    id: serial("id").primaryKey(),
+    automationId: integer("automation_id")
+      .notNull()
+      .references(() => entityAutomationsTable.id, { onDelete: "cascade" }),
+    entityId: integer("entity_id").notNull(),
+    recordId: integer("record_id"),
+    /** "success" | "error" | "skipped". */
+    status: text("status").notNull(),
+    /** Human-readable trigger label captured at run time. */
+    triggerName: text("trigger_name"),
+    /** { actionsRun, error?, ... } — best-effort diagnostics. */
+    detailJson: jsonb("detail_json").notNull().default({}),
+    /**
+     * Idempotency marker for date-based triggers: the partial-unique index makes
+     * a (automation, record, due-instant) run exactly once. Null for event runs.
+     */
+    dedupeKey: text("dedupe_key"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("entity_automation_run_automation_idx").on(t.automationId),
+    index("entity_automation_run_entity_idx").on(t.entityId),
+    uniqueIndex("entity_automation_run_dedupe_unique")
+      .on(t.automationId, t.recordId, t.dedupeKey)
+      .where(sql`${t.dedupeKey} is not null`),
+  ],
+);
+
+export const insertEntityAutomationSchema = createInsertSchema(entityAutomationsTable, {
+  triggerJson: automationTriggerSchema,
+  conditionsJson: z.array(automationConditionSchema),
+  actionsJson: z.array(automationActionSchema),
+}).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertEntityAutomation = z.infer<typeof insertEntityAutomationSchema>;
+export type EntityAutomation = typeof entityAutomationsTable.$inferSelect;
+export type EntityAutomationRun = typeof entityAutomationRunsTable.$inferSelect;

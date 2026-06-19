@@ -3,8 +3,11 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { initAutomations } from "./lib/automations-engine";
 
 const app: Express = express();
+
+initAutomations();
 
 app.use(
   pinoHttp({
