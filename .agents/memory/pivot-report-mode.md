@@ -5,9 +5,27 @@ description: Durable invariants for the entity-based interactive pivot view type
 
 # Pivot report mode — durable decisions
 
-Pivot is a new **view type** (`viewType: "pivot"` in a saved View's `configJson`), not a separate
-screen or page type. It reuses the Views engine + the live records filter bar. Records page shows a
-Таблица⇄Сводная toggle, gated on the entity's `pivotEnabled` flag.
+Pivot started as a **view type** (`viewType: "pivot"` in a saved View's `configJson`) reusing the
+Views engine + the live records filter bar (Records page shows a Таблица⇄Сводная toggle, gated on the
+entity's `pivotEnabled` flag). It now ALSO exists as a dedicated **page type** — see "Pivot PAGE type"
+below — which has a fundamentally different permission model.
+
+## Pivot PAGE type (dedicated page) — ADMIN-AUTHORITATIVE
+A page can be `isPivot=true` with `pivotEntityId` + `pivotConfigJson`. This is mutually exclusive with
+dashboard ⊥ mirror ⊥ bound-entity, enforced on BOTH create (POST) and update (PUT) against the
+effective final state. Compute endpoint: `GET /pages/:id/pivot/data`.
+**Unlike the entity-based pivot view, the pivot PAGE is ADMIN-AUTHORITATIVE** (real totals over ALL
+the entity's records, the SAME for everyone with page access — NOT scoped to the viewer's row/field
+perms). The ONLY boundary is page access: `getPermissions` is checked BEFORE any aggregation, then
+`entity.isActive` + `entity.pivotEnabled` are re-checked at compute time, then the WHERE is built from
+ALL active fields (no hidden-field/own-row scoping) over non-archived records.
+**`pivotConfigJson` shape:** `{ source:"entity"|"view"|"custom", viewId?, pivot?, filters?,
+filterConjunction?, statusIds?, search? }`. NO `sorts` — a pivot returns an aggregated cross-tab whose
+row/col ordering is decided by the pivot itself, so a record-level sort is a no-op (product decision:
+omit the sort control on pivot pages, keep only filters/search/statuses). `source:"view"` re-validates
+the view belongs to the same entity AND is `viewType==='pivot'` with a non-null pivot, else degrades to
+an empty result. Invalid stored config (e.g. a field lost its pivot opt-in) → empty result, never a
+page-level error.
 
 ## Permission scoping — NOT admin-authoritative
 Unlike dashboard widgets (which bypass viewer RBAC), pivot is **permission-scoped to the viewer**.
