@@ -493,6 +493,11 @@ export default function EntityAutomationsPage() {
       });
 
   const handleSubmit = () => {
+    // Name is required (at least one language) so automations are identifiable in lists/logs.
+    if (!nameJson.ru?.trim() && !nameJson.en?.trim() && !nameJson.he?.trim()) {
+      toast({ title: t("auto.specifyName", "Укажите название автоматизации"), variant: "destructive" });
+      return;
+    }
     // Build trigger.
     const trigger: AutomationTrigger = { type: triggerType };
     if (triggerType === "field_changed" || triggerType === "date_reached") {
@@ -855,7 +860,7 @@ export default function EntityAutomationsPage() {
           </DialogHeader>
 
           <div className="space-y-5 py-2">
-            <MultilingualInput label={t("auto.nameOptional", "Название (необязательно)")} value={nameJson} onChange={setNameJson} />
+            <MultilingualInput label={t("auto.nameRequired", "Название")} value={nameJson} onChange={setNameJson} required />
 
             <div className="flex items-center gap-2">
               <Switch checked={isActive} onCheckedChange={setIsActive} />
