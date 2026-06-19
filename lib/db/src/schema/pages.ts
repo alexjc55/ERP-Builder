@@ -30,6 +30,32 @@ export const pagesTable = pgTable("pages", {
   // mirrorEntityId (enforced in the API and the pages editor). The renderer reads
   // this flag to pick the dashboard view over the records view.
   isDashboard: boolean("is_dashboard").notNull().default(false),
+  // Pivot page: when true, this page renders a single full-page pivot
+  // (Сводная таблица) cross-tab instead of records/widgets. Mutually exclusive
+  // with a bound entity, mirrorEntityId and isDashboard (enforced in the API and
+  // the pages editor). Totals are ADMIN-AUTHORITATIVE (real aggregates over all
+  // records, identical for everyone with page access), so role gating is the
+  // existing per-role page access — no per-page role list here.
+  isPivot: boolean("is_pivot").notNull().default(false),
+  // The entity this pivot page reports on. A plain integer (not a hard FK) to
+  // avoid a circular pages<->entities import; existence validated in the API and
+  // the renderer/compute tolerates a dangling id (degrades to empty).
+  pivotEntityId: integer("pivot_entity_id"),
+  // Pivot page configuration. `source` selects where the PivotConfig comes from:
+  //  - "entity": use the entity's defaultPivotJson at compute time,
+  //  - "view":   use the referenced pivot view's configJson.pivot (viewId),
+  //  - "custom": use the inline `pivot` PivotConfig stored here.
+  // `filters`/`filterConjunction`/`statusIds`/`search` pre-filter which records
+  // feed the aggregation (applied admin-authoritatively over all active fields).
+  pivotConfigJson: jsonb("pivot_config_json").$type<{
+    source: "entity" | "view" | "custom";
+    viewId?: number | null;
+    pivot?: unknown;
+    filters?: unknown[];
+    filterConjunction?: "and" | "or";
+    statusIds?: number[];
+    search?: string | null;
+  }>(),
   // Default collapsed state of the analytics widgets block shown above a page's
   // records table. Admin-configurable; each viewer's own toggle is remembered
   // client-side (localStorage) and falls back to this default.

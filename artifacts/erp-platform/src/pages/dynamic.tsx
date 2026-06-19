@@ -6,10 +6,12 @@ import {
   type Entity,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Construction, Loader2, ShieldAlert } from "lucide-react";
+import { Construction, Loader2, ShieldAlert, TableProperties } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import { EntityRecords } from "@/components/EntityRecords";
 import DashboardView from "@/components/DashboardView";
+import { useGetPivotPageData } from "@workspace/api-client-react";
+import { PivotResultTable } from "@/components/PivotView";
 import { useAuth } from "@/lib/auth";
 import { useML, useT } from "@/lib/i18n";
 
@@ -70,7 +72,9 @@ export default function DynamicPage() {
         )}
       </div>
 
-      {page.isDashboard ? (
+      {page.isPivot ? (
+        <PivotPageView pageId={page.id} />
+      ) : page.isDashboard ? (
         <DashboardView pageId={page.id} />
       ) : entity ? (
         <>
@@ -105,4 +109,40 @@ export default function DynamicPage() {
       )}
     </div>
   );
+}
+
+/**
+ * Renders a PIVOT PAGE's cross-tab. The totals are ADMIN-AUTHORITATIVE (computed
+ * server-side over ALL the entity's records matching the page's configured
+ * filters), shipped only to viewers with page access — the access gate runs on the
+ * server before any aggregation. Display-only: this component never aggregates.
+ */
+function PivotPageView({ pageId }: { pageId: number }) {
+  const t = useT();
+  const { data: result, isLoading, isError } = useGetPivotPageData(pageId);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-16 text-slate-400">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        {t("pivot.loading", "Строим сводную…")}
+      </div>
+    );
+  }
+  if (isError) {
+    return (
+      <div className="rounded-md border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+        {t("pivot.error", "Не удалось построить сводную таблицу")}
+      </div>
+    );
+  }
+  if (!result || result.rows.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 py-16 text-slate-400">
+        <TableProperties className="w-8 h-8 opacity-50" />
+        <p className="text-sm">{t("pivot.empty", "Нет данных для сводной таблицы")}</p>
+      </div>
+    );
+  }
+  return <PivotResultTable result={result} />;
 }

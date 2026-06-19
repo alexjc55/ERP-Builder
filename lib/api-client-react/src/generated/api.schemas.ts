@@ -665,6 +665,174 @@ export interface RoleUpdate {
  */
 export type PageMirrorFieldLabelsJson = {[key: string]: MultilingualText} | null;
 
+/**
+ * entity = use the entity's defaultPivotJson; view = use the referenced pivot view's pivot config (viewId); custom = use the inline `pivot`.
+ */
+export type PivotPageConfigSource = typeof PivotPageConfigSource[keyof typeof PivotPageConfigSource];
+
+
+export const PivotPageConfigSource = {
+  entity: 'entity',
+  view: 'view',
+  custom: 'custom',
+} as const;
+
+/**
+ * Grouping key source — an entity field, a page-local field, or the record status.
+ */
+export type PivotDimensionSource = typeof PivotDimensionSource[keyof typeof PivotDimensionSource];
+
+
+export const PivotDimensionSource = {
+  entity: 'entity',
+  page: 'page',
+  status: 'status',
+} as const;
+
+/**
+ * When the field is date/datetime, bucket values by this period.
+ * @nullable
+ */
+export type PivotDimensionDatePeriod = typeof PivotDimensionDatePeriod[keyof typeof PivotDimensionDatePeriod] | null;
+
+
+export const PivotDimensionDatePeriod = {
+  year: 'year',
+  quarter: 'quarter',
+  month: 'month',
+  day: 'day',
+} as const;
+
+export interface PivotDimension {
+  /** Grouping key source — an entity field, a page-local field, or the record status. */
+  source: PivotDimensionSource;
+  /**
+     * Field key for source=entity|page. Ignored for source=status.
+     * @nullable
+     */
+  fieldKey?: string | null;
+  /**
+     * When the field is date/datetime, bucket values by this period.
+     * @nullable
+     */
+  datePeriod?: PivotDimensionDatePeriod;
+}
+
+export type PivotMeasureAgg = typeof PivotMeasureAgg[keyof typeof PivotMeasureAgg];
+
+
+export const PivotMeasureAgg = {
+  count: 'count',
+  sum: 'sum',
+  formula: 'formula',
+  calc: 'calc',
+} as const;
+
+/**
+ * For agg=sum, where the numeric field lives. Ignored for agg=count/formula/calc.
+ * @nullable
+ */
+export type PivotMeasureSource = typeof PivotMeasureSource[keyof typeof PivotMeasureSource] | null;
+
+
+export const PivotMeasureSource = {
+  entity: 'entity',
+  page: 'page',
+} as const;
+
+export interface PivotMeasure {
+  agg: PivotMeasureAgg;
+  /**
+     * Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.
+     * @nullable
+     */
+  key?: string | null;
+  /**
+     * For agg=sum, where the numeric field lives. Ignored for agg=count/formula/calc.
+     * @nullable
+     */
+  source?: PivotMeasureSource;
+  /**
+     * Numeric field key for agg=sum. Ignored for agg=count/formula/calc.
+     * @nullable
+     */
+  fieldKey?: string | null;
+  /**
+     * For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures' aggregated values, referenced via {measure_key}. Ignored for agg=count/sum.
+     * @nullable
+     */
+  formula?: string | null;
+  /** Optional multilingual display name used as this measure's column header (all agg types). Falls back to a per-agg default (the field name for sum, "Количество" for count, "Формула" for formula/calc). */
+  nameJson?: MultilingualText | null;
+  /** Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson. */
+  formulaName?: MultilingualText | null;
+}
+
+export interface PivotConfig {
+  rows: PivotDimension;
+  cols?: PivotDimension;
+  /** Single-measure mode (the cell value). Required unless `measures` is present and non-empty (multi-measure mode), in which case it is ignored. Server validation enforces that exactly one of the two modes is supplied. */
+  measure?: PivotMeasure;
+  /** Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`. */
+  measures?: PivotMeasure[];
+  /** Roles allowed to use this pivot when it is an entity's DEFAULT pivot (entity.defaultPivotJson). Empty/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view's own visibleRoleIds. */
+  visibleRoleIds?: number[];
+}
+
+export type FilterOperator = typeof FilterOperator[keyof typeof FilterOperator];
+
+
+export const FilterOperator = {
+  eq: 'eq',
+  neq: 'neq',
+  contains: 'contains',
+  not_contains: 'not_contains',
+  starts_with: 'starts_with',
+  ends_with: 'ends_with',
+  gt: 'gt',
+  gte: 'gte',
+  lt: 'lt',
+  lte: 'lte',
+  is_empty: 'is_empty',
+  is_not_empty: 'is_not_empty',
+  in: 'in',
+  between: 'between',
+} as const;
+
+export interface FilterCondition {
+  field: string;
+  operator: FilterOperator;
+  value?: unknown;
+}
+
+export type PivotPageConfigFilterConjunction = typeof PivotPageConfigFilterConjunction[keyof typeof PivotPageConfigFilterConjunction];
+
+
+export const PivotPageConfigFilterConjunction = {
+  and: 'and',
+  or: 'or',
+} as const;
+
+/**
+ * Configuration stored on a PIVOT PAGE (pages.pivotConfigJson). `source` selects where the effective PivotConfig is resolved from at compute time; the filter fields pre-filter which records feed the aggregation. Totals are admin-authoritative (computed over all records), so there is no per-page role list — page access is the boundary.
+ */
+export interface PivotPageConfig {
+  /** entity = use the entity's defaultPivotJson; view = use the referenced pivot view's pivot config (viewId); custom = use the inline `pivot`. */
+  source: PivotPageConfigSource;
+  /**
+     * The pivot view to source the config from when source=view.
+     * @nullable
+     */
+  viewId?: number | null;
+  /** Inline pivot config when source=custom. */
+  pivot?: PivotConfig | null;
+  filters?: FilterCondition[];
+  filterConjunction?: PivotPageConfigFilterConjunction;
+  statusIds?: number[];
+  /** @nullable */
+  search?: string | null;
+}
+
 export interface Page {
   id: number;
   nameJson: MultilingualText;
@@ -684,6 +852,14 @@ export interface Page {
      */
   mirrorFieldLabelsJson?: PageMirrorFieldLabelsJson;
   isDashboard?: boolean;
+  /** Pivot page — renders a single admin-authoritative cross-tab (Сводная таблица). Mutually exclusive with a bound entity, mirror and dashboard. */
+  isPivot?: boolean;
+  /**
+     * Entity this pivot page reports on (required when isPivot).
+     * @nullable
+     */
+  pivotEntityId?: number | null;
+  pivotConfigJson?: PivotPageConfig | null;
   /** Default collapsed state of the analytics widgets block above a page's records table */
   widgetsCollapsedDefault?: boolean;
   sortOrder: number;
@@ -717,6 +893,14 @@ export interface PageInput {
      */
   mirrorFieldLabelsJson?: PageInputMirrorFieldLabelsJson;
   isDashboard?: boolean;
+  /** Pivot page — renders a single admin-authoritative cross-tab. Mutually exclusive with a bound entity, mirror and dashboard. */
+  isPivot?: boolean;
+  /**
+     * Entity this pivot page reports on (required when isPivot).
+     * @nullable
+     */
+  pivotEntityId?: number | null;
+  pivotConfigJson?: PivotPageConfig | null;
   /** Default collapsed state of the analytics widgets block above a page's records table */
   widgetsCollapsedDefault?: boolean;
   sortOrder?: number;
@@ -747,6 +931,14 @@ export interface PageUpdate {
      */
   mirrorFieldLabelsJson?: PageUpdateMirrorFieldLabelsJson;
   isDashboard?: boolean;
+  /** Pivot page — renders a single admin-authoritative cross-tab. Mutually exclusive with a bound entity, mirror and dashboard. */
+  isPivot?: boolean;
+  /**
+     * Entity this pivot page reports on (required when isPivot).
+     * @nullable
+     */
+  pivotEntityId?: number | null;
+  pivotConfigJson?: PivotPageConfig | null;
   /** Default collapsed state of the analytics widgets block above a page's records table */
   widgetsCollapsedDefault?: boolean;
   sortOrder?: number;
@@ -910,108 +1102,6 @@ export interface TableConfig {
      * @nullable
      */
   limit?: number | null;
-}
-
-/**
- * Grouping key source — an entity field, a page-local field, or the record status.
- */
-export type PivotDimensionSource = typeof PivotDimensionSource[keyof typeof PivotDimensionSource];
-
-
-export const PivotDimensionSource = {
-  entity: 'entity',
-  page: 'page',
-  status: 'status',
-} as const;
-
-/**
- * When the field is date/datetime, bucket values by this period.
- * @nullable
- */
-export type PivotDimensionDatePeriod = typeof PivotDimensionDatePeriod[keyof typeof PivotDimensionDatePeriod] | null;
-
-
-export const PivotDimensionDatePeriod = {
-  year: 'year',
-  quarter: 'quarter',
-  month: 'month',
-  day: 'day',
-} as const;
-
-export interface PivotDimension {
-  /** Grouping key source — an entity field, a page-local field, or the record status. */
-  source: PivotDimensionSource;
-  /**
-     * Field key for source=entity|page. Ignored for source=status.
-     * @nullable
-     */
-  fieldKey?: string | null;
-  /**
-     * When the field is date/datetime, bucket values by this period.
-     * @nullable
-     */
-  datePeriod?: PivotDimensionDatePeriod;
-}
-
-export type PivotMeasureAgg = typeof PivotMeasureAgg[keyof typeof PivotMeasureAgg];
-
-
-export const PivotMeasureAgg = {
-  count: 'count',
-  sum: 'sum',
-  formula: 'formula',
-  calc: 'calc',
-} as const;
-
-/**
- * For agg=sum, where the numeric field lives. Ignored for agg=count/formula/calc.
- * @nullable
- */
-export type PivotMeasureSource = typeof PivotMeasureSource[keyof typeof PivotMeasureSource] | null;
-
-
-export const PivotMeasureSource = {
-  entity: 'entity',
-  page: 'page',
-} as const;
-
-export interface PivotMeasure {
-  agg: PivotMeasureAgg;
-  /**
-     * Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.
-     * @nullable
-     */
-  key?: string | null;
-  /**
-     * For agg=sum, where the numeric field lives. Ignored for agg=count/formula/calc.
-     * @nullable
-     */
-  source?: PivotMeasureSource;
-  /**
-     * Numeric field key for agg=sum. Ignored for agg=count/formula/calc.
-     * @nullable
-     */
-  fieldKey?: string | null;
-  /**
-     * For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures' aggregated values, referenced via {measure_key}. Ignored for agg=count/sum.
-     * @nullable
-     */
-  formula?: string | null;
-  /** Optional multilingual display name used as this measure's column header (all agg types). Falls back to a per-agg default (the field name for sum, "Количество" for count, "Формула" for formula/calc). */
-  nameJson?: MultilingualText | null;
-  /** Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson. */
-  formulaName?: MultilingualText | null;
-}
-
-export interface PivotConfig {
-  rows: PivotDimension;
-  cols?: PivotDimension;
-  /** Single-measure mode (the cell value). Required unless `measures` is present and non-empty (multi-measure mode), in which case it is ignored. Server validation enforces that exactly one of the two modes is supplied. */
-  measure?: PivotMeasure;
-  /** Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`. */
-  measures?: PivotMeasure[];
-  /** Roles allowed to use this pivot when it is an entity's DEFAULT pivot (entity.defaultPivotJson). Empty/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view's own visibleRoleIds. */
-  visibleRoleIds?: number[];
 }
 
 /**
@@ -1529,32 +1619,6 @@ export const SortSpecDirection = {
 export interface SortSpec {
   field: string;
   direction?: SortSpecDirection;
-}
-
-export type FilterOperator = typeof FilterOperator[keyof typeof FilterOperator];
-
-
-export const FilterOperator = {
-  eq: 'eq',
-  neq: 'neq',
-  contains: 'contains',
-  not_contains: 'not_contains',
-  starts_with: 'starts_with',
-  ends_with: 'ends_with',
-  gt: 'gt',
-  gte: 'gte',
-  lt: 'lt',
-  lte: 'lte',
-  is_empty: 'is_empty',
-  is_not_empty: 'is_not_empty',
-  in: 'in',
-  between: 'between',
-} as const;
-
-export interface FilterCondition {
-  field: string;
-  operator: FilterOperator;
-  value?: unknown;
 }
 
 export interface Entity {

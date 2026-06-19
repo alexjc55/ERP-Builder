@@ -951,6 +951,30 @@ paths:
                 items:
                   $ref: "#/components/schemas/DashboardWidgetData"
 
+  /pages/{id}/pivot/data:
+    get:
+      operationId: getPivotPageData
+      tags: [pages]
+      summary: Get the computed cross-tab for a pivot page (admin-authoritative)
+      description: >-
+        Returns the pivot result for a pivot page. Totals are admin-authoritative
+        (real aggregates over all the entity's non-archived records, independent of
+        the viewer's row/field data permissions). Access is governed solely by the
+        caller's per-role page access; no per-page role list.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Computed pivot result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PivotResult"
+
   /dashboard/widgets/{wid}:
     put:
       operationId: updateDashboardWidget
@@ -3752,6 +3776,16 @@ components:
           description: Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.
         isDashboard:
           type: boolean
+        isPivot:
+          type: boolean
+          description: Pivot page — renders a single admin-authoritative cross-tab (Сводная таблица). Mutually exclusive with a bound entity, mirror and dashboard.
+        pivotEntityId:
+          type: ["integer", "null"]
+          description: Entity this pivot page reports on (required when isPivot).
+        pivotConfigJson:
+          oneOf:
+            - $ref: "#/components/schemas/PivotPageConfig"
+            - type: "null"
         widgetsCollapsedDefault:
           type: boolean
           description: Default collapsed state of the analytics widgets block above a page's records table
@@ -3797,6 +3831,17 @@ components:
           description: Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.
         isDashboard:
           type: boolean
+        isPivot:
+          type: boolean
+          default: false
+          description: Pivot page — renders a single admin-authoritative cross-tab. Mutually exclusive with a bound entity, mirror and dashboard.
+        pivotEntityId:
+          type: ["integer", "null"]
+          description: Entity this pivot page reports on (required when isPivot).
+        pivotConfigJson:
+          oneOf:
+            - $ref: "#/components/schemas/PivotPageConfig"
+            - type: "null"
         widgetsCollapsedDefault:
           type: boolean
           default: false
@@ -3833,6 +3878,16 @@ components:
           description: Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.
         isDashboard:
           type: boolean
+        isPivot:
+          type: boolean
+          description: Pivot page — renders a single admin-authoritative cross-tab. Mutually exclusive with a bound entity, mirror and dashboard.
+        pivotEntityId:
+          type: ["integer", "null"]
+          description: Entity this pivot page reports on (required when isPivot).
+        pivotConfigJson:
+          oneOf:
+            - $ref: "#/components/schemas/PivotPageConfig"
+            - type: "null"
         widgetsCollapsedDefault:
           type: boolean
           description: Default collapsed state of the analytics widgets block above a page's records table
@@ -5691,6 +5746,45 @@ components:
             the view's own visibleRoleIds.
           items:
             type: integer
+
+    PivotPageConfig:
+      type: object
+      required: [source]
+      description: >-
+        Configuration stored on a PIVOT PAGE (pages.pivotConfigJson). `source`
+        selects where the effective PivotConfig is resolved from at compute time;
+        the filter fields pre-filter which records feed the aggregation. Totals are
+        admin-authoritative (computed over all records), so there is no per-page
+        role list — page access is the boundary.
+      properties:
+        source:
+          type: string
+          enum: [entity, view, custom]
+          description: >-
+            entity = use the entity's defaultPivotJson; view = use the referenced
+            pivot view's pivot config (viewId); custom = use the inline `pivot`.
+        viewId:
+          type: ["integer", "null"]
+          description: The pivot view to source the config from when source=view.
+        pivot:
+          oneOf:
+            - $ref: "#/components/schemas/PivotConfig"
+            - type: "null"
+          description: Inline pivot config when source=custom.
+        filters:
+          type: array
+          items:
+            $ref: "#/components/schemas/FilterCondition"
+        filterConjunction:
+          type: string
+          enum: [and, or]
+          default: and
+        statusIds:
+          type: array
+          items:
+            type: integer
+        search:
+          type: ["string", "null"]
 
     PivotQuery:
       type: object

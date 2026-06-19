@@ -3546,6 +3546,96 @@
     "he": "לוח מחוונים (וידג'טים)"
   },
   {
+    "key": "pages.typePivot",
+    "ru": "Сводная таблица",
+    "en": "Pivot table",
+    "he": "טבלת ציר"
+  },
+  {
+    "key": "pages.pivotEntity",
+    "ru": "Сущность для сводной таблицы",
+    "en": "Entity for the pivot table",
+    "he": "ישות לטבלת הציר"
+  },
+  {
+    "key": "pages.pivotEntitySelect",
+    "ru": "— Выберите сущность —",
+    "en": "— Select an entity —",
+    "he": "— בחר ישות —"
+  },
+  {
+    "key": "pages.pivotEntityRequired",
+    "ru": "Выберите сущность для сводной таблицы",
+    "en": "Select an entity for the pivot table",
+    "he": "בחר ישות לטבלת הציר"
+  },
+  {
+    "key": "pages.pivotSource",
+    "ru": "Источник настроек сводной",
+    "en": "Pivot configuration source",
+    "he": "מקור הגדרות הציר"
+  },
+  {
+    "key": "pages.pivotSourceEntity",
+    "ru": "По умолчанию из сущности",
+    "en": "Entity default",
+    "he": "ברירת מחדל של הישות"
+  },
+  {
+    "key": "pages.pivotSourceView",
+    "ru": "Из представления",
+    "en": "From a view",
+    "he": "מתצוגה"
+  },
+  {
+    "key": "pages.pivotSourceCustom",
+    "ru": "Свои настройки",
+    "en": "Custom configuration",
+    "he": "הגדרות מותאמות אישית"
+  },
+  {
+    "key": "pages.pivotView",
+    "ru": "Представление",
+    "en": "View",
+    "he": "תצוגה"
+  },
+  {
+    "key": "pages.pivotViewSelect",
+    "ru": "— Выберите представление —",
+    "en": "— Select a view —",
+    "he": "— בחר תצוגה —"
+  },
+  {
+    "key": "pages.pivotNoViews",
+    "ru": "У этой сущности нет представлений со сводной таблицей",
+    "en": "This entity has no views with a pivot table",
+    "he": "לישות זו אין תצוגות עם טבלת ציר"
+  },
+  {
+    "key": "pages.pivotStatuses",
+    "ru": "Только статусы (пусто = все)",
+    "en": "Statuses only (empty = all)",
+    "he": "סטטוסים בלבד (ריק = הכול)"
+  },
+  {
+    "key": "pages.pivotSearch",
+    "ru": "Поиск",
+    "en": "Search",
+    "he": "חיפוש"
+  },
+  {
+    "key": "pages.pivotSearchPlaceholder",
+    "ru": "Фильтр по тексту…",
+    "en": "Filter by text…",
+    "he": "סינון לפי טקסט…"
+  },
+  {
+    "key": "pages.pivotAuthHint",
+    "ru": "Итоги считаются по всем записям сущности — одинаково для всех, у кого есть доступ к странице.",
+    "en": "Totals are computed over all of the entity's records — the same for everyone with page access.",
+    "he": "הסכומים מחושבים על כל רשומות הישות — זהה לכל מי שיש לו גישה לעמוד."
+  },
+  {
     "key": "pages.typeLocked",
     "ru": "К этой странице уже привязана сущность. Доступен только обычный тип — страница не может быть зеркалом или дашбордом.",
     "en": "This page already has a bound entity. Only the normal type is available — it cannot be a mirror or a dashboard.",

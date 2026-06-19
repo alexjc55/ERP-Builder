@@ -3073,6 +3073,84 @@ export function useGetDashboardData<TData = Awaited<ReturnType<typeof getDashboa
 
 
 
+export const getGetPivotPageDataUrl = (id: number,) => {
+
+
+
+
+  return `/api/pages/${id}/pivot/data`
+}
+
+/**
+ * Returns the pivot result for a pivot page. Totals are admin-authoritative (real aggregates over all the entity's non-archived records, independent of the viewer's row/field data permissions). Access is governed solely by the caller's per-role page access; no per-page role list.
+ * @summary Get the computed cross-tab for a pivot page (admin-authoritative)
+ */
+export const getPivotPageData = async (id: number, options?: RequestInit): Promise<PivotResult> => {
+
+  return customFetch<PivotResult>(getGetPivotPageDataUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPivotPageDataQueryKey = (id: number,) => {
+    return [
+    `/api/pages/${id}/pivot/data`
+    ] as const;
+    }
+
+
+export const getGetPivotPageDataQueryOptions = <TData = Awaited<ReturnType<typeof getPivotPageData>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPivotPageData>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPivotPageDataQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPivotPageData>>> = ({ signal }) => getPivotPageData(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPivotPageData>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPivotPageDataQueryResult = NonNullable<Awaited<ReturnType<typeof getPivotPageData>>>
+export type GetPivotPageDataQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the computed cross-tab for a pivot page (admin-authoritative)
+ */
+
+export function useGetPivotPageData<TData = Awaited<ReturnType<typeof getPivotPageData>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPivotPageData>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPivotPageDataQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
 export const getUpdateDashboardWidgetUrl = (wid: number,) => {
 
 

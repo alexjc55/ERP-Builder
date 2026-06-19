@@ -12,6 +12,7 @@ import {
   type Field,
   type MultilingualText,
 } from "@workspace/api-client-react";
+import { PivotPageConfig, type PivotPageConfigValue } from "@/components/PivotPageConfig";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -79,7 +80,9 @@ export default function PagesPage() {
   const [isActive, setIsActive] = useState(true);
   const [mirrorEntityId, setMirrorEntityId] = useState<string>("none");
   const [mirrorFieldKeys, setMirrorFieldKeys] = useState<string[]>([]);
-  const [pageType, setPageType] = useState<"normal" | "mirror" | "dashboard">("normal");
+  const [pageType, setPageType] = useState<"normal" | "mirror" | "dashboard" | "pivot">("normal");
+  const [pivotEntityId, setPivotEntityId] = useState<string>("none");
+  const [pivotConfig, setPivotConfig] = useState<PivotPageConfigValue | null>(null);
 
   const { data: pages = [], isLoading } = useListPages();
   const { data: entities = [] } = useListEntities();
@@ -144,6 +147,8 @@ export default function PagesPage() {
     setMirrorEntityId("none");
     setMirrorFieldKeys([]);
     setPageType("normal");
+    setPivotEntityId("none");
+    setPivotConfig(null);
     setDialogOpen(true);
   };
 
@@ -160,7 +165,11 @@ export default function PagesPage() {
     setIsActive(page.isActive);
     setMirrorEntityId(page.mirrorEntityId ? String(page.mirrorEntityId) : "none");
     setMirrorFieldKeys(page.mirrorFieldKeysJson ?? []);
-    setPageType(page.isDashboard ? "dashboard" : page.mirrorEntityId ? "mirror" : "normal");
+    setPageType(
+      page.isPivot ? "pivot" : page.isDashboard ? "dashboard" : page.mirrorEntityId ? "mirror" : "normal",
+    );
+    setPivotEntityId(page.pivotEntityId ? String(page.pivotEntityId) : "none");
+    setPivotConfig((page.pivotConfigJson as PivotPageConfigValue | null) ?? null);
     setDialogOpen(true);
   };
 
@@ -173,22 +182,33 @@ export default function PagesPage() {
   const normalizedPath = withSlash(path);
   // Path is required whenever the page renders data (a mirror entity or a
   // dashboard), otherwise navigating to it falls through to the home dashboard.
-  const pathRequired = pageType === "mirror" || pageType === "dashboard";
+  const pathRequired = pageType === "mirror" || pageType === "dashboard" || pageType === "pivot";
   const pathMissing = pathRequired && normalizedPath === "";
 
-  const handlePageTypeChange = (v: "normal" | "mirror" | "dashboard") => {
+  const handlePageTypeChange = (v: "normal" | "mirror" | "dashboard" | "pivot") => {
     setPageType(v);
     if (v !== "mirror") {
       setMirrorEntityId("none");
       setMirrorFieldKeys([]);
     }
+    if (v !== "pivot") {
+      setPivotEntityId("none");
+      setPivotConfig(null);
+    }
   };
+
+  const pivotEntityMissing = pageType === "pivot" && pivotEntityId === "none";
 
   const handleSubmit = () => {
     if (pathMissing) {
       toast({ title: t("pages.pathRequiredError", "Укажите путь для страницы со связанной сущностью"), variant: "destructive" });
       return;
     }
+    if (pivotEntityMissing) {
+      toast({ title: t("pages.pivotEntityRequired", "Выберите сущность для сводной таблицы"), variant: "destructive" });
+      return;
+    }
+    const isPivot = pageType === "pivot";
     const payload = {
       nameJson: nameJson as MultilingualText,
       descriptionJson: descJson as MultilingualText,
@@ -199,6 +219,9 @@ export default function PagesPage() {
       mirrorFieldKeysJson:
         pageType === "mirror" && mirrorEntityId !== "none" && mirrorFieldKeys.length > 0 ? mirrorFieldKeys : null,
       isDashboard: pageType === "dashboard",
+      isPivot,
+      pivotEntityId: isPivot && pivotEntityId !== "none" ? Number(pivotEntityId) : null,
+      pivotConfigJson: isPivot ? (pivotConfig ?? { source: "entity" }) : null,
       sortOrder,
       isActive,
     };
@@ -407,7 +430,7 @@ export default function PagesPage() {
               <Select
                 value={pageType}
                 disabled={mirrorLockedByBinding}
-                onValueChange={(v) => handlePageTypeChange(v as "normal" | "mirror" | "dashboard")}
+                onValueChange={(v) => handlePageTypeChange(v as "normal" | "mirror" | "dashboard" | "pivot")}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -416,6 +439,7 @@ export default function PagesPage() {
                   <SelectItem value="normal">{t("pages.typeNormal", "Обычная")}</SelectItem>
                   <SelectItem value="mirror">{t("pages.typeMirror", "Зеркальная (живые данные сущности)")}</SelectItem>
                   <SelectItem value="dashboard">{t("pages.typeDashboard", "Дашборд (виджеты)")}</SelectItem>
+                  <SelectItem value="pivot">{t("pages.typePivot", "Сводная таблица")}</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -465,6 +489,37 @@ export default function PagesPage() {
                 <p className="text-xs text-slate-400">
                   {t("pages.dashboardHint", "Страница покажет панель виджетов. Виджеты настраиваются на самой странице кнопкой «Настроить».")}
                 </p>
+              )}
+
+              {pageType === "pivot" && (
+                <>
+                  <Label>{t("pages.pivotEntity", "Сущность для сводной таблицы")}</Label>
+                  <Select value={pivotEntityId} onValueChange={setPivotEntityId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={t("pages.pivotEntitySelect", "— Выберите сущность —")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">{t("pages.pivotEntitySelect", "— Выберите сущность —")}</SelectItem>
+                      {entities
+                        .filter((e: Entity) => e.isActive)
+                        .map((e: Entity) => (
+                          <SelectItem key={e.id} value={String(e.id)}>
+                            {ml(e.nameJson)}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  {pivotEntityId !== "none" && (
+                    <PivotPageConfig
+                      key={pivotEntityId}
+                      entityId={Number(pivotEntityId)}
+                      initial={pivotConfig}
+                      onChange={setPivotConfig}
+                      ml={ml}
+                      t={t}
+                    />
+                  )}
+                </>
               )}
             </div>
             <div className="flex items-center gap-2">

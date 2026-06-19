@@ -7,6 +7,7 @@
  */
 import type { MultilingualText } from './multilingualText';
 import type { PageInputMirrorFieldLabelsJson } from './pageInputMirrorFieldLabelsJson';
+import type { PivotPageConfig } from './pivotPageConfig';
 
 export interface PageInput {
   nameJson: MultilingualText;
@@ -26,6 +27,14 @@ export interface PageInput {
      */
   mirrorFieldLabelsJson?: PageInputMirrorFieldLabelsJson;
   isDashboard?: boolean;
+  /** Pivot page — renders a single admin-authoritative cross-tab. Mutually exclusive with a bound entity, mirror and dashboard. */
+  isPivot?: boolean;
+  /**
+     * Entity this pivot page reports on (required when isPivot).
+     * @nullable
+     */
+  pivotEntityId?: number | null;
+  pivotConfigJson?: PivotPageConfig | null;
   /** Default collapsed state of the analytics widgets block above a page's records table */
   widgetsCollapsedDefault?: boolean;
   sortOrder?: number;
