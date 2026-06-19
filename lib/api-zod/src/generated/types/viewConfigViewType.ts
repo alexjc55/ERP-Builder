@@ -12,4 +12,5 @@ export type ViewConfigViewType = typeof ViewConfigViewType[keyof typeof ViewConf
 export const ViewConfigViewType = {
   table: 'table',
   pivot: 'pivot',
+  calendar: 'calendar',
 } as const;

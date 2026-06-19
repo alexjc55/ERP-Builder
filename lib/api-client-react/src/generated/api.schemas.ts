@@ -2324,7 +2324,69 @@ export type ViewConfigViewType = typeof ViewConfigViewType[keyof typeof ViewConf
 export const ViewConfigViewType = {
   table: 'table',
   pivot: 'pivot',
+  calendar: 'calendar',
 } as const;
+
+/**
+ * Color chips by record status, by a field value, or not at all.
+ * @nullable
+ */
+export type CalendarConfigColorBy = typeof CalendarConfigColorBy[keyof typeof CalendarConfigColorBy] | null;
+
+
+export const CalendarConfigColorBy = {
+  status: 'status',
+  field: 'field',
+} as const;
+
+/**
+ * Initial calendar layout. Defaults to month.
+ * @nullable
+ */
+export type CalendarConfigDefaultMode = typeof CalendarConfigDefaultMode[keyof typeof CalendarConfigDefaultMode] | null;
+
+
+export const CalendarConfigDefaultMode = {
+  month: 'month',
+  week: 'week',
+  day: 'day',
+  agenda: 'agenda',
+} as const;
+
+/**
+ * Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters/search/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.
+ */
+export interface CalendarConfig {
+  /** Date/datetime field key that places a record on the calendar. */
+  dateFieldKey: string;
+  /**
+     * Optional date/datetime field key for the end of a multi-day span.
+     * @nullable
+     */
+  endDateFieldKey?: string | null;
+  /**
+     * Field whose value is the chip title. Falls back to the first text field.
+     * @nullable
+     */
+  titleFieldKey?: string | null;
+  /** Additional field keys rendered on the event chip under the title. */
+  cardFieldKeys?: string[];
+  /**
+     * Color chips by record status, by a field value, or not at all.
+     * @nullable
+     */
+  colorBy?: CalendarConfigColorBy;
+  /**
+     * Field key used for coloring when colorBy=field (a select/status-like field).
+     * @nullable
+     */
+  colorFieldKey?: string | null;
+  /**
+     * Initial calendar layout. Defaults to month.
+     * @nullable
+     */
+  defaultMode?: CalendarConfigDefaultMode;
+}
 
 export interface ViewConfig {
   filters?: FilterCondition[];
@@ -2334,6 +2396,7 @@ export interface ViewConfig {
   visibleFields?: string[];
   viewType?: ViewConfigViewType;
   pivot?: PivotConfig;
+  calendar?: CalendarConfig;
 }
 
 export type PivotQueryFilterConjunction = typeof PivotQueryFilterConjunction[keyof typeof PivotQueryFilterConjunction];

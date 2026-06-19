@@ -8,6 +8,9 @@ import {
   type PivotDimension,
   type PivotDimensionSource,
   type PivotDimensionDatePeriod,
+  type CalendarConfig,
+  type CalendarConfigColorBy,
+  type CalendarConfigDefaultMode,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, Filter, X, ChevronDown, Check } from "lucide-react";
+import { Plus, Filter, X, ChevronDown, Check, CalendarDays } from "lucide-react";
 import { ValueChecklistPicker } from "@/components/FilterValuePicker";
 
 export const FILTER_OPERATORS: { value: FilterOperator; label: string; needsValue: boolean; arrayValue?: boolean }[] = [
@@ -547,6 +550,189 @@ export function PivotDimEditor({
             </SelectContent>
           </Select>
         )}
+      </div>
+    </div>
+  );
+}
+
+const CALENDAR_DATE_TYPES = new Set(["date", "datetime"]);
+const NONE_VALUE = "__none__";
+
+/**
+ * Editor for a calendar view's configuration. The admin picks the date field that
+ * anchors records on the calendar, an optional end-date field (multi-day spans),
+ * the chip's title field, any extra fields shown on the chip, how chips are
+ * colored (record status / a field value / none), and the initial layout mode.
+ * The calendar reuses the SAME viewer-scoped records query as the table — this is
+ * purely layout config, no permission logic lives here.
+ */
+export function CalendarConfigEditor({
+  value,
+  onChange,
+  fields,
+  ml,
+  t,
+}: {
+  value: CalendarConfig;
+  onChange: (c: CalendarConfig) => void;
+  fields: Field[];
+  ml: (val: MultilingualText | string | undefined | null) => string;
+  t: (key: string, def: string) => string;
+}) {
+  const [cardOpen, setCardOpen] = useState(false);
+  const dateFields = fields.filter((f) => CALENDAR_DATE_TYPES.has(f.fieldType));
+  const cardKeys = value.cardFieldKeys ?? [];
+  const colorBy = value.colorBy ?? null;
+
+  const toggleCardField = (key: string) => {
+    const next = cardKeys.includes(key)
+      ? cardKeys.filter((k) => k !== key)
+      : [...cardKeys, key];
+    onChange({ ...value, cardFieldKeys: next });
+  };
+
+  return (
+    <div className="space-y-3 border-t border-slate-100 pt-4">
+      <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+        <CalendarDays className="w-4 h-4 text-blue-600" />
+        {t("calendar.configTitle", "Конфигурация календаря")}
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-sm">{t("calendar.dateField", "Поле даты")}</Label>
+        {dateFields.length === 0 ? (
+          <p className="text-xs text-rose-500">{t("calendar.noDateFields", "У сущности нет полей типа «дата». Добавьте поле даты, чтобы использовать календарь.")}</p>
+        ) : (
+          <Select value={value.dateFieldKey || ""} onValueChange={(v) => onChange({ ...value, dateFieldKey: v })}>
+            <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t("calendar.selectDateField", "выберите поле даты…")} /></SelectTrigger>
+            <SelectContent>
+              {dateFields.map((f) => (
+                <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-sm">{t("calendar.endDateField", "Поле даты окончания")}</Label>
+        <Select
+          value={value.endDateFieldKey ?? NONE_VALUE}
+          onValueChange={(v) => onChange({ ...value, endDateFieldKey: v === NONE_VALUE ? null : v })}
+        >
+          <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NONE_VALUE}>{t("calendar.endDateNone", "Без диапазона (один день)")}</SelectItem>
+            {dateFields.filter((f) => f.fieldKey !== value.dateFieldKey).map((f) => (
+              <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-sm">{t("calendar.titleField", "Поле заголовка")}</Label>
+        <Select
+          value={value.titleFieldKey ?? NONE_VALUE}
+          onValueChange={(v) => onChange({ ...value, titleFieldKey: v === NONE_VALUE ? null : v })}
+        >
+          <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NONE_VALUE}>{t("calendar.titleAuto", "Автоматически (первое текстовое поле)")}</SelectItem>
+            {fields.map((f) => (
+              <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-sm">{t("calendar.cardFields", "Данные на плашке")}</Label>
+        <Popover open={cardOpen} onOpenChange={setCardOpen}>
+          <PopoverTrigger asChild>
+            <Button type="button" variant="outline" className="h-8 w-full justify-between text-sm font-normal">
+              <span className="truncate text-left">
+                {cardKeys.length === 0 ? (
+                  <span className="text-slate-400">{t("calendar.cardFieldsNone", "только заголовок")}</span>
+                ) : (
+                  cardKeys.map((k) => ml(fields.find((f) => f.fieldKey === k)?.nameJson) || k).join(", ")
+                )}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-60" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-72 p-0">
+            <div className="max-h-60 overflow-y-auto p-1">
+              {fields.length === 0 ? (
+                <p className="px-2 py-1.5 text-xs text-slate-400">{t("views.noOptions", "Нет вариантов")}</p>
+              ) : (
+                fields.map((f) => {
+                  const isSel = cardKeys.includes(f.fieldKey);
+                  return (
+                    <button
+                      key={f.fieldKey}
+                      type="button"
+                      onClick={() => toggleCardField(f.fieldKey)}
+                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-slate-100"
+                    >
+                      <span className={`flex h-4 w-4 items-center justify-center rounded border ${isSel ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300"}`}>
+                        {isSel && <Check className="w-3 h-3" />}
+                      </span>
+                      <span className="truncate">{ml(f.nameJson)}</span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+        <p className="text-xs text-slate-400">{t("calendar.cardFieldsHint", "Дополнительные поля записи, показываемые на плашке события под заголовком.")}</p>
+      </div>
+
+      <div className="flex items-end gap-2">
+        <div className="flex-1 space-y-1.5">
+          <Label className="text-sm">{t("calendar.colorBy", "Цвет плашки")}</Label>
+          <Select
+            value={colorBy ?? NONE_VALUE}
+            onValueChange={(v) => onChange({ ...value, colorBy: v === NONE_VALUE ? null : (v as CalendarConfigColorBy), colorFieldKey: v === "field" ? value.colorFieldKey : null })}
+          >
+            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE_VALUE}>{t("calendar.colorNone", "Без цвета")}</SelectItem>
+              <SelectItem value="status">{t("calendar.colorStatus", "По статусу")}</SelectItem>
+              <SelectItem value="field">{t("calendar.colorField", "По полю")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {colorBy === "field" && (
+          <div className="flex-1 space-y-1.5">
+            <Label className="text-sm">{t("calendar.colorField", "По полю")}</Label>
+            <Select value={value.colorFieldKey ?? ""} onValueChange={(v) => onChange({ ...value, colorFieldKey: v })}>
+              <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t("calendar.selectField", "поле…")} /></SelectTrigger>
+              <SelectContent>
+                {fields.map((f) => (
+                  <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-sm">{t("calendar.defaultMode", "Режим по умолчанию")}</Label>
+        <Select
+          value={value.defaultMode ?? "month"}
+          onValueChange={(v) => onChange({ ...value, defaultMode: v as CalendarConfigDefaultMode })}
+        >
+          <SelectTrigger className="h-8 text-sm w-40"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="month">{t("calendar.modeMonth", "Месяц")}</SelectItem>
+            <SelectItem value="week">{t("calendar.modeWeek", "Неделя")}</SelectItem>
+            <SelectItem value="day">{t("calendar.modeDay", "День")}</SelectItem>
+            <SelectItem value="agenda">{t("calendar.modeAgenda", "Повестка")}</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
     </div>
   );

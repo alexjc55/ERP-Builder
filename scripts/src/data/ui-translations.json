@@ -7690,5 +7690,191 @@
     "ru": "выберите пользователя",
     "en": "select a user",
     "he": "בחר משתמש"
+  },
+  {
+    "key": "calendar.modeCalendar",
+    "ru": "Календарь",
+    "en": "Calendar",
+    "he": "לוח שנה"
+  },
+  {
+    "key": "calendar.configTitle",
+    "ru": "Конфигурация календаря",
+    "en": "Calendar configuration",
+    "he": "תצורת לוח שנה"
+  },
+  {
+    "key": "calendar.dateField",
+    "ru": "Поле даты",
+    "en": "Date field",
+    "he": "שדה תאריך"
+  },
+  {
+    "key": "calendar.selectDateField",
+    "ru": "выберите поле даты…",
+    "en": "select a date field…",
+    "he": "בחר שדה תאריך…"
+  },
+  {
+    "key": "calendar.noDateFields",
+    "ru": "У сущности нет полей типа «дата». Добавьте поле даты, чтобы использовать календарь.",
+    "en": "The entity has no date fields. Add a date field to use the calendar.",
+    "he": "לישות אין שדות תאריך. הוסף שדה תאריך כדי להשתמש בלוח השנה."
+  },
+  {
+    "key": "calendar.endDateField",
+    "ru": "Поле даты окончания",
+    "en": "End date field",
+    "he": "שדה תאריך סיום"
+  },
+  {
+    "key": "calendar.endDateNone",
+    "ru": "Без диапазона (один день)",
+    "en": "No range (single day)",
+    "he": "ללא טווח (יום בודד)"
+  },
+  {
+    "key": "calendar.titleField",
+    "ru": "Поле заголовка",
+    "en": "Title field",
+    "he": "שדה כותרת"
+  },
+  {
+    "key": "calendar.titleAuto",
+    "ru": "Автоматически (первое текстовое поле)",
+    "en": "Automatic (first text field)",
+    "he": "אוטומטי (שדה הטקסט הראשון)"
+  },
+  {
+    "key": "calendar.cardFields",
+    "ru": "Данные на плашке",
+    "en": "Chip details",
+    "he": "פרטי תווית"
+  },
+  {
+    "key": "calendar.cardFieldsNone",
+    "ru": "только заголовок",
+    "en": "title only",
+    "he": "כותרת בלבד"
+  },
+  {
+    "key": "calendar.cardFieldsHint",
+    "ru": "Дополнительные поля записи, показываемые на плашке события под заголовком.",
+    "en": "Extra record fields shown on the event chip under the title.",
+    "he": "שדות רשומה נוספים המוצגים על תווית האירוע מתחת לכותרת."
+  },
+  {
+    "key": "calendar.colorBy",
+    "ru": "Цвет плашки",
+    "en": "Chip color",
+    "he": "צבע תווית"
+  },
+  {
+    "key": "calendar.colorNone",
+    "ru": "Без цвета",
+    "en": "No color",
+    "he": "ללא צבע"
+  },
+  {
+    "key": "calendar.colorStatus",
+    "ru": "По статусу",
+    "en": "By status",
+    "he": "לפי סטטוס"
+  },
+  {
+    "key": "calendar.colorField",
+    "ru": "По полю",
+    "en": "By field",
+    "he": "לפי שדה"
+  },
+  {
+    "key": "calendar.selectField",
+    "ru": "поле…",
+    "en": "field…",
+    "he": "שדה…"
+  },
+  {
+    "key": "calendar.defaultMode",
+    "ru": "Режим по умолчанию",
+    "en": "Default mode",
+    "he": "מצב ברירת מחדל"
+  },
+  {
+    "key": "calendar.modeMonth",
+    "ru": "Месяц",
+    "en": "Month",
+    "he": "חודש"
+  },
+  {
+    "key": "calendar.modeWeek",
+    "ru": "Неделя",
+    "en": "Week",
+    "he": "שבוע"
+  },
+  {
+    "key": "calendar.modeDay",
+    "ru": "День",
+    "en": "Day",
+    "he": "יום"
+  },
+  {
+    "key": "calendar.modeAgenda",
+    "ru": "Повестка",
+    "en": "Agenda",
+    "he": "סדר יום"
+  },
+  {
+    "key": "calendar.needDateField",
+    "ru": "Выберите поле даты для календаря",
+    "en": "Select a date field for the calendar",
+    "he": "בחר שדה תאריך עבור לוח השנה"
+  },
+  {
+    "key": "calendar.noDateConfigured",
+    "ru": "Поле даты для календаря не настроено",
+    "en": "No calendar date field configured",
+    "he": "לא הוגדר שדה תאריך ללוח השנה"
+  },
+  {
+    "key": "calendar.today",
+    "ru": "Сегодня",
+    "en": "Today",
+    "he": "היום"
+  },
+  {
+    "key": "calendar.more",
+    "ru": "ещё",
+    "en": "more",
+    "he": "עוד"
+  },
+  {
+    "key": "calendar.noEvents",
+    "ru": "Нет событий",
+    "en": "No events",
+    "he": "אין אירועים"
+  },
+  {
+    "key": "calendar.empty",
+    "ru": "Нет событий в этом диапазоне",
+    "en": "No events in this range",
+    "he": "אין אירועים בטווח זה"
+  },
+  {
+    "key": "calendar.untitled",
+    "ru": "Без названия",
+    "en": "Untitled",
+    "he": "ללא כותרת"
+  },
+  {
+    "key": "calendar.error",
+    "ru": "Не удалось загрузить календарь",
+    "en": "Failed to load the calendar",
+    "he": "טעינת לוח השנה נכשלה"
+  },
+  {
+    "key": "calendar.truncated",
+    "ru": "Показаны не все события: слишком много записей. Сузьте период или фильтры.",
+    "en": "Not all events are shown: too many records. Narrow the range or filters.",
+    "he": "לא כל האירועים מוצגים: יותר מדי רשומות. צמצם את הטווח או המסננים."
   }
 ]

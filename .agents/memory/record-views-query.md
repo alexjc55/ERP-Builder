@@ -31,6 +31,14 @@ The view/default filter value editor branches by field type: `select`→option p
 **Why:** `record-query.ts buildCondition` compares `values_json ->> key` lexically for non-numeric/date types, so the stored filter value MUST match how the record value is stored (user values are ids as text; booleans are `"true"/"false"`). A free-text box let users type values that never matched.
 **How to apply:** keep the editor and `buildCondition` in lockstep — any new field-type filter must store text the server comparison understands. Reuse the shared `FilterRowsEditor` so the view dialog and the default-view dialog stay identical; changing a row's field clears its value (editors are type-specific).
 
+## Calendar view type is a client-side render of the same filtered rows (viewer-scoped)
+A `viewType: "calendar"` view (config `CalendarConfig { dateFieldKey, endDateFieldKey?, titleFieldKey?, cardFieldKeys[], colorBy?, colorFieldKey?, defaultMode? }`) is just another render of `records/query` — **no new endpoint, no admin-authoritative path** (unlike pivot/dashboard). It MUST stay viewer-scoped: it reuses the viewer's field/row/entity read boundary by going through `records/query` and rendering the RBAC-visible field set.
+**Why:** a calendar is a presentation of the user's own filtered data; it has no reason to bypass perms the way pivot/dashboard totals do.
+**How to apply:**
+- Pass the **RBAC-visible** field set (`visibleFormFields`), NOT the table-column set (`displayFields`), so configured `cardFieldKeys`/`titleFieldKey` always resolve while hidden fields stay hidden.
+- Date-window narrowing: a window filter can only be appended server-side when `filterConjunction` is AND (or no base filters). The endpoint applies ONE conjunction to the whole filter list, so under OR an appended window would OR-WIDEN. Under OR, send NO window filter and instead page by `dateFieldKey` ASC, stopping once a row starts ≥ windowEnd (asc order ⇒ all later rows are also out). Always re-filter the window client-side for exactness (spans, OR).
+- Capped pagination (MAX_PAGES) must surface a **truncation banner** when the cap is hit with rows still unread — never silently drop events.
+
 ## Views do NOT control which columns show — per-field "Показывать в таблице" does
 A view's `configJson.visibleFields` is **no longer used to choose/limit the records-table columns**. Columns are governed solely by each field's per-page `showInTable` flag (plus field-level role perms via `tableFields`); column order follows field `sortOrder`. A view carries only sort/filter/search.
 **Why:** the views admin UI never exposed a column picker, yet seeded default views had `visibleFields` populated — so selecting the default view silently hid columns the field settings said to show, with no way for the user to fix it. The user's model: column visibility is a per-page/per-field decision (independently per page, even for related/mirror columns), not a view concern.

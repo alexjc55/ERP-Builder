@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { CalendarConfig } from './calendarConfig';
 import type { FilterCondition } from './filterCondition';
 import type { PivotConfig } from './pivotConfig';
 import type { SortSpec } from './sortSpec';
@@ -19,4 +20,5 @@ export interface ViewConfig {
   visibleFields?: string[];
   viewType?: ViewConfigViewType;
   pivot?: PivotConfig;
+  calendar?: CalendarConfig;
 }

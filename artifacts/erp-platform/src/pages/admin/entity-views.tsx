@@ -31,6 +31,7 @@ import {
   type PivotMeasure,
   type PivotDimensionSource,
   type PivotDimensionDatePeriod,
+  type CalendarConfig,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,6 +93,7 @@ import {
   isDateLikeType,
   FilterRowsEditor,
   PivotDimEditor,
+  CalendarConfigEditor,
   type DraftFilter,
   type DraftSort,
   type DraftDim,
@@ -251,6 +253,8 @@ export default function EntityViewsPage() {
   // Fields the admin has opted into as pivot dims/measures.
   const pivotDimFields = fields.filter((f: Field) => f.pivotEnabled && PIVOT_DIM_TYPES.has(f.fieldType));
   const pivotSumFields = fields.filter((f: Field) => f.pivotEnabled && f.fieldType === "number");
+  // Date/datetime fields available to anchor records on a calendar view.
+  const calendarDateFields = fields.filter((f: Field) => f.fieldType === "date" || f.fieldType === "datetime");
   // Fields offered as clickable chips inside a pivot formula measure. Numeric
   // pivot-enabled fields match the cost use case (metres × price); the server
   // restricts the formula to ALL pivot-enabled keys regardless.
@@ -270,7 +274,9 @@ export default function EntityViewsPage() {
   const [filters, setFilters] = useState<DraftFilter[]>([]);
   const [sorts, setSorts] = useState<DraftSort[]>([]);
   // Pivot view editor state.
-  const [viewType, setViewType] = useState<"table" | "pivot">("table");
+  const [viewType, setViewType] = useState<"table" | "pivot" | "calendar">("table");
+  // Calendar view editor state.
+  const [calendarConfig, setCalendarConfig] = useState<CalendarConfig>({ dateFieldKey: "" });
   const [pivotRows, setPivotRows] = useState<DraftDim>({ source: "status", fieldKey: "", datePeriod: null });
   const [pivotColsOn, setPivotColsOn] = useState(false);
   const [pivotCols, setPivotCols] = useState<DraftDim>({ source: "status", fieldKey: "", datePeriod: null });
@@ -387,6 +393,7 @@ export default function EntityViewsPage() {
     setPivotColsOn(false);
     setPivotCols({ source: "status", fieldKey: "", datePeriod: null });
     setPivotMeasures([newDraftMeasure(pivotSumFields[0]?.fieldKey ?? "")]);
+    setCalendarConfig({ dateFieldKey: calendarDateFields[0]?.fieldKey ?? "" });
     setVisibleRoleIds([]);
     setDialogOpen(true);
   };
@@ -410,7 +417,13 @@ export default function EntityViewsPage() {
     setSorts((cfg.sorts ?? []).map((s) => ({ field: s.field, direction: s.direction ?? "asc" })));
     setVisibleRoleIds(Array.isArray(view.visibleRoleIds) ? view.visibleRoleIds : []);
     const isPivot = cfg.viewType === "pivot" && !!cfg.pivot;
-    setViewType(isPivot ? "pivot" : "table");
+    const isCalendar = cfg.viewType === "calendar";
+    setViewType(isCalendar ? "calendar" : isPivot ? "pivot" : "table");
+    setCalendarConfig(
+      isCalendar && cfg.calendar
+        ? cfg.calendar
+        : { dateFieldKey: calendarDateFields[0]?.fieldKey ?? "" },
+    );
     const dimToDraft = (d: PivotDimension | undefined): DraftDim =>
       d && d.source !== "status"
         ? { source: "entity", fieldKey: d.fieldKey ?? "", datePeriod: d.datePeriod ?? null }
@@ -547,6 +560,18 @@ export default function EntityViewsPage() {
       sorts: builtSorts,
       search: search.trim() || undefined,
     };
+    if (viewType === "calendar") {
+      const cal: CalendarConfig = {
+        dateFieldKey: calendarConfig.dateFieldKey,
+        endDateFieldKey: calendarConfig.endDateFieldKey ?? null,
+        titleFieldKey: calendarConfig.titleFieldKey ?? null,
+        cardFieldKeys: calendarConfig.cardFieldKeys ?? [],
+        colorBy: calendarConfig.colorBy ?? null,
+        colorFieldKey: calendarConfig.colorBy === "field" ? (calendarConfig.colorFieldKey ?? null) : null,
+        defaultMode: calendarConfig.defaultMode ?? "month",
+      };
+      return { ...base, viewType: "calendar", calendar: cal };
+    }
     if (viewType !== "pivot") return base;
 
     const draftToDim = (d: DraftDim): PivotDimension =>
@@ -576,6 +601,10 @@ export default function EntityViewsPage() {
     const existingKeys = new Set(
       views.filter((v: View) => v.id !== editing?.id).map((v: View) => v.viewKey),
     );
+    if (viewType === "calendar" && !configJson.calendar?.dateFieldKey) {
+      toast({ title: t("calendar.needDateField", "Выберите поле даты для календаря"), variant: "destructive" });
+      return;
+    }
     if (viewType === "pivot") {
       if (configJson.pivot?.rows.source === "entity" && !configJson.pivot.rows.fieldKey) {
         toast({ title: t("pivot.needRowField", "Выберите поле строк сводной таблицы"), variant: "destructive" });
@@ -835,28 +864,27 @@ export default function EntityViewsPage() {
               <Label className="cursor-pointer">{t("views.defaultView", "Вид по умолчанию")}</Label>
             </div>
 
-            {entity?.pivotEnabled && (
-              <div className="space-y-1.5">
-                <Label>{t("pivot.viewMode", "Тип отображения")}</Label>
-                <div className="inline-flex items-center rounded-md border border-slate-200 p-0.5">
-                  {([
-                    ["table", t("pivot.modeTable", "Таблица")],
-                    ["pivot", t("pivot.modePivot", "Сводная")],
-                  ] as ["table" | "pivot", string][]).map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setViewType(value)}
-                      className={`px-3 h-8 text-xs rounded-[5px] transition ${
-                        viewType === value ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-700"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+            <div className="space-y-1.5">
+              <Label>{t("pivot.viewMode", "Тип отображения")}</Label>
+              <div className="inline-flex items-center rounded-md border border-slate-200 p-0.5">
+                {(([
+                  ["table", t("pivot.modeTable", "Таблица")],
+                  ...(entity?.pivotEnabled ? [["pivot", t("pivot.modePivot", "Сводная")]] : []),
+                  ["calendar", t("calendar.modeCalendar", "Календарь")],
+                ]) as ["table" | "pivot" | "calendar", string][]).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setViewType(value)}
+                    className={`px-3 h-8 text-xs rounded-[5px] transition ${
+                      viewType === value ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
-            )}
+            </div>
 
             <div className="space-y-1.5">
               <Label>{t("views.textSearch", "Поиск по тексту")}</Label>
@@ -953,6 +981,16 @@ export default function EntityViewsPage() {
                   t={t}
                 />
               </div>
+            )}
+
+            {viewType === "calendar" && (
+              <CalendarConfigEditor
+                value={calendarConfig}
+                onChange={setCalendarConfig}
+                fields={fields}
+                ml={ml}
+                t={t}
+              />
             )}
 
             {viewType === "table" && (

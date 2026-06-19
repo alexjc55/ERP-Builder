@@ -5645,10 +5645,49 @@ components:
             type: string
         viewType:
           type: string
-          enum: [table, pivot]
+          enum: [table, pivot, calendar]
           default: table
         pivot:
           $ref: "#/components/schemas/PivotConfig"
+        calendar:
+          $ref: "#/components/schemas/CalendarConfig"
+
+    CalendarConfig:
+      type: object
+      required: [dateFieldKey]
+      description: >-
+        Configuration for a calendar view (viewType=calendar). The records shown
+        are the SAME viewer-scoped rows as the table (filters/search/status apply);
+        the calendar just lays them out by date. `dateFieldKey` anchors each record
+        on a day; `endDateFieldKey` (optional) turns a record into a multi-day span.
+        The event chip shows `titleFieldKey` (falling back to the first text field)
+        plus any `cardFieldKeys`. Coloring is by record status or a chosen field.
+      properties:
+        dateFieldKey:
+          type: string
+          description: Date/datetime field key that places a record on the calendar.
+        endDateFieldKey:
+          type: ["string", "null"]
+          description: Optional date/datetime field key for the end of a multi-day span.
+        titleFieldKey:
+          type: ["string", "null"]
+          description: Field whose value is the chip title. Falls back to the first text field.
+        cardFieldKeys:
+          type: array
+          description: Additional field keys rendered on the event chip under the title.
+          items:
+            type: string
+        colorBy:
+          type: ["string", "null"]
+          enum: [status, field, null]
+          description: Color chips by record status, by a field value, or not at all.
+        colorFieldKey:
+          type: ["string", "null"]
+          description: Field key used for coloring when colorBy=field (a select/status-like field).
+        defaultMode:
+          type: ["string", "null"]
+          enum: [month, week, day, agenda, null]
+          description: Initial calendar layout. Defaults to month.
 
     PivotDimension:
       type: object

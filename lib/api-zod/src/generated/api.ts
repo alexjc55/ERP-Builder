@@ -4510,7 +4510,7 @@ export const ListEntityViewsResponseItem = zod.object({
 })).optional(),
   "search": zod.string().optional(),
   "visibleFields": zod.array(zod.string()).optional(),
-  "viewType": zod.enum(['table', 'pivot']).default(listEntityViewsResponseConfigJsonViewTypeDefault),
+  "viewType": zod.enum(['table', 'pivot', 'calendar']).default(listEntityViewsResponseConfigJsonViewTypeDefault),
   "pivot": zod.object({
   "rows": zod.object({
   "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
@@ -4557,7 +4557,16 @@ export const ListEntityViewsResponseItem = zod.object({
 }),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
 })).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
-}).optional()
+}).optional(),
+  "calendar": zod.object({
+  "dateFieldKey": zod.string().describe('Date\/datetime field key that places a record on the calendar.'),
+  "endDateFieldKey": zod.string().nullish().describe('Optional date\/datetime field key for the end of a multi-day span.'),
+  "titleFieldKey": zod.string().nullish().describe('Field whose value is the chip title. Falls back to the first text field.'),
+  "cardFieldKeys": zod.array(zod.string()).optional().describe('Additional field keys rendered on the event chip under the title.'),
+  "colorBy": zod.union([zod.literal('status'),zod.literal('field'),zod.literal(null)]).nullish().describe('Color chips by record status, by a field value, or not at all.'),
+  "colorFieldKey": zod.string().nullish().describe('Field key used for coloring when colorBy=field (a select\/status-like field).'),
+  "defaultMode": zod.union([zod.literal('month'),zod.literal('week'),zod.literal('day'),zod.literal('agenda'),zod.literal(null)]).nullish().describe('Initial calendar layout. Defaults to month.')
+}).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.')
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
   "isDefault": zod.boolean(),
@@ -4602,7 +4611,7 @@ export const CreateEntityViewBody = zod.object({
 })).optional(),
   "search": zod.string().optional(),
   "visibleFields": zod.array(zod.string()).optional(),
-  "viewType": zod.enum(['table', 'pivot']).default(createEntityViewBodyConfigJsonViewTypeDefault),
+  "viewType": zod.enum(['table', 'pivot', 'calendar']).default(createEntityViewBodyConfigJsonViewTypeDefault),
   "pivot": zod.object({
   "rows": zod.object({
   "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
@@ -4649,7 +4658,16 @@ export const CreateEntityViewBody = zod.object({
 }),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
 })).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
-}).optional()
+}).optional(),
+  "calendar": zod.object({
+  "dateFieldKey": zod.string().describe('Date\/datetime field key that places a record on the calendar.'),
+  "endDateFieldKey": zod.string().nullish().describe('Optional date\/datetime field key for the end of a multi-day span.'),
+  "titleFieldKey": zod.string().nullish().describe('Field whose value is the chip title. Falls back to the first text field.'),
+  "cardFieldKeys": zod.array(zod.string()).optional().describe('Additional field keys rendered on the event chip under the title.'),
+  "colorBy": zod.union([zod.literal('status'),zod.literal('field'),zod.literal(null)]).nullish().describe('Color chips by record status, by a field value, or not at all.'),
+  "colorFieldKey": zod.string().nullish().describe('Field key used for coloring when colorBy=field (a select\/status-like field).'),
+  "defaultMode": zod.union([zod.literal('month'),zod.literal('week'),zod.literal('day'),zod.literal('agenda'),zod.literal(null)]).nullish().describe('Initial calendar layout. Defaults to month.')
+}).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.')
 }).optional(),
   "visibleRoleIds": zod.array(zod.number()).nullish().describe('Role ids that may select this view; null\/empty = all roles with record access.'),
   "isDefault": zod.boolean().default(createEntityViewBodyIsDefaultDefault),
@@ -4691,7 +4709,7 @@ export const GetViewResponse = zod.object({
 })).optional(),
   "search": zod.string().optional(),
   "visibleFields": zod.array(zod.string()).optional(),
-  "viewType": zod.enum(['table', 'pivot']).default(getViewResponseConfigJsonViewTypeDefault),
+  "viewType": zod.enum(['table', 'pivot', 'calendar']).default(getViewResponseConfigJsonViewTypeDefault),
   "pivot": zod.object({
   "rows": zod.object({
   "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
@@ -4738,7 +4756,16 @@ export const GetViewResponse = zod.object({
 }),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
 })).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
-}).optional()
+}).optional(),
+  "calendar": zod.object({
+  "dateFieldKey": zod.string().describe('Date\/datetime field key that places a record on the calendar.'),
+  "endDateFieldKey": zod.string().nullish().describe('Optional date\/datetime field key for the end of a multi-day span.'),
+  "titleFieldKey": zod.string().nullish().describe('Field whose value is the chip title. Falls back to the first text field.'),
+  "cardFieldKeys": zod.array(zod.string()).optional().describe('Additional field keys rendered on the event chip under the title.'),
+  "colorBy": zod.union([zod.literal('status'),zod.literal('field'),zod.literal(null)]).nullish().describe('Color chips by record status, by a field value, or not at all.'),
+  "colorFieldKey": zod.string().nullish().describe('Field key used for coloring when colorBy=field (a select\/status-like field).'),
+  "defaultMode": zod.union([zod.literal('month'),zod.literal('week'),zod.literal('day'),zod.literal('agenda'),zod.literal(null)]).nullish().describe('Initial calendar layout. Defaults to month.')
+}).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.')
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
   "isDefault": zod.boolean(),
@@ -4780,7 +4807,7 @@ export const UpdateViewBody = zod.object({
 })).optional(),
   "search": zod.string().optional(),
   "visibleFields": zod.array(zod.string()).optional(),
-  "viewType": zod.enum(['table', 'pivot']).default(updateViewBodyConfigJsonViewTypeDefault),
+  "viewType": zod.enum(['table', 'pivot', 'calendar']).default(updateViewBodyConfigJsonViewTypeDefault),
   "pivot": zod.object({
   "rows": zod.object({
   "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
@@ -4827,7 +4854,16 @@ export const UpdateViewBody = zod.object({
 }),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
 })).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
-}).optional()
+}).optional(),
+  "calendar": zod.object({
+  "dateFieldKey": zod.string().describe('Date\/datetime field key that places a record on the calendar.'),
+  "endDateFieldKey": zod.string().nullish().describe('Optional date\/datetime field key for the end of a multi-day span.'),
+  "titleFieldKey": zod.string().nullish().describe('Field whose value is the chip title. Falls back to the first text field.'),
+  "cardFieldKeys": zod.array(zod.string()).optional().describe('Additional field keys rendered on the event chip under the title.'),
+  "colorBy": zod.union([zod.literal('status'),zod.literal('field'),zod.literal(null)]).nullish().describe('Color chips by record status, by a field value, or not at all.'),
+  "colorFieldKey": zod.string().nullish().describe('Field key used for coloring when colorBy=field (a select\/status-like field).'),
+  "defaultMode": zod.union([zod.literal('month'),zod.literal('week'),zod.literal('day'),zod.literal('agenda'),zod.literal(null)]).nullish().describe('Initial calendar layout. Defaults to month.')
+}).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.')
 }).optional(),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
   "isDefault": zod.boolean().optional(),
@@ -4861,7 +4897,7 @@ export const UpdateViewResponse = zod.object({
 })).optional(),
   "search": zod.string().optional(),
   "visibleFields": zod.array(zod.string()).optional(),
-  "viewType": zod.enum(['table', 'pivot']).default(updateViewResponseConfigJsonViewTypeDefault),
+  "viewType": zod.enum(['table', 'pivot', 'calendar']).default(updateViewResponseConfigJsonViewTypeDefault),
   "pivot": zod.object({
   "rows": zod.object({
   "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
@@ -4908,7 +4944,16 @@ export const UpdateViewResponse = zod.object({
 }),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
 })).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
-}).optional()
+}).optional(),
+  "calendar": zod.object({
+  "dateFieldKey": zod.string().describe('Date\/datetime field key that places a record on the calendar.'),
+  "endDateFieldKey": zod.string().nullish().describe('Optional date\/datetime field key for the end of a multi-day span.'),
+  "titleFieldKey": zod.string().nullish().describe('Field whose value is the chip title. Falls back to the first text field.'),
+  "cardFieldKeys": zod.array(zod.string()).optional().describe('Additional field keys rendered on the event chip under the title.'),
+  "colorBy": zod.union([zod.literal('status'),zod.literal('field'),zod.literal(null)]).nullish().describe('Color chips by record status, by a field value, or not at all.'),
+  "colorFieldKey": zod.string().nullish().describe('Field key used for coloring when colorBy=field (a select\/status-like field).'),
+  "defaultMode": zod.union([zod.literal('month'),zod.literal('week'),zod.literal('day'),zod.literal('agenda'),zod.literal(null)]).nullish().describe('Initial calendar layout. Defaults to month.')
+}).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.')
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
   "isDefault": zod.boolean(),

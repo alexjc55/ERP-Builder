@@ -61,6 +61,7 @@ import {
   type FieldAccess,
 } from "@workspace/api-client-react";
 import { PivotView } from "./PivotView";
+import { CalendarView, defaultCalendarMode, type CalendarMode, type CalendarBaseQuery } from "./CalendarView";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1462,6 +1463,38 @@ export function EntityRecords({
     [baseFiltersKey, selectedConfig.filterConjunction, adHocKey, dateKey, pageAdHocKey, pageDateKey, statusKey, search, archived, selectedView?.id, JSON.stringify(pivotConfig)],
   );
 
+  // Calendar (Календарь): a view whose configJson.viewType is "calendar" carries a
+  // calendar config. Like pivot, it's a different render of the SAME viewer-scoped
+  // records query (no entity opt-in, no admin-authoritative path). Only available
+  // for a selected calendar view (no entity-default calendar).
+  const calendarConfig =
+    selectedView && selectedConfig.viewType === "calendar" ? selectedConfig.calendar : undefined;
+  const calendarAvailable = calendarConfig != null && !!calendarConfig.dateFieldKey;
+  const [calendarMode, setCalendarMode] = useState<CalendarMode>("month");
+  // Render the calendar by default whenever a calendar view is selected; a
+  // Таблица/Календарь toggle lets the viewer drop back to the row table.
+  const [calendarActive, setCalendarActive] = useState(false);
+  useEffect(() => {
+    setCalendarMode(defaultCalendarMode(calendarConfig));
+    setCalendarActive(selectedConfig.viewType === "calendar" && !!selectedConfig.calendar);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedViewId]);
+  const showCalendar = calendarAvailable && calendarActive && !setupMode;
+
+  const calendarBaseQuery: CalendarBaseQuery = useMemo(
+    () => ({
+      filters: [...baseFilters, ...adHocFilters, ...dateFilterConditions],
+      filterConjunction: selectedConfig.filterConjunction ?? "and",
+      pageLocalFilters: [...pageAdHocFilters, ...pageDateFilterConditions],
+      statusIds: statusFilter.length > 0 ? statusFilter : undefined,
+      search: search.trim() || undefined,
+      archived,
+      pageId: permPageId,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [baseFiltersKey, selectedConfig.filterConjunction, adHocKey, dateKey, pageAdHocKey, pageDateKey, statusKey, search, archived, permPageId],
+  );
+
   // Dependent filters: when fetching the option list for a field, we run a query against the
   // records matching the OTHER active filters (this field's own picks excluded) so co-occurring
   // values narrow each other (e.g. pick «Отдел» ⇒ «Сотрудник» lists only that department's staff).
@@ -2308,6 +2341,25 @@ export function EntityRecords({
               ))}
             </div>
           )}
+          {calendarAvailable && !setupMode && (
+            <div className="flex items-center justify-center w-full sm:w-auto rounded-md border border-slate-200 p-0.5 bg-white">
+              {([
+                [false, t("pivot.modeTable", "Таблица")],
+                [true, t("calendar.modeCalendar", "Календарь")],
+              ] as [boolean, string][]).map(([value, label]) => (
+                <button
+                  key={String(value)}
+                  type="button"
+                  onClick={() => setCalendarActive(value)}
+                  className={`px-2.5 h-8 text-xs rounded-[5px] transition ${
+                    calendarActive === value ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           {(canConfigureColumns || canEditMirrorLabels) && (
             <Button
               type="button"
@@ -2475,7 +2527,26 @@ export function EntityRecords({
         </div>
       )}
 
-      {showPivot ? (
+      {showCalendar && calendarConfig ? (
+        <Card className="border-slate-200 shadow-sm">
+          <CardContent className="p-3 sm:p-4">
+            <CalendarView
+              entityId={entityId}
+              config={calendarConfig}
+              baseQuery={calendarBaseQuery}
+              fields={visibleFormFields}
+              statuses={statuses}
+              userNames={userNames}
+              renderCellValue={renderCellValue}
+              onRecordClick={openEdit}
+              mode={calendarMode}
+              onModeChange={setCalendarMode}
+              refreshTick={refreshTick}
+              ml={ml}
+            />
+          </CardContent>
+        </Card>
+      ) : showPivot ? (
         <Card className="border-slate-200 shadow-sm">
           <CardContent className="p-3 sm:p-4">
             <PivotView entityId={entityId} query={pivotQuery} refreshTick={refreshTick} />
