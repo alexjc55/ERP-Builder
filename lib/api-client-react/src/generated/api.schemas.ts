@@ -249,6 +249,7 @@ export interface RoleAdminCaps {
   events: boolean;
   modules: boolean;
   automations: boolean;
+  columnGroups: boolean;
   googleDrive: boolean;
   settings: boolean;
 }
@@ -638,6 +639,44 @@ export interface ModuleUpdate {
   settingsJson?: ModuleUpdateSettingsJson;
 }
 
+export type ColumnGroupDisplayMode = typeof ColumnGroupDisplayMode[keyof typeof ColumnGroupDisplayMode];
+
+
+export const ColumnGroupDisplayMode = {
+  bar: 'bar',
+  fill: 'fill',
+} as const;
+
+export interface ColumnGroup {
+  id: number;
+  nameJson: MultilingualText;
+  color: string;
+  displayMode: ColumnGroupDisplayMode;
+  /** @nullable */
+  textColor: string | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ColumnGroupInput {
+  nameJson: MultilingualText;
+  color: string;
+  displayMode: ColumnGroupDisplayMode;
+  /** @nullable */
+  textColor?: string | null;
+  sortOrder?: number;
+}
+
+export interface ColumnGroupUpdate {
+  nameJson?: MultilingualText;
+  color?: string;
+  displayMode?: ColumnGroupDisplayMode;
+  /** @nullable */
+  textColor?: string | null;
+  sortOrder?: number;
+}
+
 export interface Role {
   id: number;
   nameJson: MultilingualText;
@@ -665,6 +704,12 @@ export interface RoleUpdate {
  * @nullable
  */
 export type PageMirrorFieldLabelsJson = {[key: string]: MultilingualText} | null;
+
+/**
+ * Per-mirror-page column-group override for entity columns, keyed by "e:<fieldKey>" -> column_groups.id (0 = force no group; absent = inherit the field base). Display-only.
+ * @nullable
+ */
+export type PageColumnGroupsJson = {[key: string]: number} | null;
 
 /**
  * entity = use the entity's defaultPivotJson; view = use the referenced pivot view's pivot config (viewId); custom = use the inline `pivot`.
@@ -857,6 +902,11 @@ export interface Page {
      * @nullable
      */
   mirrorColumnOrderJson?: string[] | null;
+  /**
+     * Per-mirror-page column-group override for entity columns, keyed by "e:<fieldKey>" -> column_groups.id (0 = force no group; absent = inherit the field base). Display-only.
+     * @nullable
+     */
+  columnGroupsJson?: PageColumnGroupsJson;
   isDashboard?: boolean;
   /** Pivot page — renders a single admin-authoritative cross-tab (Сводная таблица). Mutually exclusive with a bound entity, mirror and dashboard. */
   isPivot?: boolean;
@@ -881,6 +931,12 @@ export interface Page {
  */
 export type PageInputMirrorFieldLabelsJson = {[key: string]: MultilingualText} | null;
 
+/**
+ * Per-mirror-page column-group override for entity columns, keyed by "e:<fieldKey>" -> column_groups.id (0 = force no group; absent = inherit the field base). Display-only.
+ * @nullable
+ */
+export type PageInputColumnGroupsJson = {[key: string]: number} | null;
+
 export interface PageInput {
   nameJson: MultilingualText;
   descriptionJson?: MultilingualText;
@@ -903,6 +959,11 @@ export interface PageInput {
      * @nullable
      */
   mirrorColumnOrderJson?: string[] | null;
+  /**
+     * Per-mirror-page column-group override for entity columns, keyed by "e:<fieldKey>" -> column_groups.id (0 = force no group; absent = inherit the field base). Display-only.
+     * @nullable
+     */
+  columnGroupsJson?: PageInputColumnGroupsJson;
   isDashboard?: boolean;
   /** Pivot page — renders a single admin-authoritative cross-tab. Mutually exclusive with a bound entity, mirror and dashboard. */
   isPivot?: boolean;
@@ -923,6 +984,12 @@ export interface PageInput {
  * @nullable
  */
 export type PageUpdateMirrorFieldLabelsJson = {[key: string]: MultilingualText} | null;
+
+/**
+ * Per-mirror-page column-group override for entity columns, keyed by "e:<fieldKey>" -> column_groups.id (0 = force no group; absent = inherit the field base). Display-only.
+ * @nullable
+ */
+export type PageUpdateColumnGroupsJson = {[key: string]: number} | null;
 
 export interface PageUpdate {
   nameJson?: MultilingualText;
@@ -946,6 +1013,11 @@ export interface PageUpdate {
      * @nullable
      */
   mirrorColumnOrderJson?: string[] | null;
+  /**
+     * Per-mirror-page column-group override for entity columns, keyed by "e:<fieldKey>" -> column_groups.id (0 = force no group; absent = inherit the field base). Display-only.
+     * @nullable
+     */
+  columnGroupsJson?: PageUpdateColumnGroupsJson;
   isDashboard?: boolean;
   /** Pivot page — renders a single admin-authoritative cross-tab. Mutually exclusive with a bound entity, mirror and dashboard. */
   isPivot?: boolean;
@@ -1846,6 +1918,8 @@ export interface Field {
   totalFillColor?: string | null;
   /** @nullable */
   totalTextColor?: string | null;
+  /** @nullable */
+  columnGroupId?: number | null;
   sortOrder: number;
   isActive: boolean;
   createdAt: string;
@@ -1879,6 +1953,8 @@ export interface FieldInput {
   totalFillColor?: string | null;
   /** @nullable */
   totalTextColor?: string | null;
+  /** @nullable */
+  columnGroupId?: number | null;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -1920,6 +1996,8 @@ export interface FieldUpdate {
   totalFillColor?: string | null;
   /** @nullable */
   totalTextColor?: string | null;
+  /** @nullable */
+  columnGroupId?: number | null;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -2082,6 +2160,8 @@ export interface PageField {
   totalFillColor?: string | null;
   /** @nullable */
   totalTextColor?: string | null;
+  /** @nullable */
+  columnGroupId?: number | null;
   sortOrder: number;
   isActive: boolean;
   createdAt: string;
@@ -2110,6 +2190,8 @@ export interface PageFieldInput {
   totalFillColor?: string | null;
   /** @nullable */
   totalTextColor?: string | null;
+  /** @nullable */
+  columnGroupId?: number | null;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -2136,6 +2218,8 @@ export interface PageFieldUpdate {
   totalFillColor?: string | null;
   /** @nullable */
   totalTextColor?: string | null;
+  /** @nullable */
+  columnGroupId?: number | null;
   sortOrder?: number;
   isActive?: boolean;
 }

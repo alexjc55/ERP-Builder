@@ -15,6 +15,7 @@ export interface RoleAdminCaps {
   events: boolean;
   modules: boolean;
   automations: boolean;
+  columnGroups: boolean;
   googleDrive: boolean;
   settings: boolean;
 }

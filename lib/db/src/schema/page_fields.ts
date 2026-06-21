@@ -37,6 +37,10 @@ export const pageFieldsTable = pgTable(
     showColumnTotal: boolean("show_column_total").notNull().default(false),
     totalFillColor: text("total_fill_color"),
     totalTextColor: text("total_text_color"),
+    // Base column-group membership (points at column_groups.id). A page-local
+    // field only ever appears on its own page, so this is also its effective
+    // group there. Plain int (no FK): a removed group stops rendering.
+    columnGroupId: integer("column_group_id"),
     sortOrder: integer("sort_order").notNull().default(0),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

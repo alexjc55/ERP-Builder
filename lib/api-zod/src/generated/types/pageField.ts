@@ -36,6 +36,8 @@ export interface PageField {
   totalFillColor?: string | null;
   /** @nullable */
   totalTextColor?: string | null;
+  /** @nullable */
+  columnGroupId?: number | null;
   sortOrder: number;
   isActive: boolean;
   createdAt: Date;

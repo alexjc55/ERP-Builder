@@ -148,6 +148,7 @@ export const LoginResponse = zod.object({
   "events": zod.boolean(),
   "modules": zod.boolean(),
   "automations": zod.boolean(),
+  "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean()
 }),
@@ -213,6 +214,7 @@ export const GetMeResponse = zod.object({
   "events": zod.boolean(),
   "modules": zod.boolean(),
   "automations": zod.boolean(),
+  "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean()
 }),
@@ -276,6 +278,7 @@ export const UpdateMeResponse = zod.object({
   "events": zod.boolean(),
   "modules": zod.boolean(),
   "automations": zod.boolean(),
+  "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean()
 }),
@@ -337,6 +340,7 @@ export const ImpersonateResponse = zod.object({
   "events": zod.boolean(),
   "modules": zod.boolean(),
   "automations": zod.boolean(),
+  "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean()
 }),
@@ -395,6 +399,7 @@ export const StopImpersonationResponse = zod.object({
   "events": zod.boolean(),
   "modules": zod.boolean(),
   "automations": zod.boolean(),
+  "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean()
 }),
@@ -457,6 +462,7 @@ export const RedeemGuestLinkResponse = zod.object({
   "events": zod.boolean(),
   "modules": zod.boolean(),
   "automations": zod.boolean(),
+  "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean()
 }),
@@ -861,6 +867,7 @@ export const ListRolesResponseItem = zod.object({
   "events": zod.boolean(),
   "modules": zod.boolean(),
   "automations": zod.boolean(),
+  "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean()
 }),
@@ -910,6 +917,7 @@ export const CreateRoleBody = zod.object({
   "events": zod.boolean(),
   "modules": zod.boolean(),
   "automations": zod.boolean(),
+  "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean()
 }),
@@ -960,6 +968,7 @@ export const GetRoleResponse = zod.object({
   "events": zod.boolean(),
   "modules": zod.boolean(),
   "automations": zod.boolean(),
+  "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean()
 }),
@@ -1012,6 +1021,7 @@ export const UpdateRoleBody = zod.object({
   "events": zod.boolean(),
   "modules": zod.boolean(),
   "automations": zod.boolean(),
+  "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean()
 }),
@@ -1054,6 +1064,7 @@ export const UpdateRoleResponse = zod.object({
   "events": zod.boolean(),
   "modules": zod.boolean(),
   "automations": zod.boolean(),
+  "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean()
 }),
@@ -1118,6 +1129,7 @@ export const ListPagesResponseItem = zod.object({
   "he": zod.string().optional()
 })).nullish().describe('Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.'),
   "mirrorColumnOrderJson": zod.array(zod.string()).nullish().describe('Per-mirror-page unified column order across entity and page-local columns. Ordered tokens: \"e:<fieldKey>\" (source-entity field) or \"p:<fieldKey>\" (page-local field). Null\/empty = default order. Display-only.'),
+  "columnGroupsJson": zod.record(zod.string(), zod.number()).nullish().describe('Per-mirror-page column-group override for entity columns, keyed by \"e:<fieldKey>\" -> column_groups.id (0 = force no group; absent = inherit the field base). Display-only.'),
   "isDashboard": zod.boolean().optional(),
   "isPivot": zod.boolean().optional().describe('Pivot page — renders a single admin-authoritative cross-tab (Сводная таблица). Mutually exclusive with a bound entity, mirror and dashboard.'),
   "pivotEntityId": zod.number().nullish().describe('Entity this pivot page reports on (required when isPivot).'),
@@ -1220,6 +1232,7 @@ export const CreatePageBody = zod.object({
   "he": zod.string().optional()
 })).nullish().describe('Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.'),
   "mirrorColumnOrderJson": zod.array(zod.string()).nullish().describe('Per-mirror-page unified column order across entity and page-local columns. Ordered tokens: \"e:<fieldKey>\" or \"p:<fieldKey>\". Null\/empty = default order. Display-only.'),
+  "columnGroupsJson": zod.record(zod.string(), zod.number()).nullish().describe('Per-mirror-page column-group override for entity columns, keyed by \"e:<fieldKey>\" -> column_groups.id (0 = force no group; absent = inherit the field base). Display-only.'),
   "isDashboard": zod.boolean().optional(),
   "isPivot": zod.boolean().default(createPageBodyIsPivotDefault).describe('Pivot page — renders a single admin-authoritative cross-tab. Mutually exclusive with a bound entity, mirror and dashboard.'),
   "pivotEntityId": zod.number().nullish().describe('Entity this pivot page reports on (required when isPivot).'),
@@ -1320,6 +1333,7 @@ export const GetPageResponse = zod.object({
   "he": zod.string().optional()
 })).nullish().describe('Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.'),
   "mirrorColumnOrderJson": zod.array(zod.string()).nullish().describe('Per-mirror-page unified column order across entity and page-local columns. Ordered tokens: \"e:<fieldKey>\" (source-entity field) or \"p:<fieldKey>\" (page-local field). Null\/empty = default order. Display-only.'),
+  "columnGroupsJson": zod.record(zod.string(), zod.number()).nullish().describe('Per-mirror-page column-group override for entity columns, keyed by \"e:<fieldKey>\" -> column_groups.id (0 = force no group; absent = inherit the field base). Display-only.'),
   "isDashboard": zod.boolean().optional(),
   "isPivot": zod.boolean().optional().describe('Pivot page — renders a single admin-authoritative cross-tab (Сводная таблица). Mutually exclusive with a bound entity, mirror and dashboard.'),
   "pivotEntityId": zod.number().nullish().describe('Entity this pivot page reports on (required when isPivot).'),
@@ -1422,6 +1436,7 @@ export const UpdatePageBody = zod.object({
   "he": zod.string().optional()
 })).nullish().describe('Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.'),
   "mirrorColumnOrderJson": zod.array(zod.string()).nullish().describe('Per-mirror-page unified column order across entity and page-local columns. Ordered tokens: \"e:<fieldKey>\" or \"p:<fieldKey>\". Null\/empty = default order. Display-only.'),
+  "columnGroupsJson": zod.record(zod.string(), zod.number()).nullish().describe('Per-mirror-page column-group override for entity columns, keyed by \"e:<fieldKey>\" -> column_groups.id (0 = force no group; absent = inherit the field base). Display-only.'),
   "isDashboard": zod.boolean().optional(),
   "isPivot": zod.boolean().optional().describe('Pivot page — renders a single admin-authoritative cross-tab. Mutually exclusive with a bound entity, mirror and dashboard.'),
   "pivotEntityId": zod.number().nullish().describe('Entity this pivot page reports on (required when isPivot).'),
@@ -1514,6 +1529,7 @@ export const UpdatePageResponse = zod.object({
   "he": zod.string().optional()
 })).nullish().describe('Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.'),
   "mirrorColumnOrderJson": zod.array(zod.string()).nullish().describe('Per-mirror-page unified column order across entity and page-local columns. Ordered tokens: \"e:<fieldKey>\" (source-entity field) or \"p:<fieldKey>\" (page-local field). Null\/empty = default order. Display-only.'),
+  "columnGroupsJson": zod.record(zod.string(), zod.number()).nullish().describe('Per-mirror-page column-group override for entity columns, keyed by \"e:<fieldKey>\" -> column_groups.id (0 = force no group; absent = inherit the field base). Display-only.'),
   "isDashboard": zod.boolean().optional(),
   "isPivot": zod.boolean().optional().describe('Pivot page — renders a single admin-authoritative cross-tab (Сводная таблица). Mutually exclusive with a bound entity, mirror and dashboard.'),
   "pivotEntityId": zod.number().nullish().describe('Entity this pivot page reports on (required when isPivot).'),
@@ -2533,6 +2549,7 @@ export const ListEntityFieldsResponseItem = zod.object({
   "showColumnTotal": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
+  "columnGroupId": zod.number().nullish(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -2616,6 +2633,7 @@ export const CreateEntityFieldBody = zod.object({
   "showColumnTotal": zod.boolean().default(createEntityFieldBodyShowColumnTotalDefault),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
+  "columnGroupId": zod.number().nullish(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createEntityFieldBodyIsActiveDefault)
 })
@@ -2690,6 +2708,7 @@ export const GetFieldResponse = zod.object({
   "showColumnTotal": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
+  "columnGroupId": zod.number().nullish(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -2764,6 +2783,7 @@ export const UpdateFieldBody = zod.object({
   "showColumnTotal": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
+  "columnGroupId": zod.number().nullish(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
@@ -2830,6 +2850,7 @@ export const UpdateFieldResponse = zod.object({
   "showColumnTotal": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
+  "columnGroupId": zod.number().nullish(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -2922,6 +2943,7 @@ export const ListPageFieldsResponseItem = zod.object({
   "showColumnTotal": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
+  "columnGroupId": zod.number().nullish(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -2989,6 +3011,7 @@ export const CreatePageFieldBody = zod.object({
   "showColumnTotal": zod.boolean().default(createPageFieldBodyShowColumnTotalDefault),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
+  "columnGroupId": zod.number().nullish(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createPageFieldBodyIsActiveDefault)
 })
@@ -3047,6 +3070,7 @@ export const UpdatePageFieldBody = zod.object({
   "showColumnTotal": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
+  "columnGroupId": zod.number().nullish(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
@@ -3099,6 +3123,7 @@ export const UpdatePageFieldResponse = zod.object({
   "showColumnTotal": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
+  "columnGroupId": zod.number().nullish(),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -4381,6 +4406,113 @@ export const DeleteModuleParams = zod.object({
 })
 
 export const DeleteModuleResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
+ * @summary List all column groups
+ */
+export const ListColumnGroupsResponseItem = zod.object({
+  "id": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string(),
+  "displayMode": zod.enum(['bar', 'fill']),
+  "textColor": zod.string().nullable(),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListColumnGroupsResponse = zod.array(ListColumnGroupsResponseItem)
+
+
+/**
+ * @summary Create a column group
+ */
+export const CreateColumnGroupBody = zod.object({
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string(),
+  "displayMode": zod.enum(['bar', 'fill']),
+  "textColor": zod.string().nullish(),
+  "sortOrder": zod.number().optional()
+})
+
+
+/**
+ * @summary Get column group by ID
+ */
+export const GetColumnGroupParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetColumnGroupResponse = zod.object({
+  "id": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string(),
+  "displayMode": zod.enum(['bar', 'fill']),
+  "textColor": zod.string().nullable(),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update column group
+ */
+export const UpdateColumnGroupParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateColumnGroupBody = zod.object({
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "color": zod.string().optional(),
+  "displayMode": zod.enum(['bar', 'fill']).optional(),
+  "textColor": zod.string().nullish(),
+  "sortOrder": zod.number().optional()
+})
+
+export const UpdateColumnGroupResponse = zod.object({
+  "id": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string(),
+  "displayMode": zod.enum(['bar', 'fill']),
+  "textColor": zod.string().nullable(),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete column group (soft from columns' perspective)
+ */
+export const DeleteColumnGroupParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteColumnGroupResponse = zod.object({
   "success": zod.boolean(),
   "message": zod.string().optional()
 })

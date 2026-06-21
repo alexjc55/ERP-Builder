@@ -127,6 +127,11 @@ export const entityFieldsTable = pgTable(
     showColumnTotal: boolean("show_column_total").notNull().default(false),
     totalFillColor: text("total_fill_color"),
     totalTextColor: text("total_text_color"),
+    // Base column-group membership (points at column_groups.id). Inherited
+    // everywhere the field is shown, including mirror pages, where it may be
+    // overridden via pages.columnGroupsJson. Plain int (no FK): a removed group
+    // simply stops rendering (soft delete, no cascade).
+    columnGroupId: integer("column_group_id"),
     sortOrder: integer("sort_order").notNull().default(0),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MultilingualText } from './multilingualText';
+import type { PageColumnGroupsJson } from './pageColumnGroupsJson';
 import type { PageMirrorFieldLabelsJson } from './pageMirrorFieldLabelsJson';
 import type { PivotPageConfig } from './pivotPageConfig';
 
@@ -32,6 +33,11 @@ export interface Page {
      * @nullable
      */
   mirrorColumnOrderJson?: string[] | null;
+  /**
+     * Per-mirror-page column-group override for entity columns, keyed by "e:<fieldKey>" -> column_groups.id (0 = force no group; absent = inherit the field base). Display-only.
+     * @nullable
+     */
+  columnGroupsJson?: PageColumnGroupsJson;
   isDashboard?: boolean;
   /** Pivot page — renders a single admin-authoritative cross-tab (Сводная таблица). Mutually exclusive with a bound entity, mirror and dashboard. */
   isPivot?: boolean;

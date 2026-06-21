@@ -561,6 +561,7 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
   if (body.showColumnTotal != null) updateData.showColumnTotal = body.showColumnTotal;
   if ("totalFillColor" in body) updateData.totalFillColor = body.totalFillColor ?? null;
   if ("totalTextColor" in body) updateData.totalTextColor = body.totalTextColor ?? null;
+  if ("columnGroupId" in body) updateData.columnGroupId = body.columnGroupId ?? null;
   if (Object.keys(updateData).length === 0) {
     res.status(400).json({ error: "No fields to update" });
     return;

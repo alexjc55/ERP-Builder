@@ -53,6 +53,8 @@ export interface RoleAdminCaps {
   modules: boolean;
   /** Manage per-entity automations (Automations Engine). */
   automations: boolean;
+  /** Manage the global column-groups registry (Column Groups). */
+  columnGroups: boolean;
   /** Manage the Google Drive connection used by file fields. */
   googleDrive: boolean;
   /** Manage platform branding / general settings (app name, subtitle, logo). */
@@ -91,7 +93,7 @@ export interface RolePermissions {
 /** Default permissions for new/existing roles: no access until granted. */
 export const NO_ACCESS_PERMS: RolePermissions = {
   superAdmin: false,
-  admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, automations: false, googleDrive: false, settings: false },
+  admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, automations: false, columnGroups: false, googleDrive: false, settings: false },
   pageIds: [],
   records: {},
 };

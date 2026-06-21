@@ -32,6 +32,11 @@ import {
   getListPageRecordValuesQueryKey,
   useSetPageRecordValues,
   useReorderPageFields,
+  useListColumnGroups,
+  useUpdateField,
+  useUpdatePageField,
+  getListEntityFieldsQueryKey,
+  type ColumnGroup,
   useGetPageRelatedValues,
   useGetPageRelatedCandidates,
   useSetPageRelatedLink,
@@ -762,6 +767,7 @@ export function EntityRecords({
   isMirror = false,
   fieldLabelOverrides,
   mirrorColumnOrder,
+  columnGroups,
 }: {
   entityId: number;
   /**
@@ -807,6 +813,17 @@ export function EntityRecords({
    * Display-only — never a security boundary.
    */
   mirrorColumnOrder?: string[];
+  /**
+   * Per-page column-group OVERRIDE map: token (`e:<fieldKey>` / `p:<fieldKey>`)
+   * → groupId. A value of `0` forces "no group" (suppresses the inherited base
+   * group); an absent token inherits the column's base group (which lives on the
+   * field — `entity_fields.columnGroupId` / `page_fields.columnGroupId`). Sourced
+   * from `page.columnGroupsJson` and supplied on EVERY page (mirror and normal).
+   * On a normal page this map is normally empty (assignments are written to the
+   * field base); on a mirror page it carries per-column overrides so the source
+   * entity's base group is never mutated from a mirror. Display-only.
+   */
+  columnGroups?: Record<string, number>;
 }) {
   const ml = useML();
   const t = useT();
@@ -900,6 +917,99 @@ export function EntityRecords({
       data: { mirrorColumnOrderJson: tokens.length > 0 ? tokens : null },
     });
   };
+
+  // ── Column groups (metadata-driven header decoration) ──────────────────────
+  // Global, entity-independent group definitions (name + color + display mode).
+  // A column's EFFECTIVE group is resolved per token: the page's override map
+  // (`columnGroups` prop, from page.columnGroupsJson) wins when present (0 ⇒
+  // force "no group"), otherwise the base group on the field is inherited. The
+  // base lives on the field so it shows everywhere (incl. mirror) without per-
+  // page config; the override lets a mirror page re-skin a column without
+  // mutating the shared source-entity field.
+  const { data: columnGroupDefs = [] } = useListColumnGroups();
+  const columnGroupById = useMemo(() => {
+    const m = new Map<number, ColumnGroup>();
+    for (const g of columnGroupDefs) m.set(g.id, g);
+    return m;
+  }, [columnGroupDefs]);
+  const resolveColumnGroup = (token: string, baseGroupId: number | null | undefined): ColumnGroup | null => {
+    const override = columnGroups?.[token];
+    let effectiveId: number | null;
+    if (override !== undefined) {
+      effectiveId = override === 0 ? null : override;
+    } else {
+      effectiveId = baseGroupId ?? null;
+    }
+    if (effectiveId == null) return null;
+    return columnGroupById.get(effectiveId) ?? null;
+  };
+  // Setup-mode group assignment. On a NORMAL page the assignment is written to
+  // the column's field base (entity field → updateField, page-local field →
+  // updatePageField). On a MIRROR page it is written as a per-column override in
+  // page.columnGroupsJson (0 ⇒ force no group) so the shared source field stays
+  // untouched. A `null` target clears: base ⇒ columnGroupId null; override ⇒
+  // remove the token entirely (fall back to inheriting the base).
+  const updateFieldGroupMutation = useUpdateField({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListEntityFieldsQueryKey(entityId) });
+        toast({ title: t("colGroups.assigned", "Группа колонки обновлена") });
+      },
+      onError: () => toast({ title: t("colGroups.assignError", "Не удалось обновить группу колонки"), variant: "destructive" }),
+    },
+  });
+  const updatePageFieldGroupMutation = useUpdatePageField({
+    mutation: {
+      onSuccess: () => {
+        if (pageId != null) queryClient.invalidateQueries({ queryKey: getListPageFieldsQueryKey(pageId) });
+        toast({ title: t("colGroups.assigned", "Группа колонки обновлена") });
+      },
+      onError: () => toast({ title: t("colGroups.assignError", "Не удалось обновить группу колонки"), variant: "destructive" }),
+    },
+  });
+  const updatePageGroupsMutation = useUpdatePage({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListPagesQueryKey() });
+        toast({ title: t("colGroups.assigned", "Группа колонки обновлена") });
+      },
+      onError: () => toast({ title: t("colGroups.assignError", "Не удалось обновить группу колонки"), variant: "destructive" }),
+    },
+  });
+  // target: a groupId, `null` (= "no group": clears the base on a normal page,
+  // forces 0 on a mirror), or `"inherit"` (mirror only — drops the override so
+  // the field's base group shows through again).
+  const assignColumnGroup = (col: UnifiedCol, target: number | null | "inherit") => {
+    if (isMirror) {
+      // Mirror page → per-column override in page.columnGroupsJson.
+      if (pageId == null) return;
+      const next: Record<string, number> = { ...(columnGroups ?? {}) };
+      if (target === "inherit") {
+        delete next[col.token];
+      } else if (target === null) {
+        // Force "no group" so the inherited base is hidden on this page only.
+        next[col.token] = 0;
+      } else {
+        next[col.token] = target;
+      }
+      updatePageGroupsMutation.mutate({
+        id: pageId,
+        data: { columnGroupsJson: Object.keys(next).length > 0 ? next : null },
+      });
+    } else if (col.kind === "entity") {
+      updateFieldGroupMutation.mutate({
+        id: col.field.id,
+        data: { columnGroupId: target === "inherit" ? null : target },
+      });
+    } else {
+      updatePageFieldGroupMutation.mutate({
+        id: col.field.id,
+        data: { columnGroupId: target === "inherit" ? null : target },
+      });
+    }
+  };
+  const canAssignGroup = (col: UnifiedCol): boolean =>
+    isMirror ? canAdmin("pages") : col.kind === "entity" ? canConfigureColumns : canAdmin("pages");
 
   const { data: rawAllFields = [], isLoading: fieldsLoading } = useListEntityFields(entityId);
   // On a mirror page, apply display-only per-field label overrides at the source
@@ -2760,10 +2870,21 @@ export function EntityRecords({
                           </Button>
                         </>
                       );
+                      // Effective column group (base on the field, overridable per
+                      // page). Visuals show in NORMAL view for everyone; setup mode
+                      // shows the group picker instead.
+                      const colGroup = resolveColumnGroup(
+                        col.token,
+                        (fld as { columnGroupId?: number | null }).columnGroupId,
+                      );
+                      const groupName = colGroup ? ml(colGroup.nameJson) : "";
+                      const fillActive = !setupMode && colGroup?.displayMode === "fill";
+                      const barActive = !setupMode && colGroup?.displayMode === "bar";
                       return (
                       <th
                         key={pinKey}
                         ref={(el) => { pinHeaderRefs.current[pinKey] = el; }}
+                        title={!setupMode && groupName ? groupName : undefined}
                         className={cn(
                           "relative align-top text-center px-4 py-3 font-medium text-slate-600 break-words",
                           // Setup-mode ONLY: tint page-local headers on a mirror page so
@@ -2772,10 +2893,28 @@ export function EntityRecords({
                           setupMode && isMirror && isPageCol && "bg-violet-50",
                         )}
                         style={{
-                          ...pinStyle(pinKey, setupMode && isMirror && isPageCol ? "#f5f3ff" : "#f8fafc", true),
+                          ...pinStyle(
+                            pinKey,
+                            fillActive
+                              ? (colGroup?.color ?? "#f8fafc")
+                              : setupMode && isMirror && isPageCol
+                                ? "#f5f3ff"
+                                : "#f8fafc",
+                            true,
+                          ),
                           ...colWidthStyle(pinKey),
+                          ...(fillActive
+                            ? { backgroundColor: colGroup?.color, color: colGroup?.textColor ?? "#ffffff" }
+                            : undefined),
                         }}
                       >
+                        {barActive && colGroup && (
+                          <div
+                            aria-hidden
+                            className="absolute top-0 left-0 right-0 h-[3px] rounded-t-sm"
+                            style={{ backgroundColor: colGroup.color }}
+                          />
+                        )}
                         {isPageCol ? (
                           setupMode ? (
                             <div className="inline-flex items-center gap-1">
@@ -2874,6 +3013,53 @@ export function EntityRecords({
                           </div>
                         ) : (
                           ml(fld.nameJson)
+                        )}
+                        {setupMode && canAssignGroup(col) && (
+                          <div className="mt-1.5 flex justify-center">
+                            <Select
+                              value={
+                                isMirror
+                                  ? columnGroups?.[col.token] === undefined
+                                    ? "__inherit__"
+                                    : columnGroups[col.token] === 0
+                                      ? "__none__"
+                                      : String(columnGroups[col.token])
+                                  : colGroup
+                                    ? String(colGroup.id)
+                                    : "__none__"
+                              }
+                              onValueChange={(v) => {
+                                if (v === "__inherit__") assignColumnGroup(col, "inherit");
+                                else if (v === "__none__") assignColumnGroup(col, null);
+                                else assignColumnGroup(col, Number(v));
+                              }}
+                            >
+                              <SelectTrigger className="h-7 w-[150px] text-xs font-normal">
+                                <SelectValue placeholder={t("colGroups.pick", "Группа колонки")} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {isMirror && (
+                                  <SelectItem value="__inherit__">
+                                    {t("colGroups.inherit", "Наследовать")}
+                                  </SelectItem>
+                                )}
+                                <SelectItem value="__none__">
+                                  {t("colGroups.noGroup", "Без группы")}
+                                </SelectItem>
+                                {columnGroupDefs.map((g) => (
+                                  <SelectItem key={g.id} value={String(g.id)}>
+                                    <span className="inline-flex items-center gap-2">
+                                      <span
+                                        className="inline-block w-3 h-3 rounded-sm shrink-0"
+                                        style={{ backgroundColor: g.color }}
+                                      />
+                                      {ml(g.nameJson) || `#${g.id}`}
+                                    </span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         )}
                         <ResizeHandle colKey={pinKey} />
                       </th>

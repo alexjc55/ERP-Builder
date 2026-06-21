@@ -2221,6 +2221,103 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  /column-groups:
+    get:
+      operationId: listColumnGroups
+      tags: [columnGroups]
+      summary: List all column groups
+      responses:
+        "200":
+          description: List of column groups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ColumnGroup"
+    post:
+      operationId: createColumnGroup
+      tags: [columnGroups]
+      summary: Create a column group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ColumnGroupInput"
+      responses:
+        "201":
+          description: Column group created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ColumnGroup"
+
+  /column-groups/{id}:
+    get:
+      operationId: getColumnGroup
+      tags: [columnGroups]
+      summary: Get column group by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Column group found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ColumnGroup"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateColumnGroup
+      tags: [columnGroups]
+      summary: Update column group
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ColumnGroupUpdate"
+      responses:
+        "200":
+          description: Column group updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ColumnGroup"
+    delete:
+      operationId: deleteColumnGroup
+      tags: [columnGroups]
+      summary: Delete column group (soft from columns' perspective)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
   /entities/{entityId}/records/query:
     post:
       operationId: queryEntityRecords
@@ -3766,6 +3863,63 @@ components:
           type: object
           additionalProperties: true
 
+    # COLUMN GROUPS
+    ColumnGroupDisplayMode:
+      type: string
+      enum: [bar, fill]
+
+    ColumnGroup:
+      type: object
+      required: [id, nameJson, color, displayMode, textColor, sortOrder, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        color:
+          type: string
+        displayMode:
+          $ref: "#/components/schemas/ColumnGroupDisplayMode"
+        textColor:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ColumnGroupInput:
+      type: object
+      required: [nameJson, color, displayMode]
+      properties:
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        color:
+          type: string
+        displayMode:
+          $ref: "#/components/schemas/ColumnGroupDisplayMode"
+        textColor:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer
+
+    ColumnGroupUpdate:
+      type: object
+      properties:
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        color:
+          type: string
+        displayMode:
+          $ref: "#/components/schemas/ColumnGroupDisplayMode"
+        textColor:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer
+
     # ROLES
     RecordScope:
       type: string
@@ -3810,7 +3964,7 @@ components:
 
     RoleAdminCaps:
       type: object
-      required: [pages, entities, roles, users, translations, events, modules, automations, googleDrive, settings]
+      required: [pages, entities, roles, users, translations, events, modules, automations, columnGroups, googleDrive, settings]
       properties:
         pages:
           type: boolean
@@ -3827,6 +3981,8 @@ components:
         modules:
           type: boolean
         automations:
+          type: boolean
+        columnGroups:
           type: boolean
         googleDrive:
           type: boolean
@@ -3925,6 +4081,11 @@ components:
           items:
             type: string
           description: 'Per-mirror-page unified column order across entity and page-local columns. Ordered tokens: "e:<fieldKey>" (source-entity field) or "p:<fieldKey>" (page-local field). Null/empty = default order. Display-only.'
+        columnGroupsJson:
+          type: ["object", "null"]
+          additionalProperties:
+            type: integer
+          description: 'Per-mirror-page column-group override for entity columns, keyed by "e:<fieldKey>" -> column_groups.id (0 = force no group; absent = inherit the field base). Display-only.'
         isDashboard:
           type: boolean
         isPivot:
@@ -3985,6 +4146,11 @@ components:
           items:
             type: string
           description: 'Per-mirror-page unified column order across entity and page-local columns. Ordered tokens: "e:<fieldKey>" or "p:<fieldKey>". Null/empty = default order. Display-only.'
+        columnGroupsJson:
+          type: ["object", "null"]
+          additionalProperties:
+            type: integer
+          description: 'Per-mirror-page column-group override for entity columns, keyed by "e:<fieldKey>" -> column_groups.id (0 = force no group; absent = inherit the field base). Display-only.'
         isDashboard:
           type: boolean
         isPivot:
@@ -4037,6 +4203,11 @@ components:
           items:
             type: string
           description: 'Per-mirror-page unified column order across entity and page-local columns. Ordered tokens: "e:<fieldKey>" or "p:<fieldKey>". Null/empty = default order. Display-only.'
+        columnGroupsJson:
+          type: ["object", "null"]
+          additionalProperties:
+            type: integer
+          description: 'Per-mirror-page column-group override for entity columns, keyed by "e:<fieldKey>" -> column_groups.id (0 = force no group; absent = inherit the field base). Display-only.'
         isDashboard:
           type: boolean
         isPivot:
@@ -4848,6 +5019,8 @@ components:
           type: ["string", "null"]
         totalTextColor:
           type: ["string", "null"]
+        columnGroupId:
+          type: ["integer", "null"]
         sortOrder:
           type: integer
         isActive:
@@ -4921,6 +5094,8 @@ components:
           type: ["string", "null"]
         totalTextColor:
           type: ["string", "null"]
+        columnGroupId:
+          type: ["integer", "null"]
         sortOrder:
           type: integer
         isActive:
@@ -4997,6 +5172,8 @@ components:
           type: ["string", "null"]
         totalTextColor:
           type: ["string", "null"]
+        columnGroupId:
+          type: ["integer", "null"]
         sortOrder:
           type: integer
         isActive:
@@ -5312,6 +5489,8 @@ components:
           type: ["string", "null"]
         totalTextColor:
           type: ["string", "null"]
+        columnGroupId:
+          type: ["integer", "null"]
         sortOrder:
           type: integer
         isActive:
@@ -5373,6 +5552,8 @@ components:
           type: ["string", "null"]
         totalTextColor:
           type: ["string", "null"]
+        columnGroupId:
+          type: ["integer", "null"]
         sortOrder:
           type: integer
         isActive:
@@ -5422,6 +5603,8 @@ components:
           type: ["string", "null"]
         totalTextColor:
           type: ["string", "null"]
+        columnGroupId:
+          type: ["integer", "null"]
         sortOrder:
           type: integer
         isActive:

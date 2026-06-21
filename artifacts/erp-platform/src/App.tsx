@@ -23,6 +23,7 @@ import EntityRecordsPage from "@/pages/admin/entity-records";
 import TranslationsPage from "@/pages/admin/translations";
 import EventsPage from "@/pages/admin/events";
 import ModulesPage from "@/pages/admin/modules";
+import ColumnGroupsPage from "@/pages/admin/column-groups";
 import GoogleDrivePage from "@/pages/admin/google-drive";
 import FileTrashPage from "@/pages/admin/file-trash";
 import DynamicPage from "@/pages/dynamic";
@@ -176,6 +177,12 @@ function Router() {
       <Route path="/admin/modules">
         <ProtectedRoute adminCap="modules">
           <ModulesPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/column-groups">
+        <ProtectedRoute adminCap="columnGroups">
+          <ColumnGroupsPage />
         </ProtectedRoute>
       </Route>
 

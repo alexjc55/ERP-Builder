@@ -34,6 +34,13 @@ export const pagesTable = pgTable("pages", {
   // then page columns). Display-only — never a security boundary. Columns not
   // listed fall back to the default order, appended after the listed ones.
   mirrorColumnOrderJson: jsonb("mirror_column_order_json").$type<string[]>(),
+  // Per-page column-group OVERRIDE map for entity (source) columns, keyed by the
+  // unified token "e:<fieldKey>" → column_groups.id. Only meaningful on a mirror
+  // page: it lets the mirror assign a DIFFERENT group than the source field's
+  // base `columnGroupId` (inheritance). A key present overrides; value 0 means
+  // "force no group"; absent means "inherit the field's base group". Page-local
+  // columns are never stored here (their base on page_fields is authoritative).
+  columnGroupsJson: jsonb("column_groups_json").$type<Record<string, number>>(),
   // Dashboard page: when true, this page renders admin-defined dashboard widgets
   // instead of entity records. Mutually exclusive with a bound entity and with
   // mirrorEntityId (enforced in the API and the pages editor). The renderer reads

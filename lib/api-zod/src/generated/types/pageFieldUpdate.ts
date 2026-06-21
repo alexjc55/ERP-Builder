@@ -34,6 +34,8 @@ export interface PageFieldUpdate {
   totalFillColor?: string | null;
   /** @nullable */
   totalTextColor?: string | null;
+  /** @nullable */
+  columnGroupId?: number | null;
   sortOrder?: number;
   isActive?: boolean;
 }

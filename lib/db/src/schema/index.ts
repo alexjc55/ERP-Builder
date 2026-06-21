@@ -11,6 +11,7 @@ export * from "./login_history";
 export * from "./audit_log";
 export * from "./system_events";
 export * from "./modules";
+export * from "./column_groups";
 export * from "./entities";
 export * from "./fields";
 export * from "./statuses";

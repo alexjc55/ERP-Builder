@@ -30,6 +30,9 @@ import type {
   AutomationUpdate,
   AutomationsReorderInput,
   ChangePasswordInput,
+  ColumnGroup,
+  ColumnGroupInput,
+  ColumnGroupUpdate,
   CreateDriveFolderBody,
   DashboardStats,
   DashboardWidget,
@@ -7409,6 +7412,373 @@ export const useDeleteModule = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteModuleMutationOptions(options));
+    }
+
+export const getListColumnGroupsUrl = () => {
+
+
+
+
+  return `/api/column-groups`
+}
+
+/**
+ * @summary List all column groups
+ */
+export const listColumnGroups = async ( options?: RequestInit): Promise<ColumnGroup[]> => {
+
+  return customFetch<ColumnGroup[]>(getListColumnGroupsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListColumnGroupsQueryKey = () => {
+    return [
+    `/api/column-groups`
+    ] as const;
+    }
+
+
+export const getListColumnGroupsQueryOptions = <TData = Awaited<ReturnType<typeof listColumnGroups>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listColumnGroups>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListColumnGroupsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listColumnGroups>>> = ({ signal }) => listColumnGroups({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listColumnGroups>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListColumnGroupsQueryResult = NonNullable<Awaited<ReturnType<typeof listColumnGroups>>>
+export type ListColumnGroupsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all column groups
+ */
+
+export function useListColumnGroups<TData = Awaited<ReturnType<typeof listColumnGroups>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listColumnGroups>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListColumnGroupsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateColumnGroupUrl = () => {
+
+
+
+
+  return `/api/column-groups`
+}
+
+/**
+ * @summary Create a column group
+ */
+export const createColumnGroup = async (columnGroupInput: ColumnGroupInput, options?: RequestInit): Promise<ColumnGroup> => {
+
+  return customFetch<ColumnGroup>(getCreateColumnGroupUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      columnGroupInput,)
+  }
+);}
+
+
+
+
+export const getCreateColumnGroupMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createColumnGroup>>, TError,{data: BodyType<ColumnGroupInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createColumnGroup>>, TError,{data: BodyType<ColumnGroupInput>}, TContext> => {
+
+const mutationKey = ['createColumnGroup'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createColumnGroup>>, {data: BodyType<ColumnGroupInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createColumnGroup(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateColumnGroupMutationResult = NonNullable<Awaited<ReturnType<typeof createColumnGroup>>>
+    export type CreateColumnGroupMutationBody = BodyType<ColumnGroupInput>
+    export type CreateColumnGroupMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a column group
+ */
+export const useCreateColumnGroup = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createColumnGroup>>, TError,{data: BodyType<ColumnGroupInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createColumnGroup>>,
+        TError,
+        {data: BodyType<ColumnGroupInput>},
+        TContext
+      > => {
+      return useMutation(getCreateColumnGroupMutationOptions(options));
+    }
+
+export const getGetColumnGroupUrl = (id: number,) => {
+
+
+
+
+  return `/api/column-groups/${id}`
+}
+
+/**
+ * @summary Get column group by ID
+ */
+export const getColumnGroup = async (id: number, options?: RequestInit): Promise<ColumnGroup> => {
+
+  return customFetch<ColumnGroup>(getGetColumnGroupUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetColumnGroupQueryKey = (id: number,) => {
+    return [
+    `/api/column-groups/${id}`
+    ] as const;
+    }
+
+
+export const getGetColumnGroupQueryOptions = <TData = Awaited<ReturnType<typeof getColumnGroup>>, TError = ErrorType<ErrorResponse>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getColumnGroup>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetColumnGroupQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getColumnGroup>>> = ({ signal }) => getColumnGroup(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getColumnGroup>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetColumnGroupQueryResult = NonNullable<Awaited<ReturnType<typeof getColumnGroup>>>
+export type GetColumnGroupQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get column group by ID
+ */
+
+export function useGetColumnGroup<TData = Awaited<ReturnType<typeof getColumnGroup>>, TError = ErrorType<ErrorResponse>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getColumnGroup>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetColumnGroupQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateColumnGroupUrl = (id: number,) => {
+
+
+
+
+  return `/api/column-groups/${id}`
+}
+
+/**
+ * @summary Update column group
+ */
+export const updateColumnGroup = async (id: number,
+    columnGroupUpdate: ColumnGroupUpdate, options?: RequestInit): Promise<ColumnGroup> => {
+
+  return customFetch<ColumnGroup>(getUpdateColumnGroupUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      columnGroupUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateColumnGroupMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateColumnGroup>>, TError,{id: number;data: BodyType<ColumnGroupUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateColumnGroup>>, TError,{id: number;data: BodyType<ColumnGroupUpdate>}, TContext> => {
+
+const mutationKey = ['updateColumnGroup'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateColumnGroup>>, {id: number;data: BodyType<ColumnGroupUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateColumnGroup(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateColumnGroupMutationResult = NonNullable<Awaited<ReturnType<typeof updateColumnGroup>>>
+    export type UpdateColumnGroupMutationBody = BodyType<ColumnGroupUpdate>
+    export type UpdateColumnGroupMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update column group
+ */
+export const useUpdateColumnGroup = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateColumnGroup>>, TError,{id: number;data: BodyType<ColumnGroupUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateColumnGroup>>,
+        TError,
+        {id: number;data: BodyType<ColumnGroupUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateColumnGroupMutationOptions(options));
+    }
+
+export const getDeleteColumnGroupUrl = (id: number,) => {
+
+
+
+
+  return `/api/column-groups/${id}`
+}
+
+/**
+ * @summary Delete column group (soft from columns' perspective)
+ */
+export const deleteColumnGroup = async (id: number, options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getDeleteColumnGroupUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteColumnGroupMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteColumnGroup>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteColumnGroup>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteColumnGroup'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteColumnGroup>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteColumnGroup(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteColumnGroupMutationResult = NonNullable<Awaited<ReturnType<typeof deleteColumnGroup>>>
+
+    export type DeleteColumnGroupMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete column group (soft from columns' perspective)
+ */
+export const useDeleteColumnGroup = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteColumnGroup>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteColumnGroup>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteColumnGroupMutationOptions(options));
     }
 
 export const getQueryEntityRecordsUrl = (entityId: number,) => {

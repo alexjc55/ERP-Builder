@@ -13,6 +13,7 @@ export function adminCapForPath(path: string): keyof RoleAdminCaps | null {
   if (path.startsWith("/admin/entities")) return "entities";
   if (path.startsWith("/admin/events")) return "events";
   if (path.startsWith("/admin/modules")) return "modules";
+  if (path.startsWith("/admin/column-groups")) return "columnGroups";
   if (path.startsWith("/admin/google-drive")) return "googleDrive";
   return null;
 }
