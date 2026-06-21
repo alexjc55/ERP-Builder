@@ -5,10 +5,8 @@ import {
   recordLinksTable,
   entitiesTable,
   entityRecordsTable,
-  entityFieldsTable,
   RELATION_TYPES,
   type RelationType,
-  type RelationFieldConfig,
 } from "@workspace/db";
 import { eq, and, ne, asc, desc, inArray, sql } from "drizzle-orm";
 import { relationLinkLockViolation } from "../lib/relation-lock";
@@ -261,51 +259,6 @@ router.put("/relations/:id", requireAuth, requireAdmin("entities"), async (req, 
           return {
             status: 409 as const,
             error: `Нельзя изменить тип связи: текущие данные не соответствуют новому правилу (${parts.join("; ")}). Уберите лишние связи у этих записей, затем повторите.`,
-          };
-        }
-
-        // A relation FIELD column shows a SINGLE linked record, so it only resolves
-        // for a "to-one" direction: a field on the source side needs
-        // one_to_one/many_to_one, a field on the target side needs
-        // one_to_one/one_to_many. many_to_many yields no single value at all. If the
-        // new type would leave any existing relation/lookup field without a valid
-        // direction, that field silently disappears from records — block instead.
-        const boundFields = await tx
-          .select({
-            entityId: entityFieldsTable.entityId,
-            nameJson: entityFieldsTable.nameJson,
-            cfg: entityFieldsTable.relationConfigJson,
-          })
-          .from(entityFieldsTable)
-          .where(
-            and(
-              inArray(entityFieldsTable.entityId, [relation.sourceEntityId, relation.targetEntityId]),
-              inArray(entityFieldsTable.fieldType, ["relation", "lookup"]),
-              eq(entityFieldsTable.isActive, true),
-            ),
-          );
-        const yieldsDirection = (forEntityId: number): boolean => {
-          if (relation.sourceEntityId === forEntityId && (newType === "one_to_one" || newType === "many_to_one")) {
-            return true;
-          }
-          if (relation.targetEntityId === forEntityId && (newType === "one_to_one" || newType === "one_to_many")) {
-            return true;
-          }
-          return false;
-        };
-        const orphanedNames: string[] = [];
-        for (const f of boundFields) {
-          const fcfg = f.cfg as RelationFieldConfig | null;
-          if (fcfg?.relationId !== relation.id) continue;
-          if (!yieldsDirection(f.entityId)) {
-            const nm = (f.nameJson as Record<string, string> | null) ?? {};
-            orphanedNames.push(nm.ru || nm.en || nm.he || "—");
-          }
-        }
-        if (orphanedNames.length > 0) {
-          return {
-            status: 409 as const,
-            error: `Нельзя изменить тип связи на этот: поля, показывающие связанную запись, перестанут отображаться (${orphanedNames.join(", ")}), т.к. при таком типе у записи нет единственного связанного значения. Сначала удалите эти поля или выберите тип «один к одному»/«один ко многим»/«многие к одному» так, чтобы у нужной стороны была одна запись.`,
           };
         }
 
