@@ -220,7 +220,11 @@ router.put("/relations/:id", requireAuth, requireAdmin("entities"), async (req, 
           .where(eq(recordLinksTable.relationId, relation.id))
           .limit(1);
         if (existingLink) {
-          return { status: 409 as const, error: "Cannot change relation type while links exist" };
+          return {
+            status: 409 as const,
+            error:
+              "Нельзя изменить тип связи, пока есть связанные записи. Сначала удалите все связи между записями для этой связи, затем измените тип.",
+          };
         }
         updates.relationType = body.data.relationType;
       }
