@@ -25,6 +25,15 @@ export const pagesTable = pgTable("pages", {
   // WITHOUT touching the source field. Display-only — never a security boundary;
   // field identity and hiding stay keyed off fieldKey + RBAC on the source entity.
   mirrorFieldLabelsJson: jsonb("mirror_field_labels_json").$type<Record<string, { ru?: string; en?: string; he?: string }>>(),
+  // Optional per-mirror-page UNIFIED COLUMN ORDER across both the mirrored
+  // entity's columns and the page's own page-local columns. Stored as an ordered
+  // array of tokens: "e:<fieldKey>" for a source-entity field, "p:<fieldKey>" for
+  // a page-local field. Lets a mirror page interleave page-local columns between
+  // entity columns and keep an order independent of the source entity's field
+  // sortOrder. Null/empty means "default order" (entity columns by sortOrder,
+  // then page columns). Display-only — never a security boundary. Columns not
+  // listed fall back to the default order, appended after the listed ones.
+  mirrorColumnOrderJson: jsonb("mirror_column_order_json").$type<string[]>(),
   // Dashboard page: when true, this page renders admin-defined dashboard widgets
   // instead of entity records. Mutually exclusive with a bound entity and with
   // mirrorEntityId (enforced in the API and the pages editor). The renderer reads

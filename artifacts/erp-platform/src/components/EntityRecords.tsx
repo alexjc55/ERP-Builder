@@ -761,6 +761,7 @@ export function EntityRecords({
   pageId,
   isMirror = false,
   fieldLabelOverrides,
+  mirrorColumnOrder,
 }: {
   entityId: number;
   /**
@@ -795,6 +796,17 @@ export function EntityRecords({
    * through the (replaced) label.
    */
   fieldLabelOverrides?: Record<string, Field["nameJson"]>;
+  /**
+   * Per-mirror-page UNIFIED column order across entity + page-local columns.
+   * Ordered tokens: `e:<fieldKey>` (source-entity field) or `p:<fieldKey>`
+   * (page-local field). When present (mirror pages only) it drives the column
+   * order, letting page-local columns be interleaved between entity columns and
+   * the whole order differ from the source entity's field sortOrder. Empty/absent
+   * ⇒ default order (entity columns by sortOrder, then page columns). Columns not
+   * listed fall back to the default order, appended after the listed ones.
+   * Display-only — never a security boundary.
+   */
+  mirrorColumnOrder?: string[];
 }) {
   const ml = useML();
   const t = useT();
@@ -860,6 +872,33 @@ export function EntityRecords({
       data: { mirrorFieldLabelsJson: next as Record<string, Field["nameJson"]> | null },
     });
     setMirrorLabelField(null);
+  };
+
+  // Mirror pages let a "pages" admin reorder columns (both source-entity and
+  // page-local) into ONE unified order, independent of the source entity's field
+  // sortOrder. Saved as page.mirrorColumnOrderJson (ordered tokens) via the page
+  // update endpoint (which requires the "pages" cap server-side). On a regular
+  // entity page this stays false and the existing per-group sortOrder reorder
+  // (reorderFields / reorderPageFields) applies instead.
+  const canReorderMirrorColumns = isMirror && pageId != null && canAdmin("pages");
+  const updateMirrorOrderMutation = useUpdatePage({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListPagesQueryKey() });
+      },
+      onError: () =>
+        toast({
+          title: t("records.mirrorOrderSaveError", "Не удалось сохранить порядок колонок"),
+          variant: "destructive",
+        }),
+    },
+  });
+  const saveMirrorColumnOrder = (tokens: string[]) => {
+    if (pageId == null) return;
+    updateMirrorOrderMutation.mutate({
+      id: pageId,
+      data: { mirrorColumnOrderJson: tokens.length > 0 ? tokens : null },
+    });
   };
 
   const { data: rawAllFields = [], isLoading: fieldsLoading } = useListEntityFields(entityId);
@@ -2158,6 +2197,50 @@ export function EntityRecords({
     ? pageFields
     : pageFields.filter((f: PageField) => f.showInTable !== false);
   const extraColCount = displayedPageFields.length;
+  // ── Unified column model ───────────────────────────────────────────────────
+  // The table renders ONE ordered list of columns mixing source-entity fields and
+  // page-local fields. On a regular page (or a mirror page with no saved order)
+  // the order is the historical default: entity columns (by sortOrder) first,
+  // then page columns. On a mirror page with a saved `mirrorColumnOrder`, columns
+  // are ordered by their token position so page-local columns can be interleaved
+  // between entity columns; tokens not present fall back to the end in default
+  // order (stable). Each column carries the `pinKey` used everywhere else for
+  // pinning / width / styling so those keep working unchanged.
+  type UnifiedCol =
+    | { kind: "entity"; token: string; pinKey: string; field: Field }
+    | { kind: "page"; token: string; pinKey: string; field: PageField };
+  const orderedColumns: UnifiedCol[] = (() => {
+    const base: UnifiedCol[] = [
+      ...displayFields.map(
+        (f: Field): UnifiedCol => ({ kind: "entity", token: `e:${f.fieldKey}`, pinKey: `f:${f.id}`, field: f }),
+      ),
+      ...displayedPageFields.map(
+        (pf: PageField): UnifiedCol => ({ kind: "page", token: `p:${pf.fieldKey}`, pinKey: `pf:${pf.id}`, field: pf }),
+      ),
+    ];
+    if (isMirror && mirrorColumnOrder && mirrorColumnOrder.length > 0) {
+      const idx = new Map(mirrorColumnOrder.map((tok, i) => [tok, i] as const));
+      return base
+        .map((c, i) => ({ c, i }))
+        .sort((a, b) => {
+          const ia = idx.has(a.c.token) ? (idx.get(a.c.token) as number) : Number.MAX_SAFE_INTEGER;
+          const ib = idx.has(b.c.token) ? (idx.get(b.c.token) as number) : Number.MAX_SAFE_INTEGER;
+          return ia !== ib ? ia - ib : a.i - b.i;
+        })
+        .map((x) => x.c);
+    }
+    return base;
+  })();
+  // Reorder one column within the unified order and persist the new token list
+  // (mirror pages only — gated by `canReorderMirrorColumns`).
+  const moveMirrorColumn = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= orderedColumns.length) return;
+    const next = [...orderedColumns];
+    const [moved] = next.splice(index, 1);
+    next.splice(target, 0, moved);
+    saveMirrorColumnOrder(next.map((c) => c.token));
+  };
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // ── Pinned (frozen-left) columns ──────────────────────────────────────────
@@ -2170,17 +2253,15 @@ export function EntityRecords({
   const pinnedKeys = useMemo(() => {
     const s = new Set<string>();
     if (!setupMode) {
-      for (const f of displayFields) if (f.isPinned) s.add(`f:${f.id}`);
-      for (const pf of displayedPageFields) if (pf.isPinned) s.add(`pf:${pf.id}`);
+      for (const col of orderedColumns) if (col.field.isPinned) s.add(col.pinKey);
     }
     return s;
-  }, [displayFields, displayedPageFields, setupMode]);
+  }, [orderedColumns, setupMode]);
   const pinnedOrder = useMemo(() => {
     const keys: string[] = [];
-    for (const f of displayFields) if (pinnedKeys.has(`f:${f.id}`)) keys.push(`f:${f.id}`);
-    for (const pf of displayedPageFields) if (pinnedKeys.has(`pf:${pf.id}`)) keys.push(`pf:${pf.id}`);
+    for (const col of orderedColumns) if (pinnedKeys.has(col.pinKey)) keys.push(col.pinKey);
     return keys;
-  }, [displayFields, displayedPageFields, pinnedKeys]);
+  }, [orderedColumns, pinnedKeys]);
   const lastPinnedKey = pinnedOrder[pinnedOrder.length - 1];
   const pinHeaderRefs = useRef<Record<string, HTMLTableCellElement | null>>({});
   const [pinnedLeft, setPinnedLeft] = useState<Record<string, number>>({});
@@ -2567,48 +2648,26 @@ export function EntityRecords({
                 <thead>
                   {Object.keys(numericTotals).length > 0 && (
                     <tr>
-                      {displayFields.map((f: Field) => {
-                        const hasTotal = numericTotals[f.fieldKey] !== undefined;
+                      {orderedColumns.map((col) => {
+                        const totalKey = col.kind === "entity" ? col.field.fieldKey : col.pinKey;
+                        const hasTotal = numericTotals[totalKey] !== undefined;
+                        const fld = col.field;
                         return (
                           <th
-                            key={`tot-${f.id}`}
-                            className={cn("px-4 py-3 text-left", hasTotal && !f.totalFillColor && "bg-emerald-50")}
+                            key={`tot-${col.pinKey}`}
+                            className={cn("px-4 py-3 text-left", hasTotal && !fld.totalFillColor && "bg-emerald-50")}
                             style={{
-                              ...pinStyle(`f:${f.id}`, hasTotal ? "#ecfdf5" : "#ffffff", true),
-                              ...(hasTotal && f.totalFillColor ? { backgroundColor: f.totalFillColor } : undefined),
-                              ...colWidthStyle(`f:${f.id}`),
+                              ...pinStyle(col.pinKey, hasTotal ? "#ecfdf5" : "#ffffff", true),
+                              ...(hasTotal && fld.totalFillColor ? { backgroundColor: fld.totalFillColor } : undefined),
+                              ...colWidthStyle(col.pinKey),
                             }}
                           >
                             {hasTotal ? (
                               <span
-                                className={cn("text-sm font-bold whitespace-nowrap", !f.totalTextColor && "text-emerald-700")}
-                                style={f.totalTextColor ? { color: f.totalTextColor } : undefined}
+                                className={cn("text-sm font-bold whitespace-nowrap", !fld.totalTextColor && "text-emerald-700")}
+                                style={fld.totalTextColor ? { color: fld.totalTextColor } : undefined}
                               >
-                                {numericTotals[f.fieldKey].toLocaleString("ru-RU")}
-                              </span>
-                            ) : null}
-                          </th>
-                        );
-                      })}
-                      {displayedPageFields.map((pf: PageField) => {
-                        const pfTotalKey = `pf:${pf.id}`;
-                        const hasTotal = numericTotals[pfTotalKey] !== undefined;
-                        return (
-                          <th
-                            key={`tot-pf-${pf.id}`}
-                            className={cn("px-4 py-3 text-left", hasTotal && !pf.totalFillColor && "bg-emerald-50")}
-                            style={{
-                              ...pinStyle(`pf:${pf.id}`, hasTotal ? "#ecfdf5" : "#ffffff", true),
-                              ...(hasTotal && pf.totalFillColor ? { backgroundColor: pf.totalFillColor } : undefined),
-                              ...colWidthStyle(`pf:${pf.id}`),
-                            }}
-                          >
-                            {hasTotal ? (
-                              <span
-                                className={cn("text-sm font-bold whitespace-nowrap", !pf.totalTextColor && "text-emerald-700")}
-                                style={pf.totalTextColor ? { color: pf.totalTextColor } : undefined}
-                              >
-                                {numericTotals[pfTotalKey].toLocaleString("ru-RU")}
+                                {numericTotals[totalKey].toLocaleString("ru-RU")}
                               </span>
                             ) : null}
                           </th>
@@ -2619,56 +2678,146 @@ export function EntityRecords({
                     </tr>
                   )}
                   <tr className="border-b border-slate-100 bg-slate-50">
-                    {displayFields.map((f: Field, ci: number) => (
+                    {orderedColumns.map((col, ui) => {
+                      const fld = col.field;
+                      const pinKey = col.pinKey;
+                      const isPageCol = col.kind === "page";
+                      const ci = displayFields.findIndex((x: Field) => x.id === fld.id);
+                      const pi = displayedPageFields.findIndex((x: PageField) => x.id === fld.id);
+                      // Setup-mode reorder arrows. On a mirror page columns reorder
+                      // across the UNIFIED order (entity + page-local interleaved),
+                      // persisted to mirrorColumnOrderJson; on a regular page each
+                      // group keeps its own sortOrder reorder.
+                      const reorderArrows = isMirror ? (
+                        canReorderMirrorColumns ? (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-slate-400"
+                              disabled={ui === 0 || updateMirrorOrderMutation.isPending}
+                              onClick={() => moveMirrorColumn(ui, -1)}
+                              title={t("records.moveColumnLeft", "Левее")}
+                            >
+                              <ChevronLeft className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-slate-400"
+                              disabled={ui === orderedColumns.length - 1 || updateMirrorOrderMutation.isPending}
+                              onClick={() => moveMirrorColumn(ui, 1)}
+                              title={t("records.moveColumnRight", "Правее")}
+                            >
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </Button>
+                          </>
+                        ) : null
+                      ) : isPageCol ? (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-slate-400"
+                            disabled={pi === 0 || reorderPageFieldsMutation.isPending}
+                            onClick={() => movePageColumn(displayedPageFields, pi, -1)}
+                            title={t("records.moveColumnLeft", "Левее")}
+                          >
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-slate-400"
+                            disabled={pi === displayedPageFields.length - 1 || reorderPageFieldsMutation.isPending}
+                            onClick={() => movePageColumn(displayedPageFields, pi, 1)}
+                            title={t("records.moveColumnRight", "Правее")}
+                          >
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-slate-400"
+                            disabled={ci === 0 || reorderFieldsMutation.isPending}
+                            onClick={() => moveColumn(displayFields, ci, -1)}
+                            title={t("records.moveColumnLeft", "Левее")}
+                          >
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-slate-400"
+                            disabled={ci === displayFields.length - 1 || reorderFieldsMutation.isPending}
+                            onClick={() => moveColumn(displayFields, ci, 1)}
+                            title={t("records.moveColumnRight", "Правее")}
+                          >
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </Button>
+                        </>
+                      );
+                      return (
                       <th
-                        key={f.id}
-                        ref={(el) => { pinHeaderRefs.current[`f:${f.id}`] = el; }}
-                        className="relative align-top text-center px-4 py-3 font-medium text-slate-600 break-words"
-                        style={{ ...pinStyle(`f:${f.id}`, "#f8fafc", true), ...colWidthStyle(`f:${f.id}`) }}
+                        key={pinKey}
+                        ref={(el) => { pinHeaderRefs.current[pinKey] = el; }}
+                        className={cn(
+                          "relative align-top text-center px-4 py-3 font-medium text-slate-600 break-words",
+                          // Setup-mode ONLY: tint page-local headers on a mirror page so
+                          // admins can tell them apart from source-entity columns. Normal
+                          // view stays byte-for-byte identical (page-local invariant).
+                          setupMode && isMirror && isPageCol && "bg-violet-50",
+                        )}
+                        style={{
+                          ...pinStyle(pinKey, setupMode && isMirror && isPageCol ? "#f5f3ff" : "#f8fafc", true),
+                          ...colWidthStyle(pinKey),
+                        }}
                       >
-                        {setupMode && !isMirror ? (
-                          <div className="flex flex-col items-center gap-1">
+                        {isPageCol ? (
+                          setupMode ? (
                             <div className="inline-flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-slate-400"
-                                disabled={ci === 0 || reorderFieldsMutation.isPending}
-                                onClick={() => moveColumn(displayFields, ci, -1)}
-                                title={t("records.moveColumnLeft", "Левее")}
-                              >
-                                <ChevronLeft className="w-3.5 h-3.5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-slate-400"
-                                disabled={ci === displayFields.length - 1 || reorderFieldsMutation.isPending}
-                                onClick={() => moveColumn(displayFields, ci, 1)}
-                                title={t("records.moveColumnRight", "Правее")}
-                              >
-                                <ChevronRight className="w-3.5 h-3.5" />
-                              </Button>
+                              {reorderArrows}
                               <button
                                 type="button"
-                                onClick={() => openColumnConfig(f)}
+                                onClick={() => openPageColumnConfig(fld as PageField)}
+                                className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-2 py-1 text-amber-700 hover:bg-amber-100 transition"
+                                title={t("pageFields.configureColumn", "Настроить поле страницы")}
+                              >
+                                {ml(fld.nameJson)}
+                                <span className="text-slate-400 font-normal">({fld.sortOrder})</span>
+                                <Settings2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            ml(fld.nameJson)
+                          )
+                        ) : setupMode && !isMirror ? (
+                          <div className="flex flex-col items-center gap-1">
+                            <div className="inline-flex items-center gap-1">
+                              {reorderArrows}
+                              <button
+                                type="button"
+                                onClick={() => openColumnConfig(fld as Field)}
                                 className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-2 py-1 text-amber-700 hover:bg-amber-100 transition"
                                 title={t("records.configureColumn", "Настроить колонку")}
                               >
-                                {ml(f.nameJson)}
-                                <span className="text-slate-400 font-normal">({f.sortOrder})</span>
+                                {ml(fld.nameJson)}
+                                <span className="text-slate-400 font-normal">({fld.sortOrder})</span>
                                 <Settings2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
                             {(() => {
-                              const overrides = fieldRoleOverrides(f);
+                              const overrides = fieldRoleOverrides(fld as Field);
                               if (overrides.length === 0) return null;
                               return (
                                 <HoverCard openDelay={100}>
                                   <HoverCardTrigger asChild>
                                     <button
                                       type="button"
-                                      onClick={() => openColumnConfig(f)}
+                                      onClick={() => openColumnConfig(fld as Field)}
                                       className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 hover:bg-amber-100 transition"
                                     >
                                       <ShieldAlert className="w-3 h-3" />
@@ -2706,68 +2855,30 @@ export function EntityRecords({
                               );
                             })()}
                           </div>
-                        ) : setupMode && isMirror && canEditMirrorLabels ? (
-                          <button
-                            type="button"
-                            onClick={() => setMirrorLabelField(f)}
-                            className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-2 py-1 text-amber-700 hover:bg-amber-100 transition"
-                            title={t("records.mirrorLabelEdit", "Переименовать заголовок на этой странице")}
-                          >
-                            {ml(f.nameJson)}
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                        ) : (
-                          ml(f.nameJson)
-                        )}
-                        <ResizeHandle colKey={`f:${f.id}`} />
-                      </th>
-                    ))}
-                    {displayedPageFields.map((pf: PageField, pi: number) => (
-                      <th
-                        key={`pf-${pf.id}`}
-                        ref={(el) => { pinHeaderRefs.current[`pf:${pf.id}`] = el; }}
-                        className="relative align-top text-center px-4 py-3 font-medium text-slate-600 break-words"
-                        style={{ ...pinStyle(`pf:${pf.id}`, "#f8fafc", true), ...colWidthStyle(`pf:${pf.id}`) }}
-                      >
-                        {setupMode ? (
+                        ) : setupMode && isMirror ? (
                           <div className="inline-flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-slate-400"
-                              disabled={pi === 0 || reorderPageFieldsMutation.isPending}
-                              onClick={() => movePageColumn(displayedPageFields, pi, -1)}
-                              title={t("records.moveColumnLeft", "Левее")}
-                            >
-                              <ChevronLeft className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-slate-400"
-                              disabled={pi === displayedPageFields.length - 1 || reorderPageFieldsMutation.isPending}
-                              onClick={() => movePageColumn(displayedPageFields, pi, 1)}
-                              title={t("records.moveColumnRight", "Правее")}
-                            >
-                              <ChevronRight className="w-3.5 h-3.5" />
-                            </Button>
-                            <button
-                              type="button"
-                              onClick={() => openPageColumnConfig(pf)}
-                              className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-2 py-1 text-amber-700 hover:bg-amber-100 transition"
-                              title={t("pageFields.configureColumn", "Настроить поле страницы")}
-                            >
-                              {ml(pf.nameJson)}
-                              <span className="text-slate-400 font-normal">({pf.sortOrder})</span>
-                              <Settings2 className="w-3.5 h-3.5" />
-                            </button>
+                            {reorderArrows}
+                            {canEditMirrorLabels ? (
+                              <button
+                                type="button"
+                                onClick={() => setMirrorLabelField(fld as Field)}
+                                className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-2 py-1 text-amber-700 hover:bg-amber-100 transition"
+                                title={t("records.mirrorLabelEdit", "Переименовать заголовок на этой странице")}
+                              >
+                                {ml(fld.nameJson)}
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            ) : (
+                              <span>{ml(fld.nameJson)}</span>
+                            )}
                           </div>
                         ) : (
-                          ml(pf.nameJson)
+                          ml(fld.nameJson)
                         )}
-                        <ResizeHandle colKey={`pf:${pf.id}`} />
+                        <ResizeHandle colKey={pinKey} />
                       </th>
-                    ))}
+                      );
+                    })}
                     {showStatusColumn && (
                       <th
                         className="relative align-top text-center px-4 py-3 font-medium text-slate-600"
@@ -2814,7 +2925,7 @@ export function EntityRecords({
                   {records.length === 0 && (
                     <tr>
                       <td
-                        colSpan={displayFields.length + extraColCount + (showStatusColumn ? 1 : 0) + (showActionsColumn ? 1 : 0)}
+                        colSpan={orderedColumns.length + (showStatusColumn ? 1 : 0) + (showActionsColumn ? 1 : 0)}
                         className="text-center py-12 text-slate-400"
                       >
                         {total === 0 && (search.trim() || (selectedConfig.filters?.length ?? 0) > 0)
@@ -2825,14 +2936,34 @@ export function EntityRecords({
                   )}
                   {canCreate && !setupMode && addingRow && (
                     <tr className="border-b border-blue-100 bg-blue-50/40">
-                      {displayFields.map((f: Field) => {
+                      {orderedColumns.map((col) => {
+                        if (col.kind === "page") {
+                          const pf = col.field;
+                          const pageFieldAsField = { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
+                          const editable = pf.fieldType !== "function" && pf.fieldType !== "relation" && pf.fieldType !== "lookup";
+                          return (
+                            <td key={col.pinKey} className="px-2 py-1.5 align-top max-w-[260px]" style={{ ...pinStyle(col.pinKey, "#eff6ff"), ...colWidthStyle(col.pinKey) }}>
+                              {editable ? (
+                                <FieldInput
+                                  field={pageFieldAsField}
+                                  value={newPageRow[pf.fieldKey]}
+                                  onChange={(v) => setNewPageRow((prev) => ({ ...prev, [pf.fieldKey]: v }))}
+                                  userOptions={userOptions}
+                                />
+                              ) : (
+                                <span className="text-slate-300 text-xs">—</span>
+                              )}
+                            </td>
+                          );
+                        }
+                        const f = col.field;
                         const editable =
                           fieldAccess(f, entityId, permPageId) === "edit" &&
                           f.fieldType !== "function" &&
                           f.fieldType !== "lookup";
                         const addRowRelInfo = relCreateDepInfo(f, newRow);
                         return (
-                          <td key={f.id} className="px-2 py-1.5 align-top max-w-[260px]" style={{ ...pinStyle(`f:${f.id}`, "#eff6ff"), ...colWidthStyle(`f:${f.id}`) }}>
+                          <td key={col.pinKey} className="px-2 py-1.5 align-top max-w-[260px]" style={{ ...pinStyle(col.pinKey, "#eff6ff"), ...colWidthStyle(col.pinKey) }}>
                             {editable && f.fieldType === "relation" ? (
                               <RelationCreatePicker
                                 entityId={entityId}
@@ -2890,24 +3021,6 @@ export function EntityRecords({
                           </td>
                         );
                       })}
-                      {displayedPageFields.map((pf: PageField) => {
-                        const pageFieldAsField = { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
-                        const editable = pf.fieldType !== "function" && pf.fieldType !== "relation" && pf.fieldType !== "lookup";
-                        return (
-                          <td key={`pf-${pf.id}`} className="px-2 py-1.5 align-top max-w-[260px]" style={{ ...pinStyle(`pf:${pf.id}`, "#eff6ff"), ...colWidthStyle(`pf:${pf.id}`) }}>
-                            {editable ? (
-                              <FieldInput
-                                field={pageFieldAsField}
-                                value={newPageRow[pf.fieldKey]}
-                                onChange={(v) => setNewPageRow((prev) => ({ ...prev, [pf.fieldKey]: v }))}
-                                userOptions={userOptions}
-                              />
-                            ) : (
-                              <span className="text-slate-300 text-xs">—</span>
-                            )}
-                          </td>
-                        );
-                      })}
                       {showStatusColumn && (
                         <td className="px-2 py-1.5 align-top" style={colWidthStyle("__status__")}>
                           <Select value={newRowStatus} onValueChange={setNewRowStatus}>
@@ -2949,7 +3062,7 @@ export function EntityRecords({
                   )}
                   {canCreate && !setupMode && !addingRow && (
                     <tr className="border-b border-slate-100">
-                      <td colSpan={displayFields.length + extraColCount + (showStatusColumn ? 1 : 0) + (showActionsColumn ? 1 : 0)} className="px-2 py-2">
+                      <td colSpan={orderedColumns.length + (showStatusColumn ? 1 : 0) + (showActionsColumn ? 1 : 0)} className="px-2 py-2">
                         <button
                           type="button"
                           onClick={startAddRow}
@@ -2996,7 +3109,9 @@ export function EntityRecords({
                         className="border-b border-slate-100 hover:bg-slate-50"
                         style={formatting.rowColor ? { backgroundColor: formatting.rowColor } : undefined}
                       >
-                        {displayFields.map((f: Field) => {
+                        {orderedColumns.map((col) => {
+                          if (col.kind === "entity") {
+                          const f = col.field;
                           const access = fieldAccess(f, entityId, permPageId);
                           const isFunction = f.fieldType === "function";
                           // A lockAfterCreate field stops being editable once it has a
@@ -3170,8 +3285,8 @@ export function EntityRecords({
                               {renderCellValue(f, values[f.fieldKey], t, userNames, cellText)}
                             </td>
                           );
-                        })}
-                        {displayedPageFields.map((pf: PageField) => {
+                          }
+                          const pf = col.field;
                           const isFunction = pf.fieldType === "function";
                           const cellBg = formatting.cellColors[pf.fieldKey];
                           const cellText = formatting.cellTextColors[pf.fieldKey];

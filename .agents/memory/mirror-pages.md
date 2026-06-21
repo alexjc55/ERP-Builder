@@ -132,3 +132,34 @@ it (missing scope ⇒ "all"), fully REPLACING the entity scope — it does not m
 - The client (`auth.tsx` canRecord/fieldAccess, `EntityRecords` permPageId =
   isMirror ? pageId : undefined) mirrors this cosmetically only; the server stays
   authoritative.
+
+**Per-mirror-page UNIFIED column order (`mirrorColumnOrderJson`):** a mirror page
+can reorder its source-entity columns AND its page-local columns into one
+interleaved order, independent of the source entity's field `sortOrder`. Stored as
+`pages.mirrorColumnOrderJson` = ordered tokens `e:<fieldKey>` (entity) / `p:<fieldKey>`
+(page-local). DISPLAY-ONLY, never a security boundary.
+- **How to apply / invariants:**
+  - Empty/absent ⇒ the historical default order (entity columns by sortOrder, then
+    page-local columns). Tokens not present fall back to the end in default order
+    (stable) — so adding a field later never breaks an existing saved order.
+  - Active ONLY when `isMirror`. Non-mirror pages keep the two-group render (entity
+    then page) and the per-group `sortOrder` reorders (`reorderFields` /
+    `reorderPageFields`); the prop is only threaded on mirror pages.
+  - `EntityRecords` builds ONE `orderedColumns: UnifiedCol[]` (kind entity|page,
+    each carrying its `pinKey` `f:<id>`/`pf:<id>`) and EVERY column render site
+    iterates it: totals row, header row, inline add-row cells, record-row cells,
+    colSpans, and the pinned (frozen-left) calc. **Why:** the source-entity and
+    page-local columns used to be two separate `.map`s at ~6 sites; interleaving
+    requires a single ordered pass or the header/body columns desync.
+  - Reorder on a mirror page = move within `orderedColumns` and persist the new
+    token list via `useUpdatePage` (the page update endpoint requires the `pages`
+    cap server-side; gated client-side by `canReorderMirrorColumns = isMirror &&
+    pageId && canAdmin("pages")`), then invalidate the pages query.
+  - Server: add to the page UPDATE allowlist (`if ("mirrorColumnOrderJson" in body)`);
+    CREATE flows through the generated Zod automatically. (Same dual create+PUT rule
+    as any field-config JSONB.)
+  - **Setup-mode-ONLY page-header tint:** on a mirror page in setup mode, page-local
+    column headers get a distinct background (violet) so the admin can tell them
+    apart from entity columns. Normal view stays byte-for-byte identical — this does
+    NOT violate the page-local "look identical in normal view" invariant because it
+    is gated on `setupMode && isMirror && isPageCol`.

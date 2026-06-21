@@ -26,6 +26,11 @@ export interface PageInput {
      * @nullable
      */
   mirrorFieldLabelsJson?: PageInputMirrorFieldLabelsJson;
+  /**
+     * Per-mirror-page unified column order across entity and page-local columns. Ordered tokens: "e:<fieldKey>" or "p:<fieldKey>". Null/empty = default order. Display-only.
+     * @nullable
+     */
+  mirrorColumnOrderJson?: string[] | null;
   isDashboard?: boolean;
   /** Pivot page — renders a single admin-authoritative cross-tab. Mutually exclusive with a bound entity, mirror and dashboard. */
   isPivot?: boolean;

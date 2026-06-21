@@ -1117,6 +1117,7 @@ export const ListPagesResponseItem = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 })).nullish().describe('Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.'),
+  "mirrorColumnOrderJson": zod.array(zod.string()).nullish().describe('Per-mirror-page unified column order across entity and page-local columns. Ordered tokens: \"e:<fieldKey>\" (source-entity field) or \"p:<fieldKey>\" (page-local field). Null\/empty = default order. Display-only.'),
   "isDashboard": zod.boolean().optional(),
   "isPivot": zod.boolean().optional().describe('Pivot page — renders a single admin-authoritative cross-tab (Сводная таблица). Mutually exclusive with a bound entity, mirror and dashboard.'),
   "pivotEntityId": zod.number().nullish().describe('Entity this pivot page reports on (required when isPivot).'),
@@ -1218,6 +1219,7 @@ export const CreatePageBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 })).nullish().describe('Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.'),
+  "mirrorColumnOrderJson": zod.array(zod.string()).nullish().describe('Per-mirror-page unified column order across entity and page-local columns. Ordered tokens: \"e:<fieldKey>\" or \"p:<fieldKey>\". Null\/empty = default order. Display-only.'),
   "isDashboard": zod.boolean().optional(),
   "isPivot": zod.boolean().default(createPageBodyIsPivotDefault).describe('Pivot page — renders a single admin-authoritative cross-tab. Mutually exclusive with a bound entity, mirror and dashboard.'),
   "pivotEntityId": zod.number().nullish().describe('Entity this pivot page reports on (required when isPivot).'),
@@ -1317,6 +1319,7 @@ export const GetPageResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 })).nullish().describe('Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.'),
+  "mirrorColumnOrderJson": zod.array(zod.string()).nullish().describe('Per-mirror-page unified column order across entity and page-local columns. Ordered tokens: \"e:<fieldKey>\" (source-entity field) or \"p:<fieldKey>\" (page-local field). Null\/empty = default order. Display-only.'),
   "isDashboard": zod.boolean().optional(),
   "isPivot": zod.boolean().optional().describe('Pivot page — renders a single admin-authoritative cross-tab (Сводная таблица). Mutually exclusive with a bound entity, mirror and dashboard.'),
   "pivotEntityId": zod.number().nullish().describe('Entity this pivot page reports on (required when isPivot).'),
@@ -1418,6 +1421,7 @@ export const UpdatePageBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 })).nullish().describe('Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.'),
+  "mirrorColumnOrderJson": zod.array(zod.string()).nullish().describe('Per-mirror-page unified column order across entity and page-local columns. Ordered tokens: \"e:<fieldKey>\" or \"p:<fieldKey>\". Null\/empty = default order. Display-only.'),
   "isDashboard": zod.boolean().optional(),
   "isPivot": zod.boolean().optional().describe('Pivot page — renders a single admin-authoritative cross-tab. Mutually exclusive with a bound entity, mirror and dashboard.'),
   "pivotEntityId": zod.number().nullish().describe('Entity this pivot page reports on (required when isPivot).'),
@@ -1509,6 +1513,7 @@ export const UpdatePageResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 })).nullish().describe('Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.'),
+  "mirrorColumnOrderJson": zod.array(zod.string()).nullish().describe('Per-mirror-page unified column order across entity and page-local columns. Ordered tokens: \"e:<fieldKey>\" (source-entity field) or \"p:<fieldKey>\" (page-local field). Null\/empty = default order. Display-only.'),
   "isDashboard": zod.boolean().optional(),
   "isPivot": zod.boolean().optional().describe('Pivot page — renders a single admin-authoritative cross-tab (Сводная таблица). Mutually exclusive with a bound entity, mirror and dashboard.'),
   "pivotEntityId": zod.number().nullish().describe('Entity this pivot page reports on (required when isPivot).'),

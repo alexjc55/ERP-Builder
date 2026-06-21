@@ -3920,6 +3920,11 @@ components:
           additionalProperties:
             $ref: "#/components/schemas/MultilingualText"
           description: Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.
+        mirrorColumnOrderJson:
+          type: ["array", "null"]
+          items:
+            type: string
+          description: 'Per-mirror-page unified column order across entity and page-local columns. Ordered tokens: "e:<fieldKey>" (source-entity field) or "p:<fieldKey>" (page-local field). Null/empty = default order. Display-only.'
         isDashboard:
           type: boolean
         isPivot:
@@ -3975,6 +3980,11 @@ components:
           additionalProperties:
             $ref: "#/components/schemas/MultilingualText"
           description: Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.
+        mirrorColumnOrderJson:
+          type: ["array", "null"]
+          items:
+            type: string
+          description: 'Per-mirror-page unified column order across entity and page-local columns. Ordered tokens: "e:<fieldKey>" or "p:<fieldKey>". Null/empty = default order. Display-only.'
         isDashboard:
           type: boolean
         isPivot:
@@ -4022,6 +4032,11 @@ components:
           additionalProperties:
             $ref: "#/components/schemas/MultilingualText"
           description: Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.
+        mirrorColumnOrderJson:
+          type: ["array", "null"]
+          items:
+            type: string
+          description: 'Per-mirror-page unified column order across entity and page-local columns. Ordered tokens: "e:<fieldKey>" or "p:<fieldKey>". Null/empty = default order. Display-only.'
         isDashboard:
           type: boolean
         isPivot:

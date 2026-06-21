@@ -88,6 +88,7 @@ export default function DynamicPage() {
             entityId={entity.id}
             visibleFieldKeys={mirrorEntity ? page.mirrorFieldKeysJson ?? undefined : undefined}
             fieldLabelOverrides={mirrorEntity ? page.mirrorFieldLabelsJson ?? undefined : undefined}
+            mirrorColumnOrder={mirrorEntity ? page.mirrorColumnOrderJson ?? undefined : undefined}
             pageId={page.id}
             isMirror={Boolean(mirrorEntity)}
           />
