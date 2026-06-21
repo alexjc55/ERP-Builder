@@ -3377,7 +3377,7 @@ components:
     # Platform branding / general settings (singleton row).
     AppSettings:
       type: object
-      required: [appNameJson, subtitleJson, logoObjectPath, currencySymbol, defaultLanguage, updatedAt]
+      required: [appNameJson, subtitleJson, logoObjectPath, currencySymbol, defaultLanguage, tableStyle, updatedAt]
       properties:
         appNameJson:
           $ref: "#/components/schemas/MultilingualText"
@@ -3392,6 +3392,10 @@ components:
           type: string
           enum: [ru, en, he]
           description: Platform-wide default UI language for users who have not picked their own.
+        tableStyle:
+          type: string
+          enum: [plain, striped, striped_bold]
+          description: Global visual style of the records table (cosmetic).
         updatedAt:
           type: string
           format: date-time
@@ -3411,6 +3415,9 @@ components:
         defaultLanguage:
           type: string
           enum: [ru, en, he]
+        tableStyle:
+          type: string
+          enum: [plain, striped, striped_bold]
 
     # AUTH
     LoginInput:

@@ -99,6 +99,7 @@ export default function SettingsPage() {
   const [logoObjectPath, setLogoObjectPath] = useState<string | null>(null);
   const [currencySymbol, setCurrencySymbol] = useState<string>("₽");
   const [defaultLanguage, setDefaultLanguage] = useState<Lang>("ru");
+  const [tableStyle, setTableStyle] = useState<string>("plain");
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -113,6 +114,7 @@ export default function SettingsPage() {
     setLogoObjectPath(settings.logoObjectPath ?? null);
     setCurrencySymbol(settings.currencySymbol ?? "₽");
     setDefaultLanguage((settings.defaultLanguage as Lang) ?? "ru");
+    setTableStyle(settings.tableStyle ?? "plain");
     if (settings.logoObjectPath) {
       setLogoPreview(`/api/storage/branding-logo?v=${encodeURIComponent(settings.updatedAt)}`);
     } else {
@@ -155,6 +157,7 @@ export default function SettingsPage() {
           logoObjectPath,
           currencySymbol: currencySymbol.trim() || "₽",
           defaultLanguage,
+          tableStyle: tableStyle as "plain" | "striped" | "striped_bold",
         },
       });
       await queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
@@ -325,6 +328,20 @@ export default function SettingsPage() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-slate-400">{t("settings.defaultLanguageHint", "Язык интерфейса для новых пользователей и тех, кто ещё не выбрал язык.")}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-slate-700">{t("settings.tableStyle", "Стиль таблицы")}</Label>
+              <Select value={tableStyle} onValueChange={(v) => setTableStyle(v)}>
+                <SelectTrigger className="max-w-[320px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="plain">{t("settings.tableStylePlain", "Обычный (как сейчас)")}</SelectItem>
+                  <SelectItem value="striped">{t("settings.tableStyleStriped", "Чередующиеся строки")}</SelectItem>
+                  <SelectItem value="striped_bold">{t("settings.tableStyleStripedBold", "Чередующиеся строки + выделенный заголовок")}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-400">{t("settings.tableStyleHint", "Влияет на отображение таблиц с записями во всей платформе.")}</p>
             </div>
             <div className="flex justify-end">
               <Button onClick={saveBranding} disabled={updateSettings.isPending}>

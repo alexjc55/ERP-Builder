@@ -36,6 +36,7 @@ import {
   useUpdateField,
   useUpdatePageField,
   getListEntityFieldsQueryKey,
+  useGetSettings,
   type ColumnGroup,
   useGetPageRelatedValues,
   useGetPageRelatedCandidates,
@@ -1025,6 +1026,11 @@ export function EntityRecords({
   const { data: transitions = [] } = useListEntityTransitions(entityId);
   const { data: views = [] } = useListEntityViews(entityId);
   const { data: entity } = useGetEntity(entityId);
+  // Global records-table display style (cosmetic): plain | striped | striped_bold.
+  const { data: appSettings } = useGetSettings();
+  const tableStyle = appSettings?.tableStyle ?? "plain";
+  const stripedRows = tableStyle === "striped" || tableStyle === "striped_bold";
+  const boldHeader = tableStyle === "striped_bold";
   const { data: userOptions = [] } = useListUserOptions();
   // Roles are only needed to label per-field permission overrides in setup mode.
   const { data: rolesList = [] } = useListRoles({
@@ -2787,7 +2793,7 @@ export function EntityRecords({
                       {showActionsColumn && <th className="px-4 py-1.5" />}
                     </tr>
                   )}
-                  <tr className="border-b border-slate-100 bg-slate-50">
+                  <tr className={cn("border-b border-slate-100 bg-slate-50", boldHeader && "bg-slate-200 text-slate-800 font-semibold border-b-2 border-slate-300")}>
                     {orderedColumns.map((col, ui) => {
                       const fld = col.field;
                       const pinKey = col.pinKey;
@@ -3260,7 +3266,7 @@ export function EntityRecords({
                       </td>
                     </tr>
                   )}
-                  {records.map((record: EntityRecord) => {
+                  {records.map((record: EntityRecord, rowIndex: number) => {
                     const values = (record.valuesJson ?? {}) as Record<string, unknown>;
                     const pageValues = pageValuesByRecord.get(record.id) ?? {};
                     const allValues = { ...values, ...pageValues };
@@ -3292,7 +3298,10 @@ export function EntityRecords({
                     return (
                       <tr
                         key={record.id}
-                        className="border-b border-slate-100 hover:bg-slate-50"
+                        className={cn(
+                          "border-b border-slate-100 hover:bg-slate-50",
+                          stripedRows && rowIndex % 2 === 1 && "bg-slate-50/70",
+                        )}
                         style={formatting.rowColor ? { backgroundColor: formatting.rowColor } : undefined}
                       >
                         {orderedColumns.map((col) => {

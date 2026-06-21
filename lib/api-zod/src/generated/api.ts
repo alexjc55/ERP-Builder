@@ -58,6 +58,7 @@ export const GetSettingsResponse = zod.object({
   "logoObjectPath": zod.string().nullable(),
   "currencySymbol": zod.string().describe('Free-text currency symbol\/suffix used wherever monetary values are rendered.'),
   "defaultLanguage": zod.enum(['ru', 'en', 'he']).describe('Platform-wide default UI language for users who have not picked their own.'),
+  "tableStyle": zod.enum(['plain', 'striped', 'striped_bold']).describe('Global visual style of the records table (cosmetic).'),
   "updatedAt": zod.coerce.date()
 })
 
@@ -82,7 +83,8 @@ export const UpdateSettingsBody = zod.object({
 }).optional(),
   "logoObjectPath": zod.string().nullish(),
   "currencySymbol": zod.string().max(updateSettingsBodyCurrencySymbolMax).optional(),
-  "defaultLanguage": zod.enum(['ru', 'en', 'he']).optional()
+  "defaultLanguage": zod.enum(['ru', 'en', 'he']).optional(),
+  "tableStyle": zod.enum(['plain', 'striped', 'striped_bold']).optional()
 })
 
 export const UpdateSettingsResponse = zod.object({
@@ -99,6 +101,7 @@ export const UpdateSettingsResponse = zod.object({
   "logoObjectPath": zod.string().nullable(),
   "currencySymbol": zod.string().describe('Free-text currency symbol\/suffix used wherever monetary values are rendered.'),
   "defaultLanguage": zod.enum(['ru', 'en', 'he']).describe('Platform-wide default UI language for users who have not picked their own.'),
+  "tableStyle": zod.enum(['plain', 'striped', 'striped_bold']).describe('Global visual style of the records table (cosmetic).'),
   "updatedAt": zod.coerce.date()
 })
 

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AppSettingsUpdateDefaultLanguage } from './appSettingsUpdateDefaultLanguage';
+import type { AppSettingsUpdateTableStyle } from './appSettingsUpdateTableStyle';
 import type { MultilingualText } from './multilingualText';
 
 export interface AppSettingsUpdate {
@@ -16,4 +17,5 @@ export interface AppSettingsUpdate {
   /** @maxLength 8 */
   currencySymbol?: string;
   defaultLanguage?: AppSettingsUpdateDefaultLanguage;
+  tableStyle?: AppSettingsUpdateTableStyle;
 }

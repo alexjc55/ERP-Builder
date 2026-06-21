@@ -187,6 +187,18 @@ export const AppSettingsDefaultLanguage = {
   he: 'he',
 } as const;
 
+/**
+ * Global visual style of the records table (cosmetic).
+ */
+export type AppSettingsTableStyle = typeof AppSettingsTableStyle[keyof typeof AppSettingsTableStyle];
+
+
+export const AppSettingsTableStyle = {
+  plain: 'plain',
+  striped: 'striped',
+  striped_bold: 'striped_bold',
+} as const;
+
 export interface AppSettings {
   appNameJson: MultilingualText;
   subtitleJson: MultilingualText;
@@ -196,6 +208,8 @@ export interface AppSettings {
   currencySymbol: string;
   /** Platform-wide default UI language for users who have not picked their own. */
   defaultLanguage: AppSettingsDefaultLanguage;
+  /** Global visual style of the records table (cosmetic). */
+  tableStyle: AppSettingsTableStyle;
   updatedAt: string;
 }
 
@@ -208,6 +222,15 @@ export const AppSettingsUpdateDefaultLanguage = {
   he: 'he',
 } as const;
 
+export type AppSettingsUpdateTableStyle = typeof AppSettingsUpdateTableStyle[keyof typeof AppSettingsUpdateTableStyle];
+
+
+export const AppSettingsUpdateTableStyle = {
+  plain: 'plain',
+  striped: 'striped',
+  striped_bold: 'striped_bold',
+} as const;
+
 export interface AppSettingsUpdate {
   appNameJson?: MultilingualText;
   subtitleJson?: MultilingualText;
@@ -216,6 +239,7 @@ export interface AppSettingsUpdate {
   /** @maxLength 8 */
   currencySymbol?: string;
   defaultLanguage?: AppSettingsUpdateDefaultLanguage;
+  tableStyle?: AppSettingsUpdateTableStyle;
 }
 
 export interface LoginInput {

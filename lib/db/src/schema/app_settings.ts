@@ -19,6 +19,10 @@ export const appSettingsTable = pgTable("app_settings", {
   // Platform-wide default UI language (ru/en/he) used for users who have not yet
   // picked their own language; it is the fallback for the i18n active language.
   defaultLanguage: text("default_language").notNull().default("ru"),
+  // Global visual style of the records data table: "plain" (no striping, light
+  // header — the original look), "striped" (alternating row colours), or
+  // "striped_bold" (alternating rows + a more pronounced header). Cosmetic only.
+  tableStyle: text("table_style").notNull().default("plain"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

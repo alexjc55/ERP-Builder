@@ -8,8 +8,10 @@
 
 export * from './appSettings';
 export * from './appSettingsDefaultLanguage';
+export * from './appSettingsTableStyle';
 export * from './appSettingsUpdate';
 export * from './appSettingsUpdateDefaultLanguage';
+export * from './appSettingsUpdateTableStyle';
 export * from './archiveFilter';
 export * from './auditLogEntry';
 export * from './authResult';
