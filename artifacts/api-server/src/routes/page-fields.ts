@@ -82,8 +82,17 @@ function clampFormulaDecimals<T>(cfg: T): T {
   return cfg;
 }
 
+// Drizzle wraps the pg driver error, so the SQLSTATE code (23505 for a unique
+// violation) can live on err.cause rather than the top-level error. Walk the
+// cause chain — checking only the top level silently misclassifies wrapped
+// unique violations as generic 500s (e.g. a record_links cardinality conflict).
 function isUniqueViolation(err: unknown): boolean {
-  return Boolean(err && typeof err === "object" && "code" in err && (err as { code?: string }).code === "23505");
+  let e: unknown = err;
+  for (let i = 0; i < 5 && e && typeof e === "object"; i++) {
+    if ((e as { code?: string }).code === "23505") return true;
+    e = (e as { cause?: unknown }).cause;
+  }
+  return false;
 }
 
 async function pageExists(pageId: number): Promise<boolean> {

@@ -23,3 +23,14 @@ This was the root cause of the `POST /translations` duplicate-key 500 bug.
 constraint in try/catch, detect via the cause-chain walk, return 409 (unique) or
 422/409 (FK) with a JSON body, and re-throw everything else so Express 5's error
 middleware still surfaces unexpected faults.
+
+**Watch out — duplicated per-route `isUniqueViolation` helpers.** Several routes
+(`page-fields.ts`, `fields.ts`, `modules.ts`, `translations.ts`) each define their
+OWN local `isUniqueViolation(err)`. These were originally top-level-only checks
+(the bug above). The `page-fields.ts` copy was the root cause of a `record_links`
+500 on setting a relation link when a one-to-many/one-to-one cardinality conflict
+fired: the wrapped 23505 was misclassified and re-thrown as a 500, which also
+cascaded into a downstream "Сначала заполните родительское поле" (the parent link
+never saved). Fixed page-fields' copy to walk the cause chain. The other copies
+may still be top-level-only — if any of those routes 500s on a duplicate, apply
+the same cause-chain walk there.
