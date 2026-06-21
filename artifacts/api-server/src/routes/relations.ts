@@ -8,7 +8,7 @@ import {
   RELATION_TYPES,
   type RelationType,
 } from "@workspace/db";
-import { eq, and, ne, asc, desc, inArray } from "drizzle-orm";
+import { eq, and, ne, asc, desc, inArray, sql } from "drizzle-orm";
 import { relationLinkLockViolation } from "../lib/relation-lock";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin, getPermissions, canRecord } from "../middlewares/permissions";
@@ -214,19 +214,62 @@ router.put("/relations/:id", requireAuth, requireAdmin("entities"), async (req, 
       if (!locked) return { status: 404 as const, error: "Relation not found" };
 
       if (wantsTypeChange) {
-        const [existingLink] = await tx
-          .select({ id: recordLinksTable.id })
-          .from(recordLinksTable)
-          .where(eq(recordLinksTable.relationId, relation.id))
-          .limit(1);
-        if (existingLink) {
+        const newType = body.data.relationType as RelationType;
+        // The new type isn't just a label: it's a cardinality RULE backed by the
+        // partial-unique indexes on record_links (source unique for
+        // one_to_one/many_to_one, target unique for one_to_one/one_to_many;
+        // many_to_many has no constraint). Existing links may already violate the
+        // new rule, so we can't blindly rewrite — we verify compatibility first.
+        const needsSourceUnique = newType === "one_to_one" || newType === "many_to_one";
+        const needsTargetUnique = newType === "one_to_one" || newType === "one_to_many";
+
+        // Count records that already hold MORE THAN ONE link on a side the new
+        // type would require to be unique. These are exactly the rows the partial
+        // unique index would reject. Done under the relation row lock, so no
+        // concurrent insert can slip a new conflicting link past this check.
+        let sourceConflicts = 0;
+        if (needsSourceUnique) {
+          const dups = await tx
+            .select({ sid: recordLinksTable.sourceRecordId })
+            .from(recordLinksTable)
+            .where(eq(recordLinksTable.relationId, relation.id))
+            .groupBy(recordLinksTable.sourceRecordId)
+            .having(sql`count(*) > 1`);
+          sourceConflicts = dups.length;
+        }
+        let targetConflicts = 0;
+        if (needsTargetUnique) {
+          const dups = await tx
+            .select({ tid: recordLinksTable.targetRecordId })
+            .from(recordLinksTable)
+            .where(eq(recordLinksTable.relationId, relation.id))
+            .groupBy(recordLinksTable.targetRecordId)
+            .having(sql`count(*) > 1`);
+          targetConflicts = dups.length;
+        }
+
+        if (sourceConflicts > 0 || targetConflicts > 0) {
+          const parts: string[] = [];
+          if (sourceConflicts > 0) {
+            parts.push(`записей-источников с несколькими связями: ${sourceConflicts}`);
+          }
+          if (targetConflicts > 0) {
+            parts.push(`целевых записей с несколькими связями: ${targetConflicts}`);
+          }
           return {
             status: 409 as const,
-            error:
-              "Нельзя изменить тип связи, пока есть связанные записи. Сначала удалите все связи между записями для этой связи, затем измените тип.",
+            error: `Нельзя изменить тип связи: текущие данные не соответствуют новому правилу (${parts.join("; ")}). Уберите лишние связи у этих записей, затем повторите.`,
           };
         }
-        updates.relationType = body.data.relationType;
+
+        // Compatible: change the parent type AND rewrite the copied type on every
+        // existing link so record_links.relationType never drifts from the parent
+        // (the partial-unique indexes are evaluated off that copied column).
+        updates.relationType = newType;
+        await tx
+          .update(recordLinksTable)
+          .set({ relationType: newType })
+          .where(eq(recordLinksTable.relationId, relation.id));
       }
 
       const [updated] = await tx
