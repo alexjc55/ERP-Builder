@@ -210,6 +210,16 @@ export interface AppSettings {
   defaultLanguage: AppSettingsDefaultLanguage;
   /** Global visual style of the records table (cosmetic). */
   tableStyle: AppSettingsTableStyle;
+  /**
+     * Optional custom hex colour for striped rows; null = built-in default.
+     * @nullable
+     */
+  tableStripeColor: string | null;
+  /**
+     * Optional custom hex colour for the table header row; null = built-in default.
+     * @nullable
+     */
+  tableHeaderColor: string | null;
   updatedAt: string;
 }
 
@@ -240,6 +250,16 @@ export interface AppSettingsUpdate {
   currencySymbol?: string;
   defaultLanguage?: AppSettingsUpdateDefaultLanguage;
   tableStyle?: AppSettingsUpdateTableStyle;
+  /**
+     * @maxLength 9
+     * @nullable
+     */
+  tableStripeColor?: string | null;
+  /**
+     * @maxLength 9
+     * @nullable
+     */
+  tableHeaderColor?: string | null;
 }
 
 export interface LoginInput {

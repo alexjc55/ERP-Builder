@@ -18,4 +18,14 @@ export interface AppSettingsUpdate {
   currencySymbol?: string;
   defaultLanguage?: AppSettingsUpdateDefaultLanguage;
   tableStyle?: AppSettingsUpdateTableStyle;
+  /**
+     * @maxLength 9
+     * @nullable
+     */
+  tableStripeColor?: string | null;
+  /**
+     * @maxLength 9
+     * @nullable
+     */
+  tableHeaderColor?: string | null;
 }

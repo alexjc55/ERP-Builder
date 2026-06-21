@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MultilingualInput } from "@/components/MultilingualInput";
+import { ColorPickerControl } from "@/components/ColorPickerControl";
 import { useToast } from "@/hooks/use-toast";
 import { Building2, User, Lock, Image as ImageIcon, Loader2, Upload, Trash2 } from "lucide-react";
 
@@ -100,6 +101,8 @@ export default function SettingsPage() {
   const [currencySymbol, setCurrencySymbol] = useState<string>("₽");
   const [defaultLanguage, setDefaultLanguage] = useState<Lang>("ru");
   const [tableStyle, setTableStyle] = useState<string>("plain");
+  const [tableStripeColor, setTableStripeColor] = useState<string>("");
+  const [tableHeaderColor, setTableHeaderColor] = useState<string>("");
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -115,6 +118,8 @@ export default function SettingsPage() {
     setCurrencySymbol(settings.currencySymbol ?? "₽");
     setDefaultLanguage((settings.defaultLanguage as Lang) ?? "ru");
     setTableStyle(settings.tableStyle ?? "plain");
+    setTableStripeColor(settings.tableStripeColor ?? "");
+    setTableHeaderColor(settings.tableHeaderColor ?? "");
     if (settings.logoObjectPath) {
       setLogoPreview(`/api/storage/branding-logo?v=${encodeURIComponent(settings.updatedAt)}`);
     } else {
@@ -158,6 +163,8 @@ export default function SettingsPage() {
           currencySymbol: currencySymbol.trim() || "₽",
           defaultLanguage,
           tableStyle: tableStyle as "plain" | "striped" | "striped_bold",
+          tableStripeColor: tableStripeColor || null,
+          tableHeaderColor: tableHeaderColor || null,
         },
       });
       await queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
@@ -342,6 +349,21 @@ export default function SettingsPage() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-slate-400">{t("settings.tableStyleHint", "Влияет на отображение таблиц с записями во всей платформе.")}</p>
+            </div>
+            <div className="space-y-2 rounded-md border border-slate-100 bg-slate-50/50 p-3">
+              <p className="text-xs text-slate-500">{t("settings.tableColorsHint", "Цвета таблицы записей (необязательно). Если не заданы, используются стандартные серые.")}</p>
+              {tableStyle !== "plain" && (
+                <ColorPickerControl
+                  label={t("settings.tableStripeColor", "Цвет полосок")}
+                  value={tableStripeColor}
+                  onChange={setTableStripeColor}
+                />
+              )}
+              <ColorPickerControl
+                label={t("settings.tableHeaderColor", "Цвет заголовка")}
+                value={tableHeaderColor}
+                onChange={setTableHeaderColor}
+              />
             </div>
             <div className="flex justify-end">
               <Button onClick={saveBranding} disabled={updateSettings.isPending}>

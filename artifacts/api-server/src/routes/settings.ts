@@ -44,9 +44,22 @@ router.get("/settings", requireAuth, async (_req, res): Promise<void> => {
     currencySymbol: row.currencySymbol ?? "₽",
     defaultLanguage: row.defaultLanguage ?? "ru",
     tableStyle: row.tableStyle ?? "plain",
+    tableStripeColor: row.tableStripeColor ?? null,
+    tableHeaderColor: row.tableHeaderColor ?? null,
     updatedAt: row.updatedAt,
   });
 });
+
+/** Validate an optional hex colour; null/empty clears it. Returns the
+ * normalised value (null when cleared) or throws on a malformed string so
+ * untrusted input can never reach the inline CSS used to render the table. */
+function normalizeHexColor(value: string | null | undefined): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (!/^#[0-9a-fA-F]{6}$/.test(value)) {
+    throw new Error("invalid hex colour");
+  }
+  return value.toLowerCase();
+}
 
 /**
  * PUT /settings — update platform branding. Gated by the "settings" admin
@@ -70,6 +83,15 @@ router.put(
     if (parsed.data.currencySymbol !== undefined) updates.currencySymbol = parsed.data.currencySymbol;
     if (parsed.data.defaultLanguage !== undefined) updates.defaultLanguage = parsed.data.defaultLanguage;
     if (parsed.data.tableStyle !== undefined) updates.tableStyle = parsed.data.tableStyle;
+    try {
+      if (parsed.data.tableStripeColor !== undefined)
+        updates.tableStripeColor = normalizeHexColor(parsed.data.tableStripeColor);
+      if (parsed.data.tableHeaderColor !== undefined)
+        updates.tableHeaderColor = normalizeHexColor(parsed.data.tableHeaderColor);
+    } catch {
+      res.status(400).json({ error: "Неверный формат цвета. Используйте hex, например #e0f2fe." });
+      return;
+    }
 
     // Ensure the row exists, then apply any provided fields.
     await getOrCreateSettings();
@@ -92,6 +114,8 @@ router.put(
       currencySymbol: row.currencySymbol ?? "₽",
       defaultLanguage: row.defaultLanguage ?? "ru",
       tableStyle: row.tableStyle ?? "plain",
+      tableStripeColor: row.tableStripeColor ?? null,
+      tableHeaderColor: row.tableHeaderColor ?? null,
       updatedAt: row.updatedAt,
     });
   },

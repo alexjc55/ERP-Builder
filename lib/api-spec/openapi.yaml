@@ -3377,7 +3377,7 @@ components:
     # Platform branding / general settings (singleton row).
     AppSettings:
       type: object
-      required: [appNameJson, subtitleJson, logoObjectPath, currencySymbol, defaultLanguage, tableStyle, updatedAt]
+      required: [appNameJson, subtitleJson, logoObjectPath, currencySymbol, defaultLanguage, tableStyle, tableStripeColor, tableHeaderColor, updatedAt]
       properties:
         appNameJson:
           $ref: "#/components/schemas/MultilingualText"
@@ -3396,6 +3396,12 @@ components:
           type: string
           enum: [plain, striped, striped_bold]
           description: Global visual style of the records table (cosmetic).
+        tableStripeColor:
+          type: ["string", "null"]
+          description: Optional custom hex colour for striped rows; null = built-in default.
+        tableHeaderColor:
+          type: ["string", "null"]
+          description: Optional custom hex colour for the table header row; null = built-in default.
         updatedAt:
           type: string
           format: date-time
@@ -3418,6 +3424,12 @@ components:
         tableStyle:
           type: string
           enum: [plain, striped, striped_bold]
+        tableStripeColor:
+          type: ["string", "null"]
+          maxLength: 9
+        tableHeaderColor:
+          type: ["string", "null"]
+          maxLength: 9
 
     # AUTH
     LoginInput:

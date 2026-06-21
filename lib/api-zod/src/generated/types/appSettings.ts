@@ -20,5 +20,15 @@ export interface AppSettings {
   defaultLanguage: AppSettingsDefaultLanguage;
   /** Global visual style of the records table (cosmetic). */
   tableStyle: AppSettingsTableStyle;
+  /**
+     * Optional custom hex colour for striped rows; null = built-in default.
+     * @nullable
+     */
+  tableStripeColor: string | null;
+  /**
+     * Optional custom hex colour for the table header row; null = built-in default.
+     * @nullable
+     */
+  tableHeaderColor: string | null;
   updatedAt: Date;
 }

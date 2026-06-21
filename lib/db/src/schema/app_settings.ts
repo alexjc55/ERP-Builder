@@ -23,6 +23,12 @@ export const appSettingsTable = pgTable("app_settings", {
   // header — the original look), "striped" (alternating row colours), or
   // "striped_bold" (alternating rows + a more pronounced header). Cosmetic only.
   tableStyle: text("table_style").notNull().default("plain"),
+  // Optional custom hex colour (e.g. "#e0f2fe") for the alternating (striped)
+  // rows; null falls back to the built-in subtle grey. Cosmetic only.
+  tableStripeColor: text("table_stripe_color"),
+  // Optional custom hex colour for the records-table header row background;
+  // null falls back to the built-in grey header. Cosmetic only.
+  tableHeaderColor: text("table_header_color"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
