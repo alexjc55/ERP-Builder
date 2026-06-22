@@ -2798,19 +2798,28 @@ export function EntityRecords({
                         const nextHasTotal = nextCol
                           ? numericTotals[nextCol.kind === "entity" ? nextCol.field.fieldKey : nextCol.pinKey] !== undefined
                           : false;
+                        const prevCol = orderedColumns[idx - 1];
+                        const prevHasTotal = prevCol
+                          ? numericTotals[prevCol.kind === "entity" ? prevCol.field.fieldKey : prevCol.pinKey] !== undefined
+                          : false;
                         // Totals strip (the row above the header): background and the
                         // "empty" vertical separators are #F8FAFC, so the empty part
-                        // reads as one uniform light band. Horizontal lines are removed
-                        // (borderTop/borderBottom none) — the table has no horizontal
-                        // row lines. The aggregate cell keeps the table's REAL grey
-                        // column separators on BOTH sides, drawn as actual collapsed
-                        // `border-right` (NOT box-shadow) so they land exactly on the
-                        // column boundaries and line up with the body grid. The total's
-                        // LEFT grey line comes from the PREVIOUS cell's border-right
-                        // (in border-collapse the leftmost cell wins the shared edge),
-                        // so an empty cell sitting just left of a total also gets grey.
+                        // reads as one uniform light band. The top edge is also #F8FAFC
+                        // (a 1px line, not "none") so it doesn't read as white. The
+                        // aggregate cell keeps the table's REAL grey column separators on
+                        // BOTH sides, drawn as actual collapsed `border-right` (NOT
+                        // box-shadow) so they land exactly on the column boundaries and
+                        // line up with the body grid. The total draws its own grey
+                        // border-right (one physical edge); the OTHER edge is the grey
+                        // border-right of the cell sitting physically LEFT of the total.
+                        // In LTR that neighbour is the PREVIOUS column (idx-1); under RTL
+                        // (Hebrew) the visual order is mirrored, so the physically-left
+                        // neighbour is the NEXT column (idx+1) — greying the wrong one
+                        // pushes the line onto an unrelated cell, so the side is chosen
+                        // by direction.
                         const gridLine = "var(--erp-table-border, hsl(var(--border) / 0.7))";
-                        const sepColor = hasTotal || nextHasTotal ? gridLine : "#F8FAFC";
+                        const leftNeighbourHasTotal = isRtl ? prevHasTotal : nextHasTotal;
+                        const sepColor = hasTotal || leftNeighbourHasTotal ? gridLine : "#F8FAFC";
                         const fillColor = hasTotal ? (fld.totalFillColor || "#d1fae5") : "#F8FAFC";
                         const textColor = fld.totalTextColor || "#047857";
                         return (
@@ -2821,7 +2830,7 @@ export function EntityRecords({
                               ...colWidthStyle(col.pinKey),
                               ...pinStyle(col.pinKey, fillColor, true),
                               backgroundColor: fillColor,
-                              borderTop: hasTotal ? `1px solid ${gridLine}` : "none",
+                              borderTop: hasTotal ? `1px solid ${gridLine}` : "1px solid #F8FAFC",
                               borderBottom: "none",
                               borderRight: `1px solid ${sepColor}`,
                             }}
@@ -2837,11 +2846,11 @@ export function EntityRecords({
                       {showStatusColumn && (
                         <th
                           className="px-4 py-2"
-                          style={{ ...colWidthStyle("__status__"), ...pinStyle("__status__", "#F8FAFC", true), backgroundColor: "#F8FAFC", borderTop: "none", borderBottom: "none", borderRight: "1px solid #F8FAFC" }}
+                          style={{ ...colWidthStyle("__status__"), ...pinStyle("__status__", "#F8FAFC", true), backgroundColor: "#F8FAFC", borderTop: "1px solid #F8FAFC", borderBottom: "none", borderRight: "1px solid #F8FAFC" }}
                         />
                       )}
                       {showActionsColumn && (
-                        <th className="px-4 py-2" style={{ backgroundColor: "#F8FAFC", borderTop: "none", borderBottom: "none" }} />
+                        <th className="px-4 py-2" style={{ backgroundColor: "#F8FAFC", borderTop: "1px solid #F8FAFC", borderBottom: "none" }} />
                       )}
                     </tr>
                   )}
