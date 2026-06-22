@@ -30,5 +30,10 @@ export interface AppSettings {
      * @nullable
      */
   tableHeaderColor: string | null;
+  /**
+     * Optional custom hex colour for the table divider/grid lines; null = built-in default.
+     * @nullable
+     */
+  tableBorderColor: string | null;
   updatedAt: Date;
 }

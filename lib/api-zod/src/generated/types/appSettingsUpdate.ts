@@ -28,4 +28,9 @@ export interface AppSettingsUpdate {
      * @nullable
      */
   tableHeaderColor?: string | null;
+  /**
+     * @maxLength 9
+     * @nullable
+     */
+  tableBorderColor?: string | null;
 }

@@ -1034,6 +1034,10 @@ export function EntityRecords({
   // Optional admin-chosen custom colours; null falls back to the Tailwind classes.
   const stripeColor = appSettings?.tableStripeColor ?? null;
   const headerColor = appSettings?.tableHeaderColor ?? null;
+  // Optional custom colour for the table divider/grid lines. Set as a CSS var on
+  // the table so the global `td/th` separator rule (index.css) picks it up;
+  // null leaves the built-in light border.
+  const borderColor = appSettings?.tableBorderColor ?? null;
   // Concrete header background used for sticky (pinned) header cells, which need
   // an opaque colour and cannot rely on the row's Tailwind class. Custom colour
   // wins; otherwise mirror the bold/plain header default.
@@ -2767,7 +2771,10 @@ export function EntityRecords({
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table
+                className="w-full text-sm"
+                style={borderColor ? ({ "--erp-table-border": borderColor } as CSSProperties) : undefined}
+              >
                 <thead>
                   {Object.keys(numericTotals).length > 0 && (
                     <tr>

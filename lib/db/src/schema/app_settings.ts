@@ -29,6 +29,9 @@ export const appSettingsTable = pgTable("app_settings", {
   // Optional custom hex colour for the records-table header row background;
   // null falls back to the built-in grey header. Cosmetic only.
   tableHeaderColor: text("table_header_color"),
+  // Optional custom hex colour for the records-table divider (grid) lines;
+  // null falls back to the built-in light border. Cosmetic only.
+  tableBorderColor: text("table_border_color"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

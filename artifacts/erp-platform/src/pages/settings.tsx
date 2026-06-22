@@ -103,6 +103,7 @@ export default function SettingsPage() {
   const [tableStyle, setTableStyle] = useState<string>("plain");
   const [tableStripeColor, setTableStripeColor] = useState<string>("");
   const [tableHeaderColor, setTableHeaderColor] = useState<string>("");
+  const [tableBorderColor, setTableBorderColor] = useState<string>("");
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -120,6 +121,7 @@ export default function SettingsPage() {
     setTableStyle(settings.tableStyle ?? "plain");
     setTableStripeColor(settings.tableStripeColor ?? "");
     setTableHeaderColor(settings.tableHeaderColor ?? "");
+    setTableBorderColor(settings.tableBorderColor ?? "");
     if (settings.logoObjectPath) {
       setLogoPreview(`/api/storage/branding-logo?v=${encodeURIComponent(settings.updatedAt)}`);
     } else {
@@ -165,6 +167,7 @@ export default function SettingsPage() {
           tableStyle: tableStyle as "plain" | "striped" | "striped_bold",
           tableStripeColor: tableStripeColor || null,
           tableHeaderColor: tableHeaderColor || null,
+          tableBorderColor: tableBorderColor || null,
         },
       });
       await queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
@@ -363,6 +366,11 @@ export default function SettingsPage() {
                 label={t("settings.tableHeaderColor", "Цвет заголовка")}
                 value={tableHeaderColor}
                 onChange={setTableHeaderColor}
+              />
+              <ColorPickerControl
+                label={t("settings.tableBorderColor", "Цвет линий")}
+                value={tableBorderColor}
+                onChange={setTableBorderColor}
               />
             </div>
             <div className="flex justify-end">

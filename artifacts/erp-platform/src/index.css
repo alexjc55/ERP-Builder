@@ -165,6 +165,6 @@
      per-row in the markup; this adds the missing vertical grid lines). */
   table th:not(:last-child),
   table td:not(:last-child) {
-    border-right: 1px solid hsl(var(--border) / 0.7);
+    border-right: 1px solid var(--erp-table-border, hsl(var(--border) / 0.7));
   }
 }

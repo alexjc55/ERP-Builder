@@ -46,6 +46,7 @@ router.get("/settings", requireAuth, async (_req, res): Promise<void> => {
     tableStyle: row.tableStyle ?? "plain",
     tableStripeColor: row.tableStripeColor ?? null,
     tableHeaderColor: row.tableHeaderColor ?? null,
+    tableBorderColor: row.tableBorderColor ?? null,
     updatedAt: row.updatedAt,
   });
 });
@@ -88,6 +89,8 @@ router.put(
         updates.tableStripeColor = normalizeHexColor(parsed.data.tableStripeColor);
       if (parsed.data.tableHeaderColor !== undefined)
         updates.tableHeaderColor = normalizeHexColor(parsed.data.tableHeaderColor);
+      if (parsed.data.tableBorderColor !== undefined)
+        updates.tableBorderColor = normalizeHexColor(parsed.data.tableBorderColor);
     } catch {
       res.status(400).json({ error: "Неверный формат цвета. Используйте hex, например #e0f2fe." });
       return;
@@ -116,6 +119,7 @@ router.put(
       tableStyle: row.tableStyle ?? "plain",
       tableStripeColor: row.tableStripeColor ?? null,
       tableHeaderColor: row.tableHeaderColor ?? null,
+      tableBorderColor: row.tableBorderColor ?? null,
       updatedAt: row.updatedAt,
     });
   },

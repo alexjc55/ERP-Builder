@@ -3377,7 +3377,7 @@ components:
     # Platform branding / general settings (singleton row).
     AppSettings:
       type: object
-      required: [appNameJson, subtitleJson, logoObjectPath, currencySymbol, defaultLanguage, tableStyle, tableStripeColor, tableHeaderColor, updatedAt]
+      required: [appNameJson, subtitleJson, logoObjectPath, currencySymbol, defaultLanguage, tableStyle, tableStripeColor, tableHeaderColor, tableBorderColor, updatedAt]
       properties:
         appNameJson:
           $ref: "#/components/schemas/MultilingualText"
@@ -3402,6 +3402,9 @@ components:
         tableHeaderColor:
           type: ["string", "null"]
           description: Optional custom hex colour for the table header row; null = built-in default.
+        tableBorderColor:
+          type: ["string", "null"]
+          description: Optional custom hex colour for the table divider/grid lines; null = built-in default.
         updatedAt:
           type: string
           format: date-time
@@ -3428,6 +3431,9 @@ components:
           type: ["string", "null"]
           maxLength: 9
         tableHeaderColor:
+          type: ["string", "null"]
+          maxLength: 9
+        tableBorderColor:
           type: ["string", "null"]
           maxLength: 9
 
