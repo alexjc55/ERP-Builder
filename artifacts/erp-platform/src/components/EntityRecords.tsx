@@ -2782,37 +2782,36 @@ export function EntityRecords({
                         const totalKey = col.kind === "entity" ? col.field.fieldKey : col.pinKey;
                         const hasTotal = numericTotals[totalKey] !== undefined;
                         const fld = col.field;
-                        // Empty totals cells blend into the page background (no
-                        // fill, no divider/grid lines); only cells that carry an
-                        // aggregate value keep a colored, bordered box. The global
-                        // index.css vertical-separator rule is suppressed per-cell
-                        // with `border: none` so the empty strip reads as page bg.
+                        // The whole totals strip is chrome-free: every cell is
+                        // transparent with NO borders (the inline `border: none`
+                        // suppresses the global index.css vertical-separator rule),
+                        // so the strip reads as the page background — no frame, no
+                        // grid lines above the header. The aggregate value itself is
+                        // shown as a self-contained rounded chip, NOT a bordered
+                        // table cell, so it never introduces horizontal lines that
+                        // the rest of the (horizontally line-free) table lacks.
                         return (
                           <th
                             key={`tot-${col.pinKey}`}
-                            className={cn(
-                              "px-4 py-3 text-left",
-                              hasTotal && !fld.totalFillColor && "bg-emerald-50",
-                            )}
+                            className="px-4 py-2 text-left"
                             style={{
                               ...colWidthStyle(col.pinKey),
-                              ...(hasTotal
-                                ? {
-                                    ...pinStyle(col.pinKey, fld.totalFillColor ?? "#ecfdf5", true),
-                                    ...(fld.totalFillColor ? { backgroundColor: fld.totalFillColor } : undefined),
-                                    border: "1px solid var(--erp-table-border, hsl(var(--border) / 0.7))",
-                                  }
-                                : {
-                                    ...pinStyle(col.pinKey, "transparent", true),
-                                    backgroundColor: "transparent",
-                                    border: "none",
-                                  }),
+                              ...pinStyle(col.pinKey, "transparent", true),
+                              backgroundColor: "transparent",
+                              border: "none",
                             }}
                           >
                             {hasTotal ? (
                               <span
-                                className={cn("text-sm font-bold whitespace-nowrap", !fld.totalTextColor && "text-emerald-700")}
-                                style={fld.totalTextColor ? { color: fld.totalTextColor } : undefined}
+                                className={cn(
+                                  "inline-block rounded-md px-2.5 py-1 text-sm font-bold whitespace-nowrap",
+                                  !fld.totalFillColor && "bg-emerald-100",
+                                  !fld.totalTextColor && "text-emerald-700",
+                                )}
+                                style={{
+                                  ...(fld.totalFillColor ? { backgroundColor: fld.totalFillColor } : undefined),
+                                  ...(fld.totalTextColor ? { color: fld.totalTextColor } : undefined),
+                                }}
                               >
                                 {numericTotals[totalKey].toLocaleString("ru-RU")}
                               </span>
@@ -2822,12 +2821,12 @@ export function EntityRecords({
                       })}
                       {showStatusColumn && (
                         <th
-                          className="px-4 py-1.5"
+                          className="px-4 py-2"
                           style={{ ...colWidthStyle("__status__"), backgroundColor: "transparent", border: "none" }}
                         />
                       )}
                       {showActionsColumn && (
-                        <th className="px-4 py-1.5" style={{ backgroundColor: "transparent", border: "none" }} />
+                        <th className="px-4 py-2" style={{ backgroundColor: "transparent", border: "none" }} />
                       )}
                     </tr>
                   )}
