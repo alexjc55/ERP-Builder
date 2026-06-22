@@ -2782,37 +2782,30 @@ export function EntityRecords({
                         const totalKey = col.kind === "entity" ? col.field.fieldKey : col.pinKey;
                         const hasTotal = numericTotals[totalKey] !== undefined;
                         const fld = col.field;
-                        // The whole totals strip is chrome-free: every cell is
-                        // transparent with NO borders (the inline `border: none`
-                        // suppresses the global index.css vertical-separator rule),
-                        // so the strip reads as the page background — no frame, no
-                        // grid lines above the header. The aggregate value itself is
-                        // shown as a self-contained rounded chip, NOT a bordered
-                        // table cell, so it never introduces horizontal lines that
-                        // the rest of the (horizontally line-free) table lacks.
+                        // Totals strip matches the rest of the table grid: KEEP the
+                        // vertical column separators (the global index.css
+                        // `border-right` rule, so do NOT set `border:none`), and only
+                        // suppress the HORIZONTAL lines via borderTop/borderBottom
+                        // none — the table has no horizontal row lines. The aggregate
+                        // fill spans the WHOLE cell (background on the <th>, covering
+                        // content + padding), not a chip. Empty cells stay transparent
+                        // but still show their vertical separator.
+                        const fillColor = hasTotal ? (fld.totalFillColor || "#d1fae5") : "transparent";
+                        const textColor = fld.totalTextColor || "#047857";
                         return (
                           <th
                             key={`tot-${col.pinKey}`}
                             className="px-4 py-2 text-left"
                             style={{
                               ...colWidthStyle(col.pinKey),
-                              ...pinStyle(col.pinKey, "transparent", true),
-                              backgroundColor: "transparent",
-                              border: "none",
+                              ...pinStyle(col.pinKey, fillColor, true),
+                              backgroundColor: fillColor,
+                              borderTop: "none",
+                              borderBottom: "none",
                             }}
                           >
                             {hasTotal ? (
-                              <span
-                                className={cn(
-                                  "inline-block rounded-md px-2.5 py-1 text-sm font-bold whitespace-nowrap",
-                                  !fld.totalFillColor && "bg-emerald-100",
-                                  !fld.totalTextColor && "text-emerald-700",
-                                )}
-                                style={{
-                                  ...(fld.totalFillColor ? { backgroundColor: fld.totalFillColor } : undefined),
-                                  ...(fld.totalTextColor ? { color: fld.totalTextColor } : undefined),
-                                }}
-                              >
+                              <span className="font-bold whitespace-nowrap" style={{ color: textColor }}>
                                 {numericTotals[totalKey].toLocaleString("ru-RU")}
                               </span>
                             ) : null}
@@ -2822,11 +2815,11 @@ export function EntityRecords({
                       {showStatusColumn && (
                         <th
                           className="px-4 py-2"
-                          style={{ ...colWidthStyle("__status__"), backgroundColor: "transparent", border: "none" }}
+                          style={{ ...colWidthStyle("__status__"), ...pinStyle("__status__", "transparent", true), backgroundColor: "transparent", borderTop: "none", borderBottom: "none" }}
                         />
                       )}
                       {showActionsColumn && (
-                        <th className="px-4 py-2" style={{ backgroundColor: "transparent", border: "none" }} />
+                        <th className="px-4 py-2" style={{ backgroundColor: "transparent", borderTop: "none", borderBottom: "none" }} />
                       )}
                     </tr>
                   )}
