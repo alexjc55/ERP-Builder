@@ -2763,7 +2763,7 @@ export function EntityRecords({
         </Card>
       ) : (
       <>
-      <Card className="border-slate-200 shadow-sm">
+      <Card className="border-0 rounded-none shadow-none">
         <CardContent className="p-0">
           {recordsLoading ? (
             <div className="p-4 space-y-2">
@@ -2777,20 +2777,19 @@ export function EntityRecords({
               >
                 <thead>
                   {Object.keys(numericTotals).length > 0 && (
-                    <tr>
+                    <tr style={{ backgroundColor: "#F8FAFC" }}>
                       {orderedColumns.map((col) => {
                         const totalKey = col.kind === "entity" ? col.field.fieldKey : col.pinKey;
                         const hasTotal = numericTotals[totalKey] !== undefined;
                         const fld = col.field;
-                        // Totals strip matches the rest of the table grid: KEEP the
-                        // vertical column separators (the global index.css
-                        // `border-right` rule, so do NOT set `border:none`), and only
-                        // suppress the HORIZONTAL lines via borderTop/borderBottom
-                        // none — the table has no horizontal row lines. The aggregate
-                        // fill spans the WHOLE cell (background on the <th>, covering
-                        // content + padding), not a chip. Empty cells stay transparent
-                        // but still show their vertical separator.
-                        const fillColor = hasTotal ? (fld.totalFillColor || "#d1fae5") : "transparent";
+                        // Totals strip (the row above the header): background is
+                        // #F8FAFC and ALL its vertical separators are #F8FAFC, so the
+                        // empty part reads as one uniform light band. Horizontal lines
+                        // are removed (borderTop/borderBottom none) — the table has no
+                        // horizontal row lines. The cell that carries an aggregate keeps
+                        // its OWN full-cell fill (totalFillColor or emerald default) and
+                        // its vertical lines on both sides.
+                        const fillColor = hasTotal ? (fld.totalFillColor || "#d1fae5") : "#F8FAFC";
                         const textColor = fld.totalTextColor || "#047857";
                         return (
                           <th
@@ -2802,6 +2801,7 @@ export function EntityRecords({
                               backgroundColor: fillColor,
                               borderTop: "none",
                               borderBottom: "none",
+                              borderRight: "1px solid #F8FAFC",
                             }}
                           >
                             {hasTotal ? (
@@ -2815,11 +2815,11 @@ export function EntityRecords({
                       {showStatusColumn && (
                         <th
                           className="px-4 py-2"
-                          style={{ ...colWidthStyle("__status__"), ...pinStyle("__status__", "transparent", true), backgroundColor: "transparent", borderTop: "none", borderBottom: "none" }}
+                          style={{ ...colWidthStyle("__status__"), ...pinStyle("__status__", "#F8FAFC", true), backgroundColor: "#F8FAFC", borderTop: "none", borderBottom: "none", borderRight: "1px solid #F8FAFC" }}
                         />
                       )}
                       {showActionsColumn && (
-                        <th className="px-4 py-2" style={{ backgroundColor: "transparent", borderTop: "none", borderBottom: "none" }} />
+                        <th className="px-4 py-2" style={{ backgroundColor: "#F8FAFC", borderTop: "none", borderBottom: "none" }} />
                       )}
                     </tr>
                   )}
