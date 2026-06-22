@@ -151,6 +151,11 @@ meta, fallback `text`) and branches the calendar-vs-checklist on `effType`. Cons
 `between` (the calendar's only operator). Its `::timestamptz` cast on the linked value must be
 CASE-guarded by a date-prefix regex so an empty/malformed linked value (the EXISTS scans many linked
 rows) yields no-match instead of a 500.
+**The projected type must be sticky.** `relatedFieldType` is only available from the related-values
+fetch, which CLEARS its columns whenever the current filter returns zero rows. So routing read live
+off that meta would flip a lookup-of-date field back to the checklist as soon as you filter to an
+empty day/period. Cache `relatedFieldType` per fieldKey (accumulate, never clear on empty; reset on
+entity switch) and use it as the routing fallback so the calendar persists across empty results.
 
 ## Page-local fields participate in the filter bar via a separate channel
 Page-local fields (values live in `page_record_values.values_json`, keyed by fieldKey, NOT the

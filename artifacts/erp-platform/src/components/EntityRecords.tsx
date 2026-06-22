@@ -1237,6 +1237,32 @@ export function EntityRecords({
     for (const c of entityRelatedColumns) m.set(c.fieldKey, c);
     return m;
   }, [entityRelatedColumns]);
+  // Sticky cache of a relation/lookup field's PROJECTED type, keyed by fieldKey. The related-values
+  // fetch clears `entityRelatedColumns` whenever the current filter yields zero rows (see the fetch
+  // effect below), which would otherwise make a lookup-of-date field flip back to the checklist UI
+  // once you filter to an empty day/period. We accumulate the type here so the calendar-vs-checklist
+  // routing stays stable across empty results. Reset on entity switch (field keys are entity-scoped).
+  const [knownRelatedFieldTypes, setKnownRelatedFieldTypes] = useState<Map<string, string>>(
+    new Map(),
+  );
+  useEffect(() => {
+    setKnownRelatedFieldTypes(new Map());
+  }, [entityId]);
+  useEffect(() => {
+    if (entityRelatedColumns.length === 0) return;
+    setKnownRelatedFieldTypes((prev) => {
+      let changed = false;
+      const next = new Map(prev);
+      for (const c of entityRelatedColumns) {
+        const rt = c.relatedFieldType;
+        if (rt && next.get(c.fieldKey) !== rt) {
+          next.set(c.fieldKey, rt);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [entityRelatedColumns]);
   const fetchEntityRelatedValues = useGetEntityRelatedValues().mutateAsync;
 
   // Optional mirror-page projection: restrict to a chosen subset of field keys.
@@ -2705,7 +2731,9 @@ export function EntityRecords({
             // (projected) type so a lookup pointing at a date gets the calendar, not the checklist.
             const effType =
               f.fieldType === "relation" || f.fieldType === "lookup"
-                ? ((entityRelatedColMeta.get(f.fieldKey)?.relatedFieldType ?? "text") as Field["fieldType"])
+                ? ((entityRelatedColMeta.get(f.fieldKey)?.relatedFieldType ??
+                    knownRelatedFieldTypes.get(f.fieldKey) ??
+                    "text") as Field["fieldType"])
                 : f.fieldType;
             return effType === "date" || effType === "datetime" ? (
               <DateFilterPopover
