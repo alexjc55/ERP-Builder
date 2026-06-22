@@ -2809,7 +2809,7 @@ export function EntityRecords({
                               ...colWidthStyle(col.pinKey),
                               ...pinStyle(col.pinKey, fillColor, true),
                               backgroundColor: fillColor,
-                              borderTop: "none",
+                              borderTop: hasTotal ? `1px solid ${gridLine}` : "none",
                               borderBottom: "none",
                               borderRight: `1px solid ${sepColor}`,
                             }}
