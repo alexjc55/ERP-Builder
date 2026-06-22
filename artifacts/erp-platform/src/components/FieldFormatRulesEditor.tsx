@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent, type FocusEvent } from "react";
+import { useState, useEffect, type ChangeEvent, type FocusEvent } from "react";
 import type { FieldFormatRule, FormatOperator, FieldType } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -94,14 +94,47 @@ export function FieldFormatRulesEditor({
   const ops = operatorsForType(fieldType);
   const [presets, setPresets] = useState<string[]>(() => loadColorPresets());
 
+  // For select/boolean fields the value <Select> visually shows a default (the
+  // first option / "Да") even when nothing is stored, so a rule must START with
+  // that displayed value persisted — otherwise the stored value stays "" and the
+  // rule silently matches EMPTY cells ("" === "") instead of the shown option,
+  // while the real first option matches nothing. Returns "" for ops that take no
+  // value and for free-text/number/user fields (those don't lie about a default).
+  const defaultRuleValue = (op: FormatOperator): string => {
+    if (!needsValue(op)) return "";
+    if (fieldType === "select") return options[0] ?? "";
+    if (fieldType === "boolean") return "true";
+    return "";
+  };
+
   const update = (idx: number, patch: Partial<FieldFormatRule>) => {
     onChange(rules.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
   };
   const remove = (idx: number) => onChange(rules.filter((_, i) => i !== idx));
   const add = () => {
     const op = ops[0]?.value ?? "equals";
-    onChange([...rules, { operator: op, value: "", cellColor: "#fee2e2", rowColor: "" }]);
+    onChange([...rules, { operator: op, value: defaultRuleValue(op), cellColor: "#fee2e2", rowColor: "" }]);
   };
+
+  // Heal legacy rules (saved before the persisted-default fix) and any rule whose
+  // value-taking operator still has an empty value on a select/boolean field:
+  // persist the value the <Select> already shows so stored matches displayed.
+  useEffect(() => {
+    if (fieldType !== "select" && fieldType !== "boolean") return;
+    let changed = false;
+    const fixed = rules.map((r) => {
+      if (needsValue(r.operator) && !r.value) {
+        const dv = defaultRuleValue(r.operator);
+        if (dv && dv !== r.value) {
+          changed = true;
+          return { ...r, value: dv };
+        }
+      }
+      return r;
+    });
+    if (changed) onChange(fixed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fieldType, options, rules]);
 
   const renderColorControl = (label: string, value: string, onColorChange: (v: string) => void) => {
     const valid = /^#[0-9a-fA-F]{6}$/.test(value);
