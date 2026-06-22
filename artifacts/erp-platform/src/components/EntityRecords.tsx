@@ -2782,14 +2782,31 @@ export function EntityRecords({
                         const totalKey = col.kind === "entity" ? col.field.fieldKey : col.pinKey;
                         const hasTotal = numericTotals[totalKey] !== undefined;
                         const fld = col.field;
+                        // Empty totals cells blend into the page background (no
+                        // fill, no divider/grid lines); only cells that carry an
+                        // aggregate value keep a colored, bordered box. The global
+                        // index.css vertical-separator rule is suppressed per-cell
+                        // with `border: none` so the empty strip reads as page bg.
                         return (
                           <th
                             key={`tot-${col.pinKey}`}
-                            className={cn("px-4 py-3 text-left", hasTotal && !fld.totalFillColor && "bg-emerald-50")}
+                            className={cn(
+                              "px-4 py-3 text-left",
+                              hasTotal && !fld.totalFillColor && "bg-emerald-50",
+                            )}
                             style={{
-                              ...pinStyle(col.pinKey, hasTotal ? "#ecfdf5" : "#ffffff", true),
-                              ...(hasTotal && fld.totalFillColor ? { backgroundColor: fld.totalFillColor } : undefined),
                               ...colWidthStyle(col.pinKey),
+                              ...(hasTotal
+                                ? {
+                                    ...pinStyle(col.pinKey, fld.totalFillColor ?? "#ecfdf5", true),
+                                    ...(fld.totalFillColor ? { backgroundColor: fld.totalFillColor } : undefined),
+                                    border: "1px solid var(--erp-table-border, hsl(var(--border) / 0.7))",
+                                  }
+                                : {
+                                    ...pinStyle(col.pinKey, "transparent", true),
+                                    backgroundColor: "transparent",
+                                    border: "none",
+                                  }),
                             }}
                           >
                             {hasTotal ? (
@@ -2803,8 +2820,15 @@ export function EntityRecords({
                           </th>
                         );
                       })}
-                      {showStatusColumn && <th className="px-4 py-1.5" style={colWidthStyle("__status__")} />}
-                      {showActionsColumn && <th className="px-4 py-1.5" />}
+                      {showStatusColumn && (
+                        <th
+                          className="px-4 py-1.5"
+                          style={{ ...colWidthStyle("__status__"), backgroundColor: "transparent", border: "none" }}
+                        />
+                      )}
+                      {showActionsColumn && (
+                        <th className="px-4 py-1.5" style={{ backgroundColor: "transparent", border: "none" }} />
+                      )}
                     </tr>
                   )}
                   <tr
