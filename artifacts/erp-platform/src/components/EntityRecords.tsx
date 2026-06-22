@@ -262,6 +262,18 @@ function renderCellValue(field: Field, value: unknown, t: (key: string, def: str
       </span>
     );
   }
+  if (field.fieldType === "date" || field.fieldType === "datetime") {
+    // Stored value is ISO (yyyy-MM-dd or full ISO datetime). Display it in the
+    // same day-first format the native <input type="date"> shows in a ru locale
+    // (dd.MM.yyyy), so the saved value matches what the user typed.
+    const raw = String(value);
+    const parsed = parseISO(raw);
+    if (!Number.isNaN(parsed.getTime())) {
+      const fmt = field.fieldType === "datetime" ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy";
+      return <span className="text-slate-700" style={colorStyle}>{formatDate(parsed, fmt)}</span>;
+    }
+    return <span className="text-slate-700" style={colorStyle}>{raw}</span>;
+  }
   return <span className="text-slate-700" style={colorStyle}>{String(value)}</span>;
 }
 
