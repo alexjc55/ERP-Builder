@@ -2778,25 +2778,29 @@ export function EntityRecords({
                 <thead>
                   {Object.keys(numericTotals).length > 0 && (
                     <tr style={{ backgroundColor: "#F8FAFC" }}>
-                      {orderedColumns.map((col) => {
+                      {orderedColumns.map((col, idx) => {
                         const totalKey = col.kind === "entity" ? col.field.fieldKey : col.pinKey;
                         const hasTotal = numericTotals[totalKey] !== undefined;
                         const fld = col.field;
-                        // Totals strip (the row above the header): background is
-                        // #F8FAFC and ALL its vertical separators are #F8FAFC, so the
-                        // empty part reads as one uniform light band. Horizontal lines
-                        // are removed (borderTop/borderBottom none) — the table has no
-                        // horizontal row lines. The cell that carries an aggregate keeps
-                        // its OWN full-cell fill (totalFillColor or emerald default) and
-                        // its vertical lines on both sides.
+                        const nextCol = orderedColumns[idx + 1];
+                        const nextHasTotal = nextCol
+                          ? numericTotals[nextCol.kind === "entity" ? nextCol.field.fieldKey : nextCol.pinKey] !== undefined
+                          : false;
+                        // Totals strip (the row above the header): background and the
+                        // "empty" vertical separators are #F8FAFC, so the empty part
+                        // reads as one uniform light band. Horizontal lines are removed
+                        // (borderTop/borderBottom none) — the table has no horizontal
+                        // row lines. The aggregate cell keeps the table's REAL grey
+                        // column separators on BOTH sides, drawn as actual collapsed
+                        // `border-right` (NOT box-shadow) so they land exactly on the
+                        // column boundaries and line up with the body grid. The total's
+                        // LEFT grey line comes from the PREVIOUS cell's border-right
+                        // (in border-collapse the leftmost cell wins the shared edge),
+                        // so an empty cell sitting just left of a total also gets grey.
+                        const gridLine = "var(--erp-table-border, hsl(var(--border) / 0.7))";
+                        const sepColor = hasTotal || nextHasTotal ? gridLine : "#F8FAFC";
                         const fillColor = hasTotal ? (fld.totalFillColor || "#d1fae5") : "#F8FAFC";
                         const textColor = fld.totalTextColor || "#047857";
-                        // The aggregate cell keeps the table's normal grey vertical
-                        // separators on BOTH sides. We draw them with an inset
-                        // box-shadow (not borders) because `border-collapse` lets a
-                        // neighbour's #F8FAFC border win the shared edge, which would
-                        // erase the line. The shadow always renders on THIS cell.
-                        const gridLine = "var(--erp-table-border, hsl(var(--border) / 0.7))";
                         return (
                           <th
                             key={`tot-${col.pinKey}`}
@@ -2807,10 +2811,7 @@ export function EntityRecords({
                               backgroundColor: fillColor,
                               borderTop: "none",
                               borderBottom: "none",
-                              borderRight: "1px solid #F8FAFC",
-                              ...(hasTotal
-                                ? { boxShadow: `inset 1px 0 0 0 ${gridLine}, inset -1px 0 0 0 ${gridLine}` }
-                                : undefined),
+                              borderRight: `1px solid ${sepColor}`,
                             }}
                           >
                             {hasTotal ? (
