@@ -143,6 +143,14 @@ rendered column, no new leak).
 filter-values DISTINCT path joins with DIFFERENT aliases `record_links frl` / `entity_records flt` to
 avoid shadowing. Pick `frl.source_record_id`=base / `frl.target_record_id`=linked for direction
 "source", inverse for "target".
+**Route the live filter bar by the PROJECTED type, not the field's own type.** A relation/lookup
+field that projects a date must open the date CALENDAR, not the value checklist. The client computes
+an `effType` (relation/lookup → the projected `relatedFieldType` from the entity-related-columns
+meta, fallback `text`) and branches the calendar-vs-checklist on `effType`. Consequently
+`buildRelationCondition` MUST implement every operator the projected type can emit — including
+`between` (the calendar's only operator). Its `::timestamptz` cast on the linked value must be
+CASE-guarded by a date-prefix regex so an empty/malformed linked value (the EXISTS scans many linked
+rows) yields no-match instead of a 500.
 
 ## Page-local fields participate in the filter bar via a separate channel
 Page-local fields (values live in `page_record_values.values_json`, keyed by fieldKey, NOT the

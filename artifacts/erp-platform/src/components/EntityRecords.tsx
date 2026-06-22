@@ -2700,8 +2700,14 @@ export function EntityRecords({
               </PopoverContent>
             </Popover>
           )}
-          {filterableFields.map((f: Field) =>
-            f.fieldType === "date" || f.fieldType === "datetime" ? (
+          {filterableFields.map((f: Field) => {
+            // A relation/lookup field projects another entity's field; route it by its EFFECTIVE
+            // (projected) type so a lookup pointing at a date gets the calendar, not the checklist.
+            const effType =
+              f.fieldType === "relation" || f.fieldType === "lookup"
+                ? ((entityRelatedColMeta.get(f.fieldKey)?.relatedFieldType ?? "text") as Field["fieldType"])
+                : f.fieldType;
+            return effType === "date" || effType === "datetime" ? (
               <DateFilterPopover
                 key={f.id}
                 field={f}
@@ -2722,15 +2728,11 @@ export function EntityRecords({
                 ml={ml}
                 t={t}
                 userNames={userNames}
-                effectiveType={
-                  f.fieldType === "relation" || f.fieldType === "lookup"
-                    ? ((entityRelatedColMeta.get(f.fieldKey)?.relatedFieldType ?? "text") as Field["fieldType"])
-                    : f.fieldType
-                }
+                effectiveType={effType}
                 triggerClassName="w-full justify-between sm:w-auto sm:justify-center"
               />
-            ),
-          )}
+            );
+          })}
           {filterablePageFields.map((pf: PageField) =>
             pf.fieldType === "date" || pf.fieldType === "datetime" ? (
               <DateFilterPopover

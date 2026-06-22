@@ -151,6 +151,31 @@ function buildRelationCondition(cond: FilterCondition, meta: RelationFilterMeta)
     return { sql: relationValueExists(meta, (v) => sql`${v} IN (${sql.join(parts, sql`, `)})`) };
   }
 
+  // Half-open range [from, to) on a relation/lookup field. The live filter bar only emits
+  // `between` from the date calendar (a relation/lookup whose PROJECTED type is date/datetime),
+  // so the linked value is a date string — compare as timestamptz, mirroring the entity-field
+  // date `between` in buildCondition. Internally AND, so it stays correct under any conjunction.
+  if (op === "between") {
+    if (!Array.isArray(cond.value) || cond.value.length !== 2) {
+      return { error: `Operator "between" requires a [from, to] array for field "${cond.field}"` };
+    }
+    const [from, to] = cond.value;
+    if (from === undefined || from === null || to === undefined || to === null) {
+      return { error: `Operator "between" requires both bounds for field "${cond.field}"` };
+    }
+    // CASE-guard the cast: a linked row whose projected value is empty or not a date prefix would
+    // make `::timestamptz` raise (a 500). The CASE guarantees the cast is only evaluated for
+    // date-shaped values, so malformed/empty linked values (or a `between` mistakenly sent for a
+    // non-date projected field) simply don't match instead of erroring.
+    return {
+      sql: relationValueExists(
+        meta,
+        (v) =>
+          sql`CASE WHEN ${v} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' THEN ((${v})::timestamptz >= ${String(from)}::timestamptz AND (${v})::timestamptz < ${String(to)}::timestamptz) ELSE false END`,
+      ),
+    };
+  }
+
   const value = cond.value;
   if (value === undefined || value === null) {
     return { error: `Operator "${op}" requires a value for field "${cond.field}"` };
