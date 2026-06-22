@@ -628,6 +628,7 @@ function DateFilterPopover({
   ml,
   t,
   triggerClassName,
+  getAvailableDays,
 }: {
   field: Field;
   value: DateRangeFilter | undefined;
@@ -635,17 +636,55 @@ function DateFilterPopover({
   ml: (v: unknown) => string;
   t: (key: string, def: string) => string;
   triggerClassName?: string;
+  /**
+   * Returns the distinct stored values of THIS date field among records matching the OTHER
+   * active filters (the field self-excludes its own pick). Used to highlight, in the calendar,
+   * the days that actually have records so the user never picks an empty day. Must be a STABLE
+   * reference (e.g. a useCallback) — the popover refetches whenever it changes while open.
+   */
+  getAvailableDays?: (fieldKey: string) => Promise<string[]>;
 }) {
   const [open, setOpen] = useState(false);
   // Local in-progress range so the user can build a range across two calendar clicks before it
   // commits to the parent (and triggers a query). Synced from the committed value on open.
   const [draft, setDraft] = useState<DateRange | undefined>(undefined);
+  // Days (at local midnight) that have at least one record under the other active filters.
+  const [availableDays, setAvailableDays] = useState<Date[]>([]);
 
   useEffect(() => {
     if (open) {
       setDraft(value ? { from: parseISO(value.from), to: parseISO(value.to) } : undefined);
     }
   }, [open, value]);
+
+  // When the popover opens (or the other filters change while it's open), fetch the days that
+  // have records and bucket them to local-day granularity for calendar highlighting.
+  useEffect(() => {
+    if (!open || !getAvailableDays) return;
+    let cancelled = false;
+    getAvailableDays(field.fieldKey)
+      .then((vals) => {
+        if (cancelled) return;
+        const seen = new Set<string>();
+        const days: Date[] = [];
+        for (const v of vals) {
+          if (!v) continue;
+          const parsed = parseISO(v);
+          if (Number.isNaN(parsed.getTime())) continue;
+          const key = formatDate(parsed, DAY_FMT);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          days.push(parseISO(key));
+        }
+        setAvailableDays(days);
+      })
+      .catch(() => {
+        if (!cancelled) setAvailableDays([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, field.fieldKey, getAvailableDays]);
 
   const commit = (from: Date, to: Date) => {
     setDraft({ from, to });
@@ -731,8 +770,19 @@ function DateFilterPopover({
             defaultMonth={draft?.from}
             selected={draft}
             onSelect={onSelect}
+            modifiers={{ hasRecords: availableDays }}
+            modifiersClassNames={{
+              hasRecords:
+                "relative after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:h-1 after:w-1 after:rounded-full after:bg-blue-500 after:content-['']",
+            }}
           />
         </div>
+        {getAvailableDays && availableDays.length > 0 && (
+          <div className="flex items-center gap-1.5 border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500" />
+            {t("records.dateHasRecords", "Есть записи")}
+          </div>
+        )}
         {value && (
           <div className="border-t border-slate-100 p-1.5">
             <Button
@@ -2659,6 +2709,7 @@ export function EntityRecords({
                 onChange={(range) => setDateFilter(f.fieldKey, range)}
                 ml={ml}
                 t={t}
+                getAvailableDays={getFilterOptions}
                 triggerClassName="w-full justify-start sm:w-auto sm:justify-center"
               />
             ) : (
@@ -2689,6 +2740,7 @@ export function EntityRecords({
                 onChange={(range) => setPageDateFilter(pf.fieldKey, range)}
                 ml={ml}
                 t={t}
+                getAvailableDays={getPageFilterOptions}
                 triggerClassName="w-full justify-start sm:w-auto sm:justify-center"
               />
             ) : (

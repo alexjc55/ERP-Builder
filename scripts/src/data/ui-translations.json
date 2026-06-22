@@ -3900,6 +3900,12 @@
     "he": "היום"
   },
   {
+    "key": "records.dateHasRecords",
+    "ru": "Есть записи",
+    "en": "Has records",
+    "he": "יש רשומות"
+  },
+  {
     "key": "records.delete",
     "ru": "Удалить",
     "en": "Delete",

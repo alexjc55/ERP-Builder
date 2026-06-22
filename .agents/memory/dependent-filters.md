@@ -108,6 +108,17 @@ not a pair of conditions, because the surrounding conjunction is not guaranteed 
 date filters must also be fed into `getEntityFilterValues` (self-excluding the target field) so the
 dependent dropdowns narrow by the date range too.
 
+### Calendar highlights days that have records
+The date popover highlights, in the calendar, the days that actually have records (so users don't
+pick empty days). It reuses the SAME distinct-values fetch as the dropdowns — entity fields →
+`getEntityFilterValues` (filter-aware: narrows by the OTHER active filters, self-excluding the
+target), page-local fields → `getPageFilterValues`. The fetched stored values are bucketed to
+local-day granularity and passed as react-day-picker `modifiers`. The availability fetcher MUST be
+a stable reference (it's an effect dep keyed on `open`); fetch on open, guard with a cancelled flag.
+**Known asymmetry (intentional):** page-local highlighting reflects ALL stored record-days for the
+field, NOT narrowed by other active filters — same deliberate no-dependent-narrowing rule the
+page-local dropdowns already follow. Making it filter-aware needs new params on `getPageFilterValues`.
+
 ## relation/lookup fields participate in search AND filters (no values_json entry)
 `relation`/`lookup` fields store NOTHING in `values_json`; their displayed value is the LINKED
 record's `valuesJson[relatedFieldKey]` reached through `record_links`. So free-text search and the
