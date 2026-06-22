@@ -2791,6 +2791,12 @@ export function EntityRecords({
                         // its vertical lines on both sides.
                         const fillColor = hasTotal ? (fld.totalFillColor || "#d1fae5") : "#F8FAFC";
                         const textColor = fld.totalTextColor || "#047857";
+                        // The aggregate cell keeps the table's normal grey vertical
+                        // separators on BOTH sides. We draw them with an inset
+                        // box-shadow (not borders) because `border-collapse` lets a
+                        // neighbour's #F8FAFC border win the shared edge, which would
+                        // erase the line. The shadow always renders on THIS cell.
+                        const gridLine = "var(--erp-table-border, hsl(var(--border) / 0.7))";
                         return (
                           <th
                             key={`tot-${col.pinKey}`}
@@ -2802,6 +2808,9 @@ export function EntityRecords({
                               borderTop: "none",
                               borderBottom: "none",
                               borderRight: "1px solid #F8FAFC",
+                              ...(hasTotal
+                                ? { boxShadow: `inset 1px 0 0 0 ${gridLine}, inset -1px 0 0 0 ${gridLine}` }
+                                : undefined),
                             }}
                           >
                             {hasTotal ? (
