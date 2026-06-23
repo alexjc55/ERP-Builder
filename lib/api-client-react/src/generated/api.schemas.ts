@@ -1864,6 +1864,33 @@ export interface FieldFormatRule {
   textColor?: string;
 }
 
+export type ValidationOperator = typeof ValidationOperator[keyof typeof ValidationOperator];
+
+
+export const ValidationOperator = {
+  empty: 'empty',
+  notEmpty: 'notEmpty',
+  equals: 'equals',
+  notEquals: 'notEquals',
+  gt: 'gt',
+  lt: 'lt',
+  gte: 'gte',
+  lte: 'lte',
+  between: 'between',
+} as const;
+
+/**
+ * One cross-field validation ("fill") rule. Distinct from conditional formatting (which is cosmetic): this is a HARD constraint on saving. Saving THIS field with a value (any non-empty value, or one of applyToValues when that list is non-empty) is allowed only when the field named conditionFieldKey (same entity) satisfies operator/value (value2 is the upper bound for `between`). Otherwise the record save is rejected server-side with an auto-generated message.
+ */
+export interface FieldValidationRule {
+  /** When non-empty, the rule applies only if THIS field's new value is one of these. Empty/absent = applies to any non-empty value. */
+  applyToValues?: string[];
+  conditionFieldKey: string;
+  operator: ValidationOperator;
+  value?: string;
+  value2?: string;
+}
+
 /**
  * Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.
  */
@@ -1958,6 +1985,7 @@ export interface Field {
   fileConfigJson?: FileFieldConfig;
   userConfigJson?: UserFieldConfig;
   formatRulesJson?: FieldFormatRule[];
+  validationRulesJson?: FieldValidationRule[];
   formulaConfigJson?: FormulaFieldConfig;
   dependencyConfigJson?: DependencyFieldConfig;
   relationConfigJson?: RelationFieldConfig;
@@ -1993,6 +2021,7 @@ export interface FieldInput {
   fileConfigJson?: FileFieldConfig;
   userConfigJson?: UserFieldConfig;
   formatRulesJson?: FieldFormatRule[];
+  validationRulesJson?: FieldValidationRule[];
   formulaConfigJson?: FormulaFieldConfig;
   dependencyConfigJson?: DependencyFieldConfig;
   relationConfigJson?: RelationFieldConfig;
@@ -2036,6 +2065,7 @@ export interface FieldUpdate {
   fileConfigJson?: FileFieldConfig;
   userConfigJson?: UserFieldConfig;
   formatRulesJson?: FieldFormatRule[];
+  validationRulesJson?: FieldValidationRule[];
   formulaConfigJson?: FormulaFieldConfig;
   dependencyConfigJson?: DependencyFieldConfig;
   relationConfigJson?: RelationFieldConfig;

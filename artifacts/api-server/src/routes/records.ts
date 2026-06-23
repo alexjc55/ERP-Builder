@@ -41,7 +41,7 @@ import {
   PivotEntityRecordsParams,
   PivotEntityRecordsBody,
 } from "@workspace/api-zod";
-import type { EntityField, InsertAuditLog, FileSource, FileFieldConfig } from "@workspace/db";
+import type { EntityField, InsertAuditLog, FileSource, FileFieldConfig, FieldValidationRule } from "@workspace/db";
 import { buildRecordQuery, buildPageLocalCondition, type RecordQuerySpec, type FilterCondition } from "./record-query";
 import { buildRelationMeta, ownScopeWhere, isRecordOwned } from "./own-scope";
 import { computePivot } from "./pivot-compute";
@@ -381,6 +381,120 @@ function stripHidden<T extends { valuesJson: unknown }>(record: T, hidden: Set<s
 function fieldRuName(field: EntityField): string {
   const name = field.nameJson as { ru?: string; en?: string; he?: string } | null;
   return name?.ru || name?.en || name?.he || field.fieldKey;
+}
+
+/**
+ * Coerce a value into a number for ordered comparisons (gt/lt/gte/lte/between).
+ * Numeric strings compare numerically; otherwise an ISO date/datetime string is
+ * compared by its epoch. Returns null when the value is not comparable.
+ */
+function toComparable(v: unknown): number | null {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+    const t = Date.parse(v);
+    if (!Number.isNaN(t)) return t;
+  }
+  return null;
+}
+
+/** Whether the condition field's value satisfies a validation rule's operator. */
+function validationConditionSatisfied(rule: FieldValidationRule, otherValue: unknown): boolean {
+  switch (rule.operator) {
+    case "empty":
+      return isEmpty(otherValue);
+    case "notEmpty":
+      return !isEmpty(otherValue);
+    case "equals":
+      return String(otherValue ?? "") === String(rule.value ?? "");
+    case "notEquals":
+      return String(otherValue ?? "") !== String(rule.value ?? "");
+    case "gt": {
+      const a = toComparable(otherValue), b = toComparable(rule.value);
+      return a != null && b != null && a > b;
+    }
+    case "lt": {
+      const a = toComparable(otherValue), b = toComparable(rule.value);
+      return a != null && b != null && a < b;
+    }
+    case "gte": {
+      const a = toComparable(otherValue), b = toComparable(rule.value);
+      return a != null && b != null && a >= b;
+    }
+    case "lte": {
+      const a = toComparable(otherValue), b = toComparable(rule.value);
+      return a != null && b != null && a <= b;
+    }
+    case "between": {
+      const a = toComparable(otherValue), lo = toComparable(rule.value), hi = toComparable(rule.value2);
+      return a != null && lo != null && hi != null && a >= lo && a <= hi;
+    }
+    default:
+      // Unknown operator (forward-compat): do not block.
+      return true;
+  }
+}
+
+/** Human-readable (ru) description of what the condition field must satisfy. */
+function describeValidationCondition(rule: FieldValidationRule, condField: EntityField): string {
+  const name = fieldRuName(condField);
+  const v = rule.value ?? "";
+  switch (rule.operator) {
+    case "empty":
+      return `поле «${name}» должно быть пустым`;
+    case "notEmpty":
+      return `поле «${name}» должно быть заполнено`;
+    case "equals":
+      return `поле «${name}» должно быть равно «${v}»`;
+    case "notEquals":
+      return `поле «${name}» не должно быть равно «${v}»`;
+    case "gt":
+      return `поле «${name}» должно быть больше «${v}»`;
+    case "lt":
+      return `поле «${name}» должно быть меньше «${v}»`;
+    case "gte":
+      return `поле «${name}» должно быть не меньше «${v}»`;
+    case "lte":
+      return `поле «${name}» должно быть не больше «${v}»`;
+    case "between":
+      return `поле «${name}» должно быть в диапазоне от «${v}» до «${rule.value2 ?? ""}»`;
+    default:
+      return `поле «${name}» должно удовлетворять условию`;
+  }
+}
+
+/**
+ * Cross-field validation ("fill") rules — a HARD server boundary on record
+ * create/update, distinct from cosmetic conditional formatting. For each field
+ * that has a (non-empty) value, every one of its validationRulesJson rules whose
+ * applyToValues matches must be satisfied by the named condition field;
+ * otherwise the save is rejected with an auto-generated message. Evaluated
+ * against the FINAL merged record values, so it also blocks clearing/altering a
+ * prerequisite field that another field's set value still depends on. Stale
+ * rules referencing a removed field are ignored.
+ */
+export function checkValidationRules(fields: EntityField[], values: Record<string, unknown>): string | null {
+  const byKey = new Map(fields.map((f) => [f.fieldKey, f] as const));
+  for (const field of fields) {
+    const rules = (field.validationRulesJson as FieldValidationRule[] | null) ?? [];
+    if (!Array.isArray(rules) || rules.length === 0) continue;
+    const myVal = values[field.fieldKey];
+    if (isEmpty(myVal)) continue;
+    for (const rule of rules) {
+      if (!rule || !rule.conditionFieldKey || !rule.operator) continue;
+      if (Array.isArray(rule.applyToValues) && rule.applyToValues.length > 0 && !rule.applyToValues.includes(String(myVal))) {
+        continue;
+      }
+      const condField = byKey.get(rule.conditionFieldKey);
+      if (!condField) continue;
+      if (!validationConditionSatisfied(rule, values[rule.conditionFieldKey])) {
+        const shown = field.fieldType === "boolean" ? (String(myVal) === "true" ? "Да" : "Нет") : String(myVal);
+        return `Нельзя сохранить поле «${fieldRuName(field)}» со значением «${shown}»: ${describeValidationCondition(rule, condField)}.`;
+      }
+    }
+  }
+  return null;
 }
 
 /**
@@ -1467,6 +1581,19 @@ router.post(
       return;
     }
 
+    // Renaming the value writes it straight into valuesJson, so re-apply the
+    // cross-field validation boundary on each resulting row before mutating —
+    // reject the whole rename if any row would violate a fill rule (no partial
+    // writes), the same hard boundary the normal records update path enforces.
+    for (const m of matches) {
+      const candidate = { ...((m.valuesJson as Record<string, unknown>) ?? {}), [target.fieldKey]: newValue };
+      const validationError = checkValidationRules(fields, candidate);
+      if (validationError) {
+        res.status(422).json({ error: validationError });
+        return;
+      }
+    }
+
     await db.transaction(async (tx) => {
       for (const m of matches) {
         const next = { ...((m.valuesJson as Record<string, unknown>) ?? {}), [target.fieldKey]: newValue };
@@ -1540,6 +1667,11 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
   const depError = await checkDependentValues(entityId, fields, result.values);
   if (depError) {
     res.status(400).json({ error: depError });
+    return;
+  }
+  const validationError = checkValidationRules(fields, result.values);
+  if (validationError) {
+    res.status(422).json({ error: validationError });
     return;
   }
 
@@ -1950,6 +2082,13 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
     const immErr = checkImmutableFields(fields, update.valuesJson, existingValues);
     if (immErr) {
       res.status(422).json({ error: immErr });
+      return;
+    }
+    // Cross-field validation (fill) rules on the FINAL values — after any
+    // workflow set_field actions — so a transition cannot bypass them.
+    const validationError = checkValidationRules(fields, update.valuesJson);
+    if (validationError) {
+      res.status(422).json({ error: validationError });
       return;
     }
   }

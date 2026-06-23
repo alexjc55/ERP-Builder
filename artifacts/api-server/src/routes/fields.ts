@@ -546,6 +546,7 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   if ("defaultValue" in body) updateData.defaultValue = body.defaultValue ?? null;
   if (body.optionsJson != null) updateData.optionsJson = body.optionsJson;
   if (body.formatRulesJson != null) updateData.formatRulesJson = body.formatRulesJson;
+  if (body.validationRulesJson != null) updateData.validationRulesJson = body.validationRulesJson;
   if (body.formulaConfigJson != null)
     updateData.formulaConfigJson = clampFormulaDecimals(body.formulaConfigJson);
   if ("dependencyConfigJson" in body) updateData.dependencyConfigJson = body.dependencyConfigJson ?? {};

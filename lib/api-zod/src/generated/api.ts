@@ -2544,6 +2544,13 @@ export const ListEntityFieldsResponseItem = zod.object({
   "rowColor": zod.string().optional(),
   "textColor": zod.string().optional()
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "validationRulesJson": zod.array(zod.object({
+  "applyToValues": zod.array(zod.string()).optional().describe('When non-empty, the rule applies only if THIS field\'s new value is one of these. Empty\/absent = applies to any non-empty value.'),
+  "conditionFieldKey": zod.string(),
+  "operator": zod.enum(['empty', 'notEmpty', 'equals', 'notEquals', 'gt', 'lt', 'gte', 'lte', 'between']),
+  "value": zod.string().optional(),
+  "value2": zod.string().optional()
+}).describe('One cross-field validation (\"fill\") rule. Distinct from conditional formatting (which is cosmetic): this is a HARD constraint on saving. Saving THIS field with a value (any non-empty value, or one of applyToValues when that list is non-empty) is allowed only when the field named conditionFieldKey (same entity) satisfies operator\/value (value2 is the upper bound for `between`). Otherwise the record save is rejected server-side with an auto-generated message.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
   "decimals": zod.number().min(listEntityFieldsResponseFormulaConfigJsonDecimalsMin).max(listEntityFieldsResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
@@ -2628,6 +2635,13 @@ export const CreateEntityFieldBody = zod.object({
   "rowColor": zod.string().optional(),
   "textColor": zod.string().optional()
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "validationRulesJson": zod.array(zod.object({
+  "applyToValues": zod.array(zod.string()).optional().describe('When non-empty, the rule applies only if THIS field\'s new value is one of these. Empty\/absent = applies to any non-empty value.'),
+  "conditionFieldKey": zod.string(),
+  "operator": zod.enum(['empty', 'notEmpty', 'equals', 'notEquals', 'gt', 'lt', 'gte', 'lte', 'between']),
+  "value": zod.string().optional(),
+  "value2": zod.string().optional()
+}).describe('One cross-field validation (\"fill\") rule. Distinct from conditional formatting (which is cosmetic): this is a HARD constraint on saving. Saving THIS field with a value (any non-empty value, or one of applyToValues when that list is non-empty) is allowed only when the field named conditionFieldKey (same entity) satisfies operator\/value (value2 is the upper bound for `between`). Otherwise the record save is rejected server-side with an auto-generated message.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
   "decimals": zod.number().min(createEntityFieldBodyFormulaConfigJsonDecimalsMin).max(createEntityFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
@@ -2703,6 +2717,13 @@ export const GetFieldResponse = zod.object({
   "rowColor": zod.string().optional(),
   "textColor": zod.string().optional()
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "validationRulesJson": zod.array(zod.object({
+  "applyToValues": zod.array(zod.string()).optional().describe('When non-empty, the rule applies only if THIS field\'s new value is one of these. Empty\/absent = applies to any non-empty value.'),
+  "conditionFieldKey": zod.string(),
+  "operator": zod.enum(['empty', 'notEmpty', 'equals', 'notEquals', 'gt', 'lt', 'gte', 'lte', 'between']),
+  "value": zod.string().optional(),
+  "value2": zod.string().optional()
+}).describe('One cross-field validation (\"fill\") rule. Distinct from conditional formatting (which is cosmetic): this is a HARD constraint on saving. Saving THIS field with a value (any non-empty value, or one of applyToValues when that list is non-empty) is allowed only when the field named conditionFieldKey (same entity) satisfies operator\/value (value2 is the upper bound for `between`). Otherwise the record save is rejected server-side with an auto-generated message.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
   "decimals": zod.number().min(getFieldResponseFormulaConfigJsonDecimalsMin).max(getFieldResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
@@ -2778,6 +2799,13 @@ export const UpdateFieldBody = zod.object({
   "rowColor": zod.string().optional(),
   "textColor": zod.string().optional()
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "validationRulesJson": zod.array(zod.object({
+  "applyToValues": zod.array(zod.string()).optional().describe('When non-empty, the rule applies only if THIS field\'s new value is one of these. Empty\/absent = applies to any non-empty value.'),
+  "conditionFieldKey": zod.string(),
+  "operator": zod.enum(['empty', 'notEmpty', 'equals', 'notEquals', 'gt', 'lt', 'gte', 'lte', 'between']),
+  "value": zod.string().optional(),
+  "value2": zod.string().optional()
+}).describe('One cross-field validation (\"fill\") rule. Distinct from conditional formatting (which is cosmetic): this is a HARD constraint on saving. Saving THIS field with a value (any non-empty value, or one of applyToValues when that list is non-empty) is allowed only when the field named conditionFieldKey (same entity) satisfies operator\/value (value2 is the upper bound for `between`). Otherwise the record save is rejected server-side with an auto-generated message.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
   "decimals": zod.number().min(updateFieldBodyFormulaConfigJsonDecimalsMin).max(updateFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
@@ -2845,6 +2873,13 @@ export const UpdateFieldResponse = zod.object({
   "rowColor": zod.string().optional(),
   "textColor": zod.string().optional()
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
+  "validationRulesJson": zod.array(zod.object({
+  "applyToValues": zod.array(zod.string()).optional().describe('When non-empty, the rule applies only if THIS field\'s new value is one of these. Empty\/absent = applies to any non-empty value.'),
+  "conditionFieldKey": zod.string(),
+  "operator": zod.enum(['empty', 'notEmpty', 'equals', 'notEquals', 'gt', 'lt', 'gte', 'lte', 'between']),
+  "value": zod.string().optional(),
+  "value2": zod.string().optional()
+}).describe('One cross-field validation (\"fill\") rule. Distinct from conditional formatting (which is cosmetic): this is a HARD constraint on saving. Saving THIS field with a value (any non-empty value, or one of applyToValues when that list is non-empty) is allowed only when the field named conditionFieldKey (same entity) satisfies operator\/value (value2 is the upper bound for `between`). Otherwise the record save is rejected server-side with an auto-generated message.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
   "decimals": zod.number().min(updateFieldResponseFormulaConfigJsonDecimalsMin).max(updateFieldResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')

@@ -55,6 +55,36 @@ export type FieldFormatRule = {
   textColor?: string;
 };
 
+/** Comparison used by a cross-field validation (fill) rule. */
+export type ValidationOperator =
+  | "empty"
+  | "notEmpty"
+  | "equals"
+  | "notEquals"
+  | "gt"
+  | "lt"
+  | "gte"
+  | "lte"
+  | "between";
+
+/**
+ * One cross-field validation ("fill") rule. Distinct from conditional
+ * formatting (which is purely cosmetic): this is a HARD constraint on saving.
+ * Saving THIS field with a value — any non-empty value, or one of
+ * `applyToValues` when that list is non-empty — is allowed only when the field
+ * named `conditionFieldKey` (same entity) satisfies `operator`/`value`
+ * (`value2` is the upper bound for `between`). Otherwise the record
+ * create/update is rejected server-side with an auto-generated message. Rules
+ * are evaluated against the FINAL merged record values.
+ */
+export type FieldValidationRule = {
+  applyToValues?: string[];
+  conditionFieldKey: string;
+  operator: ValidationOperator;
+  value?: string;
+  value2?: string;
+};
+
 /**
  * Per-field configuration for a `function`-type field. `expression` is a safe
  * formula referencing other fields of the same record via `{field_key}`. It is
@@ -107,6 +137,9 @@ export const entityFieldsTable = pgTable(
     fileConfigJson: jsonb("file_config_json").$type<FileFieldConfig>().notNull().default({}),
     userConfigJson: jsonb("user_config_json").$type<UserFieldConfig>().notNull().default({}),
     formatRulesJson: jsonb("format_rules_json").$type<FieldFormatRule[]>().notNull().default([]),
+    // Cross-field validation (fill) rules — hard constraint on record save,
+    // distinct from the cosmetic formatRulesJson. Empty [] = no constraints.
+    validationRulesJson: jsonb("validation_rules_json").$type<FieldValidationRule[]>().notNull().default([]),
     formulaConfigJson: jsonb("formula_config_json").$type<FormulaFieldConfig>().notNull().default({}),
     dependencyConfigJson: jsonb("dependency_config_json").$type<DependencyFieldConfig>().notNull().default({}),
     // Per-field config for a `relation`-type entity field (the relation it binds to

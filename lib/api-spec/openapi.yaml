@@ -4898,6 +4898,47 @@ components:
         textColor:
           type: string
 
+    ValidationOperator:
+      type: string
+      enum:
+        - empty
+        - notEmpty
+        - equals
+        - notEquals
+        - gt
+        - lt
+        - gte
+        - lte
+        - between
+
+    FieldValidationRule:
+      type: object
+      required: [conditionFieldKey, operator]
+      description: >-
+        One cross-field validation ("fill") rule. Distinct from conditional
+        formatting (which is cosmetic): this is a HARD constraint on saving.
+        Saving THIS field with a value (any non-empty value, or one of
+        applyToValues when that list is non-empty) is allowed only when the
+        field named conditionFieldKey (same entity) satisfies operator/value
+        (value2 is the upper bound for `between`). Otherwise the record save is
+        rejected server-side with an auto-generated message.
+      properties:
+        applyToValues:
+          type: array
+          items:
+            type: string
+          description: >-
+            When non-empty, the rule applies only if THIS field's new value is
+            one of these. Empty/absent = applies to any non-empty value.
+        conditionFieldKey:
+          type: string
+        operator:
+          $ref: "#/components/schemas/ValidationOperator"
+        value:
+          type: string
+        value2:
+          type: string
+
     FormulaFieldConfig:
       type: object
       description: >-
@@ -5020,6 +5061,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FieldFormatRule"
+        validationRulesJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldValidationRule"
         formulaConfigJson:
           $ref: "#/components/schemas/FormulaFieldConfig"
         dependencyConfigJson:
@@ -5088,6 +5133,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FieldFormatRule"
+        validationRulesJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldValidationRule"
         formulaConfigJson:
           $ref: "#/components/schemas/FormulaFieldConfig"
         dependencyConfigJson:
@@ -5173,6 +5222,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FieldFormatRule"
+        validationRulesJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldValidationRule"
         formulaConfigJson:
           $ref: "#/components/schemas/FormulaFieldConfig"
         dependencyConfigJson:

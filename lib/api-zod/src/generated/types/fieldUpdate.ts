@@ -9,6 +9,7 @@ import type { DependencyFieldConfig } from './dependencyFieldConfig';
 import type { FieldFormatRule } from './fieldFormatRule';
 import type { FieldPermissions } from './fieldPermissions';
 import type { FieldType } from './fieldType';
+import type { FieldValidationRule } from './fieldValidationRule';
 import type { FileFieldConfig } from './fileFieldConfig';
 import type { FormulaFieldConfig } from './formulaFieldConfig';
 import type { MultilingualText } from './multilingualText';
@@ -28,6 +29,7 @@ export interface FieldUpdate {
   fileConfigJson?: FileFieldConfig;
   userConfigJson?: UserFieldConfig;
   formatRulesJson?: FieldFormatRule[];
+  validationRulesJson?: FieldValidationRule[];
   formulaConfigJson?: FormulaFieldConfig;
   dependencyConfigJson?: DependencyFieldConfig;
   relationConfigJson?: RelationFieldConfig;

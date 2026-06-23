@@ -17,6 +17,7 @@ import {
   type MultilingualText,
   type FileSource,
   type FieldFormatRule,
+  type FieldValidationRule,
 } from "@workspace/api-client-react";
 
 /** Flatten managed Drive folders into a depth-ordered list for indented display. */
@@ -72,6 +73,7 @@ import {
 } from "@/components/ui/select";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { FieldFormatRulesEditor } from "@/components/FieldFormatRulesEditor";
+import { FieldValidationRulesEditor, type OtherField } from "@/components/FieldValidationRulesEditor";
 import { ColorPickerControl } from "@/components/ColorPickerControl";
 import { useToast } from "@/hooks/use-toast";
 import { FormulaEditor, type FormulaFieldRef } from "@/components/FormulaEditor";
@@ -180,6 +182,7 @@ export function FieldConfigDialog({
   const [allowedRoleIds, setAllowedRoleIds] = useState<number[]>([]);
   const [allowCreateUser, setAllowCreateUser] = useState(false);
   const [formatRules, setFormatRules] = useState<FieldFormatRule[]>([]);
+  const [validationRules, setValidationRules] = useState<FieldValidationRule[]>([]);
   const [formula, setFormula] = useState("");
   const [formulaDecimals, setFormulaDecimals] = useState("");
   const [dependsOnFieldKey, setDependsOnFieldKey] = useState("");
@@ -234,6 +237,7 @@ export function FieldConfigDialog({
       );
       setAllowCreateUser(field.userConfigJson?.allowCreate === true);
       setFormatRules(Array.isArray(field.formatRulesJson) ? field.formatRulesJson : []);
+      setValidationRules(Array.isArray(field.validationRulesJson) ? field.validationRulesJson : []);
       setFormula(field.formulaConfigJson?.expression ?? "");
       setFormulaDecimals(
         field.formulaConfigJson?.decimals != null ? String(field.formulaConfigJson.decimals) : "",
@@ -268,6 +272,7 @@ export function FieldConfigDialog({
       setAllowedRoleIds([]);
       setAllowCreateUser(false);
       setFormatRules([]);
+      setValidationRules([]);
       setFormula("");
       setFormulaDecimals("");
       setDependsOnFieldKey("");
@@ -364,6 +369,25 @@ export function FieldConfigDialog({
     (f: Field) => f.id !== field?.id && f.fieldType !== "function" && !wouldCycle(f.fieldKey),
   );
 
+  // Sibling fields that can serve as a validation rule's "condition" field:
+  // any OTHER stored field. Derived/computed types (function) and link-only
+  // types (relation/lookup) hold no comparable scalar in valuesJson, so exclude
+  // them — the server compares against the stored fieldKey → value map.
+  const validationOtherFields: OtherField[] = existingFields
+    .filter(
+      (f: Field) =>
+        f.id !== field?.id &&
+        f.fieldType !== "function" &&
+        f.fieldType !== "relation" &&
+        f.fieldType !== "lookup",
+    )
+    .map((f: Field) => ({
+      fieldKey: f.fieldKey,
+      name: ml(f.nameJson) || f.fieldKey,
+      fieldType: f.fieldType,
+      options: Array.isArray(f.optionsJson) ? f.optionsJson : [],
+    }));
+
   const handleSubmit = () => {
     const options = optionsText
       .split("\n")
@@ -395,6 +419,7 @@ export function FieldConfigDialog({
           : {},
       userConfigJson: fieldType === "user" ? { allowedRoleIds, allowCreate: allowCreateUser } : {},
       formatRulesJson: formatRules,
+      validationRulesJson: validationRules,
       formulaConfigJson:
         fieldType === "function"
           ? {
@@ -886,6 +911,18 @@ export function FieldConfigDialog({
                 users={userOptions}
                 rules={formatRules}
                 onChange={setFormatRules}
+              />
+            </div>
+
+            <div className="border-t border-slate-100 pt-4">
+              <FieldValidationRulesEditor
+                selfType={fieldType}
+                selfName={ml(nameJson) || effectiveKey}
+                selfOptions={optionsText.split("\n").map((o) => o.trim()).filter(Boolean)}
+                otherFields={validationOtherFields}
+                users={userOptions}
+                rules={validationRules}
+                onChange={setValidationRules}
               />
             </div>
 

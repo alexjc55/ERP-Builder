@@ -1872,6 +1872,108 @@
     "he": "ערך"
   },
   {
+    "key": "fields.validationRules",
+    "ru": "Правила заполнения",
+    "en": "Fill rules",
+    "he": "כללי מילוי"
+  },
+  {
+    "key": "fields.validationRulesHint",
+    "ru": "Запрет на сохранение этого поля, пока другое поле не удовлетворяет условию. Текст ошибки формируется автоматически.",
+    "en": "Block saving this field until another field satisfies the condition. The error message is generated automatically.",
+    "he": "חסימת שמירת שדה זה עד ששדה אחר עומד בתנאי. הודעת השגיאה נוצרת אוטומטית."
+  },
+  {
+    "key": "fields.validationNoOther",
+    "ru": "Сначала добавьте другие поля в эту сущность.",
+    "en": "Add other fields to this entity first.",
+    "he": "הוסף תחילה שדות אחרים לישות זו."
+  },
+  {
+    "key": "fields.validationApplyTo",
+    "ru": "Применять только к значениям (пусто = к любому):",
+    "en": "Apply only to values (empty = any):",
+    "he": "החל רק על ערכים (ריק = כל ערך):"
+  },
+  {
+    "key": "fields.validationCondField",
+    "ru": "Поле-условие",
+    "en": "Condition field",
+    "he": "שדה תנאי"
+  },
+  {
+    "key": "fields.addValidationRule",
+    "ru": "Добавить правило",
+    "en": "Add rule",
+    "he": "הוסף כלל"
+  },
+  {
+    "key": "fields.valFrom",
+    "ru": "от",
+    "en": "from",
+    "he": "מ-"
+  },
+  {
+    "key": "fields.valTo",
+    "ru": "до",
+    "en": "to",
+    "he": "עד"
+  },
+  {
+    "key": "fields.vop.empty",
+    "ru": "пусто",
+    "en": "is empty",
+    "he": "ריק"
+  },
+  {
+    "key": "fields.vop.notEmpty",
+    "ru": "заполнено",
+    "en": "is filled",
+    "he": "מלא"
+  },
+  {
+    "key": "fields.vop.equals",
+    "ru": "равно",
+    "en": "equals",
+    "he": "שווה"
+  },
+  {
+    "key": "fields.vop.notEquals",
+    "ru": "не равно",
+    "en": "not equals",
+    "he": "לא שווה"
+  },
+  {
+    "key": "fields.vop.gt",
+    "ru": "больше",
+    "en": "greater than",
+    "he": "גדול מ-"
+  },
+  {
+    "key": "fields.vop.lt",
+    "ru": "меньше",
+    "en": "less than",
+    "he": "קטן מ-"
+  },
+  {
+    "key": "fields.vop.gte",
+    "ru": "больше или равно",
+    "en": "greater or equal",
+    "he": "גדול או שווה"
+  },
+  {
+    "key": "fields.vop.lte",
+    "ru": "меньше или равно",
+    "en": "less or equal",
+    "he": "קטן או שווה"
+  },
+  {
+    "key": "fields.vop.between",
+    "ru": "в диапазоне",
+    "en": "between",
+    "he": "בטווח"
+  },
+  {
     "key": "fields.formula",
     "ru": "Формула",
     "en": "Formula",

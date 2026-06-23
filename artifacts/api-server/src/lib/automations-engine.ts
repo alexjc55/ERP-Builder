@@ -28,6 +28,7 @@ import {
   validateValues,
   validateUserRefs,
   checkDependentValues,
+  checkValidationRules,
   statusBelongsToEntity,
   checkUniqueKeys,
   defaultStatusId,
@@ -342,6 +343,11 @@ export async function systemCreateRecord(
       log.error({ entityId, error: depErr }, "Automation create_record dependent-value invalid");
       return null;
     }
+    const validationErr = checkValidationRules(fields, result.values);
+    if (validationErr) {
+      log.error({ entityId, error: validationErr }, "Automation create_record validation-rule violation");
+      return null;
+    }
 
     let statusId: number | null;
     if (statusIdInput === undefined) {
@@ -439,6 +445,11 @@ export async function systemUpdateRecord(
       const depErr = await checkDependentValues(entityId, fields, result.values, recordId);
       if (depErr) {
         log.error({ recordId, error: depErr }, "Automation set_field dependent-value invalid");
+        return false;
+      }
+      const validationErr = checkValidationRules(fields, result.values);
+      if (validationErr) {
+        log.error({ recordId, error: validationErr }, "Automation set_field validation-rule violation");
         return false;
       }
       update.valuesJson = result.values;
