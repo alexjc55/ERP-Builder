@@ -77,7 +77,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, ArrowLeft, LayoutList, Star, Filter, ArrowDownUp, X, ChevronUp, ChevronDown, Check, Table2, Shield, Columns3 } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, ArrowLeft, LayoutList, Star, Filter, ArrowDownUp, X, ChevronUp, ChevronDown, ChevronRight, Check, Table2, Shield, Columns3 } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
 import { slugifyKey, uniqueKey } from "@/lib/keys";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
@@ -287,6 +287,8 @@ export default function EntityViewsPage() {
   // columns). A non-empty set only NARROWS within the already-permitted columns —
   // it can never reveal a field hidden by role/field perms (enforced in the table).
   const [visibleFields, setVisibleFields] = useState<string[]>([]);
+  // Collapsed by default so the (potentially long) column list doesn't take space.
+  const [columnsExpanded, setColumnsExpanded] = useState(false);
 
   // Default sort: the row ordering applied when no view is selected (the implicit
   // "По умолчанию"). Stored on the entity itself, configured via its own dialog.
@@ -400,6 +402,7 @@ export default function EntityViewsPage() {
     setCalendarConfig({ dateFieldKey: calendarDateFields[0]?.fieldKey ?? "" });
     setVisibleRoleIds([]);
     setVisibleFields([]);
+    setColumnsExpanded(false);
     setDialogOpen(true);
   };
 
@@ -422,6 +425,7 @@ export default function EntityViewsPage() {
     setSorts((cfg.sorts ?? []).map((s) => ({ field: s.field, direction: s.direction ?? "asc" })));
     setVisibleRoleIds(Array.isArray(view.visibleRoleIds) ? view.visibleRoleIds : []);
     setVisibleFields(Array.isArray(cfg.visibleFields) ? cfg.visibleFields : []);
+    setColumnsExpanded(false);
     const isPivot = cfg.viewType === "pivot" && !!cfg.pivot;
     const isCalendar = cfg.viewType === "calendar";
     setViewType(isCalendar ? "calendar" : isPivot ? "pivot" : "table");
@@ -1009,10 +1013,24 @@ export default function EntityViewsPage() {
             {viewType === "table" && (
             <div className="space-y-2 border-t border-slate-100 pt-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setColumnsExpanded((v) => !v)}
+                  className="flex items-center gap-1.5 text-sm font-medium text-slate-700 hover:text-slate-900"
+                >
+                  {columnsExpanded ? (
+                    <ChevronDown className="w-4 h-4 text-slate-400" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 text-slate-400" />
+                  )}
                   <Columns3 className="w-4 h-4 text-blue-600" />
                   {t("views.columns", "Отображаемые столбцы")}
-                </div>
+                  <span className="ml-1 text-xs font-normal text-slate-400">
+                    {visibleFields.length > 0
+                      ? t("views.columnsSelectedCount", "выбрано: {n}").replace("{n}", String(visibleFields.length))
+                      : t("views.columnsAll", "все")}
+                  </span>
+                </button>
                 {visibleFields.length > 0 && (
                   <Button
                     type="button"
@@ -1025,39 +1043,43 @@ export default function EntityViewsPage() {
                   </Button>
                 )}
               </div>
-              <p className="text-xs text-slate-400">
-                {t(
-                  "views.columnsHint",
-                  "Не выбрано ни одного — показываются все столбцы по умолчанию. Выбор только сужает набор в пределах доступных вам столбцов.",
-                )}
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {fields.map((fld: Field) => {
-                  const active = visibleFields.includes(fld.fieldKey);
-                  return (
-                    <button
-                      key={fld.fieldKey}
-                      type="button"
-                      onClick={() =>
-                        setVisibleFields((prev) =>
-                          prev.includes(fld.fieldKey)
-                            ? prev.filter((k) => k !== fld.fieldKey)
-                            : [...prev, fld.fieldKey],
-                        )
-                      }
-                      className={
-                        "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors " +
-                        (active
-                          ? "border-blue-500 bg-blue-50 text-blue-700"
-                          : "border-slate-200 bg-white text-slate-500 hover:border-slate-300")
-                      }
-                    >
-                      {active && <Check className="w-3 h-3" />}
-                      {ml(fld.nameJson)}
-                    </button>
-                  );
-                })}
-              </div>
+              {columnsExpanded && (
+                <>
+                  <p className="text-xs text-slate-400">
+                    {t(
+                      "views.columnsHint",
+                      "Не выбрано ни одного — показываются все столбцы по умолчанию. Выбор только сужает набор в пределах доступных вам столбцов.",
+                    )}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {fields.map((fld: Field) => {
+                      const active = visibleFields.includes(fld.fieldKey);
+                      return (
+                        <button
+                          key={fld.fieldKey}
+                          type="button"
+                          onClick={() =>
+                            setVisibleFields((prev) =>
+                              prev.includes(fld.fieldKey)
+                                ? prev.filter((k) => k !== fld.fieldKey)
+                                : [...prev, fld.fieldKey],
+                            )
+                          }
+                          className={
+                            "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors " +
+                            (active
+                              ? "border-blue-500 bg-blue-50 text-blue-700"
+                              : "border-slate-200 bg-white text-slate-500 hover:border-slate-300")
+                          }
+                        >
+                          {active && <Check className="w-3 h-3" />}
+                          {ml(fld.nameJson)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
             )}
 

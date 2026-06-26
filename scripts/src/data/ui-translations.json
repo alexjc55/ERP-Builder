@@ -6576,6 +6576,18 @@
     "he": "הצג הכול"
   },
   {
+    "key": "views.columnsAll",
+    "ru": "все",
+    "en": "all",
+    "he": "הכול"
+  },
+  {
+    "key": "views.columnsSelectedCount",
+    "ru": "выбрано: {n}",
+    "en": "selected: {n}",
+    "he": "נבחרו: {n}"
+  },
+  {
     "key": "views.columnsHint",
     "ru": "Не выбрано ни одного — показываются все столбцы по умолчанию. Выбор только сужает набор в пределах доступных вам столбцов.",
     "en": "None selected — all default columns are shown. A selection only narrows the set within the columns available to you.",
