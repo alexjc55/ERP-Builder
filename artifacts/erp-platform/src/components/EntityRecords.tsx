@@ -2398,14 +2398,27 @@ export function EntityRecords({
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
-  // Columns are governed solely by each field's per-page "Показывать в таблице"
-  // flag (and field-level role perms, already applied in `tableFields`) — NOT by
-  // the selected view. A view carries only sort/filter/search; it must never hide
-  // a column the field settings say should appear. Column order follows field
-  // sortOrder. In setup mode the admin manages every column (incl. table-hidden).
+  // Columns start from each field's per-page "Показывать в таблице" flag (and
+  // field-level role perms, already applied in `tableFields`). A selected table
+  // view MAY further NARROW this set via its `visibleFields` override, but it can
+  // never reveal a column the field settings / role perms hide — the override is
+  // intersected with the already-permitted set, never unioned. Empty override (or
+  // no view / non-table view) = no narrowing. Column order always follows field
+  // sortOrder. Setup mode ignores view overrides so the admin manages every column.
+  const viewVisibleFieldKeys: string[] | null =
+    !setupMode &&
+    selectedView &&
+    selectedConfig.viewType !== "pivot" &&
+    selectedConfig.viewType !== "calendar" &&
+    Array.isArray(selectedConfig.visibleFields) &&
+    selectedConfig.visibleFields.length > 0
+      ? selectedConfig.visibleFields
+      : null;
   const displayFields = setupMode
     ? tableFields
-    : tableFields.filter((f: Field) => f.showInTable !== false);
+    : tableFields
+        .filter((f: Field) => f.showInTable !== false)
+        .filter((f: Field) => !viewVisibleFieldKeys || viewVisibleFieldKeys.includes(f.fieldKey));
   // Page-local columns are appended after the entity columns. In setup mode the
   // admin sees them all; otherwise only those opted-in via "Показывать в таблице".
   const displayedPageFields = setupMode

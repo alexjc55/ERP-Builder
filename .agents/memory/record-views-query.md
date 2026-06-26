@@ -39,7 +39,24 @@ A `viewType: "calendar"` view (config `CalendarConfig { dateFieldKey, endDateFie
 - Date-window narrowing: a window filter can only be appended server-side when `filterConjunction` is AND (or no base filters). The endpoint applies ONE conjunction to the whole filter list, so under OR an appended window would OR-WIDEN. Under OR, send NO window filter and instead page by `dateFieldKey` ASC, stopping once a row starts ≥ windowEnd (asc order ⇒ all later rows are also out). Always re-filter the window client-side for exactness (spans, OR).
 - Capped pagination (MAX_PAGES) must surface a **truncation banner** when the cap is hit with rows still unread — never silently drop events.
 
-## Views do NOT control which columns show — per-field "Показывать в таблице" does
-A view's `configJson.visibleFields` is **no longer used to choose/limit the records-table columns**. Columns are governed solely by each field's per-page `showInTable` flag (plus field-level role perms via `tableFields`); column order follows field `sortOrder`. A view carries only sort/filter/search.
-**Why:** the views admin UI never exposed a column picker, yet seeded default views had `visibleFields` populated — so selecting the default view silently hid columns the field settings said to show, with no way for the user to fix it. The user's model: column visibility is a per-page/per-field decision (independently per page, even for related/mirror columns), not a view concern.
-**How to apply:** if per-view column sets are ever wanted again, add an explicit column picker to the views UI AND re-introduce the `visibleFields` branch in `EntityRecords` `displayFields` — don't silently resurrect the old behavior. `visibleFields` stays in the ViewConfig type for backward compat but is display-inert.
+## Per-view column visibility — narrows, NEVER expands
+A table view's `configJson.visibleFields` (entity field keys) can NARROW which
+columns the records table shows. It is applied as an INTERSECTION with the
+already-permitted set: `tableFields` → `showInTable !== false` → (if a non-pivot/
+non-calendar view is selected with a non-empty `visibleFields`) keep only keys in
+`visibleFields`. Column ORDER still follows field `sortOrder` (per-view ordering is
+intentionally out of scope). Empty/absent `visibleFields`, no view, pivot/calendar
+view, or setup mode = no narrowing (all default columns).
+**Why (the footgun that got this disabled once):** previously seeded default views
+had `visibleFields` populated but the views UI had NO column picker, so selecting a
+view silently hid columns with no way to fix it. Two rules prevent a repeat:
+(1) there is now an explicit chip-toggle picker in the table-view editor with a
+"Показать все" reset, and (2) empty list = no override (never written to config).
+**Security invariant (must stay true):** a view may only narrow within the
+permission-scoped `tableFields` (which already applied field role perms +
+`showInTable`); it must NEVER reveal a hidden/no-perm field. Keep it as a `.filter`
+over `tableFields` (intersection) — never a union/lookup that could resurrect a
+field. Any new render path (cells, totals, conditional formatting, export) must
+read from the already-narrowed `displayFields`/`orderedColumns`, not re-derive
+columns from raw fields. Page-local (mirror) columns are NOT part of `visibleFields`
+(picker lists entity fields only) and are unaffected.

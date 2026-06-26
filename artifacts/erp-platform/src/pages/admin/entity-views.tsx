@@ -77,7 +77,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, ArrowLeft, LayoutList, Star, Filter, ArrowDownUp, X, ChevronUp, ChevronDown, Check, Table2, Shield } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, ArrowLeft, LayoutList, Star, Filter, ArrowDownUp, X, ChevronUp, ChevronDown, Check, Table2, Shield, Columns3 } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
 import { slugifyKey, uniqueKey } from "@/lib/keys";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
@@ -283,6 +283,10 @@ export default function EntityViewsPage() {
   const [pivotMeasures, setPivotMeasures] = useState<DraftMeasure[]>([newDraftMeasure()]);
   // Per-view role visibility (empty = visible to everyone with record access).
   const [visibleRoleIds, setVisibleRoleIds] = useState<number[]>([]);
+  // Per-view visible columns (table view). Empty = no override (show all default
+  // columns). A non-empty set only NARROWS within the already-permitted columns —
+  // it can never reveal a field hidden by role/field perms (enforced in the table).
+  const [visibleFields, setVisibleFields] = useState<string[]>([]);
 
   // Default sort: the row ordering applied when no view is selected (the implicit
   // "По умолчанию"). Stored on the entity itself, configured via its own dialog.
@@ -395,6 +399,7 @@ export default function EntityViewsPage() {
     setPivotMeasures([newDraftMeasure(pivotSumFields[0]?.fieldKey ?? "")]);
     setCalendarConfig({ dateFieldKey: calendarDateFields[0]?.fieldKey ?? "" });
     setVisibleRoleIds([]);
+    setVisibleFields([]);
     setDialogOpen(true);
   };
 
@@ -416,6 +421,7 @@ export default function EntityViewsPage() {
     );
     setSorts((cfg.sorts ?? []).map((s) => ({ field: s.field, direction: s.direction ?? "asc" })));
     setVisibleRoleIds(Array.isArray(view.visibleRoleIds) ? view.visibleRoleIds : []);
+    setVisibleFields(Array.isArray(cfg.visibleFields) ? cfg.visibleFields : []);
     const isPivot = cfg.viewType === "pivot" && !!cfg.pivot;
     const isCalendar = cfg.viewType === "calendar";
     setViewType(isCalendar ? "calendar" : isPivot ? "pivot" : "table");
@@ -560,6 +566,13 @@ export default function EntityViewsPage() {
       sorts: builtSorts,
       search: search.trim() || undefined,
     };
+    // Column visibility override is only meaningful for the table view. Keep only
+    // keys that still map to an existing field; empty = no override.
+    if (viewType === "table") {
+      const activeKeys = new Set(fields.map((f: Field) => f.fieldKey));
+      const cleaned = visibleFields.filter((k) => activeKeys.has(k));
+      if (cleaned.length > 0) base.visibleFields = cleaned;
+    }
     if (viewType === "calendar") {
       const cal: CalendarConfig = {
         dateFieldKey: calendarConfig.dateFieldKey,
@@ -991,6 +1004,61 @@ export default function EntityViewsPage() {
                 ml={ml}
                 t={t}
               />
+            )}
+
+            {viewType === "table" && (
+            <div className="space-y-2 border-t border-slate-100 pt-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+                  <Columns3 className="w-4 h-4 text-blue-600" />
+                  {t("views.columns", "Отображаемые столбцы")}
+                </div>
+                {visibleFields.length > 0 && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 text-slate-500"
+                    onClick={() => setVisibleFields([])}
+                  >
+                    {t("views.columnsShowAll", "Показать все")}
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-slate-400">
+                {t(
+                  "views.columnsHint",
+                  "Не выбрано ни одного — показываются все столбцы по умолчанию. Выбор только сужает набор в пределах доступных вам столбцов.",
+                )}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {fields.map((fld: Field) => {
+                  const active = visibleFields.includes(fld.fieldKey);
+                  return (
+                    <button
+                      key={fld.fieldKey}
+                      type="button"
+                      onClick={() =>
+                        setVisibleFields((prev) =>
+                          prev.includes(fld.fieldKey)
+                            ? prev.filter((k) => k !== fld.fieldKey)
+                            : [...prev, fld.fieldKey],
+                        )
+                      }
+                      className={
+                        "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors " +
+                        (active
+                          ? "border-blue-500 bg-blue-50 text-blue-700"
+                          : "border-slate-200 bg-white text-slate-500 hover:border-slate-300")
+                      }
+                    >
+                      {active && <Check className="w-3 h-3" />}
+                      {ml(fld.nameJson)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             )}
 
             {viewType === "table" && (
