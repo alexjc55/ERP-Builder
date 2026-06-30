@@ -2192,6 +2192,20 @@ router.post("/entities/:entityId/related-candidates", requireAuth, async (req, r
   if (candHiddenRowWhere) conds.push(candHiddenRowWhere);
   const q = body.data.q?.trim();
 
+  // A dependent (cascading) parent that yields no matching candidates must still
+  // surface the related entity + create permission, so the picker can offer
+  // "add record" even when the parent has zero existing children (e.g. a project
+  // with no orders yet). Returning bare `{ candidates: [] }` would hide the
+  // create affordance — the very bug this avoids. Creating from the picker
+  // prefills the dependency filter with the parent value, so the new record
+  // satisfies the cascade.
+  const emptyResult = {
+    candidates: [] as { id: number; label: string; value?: string }[],
+    relatedEntityId,
+    relatedFieldKey,
+    canCreate: canRecord(perms, relatedEntityId, "create"),
+  };
+
   // Dependent (cascading) relation field: when configured, narrow the candidate
   // list to related records whose `relatedFilterFieldKey` matches the parent
   // field's value in the row being edited. `parentValue` is supplied by the
@@ -2203,7 +2217,7 @@ router.post("/entities/:entityId/related-candidates", requireAuth, async (req, r
   if (!body.data.ignoreDependency && dependsOnFieldKey && relatedFilterFieldKey) {
     const parentValue = body.data.parentValue?.trim() ?? "";
     if (!parentValue) {
-      res.json({ candidates: [] });
+      res.json(emptyResult);
       return;
     }
     const [filterField] = await db
@@ -2217,7 +2231,7 @@ router.post("/entities/:entityId/related-candidates", requireAuth, async (req, r
         ),
       );
     if (!filterField) {
-      res.json({ candidates: [] });
+      res.json(emptyResult);
       return;
     }
     if (filterField.fieldType === "relation") {
@@ -2226,7 +2240,7 @@ router.post("/entities/:entityId/related-candidates", requireAuth, async (req, r
       const fr = await resolveRelationEntityField(relatedEntityId, relatedFilterFieldKey);
       const parentId = Number(parentValue);
       if (!fr.ok || !Number.isFinite(parentId)) {
-        res.json({ candidates: [] });
+        res.json(emptyResult);
         return;
       }
       const baseCol =
@@ -2239,7 +2253,7 @@ router.post("/entities/:entityId/related-candidates", requireAuth, async (req, r
         .where(and(eq(recordLinksTable.relationId, fr.relation.id), eq(otherCol, parentId)));
       const ids = linkRows.map((r) => r.id);
       if (ids.length === 0) {
-        res.json({ candidates: [] });
+        res.json(emptyResult);
         return;
       }
       conds.push(inArray(entityRecordsTable.id, ids));
