@@ -190,6 +190,25 @@ function emptyForField(field: Field): CellValue {
   return "";
 }
 
+/** Local "now" formatted for a native date / datetime-local input. */
+function nowForInput(kind: "date" | "datetime"): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  const day = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return kind === "date" ? day : `${day}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/**
+ * Initial value for a new-record form cell. Date/datetime fields with
+ * `defaultToToday` prefill the current local date/time; everything else is empty.
+ */
+function initialForField(field: Field): CellValue {
+  if (field.defaultToToday && (field.fieldType === "date" || field.fieldType === "datetime")) {
+    return nowForInput(field.fieldType);
+  }
+  return emptyForField(field);
+}
+
 /** True when a value counts as "set" (mirrors the server's isEmpty boundary). */
 function valueIsSet(v: unknown): boolean {
   if (v === null || v === undefined) return false;
@@ -2105,7 +2124,7 @@ export function EntityRecords({
   const openCreate = () => {
     setEditing(null);
     const initial: FormState = {};
-    for (const f of fields) initial[f.fieldKey] = emptyForField(f);
+    for (const f of fields) initial[f.fieldKey] = initialForField(f);
     setForm(initial);
     // Preselect the default status — but if it is hidden from this role's picker,
     // leave it unset so the server assigns the (hidden) default itself instead of
@@ -2328,12 +2347,12 @@ export function EntityRecords({
 
   const startAddRow = () => {
     const initial: FormState = {};
-    for (const f of fields) initial[f.fieldKey] = emptyForField(f);
+    for (const f of fields) initial[f.fieldKey] = initialForField(f);
     setNewRow(initial);
     const pageInitial: FormState = {};
     for (const pf of pageFields) {
       if (pf.fieldType === "relation" || pf.fieldType === "lookup") continue;
-      pageInitial[pf.fieldKey] = emptyForField({ ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field);
+      pageInitial[pf.fieldKey] = initialForField({ ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field);
     }
     setNewPageRow(pageInitial);
     // Preselect the default status — but if it is hidden from this role's picker,

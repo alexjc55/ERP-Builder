@@ -548,6 +548,7 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   if (body.fieldType != null) updateData.fieldType = body.fieldType;
   if (body.isRequired != null) updateData.isRequired = body.isRequired;
   if ("defaultValue" in body) updateData.defaultValue = body.defaultValue ?? null;
+  if (body.defaultToToday != null) updateData.defaultToToday = body.defaultToToday;
   if (sanitizedOptions != null) updateData.optionsJson = sanitizedOptions;
   if (body.formatRulesJson != null) updateData.formatRulesJson = body.formatRulesJson;
   if (body.validationRulesJson != null) updateData.validationRulesJson = body.validationRulesJson;

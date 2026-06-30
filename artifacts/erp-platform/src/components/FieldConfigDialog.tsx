@@ -168,6 +168,7 @@ export function FieldConfigDialog({
   const [fieldType, setFieldType] = useState<FieldType>("text");
   const [isRequired, setIsRequired] = useState(false);
   const [defaultValue, setDefaultValue] = useState("");
+  const [defaultToToday, setDefaultToToday] = useState(false);
   const [options, setOptions] = useState<SelectOption[]>([]);
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
@@ -219,6 +220,7 @@ export function FieldConfigDialog({
       setFieldType(field.fieldType);
       setIsRequired(field.isRequired);
       setDefaultValue(field.defaultValue ?? "");
+      setDefaultToToday(field.defaultToToday ?? false);
       setOptions(normalizeSelectOptions(field.optionsJson));
       setSortOrder(field.sortOrder);
       setIsActive(field.isActive);
@@ -260,6 +262,7 @@ export function FieldConfigDialog({
       setFieldType("text");
       setIsRequired(false);
       setDefaultValue("");
+      setDefaultToToday(false);
       setOptions([]);
       setSortOrder(nextSortOrder);
       setIsActive(true);
@@ -399,6 +402,7 @@ export function FieldConfigDialog({
       fieldType,
       isRequired,
       defaultValue: defaultValue.trim() ? defaultValue.trim() : null,
+      defaultToToday: fieldType === "date" || fieldType === "datetime" ? defaultToToday : false,
       optionsJson: options,
       permissionsJson: permissions,
       sortOrder,
@@ -833,7 +837,20 @@ export function FieldConfigDialog({
             {fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup" && (
               <div className="space-y-1.5">
                 <Label>{t("fields.defaultValue", "Значение по умолчанию")}</Label>
-                <Input value={defaultValue} onChange={(e) => setDefaultValue(e.target.value)} placeholder="—" />
+                <Input
+                  value={defaultValue}
+                  onChange={(e) => setDefaultValue(e.target.value)}
+                  placeholder="—"
+                  disabled={(fieldType === "date" || fieldType === "datetime") && defaultToToday}
+                />
+              </div>
+            )}
+            {(fieldType === "date" || fieldType === "datetime") && (
+              <div className="flex items-center gap-2">
+                <Switch checked={defaultToToday} onCheckedChange={setDefaultToToday} id="fcd-today" />
+                <Label htmlFor="fcd-today">
+                  {t("fields.defaultToToday", "По умолчанию — текущая дата")}
+                </Label>
               </div>
             )}
             <div className="grid grid-cols-2 gap-x-4 gap-y-3">

@@ -5193,6 +5193,8 @@ components:
           type: boolean
         defaultValue:
           type: ["string", "null"]
+        defaultToToday:
+          type: boolean
         optionsJson:
           type: array
           items:
@@ -5267,6 +5269,9 @@ components:
           default: false
         defaultValue:
           type: ["string", "null"]
+        defaultToToday:
+          type: boolean
+          default: false
         optionsJson:
           type: array
           items:
@@ -5359,6 +5364,8 @@ components:
           type: boolean
         defaultValue:
           type: ["string", "null"]
+        defaultToToday:
+          type: boolean
         optionsJson:
           type: array
           items:

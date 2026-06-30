@@ -132,6 +132,9 @@ export const entityFieldsTable = pgTable(
     fieldType: text("field_type").notNull().default("text"),
     isRequired: boolean("is_required").notNull().default(false),
     defaultValue: text("default_value"),
+    // For date/datetime fields: prefill new records with the current date/time.
+    // Applied at record-create time on the client; ignored for other field types.
+    defaultToToday: boolean("default_to_today").notNull().default(false),
     optionsJson: jsonb("options_json").notNull().default([]),
     permissionsJson: jsonb("permissions_json").$type<FieldPermissions>().notNull().default({}),
     fileConfigJson: jsonb("file_config_json").$type<FileFieldConfig>().notNull().default({}),

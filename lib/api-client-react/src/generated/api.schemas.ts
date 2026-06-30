@@ -2045,6 +2045,7 @@ export interface Field {
   isRequired: boolean;
   /** @nullable */
   defaultValue?: string | null;
+  defaultToToday?: boolean;
   optionsJson: SelectOption[];
   permissionsJson?: FieldPermissions;
   fileConfigJson?: FileFieldConfig;
@@ -2082,6 +2083,7 @@ export interface FieldInput {
   isRequired?: boolean;
   /** @nullable */
   defaultValue?: string | null;
+  defaultToToday?: boolean;
   optionsJson?: SelectOption[];
   permissionsJson?: FieldPermissions;
   fileConfigJson?: FileFieldConfig;
@@ -2127,6 +2129,7 @@ export interface FieldUpdate {
   isRequired?: boolean;
   /** @nullable */
   defaultValue?: string | null;
+  defaultToToday?: boolean;
   optionsJson?: SelectOption[];
   permissionsJson?: FieldPermissions;
   fileConfigJson?: FileFieldConfig;

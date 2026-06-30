@@ -2538,6 +2538,7 @@ export const ListEntityFieldsResponseItem = zod.object({
   "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
+  "defaultToToday": zod.boolean().optional(),
   "optionsJson": zod.array(zod.object({
   "value": zod.string(),
   "labelJson": zod.object({
@@ -2610,6 +2611,7 @@ export const CreateEntityFieldParams = zod.object({
 })
 
 export const createEntityFieldBodyIsRequiredDefault = false;
+export const createEntityFieldBodyDefaultToTodayDefault = false;
 export const createEntityFieldBodyFormulaConfigJsonDecimalsMin = 0;
 export const createEntityFieldBodyFormulaConfigJsonDecimalsMax = 10;
 
@@ -2638,6 +2640,7 @@ export const CreateEntityFieldBody = zod.object({
   "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
   "isRequired": zod.boolean().default(createEntityFieldBodyIsRequiredDefault),
   "defaultValue": zod.string().nullish(),
+  "defaultToToday": zod.boolean().default(createEntityFieldBodyDefaultToTodayDefault),
   "optionsJson": zod.array(zod.object({
   "value": zod.string(),
   "labelJson": zod.object({
@@ -2728,6 +2731,7 @@ export const GetFieldResponse = zod.object({
   "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
+  "defaultToToday": zod.boolean().optional(),
   "optionsJson": zod.array(zod.object({
   "value": zod.string(),
   "labelJson": zod.object({
@@ -2818,6 +2822,7 @@ export const UpdateFieldBody = zod.object({
   "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']).optional(),
   "isRequired": zod.boolean().optional(),
   "defaultValue": zod.string().nullish(),
+  "defaultToToday": zod.boolean().optional(),
   "optionsJson": zod.array(zod.object({
   "value": zod.string(),
   "labelJson": zod.object({
@@ -2900,6 +2905,7 @@ export const UpdateFieldResponse = zod.object({
   "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
+  "defaultToToday": zod.boolean().optional(),
   "optionsJson": zod.array(zod.object({
   "value": zod.string(),
   "labelJson": zod.object({

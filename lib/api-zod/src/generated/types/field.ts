@@ -27,6 +27,7 @@ export interface Field {
   isRequired: boolean;
   /** @nullable */
   defaultValue?: string | null;
+  defaultToToday?: boolean;
   optionsJson: SelectOption[];
   permissionsJson?: FieldPermissions;
   fileConfigJson?: FileFieldConfig;
