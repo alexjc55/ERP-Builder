@@ -18,4 +18,5 @@ export interface RoleAdminCaps {
   columnGroups: boolean;
   googleDrive: boolean;
   settings: boolean;
+  dataImport: boolean;
 }

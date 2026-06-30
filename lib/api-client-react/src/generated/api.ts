@@ -63,6 +63,8 @@ import type {
   GuestRedeemInput,
   HealthStatus,
   ImpersonateInput,
+  ImportRequest,
+  ImportResult,
   LinkInput,
   LinkedRecord,
   ListEventsParams,
@@ -8364,6 +8366,150 @@ export const useCreateEntityRelation = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateEntityRelationMutationOptions(options));
+    }
+
+export const getPreviewEntityImportUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/import/preview`
+}
+
+/**
+ * @summary Dry-run validate rows for import (no writes)
+ */
+export const previewEntityImport = async (entityId: number,
+    importRequest: ImportRequest, options?: RequestInit): Promise<ImportResult> => {
+
+  return customFetch<ImportResult>(getPreviewEntityImportUrl(entityId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      importRequest,)
+  }
+);}
+
+
+
+
+export const getPreviewEntityImportMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewEntityImport>>, TError,{entityId: number;data: BodyType<ImportRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof previewEntityImport>>, TError,{entityId: number;data: BodyType<ImportRequest>}, TContext> => {
+
+const mutationKey = ['previewEntityImport'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewEntityImport>>, {entityId: number;data: BodyType<ImportRequest>}> = (props) => {
+          const {entityId,data} = props ?? {};
+
+          return  previewEntityImport(entityId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PreviewEntityImportMutationResult = NonNullable<Awaited<ReturnType<typeof previewEntityImport>>>
+    export type PreviewEntityImportMutationBody = BodyType<ImportRequest>
+    export type PreviewEntityImportMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Dry-run validate rows for import (no writes)
+ */
+export const usePreviewEntityImport = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewEntityImport>>, TError,{entityId: number;data: BodyType<ImportRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof previewEntityImport>>,
+        TError,
+        {entityId: number;data: BodyType<ImportRequest>},
+        TContext
+      > => {
+      return useMutation(getPreviewEntityImportMutationOptions(options));
+    }
+
+export const getCommitEntityImportUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/import/commit`
+}
+
+/**
+ * @summary Import rows into an entity (insert/upsert)
+ */
+export const commitEntityImport = async (entityId: number,
+    importRequest: ImportRequest, options?: RequestInit): Promise<ImportResult> => {
+
+  return customFetch<ImportResult>(getCommitEntityImportUrl(entityId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      importRequest,)
+  }
+);}
+
+
+
+
+export const getCommitEntityImportMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof commitEntityImport>>, TError,{entityId: number;data: BodyType<ImportRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof commitEntityImport>>, TError,{entityId: number;data: BodyType<ImportRequest>}, TContext> => {
+
+const mutationKey = ['commitEntityImport'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof commitEntityImport>>, {entityId: number;data: BodyType<ImportRequest>}> = (props) => {
+          const {entityId,data} = props ?? {};
+
+          return  commitEntityImport(entityId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CommitEntityImportMutationResult = NonNullable<Awaited<ReturnType<typeof commitEntityImport>>>
+    export type CommitEntityImportMutationBody = BodyType<ImportRequest>
+    export type CommitEntityImportMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Import rows into an entity (insert/upsert)
+ */
+export const useCommitEntityImport = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof commitEntityImport>>, TError,{entityId: number;data: BodyType<ImportRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof commitEntityImport>>,
+        TError,
+        {entityId: number;data: BodyType<ImportRequest>},
+        TContext
+      > => {
+      return useMutation(getCommitEntityImportMutationOptions(options));
     }
 
 export const getGetRelationUrl = (id: number,) => {

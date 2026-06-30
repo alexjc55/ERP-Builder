@@ -611,7 +611,7 @@ export async function checkUniqueKeys(
  * non-empty value has been stored, it can neither change nor be cleared. No
  * superAdmin exception — durable integrity is the entire point of the flag.
  */
-function checkImmutableFields(
+export function checkImmutableFields(
   fields: EntityField[],
   newValues: Record<string, unknown>,
   oldValues: Record<string, unknown>,

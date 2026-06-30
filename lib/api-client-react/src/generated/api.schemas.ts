@@ -306,6 +306,7 @@ export interface RoleAdminCaps {
   columnGroups: boolean;
   googleDrive: boolean;
   settings: boolean;
+  dataImport: boolean;
 }
 
 export type RecordScope = typeof RecordScope[keyof typeof RecordScope];
@@ -729,6 +730,65 @@ export interface ColumnGroupUpdate {
   /** @nullable */
   textColor?: string | null;
   sortOrder?: number;
+}
+
+export interface ImportRelationColumn {
+  relationId: number;
+  /** Field key on the target entity used to resolve a link by value. */
+  targetKeyFieldKey: string;
+}
+
+/**
+ * Map of fieldKey to raw cell value.
+ */
+export type ImportRowValues = { [key: string]: unknown };
+
+/**
+ * Map of relationId (as string) to target key values.
+ */
+export type ImportRowRelations = {[key: string]: string[]};
+
+export interface ImportRow {
+  /** Original spreadsheet row number, used in the result report. */
+  index: number;
+  /** Map of fieldKey to raw cell value. */
+  values: ImportRowValues;
+  /** Map of relationId (as string) to target key values. */
+  relations?: ImportRowRelations;
+  /** Status key or localized status name; empty falls back to the entity default. */
+  statusName?: string | null;
+}
+
+export interface ImportRequest {
+  /** Field used to match existing records for upsert; null inserts every row. */
+  keyFieldKey?: string | null;
+  relationColumns?: ImportRelationColumn[];
+  rows: ImportRow[];
+}
+
+export type ImportRowResultStatus = typeof ImportRowResultStatus[keyof typeof ImportRowResultStatus];
+
+
+export const ImportRowResultStatus = {
+  created: 'created',
+  updated: 'updated',
+  skipped: 'skipped',
+  error: 'error',
+} as const;
+
+export interface ImportRowResult {
+  index: number;
+  status: ImportRowResultStatus;
+  message?: string | null;
+}
+
+export interface ImportResult {
+  total: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: number;
+  rows: ImportRowResult[];
 }
 
 export interface Role {

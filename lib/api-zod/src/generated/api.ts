@@ -168,7 +168,8 @@ export const LoginResponse = zod.object({
   "automations": zod.boolean(),
   "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
-  "settings": zod.boolean()
+  "settings": zod.boolean(),
+  "dataImport": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -234,7 +235,8 @@ export const GetMeResponse = zod.object({
   "automations": zod.boolean(),
   "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
-  "settings": zod.boolean()
+  "settings": zod.boolean(),
+  "dataImport": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -298,7 +300,8 @@ export const UpdateMeResponse = zod.object({
   "automations": zod.boolean(),
   "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
-  "settings": zod.boolean()
+  "settings": zod.boolean(),
+  "dataImport": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -360,7 +363,8 @@ export const ImpersonateResponse = zod.object({
   "automations": zod.boolean(),
   "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
-  "settings": zod.boolean()
+  "settings": zod.boolean(),
+  "dataImport": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -419,7 +423,8 @@ export const StopImpersonationResponse = zod.object({
   "automations": zod.boolean(),
   "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
-  "settings": zod.boolean()
+  "settings": zod.boolean(),
+  "dataImport": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -482,7 +487,8 @@ export const RedeemGuestLinkResponse = zod.object({
   "automations": zod.boolean(),
   "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
-  "settings": zod.boolean()
+  "settings": zod.boolean(),
+  "dataImport": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -887,7 +893,8 @@ export const ListRolesResponseItem = zod.object({
   "automations": zod.boolean(),
   "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
-  "settings": zod.boolean()
+  "settings": zod.boolean(),
+  "dataImport": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -937,7 +944,8 @@ export const CreateRoleBody = zod.object({
   "automations": zod.boolean(),
   "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
-  "settings": zod.boolean()
+  "settings": zod.boolean(),
+  "dataImport": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -988,7 +996,8 @@ export const GetRoleResponse = zod.object({
   "automations": zod.boolean(),
   "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
-  "settings": zod.boolean()
+  "settings": zod.boolean(),
+  "dataImport": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -1041,7 +1050,8 @@ export const UpdateRoleBody = zod.object({
   "automations": zod.boolean(),
   "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
-  "settings": zod.boolean()
+  "settings": zod.boolean(),
+  "dataImport": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -1084,7 +1094,8 @@ export const UpdateRoleResponse = zod.object({
   "automations": zod.boolean(),
   "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
-  "settings": zod.boolean()
+  "settings": zod.boolean(),
+  "dataImport": zod.boolean()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -4883,6 +4894,76 @@ export const CreateEntityRelationBody = zod.object({
   "he": zod.string().optional()
 }).optional(),
   "settingsJson": zod.record(zod.string(), zod.unknown()).optional()
+})
+
+
+/**
+ * @summary Dry-run validate rows for import (no writes)
+ */
+export const PreviewEntityImportParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const PreviewEntityImportBody = zod.object({
+  "keyFieldKey": zod.string().nullish().describe('Field used to match existing records for upsert; null inserts every row.'),
+  "relationColumns": zod.array(zod.object({
+  "relationId": zod.number(),
+  "targetKeyFieldKey": zod.string().describe('Field key on the target entity used to resolve a link by value.')
+})).optional(),
+  "rows": zod.array(zod.object({
+  "index": zod.number().describe('Original spreadsheet row number, used in the result report.'),
+  "values": zod.record(zod.string(), zod.unknown()).describe('Map of fieldKey to raw cell value.'),
+  "relations": zod.record(zod.string(), zod.array(zod.string())).optional().describe('Map of relationId (as string) to target key values.'),
+  "statusName": zod.string().nullish().describe('Status key or localized status name; empty falls back to the entity default.')
+}))
+})
+
+export const PreviewEntityImportResponse = zod.object({
+  "total": zod.number(),
+  "created": zod.number(),
+  "updated": zod.number(),
+  "skipped": zod.number(),
+  "errors": zod.number(),
+  "rows": zod.array(zod.object({
+  "index": zod.number(),
+  "status": zod.enum(['created', 'updated', 'skipped', 'error']),
+  "message": zod.string().nullish()
+}))
+})
+
+
+/**
+ * @summary Import rows into an entity (insert/upsert)
+ */
+export const CommitEntityImportParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const CommitEntityImportBody = zod.object({
+  "keyFieldKey": zod.string().nullish().describe('Field used to match existing records for upsert; null inserts every row.'),
+  "relationColumns": zod.array(zod.object({
+  "relationId": zod.number(),
+  "targetKeyFieldKey": zod.string().describe('Field key on the target entity used to resolve a link by value.')
+})).optional(),
+  "rows": zod.array(zod.object({
+  "index": zod.number().describe('Original spreadsheet row number, used in the result report.'),
+  "values": zod.record(zod.string(), zod.unknown()).describe('Map of fieldKey to raw cell value.'),
+  "relations": zod.record(zod.string(), zod.array(zod.string())).optional().describe('Map of relationId (as string) to target key values.'),
+  "statusName": zod.string().nullish().describe('Status key or localized status name; empty falls back to the entity default.')
+}))
+})
+
+export const CommitEntityImportResponse = zod.object({
+  "total": zod.number(),
+  "created": zod.number(),
+  "updated": zod.number(),
+  "skipped": zod.number(),
+  "errors": zod.number(),
+  "rows": zod.array(zod.object({
+  "index": zod.number(),
+  "status": zod.enum(['created', 'updated', 'skipped', 'error']),
+  "message": zod.string().nullish()
+}))
 })
 
 

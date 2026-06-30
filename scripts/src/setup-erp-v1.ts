@@ -222,6 +222,7 @@ async function main() {
       { name: ml("События", "Events", "אירועים"), icon: "activity", path: "/admin/events" },
       { name: ml("Модули", "Modules", "מודולים"), icon: "puzzle", path: "/admin/modules" },
       { name: ml("Группы колонок", "Column Groups", "קבוצות עמודות"), icon: "columns", path: "/admin/column-groups" },
+      { name: ml("Импорт данных", "Data Import", "ייבוא נתונים"), icon: "upload", path: "/admin/import" },
       { name: ml("Корзина файлов", "File Trash", "סל קבצים"), icon: "trash", path: "/admin/file-trash" },
     ];
     await tx.insert(pagesTable).values(

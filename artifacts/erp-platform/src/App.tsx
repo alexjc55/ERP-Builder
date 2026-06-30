@@ -25,6 +25,7 @@ import EventsPage from "@/pages/admin/events";
 import ModulesPage from "@/pages/admin/modules";
 import ColumnGroupsPage from "@/pages/admin/column-groups";
 import GoogleDrivePage from "@/pages/admin/google-drive";
+import ImportPage from "@/pages/admin/import";
 import FileTrashPage from "@/pages/admin/file-trash";
 import DynamicPage from "@/pages/dynamic";
 import SettingsPage from "@/pages/settings";
@@ -189,6 +190,12 @@ function Router() {
       <Route path="/admin/google-drive">
         <ProtectedRoute adminCap="googleDrive">
           <GoogleDrivePage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/import">
+        <ProtectedRoute adminCap="dataImport">
+          <ImportPage />
         </ProtectedRoute>
       </Route>
 

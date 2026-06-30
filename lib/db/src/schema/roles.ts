@@ -59,6 +59,8 @@ export interface RoleAdminCaps {
   googleDrive: boolean;
   /** Manage platform branding / general settings (app name, subtitle, logo). */
   settings: boolean;
+  /** Import entity records from an uploaded file (XLSX/CSV). */
+  dataImport: boolean;
 }
 
 /**
@@ -93,7 +95,7 @@ export interface RolePermissions {
 /** Default permissions for new/existing roles: no access until granted. */
 export const NO_ACCESS_PERMS: RolePermissions = {
   superAdmin: false,
-  admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, automations: false, columnGroups: false, googleDrive: false, settings: false },
+  admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, automations: false, columnGroups: false, googleDrive: false, settings: false, dataImport: false },
   pageIds: [],
   records: {},
 };
