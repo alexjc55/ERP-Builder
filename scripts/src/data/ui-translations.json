@@ -2238,6 +2238,12 @@
     "he": "הצמד עמודה בגלילה אופקית"
   },
   {
+    "key": "fields.wrapText",
+    "ru": "Переносить текст в столбце на новую строку",
+    "en": "Wrap text in this column",
+    "he": "גלישת טקסט בעמודה זו"
+  },
+  {
     "key": "fields.sortOrder",
     "ru": "Порядок",
     "en": "Sorting",

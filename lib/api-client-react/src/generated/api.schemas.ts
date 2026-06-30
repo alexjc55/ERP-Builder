@@ -1996,6 +1996,7 @@ export interface Field {
   showInTable?: boolean;
   isPinned?: boolean;
   showColumnTotal?: boolean;
+  wrapText?: boolean;
   /** @nullable */
   totalFillColor?: string | null;
   /** @nullable */
@@ -2032,6 +2033,7 @@ export interface FieldInput {
   showInTable?: boolean;
   isPinned?: boolean;
   showColumnTotal?: boolean;
+  wrapText?: boolean;
   /** @nullable */
   totalFillColor?: string | null;
   /** @nullable */
@@ -2076,6 +2078,7 @@ export interface FieldUpdate {
   showInTable?: boolean;
   isPinned?: boolean;
   showColumnTotal?: boolean;
+  wrapText?: boolean;
   /** @nullable */
   totalFillColor?: string | null;
   /** @nullable */

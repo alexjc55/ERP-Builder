@@ -2572,6 +2572,7 @@ export const ListEntityFieldsResponseItem = zod.object({
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
+  "wrapText": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
   "columnGroupId": zod.number().nullish(),
@@ -2601,6 +2602,7 @@ export const createEntityFieldBodyPivotEnabledDefault = false;
 export const createEntityFieldBodyShowInTableDefault = true;
 export const createEntityFieldBodyIsPinnedDefault = false;
 export const createEntityFieldBodyShowColumnTotalDefault = false;
+export const createEntityFieldBodyWrapTextDefault = false;
 export const createEntityFieldBodyIsActiveDefault = true;
 
 export const CreateEntityFieldBody = zod.object({
@@ -2663,6 +2665,7 @@ export const CreateEntityFieldBody = zod.object({
   "showInTable": zod.boolean().default(createEntityFieldBodyShowInTableDefault),
   "isPinned": zod.boolean().default(createEntityFieldBodyIsPinnedDefault),
   "showColumnTotal": zod.boolean().default(createEntityFieldBodyShowColumnTotalDefault),
+  "wrapText": zod.boolean().default(createEntityFieldBodyWrapTextDefault),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
   "columnGroupId": zod.number().nullish(),
@@ -2745,6 +2748,7 @@ export const GetFieldResponse = zod.object({
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
+  "wrapText": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
   "columnGroupId": zod.number().nullish(),
@@ -2827,6 +2831,7 @@ export const UpdateFieldBody = zod.object({
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
+  "wrapText": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
   "columnGroupId": zod.number().nullish(),
@@ -2901,6 +2906,7 @@ export const UpdateFieldResponse = zod.object({
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
+  "wrapText": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
   "columnGroupId": zod.number().nullish(),

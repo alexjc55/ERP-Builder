@@ -5085,6 +5085,8 @@ components:
           type: boolean
         showColumnTotal:
           type: boolean
+        wrapText:
+          type: boolean
         totalFillColor:
           type: ["string", "null"]
         totalTextColor:
@@ -5162,6 +5164,9 @@ components:
           type: boolean
           default: false
         showColumnTotal:
+          type: boolean
+          default: false
+        wrapText:
           type: boolean
           default: false
         totalFillColor:
@@ -5245,6 +5250,8 @@ components:
         isPinned:
           type: boolean
         showColumnTotal:
+          type: boolean
+        wrapText:
           type: boolean
         totalFillColor:
           type: ["string", "null"]

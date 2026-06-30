@@ -174,6 +174,7 @@ export function FieldConfigDialog({
   const [showInTable, setShowInTable] = useState(true);
   const [isPinned, setIsPinned] = useState(false);
   const [showColumnTotal, setShowColumnTotal] = useState(false);
+  const [wrapText, setWrapText] = useState(false);
   const [totalFillColor, setTotalFillColor] = useState("");
   const [totalTextColor, setTotalTextColor] = useState("");
   const [permissions, setPermissions] = useState<FieldPermissions>({});
@@ -224,6 +225,7 @@ export function FieldConfigDialog({
       setShowInTable(field.showInTable ?? true);
       setIsPinned(field.isPinned ?? false);
       setShowColumnTotal(field.showColumnTotal ?? false);
+      setWrapText(field.wrapText ?? false);
       setTotalFillColor(field.totalFillColor ?? "");
       setTotalTextColor(field.totalTextColor ?? "");
       setPermissions(field.permissionsJson ?? {});
@@ -408,6 +410,7 @@ export function FieldConfigDialog({
       showInTable,
       isPinned,
       showColumnTotal: fieldType === "number" || fieldType === "function" ? showColumnTotal : false,
+      wrapText,
       totalFillColor: (fieldType === "number" || fieldType === "function") && showColumnTotal && totalFillColor ? totalFillColor : null,
       totalTextColor: (fieldType === "number" || fieldType === "function") && showColumnTotal && totalTextColor ? totalTextColor : null,
       fileConfigJson:
@@ -865,6 +868,10 @@ export function FieldConfigDialog({
               <div className="flex items-center gap-2">
                 <Switch checked={isPinned} onCheckedChange={setIsPinned} id="fcd-pinned" />
                 <Label htmlFor="fcd-pinned">{t("fields.pinColumn", "Закрепить при горизонтальной прокрутке")}</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={wrapText} onCheckedChange={setWrapText} id="fcd-wrap-text" />
+                <Label htmlFor="fcd-wrap-text">{t("fields.wrapText", "Переносить текст в столбце на новую строку")}</Label>
               </div>
               {fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup" && (
                 <div className="flex items-center gap-2">
