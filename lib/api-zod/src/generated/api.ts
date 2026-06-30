@@ -3901,7 +3901,7 @@ export const ListEntityAutomationsResponseItem = zod.object({
   "targetEntityId": zod.number().optional(),
   "mapping": zod.array(zod.object({
   "targetFieldKey": zod.string(),
-  "sourceType": zod.enum(['literal', 'field']),
+  "sourceType": zod.enum(['literal', 'field', 'combined']),
   "value": zod.unknown().optional(),
   "sourceFieldKey": zod.string().optional()
 })).optional(),
@@ -3963,7 +3963,7 @@ export const CreateEntityAutomationBody = zod.object({
   "targetEntityId": zod.number().optional(),
   "mapping": zod.array(zod.object({
   "targetFieldKey": zod.string(),
-  "sourceType": zod.enum(['literal', 'field']),
+  "sourceType": zod.enum(['literal', 'field', 'combined']),
   "value": zod.unknown().optional(),
   "sourceFieldKey": zod.string().optional()
 })).optional(),
@@ -4041,7 +4041,7 @@ export const GetAutomationResponse = zod.object({
   "targetEntityId": zod.number().optional(),
   "mapping": zod.array(zod.object({
   "targetFieldKey": zod.string(),
-  "sourceType": zod.enum(['literal', 'field']),
+  "sourceType": zod.enum(['literal', 'field', 'combined']),
   "value": zod.unknown().optional(),
   "sourceFieldKey": zod.string().optional()
 })).optional(),
@@ -4098,7 +4098,7 @@ export const UpdateAutomationBody = zod.object({
   "targetEntityId": zod.number().optional(),
   "mapping": zod.array(zod.object({
   "targetFieldKey": zod.string(),
-  "sourceType": zod.enum(['literal', 'field']),
+  "sourceType": zod.enum(['literal', 'field', 'combined']),
   "value": zod.unknown().optional(),
   "sourceFieldKey": zod.string().optional()
 })).optional(),
@@ -4147,7 +4147,7 @@ export const UpdateAutomationResponse = zod.object({
   "targetEntityId": zod.number().optional(),
   "mapping": zod.array(zod.object({
   "targetFieldKey": zod.string(),
-  "sourceType": zod.enum(['literal', 'field']),
+  "sourceType": zod.enum(['literal', 'field', 'combined']),
   "value": zod.unknown().optional(),
   "sourceFieldKey": zod.string().optional()
 })).optional(),

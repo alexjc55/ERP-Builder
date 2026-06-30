@@ -9,6 +9,7 @@ import {
   entityStatusesTable,
   relationsTable,
   recordLinksTable,
+  usersTable,
   type EntityAutomation,
   type EntityField,
   type AutomationTrigger,
@@ -602,14 +603,82 @@ async function sendWebhook(url: string, payload: unknown, log: Log): Promise<boo
 // Action execution
 // ---------------------------------------------------------------------------
 
-function buildMappedValues(
+/** First non-empty language of a multilingual JSONB value (ru → en → he). */
+function pickML(raw: unknown): string {
+  const m = (raw ?? {}) as { ru?: string; en?: string; he?: string };
+  return m.ru || m.en || m.he || "";
+}
+
+/** Render one source field's raw value as human-readable display text. */
+function formatDisplayValue(
+  field: EntityField,
+  value: unknown,
+  userNames: Map<number, string>,
+): string {
+  if (value == null || value === "") return "";
+  if (field.fieldType === "user") {
+    if (Array.isArray(value)) return value.map((v) => (typeof v === "number" ? userNames.get(v) ?? "" : String(v))).filter(Boolean).join(", ");
+    return typeof value === "number" ? userNames.get(value) ?? "" : String(value);
+  }
+  if (Array.isArray(value)) return value.map((v) => String(v)).filter((s) => s !== "").join(", ");
+  if (typeof value === "boolean") return value ? "Да" : "Нет";
+  return String(value);
+}
+
+/**
+ * Build a `{key → display text}` map for the triggering record, used to
+ * interpolate `combined` mapping templates. Resolves the record's status name
+ * (`__status__`), user references to names, and joins multi-value fields.
+ */
+async function buildDisplayValues(ctx: {
+  entityId: number;
+  values: Record<string, unknown>;
+  statusId: number | null;
+}): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  const fields = await loadActiveFields(ctx.entityId);
+
+  if (ctx.statusId != null) {
+    const [st] = await db.select().from(entityStatusesTable).where(eq(entityStatusesTable.id, ctx.statusId)).limit(1);
+    if (st) out[CONDITION_STATUS_KEY] = pickML(st.nameJson);
+  }
+
+  const userIds = new Set<number>();
+  for (const f of fields) {
+    if (f.fieldType !== "user") continue;
+    const v = ctx.values[f.fieldKey];
+    if (typeof v === "number") userIds.add(v);
+    else if (Array.isArray(v)) for (const x of v) if (typeof x === "number") userIds.add(x);
+  }
+  const userNames = new Map<number, string>();
+  if (userIds.size > 0) {
+    const us = await db.select().from(usersTable).where(inArray(usersTable.id, [...userIds]));
+    for (const u of us) userNames.set(u.id, [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || u.email);
+  }
+
+  for (const f of fields) {
+    out[f.fieldKey] = formatDisplayValue(f, ctx.values[f.fieldKey], userNames);
+  }
+  return out;
+}
+
+/** Replace `{key}` placeholders in a template with resolved display values. */
+function interpolateTemplate(template: string, display: Record<string, string>): string {
+  return template.replace(/\{([^{}]+)\}/g, (_m, key: string) => display[key.trim()] ?? "");
+}
+
+async function buildMappedValues(
   mapping: AutomationMapping[],
-  sourceValues: Record<string, unknown>,
-): Record<string, unknown> {
+  ctx: { entityId: number; values: Record<string, unknown>; statusId: number | null },
+): Promise<Record<string, unknown>> {
   const out: Record<string, unknown> = {};
+  let display: Record<string, string> | null = null;
   for (const m of mapping) {
     if (m.sourceType === "field") {
-      if (m.sourceFieldKey && m.sourceFieldKey in sourceValues) out[m.targetFieldKey] = sourceValues[m.sourceFieldKey];
+      if (m.sourceFieldKey && m.sourceFieldKey in ctx.values) out[m.targetFieldKey] = ctx.values[m.sourceFieldKey];
+    } else if (m.sourceType === "combined") {
+      if (!display) display = await buildDisplayValues(ctx);
+      out[m.targetFieldKey] = interpolateTemplate(typeof m.value === "string" ? m.value : "", display);
     } else {
       out[m.targetFieldKey] = m.value;
     }
@@ -634,7 +703,7 @@ async function runActions(
         ok = await systemUpdateRecord(ctx.recordId, undefined, action.statusId, ctx.actorUserId, log);
         break;
       case "create_record": {
-        const values = buildMappedValues(action.mapping ?? [], ctx.values);
+        const values = await buildMappedValues(action.mapping ?? [], { entityId: ctx.entityId, values: ctx.values, statusId: ctx.statusId });
         const id = await systemCreateRecord(action.targetEntityId, values, action.statusId, ctx.actorUserId, log);
         ok = id != null;
         break;
@@ -646,7 +715,7 @@ async function runActions(
           .select()
           .from(entityRecordsTable)
           .where(and(eq(entityRecordsTable.entityId, action.targetEntityId), sql`${entityRecordsTable.archivedAt} is null`));
-        const mappedValues = buildMappedValues(action.mapping ?? [], ctx.values);
+        const mappedValues = await buildMappedValues(action.mapping ?? [], { entityId: ctx.entityId, values: ctx.values, statusId: ctx.statusId });
         const relValues = await loadRelationValues(action.targetEntityId, rows.map((r) => r.id), targetFields);
         let allOk = true;
         for (const row of rows) {

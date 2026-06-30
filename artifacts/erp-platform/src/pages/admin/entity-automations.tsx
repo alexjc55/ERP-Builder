@@ -76,6 +76,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { MultilingualInput } from "@/components/MultilingualInput";
+import { FormulaEditor } from "@/components/FormulaEditor";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -112,7 +113,7 @@ type ConditionDraft = {
   valueSource: "literal" | "field";
   valueFieldKey: string;
 };
-type MappingDraft = { targetFieldKey: string; sourceType: "literal" | "field"; value: string; sourceFieldKey: string };
+type MappingDraft = { targetFieldKey: string; sourceType: "literal" | "field" | "combined"; value: string; sourceFieldKey: string };
 type ActionDraft = {
   type: AutomationActionType;
   fieldKey: string;
@@ -532,7 +533,9 @@ export default function EntityAutomationsPage() {
           .map((m) =>
             m.sourceType === "field"
               ? { targetFieldKey: m.targetFieldKey, sourceType: "field", sourceFieldKey: m.sourceFieldKey }
-              : { targetFieldKey: m.targetFieldKey, sourceType: "literal", value: coerce(m.targetFieldKey, m.value, tMap, false) },
+              : m.sourceType === "combined"
+                ? { targetFieldKey: m.targetFieldKey, sourceType: "combined", value: m.value }
+                : { targetFieldKey: m.targetFieldKey, sourceType: "literal", value: coerce(m.targetFieldKey, m.value, tMap, false) },
           );
         if (a.type === "create_record") {
           const action: AutomationAction = { type: "create_record", targetEntityId: targetId, mapping };
@@ -1185,28 +1188,50 @@ function ActionCard({
             <div className="space-y-1.5">
               <Label className="text-xs text-slate-500">{t("auto.fieldMapping", "Значения полей")}</Label>
               {draft.mapping.map((m, i) => (
-                <div key={i} className="flex items-center gap-1.5">
-                  <Select value={m.targetFieldKey} onValueChange={(v) => updMapping(i, { targetFieldKey: v })}>
-                    <SelectTrigger className="w-40"><SelectValue placeholder={t("auto.targetField", "Поле")} /></SelectTrigger>
-                    <SelectContent>{targetFields.map((f) => (<SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson) || f.fieldKey}</SelectItem>))}</SelectContent>
-                  </Select>
-                  <span className="text-slate-400">=</span>
-                  <Select value={m.sourceType} onValueChange={(v) => updMapping(i, { sourceType: v as "literal" | "field" })}>
-                    <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="literal">{t("auto.literal", "Значение")}</SelectItem>
-                      <SelectItem value="field">{t("auto.fromField", "Из поля")}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {m.sourceType === "field" ? (
-                    <Select value={m.sourceFieldKey} onValueChange={(v) => updMapping(i, { sourceFieldKey: v })}>
-                      <SelectTrigger className="flex-1"><SelectValue placeholder={t("auto.sourceField", "Поле-источник")} /></SelectTrigger>
-                      <SelectContent>{currentFields.map((f) => (<SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson) || f.fieldKey}</SelectItem>))}</SelectContent>
+                <div key={i} className="flex flex-col gap-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Select value={m.targetFieldKey} onValueChange={(v) => updMapping(i, { targetFieldKey: v })}>
+                      <SelectTrigger className="w-40"><SelectValue placeholder={t("auto.targetField", "Поле")} /></SelectTrigger>
+                      <SelectContent>{targetFields.map((f) => (<SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson) || f.fieldKey}</SelectItem>))}</SelectContent>
                     </Select>
-                  ) : (
-                    <ValueControl fieldKey={m.targetFieldKey} raw={m.value} onChange={(v) => updMapping(i, { value: v })} fmap={targetFieldByKey} sts={targetStatuses} statusKey={false} ownerEntityId={targetId} />
+                    <span className="text-slate-400">=</span>
+                    <Select value={m.sourceType} onValueChange={(v) => updMapping(i, { sourceType: v as "literal" | "field" | "combined" })}>
+                      <SelectTrigger className="w-28 shrink-0"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="literal">{t("auto.literal", "Значение")}</SelectItem>
+                        <SelectItem value="field">{t("auto.fromField", "Из поля")}</SelectItem>
+                        <SelectItem value="combined">{t("auto.combined", "Комбинированное")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {m.sourceType === "field" ? (
+                      <Select value={m.sourceFieldKey} onValueChange={(v) => updMapping(i, { sourceFieldKey: v })}>
+                        <SelectTrigger className="flex-1 min-w-0"><SelectValue placeholder={t("auto.sourceField", "Поле-источник")} /></SelectTrigger>
+                        <SelectContent>{currentFields.map((f) => (<SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson) || f.fieldKey}</SelectItem>))}</SelectContent>
+                      </Select>
+                    ) : m.sourceType === "combined" ? (
+                      <span className="flex-1 min-w-0 truncate text-xs text-slate-400">{t("auto.combinedTemplateBelow", "Шаблон ниже")}</span>
+                    ) : (
+                      <ValueControl fieldKey={m.targetFieldKey} raw={m.value} onChange={(v) => updMapping(i, { value: v })} fmap={targetFieldByKey} sts={targetStatuses} statusKey={false} ownerEntityId={targetId} />
+                    )}
+                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-400 shrink-0" onClick={() => rmMapping(i)}><X className="w-3.5 h-3.5" /></Button>
+                  </div>
+                  {m.sourceType === "combined" && (
+                    <div className="min-w-0 rounded-md border border-slate-100 bg-slate-50/50 p-2">
+                      <FormulaEditor
+                        value={m.value}
+                        onChange={(v) => updMapping(i, { value: v })}
+                        hideFunctions
+                        fields={[
+                          { key: STATUS_KEY, label: t("auto.recordStatus", "Статус записи") },
+                          ...currentFields.map((f) => ({ key: f.fieldKey, label: ml(f.nameJson) || f.fieldKey })),
+                        ]}
+                        label={t("auto.combinedTemplate", "Шаблон значения")}
+                        placeholder={t("auto.combinedPlaceholder", "Доставлено в покрасочную ({painter})")}
+                        insertLabel={t("auto.combinedInsert", "Вставить поле:")}
+                        hint={t("auto.combinedHint", "Свободный текст + значения полей записи через {ключ_поля}. Подставляются при срабатывании автоматизации.")}
+                      />
+                    </div>
                   )}
-                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-400 shrink-0" onClick={() => rmMapping(i)}><X className="w-3.5 h-3.5" /></Button>
                 </div>
               ))}
               <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={addMapping}><Plus className="w-3.5 h-3.5" />{t("auto.addMapping", "Добавить поле")}</Button>

@@ -123,6 +123,7 @@ export function FormulaEditor({
   placeholder,
   hint,
   insertLabel,
+  hideFunctions,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -135,6 +136,8 @@ export function FormulaEditor({
   hint?: string;
   /** Override the "insert field" chips heading (e.g. «Вставить метрику:»). */
   insertLabel?: string;
+  /** Hide the function chips — for plain text-interpolation templates. */
+  hideFunctions?: boolean;
 }) {
   const t = useT();
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -186,6 +189,7 @@ export function FormulaEditor({
           </div>
         </div>
       )}
+      {!hideFunctions && (
       <div className="space-y-1">
         <p className="text-xs text-slate-500">{t("fields.formulaInsertFunc", "Функции:")}</p>
         <div className="flex flex-wrap gap-1">
@@ -211,6 +215,7 @@ export function FormulaEditor({
           ))}
         </div>
       </div>
+      )}
       <p className="text-xs text-slate-400">
         {hint ??
           t(

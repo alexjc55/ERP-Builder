@@ -2512,6 +2512,7 @@ export type AutomationMappingSourceType = typeof AutomationMappingSourceType[key
 export const AutomationMappingSourceType = {
   literal: 'literal',
   field: 'field',
+  combined: 'combined',
 } as const;
 
 export interface AutomationMapping {

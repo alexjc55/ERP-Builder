@@ -13,6 +13,7 @@
 - [Editable records table](editable-records-table.md) — inline cell/add-row/setup-mode constraints; inline status edits must mirror the per-row server workflow boundary, not a heuristic.
 - [Page-local & computed fields](page-local-and-computed-fields.md) — mirror-page page-local fields (separate value storage, RBAC = entity records boundary), per-field conditional formatting, read-only function/formula fields.
 - [Event system](event-system.md) — internal best-effort event bus design, the 5 core events, foundation for automations/modules.
+- [Automations engine](automations-engine.md) — mapping/condition/action types live in db zod (server source of truth) + parallel openapi copy; combined value mode interpolates trigger-record display values.
 - [Impersonation](erp-impersonation.md) — impersonation modeled on the custom JWT; boundary/no-escalation rules that must stay consistent.
 - [Passwordless guest access](guest-access.md) — shareable-link guest sessions: read-only is a hard guard at requireAuth (not RBAC), guest reads must be side-effect free, links bind to passwordless accounts only.
 - [Mirror pages](mirror-pages.md) — a page shows another entity's LIVE records (bidirectional) via mirrorEntityId + display-only mirrorFieldKeys; source-entity RBAC is the boundary, with optional per-mirror-page CRUD overrides.

@@ -5995,7 +5995,10 @@ components:
           type: string
         sourceType:
           type: string
-          enum: [literal, field]
+          enum: [literal, field, combined]
+        # For `literal`: the constant value. For `combined`: a text template
+        # string with `{fieldKey}` placeholders (and `{__status__}`) that are
+        # interpolated against the triggering record's display values.
         value: {}
         sourceFieldKey:
           type: string

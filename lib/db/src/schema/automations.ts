@@ -76,8 +76,13 @@ export type AutomationTrigger = z.infer<typeof automationTriggerSchema>;
 /** How a target field's value is sourced when creating/updating records. */
 export const automationMappingSchema = z.object({
   targetFieldKey: z.string().min(1),
-  /** "literal": use `value` as-is; "field": copy from the triggering record's `sourceFieldKey`. */
-  sourceType: z.enum(["literal", "field"]),
+  /**
+   * "literal": use `value` as-is; "field": copy from the triggering record's
+   * `sourceFieldKey`; "combined": `value` is a text template with `{fieldKey}`
+   * (and `{__status__}`) placeholders interpolated against the triggering
+   * record's display values.
+   */
+  sourceType: z.enum(["literal", "field", "combined"]),
   value: z.unknown().optional(),
   sourceFieldKey: z.string().optional(),
 });
