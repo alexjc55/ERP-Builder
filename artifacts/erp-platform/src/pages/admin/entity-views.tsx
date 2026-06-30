@@ -79,6 +79,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Loader2, ArrowLeft, LayoutList, Star, Filter, ArrowDownUp, X, ChevronUp, ChevronDown, ChevronRight, Check, Table2, Shield, Columns3 } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
+import { normalizeSelectOptions } from "@/lib/selectOptions";
 import { slugifyKey, uniqueKey } from "@/lib/keys";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 import {
@@ -241,7 +242,7 @@ export default function EntityViewsPage() {
       if (eff === "boolean") return ["true", "false"];
       if (eff === "select") {
         const src = ft === "relation" || ft === "lookup" ? d.projectedFieldByField.get(fieldKey) : f;
-        const opts = src && Array.isArray(src.optionsJson) ? (src.optionsJson as string[]) : [];
+        const opts = normalizeSelectOptions(src?.optionsJson).map((o) => o.value);
         if (opts.length > 0) return opts;
       }
       const res = await filterValuesMutation.mutateAsync({ entityId, data: { field: fieldKey, filters: [] } });
@@ -954,6 +955,7 @@ export default function EntityViewsPage() {
               conjunction={filterConjunction}
               onConjunctionChange={setFilterConjunction}
               getOptions={getDomainOptions}
+              projectedFieldByField={projectedFieldByField}
               projectedTypeByField={projectedTypeByField}
             />
 
@@ -1156,6 +1158,7 @@ export default function EntityViewsPage() {
               onRemove={removeDefaultFilter}
               getOptions={getDomainOptions}
               projectedTypeByField={projectedTypeByField}
+              projectedFieldByField={projectedFieldByField}
             />
             <div className="flex items-center justify-between border-t border-slate-100 pt-4">
               <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">

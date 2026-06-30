@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { SelectOption } from './selectOption';
 
 export interface PageRelatedColumn {
   /** The relation page-field's own key (column identity). */
@@ -16,7 +17,7 @@ export interface PageRelatedColumn {
      */
   relatedFieldType?: string | null;
   /** Select options of the related field (for inline editing). */
-  optionsJson?: string[];
+  optionsJson?: SelectOption[];
   /** Whether the viewer's role may edit the related field at all (before per-row scope). */
   editableColumn: boolean;
   /** The id of the related entity this column projects from (set by the entity-keyed endpoint; used to open the linked record's editor for write-through lookups). */

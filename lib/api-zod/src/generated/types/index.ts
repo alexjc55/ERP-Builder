@@ -224,6 +224,7 @@ export * from './roleInput';
 export * from './rolePermissions';
 export * from './rolePermissionsRecords';
 export * from './roleUpdate';
+export * from './selectOption';
 export * from './sortSpec';
 export * from './sortSpecDirection';
 export * from './status';

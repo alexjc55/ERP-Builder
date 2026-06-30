@@ -96,6 +96,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
+import { normalizeSelectOptions } from "@/lib/selectOptions";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 
 type MLValue = { ru?: string; en?: string; he?: string };
@@ -636,11 +637,11 @@ export default function EntityAutomationsPage() {
       return <RelationValueControl entityId={ownerEntityId} fieldKey={fieldKey} value={raw} onChange={onChange} t={t} />;
     }
     if (type === "select") {
-      const options = Array.isArray(f?.optionsJson) ? (f!.optionsJson as string[]) : [];
+      const options = normalizeSelectOptions(f?.optionsJson);
       return (
         <Select value={raw || ""} onValueChange={onChange}>
           <SelectTrigger className="flex-1"><SelectValue placeholder={ph} /></SelectTrigger>
-          <SelectContent>{options.map((o) => (<SelectItem key={o} value={o}>{o}</SelectItem>))}</SelectContent>
+          <SelectContent>{options.map((o) => (<SelectItem key={o.value} value={o.value}>{ml(o.labelJson) || o.value}</SelectItem>))}</SelectContent>
         </Select>
       );
     }

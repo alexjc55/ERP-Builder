@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useML } from "@/lib/i18n";
 import {
   type UserOption,
   type FilterOperator,
@@ -25,6 +26,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Plus, Filter, X, ChevronDown, Check, CalendarDays } from "lucide-react";
 import { ValueChecklistPicker } from "@/components/FilterValuePicker";
+import { normalizeSelectOptions, type SelectOption } from "@/lib/selectOptions";
 
 export const FILTER_OPERATORS: { value: FilterOperator; label: string; needsValue: boolean; arrayValue?: boolean }[] = [
   { value: "eq", label: "равно", needsValue: true },
@@ -146,12 +148,13 @@ function OptionPicker({
   multiple,
   t,
 }: {
-  options: string[];
+  options: SelectOption[];
   valueText: string;
   onChange: (text: string) => void;
   multiple: boolean;
   t: (key: string, def: string) => string;
 }) {
+  const ml = useML();
   const [open, setOpen] = useState(false);
   const [manual, setManual] = useState("");
   const selected = multiple
@@ -179,7 +182,10 @@ function OptionPicker({
     }
     setManual("");
   };
-  const allOptions = [...options, ...selected.filter((s) => !options.includes(s))];
+  const optionValues = options.map((o) => o.value);
+  const labelOf = (value: string) =>
+    ml(options.find((o) => o.value === value)?.labelJson) || value;
+  const allOptions = [...optionValues, ...selected.filter((s) => !optionValues.includes(s))];
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -189,7 +195,7 @@ function OptionPicker({
             {selected.length === 0 ? (
               <span className="text-slate-400">{t("views.selectValue", "выберите значение")}</span>
             ) : (
-              selected.join(", ")
+              selected.map(labelOf).join(", ")
             )}
           </span>
           <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-60" />
@@ -212,7 +218,7 @@ function OptionPicker({
                   <span className={`flex h-4 w-4 items-center justify-center rounded border ${isSel ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300"}`}>
                     {isSel && <Check className="w-3 h-3" />}
                   </span>
-                  <span className="truncate">{opt}</span>
+                  <span className="truncate">{labelOf(opt)}</span>
                 </button>
               );
             })
@@ -261,6 +267,7 @@ function FilterValueEditor({
   userOptions,
   getOptions,
   projectedType,
+  projectedField,
 }: {
   field: Field | undefined;
   operator: FilterOperator;
@@ -271,11 +278,14 @@ function FilterValueEditor({
   getOptions?: (fieldKey: string) => Promise<string[]>;
   /** For relation/lookup fields: the type of the linked field they surface. */
   projectedType?: Field["fieldType"];
+  /** For relation/lookup fields: the linked field itself (e.g. its select options). */
+  projectedField?: Field;
 }) {
+  const ml = useML();
   if (!operatorNeedsValue(operator)) {
     return <div className="flex h-8 flex-1 items-center px-2 text-xs text-slate-400">—</div>;
   }
-  const options = field && Array.isArray(field.optionsJson) ? (field.optionsJson as string[]) : [];
+  const options = normalizeSelectOptions(field?.optionsJson);
   const isArray = operatorIsArray(operator);
   const ft = field?.fieldType;
   // A relation/lookup field's raw values ARE the linked field's values, so labels
@@ -318,12 +328,18 @@ function FilterValueEditor({
         : [];
     const commit = (vals: string[]) => onChange(isArray ? vals.join(", ") : vals[0] ?? "");
     const userNameById = new Map(userOptions.map((u) => [String(u.id), u.name] as const));
+    // For a relation/lookup field projecting onto a select, resolve labels from the
+    // LINKED field's options; for a direct select the picker above already handled it.
+    const projectedSelectOptions =
+      effectiveType === "select" ? normalizeSelectOptions((projectedField ?? field)?.optionsJson) : [];
     const labelFor =
       effectiveType === "user"
         ? (v: string) => userNameById.get(v) ?? `#${v}`
         : effectiveType === "boolean"
           ? (v: string) => (v === "true" ? t("views.boolTrue", "Да") : t("views.boolFalse", "Нет"))
-          : undefined;
+          : effectiveType === "select"
+            ? (v: string) => ml(projectedSelectOptions.find((o) => o.value === v)?.labelJson) || v
+            : undefined;
     // Closed-domain values (user ids, booleans, select options) must be picked from
     // the full resolved list — typing one by hand is meaningless. Open-domain
     // (text-like) values keep manual entry so authors can target a value not yet
@@ -385,6 +401,7 @@ export function FilterRowsEditor({
   onConjunctionChange,
   getOptions,
   projectedTypeByField,
+  projectedFieldByField,
 }: {
   filters: DraftFilter[];
   fields: Field[];
@@ -398,6 +415,7 @@ export function FilterRowsEditor({
   onConjunctionChange?: (v: "and" | "or") => void;
   getOptions?: (fieldKey: string) => Promise<string[]>;
   projectedTypeByField?: Map<string, Field["fieldType"]>;
+  projectedFieldByField?: Map<string, Field>;
 }) {
   return (
     <div className="space-y-2 border-t border-slate-100 pt-4">
@@ -480,6 +498,7 @@ export function FilterRowsEditor({
                   userOptions={userOptions}
                   getOptions={getOptions}
                   projectedType={projectedTypeByField?.get(f.field)}
+                  projectedField={projectedFieldByField?.get(f.field)}
                 />
                 <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-500 shrink-0" onClick={() => onRemove(idx)}>
                   <X className="w-3.5 h-3.5" />

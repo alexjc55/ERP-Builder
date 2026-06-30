@@ -14,6 +14,7 @@ import type { FileFieldConfig } from './fileFieldConfig';
 import type { FormulaFieldConfig } from './formulaFieldConfig';
 import type { MultilingualText } from './multilingualText';
 import type { RelationFieldConfig } from './relationFieldConfig';
+import type { SelectOption } from './selectOption';
 import type { UserFieldConfig } from './userFieldConfig';
 
 export interface FieldUpdate {
@@ -24,7 +25,7 @@ export interface FieldUpdate {
   isRequired?: boolean;
   /** @nullable */
   defaultValue?: string | null;
-  optionsJson?: string[];
+  optionsJson?: SelectOption[];
   permissionsJson?: FieldPermissions;
   fileConfigJson?: FileFieldConfig;
   userConfigJson?: UserFieldConfig;

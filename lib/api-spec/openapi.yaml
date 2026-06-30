@@ -3424,6 +3424,18 @@ components:
         he:
           type: string
 
+    # A single select-field option: a stable `value` (key, stored on records and
+    # never recomputed from the label) plus a multilingual display label. Renaming
+    # edits only labelJson, so the change reflects in every existing record.
+    SelectOption:
+      type: object
+      required: [value, labelJson]
+      properties:
+        value:
+          type: string
+        labelJson:
+          $ref: "#/components/schemas/MultilingualText"
+
     # Platform branding / general settings (singleton row).
     AppSettings:
       type: object
@@ -5184,7 +5196,7 @@ components:
         optionsJson:
           type: array
           items:
-            type: string
+            $ref: "#/components/schemas/SelectOption"
         permissionsJson:
           $ref: "#/components/schemas/FieldPermissions"
         fileConfigJson:
@@ -5258,7 +5270,7 @@ components:
         optionsJson:
           type: array
           items:
-            type: string
+            $ref: "#/components/schemas/SelectOption"
         permissionsJson:
           $ref: "#/components/schemas/FieldPermissions"
         fileConfigJson:
@@ -5350,7 +5362,7 @@ components:
         optionsJson:
           type: array
           items:
-            type: string
+            $ref: "#/components/schemas/SelectOption"
         permissionsJson:
           $ref: "#/components/schemas/FieldPermissions"
         fileConfigJson:
@@ -5426,7 +5438,7 @@ components:
         optionsJson:
           type: array
           items:
-            type: string
+            $ref: "#/components/schemas/SelectOption"
           description: Select options of the related field (for inline editing).
         editableColumn:
           type: boolean
@@ -5687,7 +5699,7 @@ components:
         optionsJson:
           type: array
           items:
-            type: string
+            $ref: "#/components/schemas/SelectOption"
         formatRulesJson:
           type: array
           items:
@@ -5747,7 +5759,7 @@ components:
         optionsJson:
           type: array
           items:
-            type: string
+            $ref: "#/components/schemas/SelectOption"
         formatRulesJson:
           type: array
           items:
@@ -5801,7 +5813,7 @@ components:
         optionsJson:
           type: array
           items:
-            type: string
+            $ref: "#/components/schemas/SelectOption"
         formatRulesJson:
           type: array
           items:

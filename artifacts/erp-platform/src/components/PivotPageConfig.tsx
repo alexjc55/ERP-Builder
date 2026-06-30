@@ -30,6 +30,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table2, Search } from "lucide-react";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
+import { normalizeSelectOptions } from "@/lib/selectOptions";
 import {
   PivotMeasuresEditor,
   type DraftMeasure,
@@ -166,7 +167,7 @@ export function PivotPageConfig({
       if (eff === "boolean") return ["true", "false"];
       if (eff === "select") {
         const src = ft === "relation" || ft === "lookup" ? d.projectedFieldByField.get(fieldKey) : f;
-        const opts = src && Array.isArray(src.optionsJson) ? (src.optionsJson as string[]) : [];
+        const opts = normalizeSelectOptions(src?.optionsJson).map((o) => o.value);
         if (opts.length > 0) return opts;
       }
       const res = await filterValuesMutation.mutateAsync({ entityId, data: { field: fieldKey, filters: [] } });
@@ -381,6 +382,7 @@ export function PivotPageConfig({
         onConjunctionChange={setFilterConjunction}
         getOptions={getDomainOptions}
         projectedTypeByField={projectedTypeByField}
+        projectedFieldByField={projectedFieldByField}
       />
 
       <p className="text-xs text-slate-400">

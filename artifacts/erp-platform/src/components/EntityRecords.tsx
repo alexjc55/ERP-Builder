@@ -65,6 +65,7 @@ import {
   type UserOption,
   type Role,
   type FieldAccess,
+  type MultilingualText,
 } from "@workspace/api-client-react";
 import { PivotView } from "./PivotView";
 import { CalendarView, defaultCalendarMode, type CalendarMode, type CalendarBaseQuery } from "./CalendarView";
@@ -135,6 +136,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useML, useT, useLang } from "@/lib/i18n";
+import { normalizeSelectOptions, getOptionLabel } from "@/lib/selectOptions";
 import { useGoogleDriveReady } from "@/lib/googleDrive";
 import { FieldConfigDialog } from "@/components/FieldConfigDialog";
 import { MultilingualInput } from "@/components/MultilingualInput";
@@ -229,10 +231,17 @@ function formToValues(fields: Field[], form: FormState): Record<string, unknown>
   return out;
 }
 
-function renderCellValue(field: Field, value: unknown, t: (key: string, def: string) => string, userNames?: Map<number, string>, textColor?: string): React.ReactNode {
+function renderCellValue(field: Field, value: unknown, t: (key: string, def: string) => string, userNames?: Map<number, string>, textColor?: string, ml?: (val: MultilingualText | string | undefined | null) => string): React.ReactNode {
   const colorStyle = textColor ? { color: textColor } : undefined;
   if (value === undefined || value === null || value === "")
     return <span className="text-slate-300" style={colorStyle}>—</span>;
+  if (field.fieldType === "select") {
+    // Show the option's multilingual label, but the stored value stays the stable
+    // key. ml may be absent at some call sites — getOptionLabel then falls back to
+    // the raw value (which is the legacy ru text for migrated options).
+    const label = getOptionLabel(field.optionsJson, String(value), ml ?? (() => ""));
+    return <span className="text-slate-700" style={colorStyle}>{label}</span>;
+  }
   if (field.fieldType === "boolean") {
     return value ? (
       <Badge className="bg-emerald-100 text-emerald-700 border-0 font-normal">{t("fields.yes", "Да")}</Badge>
@@ -297,6 +306,7 @@ function LookupCreatePreview({
   userNames: Map<number, string>;
 }): React.ReactNode {
   const t = useT();
+  const ml = useML();
   const { data: record } = useGetRecord(linkedRecordId, {
     query: {
       enabled: linkedRecordId > 0 && relatedFieldKey !== "",
@@ -316,7 +326,7 @@ function LookupCreatePreview({
   const relField = isFileValue(value)
     ? ({ ...fallbackField, fieldType: "file" } as Field)
     : fallbackField;
-  return renderCellValue(relField, value, t, userNames);
+  return renderCellValue(relField, value, t, userNames, undefined, ml);
 }
 
 /**
@@ -583,6 +593,7 @@ function FieldFilterPopover({
   const labelFor = (v: string): string => {
     if (ft === "user") return userNames.get(Number(v)) ?? `#${v}`;
     if (ft === "boolean") return v === "true" ? t("common.yes", "Да") : t("common.no", "Нет");
+    if (ft === "select") return getOptionLabel(field.optionsJson, v, ml);
     return v;
   };
 
@@ -3528,7 +3539,7 @@ export function EntityRecords({
                               rel?.linkedRecordId == null ? (
                                 <span className="text-slate-300">—</span>
                               ) : (
-                                renderCellValue(relField, rel?.value, t, userNames, cellText)
+                                renderCellValue(relField, rel?.value, t, userNames, cellText, ml)
                               );
                             return (
                               <td key={f.id} className="px-4 py-3 max-w-[240px] truncate" style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
@@ -3645,7 +3656,7 @@ export function EntityRecords({
                               style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}
                               title={cellEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
                             >
-                              {renderCellValue(f, values[f.fieldKey], t, userNames, cellText)}
+                              {renderCellValue(f, values[f.fieldKey], t, userNames, cellText, ml)}
                             </td>
                           );
                           }
@@ -3671,7 +3682,7 @@ export function EntityRecords({
                               rel?.linkedRecordId == null ? (
                                 <span className="text-slate-300">—</span>
                               ) : (
-                                renderCellValue(relField, rel?.value, t, userNames, cellText)
+                                renderCellValue(relField, rel?.value, t, userNames, cellText, ml)
                               );
                             return (
                               <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px] truncate" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
@@ -3701,7 +3712,7 @@ export function EntityRecords({
                               rel?.linkedRecordId == null || rel?.value == null ? (
                                 <span className="text-slate-300">—</span>
                               ) : (
-                                renderCellValue(relField, rel?.value, t, userNames, cellText)
+                                renderCellValue(relField, rel?.value, t, userNames, cellText, ml)
                               );
                             return (
                               <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px] truncate" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
@@ -3756,7 +3767,7 @@ export function EntityRecords({
                               style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}
                               title={cellEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
                             >
-                              {renderCellValue(pageFieldAsField, pageValues[pf.fieldKey], t, userNames, cellText)}
+                              {renderCellValue(pageFieldAsField, pageValues[pf.fieldKey], t, userNames, cellText, ml)}
                             </td>
                           );
                         })}
@@ -4913,6 +4924,8 @@ function RecordFormBody({
       relVal?.value,
       t,
       userNames,
+      undefined,
+      ml,
     );
   };
 
@@ -5881,6 +5894,7 @@ function InlineCellEditor({
   pageId?: number;
 }) {
   const t = useT();
+  const ml = useML();
   const [draft, setDraft] = useState<CellValue>(initial);
   const cancelRef = useRef(false);
   const committedRef = useRef(false);
@@ -5940,7 +5954,7 @@ function InlineCellEditor({
   }
 
   if (field.fieldType === "select") {
-    const options = (Array.isArray(field.optionsJson) ? (field.optionsJson as string[]) : []).map((o) => ({ value: o, label: o }));
+    const options = normalizeSelectOptions(field.optionsJson).map((o) => ({ value: o.value, label: ml(o.labelJson) || o.value }));
     return (
       <Select
         defaultOpen
@@ -6120,6 +6134,7 @@ function FieldInput({
   pageId?: number;
 }) {
   const t = useT();
+  const ml = useML();
   if (isDependentField(field) && allFields && rowValues && entityId != null) {
     return (
       <DependentFieldCombobox
@@ -6182,7 +6197,7 @@ function FieldInput({
       );
     }
     case "select": {
-      const options = Array.isArray(field.optionsJson) ? (field.optionsJson as string[]) : [];
+      const options = normalizeSelectOptions(field.optionsJson);
       return (
         <Select value={value ? String(value) : ""} onValueChange={onChange} disabled={disabled}>
           <SelectTrigger>
@@ -6190,7 +6205,7 @@ function FieldInput({
           </SelectTrigger>
           <SelectContent>
             {options.map((opt) => (
-              <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+              <SelectItem key={opt.value} value={opt.value}>{ml(opt.labelJson) || opt.value}</SelectItem>
             ))}
           </SelectContent>
         </Select>

@@ -44,7 +44,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { FileSourcesConfig } from "@/components/FileSourcesConfig";
 import {
   Dialog,
@@ -72,6 +71,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MultilingualInput } from "@/components/MultilingualInput";
+import { SelectOptionsEditor } from "@/components/SelectOptionsEditor";
+import { normalizeSelectOptions, type SelectOption } from "@/lib/selectOptions";
 import { FieldFormatRulesEditor } from "@/components/FieldFormatRulesEditor";
 import { FieldValidationRulesEditor, type OtherField } from "@/components/FieldValidationRulesEditor";
 import { ColorPickerControl } from "@/components/ColorPickerControl";
@@ -167,7 +168,7 @@ export function FieldConfigDialog({
   const [fieldType, setFieldType] = useState<FieldType>("text");
   const [isRequired, setIsRequired] = useState(false);
   const [defaultValue, setDefaultValue] = useState("");
-  const [optionsText, setOptionsText] = useState("");
+  const [options, setOptions] = useState<SelectOption[]>([]);
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
   const [isFilterable, setIsFilterable] = useState(false);
@@ -218,7 +219,7 @@ export function FieldConfigDialog({
       setFieldType(field.fieldType);
       setIsRequired(field.isRequired);
       setDefaultValue(field.defaultValue ?? "");
-      setOptionsText((field.optionsJson ?? []).join("\n"));
+      setOptions(normalizeSelectOptions(field.optionsJson));
       setSortOrder(field.sortOrder);
       setIsActive(field.isActive);
       setIsFilterable(field.isFilterable ?? false);
@@ -259,7 +260,7 @@ export function FieldConfigDialog({
       setFieldType("text");
       setIsRequired(false);
       setDefaultValue("");
-      setOptionsText("");
+      setOptions([]);
       setSortOrder(nextSortOrder);
       setIsActive(true);
       setIsFilterable(false);
@@ -391,10 +392,6 @@ export function FieldConfigDialog({
     }));
 
   const handleSubmit = () => {
-    const options = optionsText
-      .split("\n")
-      .map((o) => o.trim())
-      .filter(Boolean);
     const payload = {
       fieldKey: effectiveKey,
       nameJson: nameJson as MultilingualText,
@@ -688,16 +685,7 @@ export function FieldConfigDialog({
               </div>
             )}
             {fieldType === "select" && (
-              <div className="space-y-1.5">
-                <Label>{t("fields.options", "Варианты списка")}</Label>
-                <Textarea
-                  value={optionsText}
-                  onChange={(e) => setOptionsText(e.target.value)}
-                  placeholder={t("fields.optionsPlaceholder", "Новая\nВ работе\nЗавершена")}
-                  rows={4}
-                />
-                <p className="text-xs text-slate-400">{t("fields.optionsHint", "По одному варианту на строку.")}</p>
-              </div>
+              <SelectOptionsEditor value={options} onChange={setOptions} t={t} />
             )}
             {fieldType === "file" && (
               <div className="space-y-2">
@@ -914,7 +902,7 @@ export function FieldConfigDialog({
             <div className="border-t border-slate-100 pt-4">
               <FieldFormatRulesEditor
                 fieldType={fieldType}
-                options={optionsText.split("\n").map((o) => o.trim()).filter(Boolean)}
+                options={options}
                 users={userOptions}
                 rules={formatRules}
                 onChange={setFormatRules}
@@ -925,7 +913,7 @@ export function FieldConfigDialog({
               <FieldValidationRulesEditor
                 selfType={fieldType}
                 selfName={ml(nameJson) || effectiveKey}
-                selfOptions={optionsText.split("\n").map((o) => o.trim()).filter(Boolean)}
+                selfOptions={options}
                 otherFields={validationOtherFields}
                 users={userOptions}
                 rules={validationRules}

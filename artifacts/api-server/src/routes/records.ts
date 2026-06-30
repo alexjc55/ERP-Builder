@@ -42,6 +42,7 @@ import {
   PivotEntityRecordsBody,
 } from "@workspace/api-zod";
 import type { EntityField, InsertAuditLog, FileSource, FileFieldConfig, FieldValidationRule } from "@workspace/db";
+import { optionValues } from "../lib/selectOptions";
 import { buildRecordQuery, buildPageLocalCondition, type RecordQuerySpec, type FilterCondition } from "./record-query";
 import { buildRelationMeta, ownScopeWhere, isRecordOwned } from "./own-scope";
 import { computePivot } from "./pivot-compute";
@@ -286,8 +287,7 @@ export function validateValues(fields: EntityField[], values: Record<string, unk
       }
       case "select": {
         if (typeof raw !== "string") return { error: `Field "${field.fieldKey}" must be a string` };
-        const options = Array.isArray(field.optionsJson) ? (field.optionsJson as unknown[]) : [];
-        if (!options.includes(raw)) return { error: `Field "${field.fieldKey}" must be one of the allowed options` };
+        if (!optionValues(field.optionsJson).has(raw)) return { error: `Field "${field.fieldKey}" must be one of the allowed options` };
         cleaned[field.fieldKey] = raw;
         break;
       }

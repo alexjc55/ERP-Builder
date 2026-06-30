@@ -20,7 +20,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -47,6 +46,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MultilingualInput } from "@/components/MultilingualInput";
+import { SelectOptionsEditor } from "@/components/SelectOptionsEditor";
+import { normalizeSelectOptions, type SelectOption } from "@/lib/selectOptions";
 import { FieldFormatRulesEditor } from "@/components/FieldFormatRulesEditor";
 import { ColorPickerControl } from "@/components/ColorPickerControl";
 import { FormulaEditor, type FormulaFieldRef } from "@/components/FormulaEditor";
@@ -140,7 +141,7 @@ export function PageFieldConfigDialog({
   const [isRequired, setIsRequired] = useState(false);
   const [isFilterable, setIsFilterable] = useState(false);
   const [defaultValue, setDefaultValue] = useState("");
-  const [optionsText, setOptionsText] = useState("");
+  const [options, setOptions] = useState<SelectOption[]>([]);
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
   const [showInTable, setShowInTable] = useState(true);
@@ -172,7 +173,7 @@ export function PageFieldConfigDialog({
       setIsRequired(field.isRequired);
       setIsFilterable(field.isFilterable ?? false);
       setDefaultValue(field.defaultValue ?? "");
-      setOptionsText((field.optionsJson ?? []).join("\n"));
+      setOptions(normalizeSelectOptions(field.optionsJson));
       setSortOrder(field.sortOrder);
       setIsActive(field.isActive);
       setShowInTable(field.showInTable ?? true);
@@ -197,7 +198,7 @@ export function PageFieldConfigDialog({
       setIsRequired(false);
       setIsFilterable(false);
       setDefaultValue("");
-      setOptionsText("");
+      setOptions([]);
       setSortOrder(nextSortOrder);
       setIsActive(true);
       setShowInTable(true);
@@ -293,10 +294,6 @@ export function PageFieldConfigDialog({
   };
 
   const handleSubmit = () => {
-    const options = optionsText
-      .split("\n")
-      .map((o) => o.trim())
-      .filter(Boolean);
     const payload = {
       fieldKey: effectiveKey,
       nameJson: nameJson as MultilingualText,
@@ -391,16 +388,7 @@ export function PageFieldConfigDialog({
               </div>
             </div>
             {fieldType === "select" && (
-              <div className="space-y-1.5">
-                <Label>{t("fields.options", "Варианты списка")}</Label>
-                <Textarea
-                  value={optionsText}
-                  onChange={(e) => setOptionsText(e.target.value)}
-                  placeholder={t("fields.optionsPlaceholder", "Новая\nВ работе\nЗавершена")}
-                  rows={4}
-                />
-                <p className="text-xs text-slate-400">{t("fields.optionsHint", "По одному варианту на строку.")}</p>
-              </div>
+              <SelectOptionsEditor value={options} onChange={setOptions} t={t} />
             )}
             {fieldType === "function" && (
               <div className="space-y-3">
@@ -603,7 +591,7 @@ export function PageFieldConfigDialog({
             <div className="border-t border-slate-100 pt-4">
               <FieldFormatRulesEditor
                 fieldType={formatFieldType}
-                options={optionsText.split("\n").map((o) => o.trim()).filter(Boolean)}
+                options={options}
                 users={userOptions}
                 rules={formatRules}
                 onChange={setFormatRules}

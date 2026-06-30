@@ -10,14 +10,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useT } from "@/lib/i18n";
+import { useT, useML } from "@/lib/i18n";
+import type { SelectOption } from "@/lib/selectOptions";
 import { Plus, Trash2 } from "lucide-react";
 
 export interface OtherField {
   fieldKey: string;
   name: string;
   fieldType: FieldType;
-  options: string[];
+  options: SelectOption[];
 }
 
 const ALL_OPERATORS: { value: ValidationOperator; label: string }[] = [
@@ -63,13 +64,14 @@ export function FieldValidationRulesEditor({
 }: {
   selfType: FieldType;
   selfName: string;
-  selfOptions: string[];
+  selfOptions: SelectOption[];
   otherFields: OtherField[];
   users?: { id: number; name: string }[];
   rules: FieldValidationRule[];
   onChange: (rules: FieldValidationRule[]) => void;
 }) {
   const t = useT();
+  const ml = useML();
   const isSelectSelf = selfType === "select" && selfOptions.length > 0;
 
   const update = (idx: number, patch: Partial<FieldValidationRule>) => {
@@ -119,7 +121,9 @@ export function FieldValidationRulesEditor({
     // illustrate with the chosen applyToValues (select self) or a placeholder.
     const sample =
       isSelectSelf && rule.applyToValues && rule.applyToValues.length > 0
-        ? rule.applyToValues.join("», «")
+        ? rule.applyToValues
+            .map((v) => ml(selfOptions.find((o) => o.value === v)?.labelJson) || v)
+            .join("», «")
         : "…";
     return `Нельзя сохранить поле «${selfName}» со значением «${sample}»: ${cond}.`;
   };
@@ -141,11 +145,11 @@ export function FieldValidationRulesEditor({
     }
     if (cfType === "select" && cf && cf.options.length > 0) {
       return (
-        <Select value={rule.value || cf.options[0]} onValueChange={(v) => update(idx, { value: v })}>
+        <Select value={rule.value || cf.options[0]!.value} onValueChange={(v) => update(idx, { value: v })}>
           <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
           <SelectContent>
             {cf.options.map((o) => (
-              <SelectItem key={o} value={o}>{o}</SelectItem>
+              <SelectItem key={o.value} value={o.value}>{ml(o.labelJson) || o.value}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -223,19 +227,19 @@ export function FieldValidationRulesEditor({
                   </p>
                   <div className="flex flex-wrap gap-x-3 gap-y-1">
                     {selfOptions.map((o) => {
-                      const checked = (rule.applyToValues ?? []).includes(o);
+                      const checked = (rule.applyToValues ?? []).includes(o.value);
                       return (
-                        <label key={o} className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
+                        <label key={o.value} className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
                           <Checkbox
                             checked={checked}
                             onCheckedChange={(c) => {
                               const cur = rule.applyToValues ?? [];
                               update(idx, {
-                                applyToValues: c ? [...cur, o] : cur.filter((x) => x !== o),
+                                applyToValues: c ? [...cur, o.value] : cur.filter((x) => x !== o.value),
                               });
                             }}
                           />
-                          {o}
+                          {ml(o.labelJson) || o.value}
                         </label>
                       );
                     })}

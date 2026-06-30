@@ -13,6 +13,7 @@ import {
 import { eq, asc, and, ne, inArray, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
+import { sanitizeOptionsInput, normalizeOptions } from "../lib/selectOptions";
 import {
   ListEntityFieldsParams,
   CreateEntityFieldParams,
@@ -272,7 +273,8 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
     relationConfig = check.cleaned;
   }
 
-  if (parsed.data.fieldType === "select" && (!parsed.data.optionsJson || parsed.data.optionsJson.length === 0)) {
+  const createOptions = sanitizeOptionsInput(parsed.data.optionsJson);
+  if (parsed.data.fieldType === "select" && createOptions.length === 0) {
     res.status(400).json({ error: "Select fields require at least one option" });
     return;
   }
@@ -314,6 +316,7 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
       .insert(entityFieldsTable)
       .values({
         ...parsed.data,
+        optionsJson: createOptions,
         formulaConfigJson: clampFormulaDecimals(parsed.data.formulaConfigJson),
         relationConfigJson: relationConfig ?? {},
         fieldKey: key,
@@ -462,9 +465,10 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
     relationConfigToPersist = check.cleaned;
   }
 
+  const sanitizedOptions = body.optionsJson != null ? sanitizeOptionsInput(body.optionsJson) : null;
   if ("optionsJson" in body || body.fieldType != null) {
-    const nextOptions = body.optionsJson ?? (current.optionsJson as string[]);
-    if (nextType === "select" && (!nextOptions || nextOptions.length === 0)) {
+    const nextOptions = sanitizedOptions ?? normalizeOptions(current.optionsJson);
+    if (nextType === "select" && nextOptions.length === 0) {
       res.status(400).json({ error: "Select fields require at least one option" });
       return;
     }
@@ -544,7 +548,7 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   if (body.fieldType != null) updateData.fieldType = body.fieldType;
   if (body.isRequired != null) updateData.isRequired = body.isRequired;
   if ("defaultValue" in body) updateData.defaultValue = body.defaultValue ?? null;
-  if (body.optionsJson != null) updateData.optionsJson = body.optionsJson;
+  if (sanitizedOptions != null) updateData.optionsJson = sanitizedOptions;
   if (body.formatRulesJson != null) updateData.formatRulesJson = body.formatRulesJson;
   if (body.validationRulesJson != null) updateData.validationRulesJson = body.validationRulesJson;
   if (body.formulaConfigJson != null)

@@ -11,6 +11,7 @@ import type { FieldType } from './fieldType';
 import type { FormulaFieldConfig } from './formulaFieldConfig';
 import type { MultilingualText } from './multilingualText';
 import type { RelationFieldConfig } from './relationFieldConfig';
+import type { SelectOption } from './selectOption';
 
 export interface PageFieldInput {
   fieldKey: string;
@@ -22,7 +23,7 @@ export interface PageFieldInput {
   pivotEnabled?: boolean;
   /** @nullable */
   defaultValue?: string | null;
-  optionsJson?: string[];
+  optionsJson?: SelectOption[];
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
   relationConfigJson?: RelationFieldConfig;

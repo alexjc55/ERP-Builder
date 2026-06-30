@@ -175,6 +175,11 @@ export interface MultilingualText {
   he?: string;
 }
 
+export interface SelectOption {
+  value: string;
+  labelJson: MultilingualText;
+}
+
 /**
  * Platform-wide default UI language for users who have not picked their own.
  */
@@ -2040,7 +2045,7 @@ export interface Field {
   isRequired: boolean;
   /** @nullable */
   defaultValue?: string | null;
-  optionsJson: string[];
+  optionsJson: SelectOption[];
   permissionsJson?: FieldPermissions;
   fileConfigJson?: FileFieldConfig;
   userConfigJson?: UserFieldConfig;
@@ -2077,7 +2082,7 @@ export interface FieldInput {
   isRequired?: boolean;
   /** @nullable */
   defaultValue?: string | null;
-  optionsJson?: string[];
+  optionsJson?: SelectOption[];
   permissionsJson?: FieldPermissions;
   fileConfigJson?: FileFieldConfig;
   userConfigJson?: UserFieldConfig;
@@ -2122,7 +2127,7 @@ export interface FieldUpdate {
   isRequired?: boolean;
   /** @nullable */
   defaultValue?: string | null;
-  optionsJson?: string[];
+  optionsJson?: SelectOption[];
   permissionsJson?: FieldPermissions;
   fileConfigJson?: FileFieldConfig;
   userConfigJson?: UserFieldConfig;
@@ -2165,7 +2170,7 @@ export interface PageRelatedColumn {
      */
   relatedFieldType?: string | null;
   /** Select options of the related field (for inline editing). */
-  optionsJson?: string[];
+  optionsJson?: SelectOption[];
   /** Whether the viewer's role may edit the related field at all (before per-row scope). */
   editableColumn: boolean;
   /** The id of the related entity this column projects from (set by the entity-keyed endpoint; used to open the linked record's editor for write-through lookups). */
@@ -2295,7 +2300,7 @@ export interface PageField {
   pivotEnabled?: boolean;
   /** @nullable */
   defaultValue?: string | null;
-  optionsJson: string[];
+  optionsJson: SelectOption[];
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
   relationConfigJson?: RelationFieldConfig;
@@ -2325,7 +2330,7 @@ export interface PageFieldInput {
   pivotEnabled?: boolean;
   /** @nullable */
   defaultValue?: string | null;
-  optionsJson?: string[];
+  optionsJson?: SelectOption[];
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
   relationConfigJson?: RelationFieldConfig;
@@ -2353,7 +2358,7 @@ export interface PageFieldUpdate {
   pivotEnabled?: boolean;
   /** @nullable */
   defaultValue?: string | null;
-  optionsJson?: string[];
+  optionsJson?: SelectOption[];
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
   relationConfigJson?: RelationFieldConfig;

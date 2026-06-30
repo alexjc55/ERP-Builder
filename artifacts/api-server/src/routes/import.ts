@@ -13,6 +13,7 @@ import { eq, and, sql, asc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
 import { isGoogleDriveModuleEnabled } from "../lib/googleDrive";
+import { matchOption, optionLabels } from "../lib/selectOptions";
 import {
   validateValues,
   loadActiveFields,
@@ -115,13 +116,13 @@ async function coerceValue(field: EntityField, raw: unknown): Promise<Coerced> {
       return { value: field.fieldType === "date" ? iso.slice(0, 10) : iso };
     }
     case "select": {
-      const opts = Array.isArray(field.optionsJson)
-        ? (field.optionsJson as unknown[]).filter((o): o is string => typeof o === "string")
-        : [];
       const s = String(raw).trim();
-      const hit = opts.find((o) => o === s) ?? opts.find((o) => norm(o) === norm(s));
-      if (!hit) return { error: `Поле «${name}»: «${String(raw)}» не входит в список допустимых значений (${opts.join(", ")})` };
-      return { value: hit };
+      const hit = matchOption(field.optionsJson, s);
+      if (!hit)
+        return {
+          error: `Поле «${name}»: «${String(raw)}» не входит в список допустимых значений (${optionLabels(field.optionsJson).join(", ")})`,
+        };
+      return { value: hit.value };
     }
     case "user": {
       if (typeof raw === "number" && Number.isInteger(raw)) return { value: raw };

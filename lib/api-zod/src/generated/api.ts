@@ -2538,7 +2538,14 @@ export const ListEntityFieldsResponseItem = zod.object({
   "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
-  "optionsJson": zod.array(zod.string()),
+  "optionsJson": zod.array(zod.object({
+  "value": zod.string(),
+  "labelJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+})
+})),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "fileConfigJson": zod.object({
   "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional(),
@@ -2631,7 +2638,14 @@ export const CreateEntityFieldBody = zod.object({
   "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
   "isRequired": zod.boolean().default(createEntityFieldBodyIsRequiredDefault),
   "defaultValue": zod.string().nullish(),
-  "optionsJson": zod.array(zod.string()).optional(),
+  "optionsJson": zod.array(zod.object({
+  "value": zod.string(),
+  "labelJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+})
+})).optional(),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "fileConfigJson": zod.object({
   "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional(),
@@ -2714,7 +2728,14 @@ export const GetFieldResponse = zod.object({
   "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
-  "optionsJson": zod.array(zod.string()),
+  "optionsJson": zod.array(zod.object({
+  "value": zod.string(),
+  "labelJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+})
+})),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "fileConfigJson": zod.object({
   "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional(),
@@ -2797,7 +2818,14 @@ export const UpdateFieldBody = zod.object({
   "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']).optional(),
   "isRequired": zod.boolean().optional(),
   "defaultValue": zod.string().nullish(),
-  "optionsJson": zod.array(zod.string()).optional(),
+  "optionsJson": zod.array(zod.object({
+  "value": zod.string(),
+  "labelJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+})
+})).optional(),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "fileConfigJson": zod.object({
   "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional(),
@@ -2872,7 +2900,14 @@ export const UpdateFieldResponse = zod.object({
   "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
-  "optionsJson": zod.array(zod.string()),
+  "optionsJson": zod.array(zod.object({
+  "value": zod.string(),
+  "labelJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+})
+})),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "fileConfigJson": zod.object({
   "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional(),
@@ -2989,7 +3024,14 @@ export const ListPageFieldsResponseItem = zod.object({
   "isFilterable": zod.boolean().optional(),
   "pivotEnabled": zod.boolean().optional(),
   "defaultValue": zod.string().nullish(),
-  "optionsJson": zod.array(zod.string()),
+  "optionsJson": zod.array(zod.object({
+  "value": zod.string(),
+  "labelJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+})
+})),
   "formatRulesJson": zod.array(zod.object({
   "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
   "value": zod.string().optional(),
@@ -3057,7 +3099,14 @@ export const CreatePageFieldBody = zod.object({
   "isFilterable": zod.boolean().default(createPageFieldBodyIsFilterableDefault),
   "pivotEnabled": zod.boolean().default(createPageFieldBodyPivotEnabledDefault),
   "defaultValue": zod.string().nullish(),
-  "optionsJson": zod.array(zod.string()).optional(),
+  "optionsJson": zod.array(zod.object({
+  "value": zod.string(),
+  "labelJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+})
+})).optional(),
   "formatRulesJson": zod.array(zod.object({
   "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
   "value": zod.string().optional(),
@@ -3116,7 +3165,14 @@ export const UpdatePageFieldBody = zod.object({
   "isFilterable": zod.boolean().optional(),
   "pivotEnabled": zod.boolean().optional(),
   "defaultValue": zod.string().nullish(),
-  "optionsJson": zod.array(zod.string()).optional(),
+  "optionsJson": zod.array(zod.object({
+  "value": zod.string(),
+  "labelJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+})
+})).optional(),
   "formatRulesJson": zod.array(zod.object({
   "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
   "value": zod.string().optional(),
@@ -3169,7 +3225,14 @@ export const UpdatePageFieldResponse = zod.object({
   "isFilterable": zod.boolean().optional(),
   "pivotEnabled": zod.boolean().optional(),
   "defaultValue": zod.string().nullish(),
-  "optionsJson": zod.array(zod.string()),
+  "optionsJson": zod.array(zod.object({
+  "value": zod.string(),
+  "labelJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+})
+})),
   "formatRulesJson": zod.array(zod.object({
   "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
   "value": zod.string().optional(),
@@ -3280,7 +3343,14 @@ export const GetPageRelatedValuesResponse = zod.object({
   "fieldKey": zod.string().describe('The relation page-field\'s own key (column identity).'),
   "relatedFieldKey": zod.string(),
   "relatedFieldType": zod.string().nullish().describe('Field type of the related entity field (drives rendering\/editing).'),
-  "optionsJson": zod.array(zod.string()).optional().describe('Select options of the related field (for inline editing).'),
+  "optionsJson": zod.array(zod.object({
+  "value": zod.string(),
+  "labelJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+})
+})).optional().describe('Select options of the related field (for inline editing).'),
   "editableColumn": zod.boolean().describe('Whether the viewer\'s role may edit the related field at all (before per-row scope).'),
   "relatedEntityId": zod.number().optional().describe('The id of the related entity this column projects from (set by the entity-keyed endpoint; used to open the linked record\'s editor for write-through lookups).'),
   "writeThrough": zod.boolean().optional().describe('True for a write-through lookup column whose cells open the linked record\'s full editor in the related entity.')
@@ -3461,7 +3531,14 @@ export const GetEntityRelatedValuesResponse = zod.object({
   "fieldKey": zod.string().describe('The relation page-field\'s own key (column identity).'),
   "relatedFieldKey": zod.string(),
   "relatedFieldType": zod.string().nullish().describe('Field type of the related entity field (drives rendering\/editing).'),
-  "optionsJson": zod.array(zod.string()).optional().describe('Select options of the related field (for inline editing).'),
+  "optionsJson": zod.array(zod.object({
+  "value": zod.string(),
+  "labelJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+})
+})).optional().describe('Select options of the related field (for inline editing).'),
   "editableColumn": zod.boolean().describe('Whether the viewer\'s role may edit the related field at all (before per-row scope).'),
   "relatedEntityId": zod.number().optional().describe('The id of the related entity this column projects from (set by the entity-keyed endpoint; used to open the linked record\'s editor for write-through lookups).'),
   "writeThrough": zod.boolean().optional().describe('True for a write-through lookup column whose cells open the linked record\'s full editor in the related entity.')

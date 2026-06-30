@@ -56,6 +56,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Loader2, ArrowLeft, Workflow, ArrowRight, X, ChevronUp, ChevronDown } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
+import { normalizeSelectOptions } from "@/lib/selectOptions";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 type ActionRow = { fieldKey: string; value: string; manual: boolean };
@@ -278,13 +279,13 @@ export default function EntityWorkflowPage() {
       return wrap(<Input className="flex-1" value={action.value} onChange={(e) => set(e.target.value)} placeholder={placeholder} />);
     }
     if (type === "select") {
-      const options = Array.isArray(f?.optionsJson) ? (f!.optionsJson as string[]) : [];
+      const options = normalizeSelectOptions(f?.optionsJson);
       return wrap(
         <Select value={action.value || ""} onValueChange={set}>
           <SelectTrigger className="flex-1"><SelectValue placeholder={placeholder} /></SelectTrigger>
           <SelectContent>
             {options.map((opt) => (
-              <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+              <SelectItem key={opt.value} value={opt.value}>{ml(opt.labelJson) || opt.value}</SelectItem>
             ))}
           </SelectContent>
         </Select>,

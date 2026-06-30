@@ -11,7 +11,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useT } from "@/lib/i18n";
+import { useT, useML } from "@/lib/i18n";
+import type { SelectOption } from "@/lib/selectOptions";
 import { addColorPreset, loadColorPresets, removeColorPreset } from "@/lib/colorPresets";
 import { Plus, Star, Trash2, X } from "lucide-react";
 import { HexColorPicker } from "react-colorful";
@@ -85,12 +86,13 @@ export function FieldFormatRulesEditor({
   onChange,
 }: {
   fieldType: FieldType;
-  options: string[];
+  options: SelectOption[];
   users?: { id: number; name: string }[];
   rules: FieldFormatRule[];
   onChange: (rules: FieldFormatRule[]) => void;
 }) {
   const t = useT();
+  const ml = useML();
   const ops = operatorsForType(fieldType);
   const [presets, setPresets] = useState<string[]>(() => loadColorPresets());
 
@@ -102,7 +104,7 @@ export function FieldFormatRulesEditor({
   // value and for free-text/number/user fields (those don't lie about a default).
   const defaultRuleValue = (op: FormatOperator): string => {
     if (!needsValue(op)) return "";
-    if (fieldType === "select") return options[0] ?? "";
+    if (fieldType === "select") return options[0]?.value ?? "";
     if (fieldType === "boolean") return "true";
     return "";
   };
@@ -258,11 +260,11 @@ export function FieldFormatRulesEditor({
     }
     if (fieldType === "select" && options.length > 0) {
       return (
-        <Select value={rule.value || options[0]} onValueChange={(v) => update(idx, { value: v })}>
+        <Select value={rule.value || options[0]!.value} onValueChange={(v) => update(idx, { value: v })}>
           <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
           <SelectContent>
             {options.map((o) => (
-              <SelectItem key={o} value={o}>{o}</SelectItem>
+              <SelectItem key={o.value} value={o.value}>{ml(o.labelJson) || o.value}</SelectItem>
             ))}
           </SelectContent>
         </Select>

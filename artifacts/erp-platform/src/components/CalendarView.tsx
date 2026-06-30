@@ -117,6 +117,8 @@ export function CalendarView({
     value: unknown,
     t: (key: string, def: string) => string,
     userNames?: Map<number, string>,
+    textColor?: string,
+    ml?: (val: MultilingualText | string | undefined | null) => string,
   ) => React.ReactNode;
   onRecordClick: (record: EntityRecord) => void;
   mode: CalendarMode;
@@ -379,7 +381,7 @@ export function CalendarView({
             if (v == null || v === "") return null;
             return (
               <span key={f.fieldKey} className="block truncate text-[11px] opacity-80">
-                {ml(f.nameJson)}: {renderCellValue(f, v, t, userNames)}
+                {ml(f.nameJson)}: {renderCellValue(f, v, t, userNames, undefined, ml)}
               </span>
             );
           })}

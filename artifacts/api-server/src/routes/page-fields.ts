@@ -20,6 +20,7 @@ import {
 } from "@workspace/db";
 import { eq, asc, desc, and, ne, inArray, or, sql, type SQL } from "drizzle-orm";
 import { relationLinkLockViolation } from "../lib/relation-lock";
+import { sanitizeOptionsInput, normalizeOptions, optionValues, type SelectOption } from "../lib/selectOptions";
 import { requireAuth } from "../middlewares/auth";
 import {
   requireAdmin,
@@ -323,8 +324,7 @@ function validatePageValues(
       }
       case "select": {
         if (typeof raw !== "string") return { error: `Field "${field.fieldKey}" must be a string` };
-        const options = Array.isArray(field.optionsJson) ? (field.optionsJson as unknown[]) : [];
-        if (!options.includes(raw)) return { error: `Field "${field.fieldKey}" must be one of the allowed options` };
+        if (!optionValues(field.optionsJson).has(raw)) return { error: `Field "${field.fieldKey}" must be one of the allowed options` };
         cleaned[field.fieldKey] = raw;
         break;
       }
@@ -399,7 +399,8 @@ router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (
     res.status(400).json({ error: "Field key must be lowercase letters, digits and underscores, starting with a letter" });
     return;
   }
-  if (parsed.data.fieldType === "select" && (!parsed.data.optionsJson || parsed.data.optionsJson.length === 0)) {
+  const createOptions = sanitizeOptionsInput(parsed.data.optionsJson);
+  if (parsed.data.fieldType === "select" && createOptions.length === 0) {
     res.status(400).json({ error: "Select fields require at least one option" });
     return;
   }
@@ -429,6 +430,7 @@ router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (
       .insert(pageFieldsTable)
       .values({
         ...parsed.data,
+        optionsJson: createOptions,
         formulaConfigJson: clampFormulaDecimals(parsed.data.formulaConfigJson),
         relationConfigJson: relationConfigToInsert ?? {},
         fieldKey: key,
@@ -517,9 +519,10 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
     updateData.fieldKey = key;
   }
   const nextType = body.fieldType ?? current.fieldType;
+  const sanitizedOptions = body.optionsJson != null ? sanitizeOptionsInput(body.optionsJson) : null;
   if ("optionsJson" in body || body.fieldType != null) {
-    const nextOptions = body.optionsJson ?? (current.optionsJson as string[]);
-    if (nextType === "select" && (!nextOptions || nextOptions.length === 0)) {
+    const nextOptions = sanitizedOptions ?? normalizeOptions(current.optionsJson);
+    if (nextType === "select" && nextOptions.length === 0) {
       res.status(400).json({ error: "Select fields require at least one option" });
       return;
     }
@@ -553,7 +556,7 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
   if (body.isFilterable != null) updateData.isFilterable = body.isFilterable;
   if (body.pivotEnabled != null) updateData.pivotEnabled = body.pivotEnabled;
   if ("defaultValue" in body) updateData.defaultValue = body.defaultValue ?? null;
-  if (body.optionsJson != null) updateData.optionsJson = body.optionsJson;
+  if (sanitizedOptions != null) updateData.optionsJson = sanitizedOptions;
   if (body.formatRulesJson != null) updateData.formatRulesJson = body.formatRulesJson;
   if (body.formulaConfigJson != null)
     updateData.formulaConfigJson = clampFormulaDecimals(body.formulaConfigJson);
@@ -826,7 +829,7 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
     fieldKey: string;
     relatedFieldKey: string;
     relatedFieldType: string | null;
-    optionsJson: string[];
+    optionsJson: SelectOption[];
     editableColumn: boolean;
   }[] = [];
   const values: {
@@ -862,7 +865,7 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
     // a page field (page-source lookup) or the linked entity's own field.
     let access: "hidden" | "view" | "edit";
     let relatedFieldType: string | null;
-    let optionsJson: string[];
+    let optionsJson: SelectOption[];
     if (relatedPageId != null) {
       const [relatedPageField] = await db
         .select({
@@ -886,7 +889,7 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
       );
       access = canViewRelated && projPerm !== "hidden" ? "view" : "hidden";
       relatedFieldType = access === "hidden" ? null : relatedPageField.fieldType;
-      optionsJson = access === "hidden" ? [] : ((relatedPageField.optionsJson as string[]) ?? []);
+      optionsJson = access === "hidden" ? [] : normalizeOptions(relatedPageField.optionsJson);
     } else {
       const [relatedField] = await db
         .select()
@@ -903,7 +906,7 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
       // so treat lack of related-entity view as hidden (no type, value, or id).
       access = canViewRelated ? resolveFieldAccess(relatedField, perms, roleIds, relatedEntityId) : "hidden";
       relatedFieldType = access === "hidden" ? null : relatedField.fieldType;
-      optionsJson = access === "hidden" ? [] : ((relatedField.optionsJson as string[]) ?? []);
+      optionsJson = access === "hidden" ? [] : normalizeOptions(relatedField.optionsJson);
     }
 
     const pagePerm = mostPermissiveFieldPerm(pf.permissionsJson as FieldPermissions | null, roleIds, "edit");
@@ -1943,7 +1946,7 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
     fieldKey: string;
     relatedFieldKey: string;
     relatedFieldType: string | null;
-    optionsJson: string[];
+    optionsJson: SelectOption[];
     editableColumn: boolean;
     relatedEntityId?: number;
     writeThrough?: boolean;
@@ -1980,7 +1983,7 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
     // a page field (page-source lookup) or the linked entity's own field.
     let access: "hidden" | "view" | "edit";
     let relatedFieldType: string | null;
-    let optionsJson: string[];
+    let optionsJson: SelectOption[];
     if (relatedPageId != null) {
       const [relatedPageField] = await db
         .select({
@@ -2006,7 +2009,7 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
       );
       access = canViewRelated && pagePerm !== "hidden" ? "view" : "hidden";
       relatedFieldType = access === "hidden" ? null : relatedPageField.fieldType;
-      optionsJson = access === "hidden" ? [] : ((relatedPageField.optionsJson as string[]) ?? []);
+      optionsJson = access === "hidden" ? [] : normalizeOptions(relatedPageField.optionsJson);
     } else {
       const [relatedField] = await db
         .select()
@@ -2024,7 +2027,7 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
       // view as hidden). The relation field's OWN access decides assignability.
       access = canViewRelated ? resolveFieldAccess(relatedField, perms, roleIds, relatedEntityId) : "hidden";
       relatedFieldType = access === "hidden" ? null : relatedField.fieldType;
-      optionsJson = access === "hidden" ? [] : ((relatedField.optionsJson as string[]) ?? []);
+      optionsJson = access === "hidden" ? [] : normalizeOptions(relatedField.optionsJson);
     }
 
     // The cell ASSIGNS the link (not edits the related value): assignable when
