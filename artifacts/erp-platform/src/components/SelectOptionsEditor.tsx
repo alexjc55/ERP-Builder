@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import { useGetSettings, getGetSettingsQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -54,6 +54,15 @@ export function SelectOptionsEditor({ value, onChange, t }: SelectOptionsEditorP
   };
   const remove = (index: number) => onChange(value.filter((_, i) => i !== index));
   const add = () => onChange([...value, { value: "", labelJson: {} }]);
+  // Reordering only shuffles the options array; the stored `value` of each option
+  // stays put, so existing record values keep matching after a reorder.
+  const move = (index: number, dir: -1 | 1) => {
+    const target = index + dir;
+    if (target < 0 || target >= value.length) return;
+    const next = value.slice();
+    [next[index], next[target]] = [next[target]!, next[index]!];
+    onChange(next);
+  };
 
   return (
     <div className="space-y-1.5">
@@ -84,6 +93,26 @@ export function SelectOptionsEditor({ value, onChange, t }: SelectOptionsEditorP
           const lj = (opt.labelJson ?? {}) as MLValue;
           return (
             <div key={i} className="flex items-center gap-2">
+              <div className="flex shrink-0 flex-col">
+                <button
+                  type="button"
+                  onClick={() => move(i, -1)}
+                  disabled={i === 0}
+                  className="text-slate-400 hover:text-slate-700 disabled:opacity-30 disabled:hover:text-slate-400"
+                  aria-label={t("common.moveUp", "Выше")}
+                >
+                  <ChevronUp className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => move(i, 1)}
+                  disabled={i === value.length - 1}
+                  className="text-slate-400 hover:text-slate-700 disabled:opacity-30 disabled:hover:text-slate-400"
+                  aria-label={t("common.moveDown", "Ниже")}
+                >
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </button>
+              </div>
               <span className="w-6 shrink-0 text-right text-xs text-slate-400">{i + 1}.</span>
               <Input
                 value={lj[active] || ""}
