@@ -1227,9 +1227,16 @@ router.post(
     }
 
     // Dependent filters: options come from records matching the OTHER active filters.
-    // Strip any filter on the target field itself so its own picks don't narrow its option list.
+    // The viewer's AD-HOC picks (`filters`) self-exclude the target field so its own
+    // selection can still be widened. The view's HARD filters (`baseFilters`) are kept
+    // even on the target field, so a field pinned by the view only offers the value(s)
+    // the view permits (never all values). Both sets combine under one conjunction, the
+    // same way the records query flattens them.
     const spec: RecordQuerySpec = {
-      filters: (body.data.filters ?? []).filter((c) => c.field !== body.data.field),
+      filters: [
+        ...(body.data.baseFilters ?? []),
+        ...(body.data.filters ?? []).filter((c) => c.field !== body.data.field),
+      ],
       filterConjunction: body.data.filterConjunction ?? "and",
       statusIds: body.data.statusIds ?? undefined,
       search: body.data.search ?? undefined,

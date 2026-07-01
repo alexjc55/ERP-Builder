@@ -998,6 +998,16 @@ export interface PivotPageConfig {
   search?: string | null;
 }
 
+export type PageQuickFilterFieldFilters = {[key: string]: string[]};
+
+/**
+ * A page's SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view's hard filter boundary.
+ */
+export interface PageQuickFilter {
+  fieldFilters?: PageQuickFilterFieldFilters;
+  statusIds?: number[];
+}
+
 export interface Page {
   id: number;
   nameJson: MultilingualText;
@@ -1037,6 +1047,8 @@ export interface Page {
   pivotConfigJson?: PivotPageConfig | null;
   /** Default collapsed state of the analytics widgets block above a page's records table */
   widgetsCollapsedDefault?: boolean;
+  /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
+  defaultQuickFilterJson?: PageQuickFilter | null;
   sortOrder: number;
   isActive: boolean;
   children?: Page[];
@@ -1094,6 +1106,8 @@ export interface PageInput {
   pivotConfigJson?: PivotPageConfig | null;
   /** Default collapsed state of the analytics widgets block above a page's records table */
   widgetsCollapsedDefault?: boolean;
+  /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
+  defaultQuickFilterJson?: PageQuickFilter | null;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -1148,6 +1162,8 @@ export interface PageUpdate {
   pivotConfigJson?: PivotPageConfig | null;
   /** Default collapsed state of the analytics widgets block above a page's records table */
   widgetsCollapsedDefault?: boolean;
+  /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
+  defaultQuickFilterJson?: PageQuickFilter | null;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -2968,6 +2984,8 @@ export interface FilterValuesQuery {
   /** Optional mirror-page context. When the request is made through a mirror page, this lets the server honor a per-mirror-page record permission override for the view check. */
   pageId?: number;
   field: string;
+  /** The view's (or entity default) HARD filter conditions. Applied to the option list WITHOUT self-exclusion so a field pinned by the view only offers the value(s) the view permits. Distinct from `filters` (the viewer's ad-hoc picks), which ARE self-excluded on the target field so a selection can still be widened. */
+  baseFilters?: FilterCondition[];
   filters?: FilterCondition[];
   filterConjunction?: FilterValuesQueryFilterConjunction;
   statusIds?: number[];

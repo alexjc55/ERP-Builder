@@ -156,6 +156,8 @@ export * from './pageInput';
 export * from './pageInputColumnGroupsJson';
 export * from './pageInputMirrorFieldLabelsJson';
 export * from './pageMirrorFieldLabelsJson';
+export * from './pageQuickFilter';
+export * from './pageQuickFilterFieldFilters';
 export * from './pageRecordValue';
 export * from './pageRecordValueInput';
 export * from './pageRecordValueInputValuesJson';

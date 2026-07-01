@@ -1222,6 +1222,10 @@ export const ListPagesResponseItem = zod.object({
   "search": zod.string().nullish()
 }).describe('Configuration stored on a PIVOT PAGE (pages.pivotConfigJson). `source` selects where the effective PivotConfig is resolved from at compute time; the filter fields pre-filter which records feed the aggregation. Totals are admin-authoritative (computed over all records), so there is no per-page role list — page access is the boundary.'),zod.null()]).optional(),
   "widgetsCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
+  "defaultQuickFilterJson": zod.union([zod.object({
+  "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
+  "statusIds": zod.array(zod.number()).optional()
+}).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "children": zod.array(zod.unknown()).optional(),
@@ -1325,6 +1329,10 @@ export const CreatePageBody = zod.object({
   "search": zod.string().nullish()
 }).describe('Configuration stored on a PIVOT PAGE (pages.pivotConfigJson). `source` selects where the effective PivotConfig is resolved from at compute time; the filter fields pre-filter which records feed the aggregation. Totals are admin-authoritative (computed over all records), so there is no per-page role list — page access is the boundary.'),zod.null()]).optional(),
   "widgetsCollapsedDefault": zod.boolean().default(createPageBodyWidgetsCollapsedDefaultDefault).describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
+  "defaultQuickFilterJson": zod.union([zod.object({
+  "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
+  "statusIds": zod.array(zod.number()).optional()
+}).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createPageBodyIsActiveDefault)
 })
@@ -1426,6 +1434,10 @@ export const GetPageResponse = zod.object({
   "search": zod.string().nullish()
 }).describe('Configuration stored on a PIVOT PAGE (pages.pivotConfigJson). `source` selects where the effective PivotConfig is resolved from at compute time; the filter fields pre-filter which records feed the aggregation. Totals are admin-authoritative (computed over all records), so there is no per-page role list — page access is the boundary.'),zod.null()]).optional(),
   "widgetsCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
+  "defaultQuickFilterJson": zod.union([zod.object({
+  "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
+  "statusIds": zod.array(zod.number()).optional()
+}).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "children": zod.array(zod.unknown()).optional(),
@@ -1529,6 +1541,10 @@ export const UpdatePageBody = zod.object({
   "search": zod.string().nullish()
 }).describe('Configuration stored on a PIVOT PAGE (pages.pivotConfigJson). `source` selects where the effective PivotConfig is resolved from at compute time; the filter fields pre-filter which records feed the aggregation. Totals are admin-authoritative (computed over all records), so there is no per-page role list — page access is the boundary.'),zod.null()]).optional(),
   "widgetsCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
+  "defaultQuickFilterJson": zod.union([zod.object({
+  "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
+  "statusIds": zod.array(zod.number()).optional()
+}).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
@@ -1622,6 +1638,10 @@ export const UpdatePageResponse = zod.object({
   "search": zod.string().nullish()
 }).describe('Configuration stored on a PIVOT PAGE (pages.pivotConfigJson). `source` selects where the effective PivotConfig is resolved from at compute time; the filter fields pre-filter which records feed the aggregation. Totals are admin-authoritative (computed over all records), so there is no per-page role list — page access is the boundary.'),zod.null()]).optional(),
   "widgetsCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
+  "defaultQuickFilterJson": zod.union([zod.object({
+  "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
+  "statusIds": zod.array(zod.number()).optional()
+}).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "children": zod.array(zod.unknown()).optional(),
@@ -4845,6 +4865,11 @@ export const getEntityFilterValuesBodyArchivedDefault = `active`;
 export const GetEntityFilterValuesBody = zod.object({
   "pageId": zod.number().optional().describe('Optional mirror-page context. When the request is made through a mirror page, this lets the server honor a per-mirror-page record permission override for the view check.'),
   "field": zod.string(),
+  "baseFilters": zod.array(zod.object({
+  "field": zod.string(),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
+  "value": zod.unknown().optional()
+})).optional().describe('The view\'s (or entity default) HARD filter conditions. Applied to the option list WITHOUT self-exclusion so a field pinned by the view only offers the value(s) the view permits. Distinct from `filters` (the viewer\'s ad-hoc picks), which ARE self-excluded on the target field so a selection can still be widened.'),
   "filters": zod.array(zod.object({
   "field": zod.string(),
   "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),

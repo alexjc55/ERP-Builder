@@ -92,6 +92,7 @@ export default function DynamicPage() {
             columnGroups={page.columnGroupsJson ?? undefined}
             pageId={page.id}
             isMirror={Boolean(mirrorEntity)}
+            defaultQuickFilter={page.defaultQuickFilterJson ?? undefined}
           />
         </>
       ) : (

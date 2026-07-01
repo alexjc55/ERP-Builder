@@ -13,6 +13,8 @@ export interface FilterValuesQuery {
   /** Optional mirror-page context. When the request is made through a mirror page, this lets the server honor a per-mirror-page record permission override for the view check. */
   pageId?: number;
   field: string;
+  /** The view's (or entity default) HARD filter conditions. Applied to the option list WITHOUT self-exclusion so a field pinned by the view only offers the value(s) the view permits. Distinct from `filters` (the viewer's ad-hoc picks), which ARE self-excluded on the target field so a selection can still be widened. */
+  baseFilters?: FilterCondition[];
   filters?: FilterCondition[];
   filterConjunction?: FilterValuesQueryFilterConjunction;
   statusIds?: number[];

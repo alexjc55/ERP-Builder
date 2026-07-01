@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MultilingualText } from './multilingualText';
+import type { PageQuickFilter } from './pageQuickFilter';
 import type { PageUpdateColumnGroupsJson } from './pageUpdateColumnGroupsJson';
 import type { PageUpdateMirrorFieldLabelsJson } from './pageUpdateMirrorFieldLabelsJson';
 import type { PivotPageConfig } from './pivotPageConfig';
@@ -48,6 +49,8 @@ export interface PageUpdate {
   pivotConfigJson?: PivotPageConfig | null;
   /** Default collapsed state of the analytics widgets block above a page's records table */
   widgetsCollapsedDefault?: boolean;
+  /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
+  defaultQuickFilterJson?: PageQuickFilter | null;
   sortOrder?: number;
   isActive?: boolean;
 }

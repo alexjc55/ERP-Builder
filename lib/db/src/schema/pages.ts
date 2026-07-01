@@ -76,6 +76,19 @@ export const pagesTable = pgTable("pages", {
   // records table. Admin-configurable; each viewer's own toggle is remembered
   // client-side (localStorage) and falls back to this default.
   widgetsCollapsedDefault: boolean("widgets_collapsed_default").notNull().default(false),
+  // Per-page SOFT default filter that pre-fills the records filter bar on open.
+  // Unlike a view's/entity's hard defaultFilterJson (a security boundary that
+  // rows can never escape), this only seeds the user-adjustable AD-HOC quick
+  // filters (field dropdowns + status quick-filter): the viewer can change or
+  // clear it to reveal rows it hid, but it can NEVER reveal rows the view's hard
+  // filter hides (it AND-combines on top of the base boundary). Stored per-page
+  // so a main entity page and a mirror page onto the same entity keep separate
+  // defaults. Null = no default. Authored from the records page setup mode
+  // (gated by the "pages" admin cap).
+  defaultQuickFilterJson: jsonb("default_quick_filter_json").$type<{
+    fieldFilters?: Record<string, string[]>;
+    statusIds?: number[];
+  }>(),
   sortOrder: integer("sort_order").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

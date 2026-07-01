@@ -4272,6 +4272,11 @@ components:
         widgetsCollapsedDefault:
           type: boolean
           description: Default collapsed state of the analytics widgets block above a page's records table
+        defaultQuickFilterJson:
+          oneOf:
+            - $ref: "#/components/schemas/PageQuickFilter"
+            - type: "null"
+          description: Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter).
         sortOrder:
           type: integer
         isActive:
@@ -4339,6 +4344,11 @@ components:
           type: boolean
           default: false
           description: Default collapsed state of the analytics widgets block above a page's records table
+        defaultQuickFilterJson:
+          oneOf:
+            - $ref: "#/components/schemas/PageQuickFilter"
+            - type: "null"
+          description: Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter).
         sortOrder:
           type: integer
         isActive:
@@ -4394,6 +4404,11 @@ components:
         widgetsCollapsedDefault:
           type: boolean
           description: Default collapsed state of the analytics widgets block above a page's records table
+        defaultQuickFilterJson:
+          oneOf:
+            - $ref: "#/components/schemas/PageQuickFilter"
+            - type: "null"
+          description: Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter).
         sortOrder:
           type: integer
         isActive:
@@ -6907,6 +6922,16 @@ components:
             permission override for the view check.
         field:
           type: string
+        baseFilters:
+          type: array
+          description: >-
+            The view's (or entity default) HARD filter conditions. Applied to the
+            option list WITHOUT self-exclusion so a field pinned by the view only
+            offers the value(s) the view permits. Distinct from `filters` (the
+            viewer's ad-hoc picks), which ARE self-excluded on the target field so
+            a selection can still be widened.
+          items:
+            $ref: "#/components/schemas/FilterCondition"
         filters:
           type: array
           items:
@@ -6923,6 +6948,24 @@ components:
           type: string
         archived:
           $ref: "#/components/schemas/ArchiveFilter"
+
+    PageQuickFilter:
+      type: object
+      description: >-
+        A page's SOFT default quick-filter that pre-fills the records filter bar
+        on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns +
+        status quick-filter); it never overrides the view's hard filter boundary.
+      properties:
+        fieldFilters:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        statusIds:
+          type: array
+          items:
+            type: integer
 
     PageFilterValuesQuery:
       type: object

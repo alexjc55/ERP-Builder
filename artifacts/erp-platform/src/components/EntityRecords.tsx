@@ -914,6 +914,7 @@ export function EntityRecords({
   fieldLabelOverrides,
   mirrorColumnOrder,
   columnGroups,
+  defaultQuickFilter,
 }: {
   entityId: number;
   /**
@@ -970,6 +971,16 @@ export function EntityRecords({
    * entity's base group is never mutated from a mirror. Display-only.
    */
   columnGroups?: Record<string, number>;
+  /**
+   * Per-page SOFT default quick-filter (from `page.defaultQuickFilterJson`).
+   * Seeds the user-adjustable filter bar (field dropdowns + status quick-filter)
+   * when the page opens. Unlike a view's/entity's hard filter it can be changed
+   * or cleared by the viewer, and it can NEVER reveal rows the view hides (it
+   * AND-combines on top of the hard base filters). Authored from setup mode
+   * (gated by the "pages" admin cap). Stored per-page, so a normal page and a
+   * mirror page onto the same entity keep independent defaults.
+   */
+  defaultQuickFilter?: { fieldFilters?: Record<string, string[]>; statusIds?: number[] } | null;
 }) {
   const ml = useML();
   const t = useT();
@@ -1848,7 +1859,11 @@ export function EntityRecords({
         data: {
           pageId: permPageId,
           field: fieldKey,
-          filters: [...baseFilters, ...others, ...dateOthers],
+          // The view's HARD filters go in `baseFilters` (kept even on the target
+          // field, so a field pinned by the view only offers the permitted
+          // value(s)). Only the viewer's ad-hoc picks self-exclude the target.
+          baseFilters,
+          filters: [...others, ...dateOthers],
           // Mirror the records query's conjunction so option lists stay consistent with the
           // rows actually shown (a view may be configured with OR logic).
           filterConjunction: selectedConfig.filterConjunction ?? "and",
@@ -1943,6 +1958,82 @@ export function EntityRecords({
     setStatusFilter([]);
     setPage(1);
   }, []);
+
+  // ── Per-page SOFT default quick-filter ────────────────────────────────────
+  // Seed the filter bar from `page.defaultQuickFilterJson` when the page opens.
+  // This only pre-fills the user-adjustable ad-hoc filters (field dropdowns +
+  // status quick-filter): the viewer may then change or clear them (revealing
+  // rows the default hid), but they can NEVER reveal rows the view's hard filter
+  // hides — ad-hoc filters AND on top of `baseFilters`. Re-seed on entity/page
+  // switch so a normal page and a mirror page onto the same entity keep separate
+  // defaults. Seeding runs once per (entity, page); after saving from setup mode
+  // the invalidation refreshes the prop but the flag stays set, so the admin's
+  // current selection is not clobbered.
+  const [quickFilterSeeded, setQuickFilterSeeded] = useState(false);
+  useEffect(() => {
+    setQuickFilterSeeded(false);
+  }, [entityId, pageId]);
+  useEffect(() => {
+    if (quickFilterSeeded) return;
+    const dq = defaultQuickFilter;
+    const seedFields = dq?.fieldFilters && Object.keys(dq.fieldFilters).length > 0 ? dq.fieldFilters : null;
+    const seedStatuses = dq?.statusIds && dq.statusIds.length > 0 ? dq.statusIds : null;
+    // Seeding is AUTHORITATIVE for the two quick-filter dimensions it owns: set
+    // them to this page's default, or CLEAR them when the page has none. The
+    // existing filter-reset effect is keyed on [entityId] only, so on a same-
+    // entity page switch (a normal page ⇆ its mirror) it would leave the prior
+    // page's picks in place; clearing here keeps each page's default independent.
+    setFieldFilters(seedFields ? { ...seedFields } : {});
+    setStatusFilter(seedStatuses ? [...seedStatuses] : []);
+    setPage(1);
+    setQuickFilterSeeded(true);
+  }, [quickFilterSeeded, defaultQuickFilter]);
+
+  const savePageDefaultFilterMutation = useUpdatePage({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: getListPagesQueryKey() }),
+    },
+  });
+  const saveDefaultQuickFilter = useCallback(() => {
+    if (pageId == null) return;
+    savePageDefaultFilterMutation.mutate(
+      {
+        id: pageId,
+        data: {
+          defaultQuickFilterJson: {
+            fieldFilters: Object.keys(fieldFilters).length > 0 ? fieldFilters : undefined,
+            statusIds: statusFilter.length > 0 ? statusFilter : undefined,
+          },
+        },
+      },
+      { onSuccess: () => toast({ title: t("records.pageDefaultFilterSaved", "Фильтр по умолчанию сохранён") }) },
+    );
+  }, [pageId, fieldFilters, statusFilter, savePageDefaultFilterMutation, toast, t]);
+  const clearDefaultQuickFilter = useCallback(() => {
+    if (pageId == null) return;
+    savePageDefaultFilterMutation.mutate(
+      { id: pageId, data: { defaultQuickFilterJson: null } },
+      { onSuccess: () => toast({ title: t("records.pageDefaultFilterCleared", "Фильтр по умолчанию очищен") }) },
+    );
+  }, [pageId, savePageDefaultFilterMutation, toast, t]);
+
+  const hasStoredDefaultQuickFilter = Boolean(
+    (defaultQuickFilter?.fieldFilters && Object.keys(defaultQuickFilter.fieldFilters).length > 0) ||
+      (defaultQuickFilter?.statusIds && defaultQuickFilter.statusIds.length > 0),
+  );
+  // Human-readable labels for the field filters that WOULD be saved (status is
+  // summarized separately). Values are omitted on purpose — user/relation values
+  // are ids, so listing the field names alone keeps the summary clean.
+  const activeQuickFilterFieldLabels = useMemo(() => {
+    const out: string[] = [];
+    for (const [key, vals] of Object.entries(fieldFilters)) {
+      if (!vals || vals.length === 0) continue;
+      const f = allFields.find((x: Field) => x.fieldKey === key);
+      const override = fieldLabelOverrides?.[key];
+      out.push((override && ml(override)) || (f ? ml(f.nameJson) : key));
+    }
+    return out;
+  }, [fieldFilters, allFields, fieldLabelOverrides, ml]);
 
   const queryKey = JSON.stringify(recordQuery);
   useEffect(() => {
@@ -2910,6 +3001,65 @@ export function EntityRecords({
             <Settings2 className="w-4 h-4" />
             {t("records.setupHint", "Режим настройки включён. Нажмите на заголовок колонки, чтобы изменить её свойства и права, или «+», чтобы добавить новую колонку.")}
           </div>
+          {pageId != null && canAdmin("pages") && (
+            <div className="rounded-md border border-slate-200 bg-white px-3 py-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                <Filter className="w-4 h-4 text-slate-400 shrink-0" />
+                {t("records.pageDefaultFilterTitle", "Фильтр по умолчанию для этой страницы")}
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {t(
+                  "records.pageDefaultFilterHint",
+                  "Выставьте нужные фильтры в панели над таблицей (в обычном режиме), затем сохраните их здесь. При открытии страницы они применятся автоматически, но пользователь сможет их изменить или очистить. Фильтр по умолчанию не может показать строки, скрытые фильтром вида.",
+                )}
+              </p>
+              <div className="text-xs text-slate-600">
+                {activeQuickFilterFieldLabels.length > 0 || statusFilter.length > 0 ? (
+                  <span>
+                    <span className="text-slate-400">{t("records.pageDefaultFilterCurrent", "Будет сохранено")}: </span>
+                    {[
+                      ...activeQuickFilterFieldLabels,
+                      ...(statusFilter.length > 0 ? [`${t("records.status", "Статус")} (${statusFilter.length})`] : []),
+                    ].join(", ")}
+                  </span>
+                ) : (
+                  <span className="text-slate-400">
+                    {t("records.pageDefaultFilterEmpty", "Сейчас фильтры не выбраны — сохранять нечего.")}
+                  </span>
+                )}
+              </div>
+              {hasStoredDefaultQuickFilter && (
+                <div className="text-xs text-emerald-600">
+                  {t("records.pageDefaultFilterStored", "Для страницы уже задан фильтр по умолчанию.")}
+                </div>
+              )}
+              <div className="flex flex-wrap gap-2 pt-0.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={saveDefaultQuickFilter}
+                  disabled={
+                    savePageDefaultFilterMutation.isPending ||
+                    (activeQuickFilterFieldLabels.length === 0 && statusFilter.length === 0)
+                  }
+                  className="gap-1.5"
+                >
+                  {t("records.pageDefaultFilterSave", "Сохранить текущие фильтры как фильтр по умолчанию")}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={clearDefaultQuickFilter}
+                  disabled={savePageDefaultFilterMutation.isPending || !hasStoredDefaultQuickFilter}
+                  className="gap-1.5 text-slate-500"
+                >
+                  {t("records.pageDefaultFilterClear", "Очистить фильтр по умолчанию")}
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium text-slate-400 mr-1">{t("records.manageEntity", "Управление сущностью")}:</span>
             {[
