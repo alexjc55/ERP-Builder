@@ -616,7 +616,7 @@ export function CalendarView({
                     {day.getDate()}
                   </div>
                   <div className="space-y-1">
-                    {dayEvents.slice(0, 4).map((ev, idx) => renderChip(ev, `${iso}-${ev.record.id}-${idx}`, true))}
+                    {dayEvents.slice(0, 4).map((ev, idx) => renderChip(ev, `${iso}-${ev.record.id}-${idx}`, false))}
                     {dayEvents.length > 4 && (
                       <span className="block px-1 text-[11px] text-slate-400">
                         +{dayEvents.length - 4} {t("calendar.more", "ещё")}
