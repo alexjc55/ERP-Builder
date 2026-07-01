@@ -4218,6 +4218,84 @@
     "he": "איפוס מסננים"
   },
   {
+    "key": "records.showHidden",
+    "ru": "Показать скрытые",
+    "en": "Show hidden",
+    "he": "הצג מוסתרים"
+  },
+  {
+    "key": "records.pageDefaultFilterTitle",
+    "ru": "Фильтр по умолчанию для этой страницы",
+    "en": "Default filter for this page",
+    "he": "מסנן ברירת מחדל לעמוד זה"
+  },
+  {
+    "key": "records.pageDefaultFilterHint",
+    "ru": "Выставьте нужные фильтры в панели над таблицей (в обычном режиме), затем сохраните их здесь. При открытии страницы они применятся автоматически, но пользователь сможет их изменить или очистить. Фильтр по умолчанию не может показать строки, скрытые фильтром вида.",
+    "en": "Set the filters you want in the bar above the table (in normal mode), then save them here. They will be applied automatically when the page opens, but the user can change or clear them. A default filter can never reveal rows hidden by the view's filter.",
+    "he": "הגדירו את המסננים הרצויים בסרגל שמעל הטבלה (במצב רגיל), ואז שמרו אותם כאן. הם יוחלו אוטומטית בעת פתיחת העמוד, אך המשתמש יוכל לשנות או לנקות אותם. מסנן ברירת מחדל לעולם אינו יכול לחשוף שורות המוסתרות על ידי מסנן התצוגה."
+  },
+  {
+    "key": "records.pageDefaultFilterCurrent",
+    "ru": "Будет сохранено",
+    "en": "Will be saved",
+    "he": "יישמר"
+  },
+  {
+    "key": "records.pageDefaultFilterEmpty",
+    "ru": "Сейчас фильтры не выбраны — сохранять нечего.",
+    "en": "No filters selected — nothing to save.",
+    "he": "לא נבחרו מסננים — אין מה לשמור."
+  },
+  {
+    "key": "records.pageDefaultFilterStored",
+    "ru": "Для страницы уже задан фильтр по умолчанию.",
+    "en": "A default filter is already set for this page.",
+    "he": "כבר הוגדר מסנן ברירת מחדל לעמוד זה."
+  },
+  {
+    "key": "records.pageDefaultFilterSave",
+    "ru": "Сохранить текущие фильтры как фильтр по умолчанию",
+    "en": "Save current filters as the default filter",
+    "he": "שמור את המסננים הנוכחיים כמסנן ברירת מחדל"
+  },
+  {
+    "key": "records.pageDefaultFilterClear",
+    "ru": "Очистить фильтр по умолчанию",
+    "en": "Clear default filter",
+    "he": "נקה מסנן ברירת מחדל"
+  },
+  {
+    "key": "records.pageDefaultFilterSaved",
+    "ru": "Фильтр по умолчанию сохранён",
+    "en": "Default filter saved",
+    "he": "מסנן ברירת המחדל נשמר"
+  },
+  {
+    "key": "records.pageDefaultFilterCleared",
+    "ru": "Фильтр по умолчанию очищен",
+    "en": "Default filter cleared",
+    "he": "מסנן ברירת המחדל נוקה"
+  },
+  {
+    "key": "records.pageExcludeTitle",
+    "ru": "Скрывать строки по умолчанию (кроме…)",
+    "en": "Hide rows by default (except…)",
+    "he": "הסתר שורות כברירת מחדל (חוץ מ…)"
+  },
+  {
+    "key": "records.pageExcludeHint",
+    "ru": "Отметьте значения, строки с которыми нужно скрыть при открытии страницы. Пользователь сможет показать их галочкой «Показать скрытые». Скрытие не может показать строки, запрещённые фильтром вида.",
+    "en": "Select the values whose rows should be hidden when the page opens. The user can reveal them with the “Show hidden” checkbox. Hiding can never reveal rows disallowed by the view's filter.",
+    "he": "בחרו את הערכים שהשורות שלהם יוסתרו בעת פתיחת העמוד. המשתמש יוכל לחשוף אותם באמצעות תיבת הסימון «הצג מוסתרים». ההסתרה לעולם אינה יכולה לחשוף שורות שאינן מותרות על ידי מסנן התצוגה."
+  },
+  {
+    "key": "records.pageExcludeSelected",
+    "ru": "Будет скрыто значений",
+    "en": "Values to be hidden",
+    "he": "ערכים שיוסתרו"
+  },
+  {
     "key": "records.filterSearchValues",
     "ru": "Поиск значений…",
     "en": "Search values…",
