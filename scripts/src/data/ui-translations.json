@@ -5622,6 +5622,66 @@
     "he": "פעיל"
   },
   {
+    "key": "statuses.allowNoStatus",
+    "ru": "Разрешить вариант «Без статуса»",
+    "en": "Allow the “No status” option",
+    "he": "אפשר את האפשרות «ללא סטטוס»"
+  },
+  {
+    "key": "statuses.allowNoStatusHint",
+    "ru": "Если выключено, вариант «Без статуса» не будет показываться при выборе статуса записи.",
+    "en": "If disabled, the “No status” option won't appear when choosing a record's status.",
+    "he": "אם מושבת, האפשרות «ללא סטטוס» לא תוצג בעת בחירת סטטוס של רשומה."
+  },
+  {
+    "key": "fields.defaultToToday",
+    "ru": "По умолчанию — текущая дата",
+    "en": "Default to today's date",
+    "he": "ברירת מחדל — התאריך הנוכחי"
+  },
+  {
+    "key": "fields.optionsMlHint",
+    "ru": "Каждый вариант можно задать на нескольких языках. Значение в записях не меняется при переименовании.",
+    "en": "Each option can be defined in several languages. The value stored in records does not change when renamed.",
+    "he": "ניתן להגדיר כל אפשרות בכמה שפות. הערך השמור ברשומות אינו משתנה בעת שינוי שם."
+  },
+  {
+    "key": "fields.optionLabel",
+    "ru": "Вариант",
+    "en": "Option",
+    "he": "אפשרות"
+  },
+  {
+    "key": "fields.noOptionsYet",
+    "ru": "Вариантов пока нет.",
+    "en": "No options yet.",
+    "he": "אין אפשרויות עדיין."
+  },
+  {
+    "key": "fields.addOption",
+    "ru": "Добавить вариант",
+    "en": "Add option",
+    "he": "הוסף אפשרות"
+  },
+  {
+    "key": "import.badValueTitle",
+    "ru": "Недопустимое значение",
+    "en": "Invalid value",
+    "he": "ערך לא חוקי"
+  },
+  {
+    "key": "import.badValueMsg",
+    "ru": "Выберите значение из списка",
+    "en": "Select a value from the list",
+    "he": "בחר ערך מהרשימה"
+  },
+  {
+    "key": "import.templateError",
+    "ru": "Не удалось создать шаблон",
+    "en": "Failed to create template",
+    "he": "יצירת התבנית נכשלה"
+  },
+  {
     "key": "statuses.add",
     "ru": "Добавить статус",
     "en": "Add status",
