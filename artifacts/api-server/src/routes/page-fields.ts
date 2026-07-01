@@ -744,6 +744,199 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
  * Editing is reported per-cell but the actual write goes through the normal
  * records update path on the linked record, which re-enforces every boundary.
  */
+
+/** Bounded depth for chained ("double-hop") lookups; also a cycle guard. */
+const MAX_LOOKUP_HOPS = 8;
+
+interface LookupResolveCtx {
+  perms: Awaited<ReturnType<typeof getPermissions>>;
+  roleIds: number[];
+  userId: number;
+}
+
+interface ChainResolution {
+  /** First-hop access after the full-chain gate: "hidden" if ANY hop is view-blocked. */
+  access: "hidden" | "view" | "edit";
+  /** The TERMINAL (deepest) field's type, used by the client to render the value. */
+  relatedFieldType: string | null;
+  /** The terminal field's select options (empty for non-select terminals). */
+  optionsJson: SelectOption[];
+  /** host recordId -> projected value, present only for viewable records (value may be null). */
+  valueByRecordId: Map<number, unknown>;
+}
+
+/**
+ * Resolve a lookup/relation projection, following the target record's OWN
+ * relation/lookup field when the projected field is itself a relation/lookup
+ * ("double-hop"). Recursion re-applies the FULL RBAC boundary at every hop —
+ * related-entity record view, projected-field hidden access, related own-row
+ * scope, and row-hidden-status exclusion — so a deeper hop can never surface a
+ * value the viewer could not read directly. This is the single source of truth
+ * used by both related-values endpoints for chained columns; keep it in lockstep
+ * with the inline first-hop logic (audit-field-security invariant).
+ */
+async function resolveChainValues(
+  hostEntityId: number,
+  recordIds: number[],
+  relationId: number,
+  relatedFieldKey: string,
+  relatedPageId: number | null,
+  ctx: LookupResolveCtx,
+  depth: number,
+): Promise<ChainResolution> {
+  const empty: ChainResolution = {
+    access: "hidden",
+    relatedFieldType: null,
+    optionsJson: [],
+    valueByRecordId: new Map(),
+  };
+  if (recordIds.length === 0) return empty;
+
+  const [relation] = await db.select().from(relationsTable).where(eq(relationsTable.id, relationId));
+  if (!relation) return empty;
+  const direction = relationDirection(relation, hostEntityId);
+  if (!direction) return empty;
+  const relatedEntityId = relatedEntityIdFor(relation, direction);
+
+  const { perms, roleIds, userId } = ctx;
+  const canViewRelated = canRecord(perms, relatedEntityId, "view");
+  const relScope = effectiveScope(perms, relatedEntityId);
+
+  // Resolve the projected field's metadata + visibility (page-source or own field).
+  let access: "hidden" | "view" | "edit";
+  let relatedFieldType: string | null;
+  let optionsJson: SelectOption[];
+  let projectedField: EntityField | null = null;
+  if (relatedPageId != null) {
+    const [rpf] = await db
+      .select({
+        fieldType: pageFieldsTable.fieldType,
+        optionsJson: pageFieldsTable.optionsJson,
+        permissionsJson: pageFieldsTable.permissionsJson,
+      })
+      .from(pageFieldsTable)
+      .where(
+        and(
+          eq(pageFieldsTable.pageId, relatedPageId),
+          eq(pageFieldsTable.fieldKey, relatedFieldKey),
+          eq(pageFieldsTable.isActive, true),
+        ),
+      );
+    if (!rpf) return empty;
+    const pagePerm = mostPermissiveFieldPerm(rpf.permissionsJson as FieldPermissions | null, roleIds, "view");
+    access = canViewRelated && pagePerm !== "hidden" ? "view" : "hidden";
+    relatedFieldType = access === "hidden" ? null : rpf.fieldType;
+    optionsJson = access === "hidden" ? [] : normalizeOptions(rpf.optionsJson);
+  } else {
+    const [rf] = await db
+      .select()
+      .from(entityFieldsTable)
+      .where(
+        and(
+          eq(entityFieldsTable.entityId, relatedEntityId),
+          eq(entityFieldsTable.fieldKey, relatedFieldKey),
+          eq(entityFieldsTable.isActive, true),
+        ),
+      );
+    if (!rf) return empty;
+    projectedField = rf;
+    access = canViewRelated ? resolveFieldAccess(rf, perms, roleIds, relatedEntityId) : "hidden";
+    relatedFieldType = access === "hidden" ? null : rf.fieldType;
+    optionsJson = access === "hidden" ? [] : normalizeOptions(rf.optionsJson);
+  }
+  if (access === "hidden") return empty;
+
+  // host record -> single linked record id.
+  const linkRows =
+    direction === "source"
+      ? await db
+          .select({ from: recordLinksTable.sourceRecordId, to: recordLinksTable.targetRecordId })
+          .from(recordLinksTable)
+          .where(and(eq(recordLinksTable.relationId, relationId), inArray(recordLinksTable.sourceRecordId, recordIds)))
+      : await db
+          .select({ from: recordLinksTable.targetRecordId, to: recordLinksTable.sourceRecordId })
+          .from(recordLinksTable)
+          .where(and(eq(recordLinksTable.relationId, relationId), inArray(recordLinksTable.targetRecordId, recordIds)));
+  const linkMap = new Map<number, number>();
+  for (const l of linkRows) linkMap.set(l.from, l.to);
+  const linkedIds = Array.from(new Set(linkRows.map((l) => l.to)));
+  if (linkedIds.length === 0) return { access, relatedFieldType, optionsJson, valueByRecordId: new Map() };
+
+  // Load only the VIEWABLE linked records (row-hidden status + related own-scope).
+  const relHiddenRowWhere = hiddenRowStatusWhere(effectiveStatusVisibility(perms, relatedEntityId).hiddenRowStatusIds);
+  const linkedConds: SQL[] = [
+    eq(entityRecordsTable.entityId, relatedEntityId),
+    inArray(entityRecordsTable.id, linkedIds),
+  ];
+  if (relHiddenRowWhere) linkedConds.push(relHiddenRowWhere);
+  if (relScope.scope === "own") {
+    const relatedFields = await loadActiveEntityFields(relatedEntityId);
+    linkedConds.push(await ownScopeWhere(relatedEntityId, relScope.scopeFieldKeys, userId, relatedFields));
+  }
+  const linkedRecords = await db
+    .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
+    .from(entityRecordsTable)
+    .where(and(...linkedConds));
+  const linkedMap = new Map<number, Record<string, unknown>>();
+  for (const lr of linkedRecords) linkedMap.set(lr.id, (lr.valuesJson as Record<string, unknown>) ?? {});
+
+  // Recurse when the projected field is itself an entity-source relation/lookup.
+  const projectedIsChain =
+    relatedPageId == null &&
+    projectedField != null &&
+    (projectedField.fieldType === "relation" || projectedField.fieldType === "lookup") &&
+    depth < MAX_LOOKUP_HOPS;
+
+  let terminalType = relatedFieldType;
+  let terminalOptions = optionsJson;
+  const linkedValueMap = new Map<number, unknown>(); // linkedId -> projected value
+
+  if (projectedIsChain) {
+    const pcfg = projectedField!.relationConfigJson as RelationFieldConfig | null;
+    const pRelId = pcfg?.relationId ?? null;
+    const pKey = pcfg?.relatedFieldKey ?? null;
+    if (pRelId == null || !pKey) {
+      return { access, relatedFieldType: null, optionsJson: [], valueByRecordId: new Map() };
+    }
+    const inner = await resolveChainValues(
+      relatedEntityId,
+      Array.from(linkedMap.keys()),
+      pRelId,
+      pKey,
+      pcfg?.relatedPageId ?? null,
+      ctx,
+      depth + 1,
+    );
+    if (inner.access === "hidden") {
+      return { access: "hidden", relatedFieldType: null, optionsJson: [], valueByRecordId: new Map() };
+    }
+    terminalType = inner.relatedFieldType;
+    terminalOptions = inner.optionsJson;
+    for (const [id, v] of inner.valueByRecordId) linkedValueMap.set(id, v);
+  } else if (relatedPageId != null) {
+    const allowedLinkedIds = Array.from(linkedMap.keys());
+    const pageValuesMap = new Map<number, Record<string, unknown>>();
+    if (allowedLinkedIds.length > 0) {
+      const prv = await db
+        .select({ recordId: pageRecordValuesTable.recordId, valuesJson: pageRecordValuesTable.valuesJson })
+        .from(pageRecordValuesTable)
+        .where(and(eq(pageRecordValuesTable.pageId, relatedPageId), inArray(pageRecordValuesTable.recordId, allowedLinkedIds)));
+      for (const r of prv) pageValuesMap.set(r.recordId, (r.valuesJson as Record<string, unknown>) ?? {});
+    }
+    for (const id of linkedMap.keys()) linkedValueMap.set(id, pageValuesMap.get(id)?.[relatedFieldKey] ?? null);
+  } else {
+    for (const [id, vals] of linkedMap) linkedValueMap.set(id, vals[relatedFieldKey] ?? null);
+  }
+
+  const valueByRecordId = new Map<number, unknown>();
+  for (const rid of recordIds) {
+    const linkedId = linkMap.get(rid);
+    if (linkedId == null || !linkedMap.has(linkedId)) continue; // no link, or linked record not viewable
+    valueByRecordId.set(rid, linkedValueMap.get(linkedId) ?? null);
+  }
+  return { access, relatedFieldType: terminalType, optionsJson: terminalOptions, valueByRecordId };
+}
+
 router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Promise<void> => {
   const params = GetPageRelatedValuesParams.safeParse(req.params);
   if (!params.success) {
@@ -866,6 +1059,7 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
     let access: "hidden" | "view" | "edit";
     let relatedFieldType: string | null;
     let optionsJson: SelectOption[];
+    let projectedChain = false;
     if (relatedPageId != null) {
       const [relatedPageField] = await db
         .select({
@@ -907,6 +1101,22 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
       access = canViewRelated ? resolveFieldAccess(relatedField, perms, roleIds, relatedEntityId) : "hidden";
       relatedFieldType = access === "hidden" ? null : relatedField.fieldType;
       optionsJson = access === "hidden" ? [] : normalizeOptions(relatedField.optionsJson);
+      // Double-hop: when the projected field is itself an entity-source
+      // relation/lookup, follow it one more hop (recursively) instead of reading
+      // values_json (which has no scalar for it). resolveChainValues re-applies
+      // the full RBAC boundary at every hop.
+      if (relatedField.fieldType === "relation" || relatedField.fieldType === "lookup") {
+        projectedChain = true;
+      }
+    }
+
+    // Resolve the chained value/metadata once per column (entity-source only).
+    let chain: ChainResolution | null = null;
+    if (projectedChain && access !== "hidden") {
+      chain = await resolveChainValues(entityId, allowedIds, relationId, relatedFieldKey, relatedPageId, { perms, roleIds, userId }, 0);
+      relatedFieldType = chain.access === "hidden" ? null : chain.relatedFieldType;
+      optionsJson = chain.optionsJson;
+      if (chain.access === "hidden") access = "hidden";
     }
 
     const pagePerm = mostPermissiveFieldPerm(pf.permissionsJson as FieldPermissions | null, roleIds, "edit");
@@ -1002,8 +1212,9 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
         const linkedValues = linkedMap.get(rawLinkedId);
         if (linkedValues != null) {
           visible = true;
-          value =
-            relatedPageId != null
+          value = chain
+            ? chain.valueByRecordId.get(recordId) ?? null
+            : relatedPageId != null
               ? pageValuesMap.get(rawLinkedId)?.[relatedFieldKey] ?? null
               : linkedValues[relatedFieldKey] ?? null;
         }
@@ -1984,6 +2195,7 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
     let access: "hidden" | "view" | "edit";
     let relatedFieldType: string | null;
     let optionsJson: SelectOption[];
+    let projectedChain = false;
     if (relatedPageId != null) {
       const [relatedPageField] = await db
         .select({
@@ -2028,6 +2240,20 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
       access = canViewRelated ? resolveFieldAccess(relatedField, perms, roleIds, relatedEntityId) : "hidden";
       relatedFieldType = access === "hidden" ? null : relatedField.fieldType;
       optionsJson = access === "hidden" ? [] : normalizeOptions(relatedField.optionsJson);
+      // Double-hop: when the projected field is itself an entity-source
+      // relation/lookup, follow it one more hop (see resolveChainValues).
+      if (relatedField.fieldType === "relation" || relatedField.fieldType === "lookup") {
+        projectedChain = true;
+      }
+    }
+
+    // Resolve the chained value/metadata once per column (entity-source only).
+    let chain: ChainResolution | null = null;
+    if (projectedChain && access !== "hidden") {
+      chain = await resolveChainValues(entityId, allowedIds, relationId, relatedFieldKey, relatedPageId, { perms, roleIds, userId }, 0);
+      relatedFieldType = chain.access === "hidden" ? null : chain.relatedFieldType;
+      optionsJson = chain.optionsJson;
+      if (chain.access === "hidden") access = "hidden";
     }
 
     // The cell ASSIGNS the link (not edits the related value): assignable when
@@ -2047,8 +2273,14 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
     // the real write boundary is enforced by that entity's own record PUT.
     // Page-source lookups are never write-through (the value lives on a page, not
     // a directly-editable entity field).
+    // A chained (double-hop) lookup is never write-through: its value comes from a
+    // record two+ hops away, so "open the linked record" would edit the wrong one.
     const writeThrough =
-      f.fieldType === "lookup" && relatedPageId == null && cfg?.writeThrough === true && access !== "hidden";
+      f.fieldType === "lookup" &&
+      relatedPageId == null &&
+      !projectedChain &&
+      cfg?.writeThrough === true &&
+      access !== "hidden";
 
     columns.push({
       fieldKey: f.fieldKey,
@@ -2127,8 +2359,9 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
         const linkedValues = linkedMap.get(rawLinkedId);
         if (linkedValues != null) {
           visible = true;
-          value =
-            relatedPageId != null
+          value = chain
+            ? chain.valueByRecordId.get(recordId) ?? null
+            : relatedPageId != null
               ? pageValuesMap.get(rawLinkedId)?.[relatedFieldKey] ?? null
               : linkedValues[relatedFieldKey] ?? null;
         }
