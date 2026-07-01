@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useQueryEntityRecords,
+  useGetEntityRelatedValues,
   type EntityRecord,
   type Field,
   type Status,
@@ -10,6 +11,8 @@ import {
   type CalendarConfig,
   type CalendarConfigDefaultMode,
   type MultilingualText,
+  type PageRelatedColumn,
+  type PageRelatedValue,
 } from "@workspace/api-client-react";
 import { useT } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
@@ -135,6 +138,29 @@ export function CalendarView({
   const [error, setError] = useState<string | null>(null);
   const [truncated, setTruncated] = useState(false);
   const reqIdRef = useRef(0);
+
+  // Relation/lookup fields (title or plaque data) don't store a scalar in
+  // valuesJson — their display value is projected from the linked record via the
+  // entity-keyed related-values endpoint (the same one the table uses), which
+  // re-applies the related entity's field/row boundary server-side. We resolve
+  // them for the calendar's OWN window records here so the plaque shows real
+  // values (e.g. a "Проект" relation → the project name) instead of "#id".
+  const [relByRecord, setRelByRecord] = useState<Map<number, Map<string, PageRelatedValue>>>(
+    new Map(),
+  );
+  const [relColMeta, setRelColMeta] = useState<Map<string, PageRelatedColumn>>(new Map());
+  const fetchEntityRelatedValues = useGetEntityRelatedValues().mutateAsync;
+  // Only resolve related-values when a relation/lookup field is actually used by
+  // the calendar — as the title or in the plaque data. Otherwise skip the fetch.
+  const hasRelationLikeFields = useMemo(() => {
+    const isRel = (key: string | null | undefined) => {
+      if (!key) return false;
+      const f = fields.find((x) => x.fieldKey === key);
+      return f?.fieldType === "relation" || f?.fieldType === "lookup";
+    };
+    if (isRel(config.titleFieldKey)) return true;
+    return (config.cardFieldKeys ?? []).some((k) => isRel(k));
+  }, [fields, config.titleFieldKey, config.cardFieldKeys]);
 
   const fieldByKey = useMemo(() => {
     const m = new Map<string, Field>();
@@ -269,6 +295,44 @@ export function CalendarView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entityId, baseKey, windowKey, dateFieldKey, endDateFieldKey, refreshTick]);
 
+  // Resolve relation/lookup values for the loaded window records (see note above).
+  const recordIdsKey = useMemo(() => records.map((r) => r.id).join(","), [records]);
+  useEffect(() => {
+    if (!hasRelationLikeFields || records.length === 0) {
+      setRelByRecord(new Map());
+      setRelColMeta(new Map());
+      return;
+    }
+    let cancelled = false;
+    const recordIds = records.map((r) => r.id);
+    fetchEntityRelatedValues({ entityId, data: { recordIds, pageId: baseQuery.pageId } })
+      .then((res) => {
+        if (cancelled) return;
+        const meta = new Map<string, PageRelatedColumn>();
+        for (const c of res.columns) meta.set(c.fieldKey, c);
+        const byRec = new Map<number, Map<string, PageRelatedValue>>();
+        for (const v of res.values) {
+          let inner = byRec.get(v.recordId);
+          if (!inner) {
+            inner = new Map();
+            byRec.set(v.recordId, inner);
+          }
+          inner.set(v.fieldKey, v);
+        }
+        setRelColMeta(meta);
+        setRelByRecord(byRec);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRelByRecord(new Map());
+        setRelColMeta(new Map());
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entityId, hasRelationLikeFields, recordIdsKey, baseQuery.pageId, refreshTick]);
+
   // Map records → events with resolved start/end/title/color, dropping any without
   // a parseable date and clipping to the visible window.
   const events = useMemo<CalendarEvent[]>(() => {
@@ -285,7 +349,16 @@ export function CalendarView({
       if (end.getTime() < windowStart.getTime() || start.getTime() >= windowEnd.getTime()) continue;
 
       const titleField = titleFieldKey ? fieldByKey.get(titleFieldKey) : undefined;
-      const rawTitle = titleFieldKey ? rec.valuesJson?.[titleFieldKey] : undefined;
+      // A relation/lookup title projects the linked record's value, which lives in
+      // relByRecord (not valuesJson). Fall back to valuesJson for scalar fields.
+      let rawTitle: unknown =
+        titleFieldKey ? rec.valuesJson?.[titleFieldKey] : undefined;
+      if (
+        titleField &&
+        (titleField.fieldType === "relation" || titleField.fieldType === "lookup")
+      ) {
+        rawTitle = relByRecord.get(rec.id)?.get(titleField.fieldKey)?.value ?? null;
+      }
       const title =
         rawTitle != null && rawTitle !== ""
           ? String(rawTitle)
@@ -301,7 +374,7 @@ export function CalendarView({
       out.push({ record: rec, start, end, title, color });
     }
     return out;
-  }, [records, dateFieldKey, endDateFieldKey, titleFieldKey, fieldByKey, config.colorBy, config.colorFieldKey, statusById, windowStart, windowEnd, ml, t]);
+  }, [records, dateFieldKey, endDateFieldKey, titleFieldKey, fieldByKey, config.colorBy, config.colorFieldKey, statusById, windowStart, windowEnd, ml, t, relByRecord]);
 
   // Group events by ISO day for the grid/list renderers. A span lands on every day
   // it covers within the window.
@@ -374,14 +447,31 @@ export function CalendarView({
         }`}
         title={ev.title}
       >
-        <span className="block truncate font-medium">{ev.title}</span>
+        <span className={`block font-medium ${compact ? "truncate" : "break-words"}`}>{ev.title}</span>
         {!compact &&
           cardFields.map((f) => {
-            const v = ev.record.valuesJson?.[f.fieldKey];
-            if (v == null || v === "") return null;
+            const isRel = f.fieldType === "relation" || f.fieldType === "lookup";
+            let renderField: Field = f;
+            let v: unknown;
+            if (isRel) {
+              // Relation/lookup plaque fields project the linked record's value from
+              // relByRecord and render with the PROJECTED type (meta.relatedFieldType).
+              const rel = relByRecord.get(ev.record.id)?.get(f.fieldKey);
+              if (rel?.linkedRecordId == null || rel.value == null || rel.value === "") return null;
+              const meta = relColMeta.get(f.fieldKey);
+              renderField = {
+                ...f,
+                fieldType: (meta?.relatedFieldType ?? "text") as Field["fieldType"],
+                optionsJson: meta?.optionsJson ?? [],
+              } as Field;
+              v = rel.value;
+            } else {
+              v = ev.record.valuesJson?.[f.fieldKey];
+              if (v == null || v === "") return null;
+            }
             return (
-              <span key={f.fieldKey} className="block truncate text-[11px] opacity-80">
-                {ml(f.nameJson)}: {renderCellValue(f, v, t, userNames, undefined, ml)}
+              <span key={f.fieldKey} className="block break-words text-[11px] opacity-80">
+                {ml(f.nameJson)}: {renderCellValue(renderField, v, t, userNames, undefined, ml)}
               </span>
             );
           })}
