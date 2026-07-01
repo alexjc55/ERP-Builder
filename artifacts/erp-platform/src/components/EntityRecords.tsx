@@ -165,6 +165,57 @@ import {
 const NO_STATUS = "__none__";
 const NO_VIEW = "__all__";
 const PAGE_SIZE = 50;
+
+// The status cell background is the status color at ~12% over white (very light),
+// so light-colored statuses (yellow, light green) become unreadable if the text
+// uses the raw color. Clamp the color's lightness so the text stays dark enough
+// to read on that near-white fill, while preserving the hue. Dark colors pass
+// through unchanged. The dot keeps the full-strength color.
+function readableStatusTextColor(hex: string): string {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim());
+  if (!m) return hex;
+  const num = parseInt(m[1], 16);
+  const r = ((num >> 16) & 255) / 255;
+  const g = ((num >> 8) & 255) / 255;
+  const b = (num & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  let h = 0;
+  let s = 0;
+  if (d !== 0) {
+    s = d / (1 - Math.abs(2 * l - 1));
+    switch (max) {
+      case r:
+        h = ((g - b) / d) % 6;
+        break;
+      case g:
+        h = (b - r) / d + 2;
+        break;
+      default:
+        h = (r - g) / d + 4;
+        break;
+    }
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  const cl = Math.min(l, 0.38);
+  const c = (1 - Math.abs(2 * cl - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const mm = cl - c / 2;
+  let rr = 0;
+  let gg = 0;
+  let bb = 0;
+  if (h < 60) { rr = c; gg = x; }
+  else if (h < 120) { rr = x; gg = c; }
+  else if (h < 180) { gg = c; bb = x; }
+  else if (h < 240) { gg = x; bb = c; }
+  else if (h < 300) { rr = x; bb = c; }
+  else { rr = c; bb = x; }
+  const toHex = (v: number) => Math.round((v + mm) * 255).toString(16).padStart(2, "0");
+  return `#${toHex(rr)}${toHex(gg)}${toHex(bb)}`;
+}
 // Reserved sort keys mapping to the record's system columns (creation date / id).
 // Never rendered as table columns; kept in lockstep with the server sort builder.
 const SYSTEM_SORT_CREATED_AT = "__created_at__";
@@ -3827,7 +3878,7 @@ export function EntityRecords({
                               {status ? (
                                 <span
                                   className="inline-flex items-center gap-1.5 text-xs font-medium"
-                                  style={{ color: status.color }}
+                                  style={{ color: readableStatusTextColor(status.color) }}
                                 >
                                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: status.color }} />
                                   {ml(status.nameJson)}
