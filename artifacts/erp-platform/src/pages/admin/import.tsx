@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import {
   useListEntities,
   useListEntityFields,
@@ -18,6 +19,7 @@ import {
   type ImportResult,
 } from "@workspace/api-client-react";
 import { useML, useT } from "@/lib/i18n";
+import { normalizeSelectOptions } from "@/lib/selectOptions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -156,19 +158,99 @@ export default function ImportPage() {
   }
 
   // ── Template download ──────────────────────────────────────────────────────
-  function downloadTemplate() {
+  // Built with exceljs so select fields and the status column get real Excel
+  // dropdown lists (data validation). Allowed values live on a hidden "Списки"
+  // sheet and each column references its range, so users pick valid values while
+  // filling instead of only discovering mistakes at the preview step. The labels
+  // written here are exactly what the server's matchOption / resolveStatusId
+  // accept (option display label ru→en→he→value; status name ru→en→he→key).
+  const TEMPLATE_ROWS = 1000;
+
+  function colLetter(n: number): string {
+    let s = "";
+    let x = n;
+    while (x > 0) {
+      const m = (x - 1) % 26;
+      s = String.fromCharCode(65 + m) + s;
+      x = Math.floor((x - 1) / 26);
+    }
+    return s;
+  }
+
+  async function downloadTemplate() {
     if (entityId == null) return;
-    const entity = entities.find((e) => e.id === entityId);
-    const header: string[] = [
-      ...fields.map((f) => ml(f.nameJson) || f.fieldKey),
-      ...relations.map((r) => ml(r.nameJson) || r.relationKey),
-      STATUS_HEADER,
-    ];
-    const ws = XLSX.utils.aoa_to_sheet([header]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Import");
-    const base = (entity ? ml(entity.nameJson) || entity.entityKey : "import").replace(/[^\w\-]+/g, "_");
-    XLSX.writeFile(wb, `${base}_template.xlsx`);
+    try {
+      const entity = entities.find((e) => e.id === entityId);
+      const header: string[] = [
+        ...fields.map((f) => ml(f.nameJson) || f.fieldKey),
+        ...relations.map((r) => ml(r.nameJson) || r.relationKey),
+        STATUS_HEADER,
+      ];
+
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet("Import");
+      const lists = wb.addWorksheet("Списки");
+      lists.state = "hidden";
+
+      ws.addRow(header);
+      ws.getRow(1).font = { bold: true };
+      ws.columns.forEach((col) => {
+        col.width = 22;
+      });
+
+      // Collect dropdown specs: (0-based import column) → allowed values.
+      const dropdowns: { col: number; values: string[] }[] = [];
+      fields.forEach((f, i) => {
+        if (f.fieldType !== "select") return;
+        const values = normalizeSelectOptions(f.optionsJson)
+          .map((o) => ml(o.labelJson) || o.value)
+          .filter((v) => v.trim() !== "");
+        if (values.length > 0) dropdowns.push({ col: i, values });
+      });
+      const statusValues = statuses
+        .map((s) => ml(s.nameJson) || s.statusKey)
+        .filter((v) => v.trim() !== "");
+      if (statusValues.length > 0) {
+        dropdowns.push({ col: fields.length + relations.length, values: statusValues });
+      }
+
+      // Write each list to its own column on the hidden sheet, then point the
+      // matching import column's rows at that range via list data-validation.
+      dropdowns.forEach((d, li) => {
+        const listCol = li + 1;
+        d.values.forEach((v, r) => {
+          lists.getCell(r + 1, listCol).value = v;
+        });
+        const letter = colLetter(listCol);
+        const range = `'Списки'!$${letter}$1:$${letter}$${d.values.length}`;
+        const impLetter = colLetter(d.col + 1);
+        for (let r = 2; r <= TEMPLATE_ROWS; r++) {
+          ws.getCell(`${impLetter}${r}`).dataValidation = {
+            type: "list",
+            allowBlank: true,
+            formulae: [range],
+            showErrorMessage: true,
+            errorStyle: "error",
+            errorTitle: t("import.badValueTitle", "Недопустимое значение"),
+            error: t("import.badValueMsg", "Выберите значение из списка"),
+          };
+        }
+      });
+
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const base = (entity ? ml(entity.nameJson) || entity.entityKey : "import").replace(/[^\w\-]+/g, "_");
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${base}_template.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: t("import.templateError", "Не удалось создать шаблон"), variant: "destructive" });
+    }
   }
 
   // ── File parse + auto-map ──────────────────────────────────────────────────

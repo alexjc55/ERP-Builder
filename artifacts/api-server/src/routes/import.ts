@@ -141,6 +141,12 @@ async function coerceValue(field: EntityField, raw: unknown): Promise<Coerced> {
   }
 }
 
+/** All non-empty localized labels (ru/en/he) of a status name. */
+function statusLabels(j: unknown): string[] {
+  const o = (j ?? {}) as Record<string, unknown>;
+  return [o.ru, o.en, o.he].filter((x): x is string => typeof x === "string" && x.trim() !== "");
+}
+
 function resolveStatusId(
   statuses: EntityStatus[],
   statusName: string | null | undefined,
@@ -149,10 +155,17 @@ function resolveStatusId(
     const def = statuses.find((s) => s.isDefault);
     return { id: def ? def.id : null };
   }
+  // Accept the status key or ANY localized name (ru/en/he), so a template
+  // dropdown generated in any UI language resolves — mirroring how matchOption
+  // resolves select values by value or any label.
   const s = statusName.trim();
+  const ns = norm(s);
   const hit =
     statuses.find((st) => st.statusKey === s) ??
-    statuses.find((st) => norm(st.statusKey) === norm(s) || norm(mlName(st.nameJson, st.statusKey)) === norm(s));
+    statuses.find((st) => statusLabels(st.nameJson).some((l) => l === s)) ??
+    statuses.find(
+      (st) => norm(st.statusKey) === ns || statusLabels(st.nameJson).some((l) => norm(l) === ns),
+    );
   if (!hit) return { error: `Статус «${statusName}» не найден` };
   return { id: hit.id };
 }
