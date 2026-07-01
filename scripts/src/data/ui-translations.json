@@ -8136,6 +8136,12 @@
     "he": "עוד"
   },
   {
+    "key": "calendar.statusLabel",
+    "ru": "Статус",
+    "en": "Status",
+    "he": "סטטוס"
+  },
+  {
     "key": "calendar.noEvents",
     "ru": "Нет событий",
     "en": "No events",

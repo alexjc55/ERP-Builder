@@ -449,7 +449,7 @@ export function CalendarView({
     // but keep the TEXT dark so it stays readable (a light-tinted bg + same-hue
     // text was nearly invisible).
     const style = ev.color
-      ? { backgroundColor: `${ev.color}20`, color: "#1e293b", borderLeft: `3px solid ${ev.color}` }
+      ? { backgroundColor: `${ev.color}20`, color: "#1e293b", borderInlineStart: `3px solid ${ev.color}` }
       : undefined;
     const status = ev.record.statusId != null ? statusById.get(ev.record.statusId) : undefined;
     return (
@@ -458,8 +458,8 @@ export function CalendarView({
         type="button"
         onClick={() => onRecordClick(ev.record)}
         style={style}
-        className={`block w-full rounded px-1.5 py-1 text-left text-xs transition hover:brightness-95 ${
-          ev.color ? "" : "bg-blue-50 text-blue-700 border-l-[3px] border-blue-400"
+        className={`block w-full rounded px-1.5 py-1 text-start text-xs transition hover:brightness-95 ${
+          ev.color ? "" : "bg-blue-50 text-blue-700 border-s-[3px] border-blue-400"
         }`}
         title={ev.title}
       >
