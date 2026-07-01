@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ArchiveFilter } from './archiveFilter';
+import type { ExcludeFilter } from './excludeFilter';
 import type { FilterCondition } from './filterCondition';
 import type { RecordQueryFilterConjunction } from './recordQueryFilterConjunction';
 import type { SortSpec } from './sortSpec';
@@ -16,6 +17,10 @@ export interface RecordQuery {
   pageLocalFilters?: FilterCondition[];
   filterConjunction?: RecordQueryFilterConjunction;
   statusIds?: number[];
+  /** SOFT per-field exclusions (from the page default filter, when the viewer has NOT toggled "show hidden"). Hides rows whose field value is one of the listed values. Always AND-combined and NULL-safe. */
+  excludeFilters?: ExcludeFilter[];
+  /** SOFT status exclusions (from the page default filter, unless the viewer toggled "show hidden"): hide rows whose statusId is in this list. AND-combined; never widens beyond the view's hard filter. */
+  excludeStatusIds?: number[];
   sorts?: SortSpec[];
   search?: string;
   archived?: ArchiveFilter;

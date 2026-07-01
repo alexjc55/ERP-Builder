@@ -1224,7 +1224,9 @@ export const ListPagesResponseItem = zod.object({
   "widgetsCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
   "defaultQuickFilterJson": zod.union([zod.object({
   "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
-  "statusIds": zod.array(zod.number()).optional()
+  "statusIds": zod.array(zod.number()).optional(),
+  "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
+  "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
@@ -1331,7 +1333,9 @@ export const CreatePageBody = zod.object({
   "widgetsCollapsedDefault": zod.boolean().default(createPageBodyWidgetsCollapsedDefaultDefault).describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
   "defaultQuickFilterJson": zod.union([zod.object({
   "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
-  "statusIds": zod.array(zod.number()).optional()
+  "statusIds": zod.array(zod.number()).optional(),
+  "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
+  "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createPageBodyIsActiveDefault)
@@ -1436,7 +1440,9 @@ export const GetPageResponse = zod.object({
   "widgetsCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
   "defaultQuickFilterJson": zod.union([zod.object({
   "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
-  "statusIds": zod.array(zod.number()).optional()
+  "statusIds": zod.array(zod.number()).optional(),
+  "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
+  "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
@@ -1543,7 +1549,9 @@ export const UpdatePageBody = zod.object({
   "widgetsCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
   "defaultQuickFilterJson": zod.union([zod.object({
   "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
-  "statusIds": zod.array(zod.number()).optional()
+  "statusIds": zod.array(zod.number()).optional(),
+  "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
+  "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
@@ -1640,7 +1648,9 @@ export const UpdatePageResponse = zod.object({
   "widgetsCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
   "defaultQuickFilterJson": zod.union([zod.object({
   "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
-  "statusIds": zod.array(zod.number()).optional()
+  "statusIds": zod.array(zod.number()).optional(),
+  "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
+  "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
@@ -4721,6 +4731,11 @@ export const QueryEntityRecordsBody = zod.object({
 })).optional().describe('Filter conditions on PAGE-LOCAL fields (values stored in page_record_values), keyed by page-field fieldKey. Requires pageId. Each condition is AND-combined with the rest of the query. Only visible (per-role) filterable page-local fields are accepted.'),
   "filterConjunction": zod.enum(['and', 'or']).default(queryEntityRecordsBodyFilterConjunctionDefault),
   "statusIds": zod.array(zod.number()).optional(),
+  "excludeFilters": zod.array(zod.object({
+  "field": zod.string(),
+  "values": zod.array(zod.string())
+}).describe('A SOFT exclusion: hide rows whose `field` value is one of `values`. Always AND-combined with the rest of the query independently of the view\'s filterConjunction, and NULL-safe (rows with an empty value are kept). Only narrows the result — it can never reveal rows the view\'s hard filter hides. Driven by a page\'s default filter and toggled off by the viewer via \"show hidden\".')).optional().describe('SOFT per-field exclusions (from the page default filter, when the viewer has NOT toggled \"show hidden\"). Hides rows whose field value is one of the listed values. Always AND-combined and NULL-safe.'),
+  "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions (from the page default filter, unless the viewer toggled \"show hidden\"): hide rows whose statusId is in this list. AND-combined; never widens beyond the view\'s hard filter.'),
   "sorts": zod.array(zod.object({
   "field": zod.string(),
   "direction": zod.enum(['asc', 'desc']).default(queryEntityRecordsBodySortsItemDirectionDefault)
@@ -4877,6 +4892,11 @@ export const GetEntityFilterValuesBody = zod.object({
 })).optional(),
   "filterConjunction": zod.enum(['and', 'or']).default(getEntityFilterValuesBodyFilterConjunctionDefault),
   "statusIds": zod.array(zod.number()).optional(),
+  "excludeFilters": zod.array(zod.object({
+  "field": zod.string(),
+  "values": zod.array(zod.string())
+}).describe('A SOFT exclusion: hide rows whose `field` value is one of `values`. Always AND-combined with the rest of the query independently of the view\'s filterConjunction, and NULL-safe (rows with an empty value are kept). Only narrows the result — it can never reveal rows the view\'s hard filter hides. Driven by a page\'s default filter and toggled off by the viewer via \"show hidden\".')).optional().describe('SOFT per-field exclusions from the page default (when \"show hidden\" is off). Applied to the option list too so co-occurring values stay consistent with the visible rows. The exclusion matching the target field is skipped by the server so the target\'s own dropdown still lists all its selectable values.'),
+  "excludeStatusIds": zod.array(zod.number()).optional(),
   "search": zod.string().optional(),
   "archived": zod.enum(['active', 'archived', 'all']).default(getEntityFilterValuesBodyArchivedDefault)
 })

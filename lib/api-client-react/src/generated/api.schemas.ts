@@ -1001,11 +1001,20 @@ export interface PivotPageConfig {
 export type PageQuickFilterFieldFilters = {[key: string]: string[]};
 
 /**
+ * SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles "show hidden". Values may be drawn from the field's configured options even if not yet present in the data. Never widens beyond the view's hard filter.
+ */
+export type PageQuickFilterExcludeFieldFilters = {[key: string]: string[]};
+
+/**
  * A page's SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view's hard filter boundary.
  */
 export interface PageQuickFilter {
   fieldFilters?: PageQuickFilterFieldFilters;
   statusIds?: number[];
+  /** SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles "show hidden". Values may be drawn from the field's configured options even if not yet present in the data. Never widens beyond the view's hard filter. */
+  excludeFieldFilters?: PageQuickFilterExcludeFieldFilters;
+  /** SOFT status exclusions: hide rows with these statuses by default, revealable via "show hidden". Authored from the full status list. */
+  excludeStatusIds?: number[];
 }
 
 export interface Page {
@@ -2772,6 +2781,14 @@ export interface RecordUpdate {
   pageId?: number;
 }
 
+/**
+ * A SOFT exclusion: hide rows whose `field` value is one of `values`. Always AND-combined with the rest of the query independently of the view's filterConjunction, and NULL-safe (rows with an empty value are kept). Only narrows the result — it can never reveal rows the view's hard filter hides. Driven by a page's default filter and toggled off by the viewer via "show hidden".
+ */
+export interface ExcludeFilter {
+  field: string;
+  values: string[];
+}
+
 export type ViewConfigFilterConjunction = typeof ViewConfigFilterConjunction[keyof typeof ViewConfigFilterConjunction];
 
 
@@ -2946,6 +2963,10 @@ export interface RecordQuery {
   pageLocalFilters?: FilterCondition[];
   filterConjunction?: RecordQueryFilterConjunction;
   statusIds?: number[];
+  /** SOFT per-field exclusions (from the page default filter, when the viewer has NOT toggled "show hidden"). Hides rows whose field value is one of the listed values. Always AND-combined and NULL-safe. */
+  excludeFilters?: ExcludeFilter[];
+  /** SOFT status exclusions (from the page default filter, unless the viewer toggled "show hidden"): hide rows whose statusId is in this list. AND-combined; never widens beyond the view's hard filter. */
+  excludeStatusIds?: number[];
   sorts?: SortSpec[];
   search?: string;
   archived?: ArchiveFilter;
@@ -2989,6 +3010,9 @@ export interface FilterValuesQuery {
   filters?: FilterCondition[];
   filterConjunction?: FilterValuesQueryFilterConjunction;
   statusIds?: number[];
+  /** SOFT per-field exclusions from the page default (when "show hidden" is off). Applied to the option list too so co-occurring values stay consistent with the visible rows. The exclusion matching the target field is skipped by the server so the target's own dropdown still lists all its selectable values. */
+  excludeFilters?: ExcludeFilter[];
+  excludeStatusIds?: number[];
   search?: string;
   archived?: ArchiveFilter;
 }

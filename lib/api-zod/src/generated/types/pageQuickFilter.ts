@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { PageQuickFilterExcludeFieldFilters } from './pageQuickFilterExcludeFieldFilters';
 import type { PageQuickFilterFieldFilters } from './pageQuickFilterFieldFilters';
 
 /**
@@ -13,4 +14,8 @@ import type { PageQuickFilterFieldFilters } from './pageQuickFilterFieldFilters'
 export interface PageQuickFilter {
   fieldFilters?: PageQuickFilterFieldFilters;
   statusIds?: number[];
+  /** SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles "show hidden". Values may be drawn from the field's configured options even if not yet present in the data. Never widens beyond the view's hard filter. */
+  excludeFieldFilters?: PageQuickFilterExcludeFieldFilters;
+  /** SOFT status exclusions: hide rows with these statuses by default, revealable via "show hidden". Authored from the full status list. */
+  excludeStatusIds?: number[];
 }

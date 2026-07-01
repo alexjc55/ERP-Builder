@@ -43,6 +43,16 @@ export interface RecordQuerySpec {
   filters?: FilterCondition[];
   filterConjunction?: "and" | "or";
   statusIds?: number[];
+  /**
+   * SOFT per-field exclusions (from a page's default filter, when the viewer has
+   * not toggled "show hidden"). Each hides rows whose field value is one of
+   * `values`. Always AND-combined into the top-level WHERE — independent of
+   * `filterConjunction` — and NULL-safe, so they only ever NARROW the result and
+   * can never reveal rows a view's hard `filters` hides.
+   */
+  excludeFilters?: { field: string; values: string[] }[];
+  /** SOFT status exclusions: hide rows whose statusId is in this list. AND-combined. */
+  excludeStatusIds?: number[];
   sorts?: SortSpec[];
   search?: string;
 }
@@ -403,7 +413,41 @@ export function buildRecordQuery(
     statusWhere = inArray(entityRecordsTable.statusId, statusIds);
   }
 
-  const whereParts = [filterWhere, searchWhere, statusWhere].filter((p): p is SQL => p !== undefined);
+  // SOFT exclusions (page default filter, "show hidden" off). These ALWAYS
+  // AND with everything — never OR — so a view configured with OR logic can't
+  // turn an exclusion into a widening. They are NULL-safe: a row whose value is
+  // empty is kept (an exclusion of value B hides only rows that ARE B).
+  const excludeChunks: SQL[] = [];
+  for (const ex of spec.excludeFilters ?? []) {
+    const field = fieldByKey.get(ex.field);
+    if (!field) return { error: `Unknown exclude field: ${ex.field}` };
+    const vals = (ex.values ?? []).filter((v) => v != null && v !== "");
+    if (vals.length === 0) continue;
+    const parts = vals.map((v) => sql`${String(v)}`);
+    const relMeta = relationMeta.get(ex.field);
+    if (relMeta) {
+      // Keep rows whose linked projected value is NOT among vals (or that have no
+      // link at all — the EXISTS is false, so NOT(...) keeps them).
+      const inCond = relationValueExists(
+        relMeta,
+        (v) => sql`${v} IN (${sql.join(parts, sql`, `)})`,
+      );
+      excludeChunks.push(sql`NOT ${inCond}`);
+    } else {
+      const expr = textExpr(ex.field);
+      excludeChunks.push(sql`(${expr} IS NULL OR ${expr} NOT IN (${sql.join(parts, sql`, `)}))`);
+    }
+  }
+  let excludeStatusWhere: SQL | undefined;
+  const exStatusIds = (spec.excludeStatusIds ?? []).filter((n) => Number.isInteger(n));
+  if (exStatusIds.length > 0) {
+    const parts = exStatusIds.map((n) => sql`${n}`);
+    excludeStatusWhere = sql`(${entityRecordsTable.statusId} IS NULL OR ${entityRecordsTable.statusId} NOT IN (${sql.join(parts, sql`, `)}))`;
+  }
+
+  const whereParts = [filterWhere, searchWhere, statusWhere, ...excludeChunks, excludeStatusWhere].filter(
+    (p): p is SQL => p !== undefined,
+  );
   const where = whereParts.length > 0 ? and(...whereParts) : undefined;
 
   const orderBy: SQL[] = [];

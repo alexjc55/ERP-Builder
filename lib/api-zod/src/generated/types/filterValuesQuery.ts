@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ArchiveFilter } from './archiveFilter';
+import type { ExcludeFilter } from './excludeFilter';
 import type { FilterCondition } from './filterCondition';
 import type { FilterValuesQueryFilterConjunction } from './filterValuesQueryFilterConjunction';
 
@@ -18,6 +19,9 @@ export interface FilterValuesQuery {
   filters?: FilterCondition[];
   filterConjunction?: FilterValuesQueryFilterConjunction;
   statusIds?: number[];
+  /** SOFT per-field exclusions from the page default (when "show hidden" is off). Applied to the option list too so co-occurring values stay consistent with the visible rows. The exclusion matching the target field is skipped by the server so the target's own dropdown still lists all its selectable values. */
+  excludeFilters?: ExcludeFilter[];
+  excludeStatusIds?: number[];
   search?: string;
   archived?: ArchiveFilter;
 }

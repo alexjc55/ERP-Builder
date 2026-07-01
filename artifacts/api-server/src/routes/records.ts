@@ -1239,6 +1239,14 @@ router.post(
       ],
       filterConjunction: body.data.filterConjunction ?? "and",
       statusIds: body.data.statusIds ?? undefined,
+      // SOFT exclusions co-narrow the option list so values only appear if they
+      // co-occur with the visible rows. The exclusion ON the target field itself
+      // is skipped, so the target's own dropdown still lists every selectable
+      // value (mirrors how ad-hoc `filters` self-exclude the target above).
+      excludeFilters: ((body.data.excludeFilters ?? []) as { field: string; values: string[] }[]).filter(
+        (ex) => ex.field !== body.data.field,
+      ),
+      excludeStatusIds: body.data.excludeStatusIds ?? undefined,
       search: body.data.search ?? undefined,
     };
     const relationMeta = await buildRelationMeta(entityId, visibleFields);

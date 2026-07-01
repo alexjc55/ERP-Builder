@@ -980,7 +980,12 @@ export function EntityRecords({
    * (gated by the "pages" admin cap). Stored per-page, so a normal page and a
    * mirror page onto the same entity keep independent defaults.
    */
-  defaultQuickFilter?: { fieldFilters?: Record<string, string[]>; statusIds?: number[] } | null;
+  defaultQuickFilter?: {
+    fieldFilters?: Record<string, string[]>;
+    statusIds?: number[];
+    excludeFieldFilters?: Record<string, string[]>;
+    excludeStatusIds?: number[];
+  } | null;
 }) {
   const ml = useML();
   const t = useT();
@@ -1636,6 +1641,14 @@ export function EntityRecords({
   const [statusFilter, setStatusFilter] = useState<number[]>([]);
   const [fieldFilters, setFieldFilters] = useState<Record<string, string[]>>({});
   const [dateFilters, setDateFilters] = useState<Record<string, DateRangeFilter>>({});
+  // SOFT exclusion default ("показывать всё, КРОМЕ …"): when the page carries an
+  // exclusion default, rows matching it are hidden until the viewer flips this on.
+  // Reset on entity/page switch so each page's default governs from a clean slate.
+  const [showHidden, setShowHidden] = useState(false);
+  // Setup-mode exclusion editor drafts (admins only). Synced from the page's
+  // stored default; saved together with the inclusion filters from the bar.
+  const [excludeFieldDraft, setExcludeFieldDraft] = useState<Record<string, string[]>>({});
+  const [excludeStatusDraft, setExcludeStatusDraft] = useState<number[]>([]);
   // Page-local field filters (separate from entity-field filters: their keys live in
   // page_record_values, not the record's own valuesJson, so they ride a dedicated
   // pageLocalFilters channel on the query).
@@ -1752,12 +1765,38 @@ export function EntityRecords({
   const baseFilters = selectedView ? (selectedConfig.filters ?? []) : entityDefaultFilters;
   const baseFiltersKey = JSON.stringify(baseFilters);
 
+  // SOFT exclusion default: hide rows matching the page's stored exclusion until
+  // the viewer toggles "Показать скрытые". The exclusion always AND-narrows the
+  // query server-side (independent of the view conjunction), so it can never
+  // reveal rows the view's hard filter hides. Drop entries for fields that no
+  // longer exist on the entity so a deleted field can't break the query.
+  const excludeFieldFilters = useMemo(() => {
+    const raw = defaultQuickFilter?.excludeFieldFilters ?? {};
+    const known = new Set(allFields.filter((f: Field) => f.isActive).map((f: Field) => f.fieldKey));
+    return Object.entries(raw)
+      .filter(([field, vals]) => known.has(field) && Array.isArray(vals) && vals.length > 0)
+      .map(([field, vals]) => ({ field, values: vals }));
+  }, [defaultQuickFilter?.excludeFieldFilters, allFields]);
+  const excludeStatusIds = useMemo(
+    () => (defaultQuickFilter?.excludeStatusIds ?? []).filter((n) => Number.isInteger(n)),
+    [defaultQuickFilter?.excludeStatusIds],
+  );
+  const hasExclusion = excludeFieldFilters.length > 0 || excludeStatusIds.length > 0;
+  // Only send exclusions when they exist AND the viewer hasn't asked to see
+  // hidden rows. Setup mode always shows everything so admins can review.
+  const applyExclusion = hasExclusion && !showHidden && !setupMode;
+  const activeExcludeFilters = applyExclusion && excludeFieldFilters.length > 0 ? excludeFieldFilters : undefined;
+  const activeExcludeStatusIds = applyExclusion && excludeStatusIds.length > 0 ? excludeStatusIds : undefined;
+  const excludeKey = JSON.stringify([activeExcludeFilters, activeExcludeStatusIds]);
+
   const recordQuery: RecordQuery = useMemo(
     () => ({
       filters: [...baseFilters, ...adHocFilters, ...dateFilterConditions],
       filterConjunction: selectedConfig.filterConjunction ?? "and",
       pageLocalFilters: [...pageAdHocFilters, ...pageDateFilterConditions],
       statusIds: statusFilter.length > 0 ? statusFilter : undefined,
+      excludeFilters: activeExcludeFilters,
+      excludeStatusIds: activeExcludeStatusIds,
       sorts: effectiveSorts,
       search: search.trim() || undefined,
       archived,
@@ -1765,7 +1804,7 @@ export function EntityRecords({
       pageSize: PAGE_SIZE,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [baseFiltersKey, selectedConfig.filterConjunction, sortsKey, adHocKey, dateKey, pageAdHocKey, pageDateKey, statusKey, search, archived, page],
+    [baseFiltersKey, selectedConfig.filterConjunction, sortsKey, adHocKey, dateKey, pageAdHocKey, pageDateKey, statusKey, excludeKey, search, archived, page],
   );
 
   // Pivot (Сводная таблица): a view whose configJson.viewType is "pivot" carries a
@@ -1868,6 +1907,11 @@ export function EntityRecords({
           // rows actually shown (a view may be configured with OR logic).
           filterConjunction: selectedConfig.filterConjunction ?? "and",
           statusIds: statusFilter.length > 0 ? statusFilter : undefined,
+          // Co-narrow the option list by the active exclusions (the server skips
+          // the target field's own exclusion so its dropdown still lists every
+          // selectable value). Omitted while "show hidden" is on / setup mode.
+          excludeFilters: activeExcludeFilters,
+          excludeStatusIds: activeExcludeStatusIds,
           search: search.trim() || undefined,
           archived,
         },
@@ -1875,7 +1919,7 @@ export function EntityRecords({
       return res.values ?? [];
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [entityId, adHocKey, dateKey, statusKey, search, archived, baseFiltersKey, selectedConfig.filterConjunction, fetchFilterOptions],
+    [entityId, adHocKey, dateKey, statusKey, excludeKey, search, archived, baseFiltersKey, selectedConfig.filterConjunction, fetchFilterOptions],
   );
 
   const setFieldFilter = useCallback((fieldKey: string, values: string[]) => {
@@ -1972,6 +2016,9 @@ export function EntityRecords({
   const [quickFilterSeeded, setQuickFilterSeeded] = useState(false);
   useEffect(() => {
     setQuickFilterSeeded(false);
+    // Each page's exclusion default governs from a clean slate: don't carry a
+    // prior page's "show hidden" choice across an entity/page switch.
+    setShowHidden(false);
   }, [entityId, pageId]);
   useEffect(() => {
     if (quickFilterSeeded) return;
@@ -1985,6 +2032,10 @@ export function EntityRecords({
     // page's picks in place; clearing here keeps each page's default independent.
     setFieldFilters(seedFields ? { ...seedFields } : {});
     setStatusFilter(seedStatuses ? [...seedStatuses] : []);
+    // Sync the setup-mode exclusion editor drafts from the stored default so an
+    // admin opening setup mode sees (and can amend) the current exclusion.
+    setExcludeFieldDraft(dq?.excludeFieldFilters ? { ...dq.excludeFieldFilters } : {});
+    setExcludeStatusDraft(dq?.excludeStatusIds ? [...dq.excludeStatusIds] : []);
     setPage(1);
     setQuickFilterSeeded(true);
   }, [quickFilterSeeded, defaultQuickFilter]);
@@ -1994,8 +2045,41 @@ export function EntityRecords({
       onSuccess: () => queryClient.invalidateQueries({ queryKey: getListPagesQueryKey() }),
     },
   });
+  // Normalize the exclusion drafts: drop empty value lists so they don't persist.
+  const cleanExcludeFieldDraft = useMemo(() => {
+    const out: Record<string, string[]> = {};
+    for (const [key, vals] of Object.entries(excludeFieldDraft)) {
+      if (Array.isArray(vals) && vals.length > 0) out[key] = vals;
+    }
+    return out;
+  }, [excludeFieldDraft]);
+  // Select-type fields whose CONFIGURED options can be excluded (offered even if
+  // no data row uses them yet — the exclusion default is authored, not sampled).
+  const excludableSelectFields = useMemo(
+    () =>
+      allFields.filter(
+        (f: Field) => f.isActive && f.fieldType === "select" && normalizeSelectOptions(f.optionsJson).length > 0,
+      ),
+    [allFields],
+  );
+  const toggleExcludeStatus = useCallback((id: number) => {
+    setExcludeStatusDraft((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }, []);
+  const toggleExcludeFieldValue = useCallback((fieldKey: string, value: string) => {
+    setExcludeFieldDraft((prev) => {
+      const cur = prev[fieldKey] ?? [];
+      const next = cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value];
+      const out = { ...prev };
+      if (next.length === 0) delete out[fieldKey];
+      else out[fieldKey] = next;
+      return out;
+    });
+  }, []);
+  const hasExclusionDraft =
+    Object.keys(cleanExcludeFieldDraft).length > 0 || excludeStatusDraft.length > 0;
   const saveDefaultQuickFilter = useCallback(() => {
     if (pageId == null) return;
+    const hasExcludeFields = Object.keys(cleanExcludeFieldDraft).length > 0;
     savePageDefaultFilterMutation.mutate(
       {
         id: pageId,
@@ -2003,12 +2087,14 @@ export function EntityRecords({
           defaultQuickFilterJson: {
             fieldFilters: Object.keys(fieldFilters).length > 0 ? fieldFilters : undefined,
             statusIds: statusFilter.length > 0 ? statusFilter : undefined,
+            excludeFieldFilters: hasExcludeFields ? cleanExcludeFieldDraft : undefined,
+            excludeStatusIds: excludeStatusDraft.length > 0 ? excludeStatusDraft : undefined,
           },
         },
       },
       { onSuccess: () => toast({ title: t("records.pageDefaultFilterSaved", "Фильтр по умолчанию сохранён") }) },
     );
-  }, [pageId, fieldFilters, statusFilter, savePageDefaultFilterMutation, toast, t]);
+  }, [pageId, fieldFilters, statusFilter, cleanExcludeFieldDraft, excludeStatusDraft, savePageDefaultFilterMutation, toast, t]);
   const clearDefaultQuickFilter = useCallback(() => {
     if (pageId == null) return;
     savePageDefaultFilterMutation.mutate(
@@ -2019,7 +2105,9 @@ export function EntityRecords({
 
   const hasStoredDefaultQuickFilter = Boolean(
     (defaultQuickFilter?.fieldFilters && Object.keys(defaultQuickFilter.fieldFilters).length > 0) ||
-      (defaultQuickFilter?.statusIds && defaultQuickFilter.statusIds.length > 0),
+      (defaultQuickFilter?.statusIds && defaultQuickFilter.statusIds.length > 0) ||
+      (defaultQuickFilter?.excludeFieldFilters && Object.keys(defaultQuickFilter.excludeFieldFilters).length > 0) ||
+      (defaultQuickFilter?.excludeStatusIds && defaultQuickFilter.excludeStatusIds.length > 0),
   );
   // Human-readable labels for the field filters that WOULD be saved (status is
   // summarized separately). Values are omitted on purpose — user/relation values
@@ -2868,7 +2956,7 @@ export function EntityRecords({
         </div>
       </div>
 
-      {!setupMode && (statuses.length > 0 || filterableFields.length > 0 || filterablePageFields.length > 0) && (
+      {!setupMode && (statuses.length > 0 || filterableFields.length > 0 || filterablePageFields.length > 0 || hasExclusion) && (
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
           <Filter className="hidden sm:block w-4 h-4 text-slate-400 shrink-0" />
           {filterableStatuses.length > 0 && (
@@ -2980,6 +3068,12 @@ export function EntityRecords({
               />
             ),
           )}
+          {hasExclusion && (
+            <label className="flex items-center gap-2 h-9 px-2.5 rounded-md border border-slate-200 bg-white text-sm text-slate-600 cursor-pointer col-span-2 w-full justify-center sm:col-span-1 sm:w-auto">
+              <Checkbox checked={showHidden} onCheckedChange={(v) => { setShowHidden(v === true); setPage(1); }} />
+              <span className="truncate">{t("records.showHidden", "Показать скрытые")}</span>
+            </label>
+          )}
           {hasActiveFilters && (
             <Button
               type="button"
@@ -3033,6 +3127,82 @@ export function EntityRecords({
                   {t("records.pageDefaultFilterStored", "Для страницы уже задан фильтр по умолчанию.")}
                 </div>
               )}
+
+              {/* SOFT exclusion default: hide rows matching these values until the
+                  viewer flips «Показать скрытые» in the bar. Authored from the
+                  field's CONFIGURED options + the full status list (not sampled
+                  from existing rows). Never widens beyond the view's hard filter. */}
+              <div className="rounded-md border border-slate-100 bg-slate-50/60 px-3 py-2.5 space-y-2">
+                <div className="text-sm font-medium text-slate-600">
+                  {t("records.pageExcludeTitle", "Скрывать строки по умолчанию (кроме…)")}
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  {t(
+                    "records.pageExcludeHint",
+                    "Отметьте значения, строки с которыми нужно скрыть при открытии страницы. Пользователь сможет показать их галочкой «Показать скрытые». Скрытие не может показать строки, запрещённые фильтром вида.",
+                  )}
+                </p>
+                {statuses.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-slate-400">{t("records.status", "Статус")}</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {statuses.map((s: Status) => {
+                        const on = excludeStatusDraft.includes(s.id);
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => toggleExcludeStatus(s.id)}
+                            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                              on
+                                ? "border-rose-300 bg-rose-50 text-rose-700"
+                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                            }`}
+                          >
+                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: s.color }} />
+                            <span className="truncate max-w-[10rem]">{ml(s.nameJson)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {excludableSelectFields.map((f: Field) => {
+                  const opts = normalizeSelectOptions(f.optionsJson);
+                  const picked = excludeFieldDraft[f.fieldKey] ?? [];
+                  return (
+                    <div key={f.fieldKey} className="space-y-1">
+                      <div className="text-xs font-medium text-slate-400">{ml(f.nameJson)}</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {opts.map((o) => {
+                          const on = picked.includes(o.value);
+                          return (
+                            <button
+                              key={o.value}
+                              type="button"
+                              onClick={() => toggleExcludeFieldValue(f.fieldKey, o.value)}
+                              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                                on
+                                  ? "border-rose-300 bg-rose-50 text-rose-700"
+                                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                              }`}
+                            >
+                              <span className="truncate max-w-[10rem]">{ml(o.labelJson) || o.value}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+                {hasExclusionDraft && (
+                  <div className="text-xs text-rose-600">
+                    {t("records.pageExcludeSelected", "Будет скрыто значений")}:{" "}
+                    {Object.values(cleanExcludeFieldDraft).reduce((n, v) => n + v.length, 0) + excludeStatusDraft.length}
+                  </div>
+                )}
+              </div>
+
               <div className="flex flex-wrap gap-2 pt-0.5">
                 <Button
                   type="button"
@@ -3041,7 +3211,7 @@ export function EntityRecords({
                   onClick={saveDefaultQuickFilter}
                   disabled={
                     savePageDefaultFilterMutation.isPending ||
-                    (activeQuickFilterFieldLabels.length === 0 && statusFilter.length === 0)
+                    (activeQuickFilterFieldLabels.length === 0 && statusFilter.length === 0 && !hasExclusionDraft)
                   }
                   className="gap-1.5"
                 >
