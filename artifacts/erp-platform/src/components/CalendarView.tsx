@@ -472,7 +472,7 @@ export function CalendarView({
                 style={{ backgroundColor: status.color }}
               />
             )}
-            {t("calendar.statusLabel", "Статус")}: {ml(status.nameJson)}
+            <span className="font-semibold">{t("calendar.statusLabel", "Статус")}:</span> {ml(status.nameJson)}
           </span>
         )}
         {!compact &&
@@ -498,7 +498,7 @@ export function CalendarView({
             }
             return (
               <span key={f.fieldKey} className="block break-words text-[11px] opacity-80">
-                {ml(f.nameJson)}: {renderCellValue(renderField, v, t, userNames, undefined, ml)}
+                <span className="font-semibold">{ml(f.nameJson)}:</span> {renderCellValue(renderField, v, t, userNames, undefined, ml)}
               </span>
             );
           })}
