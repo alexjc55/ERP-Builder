@@ -3791,7 +3791,16 @@ export function EntityRecords({
                           );
                         })}
                         {showStatusColumn && (
-                          <td className="px-4 py-3" style={colWidthStyle("__status__")}>
+                          <td
+                            className="px-4 py-3"
+                            style={{
+                              ...colWidthStyle("__status__"),
+                              ...(status &&
+                              !(editingCell?.recordId === record.id && editingCell?.fieldKey === "__status__")
+                                ? { backgroundColor: `${status.color}20` }
+                                : {}),
+                            }}
+                          >
                             {editingCell?.recordId === record.id && editingCell?.fieldKey === "__status__" ? (
                               <Select
                                 defaultOpen
@@ -3817,8 +3826,8 @@ export function EntityRecords({
                             >
                               {status ? (
                                 <span
-                                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
-                                  style={{ backgroundColor: `${status.color}20`, color: status.color }}
+                                  className="inline-flex items-center gap-1.5 text-xs font-medium"
+                                  style={{ color: status.color }}
                                 >
                                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: status.color }} />
                                   {ml(status.nameJson)}
