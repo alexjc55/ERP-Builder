@@ -50,6 +50,8 @@ import {
   type PageRelatedCandidate,
   type ArchiveFilter,
   type AuditLogEntry,
+  useListEntities,
+  type Entity,
   type EntityRecord,
   type Field,
   type Status,
@@ -2378,6 +2380,11 @@ export function EntityRecords({
   const workflowActiveForRecord = (record: EntityRecord): boolean =>
     transitions.length > 0 && record.statusId != null && !isSuperAdmin;
 
+  // When the entity disables it, the "Без статуса" option is hidden from status
+  // pickers. Still shown when the current value is already null, so the Select
+  // isn't left in a broken (value-with-no-matching-item) state.
+  const allowNoStatus = entity?.allowNoStatus ?? true;
+
   // Statuses a given row may move to, mirroring the server workflow boundary (per-row).
   const allowedStatusesForRecord = (record: EntityRecord): Status[] => {
     const cur = record.statusId ?? null;
@@ -3458,7 +3465,9 @@ export function EntityRecords({
                           <Select value={newRowStatus} onValueChange={setNewRowStatus}>
                             <SelectTrigger className="h-8 w-44 text-sm"><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
+                              {(allowNoStatus || newRowStatus === NO_STATUS) && (
+                                <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
+                              )}
                               {dropHidden(statuses).map((s: Status) => (
                                 <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
                               ))}
@@ -3861,7 +3870,7 @@ export function EntityRecords({
                               >
                                 <SelectTrigger className="h-8 w-44 text-sm"><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                  {!workflowActiveForRecord(record) && (
+                                  {!workflowActiveForRecord(record) && (allowNoStatus || record.statusId == null) && (
                                     <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
                                   )}
                                   {allowedStatusesForRecord(record).map((s: Status) => (
@@ -4020,7 +4029,7 @@ export function EntityRecords({
                     <SelectValue placeholder={t("records.noStatus", "Без статуса")} />
                   </SelectTrigger>
                   <SelectContent>
-                    {!workflowActive && <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>}
+                    {!workflowActive && (allowNoStatus || statusId === NO_STATUS) && <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>}
                     {selectableStatuses.map((s: Status) => (
                       <SelectItem key={s.id} value={String(s.id)}>
                         {ml(s.nameJson)}
@@ -5202,6 +5211,8 @@ function RecordEditModal({
   });
   const { data: fields = [], isLoading: fieldsLoading } = useListEntityFields(entityId);
   const { data: statuses = [] } = useListEntityStatuses(entityId);
+  const { data: entities = [] } = useListEntities();
+  const allowNoStatus = entities.find((e: Entity) => e.id === entityId)?.allowNoStatus ?? true;
   const updateMutation = useUpdateRecord();
   const [form, setForm] = useState<FormState>({});
   const [statusId, setStatusId] = useState<string>(NO_STATUS);
@@ -5297,7 +5308,9 @@ function RecordEditModal({
                     <SelectValue placeholder={t("records.noStatus", "Без статуса")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
+                    {(allowNoStatus || statusId === NO_STATUS) && (
+                      <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
+                    )}
                     {visibleStatuses.map((s: Status) => (
                       <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
                     ))}

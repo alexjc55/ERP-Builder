@@ -7,6 +7,7 @@ import {
   useDeleteStatus,
   useReorderStatuses,
   useListEntities,
+  useUpdateEntity,
   type Status,
   type Entity,
   type MultilingualText,
@@ -115,6 +116,22 @@ export default function EntityStatusesPage() {
     },
   });
 
+  const updateEntityMutation = useUpdateEntity({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["/api/entities"] });
+        queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}`] });
+      },
+      onError: (err) => toast({ title: t("statuses.updateError", "Ошибка обновления"), description: extractError(err), variant: "destructive" }),
+    },
+  });
+
+  const allowNoStatus = entity?.allowNoStatus ?? true;
+  const toggleAllowNoStatus = (checked: boolean) => {
+    if (!entity) return;
+    updateEntityMutation.mutate({ id: entityId, data: { allowNoStatus: checked } });
+  };
+
   const move = (list: Status[], index: number, direction: -1 | 1) => {
     const target = index + direction;
     if (target < 0 || target >= list.length) return;
@@ -213,6 +230,27 @@ export default function EntityStatusesPage() {
           </Button>
         </div>
       </div>
+
+      <Card className="border-slate-200 shadow-sm">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label htmlFor="allow-no-status" className="text-sm font-medium text-slate-700">
+                {t("statuses.allowNoStatus", "Разрешить вариант «Без статуса»")}
+              </Label>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {t("statuses.allowNoStatusHint", "Если выключено, вариант «Без статуса» не будет показываться при выборе статуса записи.")}
+              </p>
+            </div>
+            <Switch
+              id="allow-no-status"
+              checked={allowNoStatus}
+              onCheckedChange={toggleAllowNoStatus}
+              disabled={!entity || updateEntityMutation.isPending}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="border-slate-200 shadow-sm">
         <CardContent className="p-0">

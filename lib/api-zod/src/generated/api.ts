@@ -5785,6 +5785,7 @@ export const ListEntitiesResponseItem = zod.object({
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot.'),
   "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
+  "allowNoStatus": zod.boolean().optional().describe('When false, the \"Без статуса\" option is hidden from the record status pickers for this entity.'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -5797,6 +5798,7 @@ export const ListEntitiesResponse = zod.array(ListEntitiesResponseItem)
  * @summary Create a new entity
  */
 export const createEntityBodyDefaultSortJsonItemDirectionDefault = `asc`;
+export const createEntityBodyAllowNoStatusDefault = true;
 export const createEntityBodyIsActiveDefault = true;
 
 export const CreateEntityBody = zod.object({
@@ -5870,6 +5872,7 @@ export const CreateEntityBody = zod.object({
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot config for the records page when no view is selected. Null = no default pivot.'),
   "pivotEnabled": zod.boolean().optional(),
+  "allowNoStatus": zod.boolean().default(createEntityBodyAllowNoStatusDefault),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createEntityBodyIsActiveDefault)
 })
@@ -5956,6 +5959,7 @@ export const GetEntityResponse = zod.object({
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot.'),
   "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
+  "allowNoStatus": zod.boolean().optional().describe('When false, the \"Без статуса\" option is hidden from the record status pickers for this entity.'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -6043,6 +6047,7 @@ export const UpdateEntityBody = zod.object({
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot config for the records page when no view is selected. Null = no default pivot.'),
   "pivotEnabled": zod.boolean().optional(),
+  "allowNoStatus": zod.boolean().optional(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
@@ -6121,6 +6126,7 @@ export const UpdateEntityResponse = zod.object({
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot.'),
   "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
+  "allowNoStatus": zod.boolean().optional().describe('When false, the \"Без статуса\" option is hidden from the record status pickers for this entity.'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),

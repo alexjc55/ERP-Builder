@@ -180,6 +180,7 @@ router.put("/entities/:id", requireAuth, requireAdmin("entities"), async (req, r
   if (body.defaultFilterJson != null) updateData.defaultFilterJson = body.defaultFilterJson;
   if (body.defaultPivotJson !== undefined) updateData.defaultPivotJson = body.defaultPivotJson;
   if (body.pivotEnabled != null) updateData.pivotEnabled = body.pivotEnabled;
+  if (body.allowNoStatus != null) updateData.allowNoStatus = body.allowNoStatus;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
   if (body.isActive != null) updateData.isActive = body.isActive;
 

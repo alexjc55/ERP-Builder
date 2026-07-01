@@ -22,6 +22,7 @@ export interface EntityInput {
   /** Default pivot config for the records page when no view is selected. Null = no default pivot. */
   defaultPivotJson?: PivotConfig | null;
   pivotEnabled?: boolean;
+  allowNoStatus?: boolean;
   sortOrder?: number;
   isActive?: boolean;
 }

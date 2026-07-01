@@ -4911,6 +4911,9 @@ components:
         pivotEnabled:
           type: boolean
           description: Enables the "Сводная таблица" (pivot) report mode for this entity's records page.
+        allowNoStatus:
+          type: boolean
+          description: When false, the "Без статуса" option is hidden from the record status pickers for this entity.
         sortOrder:
           type: integer
         isActive:
@@ -4951,6 +4954,9 @@ components:
             - type: "null"
         pivotEnabled:
           type: boolean
+        allowNoStatus:
+          type: boolean
+          default: true
         sortOrder:
           type: integer
         isActive:
@@ -4984,6 +4990,8 @@ components:
             - $ref: "#/components/schemas/PivotConfig"
             - type: "null"
         pivotEnabled:
+          type: boolean
+        allowNoStatus:
           type: boolean
         sortOrder:
           type: integer

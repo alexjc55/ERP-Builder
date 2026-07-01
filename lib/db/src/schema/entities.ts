@@ -17,6 +17,9 @@ export const entitiesTable = pgTable("entities", {
   // Enables the per-entity "Сводная таблица" (pivot) report mode on the records
   // page. Off by default; admins opt in per entity.
   pivotEnabled: boolean("pivot_enabled").notNull().default(false),
+  // When false, the "Без статуса" (no status) option is hidden from the record
+  // status pickers for this entity. On by default to preserve existing behavior.
+  allowNoStatus: boolean("allow_no_status").notNull().default(true),
   // Default pivot (Сводная таблица) config for the records page when no view is
   // selected. Same shape as a view's configJson.pivot (PivotConfig). Null = the
   // default view offers no pivot.

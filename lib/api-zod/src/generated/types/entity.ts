@@ -25,6 +25,8 @@ export interface Entity {
   defaultPivotJson?: PivotConfig | null;
   /** Enables the "Сводная таблица" (pivot) report mode for this entity's records page. */
   pivotEnabled?: boolean;
+  /** When false, the "Без статуса" option is hidden from the record status pickers for this entity. */
+  allowNoStatus?: boolean;
   sortOrder: number;
   isActive: boolean;
   createdAt: Date;
