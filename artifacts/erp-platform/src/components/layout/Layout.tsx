@@ -72,11 +72,11 @@ function SidebarItem({
           className={cn(
             "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
             "text-slate-300 hover:bg-slate-700/60 hover:text-white",
-            depth > 0 && "pl-6"
+            depth > 0 && "ps-6"
           )}
         >
           <IconComp className="w-4 h-4 text-slate-400 shrink-0" />
-          <span className="flex-1 text-left">{name}</span>
+          <span className="flex-1 text-start">{name}</span>
           {expanded ? (
             <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
           ) : (
@@ -95,13 +95,13 @@ function SidebarItem({
           "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
           depth === 0
             ? "text-slate-200 hover:bg-slate-700/60 hover:text-white"
-            : "text-slate-400 hover:bg-slate-700/60 hover:text-white pl-6",
+            : "text-slate-400 hover:bg-slate-700/60 hover:text-white ps-6",
           isActive && "bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 hover:text-blue-300"
         )}
       >
         <IconComp className={cn("w-4 h-4 shrink-0", isActive ? "text-blue-400" : "text-slate-400")} />
         <span>{name}</span>
-        {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-400" />}
+        {isActive && <div className="ms-auto w-1.5 h-1.5 rounded-full bg-blue-400" />}
       </a>
     </Link>
   );

@@ -30,6 +30,17 @@ case: the drag handle must sit on the column's logical END edge (`right` in LTR,
 new drag/resize/swipe affordances, account for both the handle side and the delta
 sign in RTL.
 
+## RTL: physical Tailwind classes silently break mirroring
+
+Static physical-direction utilities (`text-left`/`text-right`, `pl-*`/`pr-*`,
+`ml-auto`/`mr-auto`, and inline `left`/`right`) do NOT flip under `dir="rtl"`, so
+an element stays pinned to the wrong edge while everything around it mirrors. Seen
+repeatedly: a sidebar menu-group header stuck left in Hebrew (`text-left`), the
+calendar card border/alignment, the records search icon. Always use logical
+equivalents (`text-start`/`text-end`, `ps-*`/`pe-*`, `ms-auto`/`me-auto`,
+`border-s`/`border-e`, `borderInlineStart`). When touching any layout, grep the
+component for physical classes before assuming RTL "just works".
+
 ## Radix RTL: DirectionProvider AND a single react-direction copy
 
 Radix UI primitives (Select, Dropdown, Popover, Tooltip, etc.) read text
