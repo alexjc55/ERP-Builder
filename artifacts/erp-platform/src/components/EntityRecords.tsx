@@ -3877,10 +3877,9 @@ export function EntityRecords({
                             >
                               {status ? (
                                 <span
-                                  className="inline-flex items-center gap-1.5 text-xs font-medium"
+                                  className="inline-flex items-center font-medium"
                                   style={{ color: readableStatusTextColor(status.color) }}
                                 >
-                                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: status.color }} />
                                   {ml(status.nameJson)}
                                 </span>
                               ) : (
