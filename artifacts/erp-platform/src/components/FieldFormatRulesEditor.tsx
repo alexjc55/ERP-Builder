@@ -258,12 +258,17 @@ export function FieldFormatRulesEditor({
         </Select>
       );
     }
-    if (fieldType === "select" && options.length > 0) {
+    // Only options with a real value are selectable. Blank rows still being
+    // typed in the SelectOptionsEditor arrive here as { value: "" }; rendering
+    // them would hand Radix an empty <SelectItem value=""> (which throws) and,
+    // with two blanks, duplicate empty React keys.
+    const selectableOptions = fieldType === "select" ? options.filter((o) => o.value.trim() !== "") : [];
+    if (fieldType === "select" && selectableOptions.length > 0) {
       return (
-        <Select value={rule.value || options[0]!.value} onValueChange={(v) => update(idx, { value: v })}>
+        <Select value={rule.value || selectableOptions[0]!.value} onValueChange={(v) => update(idx, { value: v })}>
           <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
           <SelectContent>
-            {options.map((o) => (
+            {selectableOptions.map((o) => (
               <SelectItem key={o.value} value={o.value}>{ml(o.labelJson) || o.value}</SelectItem>
             ))}
           </SelectContent>
