@@ -25,6 +25,10 @@ import {
 
 export type CalendarMode = "month" | "week" | "day" | "agenda";
 
+/** Sentinel card-field key that renders the record's STATUS on the plaque (status
+ * is not an entity field, so it can't be selected by fieldKey). */
+export const CALENDAR_STATUS_KEY = "__status__";
+
 /** Base records-query state shared with the table (everything except the date window). */
 export type CalendarBaseQuery = {
   filters: FilterCondition[];
@@ -427,15 +431,27 @@ export function CalendarView({
     return anchor.toLocaleDateString(locale, { month: "long", year: "numeric" });
   }, [mode, anchor, windowStart, locale]);
 
+  // Plaque data fields, ordered to MATCH the table (by field sortOrder) rather
+  // than the checkbox pick order. The status sentinel is handled separately.
   const cardFields = useMemo(
-    () => (config.cardFieldKeys ?? []).map((k) => fieldByKey.get(k)).filter((f): f is Field => !!f),
+    () =>
+      (config.cardFieldKeys ?? [])
+        .filter((k) => k !== CALENDAR_STATUS_KEY)
+        .map((k) => fieldByKey.get(k))
+        .filter((f): f is Field => !!f)
+        .sort((a, b) => a.sortOrder - b.sortOrder),
     [config.cardFieldKeys, fieldByKey],
   );
+  const showStatusOnCard = (config.cardFieldKeys ?? []).includes(CALENDAR_STATUS_KEY);
 
   const renderChip = (ev: CalendarEvent, key: string, compact: boolean) => {
+    // When coloring by status/field we tint the plaque background + left border,
+    // but keep the TEXT dark so it stays readable (a light-tinted bg + same-hue
+    // text was nearly invisible).
     const style = ev.color
-      ? { backgroundColor: `${ev.color}20`, color: ev.color, borderLeft: `3px solid ${ev.color}` }
+      ? { backgroundColor: `${ev.color}20`, color: "#1e293b", borderLeft: `3px solid ${ev.color}` }
       : undefined;
+    const status = ev.record.statusId != null ? statusById.get(ev.record.statusId) : undefined;
     return (
       <button
         key={key}
@@ -448,6 +464,17 @@ export function CalendarView({
         title={ev.title}
       >
         <span className={`block font-medium ${compact ? "truncate" : "break-words"}`}>{ev.title}</span>
+        {!compact && showStatusOnCard && status && (
+          <span className="flex items-center gap-1 break-words text-[11px] opacity-80">
+            {status.color && (
+              <span
+                className="inline-block h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: status.color }}
+              />
+            )}
+            {t("calendar.statusLabel", "Статус")}: {ml(status.nameJson)}
+          </span>
+        )}
         {!compact &&
           cardFields.map((f) => {
             const isRel = f.fieldType === "relation" || f.fieldType === "lookup";

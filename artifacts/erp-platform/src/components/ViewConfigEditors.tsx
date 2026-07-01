@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Plus, Filter, X, ChevronDown, Check, CalendarDays } from "lucide-react";
+import { CALENDAR_STATUS_KEY } from "@/components/CalendarView";
 import { ValueChecklistPicker } from "@/components/FilterValuePicker";
 import { normalizeSelectOptions, type SelectOption } from "@/lib/selectOptions";
 
@@ -674,7 +675,13 @@ export function CalendarConfigEditor({
                 {cardKeys.length === 0 ? (
                   <span className="text-slate-400">{t("calendar.cardFieldsNone", "только заголовок")}</span>
                 ) : (
-                  cardKeys.map((k) => ml(fields.find((f) => f.fieldKey === k)?.nameJson) || k).join(", ")
+                  cardKeys
+                    .map((k) =>
+                      k === CALENDAR_STATUS_KEY
+                        ? t("calendar.statusLabel", "Статус")
+                        : ml(fields.find((f) => f.fieldKey === k)?.nameJson) || k,
+                    )
+                    .join(", ")
                 )}
               </span>
               <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-60" />
@@ -682,26 +689,40 @@ export function CalendarConfigEditor({
           </PopoverTrigger>
           <PopoverContent align="start" className="w-72 p-0">
             <div className="max-h-60 overflow-y-auto p-1">
-              {fields.length === 0 ? (
-                <p className="px-2 py-1.5 text-xs text-slate-400">{t("views.noOptions", "Нет вариантов")}</p>
-              ) : (
-                fields.map((f) => {
-                  const isSel = cardKeys.includes(f.fieldKey);
-                  return (
+              {(() => {
+                const statusSel = cardKeys.includes(CALENDAR_STATUS_KEY);
+                return (
+                  <>
                     <button
-                      key={f.fieldKey}
+                      key={CALENDAR_STATUS_KEY}
                       type="button"
-                      onClick={() => toggleCardField(f.fieldKey)}
+                      onClick={() => toggleCardField(CALENDAR_STATUS_KEY)}
                       className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-slate-100"
                     >
-                      <span className={`flex h-4 w-4 items-center justify-center rounded border ${isSel ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300"}`}>
-                        {isSel && <Check className="w-3 h-3" />}
+                      <span className={`flex h-4 w-4 items-center justify-center rounded border ${statusSel ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300"}`}>
+                        {statusSel && <Check className="w-3 h-3" />}
                       </span>
-                      <span className="truncate">{ml(f.nameJson)}</span>
+                      <span className="truncate">{t("calendar.statusLabel", "Статус")}</span>
                     </button>
-                  );
-                })
-              )}
+                    {fields.map((f) => {
+                      const isSel = cardKeys.includes(f.fieldKey);
+                      return (
+                        <button
+                          key={f.fieldKey}
+                          type="button"
+                          onClick={() => toggleCardField(f.fieldKey)}
+                          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-slate-100"
+                        >
+                          <span className={`flex h-4 w-4 items-center justify-center rounded border ${isSel ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300"}`}>
+                            {isSel && <Check className="w-3 h-3" />}
+                          </span>
+                          <span className="truncate">{ml(f.nameJson)}</span>
+                        </button>
+                      );
+                    })}
+                  </>
+                );
+              })()}
             </div>
           </PopoverContent>
         </Popover>
