@@ -1645,6 +1645,7 @@ export function EntityRecords({
   // exclusion default, rows matching it are hidden until the viewer flips this on.
   // Reset on entity/page switch so each page's default governs from a clean slate.
   const [showHidden, setShowHidden] = useState(false);
+  const [pageFilterSettingsOpen, setPageFilterSettingsOpen] = useState(false);
   // Setup-mode exclusion editor drafts (admins only). Synced from the page's
   // stored default; saved together with the inclusion filters from the bar.
   const [excludeFieldDraft, setExcludeFieldDraft] = useState<Record<string, string[]>>({});
@@ -2019,6 +2020,9 @@ export function EntityRecords({
     // Each page's exclusion default governs from a clean slate: don't carry a
     // prior page's "show hidden" choice across an entity/page switch.
     setShowHidden(false);
+    // The page default-filter settings panel is collapsed by default (it's not
+    // needed on most pages); re-collapse on every entity/page switch.
+    setPageFilterSettingsOpen(false);
   }, [entityId, pageId]);
   useEffect(() => {
     if (quickFilterSeeded) return;
@@ -3097,10 +3101,23 @@ export function EntityRecords({
           </div>
           {pageId != null && canAdmin("pages") && (
             <div className="rounded-md border border-slate-200 bg-white px-3 py-3 space-y-2">
-              <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+              <button
+                type="button"
+                onClick={() => setPageFilterSettingsOpen((v) => !v)}
+                className="flex w-full items-center gap-2 text-sm font-medium text-slate-700"
+                aria-expanded={pageFilterSettingsOpen}
+              >
                 <Filter className="w-4 h-4 text-slate-400 shrink-0" />
-                {t("records.pageDefaultFilterTitle", "Фильтр по умолчанию для этой страницы")}
-              </div>
+                <span className="text-left">{t("records.pageDefaultFilterTitle", "Фильтр по умолчанию для этой страницы")}</span>
+                {(hasStoredDefaultQuickFilter || hasExclusion) && (
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                )}
+                <ChevronDown
+                  className={`w-4 h-4 text-slate-400 shrink-0 ml-auto transition-transform ${pageFilterSettingsOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+              {pageFilterSettingsOpen && (
+              <>
               <p className="text-xs text-slate-500 leading-relaxed">
                 {t(
                   "records.pageDefaultFilterHint",
@@ -3228,6 +3245,8 @@ export function EntityRecords({
                   {t("records.pageDefaultFilterClear", "Очистить фильтр по умолчанию")}
                 </Button>
               </div>
+              </>
+              )}
             </div>
           )}
           <div className="flex flex-wrap items-center gap-2">

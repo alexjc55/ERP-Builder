@@ -47,6 +47,9 @@ status quick-filter, which AND on top of `baseFilters` in the records query.
   pickers (admin sets filters in normal mode, then saves from setup mode). The
   filter bar is hidden in setup mode, so the panel shows a readable summary of
   what will be saved.
+- **The setup panel is COLLAPSED by default** (it's irrelevant on most pages) and
+  re-collapses on every `[entityId, pageId]` switch; the title row is a toggle with
+  a chevron + a green dot when the page already has a stored default or exclusion.
 - Persistence: `defaultQuickFilterJson` is in the pages PUT update allowlist and
   in the create insert (create uses `parsed.data` wholesale).
 
