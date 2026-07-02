@@ -1503,12 +1503,16 @@ type TableDraft = {
   statusIds: number[];
   limit: number;
   relatedColumns: TableRelatedColumnDraft[];
+  // Page-local extra columns: a page of the same entity + its field keys.
+  pageId: number | null;
+  pageFieldKeys: string[];
 };
 
 type WidgetTypeChoice = "metric" | "formula" | "chart" | "table" | "notes" | "pivot";
 
-// Pivot dimension draft (dashboard widget editor: entity field or record status).
-type PivotDraftDim = { source: "entity" | "status"; fieldKey: string; datePeriod: PivotDimensionDatePeriod };
+// Pivot dimension draft (dashboard widget editor: entity field, page-local field
+// or record status).
+type PivotDraftDim = { source: "entity" | "page" | "status"; fieldKey: string; datePeriod: PivotDimensionDatePeriod };
 type PivotDraft = {
   entityId: number | null;
   rows: PivotDraftDim;
@@ -1516,6 +1520,8 @@ type PivotDraft = {
   cols: PivotDraftDim;
   measures: DraftMeasure[];
   statusIds: number[];
+  // Page context enabling page-local dims/measures (a page of the same entity).
+  pageId: number | null;
 };
 
 // Field types eligible as a pivot grouping dimension (mirrors entity-views).
@@ -1533,14 +1539,15 @@ function emptyPivotDraft(): PivotDraft {
     cols: { source: "status", fieldKey: "", datePeriod: null },
     measures: [newDraftMeasure()],
     statusIds: [],
+    pageId: null,
   };
 }
 
-function pivotDraftFromConfig(spec: { entityId: number; pivot: PivotConfig; statusIds?: number[] | null } | null | undefined): PivotDraft {
+function pivotDraftFromConfig(spec: { entityId: number; pivot: PivotConfig; statusIds?: number[] | null; pageId?: number | null } | null | undefined): PivotDraft {
   if (!spec) return emptyPivotDraft();
   const dimToDraft = (d: PivotDimension | undefined): PivotDraftDim =>
-    d && d.source === "entity"
-      ? { source: "entity", fieldKey: d.fieldKey ?? "", datePeriod: d.datePeriod ?? null }
+    d && (d.source === "entity" || d.source === "page")
+      ? { source: d.source, fieldKey: d.fieldKey ?? "", datePeriod: d.datePeriod ?? null }
       : { source: "status", fieldKey: "", datePeriod: null };
   return {
     entityId: spec.entityId,
@@ -1549,6 +1556,7 @@ function pivotDraftFromConfig(spec: { entityId: number; pivot: PivotConfig; stat
     cols: spec.pivot.cols ? dimToDraft(spec.pivot.cols) : { source: "status", fieldKey: "", datePeriod: null },
     measures: measuresFromConfig(spec.pivot),
     statusIds: spec.statusIds ?? [],
+    pageId: spec.pageId ?? null,
   };
 }
 
@@ -1673,6 +1681,8 @@ function WidgetEditorDialog({
       statusIds: tb?.statusIds ?? [],
       limit: tb?.limit ?? 10,
       relatedColumns: (tb?.relatedColumns ?? []).map((rc) => ({ relationId: rc.relationId, relatedFieldKey: rc.relatedFieldKey })),
+      pageId: tb?.pageId ?? null,
+      pageFieldKeys: tb?.pageFieldKeys ?? [],
     };
   });
 
@@ -1840,12 +1850,12 @@ function WidgetEditorDialog({
         toast({ title: t("dash.pivotNeedsEntity", "Выберите сущность для сводной таблицы"), variant: "destructive" });
         return null;
       }
-      if (pivot.rows.source === "entity" && !pivot.rows.fieldKey) {
+      if (pivot.rows.source !== "status" && !pivot.rows.fieldKey) {
         toast({ title: t("dash.pivotNeedsRows", "Выберите поле для строк сводной таблицы"), variant: "destructive" });
         return null;
       }
       const pvMulti = pivot.measures.length > 1;
-      if (pivot.colsOn && !pvMulti && pivot.cols.source === "entity" && !pivot.cols.fieldKey) {
+      if (pivot.colsOn && !pvMulti && pivot.cols.source !== "status" && !pivot.cols.fieldKey) {
         toast({ title: t("dash.pivotNeedsCols", "Выберите поле для столбцов сводной таблицы"), variant: "destructive" });
         return null;
       }
@@ -1854,13 +1864,22 @@ function WidgetEditorDialog({
         toast({ title: builtMeasures.error, variant: "destructive" });
         return null;
       }
+      // Any page-local dim/measure requires the page context.
+      const usesPage =
+        pivot.rows.source === "page" ||
+        (pivot.colsOn && !pvMulti && pivot.cols.source === "page") ||
+        pivot.measures.some((m) => m.agg === "sum" && m.source === "page");
+      if (usesPage && pivot.pageId == null) {
+        toast({ title: t("dash.pivotNeedsPage", "Выберите страницу для полей страницы"), variant: "destructive" });
+        return null;
+      }
       // The PivotEditor keeps datePeriod non-null only for date-like dims, so the
       // draft value can be trusted here without re-resolving the field type.
       const draftToDim = (d: PivotDraftDim): PivotDimension =>
         d.source === "status"
           ? { source: "status" as PivotDimensionSource }
           : {
-              source: "entity" as PivotDimensionSource,
+              source: d.source as PivotDimensionSource,
               fieldKey: d.fieldKey,
               datePeriod: d.datePeriod,
             };
@@ -1877,6 +1896,7 @@ function WidgetEditorDialog({
             entityId: pivot.entityId,
             pivot: pivotConfig,
             statusIds: pivot.statusIds.length > 0 ? pivot.statusIds : null,
+            pageId: usesPage ? pivot.pageId : null,
           },
         },
       };
@@ -1940,8 +1960,12 @@ function WidgetEditorDialog({
         toast({ title: t("dash.tableNeedsEntity", "Выберите сущность для таблицы"), variant: "destructive" });
         return null;
       }
-      if (table.fieldKeys.length === 0 && table.relatedColumns.length === 0) {
+      if (table.fieldKeys.length === 0 && table.relatedColumns.length === 0 && table.pageFieldKeys.length === 0) {
         toast({ title: t("dash.tableNeedsColumns", "Выберите хотя бы одну колонку"), variant: "destructive" });
+        return null;
+      }
+      if (table.pageFieldKeys.length > 0 && table.pageId == null) {
+        toast({ title: t("dash.tableNeedsPage", "Выберите страницу для полей страницы"), variant: "destructive" });
         return null;
       }
       return {
@@ -1956,6 +1980,8 @@ function WidgetEditorDialog({
             statusIds: table.statusIds.length > 0 ? table.statusIds : null,
             limit: table.limit,
             relatedColumns: table.relatedColumns.length > 0 ? table.relatedColumns : null,
+            pageId: table.pageFieldKeys.length > 0 ? table.pageId : null,
+            pageFieldKeys: table.pageFieldKeys.length > 0 ? table.pageFieldKeys : null,
           },
         },
       };
@@ -2231,6 +2257,7 @@ function PivotWidgetDimEditor({
   dim,
   onChange,
   dimFields,
+  pageDimFields = [],
   ml,
   t,
 }: {
@@ -2238,12 +2265,20 @@ function PivotWidgetDimEditor({
   dim: PivotDraftDim;
   onChange: (d: PivotDraftDim) => void;
   dimFields: Field[];
+  /** Page-local fields offered as dims (namespaced "p:" in the select value). */
+  pageDimFields?: { fieldKey: string; nameJson: unknown; fieldType: string }[];
   ml: (v: unknown) => string;
   t: (key: string, fallback: string) => string;
 }) {
-  const selectedField = dim.source === "entity" ? dimFields.find((f) => f.fieldKey === dim.fieldKey) : undefined;
+  const selectedField =
+    dim.source === "entity"
+      ? dimFields.find((f) => f.fieldKey === dim.fieldKey)
+      : dim.source === "page"
+        ? pageDimFields.find((f) => f.fieldKey === dim.fieldKey)
+        : undefined;
   const isDate = selectedField ? isPivotDateType(selectedField.fieldType) : false;
-  const selectValue = dim.source === "status" ? "__status__" : dim.fieldKey;
+  const selectValue =
+    dim.source === "status" ? "__status__" : dim.source === "page" ? (dim.fieldKey ? `p:${dim.fieldKey}` : "") : dim.fieldKey;
   return (
     <div className="space-y-1.5">
       <p className="text-xs text-slate-400">{label}</p>
@@ -2253,6 +2288,10 @@ function PivotWidgetDimEditor({
           onValueChange={(v) => {
             if (v === "__status__") {
               onChange({ source: "status", fieldKey: "", datePeriod: null });
+            } else if (v.startsWith("p:")) {
+              const key = v.slice(2);
+              const f = pageDimFields.find((x) => x.fieldKey === key);
+              onChange({ source: "page", fieldKey: key, datePeriod: f && isPivotDateType(f.fieldType) ? (dim.datePeriod ?? "month") : null });
             } else {
               const f = dimFields.find((x) => x.fieldKey === v);
               onChange({ source: "entity", fieldKey: v, datePeriod: f && isPivotDateType(f.fieldType) ? (dim.datePeriod ?? "month") : null });
@@ -2264,6 +2303,11 @@ function PivotWidgetDimEditor({
             <SelectItem value="__status__">{t("pivot.dimStatus", "Статус записи")}</SelectItem>
             {dimFields.map((f) => (
               <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson)}</SelectItem>
+            ))}
+            {pageDimFields.map((f) => (
+              <SelectItem key={`p:${f.fieldKey}`} value={`p:${f.fieldKey}`}>
+                {ml(f.nameJson)} · {t("pivot.pageFieldSuffix", "поле страницы")}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -2305,7 +2349,41 @@ function PivotEditor({
   const activeFields = fields.filter((f: Field) => f.isActive);
   const dimFields = activeFields.filter((f: Field) => f.pivotEnabled && PIVOT_DIM_TYPES.has(f.fieldType));
   const sumFields = activeFields.filter((f: Field) => f.pivotEnabled && f.fieldType === "number");
-  const pivotEnabledEntity = entities.find((e) => e.id === pivot.entityId)?.pivotEnabled ?? false;
+  const selectedEntity = entities.find((e) => e.id === pivot.entityId);
+  const pivotEnabledEntity = selectedEntity?.pivotEnabled ?? false;
+
+  // Page context: only pages of THIS entity qualify (its bound page or a mirror
+  // page) — mirrors the server-side pageId validation.
+  const { data: pages = [] } = useListPages();
+  const entityPages = pages.filter(
+    (p) => p.isActive && (p.mirrorEntityId === pivot.entityId || p.id === selectedEntity?.pageId),
+  );
+  const { data: pageFieldsRaw = [] } = useListPageFields(pivot.pageId ?? 0, {
+    query: { enabled: pivot.pageId != null, queryKey: getListPageFieldsQueryKey(pivot.pageId ?? 0) },
+  });
+  // Same opt-in gates as the server: active + pivotEnabled; dims exclude
+  // relation/lookup (page-local fields never carry them, guarded anyway).
+  const activePivotPageFields = pageFieldsRaw.filter((f: PageField) => f.isActive !== false && f.pivotEnabled);
+  const pageDimFields = activePivotPageFields
+    .filter((f: PageField) => PIVOT_DIM_TYPES.has(f.fieldType) && f.fieldType !== "relation" && f.fieldType !== "lookup")
+    .map((f: PageField) => ({ fieldKey: f.fieldKey, nameJson: f.nameJson, fieldType: f.fieldType }));
+  const pageSumFields = activePivotPageFields
+    .filter((f: PageField) => f.fieldType === "number")
+    .map((f: PageField) => ({ fieldKey: f.fieldKey, nameJson: f.nameJson as MultilingualText, source: "page" as const }));
+
+  // Clear page-sourced dims/measures when the page context is dropped/changed.
+  const setPageContext = (pid: number | null) => {
+    const resetDim = (d: PivotDraftDim): PivotDraftDim =>
+      d.source === "page" ? { source: "status", fieldKey: "", datePeriod: null } : d;
+    onChange({
+      pageId: pid,
+      rows: resetDim(pivot.rows),
+      cols: resetDim(pivot.cols),
+      measures: pivot.measures.map((m) =>
+        m.agg === "sum" && m.source === "page" ? { ...m, fieldKey: "", source: "entity" as const } : m,
+      ),
+    });
+  };
 
   const toggleStatus = (sid: number) => {
     const next = pivot.statusIds.includes(sid)
@@ -2329,6 +2407,7 @@ function PivotEditor({
               cols: { source: "status", fieldKey: "", datePeriod: null },
               measures: [newDraftMeasure()],
               statusIds: [],
+              pageId: null,
             })
           }
         >
@@ -2340,6 +2419,24 @@ function PivotEditor({
           </SelectContent>
         </Select>
       </div>
+
+      {pivot.entityId != null && pivotEnabledEntity && entityPages.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-xs text-slate-400">{t("dash.pivotPageContext", "Страница (для полей страницы)")}</p>
+          <Select
+            value={pivot.pageId != null ? String(pivot.pageId) : "__none__"}
+            onValueChange={(v) => setPageContext(v === "__none__" ? null : Number(v))}
+          >
+            <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.pivotPageNone", "Без страницы")} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">{t("dash.pivotPageNone", "Без страницы")}</SelectItem>
+              {entityPages.map((p) => (
+                <SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {pivot.entityId != null && !pivotEnabledEntity && (
         <p className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-700">
@@ -2354,6 +2451,7 @@ function PivotEditor({
             dim={pivot.rows}
             onChange={(d) => onChange({ rows: d })}
             dimFields={dimFields}
+            pageDimFields={pivot.pageId != null ? pageDimFields : []}
             ml={ml}
             t={t}
           />
@@ -2369,6 +2467,7 @@ function PivotEditor({
                   dim={pivot.cols}
                   onChange={(d) => onChange({ cols: d })}
                   dimFields={dimFields}
+                  pageDimFields={pivot.pageId != null ? pageDimFields : []}
                   ml={ml}
                   t={t}
                 />
@@ -2378,7 +2477,10 @@ function PivotEditor({
           <PivotMeasuresEditor
             measures={pivot.measures}
             onChange={(next) => onChange({ measures: next })}
-            sumFields={sumFields.map((f: Field) => ({ fieldKey: f.fieldKey, nameJson: f.nameJson }))}
+            sumFields={[
+              ...sumFields.map((f: Field) => ({ fieldKey: f.fieldKey, nameJson: f.nameJson })),
+              ...(pivot.pageId != null ? pageSumFields : []),
+            ]}
             formulaRefs={sumFields.map((f: Field) => ({ key: f.fieldKey, label: ml(f.nameJson) }))}
             ml={ml}
             t={t}
@@ -2657,6 +2759,25 @@ function TableEditor({
   });
   const relations = relationOptions?.options ?? [];
 
+  // Page-local columns: only pages of THIS entity qualify (bound page or a mirror
+  // page) — mirrors the server-side pageId validation.
+  const { data: pages = [] } = useListPages();
+  const selectedEntity = entities.find((e) => e.id === table.entityId);
+  const entityPages = pages.filter(
+    (p) => p.isActive && (p.mirrorEntityId === table.entityId || p.id === selectedEntity?.pageId),
+  );
+  const { data: tablePageFields = [] } = useListPageFields(table.pageId ?? 0, {
+    query: { enabled: table.pageId != null, queryKey: getListPageFieldsQueryKey(table.pageId ?? 0) },
+  });
+  const activeTablePageFields = tablePageFields.filter((f: PageField) => f.isActive !== false);
+
+  const togglePageColumn = (key: string) => {
+    const next = table.pageFieldKeys.includes(key)
+      ? table.pageFieldKeys.filter((k) => k !== key)
+      : [...table.pageFieldKeys, key];
+    onChange({ pageFieldKeys: next });
+  };
+
   const toggleColumn = (key: string) => {
     const next = table.fieldKeys.includes(key)
       ? table.fieldKeys.filter((k) => k !== key)
@@ -2689,7 +2810,7 @@ function TableEditor({
         <p className="text-xs text-slate-400">{t("dash.selectEntity", "Сущность")}</p>
         <Select
           value={table.entityId != null ? String(table.entityId) : ""}
-          onValueChange={(v) => onChange({ entityId: Number(v), fieldKeys: [], statusIds: [], relatedColumns: [] })}
+          onValueChange={(v) => onChange({ entityId: Number(v), fieldKeys: [], statusIds: [], relatedColumns: [], pageId: null, pageFieldKeys: [] })}
         >
           <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectEntity", "Сущность")} /></SelectTrigger>
           <SelectContent>
@@ -2721,6 +2842,40 @@ function TableEditor({
           </div>
         )}
       </div>
+
+      {table.entityId != null && entityPages.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-xs text-slate-400">{t("dash.tablePageColumns", "Поля страницы")}</p>
+          <Select
+            value={table.pageId != null ? String(table.pageId) : "__none__"}
+            onValueChange={(v) =>
+              onChange({ pageId: v === "__none__" ? null : Number(v), pageFieldKeys: [] })
+            }
+          >
+            <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.pivotPageNone", "Без страницы")} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">{t("dash.pivotPageNone", "Без страницы")}</SelectItem>
+              {entityPages.map((p) => (
+                <SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {table.pageId != null && (
+            activeTablePageFields.length === 0 ? (
+              <p className="text-xs text-slate-400">{t("dash.noFields", "Нет полей")}</p>
+            ) : (
+              <div className="space-y-1 max-h-44 overflow-auto rounded-md border border-slate-100 p-2">
+                {activeTablePageFields.map((f: PageField) => (
+                  <label key={f.fieldKey} className="flex items-center gap-2 text-sm">
+                    <Checkbox checked={table.pageFieldKeys.includes(f.fieldKey)} onCheckedChange={() => togglePageColumn(f.fieldKey)} />
+                    {ml(f.nameJson)}
+                  </label>
+                ))}
+              </div>
+            )
+          )}
+        </div>
+      )}
 
       {table.entityId != null && relations.length > 0 && (
         <div className="space-y-1.5">

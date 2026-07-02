@@ -8195,188 +8195,1144 @@
     "en": "Not all events are shown: too many records. Narrow the range or filters.",
     "he": "לא כל האירועים מוצגים: יותר מדי רשומות. צמצם את הטווח או המסננים."
   },
-  { "key": "entities.automations", "ru": "Автоматизации", "en": "Automations", "he": "אוטומציות" },
-  { "key": "auto.title", "ru": "Автоматизации", "en": "Automations", "he": "אוטומציות" },
-  { "key": "auto.subtitle", "ru": "Триггер → условия → действия. Действия выполняются от имени системы и могут менять статус в обход «Процессов».", "en": "Trigger → conditions → actions. Actions run as the system and can change status bypassing Workflows.", "he": "טריגר → תנאים → פעולות. הפעולות רצות בשם המערכת ויכולות לשנות סטטוס תוך עקיפת התהליכים." },
-  { "key": "auto.add", "ru": "Добавить автоматизацию", "en": "Add automation", "he": "הוסף אוטומציה" },
-  { "key": "auto.history", "ru": "История", "en": "History", "he": "היסטוריה" },
-  { "key": "auto.empty", "ru": "Автоматизаций пока нет.", "en": "No automations yet.", "he": "אין עדיין אוטומציות." },
-  { "key": "auto.colName", "ru": "Название", "en": "Name", "he": "שם" },
-  { "key": "auto.colTrigger", "ru": "Триггер", "en": "Trigger", "he": "טריגר" },
-  { "key": "auto.colActions", "ru": "Действия", "en": "Actions", "he": "פעולות" },
-  { "key": "auto.colActive", "ru": "Активна", "en": "Active", "he": "פעילה" },
-  { "key": "auto.new", "ru": "Новая автоматизация", "en": "New automation", "he": "אוטומציה חדשה" },
-  { "key": "auto.edit", "ru": "Редактировать автоматизацию", "en": "Edit automation", "he": "עריכת אוטומציה" },
-  { "key": "auto.dialogDesc", "ru": "Когда срабатывает триггер и выполняются условия — по порядку запускаются действия.", "en": "When the trigger fires and the conditions are met, the actions run in order.", "he": "כאשר הטריגר מופעל והתנאים מתקיימים, הפעולות רצות לפי הסדר." },
-  { "key": "auto.nameOptional", "ru": "Название (необязательно)", "en": "Name (optional)", "he": "שם (לא חובה)" },
-  { "key": "auto.activeLabel", "ru": "Активна", "en": "Active", "he": "פעילה" },
-  { "key": "auto.trigger", "ru": "Триггер", "en": "Trigger", "he": "טריגר" },
-  { "key": "auto.field", "ru": "Поле", "en": "Field", "he": "שדה" },
-  { "key": "auto.offsetDays", "ru": "дней (− до / + после)", "en": "days (− before / + after)", "he": "ימים (− לפני / + אחרי)" },
-  { "key": "auto.fromStatus", "ru": "Из статуса", "en": "From status", "he": "מסטטוס" },
-  { "key": "auto.toStatus", "ru": "В статус", "en": "To status", "he": "לסטטוס" },
-  { "key": "auto.anyStatus", "ru": "Любой", "en": "Any", "he": "כלשהו" },
-  { "key": "auto.conditions", "ru": "Условия", "en": "Conditions", "he": "תנאים" },
-  { "key": "auto.matchLabel", "ru": "Срабатывает, когда выполняется", "en": "Triggers when", "he": "מופעל כאשר מתקיימים" },
-  { "key": "auto.matchAll", "ru": "все условия (И)", "en": "all conditions (AND)", "he": "כל התנאים (וגם)" },
-  { "key": "auto.matchAny", "ru": "любое условие (ИЛИ)", "en": "any condition (OR)", "he": "תנאי כלשהו (או)" },
-  { "key": "auto.recordStatus", "ru": "Статус записи", "en": "Record status", "he": "סטטוס הרשומה" },
-  { "key": "auto.addCondition", "ru": "Добавить условие", "en": "Add condition", "he": "הוסף תנאי" },
-  { "key": "auto.actions", "ru": "Действия (по порядку)", "en": "Actions (in order)", "he": "פעולות (לפי הסדר)" },
-  { "key": "auto.addAction", "ru": "Добавить действие", "en": "Add action", "he": "הוסף פעולה" },
-  { "key": "auto.status", "ru": "Статус", "en": "Status", "he": "סטטוס" },
-  { "key": "auto.statusOptional", "ru": "статус", "en": "status", "he": "סטטוס" },
-  { "key": "auto.defaultStatus", "ru": "По умолчанию", "en": "Default", "he": "ברירת מחדל" },
-  { "key": "auto.targetEntity", "ru": "Сущность", "en": "Entity", "he": "ישות" },
-  { "key": "auto.selectEntity", "ru": "Выберите сущность", "en": "Select entity", "he": "בחר ישות" },
-  { "key": "auto.matchConditions", "ru": "Условия выбора записей", "en": "Record match conditions", "he": "תנאי בחירת רשומות" },
-  { "key": "auto.fieldMapping", "ru": "Значения полей", "en": "Field values", "he": "ערכי שדות" },
-  { "key": "auto.targetField", "ru": "Поле", "en": "Field", "he": "שדה" },
-  { "key": "auto.literal", "ru": "Значение", "en": "Value", "he": "ערך" },
-  { "key": "auto.fromField", "ru": "Из поля", "en": "From field", "he": "משדה" },
-  { "key": "auto.combined", "ru": "Комбинированное", "en": "Combined", "he": "משולב" },
-  { "key": "auto.combinedTemplate", "ru": "Шаблон значения", "en": "Value template", "he": "תבנית ערך" },
-  { "key": "auto.combinedTemplateBelow", "ru": "Шаблон ниже", "en": "Template below", "he": "תבנית למטה" },
-  { "key": "auto.combinedPlaceholder", "ru": "Доставлено в покрасочную ({painter})", "en": "Delivered to paint shop ({painter})", "he": "נמסר למפעל הצביעה ({painter})" },
-  { "key": "auto.combinedInsert", "ru": "Вставить поле:", "en": "Insert field:", "he": "הוסף שדה:" },
-  { "key": "auto.combinedHint", "ru": "Свободный текст + значения полей записи через {ключ_поля}. Подставляются при срабатывании автоматизации.", "en": "Free text + record field values via {field_key}. Substituted when the automation runs.", "he": "טקסט חופשי + ערכי שדות הרשומה דרך {field_key}. מוחלפים בעת הפעלת האוטומציה." },
-  { "key": "auto.sourceField", "ru": "Поле-источник", "en": "Source field", "he": "שדה מקור" },
-  { "key": "auto.addMapping", "ru": "Добавить поле", "en": "Add field", "he": "הוסף שדה" },
-  { "key": "auto.includeRecord", "ru": "Передавать данные записи", "en": "Send record data", "he": "שלח נתוני רשומה" },
-  { "key": "auto.valuePlaceholder", "ru": "значение", "en": "value", "he": "ערך" },
-  { "key": "auto.selectUser", "ru": "Пользователь", "en": "User", "he": "משתמש" },
-  { "key": "auto.yes", "ru": "Да", "en": "Yes", "he": "כן" },
-  { "key": "auto.no", "ru": "Нет", "en": "No", "he": "לא" },
-  { "key": "auto.pickValue", "ru": "Выберите значение", "en": "Select value", "he": "בחר ערך" },
-  { "key": "auto.searchValue", "ru": "Поиск значения…", "en": "Search value…", "he": "חיפוש ערך…" },
-  { "key": "auto.noValues", "ru": "Значения не найдены", "en": "No values found", "he": "לא נמצאו ערכים" },
-  { "key": "auto.useTyped", "ru": "Использовать", "en": "Use", "he": "השתמש" },
-  { "key": "auto.historyTitle", "ru": "История запусков", "en": "Run history", "he": "היסטוריית הרצות" },
-  { "key": "auto.historyDesc", "ru": "Последние запуски автоматизаций этой сущности.", "en": "Recent automation runs for this entity.", "he": "הרצות אוטומציה אחרונות עבור ישות זו." },
-  { "key": "auto.noRuns", "ru": "Запусков пока нет.", "en": "No runs yet.", "he": "אין עדיין הרצות." },
-  { "key": "auto.runTime", "ru": "Время", "en": "Time", "he": "זמן" },
-  { "key": "auto.runAuto", "ru": "Автоматизация", "en": "Automation", "he": "אוטומציה" },
-  { "key": "auto.runTrigger", "ru": "Триггер", "en": "Trigger", "he": "טריגר" },
-  { "key": "auto.runRecord", "ru": "Запись", "en": "Record", "he": "רשומה" },
-  { "key": "auto.runStatus", "ru": "Статус", "en": "Status", "he": "סטטוס" },
-  { "key": "auto.success", "ru": "Успешно", "en": "Success", "he": "הצלחה" },
-  { "key": "auto.error", "ru": "Ошибка", "en": "Error", "he": "שגיאה" },
-  { "key": "auto.skipped", "ru": "Пропущено", "en": "Skipped", "he": "דולג" },
-  { "key": "auto.deleteTitle", "ru": "Удалить автоматизацию?", "en": "Delete automation?", "he": "למחוק אוטומציה?" },
-  { "key": "auto.deleteDesc", "ru": "Действие необратимо.", "en": "This action cannot be undone.", "he": "פעולה זו אינה הפיכה." },
-  { "key": "auto.created", "ru": "Автоматизация создана", "en": "Automation created", "he": "האוטומציה נוצרה" },
-  { "key": "auto.createError", "ru": "Ошибка создания", "en": "Creation error", "he": "שגיאת יצירה" },
-  { "key": "auto.updated", "ru": "Автоматизация обновлена", "en": "Automation updated", "he": "האוטומציה עודכנה" },
-  { "key": "auto.updateError", "ru": "Ошибка обновления", "en": "Update error", "he": "שגיאת עדכון" },
-  { "key": "auto.deleted", "ru": "Автоматизация удалена", "en": "Automation deleted", "he": "האוטומציה נמחקה" },
-  { "key": "auto.deleteError", "ru": "Ошибка удаления", "en": "Deletion error", "he": "שגיאת מחיקה" },
-  { "key": "auto.reorderError", "ru": "Ошибка изменения порядка", "en": "Reorder error", "he": "שגיאת שינוי סדר" },
-  { "key": "auto.specifyField", "ru": "Укажите поле триггера", "en": "Specify the trigger field", "he": "ציין את שדה הטריגר" },
-  { "key": "auto.specifyActionField", "ru": "Укажите поле действия", "en": "Specify the action field", "he": "ציין את שדה הפעולה" },
-  { "key": "auto.specifyStatus", "ru": "Укажите статус", "en": "Specify the status", "he": "ציין את הסטטוס" },
-  { "key": "auto.specifyTarget", "ru": "Укажите целевую сущность", "en": "Specify the target entity", "he": "ציין את ישות היעד" },
-  { "key": "auto.specifyUrl", "ru": "Укажите URL", "en": "Specify the URL", "he": "ציין כתובת URL" },
-  { "key": "auto.noActions", "ru": "Добавьте хотя бы одно действие", "en": "Add at least one action", "he": "הוסף לפחות פעולה אחת" },
-  { "key": "auto.backToEntities", "ru": "К списку сущностей", "en": "Back to entities", "he": "חזרה לישויות" },
-  { "key": "auto.trig.record_created", "ru": "Создание записи", "en": "Record created", "he": "רשומה נוצרה" },
-  { "key": "auto.trig.record_updated", "ru": "Изменение записи", "en": "Record updated", "he": "רשומה עודכנה" },
-  { "key": "auto.trig.field_changed", "ru": "Изменение поля", "en": "Field changed", "he": "שדה השתנה" },
-  { "key": "auto.trig.status_changed", "ru": "Смена статуса", "en": "Status changed", "he": "סטטוס השתנה" },
-  { "key": "auto.trig.date_reached", "ru": "Наступление даты", "en": "Date reached", "he": "הגיע תאריך" },
-  { "key": "auto.act.set_field", "ru": "Установить поле", "en": "Set field", "he": "הגדר שדה" },
-  { "key": "auto.act.change_status", "ru": "Сменить статус", "en": "Change status", "he": "שנה סטטוס" },
-  { "key": "auto.act.create_record", "ru": "Создать запись", "en": "Create record", "he": "צור רשומה" },
-  { "key": "auto.act.update_records_where", "ru": "Обновить записи (по условию)", "en": "Update records (by condition)", "he": "עדכן רשומות (לפי תנאי)" },
-  { "key": "auto.act.webhook", "ru": "Webhook", "en": "Webhook", "he": "Webhook" },
-  { "key": "colGroups.title", "ru": "Группы колонок", "en": "Column Groups", "he": "קבוצות עמודות" },
-  { "key": "colGroups.subtitle", "ru": "Глобальный список групп для оформления колонок таблиц", "en": "Global list of groups for styling table columns", "he": "רשימה גלובלית של קבוצות לעיצוב עמודות טבלה" },
-  { "key": "colGroups.add", "ru": "Добавить группу", "en": "Add group", "he": "הוסף קבוצה" },
-  { "key": "colGroups.col.name", "ru": "Название", "en": "Name", "he": "שם" },
-  { "key": "colGroups.col.mode", "ru": "Отображение", "en": "Display", "he": "תצוגה" },
-  { "key": "colGroups.col.preview", "ru": "Превью", "en": "Preview", "he": "תצוגה מקדימה" },
-  { "key": "colGroups.col.actions", "ru": "Действия", "en": "Actions", "he": "פעולות" },
-  { "key": "colGroups.empty", "ru": "Групп пока нет", "en": "No groups yet", "he": "אין קבוצות עדיין" },
-  { "key": "colGroups.mode.bar", "ru": "Полоса", "en": "Bar", "he": "פס" },
-  { "key": "colGroups.mode.fill", "ru": "Заливка", "en": "Fill", "he": "מילוי" },
-  { "key": "colGroups.mode.barDesc", "ru": "Над заголовком колонки рисуется тонкая цветная полоса.", "en": "A thin colored bar is drawn above the column header.", "he": "פס צבעוני דק מצויר מעל כותרת העמודה." },
-  { "key": "colGroups.mode.fillDesc", "ru": "Заголовок колонки заливается цветом группы.", "en": "The column header is filled with the group color.", "he": "כותרת העמודה ממולאת בצבע הקבוצה." },
-  { "key": "colGroups.created", "ru": "Группа создана", "en": "Group created", "he": "הקבוצה נוצרה" },
-  { "key": "colGroups.updated", "ru": "Группа обновлена", "en": "Group updated", "he": "הקבוצה עודכנה" },
-  { "key": "colGroups.deleted", "ru": "Группа удалена", "en": "Group deleted", "he": "הקבוצה נמחקה" },
-  { "key": "colGroups.createError", "ru": "Ошибка создания группы", "en": "Failed to create group", "he": "יצירת הקבוצה נכשלה" },
-  { "key": "colGroups.updateError", "ru": "Ошибка обновления группы", "en": "Failed to update group", "he": "עדכון הקבוצה נכשל" },
-  { "key": "colGroups.deleteError", "ru": "Ошибка удаления группы", "en": "Failed to delete group", "he": "מחיקת הקבוצה נכשלה" },
-  { "key": "colGroups.nameRequired", "ru": "Укажите название", "en": "Name is required", "he": "יש להזין שם" },
-  { "key": "colGroups.name", "ru": "Название", "en": "Name", "he": "שם" },
-  { "key": "colGroups.color", "ru": "Цвет группы", "en": "Group color", "he": "צבע הקבוצה" },
-  { "key": "colGroups.displayMode", "ru": "Режим отображения", "en": "Display mode", "he": "מצב תצוגה" },
-  { "key": "colGroups.textColor", "ru": "Цвет текста заголовка", "en": "Header text color", "he": "צבע טקסט הכותרת" },
-  { "key": "colGroups.editTitle", "ru": "Редактировать группу", "en": "Edit group", "he": "ערוך קבוצה" },
-  { "key": "colGroups.newTitle", "ru": "Новая группа", "en": "New group", "he": "קבוצה חדשה" },
-  { "key": "colGroups.deleteTitle", "ru": "Удалить группу?", "en": "Delete group?", "he": "למחוק את הקבוצה?" },
-  { "key": "colGroups.deleteDesc", "ru": "Колонки, привязанные к этой группе, просто перестанут показывать оформление. Это действие нельзя отменить.", "en": "Columns assigned to this group will simply stop showing the styling. This action cannot be undone.", "he": "עמודות המשויכות לקבוצה זו פשוט יפסיקו להציג את העיצוב. לא ניתן לבטל פעולה זו." },
-  { "key": "colGroups.assigned", "ru": "Группа колонки обновлена", "en": "Column group updated", "he": "קבוצת העמודה עודכנה" },
-  { "key": "colGroups.assignError", "ru": "Не удалось обновить группу колонки", "en": "Failed to update column group", "he": "עדכון קבוצת העמודה נכשל" },
-  { "key": "colGroups.inherit", "ru": "Наследовать", "en": "Inherit", "he": "ירושה" },
-  { "key": "colGroups.noGroup", "ru": "Без группы", "en": "No group", "he": "ללא קבוצה" },
-  { "key": "colGroups.pick", "ru": "Группа колонки", "en": "Column group", "he": "קבוצת עמודה" },
-  { "key": "auto.allRecordsConfirm", "ru": "Я понимаю, что изменятся все записи", "en": "I understand that all records will be changed", "he": "אני מבין שכל הרשומות ישתנו" },
-  { "key": "auto.allRecordsWarn", "ru": "Без условий выбора это действие изменит ВСЕ записи выбранной сущности. Существующие значения будут перезаписаны без возможности отмены.", "en": "Without selection conditions, this action will change ALL records of the selected entity. Existing values will be overwritten irreversibly.", "he": "ללא תנאי בחירה, פעולה זו תשנה את כל הרשומות של היישות שנבחרה. הערכים הקיימים יוחלפו ללא אפשרות ביטול." },
-  { "key": "auto.confirmAllNeeded", "ru": "Подтвердите изменение всех записей", "en": "Confirm changing all records", "he": "אשרו שינוי של כל הרשומות" },
-  { "key": "auto.confirmAllNeededDesc", "ru": "Действие «Обновить записи» без условий выбора изменит ВСЕ записи сущности. Отметьте подтверждение, что вы это понимаете.", "en": "The “Update records” action without selection conditions will change ALL records of the entity. Check the box to confirm that you understand this.", "he": "הפעולה «עדכון רשומות» ללא תנאי בחירה תשנה את כל הרשומות של היישות. סמנו את האישור שאתם מבינים זאת." },
-  { "key": "auto.fromTriggerField", "ru": "Из поля записи", "en": "From record field", "he": "משדה הרשומה" },
-  { "key": "auto.nameRequired", "ru": "Название", "en": "Name", "he": "שם" },
-  { "key": "auto.specifyName", "ru": "Укажите название автоматизации", "en": "Specify the automation name", "he": "ציינו את שם האוטומציה" },
-  { "key": "auto.specifySourceField", "ru": "Выберите поле-источник", "en": "Select a source field", "he": "בחרו שדה מקור" },
-  { "key": "auto.specifySourceFieldDesc", "ru": "Для условия со значением «Из поля записи» нужно выбрать поле-источник.", "en": "For a condition with the value “From record field”, you must select a source field.", "he": "עבור תנאי עם הערך «משדה הרשומה» יש לבחור שדה מקור." },
-  { "key": "records.mirrorOrderSaveError", "ru": "Не удалось сохранить порядок колонок", "en": "Failed to save column order", "he": "שמירת סדר העמודות נכשלה" },
-  { "key": "settings.tableBorderColor", "ru": "Цвет линий", "en": "Line color", "he": "צבע הקווים" },
-  { "key": "settings.tableColorsHint", "ru": "Цвета таблицы записей (необязательно). Если не заданы, используются стандартные серые.", "en": "Records table colors (optional). If not set, the default grays are used.", "he": "צבעי טבלת הרשומות (אופציונלי). אם לא הוגדרו, נעשה שימוש באפור ברירת המחדל." },
-  { "key": "settings.tableHeaderColor", "ru": "Цвет заголовка", "en": "Header color", "he": "צבע הכותרת" },
-  { "key": "settings.tableStripeColor", "ru": "Цвет полосок", "en": "Stripe color", "he": "צבע הפסים" },
-  { "key": "settings.tableStyle", "ru": "Стиль таблицы", "en": "Table style", "he": "סגנון הטבלה" },
-  { "key": "settings.tableStyleHint", "ru": "Влияет на отображение таблиц с записями во всей платформе.", "en": "Affects how records tables are displayed across the entire platform.", "he": "משפיע על תצוגת טבלאות הרשומות בכל הפלטפורמה." },
-  { "key": "settings.tableStylePlain", "ru": "Обычный (как сейчас)", "en": "Plain (as now)", "he": "רגיל (כמו עכשיו)" },
-  { "key": "settings.tableStyleStriped", "ru": "Чередующиеся строки", "en": "Striped rows", "he": "שורות מתחלפות" },
-  { "key": "settings.tableStyleStripedBold", "ru": "Чередующиеся строки + выделенный заголовок", "en": "Striped rows + highlighted header", "he": "שורות מתחלפות + כותרת מודגשת" },
-  { "key": "import.title", "ru": "Импорт данных", "en": "Data Import", "he": "ייבוא נתונים" },
-  { "key": "import.subtitle", "ru": "Загрузка записей из файла XLSX/CSV с проверкой по правилам сущности", "en": "Load records from an XLSX/CSV file, validated against the entity's rules", "he": "טעינת רשומות מקובץ XLSX/CSV עם אימות לפי כללי הישות" },
-  { "key": "import.step1", "ru": "1. Выберите сущность", "en": "1. Choose an entity", "he": "1. בחר ישות" },
-  { "key": "import.pickEntity", "ru": "Сущность…", "en": "Entity…", "he": "ישות…" },
-  { "key": "import.step2", "ru": "2. Шаблон и файл", "en": "2. Template & file", "he": "2. תבנית וקובץ" },
-  { "key": "import.downloadTemplate", "ru": "Скачать шаблон", "en": "Download template", "he": "הורד תבנית" },
-  { "key": "import.uploadFile", "ru": "Загрузить файл", "en": "Upload file", "he": "העלה קובץ" },
-  { "key": "import.rowsCount", "ru": "строк", "en": "rows", "he": "שורות" },
-  { "key": "import.parseError", "ru": "Не удалось прочитать файл", "en": "Could not read the file", "he": "לא ניתן לקרוא את הקובץ" },
-  { "key": "import.step3", "ru": "3. Сопоставление колонок", "en": "3. Column mapping", "he": "3. מיפוי עמודות" },
-  { "key": "import.column", "ru": "Колонка файла", "en": "File column", "he": "עמודת הקובץ" },
-  { "key": "import.sample", "ru": "Пример", "en": "Sample", "he": "דוגמה" },
-  { "key": "import.mapTo", "ru": "Поле / связь / статус", "en": "Field / relation / status", "he": "שדה / קשר / סטטוס" },
-  { "key": "import.targetKey", "ru": "Поиск по полю", "en": "Match by field", "he": "התאמה לפי שדה" },
-  { "key": "import.pickTargetKey", "ru": "Поле для поиска…", "en": "Field to match…", "he": "שדה להתאמה…" },
-  { "key": "import.ignore", "ru": "— Пропустить —", "en": "— Skip —", "he": "— דלג —" },
-  { "key": "import.status", "ru": "Статус", "en": "Status", "he": "סטטוס" },
-  { "key": "import.upsertKey", "ru": "Ключ для обновления (upsert)", "en": "Update key (upsert)", "he": "מפתח עדכון (upsert)" },
-  { "key": "import.insertOnly", "ru": "Без обновления (только добавление)", "en": "No update (insert only)", "he": "ללא עדכון (הוספה בלבד)" },
-  { "key": "import.upsertHint", "ru": "Совпадающие записи будут обновлены, остальные — добавлены", "en": "Matching records are updated, the rest are inserted", "he": "רשומות תואמות יעודכנו, השאר יתווספו" },
-  { "key": "import.preview", "ru": "Проверить (без записи)", "en": "Validate (dry run)", "he": "בדוק (ללא כתיבה)" },
-  { "key": "import.commit", "ru": "Импортировать", "en": "Import", "he": "ייבא" },
-  { "key": "import.missingTargetKey", "ru": "Выберите поле поиска для связи", "en": "Choose a match field for the relation", "he": "בחר שדה התאמה לקשר" },
-  { "key": "import.previewError", "ru": "Ошибка проверки", "en": "Validation failed", "he": "האימות נכשל" },
-  { "key": "import.commitError", "ru": "Ошибка импорта", "en": "Import failed", "he": "הייבוא נכשל" },
-  { "key": "import.done", "ru": "Импорт завершён", "en": "Import complete", "he": "הייבוא הושלם" },
-  { "key": "import.resultPreview", "ru": "Результат проверки", "en": "Validation result", "he": "תוצאת האימות" },
-  { "key": "import.resultCommit", "ru": "Результат импорта", "en": "Import result", "he": "תוצאת הייבוא" },
-  { "key": "import.total", "ru": "Всего", "en": "Total", "he": "סה״כ" },
-  { "key": "import.created", "ru": "Создано", "en": "Created", "he": "נוצרו" },
-  { "key": "import.updated", "ru": "Обновлено", "en": "Updated", "he": "עודכנו" },
-  { "key": "import.skipped", "ru": "Пропущено", "en": "Skipped", "he": "דולגו" },
-  { "key": "import.errors", "ru": "Ошибок", "en": "Errors", "he": "שגיאות" },
-  { "key": "import.row", "ru": "Строка", "en": "Row", "he": "שורה" },
-  { "key": "import.statusCol", "ru": "Статус", "en": "Status", "he": "סטטוס" },
-  { "key": "import.error", "ru": "Ошибка", "en": "Error", "he": "שגיאה" },
-  { "key": "import.message", "ru": "Сообщение", "en": "Message", "he": "הודעה" },
-  { "key": "import.downloadErrors", "ru": "Скачать отчёт об ошибках", "en": "Download error report", "he": "הורד דוח שגיאות" },
-  { "key": "import.allOkPreview", "ru": "Ошибок не найдено — можно импортировать", "en": "No errors — ready to import", "he": "אין שגיאות — מוכן לייבוא" },
-  { "key": "import.allOkCommit", "ru": "Все строки импортированы без ошибок", "en": "All rows imported without errors", "he": "כל השורות יובאו ללא שגיאות" }
+  {
+    "key": "entities.automations",
+    "ru": "Автоматизации",
+    "en": "Automations",
+    "he": "אוטומציות"
+  },
+  {
+    "key": "auto.title",
+    "ru": "Автоматизации",
+    "en": "Automations",
+    "he": "אוטומציות"
+  },
+  {
+    "key": "auto.subtitle",
+    "ru": "Триггер → условия → действия. Действия выполняются от имени системы и могут менять статус в обход «Процессов».",
+    "en": "Trigger → conditions → actions. Actions run as the system and can change status bypassing Workflows.",
+    "he": "טריגר → תנאים → פעולות. הפעולות רצות בשם המערכת ויכולות לשנות סטטוס תוך עקיפת התהליכים."
+  },
+  {
+    "key": "auto.add",
+    "ru": "Добавить автоматизацию",
+    "en": "Add automation",
+    "he": "הוסף אוטומציה"
+  },
+  {
+    "key": "auto.history",
+    "ru": "История",
+    "en": "History",
+    "he": "היסטוריה"
+  },
+  {
+    "key": "auto.empty",
+    "ru": "Автоматизаций пока нет.",
+    "en": "No automations yet.",
+    "he": "אין עדיין אוטומציות."
+  },
+  {
+    "key": "auto.colName",
+    "ru": "Название",
+    "en": "Name",
+    "he": "שם"
+  },
+  {
+    "key": "auto.colTrigger",
+    "ru": "Триггер",
+    "en": "Trigger",
+    "he": "טריגר"
+  },
+  {
+    "key": "auto.colActions",
+    "ru": "Действия",
+    "en": "Actions",
+    "he": "פעולות"
+  },
+  {
+    "key": "auto.colActive",
+    "ru": "Активна",
+    "en": "Active",
+    "he": "פעילה"
+  },
+  {
+    "key": "auto.new",
+    "ru": "Новая автоматизация",
+    "en": "New automation",
+    "he": "אוטומציה חדשה"
+  },
+  {
+    "key": "auto.edit",
+    "ru": "Редактировать автоматизацию",
+    "en": "Edit automation",
+    "he": "עריכת אוטומציה"
+  },
+  {
+    "key": "auto.dialogDesc",
+    "ru": "Когда срабатывает триггер и выполняются условия — по порядку запускаются действия.",
+    "en": "When the trigger fires and the conditions are met, the actions run in order.",
+    "he": "כאשר הטריגר מופעל והתנאים מתקיימים, הפעולות רצות לפי הסדר."
+  },
+  {
+    "key": "auto.nameOptional",
+    "ru": "Название (необязательно)",
+    "en": "Name (optional)",
+    "he": "שם (לא חובה)"
+  },
+  {
+    "key": "auto.activeLabel",
+    "ru": "Активна",
+    "en": "Active",
+    "he": "פעילה"
+  },
+  {
+    "key": "auto.trigger",
+    "ru": "Триггер",
+    "en": "Trigger",
+    "he": "טריגר"
+  },
+  {
+    "key": "auto.field",
+    "ru": "Поле",
+    "en": "Field",
+    "he": "שדה"
+  },
+  {
+    "key": "auto.offsetDays",
+    "ru": "дней (− до / + после)",
+    "en": "days (− before / + after)",
+    "he": "ימים (− לפני / + אחרי)"
+  },
+  {
+    "key": "auto.fromStatus",
+    "ru": "Из статуса",
+    "en": "From status",
+    "he": "מסטטוס"
+  },
+  {
+    "key": "auto.toStatus",
+    "ru": "В статус",
+    "en": "To status",
+    "he": "לסטטוס"
+  },
+  {
+    "key": "auto.anyStatus",
+    "ru": "Любой",
+    "en": "Any",
+    "he": "כלשהו"
+  },
+  {
+    "key": "auto.conditions",
+    "ru": "Условия",
+    "en": "Conditions",
+    "he": "תנאים"
+  },
+  {
+    "key": "auto.matchLabel",
+    "ru": "Срабатывает, когда выполняется",
+    "en": "Triggers when",
+    "he": "מופעל כאשר מתקיימים"
+  },
+  {
+    "key": "auto.matchAll",
+    "ru": "все условия (И)",
+    "en": "all conditions (AND)",
+    "he": "כל התנאים (וגם)"
+  },
+  {
+    "key": "auto.matchAny",
+    "ru": "любое условие (ИЛИ)",
+    "en": "any condition (OR)",
+    "he": "תנאי כלשהו (או)"
+  },
+  {
+    "key": "auto.recordStatus",
+    "ru": "Статус записи",
+    "en": "Record status",
+    "he": "סטטוס הרשומה"
+  },
+  {
+    "key": "auto.addCondition",
+    "ru": "Добавить условие",
+    "en": "Add condition",
+    "he": "הוסף תנאי"
+  },
+  {
+    "key": "auto.actions",
+    "ru": "Действия (по порядку)",
+    "en": "Actions (in order)",
+    "he": "פעולות (לפי הסדר)"
+  },
+  {
+    "key": "auto.addAction",
+    "ru": "Добавить действие",
+    "en": "Add action",
+    "he": "הוסף פעולה"
+  },
+  {
+    "key": "auto.status",
+    "ru": "Статус",
+    "en": "Status",
+    "he": "סטטוס"
+  },
+  {
+    "key": "auto.statusOptional",
+    "ru": "статус",
+    "en": "status",
+    "he": "סטטוס"
+  },
+  {
+    "key": "auto.defaultStatus",
+    "ru": "По умолчанию",
+    "en": "Default",
+    "he": "ברירת מחדל"
+  },
+  {
+    "key": "auto.targetEntity",
+    "ru": "Сущность",
+    "en": "Entity",
+    "he": "ישות"
+  },
+  {
+    "key": "auto.selectEntity",
+    "ru": "Выберите сущность",
+    "en": "Select entity",
+    "he": "בחר ישות"
+  },
+  {
+    "key": "auto.matchConditions",
+    "ru": "Условия выбора записей",
+    "en": "Record match conditions",
+    "he": "תנאי בחירת רשומות"
+  },
+  {
+    "key": "auto.fieldMapping",
+    "ru": "Значения полей",
+    "en": "Field values",
+    "he": "ערכי שדות"
+  },
+  {
+    "key": "auto.targetField",
+    "ru": "Поле",
+    "en": "Field",
+    "he": "שדה"
+  },
+  {
+    "key": "auto.literal",
+    "ru": "Значение",
+    "en": "Value",
+    "he": "ערך"
+  },
+  {
+    "key": "auto.fromField",
+    "ru": "Из поля",
+    "en": "From field",
+    "he": "משדה"
+  },
+  {
+    "key": "auto.combined",
+    "ru": "Комбинированное",
+    "en": "Combined",
+    "he": "משולב"
+  },
+  {
+    "key": "auto.combinedTemplate",
+    "ru": "Шаблон значения",
+    "en": "Value template",
+    "he": "תבנית ערך"
+  },
+  {
+    "key": "auto.combinedTemplateBelow",
+    "ru": "Шаблон ниже",
+    "en": "Template below",
+    "he": "תבנית למטה"
+  },
+  {
+    "key": "auto.combinedPlaceholder",
+    "ru": "Доставлено в покрасочную ({painter})",
+    "en": "Delivered to paint shop ({painter})",
+    "he": "נמסר למפעל הצביעה ({painter})"
+  },
+  {
+    "key": "auto.combinedInsert",
+    "ru": "Вставить поле:",
+    "en": "Insert field:",
+    "he": "הוסף שדה:"
+  },
+  {
+    "key": "auto.combinedHint",
+    "ru": "Свободный текст + значения полей записи через {ключ_поля}. Подставляются при срабатывании автоматизации.",
+    "en": "Free text + record field values via {field_key}. Substituted when the automation runs.",
+    "he": "טקסט חופשי + ערכי שדות הרשומה דרך {field_key}. מוחלפים בעת הפעלת האוטומציה."
+  },
+  {
+    "key": "auto.sourceField",
+    "ru": "Поле-источник",
+    "en": "Source field",
+    "he": "שדה מקור"
+  },
+  {
+    "key": "auto.addMapping",
+    "ru": "Добавить поле",
+    "en": "Add field",
+    "he": "הוסף שדה"
+  },
+  {
+    "key": "auto.includeRecord",
+    "ru": "Передавать данные записи",
+    "en": "Send record data",
+    "he": "שלח נתוני רשומה"
+  },
+  {
+    "key": "auto.valuePlaceholder",
+    "ru": "значение",
+    "en": "value",
+    "he": "ערך"
+  },
+  {
+    "key": "auto.selectUser",
+    "ru": "Пользователь",
+    "en": "User",
+    "he": "משתמש"
+  },
+  {
+    "key": "auto.yes",
+    "ru": "Да",
+    "en": "Yes",
+    "he": "כן"
+  },
+  {
+    "key": "auto.no",
+    "ru": "Нет",
+    "en": "No",
+    "he": "לא"
+  },
+  {
+    "key": "auto.pickValue",
+    "ru": "Выберите значение",
+    "en": "Select value",
+    "he": "בחר ערך"
+  },
+  {
+    "key": "auto.searchValue",
+    "ru": "Поиск значения…",
+    "en": "Search value…",
+    "he": "חיפוש ערך…"
+  },
+  {
+    "key": "auto.noValues",
+    "ru": "Значения не найдены",
+    "en": "No values found",
+    "he": "לא נמצאו ערכים"
+  },
+  {
+    "key": "auto.useTyped",
+    "ru": "Использовать",
+    "en": "Use",
+    "he": "השתמש"
+  },
+  {
+    "key": "auto.historyTitle",
+    "ru": "История запусков",
+    "en": "Run history",
+    "he": "היסטוריית הרצות"
+  },
+  {
+    "key": "auto.historyDesc",
+    "ru": "Последние запуски автоматизаций этой сущности.",
+    "en": "Recent automation runs for this entity.",
+    "he": "הרצות אוטומציה אחרונות עבור ישות זו."
+  },
+  {
+    "key": "auto.noRuns",
+    "ru": "Запусков пока нет.",
+    "en": "No runs yet.",
+    "he": "אין עדיין הרצות."
+  },
+  {
+    "key": "auto.runTime",
+    "ru": "Время",
+    "en": "Time",
+    "he": "זמן"
+  },
+  {
+    "key": "auto.runAuto",
+    "ru": "Автоматизация",
+    "en": "Automation",
+    "he": "אוטומציה"
+  },
+  {
+    "key": "auto.runTrigger",
+    "ru": "Триггер",
+    "en": "Trigger",
+    "he": "טריגר"
+  },
+  {
+    "key": "auto.runRecord",
+    "ru": "Запись",
+    "en": "Record",
+    "he": "רשומה"
+  },
+  {
+    "key": "auto.runStatus",
+    "ru": "Статус",
+    "en": "Status",
+    "he": "סטטוס"
+  },
+  {
+    "key": "auto.success",
+    "ru": "Успешно",
+    "en": "Success",
+    "he": "הצלחה"
+  },
+  {
+    "key": "auto.error",
+    "ru": "Ошибка",
+    "en": "Error",
+    "he": "שגיאה"
+  },
+  {
+    "key": "auto.skipped",
+    "ru": "Пропущено",
+    "en": "Skipped",
+    "he": "דולג"
+  },
+  {
+    "key": "auto.deleteTitle",
+    "ru": "Удалить автоматизацию?",
+    "en": "Delete automation?",
+    "he": "למחוק אוטומציה?"
+  },
+  {
+    "key": "auto.deleteDesc",
+    "ru": "Действие необратимо.",
+    "en": "This action cannot be undone.",
+    "he": "פעולה זו אינה הפיכה."
+  },
+  {
+    "key": "auto.created",
+    "ru": "Автоматизация создана",
+    "en": "Automation created",
+    "he": "האוטומציה נוצרה"
+  },
+  {
+    "key": "auto.createError",
+    "ru": "Ошибка создания",
+    "en": "Creation error",
+    "he": "שגיאת יצירה"
+  },
+  {
+    "key": "auto.updated",
+    "ru": "Автоматизация обновлена",
+    "en": "Automation updated",
+    "he": "האוטומציה עודכנה"
+  },
+  {
+    "key": "auto.updateError",
+    "ru": "Ошибка обновления",
+    "en": "Update error",
+    "he": "שגיאת עדכון"
+  },
+  {
+    "key": "auto.deleted",
+    "ru": "Автоматизация удалена",
+    "en": "Automation deleted",
+    "he": "האוטומציה נמחקה"
+  },
+  {
+    "key": "auto.deleteError",
+    "ru": "Ошибка удаления",
+    "en": "Deletion error",
+    "he": "שגיאת מחיקה"
+  },
+  {
+    "key": "auto.reorderError",
+    "ru": "Ошибка изменения порядка",
+    "en": "Reorder error",
+    "he": "שגיאת שינוי סדר"
+  },
+  {
+    "key": "auto.specifyField",
+    "ru": "Укажите поле триггера",
+    "en": "Specify the trigger field",
+    "he": "ציין את שדה הטריגר"
+  },
+  {
+    "key": "auto.specifyActionField",
+    "ru": "Укажите поле действия",
+    "en": "Specify the action field",
+    "he": "ציין את שדה הפעולה"
+  },
+  {
+    "key": "auto.specifyStatus",
+    "ru": "Укажите статус",
+    "en": "Specify the status",
+    "he": "ציין את הסטטוס"
+  },
+  {
+    "key": "auto.specifyTarget",
+    "ru": "Укажите целевую сущность",
+    "en": "Specify the target entity",
+    "he": "ציין את ישות היעד"
+  },
+  {
+    "key": "auto.specifyUrl",
+    "ru": "Укажите URL",
+    "en": "Specify the URL",
+    "he": "ציין כתובת URL"
+  },
+  {
+    "key": "auto.noActions",
+    "ru": "Добавьте хотя бы одно действие",
+    "en": "Add at least one action",
+    "he": "הוסף לפחות פעולה אחת"
+  },
+  {
+    "key": "auto.backToEntities",
+    "ru": "К списку сущностей",
+    "en": "Back to entities",
+    "he": "חזרה לישויות"
+  },
+  {
+    "key": "auto.trig.record_created",
+    "ru": "Создание записи",
+    "en": "Record created",
+    "he": "רשומה נוצרה"
+  },
+  {
+    "key": "auto.trig.record_updated",
+    "ru": "Изменение записи",
+    "en": "Record updated",
+    "he": "רשומה עודכנה"
+  },
+  {
+    "key": "auto.trig.field_changed",
+    "ru": "Изменение поля",
+    "en": "Field changed",
+    "he": "שדה השתנה"
+  },
+  {
+    "key": "auto.trig.status_changed",
+    "ru": "Смена статуса",
+    "en": "Status changed",
+    "he": "סטטוס השתנה"
+  },
+  {
+    "key": "auto.trig.date_reached",
+    "ru": "Наступление даты",
+    "en": "Date reached",
+    "he": "הגיע תאריך"
+  },
+  {
+    "key": "auto.act.set_field",
+    "ru": "Установить поле",
+    "en": "Set field",
+    "he": "הגדר שדה"
+  },
+  {
+    "key": "auto.act.change_status",
+    "ru": "Сменить статус",
+    "en": "Change status",
+    "he": "שנה סטטוס"
+  },
+  {
+    "key": "auto.act.create_record",
+    "ru": "Создать запись",
+    "en": "Create record",
+    "he": "צור רשומה"
+  },
+  {
+    "key": "auto.act.update_records_where",
+    "ru": "Обновить записи (по условию)",
+    "en": "Update records (by condition)",
+    "he": "עדכן רשומות (לפי תנאי)"
+  },
+  {
+    "key": "auto.act.webhook",
+    "ru": "Webhook",
+    "en": "Webhook",
+    "he": "Webhook"
+  },
+  {
+    "key": "colGroups.title",
+    "ru": "Группы колонок",
+    "en": "Column Groups",
+    "he": "קבוצות עמודות"
+  },
+  {
+    "key": "colGroups.subtitle",
+    "ru": "Глобальный список групп для оформления колонок таблиц",
+    "en": "Global list of groups for styling table columns",
+    "he": "רשימה גלובלית של קבוצות לעיצוב עמודות טבלה"
+  },
+  {
+    "key": "colGroups.add",
+    "ru": "Добавить группу",
+    "en": "Add group",
+    "he": "הוסף קבוצה"
+  },
+  {
+    "key": "colGroups.col.name",
+    "ru": "Название",
+    "en": "Name",
+    "he": "שם"
+  },
+  {
+    "key": "colGroups.col.mode",
+    "ru": "Отображение",
+    "en": "Display",
+    "he": "תצוגה"
+  },
+  {
+    "key": "colGroups.col.preview",
+    "ru": "Превью",
+    "en": "Preview",
+    "he": "תצוגה מקדימה"
+  },
+  {
+    "key": "colGroups.col.actions",
+    "ru": "Действия",
+    "en": "Actions",
+    "he": "פעולות"
+  },
+  {
+    "key": "colGroups.empty",
+    "ru": "Групп пока нет",
+    "en": "No groups yet",
+    "he": "אין קבוצות עדיין"
+  },
+  {
+    "key": "colGroups.mode.bar",
+    "ru": "Полоса",
+    "en": "Bar",
+    "he": "פס"
+  },
+  {
+    "key": "colGroups.mode.fill",
+    "ru": "Заливка",
+    "en": "Fill",
+    "he": "מילוי"
+  },
+  {
+    "key": "colGroups.mode.barDesc",
+    "ru": "Над заголовком колонки рисуется тонкая цветная полоса.",
+    "en": "A thin colored bar is drawn above the column header.",
+    "he": "פס צבעוני דק מצויר מעל כותרת העמודה."
+  },
+  {
+    "key": "colGroups.mode.fillDesc",
+    "ru": "Заголовок колонки заливается цветом группы.",
+    "en": "The column header is filled with the group color.",
+    "he": "כותרת העמודה ממולאת בצבע הקבוצה."
+  },
+  {
+    "key": "colGroups.created",
+    "ru": "Группа создана",
+    "en": "Group created",
+    "he": "הקבוצה נוצרה"
+  },
+  {
+    "key": "colGroups.updated",
+    "ru": "Группа обновлена",
+    "en": "Group updated",
+    "he": "הקבוצה עודכנה"
+  },
+  {
+    "key": "colGroups.deleted",
+    "ru": "Группа удалена",
+    "en": "Group deleted",
+    "he": "הקבוצה נמחקה"
+  },
+  {
+    "key": "colGroups.createError",
+    "ru": "Ошибка создания группы",
+    "en": "Failed to create group",
+    "he": "יצירת הקבוצה נכשלה"
+  },
+  {
+    "key": "colGroups.updateError",
+    "ru": "Ошибка обновления группы",
+    "en": "Failed to update group",
+    "he": "עדכון הקבוצה נכשל"
+  },
+  {
+    "key": "colGroups.deleteError",
+    "ru": "Ошибка удаления группы",
+    "en": "Failed to delete group",
+    "he": "מחיקת הקבוצה נכשלה"
+  },
+  {
+    "key": "colGroups.nameRequired",
+    "ru": "Укажите название",
+    "en": "Name is required",
+    "he": "יש להזין שם"
+  },
+  {
+    "key": "colGroups.name",
+    "ru": "Название",
+    "en": "Name",
+    "he": "שם"
+  },
+  {
+    "key": "colGroups.color",
+    "ru": "Цвет группы",
+    "en": "Group color",
+    "he": "צבע הקבוצה"
+  },
+  {
+    "key": "colGroups.displayMode",
+    "ru": "Режим отображения",
+    "en": "Display mode",
+    "he": "מצב תצוגה"
+  },
+  {
+    "key": "colGroups.textColor",
+    "ru": "Цвет текста заголовка",
+    "en": "Header text color",
+    "he": "צבע טקסט הכותרת"
+  },
+  {
+    "key": "colGroups.editTitle",
+    "ru": "Редактировать группу",
+    "en": "Edit group",
+    "he": "ערוך קבוצה"
+  },
+  {
+    "key": "colGroups.newTitle",
+    "ru": "Новая группа",
+    "en": "New group",
+    "he": "קבוצה חדשה"
+  },
+  {
+    "key": "colGroups.deleteTitle",
+    "ru": "Удалить группу?",
+    "en": "Delete group?",
+    "he": "למחוק את הקבוצה?"
+  },
+  {
+    "key": "colGroups.deleteDesc",
+    "ru": "Колонки, привязанные к этой группе, просто перестанут показывать оформление. Это действие нельзя отменить.",
+    "en": "Columns assigned to this group will simply stop showing the styling. This action cannot be undone.",
+    "he": "עמודות המשויכות לקבוצה זו פשוט יפסיקו להציג את העיצוב. לא ניתן לבטל פעולה זו."
+  },
+  {
+    "key": "colGroups.assigned",
+    "ru": "Группа колонки обновлена",
+    "en": "Column group updated",
+    "he": "קבוצת העמודה עודכנה"
+  },
+  {
+    "key": "colGroups.assignError",
+    "ru": "Не удалось обновить группу колонки",
+    "en": "Failed to update column group",
+    "he": "עדכון קבוצת העמודה נכשל"
+  },
+  {
+    "key": "colGroups.inherit",
+    "ru": "Наследовать",
+    "en": "Inherit",
+    "he": "ירושה"
+  },
+  {
+    "key": "colGroups.noGroup",
+    "ru": "Без группы",
+    "en": "No group",
+    "he": "ללא קבוצה"
+  },
+  {
+    "key": "colGroups.pick",
+    "ru": "Группа колонки",
+    "en": "Column group",
+    "he": "קבוצת עמודה"
+  },
+  {
+    "key": "auto.allRecordsConfirm",
+    "ru": "Я понимаю, что изменятся все записи",
+    "en": "I understand that all records will be changed",
+    "he": "אני מבין שכל הרשומות ישתנו"
+  },
+  {
+    "key": "auto.allRecordsWarn",
+    "ru": "Без условий выбора это действие изменит ВСЕ записи выбранной сущности. Существующие значения будут перезаписаны без возможности отмены.",
+    "en": "Without selection conditions, this action will change ALL records of the selected entity. Existing values will be overwritten irreversibly.",
+    "he": "ללא תנאי בחירה, פעולה זו תשנה את כל הרשומות של היישות שנבחרה. הערכים הקיימים יוחלפו ללא אפשרות ביטול."
+  },
+  {
+    "key": "auto.confirmAllNeeded",
+    "ru": "Подтвердите изменение всех записей",
+    "en": "Confirm changing all records",
+    "he": "אשרו שינוי של כל הרשומות"
+  },
+  {
+    "key": "auto.confirmAllNeededDesc",
+    "ru": "Действие «Обновить записи» без условий выбора изменит ВСЕ записи сущности. Отметьте подтверждение, что вы это понимаете.",
+    "en": "The “Update records” action without selection conditions will change ALL records of the entity. Check the box to confirm that you understand this.",
+    "he": "הפעולה «עדכון רשומות» ללא תנאי בחירה תשנה את כל הרשומות של היישות. סמנו את האישור שאתם מבינים זאת."
+  },
+  {
+    "key": "auto.fromTriggerField",
+    "ru": "Из поля записи",
+    "en": "From record field",
+    "he": "משדה הרשומה"
+  },
+  {
+    "key": "auto.nameRequired",
+    "ru": "Название",
+    "en": "Name",
+    "he": "שם"
+  },
+  {
+    "key": "auto.specifyName",
+    "ru": "Укажите название автоматизации",
+    "en": "Specify the automation name",
+    "he": "ציינו את שם האוטומציה"
+  },
+  {
+    "key": "auto.specifySourceField",
+    "ru": "Выберите поле-источник",
+    "en": "Select a source field",
+    "he": "בחרו שדה מקור"
+  },
+  {
+    "key": "auto.specifySourceFieldDesc",
+    "ru": "Для условия со значением «Из поля записи» нужно выбрать поле-источник.",
+    "en": "For a condition with the value “From record field”, you must select a source field.",
+    "he": "עבור תנאי עם הערך «משדה הרשומה» יש לבחור שדה מקור."
+  },
+  {
+    "key": "records.mirrorOrderSaveError",
+    "ru": "Не удалось сохранить порядок колонок",
+    "en": "Failed to save column order",
+    "he": "שמירת סדר העמודות נכשלה"
+  },
+  {
+    "key": "settings.tableBorderColor",
+    "ru": "Цвет линий",
+    "en": "Line color",
+    "he": "צבע הקווים"
+  },
+  {
+    "key": "settings.tableColorsHint",
+    "ru": "Цвета таблицы записей (необязательно). Если не заданы, используются стандартные серые.",
+    "en": "Records table colors (optional). If not set, the default grays are used.",
+    "he": "צבעי טבלת הרשומות (אופציונלי). אם לא הוגדרו, נעשה שימוש באפור ברירת המחדל."
+  },
+  {
+    "key": "settings.tableHeaderColor",
+    "ru": "Цвет заголовка",
+    "en": "Header color",
+    "he": "צבע הכותרת"
+  },
+  {
+    "key": "settings.tableStripeColor",
+    "ru": "Цвет полосок",
+    "en": "Stripe color",
+    "he": "צבע הפסים"
+  },
+  {
+    "key": "settings.tableStyle",
+    "ru": "Стиль таблицы",
+    "en": "Table style",
+    "he": "סגנון הטבלה"
+  },
+  {
+    "key": "settings.tableStyleHint",
+    "ru": "Влияет на отображение таблиц с записями во всей платформе.",
+    "en": "Affects how records tables are displayed across the entire platform.",
+    "he": "משפיע על תצוגת טבלאות הרשומות בכל הפלטפורמה."
+  },
+  {
+    "key": "settings.tableStylePlain",
+    "ru": "Обычный (как сейчас)",
+    "en": "Plain (as now)",
+    "he": "רגיל (כמו עכשיו)"
+  },
+  {
+    "key": "settings.tableStyleStriped",
+    "ru": "Чередующиеся строки",
+    "en": "Striped rows",
+    "he": "שורות מתחלפות"
+  },
+  {
+    "key": "settings.tableStyleStripedBold",
+    "ru": "Чередующиеся строки + выделенный заголовок",
+    "en": "Striped rows + highlighted header",
+    "he": "שורות מתחלפות + כותרת מודגשת"
+  },
+  {
+    "key": "import.title",
+    "ru": "Импорт данных",
+    "en": "Data Import",
+    "he": "ייבוא נתונים"
+  },
+  {
+    "key": "import.subtitle",
+    "ru": "Загрузка записей из файла XLSX/CSV с проверкой по правилам сущности",
+    "en": "Load records from an XLSX/CSV file, validated against the entity's rules",
+    "he": "טעינת רשומות מקובץ XLSX/CSV עם אימות לפי כללי הישות"
+  },
+  {
+    "key": "import.step1",
+    "ru": "1. Выберите сущность",
+    "en": "1. Choose an entity",
+    "he": "1. בחר ישות"
+  },
+  {
+    "key": "import.pickEntity",
+    "ru": "Сущность…",
+    "en": "Entity…",
+    "he": "ישות…"
+  },
+  {
+    "key": "import.step2",
+    "ru": "2. Шаблон и файл",
+    "en": "2. Template & file",
+    "he": "2. תבנית וקובץ"
+  },
+  {
+    "key": "import.downloadTemplate",
+    "ru": "Скачать шаблон",
+    "en": "Download template",
+    "he": "הורד תבנית"
+  },
+  {
+    "key": "import.uploadFile",
+    "ru": "Загрузить файл",
+    "en": "Upload file",
+    "he": "העלה קובץ"
+  },
+  {
+    "key": "import.rowsCount",
+    "ru": "строк",
+    "en": "rows",
+    "he": "שורות"
+  },
+  {
+    "key": "import.parseError",
+    "ru": "Не удалось прочитать файл",
+    "en": "Could not read the file",
+    "he": "לא ניתן לקרוא את הקובץ"
+  },
+  {
+    "key": "import.step3",
+    "ru": "3. Сопоставление колонок",
+    "en": "3. Column mapping",
+    "he": "3. מיפוי עמודות"
+  },
+  {
+    "key": "import.column",
+    "ru": "Колонка файла",
+    "en": "File column",
+    "he": "עמודת הקובץ"
+  },
+  {
+    "key": "import.sample",
+    "ru": "Пример",
+    "en": "Sample",
+    "he": "דוגמה"
+  },
+  {
+    "key": "import.mapTo",
+    "ru": "Поле / связь / статус",
+    "en": "Field / relation / status",
+    "he": "שדה / קשר / סטטוס"
+  },
+  {
+    "key": "import.targetKey",
+    "ru": "Поиск по полю",
+    "en": "Match by field",
+    "he": "התאמה לפי שדה"
+  },
+  {
+    "key": "import.pickTargetKey",
+    "ru": "Поле для поиска…",
+    "en": "Field to match…",
+    "he": "שדה להתאמה…"
+  },
+  {
+    "key": "import.ignore",
+    "ru": "— Пропустить —",
+    "en": "— Skip —",
+    "he": "— דלג —"
+  },
+  {
+    "key": "import.status",
+    "ru": "Статус",
+    "en": "Status",
+    "he": "סטטוס"
+  },
+  {
+    "key": "import.upsertKey",
+    "ru": "Ключ для обновления (upsert)",
+    "en": "Update key (upsert)",
+    "he": "מפתח עדכון (upsert)"
+  },
+  {
+    "key": "import.insertOnly",
+    "ru": "Без обновления (только добавление)",
+    "en": "No update (insert only)",
+    "he": "ללא עדכון (הוספה בלבד)"
+  },
+  {
+    "key": "import.upsertHint",
+    "ru": "Совпадающие записи будут обновлены, остальные — добавлены",
+    "en": "Matching records are updated, the rest are inserted",
+    "he": "רשומות תואמות יעודכנו, השאר יתווספו"
+  },
+  {
+    "key": "import.preview",
+    "ru": "Проверить (без записи)",
+    "en": "Validate (dry run)",
+    "he": "בדוק (ללא כתיבה)"
+  },
+  {
+    "key": "import.commit",
+    "ru": "Импортировать",
+    "en": "Import",
+    "he": "ייבא"
+  },
+  {
+    "key": "import.missingTargetKey",
+    "ru": "Выберите поле поиска для связи",
+    "en": "Choose a match field for the relation",
+    "he": "בחר שדה התאמה לקשר"
+  },
+  {
+    "key": "import.previewError",
+    "ru": "Ошибка проверки",
+    "en": "Validation failed",
+    "he": "האימות נכשל"
+  },
+  {
+    "key": "import.commitError",
+    "ru": "Ошибка импорта",
+    "en": "Import failed",
+    "he": "הייבוא נכשל"
+  },
+  {
+    "key": "import.done",
+    "ru": "Импорт завершён",
+    "en": "Import complete",
+    "he": "הייבוא הושלם"
+  },
+  {
+    "key": "import.resultPreview",
+    "ru": "Результат проверки",
+    "en": "Validation result",
+    "he": "תוצאת האימות"
+  },
+  {
+    "key": "import.resultCommit",
+    "ru": "Результат импорта",
+    "en": "Import result",
+    "he": "תוצאת הייבוא"
+  },
+  {
+    "key": "import.total",
+    "ru": "Всего",
+    "en": "Total",
+    "he": "סה״כ"
+  },
+  {
+    "key": "import.created",
+    "ru": "Создано",
+    "en": "Created",
+    "he": "נוצרו"
+  },
+  {
+    "key": "import.updated",
+    "ru": "Обновлено",
+    "en": "Updated",
+    "he": "עודכנו"
+  },
+  {
+    "key": "import.skipped",
+    "ru": "Пропущено",
+    "en": "Skipped",
+    "he": "דולגו"
+  },
+  {
+    "key": "import.errors",
+    "ru": "Ошибок",
+    "en": "Errors",
+    "he": "שגיאות"
+  },
+  {
+    "key": "import.row",
+    "ru": "Строка",
+    "en": "Row",
+    "he": "שורה"
+  },
+  {
+    "key": "import.statusCol",
+    "ru": "Статус",
+    "en": "Status",
+    "he": "סטטוס"
+  },
+  {
+    "key": "import.error",
+    "ru": "Ошибка",
+    "en": "Error",
+    "he": "שגיאה"
+  },
+  {
+    "key": "import.message",
+    "ru": "Сообщение",
+    "en": "Message",
+    "he": "הודעה"
+  },
+  {
+    "key": "import.downloadErrors",
+    "ru": "Скачать отчёт об ошибках",
+    "en": "Download error report",
+    "he": "הורד דוח שגיאות"
+  },
+  {
+    "key": "import.allOkPreview",
+    "ru": "Ошибок не найдено — можно импортировать",
+    "en": "No errors — ready to import",
+    "he": "אין שגיאות — מוכן לייבוא"
+  },
+  {
+    "key": "import.allOkCommit",
+    "ru": "Все строки импортированы без ошибок",
+    "en": "All rows imported without errors",
+    "he": "כל השורות יובאו ללא שגיאות"
+  },
+  {
+    "key": "dash.tablePageColumns",
+    "ru": "Поля страницы",
+    "en": "Page fields",
+    "he": "שדות עמוד"
+  },
+  {
+    "key": "dash.pivotPageContext",
+    "ru": "Страница (для полей страницы)",
+    "en": "Page (for page fields)",
+    "he": "עמוד (לשדות עמוד)"
+  },
+  {
+    "key": "dash.pivotPageNone",
+    "ru": "Без страницы",
+    "en": "No page",
+    "he": "ללא עמוד"
+  },
+  {
+    "key": "dash.pivotNeedsPage",
+    "ru": "Выберите страницу для полей страницы",
+    "en": "Select a page for page fields",
+    "he": "בחרו עמוד לשדות עמוד"
+  },
+  {
+    "key": "dash.tableNeedsPage",
+    "ru": "Выберите страницу для полей страницы",
+    "en": "Select a page for page fields",
+    "he": "בחרו עמוד לשדות עמוד"
+  },
+  {
+    "key": "pivot.pageFieldSuffix",
+    "ru": "поле страницы",
+    "en": "page field",
+    "he": "שדה עמוד"
+  }
 ]

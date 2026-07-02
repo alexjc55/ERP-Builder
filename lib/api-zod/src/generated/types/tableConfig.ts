@@ -17,6 +17,16 @@ export interface TableConfig {
      */
   relatedColumns?: TableRelatedColumn[] | null;
   /**
+     * The page whose page-local field values provide the pageFieldKeys columns. Must belong to the same entity (its bound page or a mirror page). Required when pageFieldKeys is non-empty.
+     * @nullable
+     */
+  pageId?: number | null;
+  /**
+     * Page-local field keys (of pageId) shown as extra columns, appended after the entity columns.
+     * @nullable
+     */
+  pageFieldKeys?: string[] | null;
+  /**
      * Restrict to records in these statuses; empty/null = all statuses
      * @nullable
      */

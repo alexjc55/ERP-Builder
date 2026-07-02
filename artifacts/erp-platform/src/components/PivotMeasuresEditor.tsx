@@ -23,8 +23,10 @@ export type DraftMeasure = {
   /** Stable id within the pivot: column key + the {ref} target for calc measures. */
   key: string;
   agg: "count" | "sum" | "formula" | "calc";
-  /** For agg=sum: the numeric entity field key. */
+  /** For agg=sum: the numeric field key (entity or page-local, per `source`). */
   fieldKey: string;
+  /** For agg=sum: where the numeric field lives. Absent = entity (back-compat). */
+  source?: "entity" | "page";
   /** For agg=formula (per-record) or agg=calc (over other measures). */
   formula: string;
   /** Multilingual column-header override. */
@@ -57,7 +59,7 @@ export function draftToMeasure(m: DraftMeasure, includeKey: boolean): PivotMeasu
   const name = cleanML(m.nameJson);
   let out: PivotMeasure;
   if (m.agg === "sum") {
-    out = { agg: "sum", source: "entity", fieldKey: m.fieldKey };
+    out = { agg: "sum", source: m.source === "page" ? "page" : "entity", fieldKey: m.fieldKey };
   } else if (m.agg === "formula") {
     out = { agg: "formula", formula: m.formula.trim() };
   } else if (m.agg === "calc") {
@@ -79,6 +81,7 @@ export function measuresFromConfig(
     key: (mm?.key && mm.key.trim()) || newMeasureKey(),
     agg: mm?.agg === "sum" ? "sum" : mm?.agg === "formula" ? "formula" : mm?.agg === "calc" ? "calc" : "count",
     fieldKey: mm?.fieldKey ?? "",
+    source: mm?.source === "page" ? "page" : "entity",
     formula: mm?.formula ?? "",
     nameJson: ((mm?.nameJson as MLValue | null | undefined) ?? (mm?.formulaName as MLValue | null | undefined) ?? {}),
   });
@@ -139,7 +142,12 @@ export function PivotMeasuresEditor({
 }: {
   measures: DraftMeasure[];
   onChange: (next: DraftMeasure[]) => void;
-  sumFields: { fieldKey: string; nameJson: MultilingualText | string | null | undefined }[];
+  sumFields: {
+    fieldKey: string;
+    nameJson: MultilingualText | string | null | undefined;
+    /** Where the field lives; absent = entity (back-compat for existing callers). */
+    source?: "entity" | "page";
+  }[];
   formulaRefs: FormulaFieldRef[];
   ml: (val: MultilingualText | string | undefined | null) => string;
   t: (k: string, f: string) => string;
@@ -156,7 +164,9 @@ export function PivotMeasuresEditor({
   // bare generated key (e.g. "Цена" / "Количество" instead of m_mqjx1rf3_55).
   const measureDefaultLabel = (o: DraftMeasure): string => {
     if (o.agg === "sum") {
-      const f = sumFields.find((s) => s.fieldKey === o.fieldKey);
+      const f = sumFields.find(
+        (s) => s.fieldKey === o.fieldKey && (s.source ?? "entity") === (o.source ?? "entity"),
+      );
       return (f && ml(f.nameJson)) || t("pivot.aggSum", "Сумма поля");
     }
     if (o.agg === "formula") return t("pivot.aggFormula", "Формула");
@@ -200,7 +210,16 @@ export function PivotMeasuresEditor({
                   </SelectContent>
                 </Select>
                 {m.agg === "sum" && (
-                  <Select value={m.fieldKey} onValueChange={(v) => update(idx, { fieldKey: v })}>
+                  <Select
+                    // Namespace page fields in the select value ("p:" prefix) so an
+                    // entity field and a page field with the same key never collide.
+                    value={m.fieldKey ? ((m.source ?? "entity") === "page" ? `p:${m.fieldKey}` : m.fieldKey) : ""}
+                    onValueChange={(v) =>
+                      v.startsWith("p:")
+                        ? update(idx, { fieldKey: v.slice(2), source: "page" })
+                        : update(idx, { fieldKey: v, source: "entity" })
+                    }
+                  >
                     <SelectTrigger className="h-8 text-sm flex-1">
                       <SelectValue placeholder={t("pivot.selectNumberField", "числовое поле…")} />
                     </SelectTrigger>
@@ -210,9 +229,15 @@ export function PivotMeasuresEditor({
                           {t("pivot.noNumberFields", "Нет числовых полей в сводных")}
                         </div>
                       ) : (
-                        sumFields.map((f) => (
-                          <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson)}</SelectItem>
-                        ))
+                        sumFields.map((f) => {
+                          const val = (f.source ?? "entity") === "page" ? `p:${f.fieldKey}` : f.fieldKey;
+                          return (
+                            <SelectItem key={val} value={val}>
+                              {ml(f.nameJson)}
+                              {(f.source ?? "entity") === "page" ? ` · ${t("pivot.pageFieldSuffix", "поле страницы")}` : ""}
+                            </SelectItem>
+                          );
+                        })
                       )}
                     </SelectContent>
                   </Select>

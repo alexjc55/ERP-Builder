@@ -5,6 +5,7 @@ import {
   entitiesTable,
   entityFieldsTable,
   entityRecordsTable,
+  pageFieldsTable,
   viewsTable,
 } from "@workspace/db";
 import { eq, isNull, asc, and, inArray, type SQL } from "drizzle-orm";
@@ -266,6 +267,7 @@ router.get("/pages/:id/pivot/data", requireAuth, async (req, res): Promise<void>
     source?: "entity" | "view" | "custom";
     viewId?: number | null;
     pivot?: unknown;
+    pageId?: number | null;
     filters?: FilterCondition[];
     filterConjunction?: "and" | "or";
     statusIds?: number[];
@@ -320,11 +322,41 @@ router.get("/pages/:id/pivot/data", requireAuth, async (req, res): Promise<void>
   const statusIds = (cfg.statusIds ?? []).filter((n) => Number.isInteger(n));
   if (statusIds.length > 0) clauses.push(inArray(entityRecordsTable.statusId, statusIds));
 
+  // Page context for page-local (source=page) dims/measures in a CUSTOM config:
+  // re-check at compute time that the context page still belongs to this entity
+  // (bound page or mirror page); on mismatch skip it — a config that references
+  // page fields then degrades to the empty result inside computePivot.
+  let pageFields: { fieldKey: string; pivotEnabled: boolean | null; fieldType: string; nameJson: unknown }[] = [];
+  let ctxPageId: number | undefined;
+  if (cfg.source === "custom" && cfg.pageId != null) {
+    const [ctxPage] = await db
+      .select({ mirrorEntityId: pagesTable.mirrorEntityId, entityId: entitiesTable.id })
+      .from(pagesTable)
+      .leftJoin(entitiesTable, eq(entitiesTable.pageId, pagesTable.id))
+      .where(eq(pagesTable.id, cfg.pageId))
+      .limit(1);
+    const ctxEntityId = ctxPage?.mirrorEntityId ?? ctxPage?.entityId ?? null;
+    if (ctxEntityId === entityId) {
+      ctxPageId = cfg.pageId;
+      pageFields = await db
+        .select({
+          fieldKey: pageFieldsTable.fieldKey,
+          pivotEnabled: pageFieldsTable.pivotEnabled,
+          fieldType: pageFieldsTable.fieldType,
+          nameJson: pageFieldsTable.nameJson,
+        })
+        .from(pageFieldsTable)
+        .where(and(eq(pageFieldsTable.pageId, cfg.pageId), eq(pageFieldsTable.isActive, true)));
+    }
+  }
+
   const outcome = await computePivot({
     entityId,
     pivot,
     entityFields: fields,
     relationMeta,
+    pageFields,
+    pageId: ctxPageId,
     where: and(...clauses)!,
   });
   if (!outcome.ok) {

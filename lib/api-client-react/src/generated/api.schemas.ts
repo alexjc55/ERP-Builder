@@ -991,6 +991,11 @@ export interface PivotPageConfig {
   viewId?: number | null;
   /** Inline pivot config when source=custom. */
   pivot?: PivotConfig | null;
+  /**
+     * Page context enabling page-local (source=page) dimensions/measures in the custom pivot. Must belong to the pivot entity (its bound page or a mirror page).
+     * @nullable
+     */
+  pageId?: number | null;
   filters?: FilterCondition[];
   filterConjunction?: PivotPageConfigFilterConjunction;
   statusIds?: number[];
@@ -1340,6 +1345,16 @@ export interface TableConfig {
      */
   relatedColumns?: TableRelatedColumn[] | null;
   /**
+     * The page whose page-local field values provide the pageFieldKeys columns. Must belong to the same entity (its bound page or a mirror page). Required when pageFieldKeys is non-empty.
+     * @nullable
+     */
+  pageId?: number | null;
+  /**
+     * Page-local field keys (of pageId) shown as extra columns, appended after the entity columns.
+     * @nullable
+     */
+  pageFieldKeys?: string[] | null;
+  /**
      * Restrict to records in these statuses; empty/null = all statuses
      * @nullable
      */
@@ -1357,6 +1372,11 @@ export interface TableConfig {
 export interface WidgetPivotConfig {
   entityId: number;
   pivot: PivotConfig;
+  /**
+     * Page context enabling page-local (source=page) pivot dimensions/measures. Must belong to the same entity (its bound page or a mirror page). Required when any dimension/measure has source=page.
+     * @nullable
+     */
+  pageId?: number | null;
   /**
      * Restrict to records in these statuses; empty/null = all statuses
      * @nullable

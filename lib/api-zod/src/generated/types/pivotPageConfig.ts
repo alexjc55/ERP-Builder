@@ -23,6 +23,11 @@ export interface PivotPageConfig {
   viewId?: number | null;
   /** Inline pivot config when source=custom. */
   pivot?: PivotConfig | null;
+  /**
+     * Page context enabling page-local (source=page) dimensions/measures in the custom pivot. Must belong to the pivot entity (its bound page or a mirror page).
+     * @nullable
+     */
+  pageId?: number | null;
   filters?: FilterCondition[];
   filterConjunction?: PivotPageConfigFilterConjunction;
   statusIds?: number[];

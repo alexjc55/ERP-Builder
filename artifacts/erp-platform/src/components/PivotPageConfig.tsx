@@ -6,6 +6,10 @@ import {
   useListEntityStatuses,
   useListUserOptions,
   useListEntityRelations,
+  useListEntities,
+  useListPages,
+  useListPageFields,
+  getListPageFieldsQueryKey,
   useGetEntityFilterValues,
   getListEntityFieldsQueryOptions,
   type Field,
@@ -16,6 +20,7 @@ import {
   type FilterOperator,
   type PivotConfig,
   type PivotDimension,
+  type PageField,
 } from "@workspace/api-client-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -61,6 +66,8 @@ export type PivotPageConfigValue = {
   filterConjunction?: "and" | "or";
   statusIds?: number[];
   search?: string | null;
+  /** Page context for page-local dims/measures in the custom pivot (a page of this entity). */
+  pageId?: number | null;
 };
 
 /**
@@ -182,6 +189,15 @@ export function PivotPageConfig({
   const pivotSumFields = fields.filter((f: Field) => f.pivotEnabled && f.fieldType === "number");
   const pivotFormulaRefs: FormulaFieldRef[] = pivotSumFields.map((f: Field) => ({ key: f.fieldKey, label: ml(f.nameJson) }));
 
+  // Page context for page-local dims/measures: only pages of THIS entity qualify
+  // (its bound page or a mirror page) — mirrors the server-side pageId validation.
+  const { data: allEntities = [] } = useListEntities();
+  const { data: allPages = [] } = useListPages();
+  const boundPageId = allEntities.find((e) => e.id === entityId)?.pageId ?? null;
+  const entityPages = allPages.filter(
+    (p) => p.isActive && (p.mirrorEntityId === entityId || p.id === boundPageId),
+  );
+
   // --- editor state ---
   const [source, setSource] = useState<"entity" | "view" | "custom">(initial?.source ?? "entity");
   const [viewId, setViewId] = useState<string>(initial?.viewId != null ? String(initial.viewId) : "none");
@@ -206,6 +222,32 @@ export function PivotPageConfig({
   const [pivotMeasures, setPivotMeasures] = useState<DraftMeasure[]>(
     initPivot ? measuresFromConfig(initPivot) : [newDraftMeasure(pivotSumFields[0]?.fieldKey ?? "")],
   );
+  const [pivotPageId, setPivotPageId] = useState<number | null>(initial?.pageId ?? null);
+
+  // Page-local fields available as dims/measures for the custom pivot. Same
+  // opt-in gates as the server (active + pivotEnabled).
+  const { data: pageFieldsRaw = [] } = useListPageFields(pivotPageId ?? 0, {
+    query: { enabled: pivotPageId != null, queryKey: getListPageFieldsQueryKey(pivotPageId ?? 0) },
+  });
+  const activePivotPageFields = pageFieldsRaw.filter((f: PageField) => f.isActive !== false && f.pivotEnabled);
+  const pageDimFields = activePivotPageFields
+    .filter((f: PageField) => PIVOT_DIM_TYPES.has(f.fieldType) && f.fieldType !== "relation" && f.fieldType !== "lookup")
+    .map((f: PageField) => ({ fieldKey: f.fieldKey, nameJson: f.nameJson, fieldType: f.fieldType }));
+  const pageSumFields = activePivotPageFields
+    .filter((f: PageField) => f.fieldType === "number")
+    .map((f: PageField) => ({ fieldKey: f.fieldKey, nameJson: f.nameJson as MultilingualText, source: "page" as const }));
+
+  // Dropping/changing the page context clears page-sourced dims/measures.
+  const setPageContext = (pid: number | null) => {
+    setPivotPageId(pid);
+    const resetDim = (d: DraftDim): DraftDim =>
+      d.source === "page" ? { source: "status", fieldKey: "", datePeriod: null } : d;
+    setPivotRows(resetDim);
+    setPivotCols(resetDim);
+    setPivotMeasures((prev) =>
+      prev.map((m) => (m.agg === "sum" && m.source === "page" ? { ...m, fieldKey: "", source: "entity" as const } : m)),
+    );
+  };
 
   const addFilter = () =>
     setFilters((prev) => [...prev, { field: fields[0]?.fieldKey ?? "", operator: "eq" as FilterOperator, valueText: "" }]);
@@ -236,13 +278,19 @@ export function PivotPageConfig({
     if (source === "custom") {
       const measures = pivotMeasures.length > 1;
       const built = buildMeasureConfig(pivotMeasures, t);
-      if (built) {
+      if (!("error" in built)) {
         const pivot: PivotConfig = {
           rows: draftToDim(pivotRows, dimFieldsForBuild),
           ...(pivotColsOn && !measures ? { cols: draftToDim(pivotCols, dimFieldsForBuild) } : {}),
           ...built,
         };
         cfg.pivot = pivot;
+        // Only persist the page context when a page dim/measure actually uses it.
+        const usesPage =
+          pivot.rows.source === "page" ||
+          pivot.cols?.source === "page" ||
+          pivotMeasures.some((m) => m.agg === "sum" && m.source === "page");
+        cfg.pageId = usesPage ? pivotPageId : null;
       }
     }
     onChangeRef.current(cfg);
@@ -257,6 +305,7 @@ export function PivotPageConfig({
     pivotCols,
     pivotColsOn,
     pivotMeasures,
+    pivotPageId,
     dimFieldsForBuild,
     t,
   ]);
@@ -302,11 +351,29 @@ export function PivotPageConfig({
             <Table2 className="w-4 h-4 text-blue-600" />
             {t("pivot.configTitle", "Конфигурация сводной таблицы")}
           </div>
+          {entityPages.length > 0 && (
+            <div className="space-y-1.5">
+              <Label className="text-sm">{t("dash.pivotPageContext", "Страница (для полей страницы)")}</Label>
+              <Select
+                value={pivotPageId != null ? String(pivotPageId) : "__none__"}
+                onValueChange={(v) => setPageContext(v === "__none__" ? null : Number(v))}
+              >
+                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t("dash.pivotPageNone", "Без страницы")} /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">{t("dash.pivotPageNone", "Без страницы")}</SelectItem>
+                  {entityPages.map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <PivotDimEditor
             label={t("pivot.rows", "Строки")}
             dim={pivotRows}
             onChange={setPivotRows}
             dimFields={pivotDimFields}
+            pageDimFields={pivotPageId != null ? pageDimFields : []}
             ml={ml}
             t={t}
           />
@@ -322,6 +389,7 @@ export function PivotPageConfig({
                   dim={pivotCols}
                   onChange={setPivotCols}
                   dimFields={pivotDimFields}
+                  pageDimFields={pivotPageId != null ? pageDimFields : []}
                   ml={ml}
                   t={t}
                 />
@@ -331,7 +399,10 @@ export function PivotPageConfig({
           <PivotMeasuresEditor
             measures={pivotMeasures}
             onChange={setPivotMeasures}
-            sumFields={pivotSumFields.map((f: Field) => ({ fieldKey: f.fieldKey, nameJson: f.nameJson }))}
+            sumFields={[
+              ...pivotSumFields.map((f: Field) => ({ fieldKey: f.fieldKey, nameJson: f.nameJson })),
+              ...(pivotPageId != null ? pageSumFields : []),
+            ]}
             formulaRefs={pivotFormulaRefs}
             ml={ml}
             t={t}

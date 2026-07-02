@@ -1212,6 +1212,7 @@ export const ListPagesResponseItem = zod.object({
 })).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Inline pivot config when source=custom.'),
+  "pageId": zod.number().nullish().describe('Page context enabling page-local (source=page) dimensions\/measures in the custom pivot. Must belong to the pivot entity (its bound page or a mirror page).'),
   "filters": zod.array(zod.object({
   "field": zod.string(),
   "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
@@ -1322,6 +1323,7 @@ export const CreatePageBody = zod.object({
 })).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Inline pivot config when source=custom.'),
+  "pageId": zod.number().nullish().describe('Page context enabling page-local (source=page) dimensions\/measures in the custom pivot. Must belong to the pivot entity (its bound page or a mirror page).'),
   "filters": zod.array(zod.object({
   "field": zod.string(),
   "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
@@ -1430,6 +1432,7 @@ export const GetPageResponse = zod.object({
 })).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Inline pivot config when source=custom.'),
+  "pageId": zod.number().nullish().describe('Page context enabling page-local (source=page) dimensions\/measures in the custom pivot. Must belong to the pivot entity (its bound page or a mirror page).'),
   "filters": zod.array(zod.object({
   "field": zod.string(),
   "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
@@ -1540,6 +1543,7 @@ export const UpdatePageBody = zod.object({
 })).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Inline pivot config when source=custom.'),
+  "pageId": zod.number().nullish().describe('Page context enabling page-local (source=page) dimensions\/measures in the custom pivot. Must belong to the pivot entity (its bound page or a mirror page).'),
   "filters": zod.array(zod.object({
   "field": zod.string(),
   "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
@@ -1640,6 +1644,7 @@ export const UpdatePageResponse = zod.object({
 })).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Inline pivot config when source=custom.'),
+  "pageId": zod.number().nullish().describe('Page context enabling page-local (source=page) dimensions\/measures in the custom pivot. Must belong to the pivot entity (its bound page or a mirror page).'),
   "filters": zod.array(zod.object({
   "field": zod.string(),
   "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
@@ -1766,6 +1771,8 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "relationId": zod.number(),
   "relatedFieldKey": zod.string()
 })).nullish().describe('Related-entity columns, each surfacing one field of a linked record through a qualifying single-link relation. Appended after the entity columns.'),
+  "pageId": zod.number().nullish().describe('The page whose page-local field values provide the pageFieldKeys columns. Must belong to the same entity (its bound page or a mirror page). Required when pageFieldKeys is non-empty.'),
+  "pageFieldKeys": zod.array(zod.string()).nullish().describe('Page-local field keys (of pageId) shown as extra columns, appended after the entity columns.'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional(),
@@ -1818,6 +1825,7 @@ export const ListDashboardWidgetsResponseItem = zod.object({
 })).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
+  "pageId": zod.number().nullish().describe('Page context enabling page-local (source=page) pivot dimensions\/measures. Must belong to the same entity (its bound page or a mirror page). Required when any dimension\/measure has source=page.'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
 }).optional().describe('Pivot (cross-tab) widget config. The pivot is computed admin-authoritatively over the entity\'s non-archived records (independent of the viewing role\'s data permissions); access is governed by the widget\'s role visibility. The entity must have pivot enabled and dimensions\/measures must reference pivot-enabled fields.'),
   "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish().describe('How the widget color is applied — icon box (default), card border, or full fill.'),
@@ -1905,6 +1913,8 @@ export const CreateDashboardWidgetBody = zod.object({
   "relationId": zod.number(),
   "relatedFieldKey": zod.string()
 })).nullish().describe('Related-entity columns, each surfacing one field of a linked record through a qualifying single-link relation. Appended after the entity columns.'),
+  "pageId": zod.number().nullish().describe('The page whose page-local field values provide the pageFieldKeys columns. Must belong to the same entity (its bound page or a mirror page). Required when pageFieldKeys is non-empty.'),
+  "pageFieldKeys": zod.array(zod.string()).nullish().describe('Page-local field keys (of pageId) shown as extra columns, appended after the entity columns.'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional(),
@@ -1957,6 +1967,7 @@ export const CreateDashboardWidgetBody = zod.object({
 })).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
+  "pageId": zod.number().nullish().describe('Page context enabling page-local (source=page) pivot dimensions\/measures. Must belong to the same entity (its bound page or a mirror page). Required when any dimension\/measure has source=page.'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
 }).optional().describe('Pivot (cross-tab) widget config. The pivot is computed admin-authoritatively over the entity\'s non-archived records (independent of the viewing role\'s data permissions); access is governed by the widget\'s role visibility. The entity must have pivot enabled and dimensions\/measures must reference pivot-enabled fields.'),
   "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish().describe('How the widget color is applied — icon box (default), card border, or full fill.'),
@@ -2035,6 +2046,8 @@ export const CreateDashboardWidgetResponse = zod.object({
   "relationId": zod.number(),
   "relatedFieldKey": zod.string()
 })).nullish().describe('Related-entity columns, each surfacing one field of a linked record through a qualifying single-link relation. Appended after the entity columns.'),
+  "pageId": zod.number().nullish().describe('The page whose page-local field values provide the pageFieldKeys columns. Must belong to the same entity (its bound page or a mirror page). Required when pageFieldKeys is non-empty.'),
+  "pageFieldKeys": zod.array(zod.string()).nullish().describe('Page-local field keys (of pageId) shown as extra columns, appended after the entity columns.'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional(),
@@ -2087,6 +2100,7 @@ export const CreateDashboardWidgetResponse = zod.object({
 })).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
+  "pageId": zod.number().nullish().describe('Page context enabling page-local (source=page) pivot dimensions\/measures. Must belong to the same entity (its bound page or a mirror page). Required when any dimension\/measure has source=page.'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
 }).optional().describe('Pivot (cross-tab) widget config. The pivot is computed admin-authoritatively over the entity\'s non-archived records (independent of the viewing role\'s data permissions); access is governed by the widget\'s role visibility. The entity must have pivot enabled and dimensions\/measures must reference pivot-enabled fields.'),
   "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish().describe('How the widget color is applied — icon box (default), card border, or full fill.'),
@@ -2294,6 +2308,8 @@ export const UpdateDashboardWidgetBody = zod.object({
   "relationId": zod.number(),
   "relatedFieldKey": zod.string()
 })).nullish().describe('Related-entity columns, each surfacing one field of a linked record through a qualifying single-link relation. Appended after the entity columns.'),
+  "pageId": zod.number().nullish().describe('The page whose page-local field values provide the pageFieldKeys columns. Must belong to the same entity (its bound page or a mirror page). Required when pageFieldKeys is non-empty.'),
+  "pageFieldKeys": zod.array(zod.string()).nullish().describe('Page-local field keys (of pageId) shown as extra columns, appended after the entity columns.'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional(),
@@ -2346,6 +2362,7 @@ export const UpdateDashboardWidgetBody = zod.object({
 })).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
+  "pageId": zod.number().nullish().describe('Page context enabling page-local (source=page) pivot dimensions\/measures. Must belong to the same entity (its bound page or a mirror page). Required when any dimension\/measure has source=page.'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
 }).optional().describe('Pivot (cross-tab) widget config. The pivot is computed admin-authoritatively over the entity\'s non-archived records (independent of the viewing role\'s data permissions); access is governed by the widget\'s role visibility. The entity must have pivot enabled and dimensions\/measures must reference pivot-enabled fields.'),
   "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish().describe('How the widget color is applied — icon box (default), card border, or full fill.'),
@@ -2424,6 +2441,8 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "relationId": zod.number(),
   "relatedFieldKey": zod.string()
 })).nullish().describe('Related-entity columns, each surfacing one field of a linked record through a qualifying single-link relation. Appended after the entity columns.'),
+  "pageId": zod.number().nullish().describe('The page whose page-local field values provide the pageFieldKeys columns. Must belong to the same entity (its bound page or a mirror page). Required when pageFieldKeys is non-empty.'),
+  "pageFieldKeys": zod.array(zod.string()).nullish().describe('Page-local field keys (of pageId) shown as extra columns, appended after the entity columns.'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional(),
@@ -2476,6 +2495,7 @@ export const UpdateDashboardWidgetResponse = zod.object({
 })).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
+  "pageId": zod.number().nullish().describe('Page context enabling page-local (source=page) pivot dimensions\/measures. Must belong to the same entity (its bound page or a mirror page). Required when any dimension\/measure has source=page.'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
 }).optional().describe('Pivot (cross-tab) widget config. The pivot is computed admin-authoritatively over the entity\'s non-archived records (independent of the viewing role\'s data permissions); access is governed by the widget\'s role visibility. The entity must have pivot enabled and dimensions\/measures must reference pivot-enabled fields.'),
   "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish().describe('How the widget color is applied — icon box (default), card border, or full fill.'),

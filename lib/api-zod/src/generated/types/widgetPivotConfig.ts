@@ -14,6 +14,11 @@ export interface WidgetPivotConfig {
   entityId: number;
   pivot: PivotConfig;
   /**
+     * Page context enabling page-local (source=page) pivot dimensions/measures. Must belong to the same entity (its bound page or a mirror page). Required when any dimension/measure has source=page.
+     * @nullable
+     */
+  pageId?: number | null;
+  /**
      * Restrict to records in these statuses; empty/null = all statuses
      * @nullable
      */

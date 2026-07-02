@@ -4527,6 +4527,14 @@ components:
           items:
             $ref: "#/components/schemas/TableRelatedColumn"
           description: Related-entity columns, each surfacing one field of a linked record through a qualifying single-link relation. Appended after the entity columns.
+        pageId:
+          type: ["integer", "null"]
+          description: The page whose page-local field values provide the pageFieldKeys columns. Must belong to the same entity (its bound page or a mirror page). Required when pageFieldKeys is non-empty.
+        pageFieldKeys:
+          type: ["array", "null"]
+          items:
+            type: string
+          description: Page-local field keys (of pageId) shown as extra columns, appended after the entity columns.
         statusIds:
           type: ["array", "null"]
           items:
@@ -4554,6 +4562,9 @@ components:
           type: integer
         pivot:
           $ref: "#/components/schemas/PivotConfig"
+        pageId:
+          type: ["integer", "null"]
+          description: Page context enabling page-local (source=page) pivot dimensions/measures. Must belong to the same entity (its bound page or a mirror page). Required when any dimension/measure has source=page.
         statusIds:
           type: ["array", "null"]
           items:
@@ -6666,6 +6677,9 @@ components:
             - $ref: "#/components/schemas/PivotConfig"
             - type: "null"
           description: Inline pivot config when source=custom.
+        pageId:
+          type: ["integer", "null"]
+          description: Page context enabling page-local (source=page) dimensions/measures in the custom pivot. Must belong to the pivot entity (its bound page or a mirror page).
         filters:
           type: array
           items:

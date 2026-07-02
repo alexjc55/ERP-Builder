@@ -119,6 +119,11 @@ interface TableSpec {
   relatedColumns?: TableRelatedColumnSpec[] | null;
   statusIds?: number[] | null;
   limit?: number | null;
+  // Page-local columns: `pageFieldKeys` are page-local field keys of `pageId`
+  // (a page of the SAME entity — its bound page or a mirror page), appended
+  // after the entity columns.
+  pageId?: number | null;
+  pageFieldKeys?: string[] | null;
 }
 
 interface NoteCellSourceSpec {
@@ -152,6 +157,9 @@ interface PivotSpec {
   entityId: number;
   pivot: PivotConfigInput;
   statusIds?: number[] | null;
+  // Page context enabling page-local (source=page) dims/measures. Must be a page
+  // of the SAME entity (its bound page or a mirror page).
+  pageId?: number | null;
 }
 
 interface WidgetConfigShape {
@@ -459,6 +467,25 @@ async function validateTableConfig(table: TableSpec | null | undefined): Promise
       if (!valid.has(sid)) return `Status ${sid} not found on entity ${table.entityId}`;
     }
   }
+
+  // Page-local columns: the page must belong to the SAME entity (its bound page
+  // or a mirror page) and every key must be an active page-local field of it.
+  const pageFieldKeys = (table.pageFieldKeys ?? []).filter((k) => typeof k === "string" && k);
+  if (pageFieldKeys.length > 0) {
+    if (table.pageId == null) return "pageId is required for page-local table columns";
+    const pageEntityId = await resolvePageEntityId(table.pageId);
+    if (pageEntityId !== table.entityId) {
+      return `Page ${table.pageId} does not belong to entity ${table.entityId}`;
+    }
+    const pfs = await db
+      .select({ fieldKey: pageFieldsTable.fieldKey })
+      .from(pageFieldsTable)
+      .where(and(eq(pageFieldsTable.pageId, table.pageId), eq(pageFieldsTable.isActive, true)));
+    const knownPf = new Set(pfs.map((f) => f.fieldKey));
+    for (const key of pageFieldKeys) {
+      if (!knownPf.has(key)) return `Page field "${key}" not found on page ${table.pageId}`;
+    }
+  }
   return null;
 }
 
@@ -684,11 +711,25 @@ async function validatePivotConfig(spec: PivotSpec | null | undefined): Promise<
   if (!entity) return `Entity ${spec.entityId} not found`;
   if (!entity.pivotEnabled) return "Pivot mode is not enabled for this entity";
   if (!spec.pivot.rows || !spec.pivot.rows.source) return "Pivot requires a rows dimension";
-  // Dashboard pivot widgets compute over a plain entity boundary with no page-local
-  // context (unlike the records-page pivot), so page-sourced dimensions/measures
-  // cannot resolve here — reject them rather than persist a config that computes to null.
-  if (spec.pivot.rows.source === "page" || spec.pivot.cols?.source === "page") {
-    return "Dashboard pivot dimensions must be an entity field or status";
+  // Page-sourced dimensions/measures need a page context: `pageId` must be set
+  // and belong to the SAME entity (its bound page or a mirror page). Without a
+  // pageId they cannot resolve — reject rather than persist a config that
+  // computes to null. Deep per-page-field checks (pivot opt-in, type) stay in
+  // computePivot, mirroring the entity-field approach.
+  const usesPageDim = spec.pivot.rows.source === "page" || spec.pivot.cols?.source === "page";
+  const usesPageMeasure =
+    (spec.pivot.measures ?? []).some((m) => m?.agg === "sum" && m.source === "page") ||
+    (spec.pivot.measure?.agg === "sum" && spec.pivot.measure.source === "page");
+  if (usesPageDim || usesPageMeasure) {
+    if (spec.pageId == null) {
+      return "Для измерений/мер по полям страницы выберите страницу";
+    }
+  }
+  if (spec.pageId != null) {
+    const pageEntityId = await resolvePageEntityId(spec.pageId);
+    if (pageEntityId !== spec.entityId) {
+      return `Page ${spec.pageId} does not belong to entity ${spec.entityId}`;
+    }
   }
   const measures = spec.pivot.measures;
   if (measures && measures.length > 0) {
@@ -704,7 +745,6 @@ async function validatePivotConfig(spec: PivotSpec | null | undefined): Promise<
       if (seen.has(key)) return `Duplicate measure key: ${key}`;
       seen.add(key);
       if (m.agg === "sum") {
-        if (m.source === "page") return "Dashboard pivot measure must be an entity field";
         if (!m.fieldKey) return "Pivot sum measure requires a numeric field";
         valueKeys.add(key);
         hasValue = true;
@@ -739,9 +779,6 @@ async function validatePivotConfig(spec: PivotSpec | null | undefined): Promise<
   // Single-measure mode (back-compat).
   if (!spec.pivot.measure || !spec.pivot.measure.agg) return "Pivot requires a measure";
   if (spec.pivot.measure.agg === "calc") return "Вычисляемая мера доступна только при нескольких мерах";
-  if (spec.pivot.measure.agg === "sum" && spec.pivot.measure.source === "page") {
-    return "Dashboard pivot measure must be an entity field";
-  }
   if (spec.pivot.measure.agg === "formula" && !spec.pivot.measure.formula?.trim()) {
     return "Pivot formula measure requires a formula";
   }
@@ -773,6 +810,26 @@ async function computePivotWidget(spec: PivotSpec): Promise<PivotResultShape | n
     .from(entityFieldsTable)
     .where(and(eq(entityFieldsTable.entityId, spec.entityId), eq(entityFieldsTable.isActive, true)));
   const relationMeta = await buildRelationMeta(spec.entityId, fields);
+  // Page context for page-local dims/measures: re-check at compute time that the
+  // page still belongs to this entity (degrade to null otherwise, mirroring the
+  // pivot-opt-in recheck above), then load ALL its active page-local fields —
+  // admin-authoritative, like the entity field set.
+  let pageFields: { fieldKey: string; pivotEnabled: boolean | null; fieldType: string; nameJson: unknown }[] = [];
+  let pageId: number | undefined;
+  if (spec.pageId != null) {
+    const pageEntityId = await resolvePageEntityId(spec.pageId);
+    if (pageEntityId !== spec.entityId) return null;
+    pageId = spec.pageId;
+    pageFields = await db
+      .select({
+        fieldKey: pageFieldsTable.fieldKey,
+        pivotEnabled: pageFieldsTable.pivotEnabled,
+        fieldType: pageFieldsTable.fieldType,
+        nameJson: pageFieldsTable.nameJson,
+      })
+      .from(pageFieldsTable)
+      .where(and(eq(pageFieldsTable.pageId, spec.pageId), eq(pageFieldsTable.isActive, true)));
+  }
   const conds: SQL[] = [
     eq(entityRecordsTable.entityId, spec.entityId),
     isNull(entityRecordsTable.archivedAt),
@@ -784,6 +841,8 @@ async function computePivotWidget(spec: PivotSpec): Promise<PivotResultShape | n
     pivot: spec.pivot,
     entityFields: fields,
     relationMeta,
+    pageFields,
+    pageId,
     where: and(...conds)!,
   });
   return outcome.ok ? outcome.result : null;
@@ -1165,7 +1224,51 @@ async function computeTableData(
     });
   }
 
-  const allColumns = [...columns, ...relCols.map((rc) => ({ fieldKey: rc.fieldKey, label: rc.label, fieldType: rc.fieldType }))];
+  // Page-local columns: values live in page_record_values for (pageId, recordId).
+  // ADMIN-AUTHORITATIVE like the rest. Synthetic key avoids entity-key collisions.
+  // The page-vs-entity binding is re-checked at compute time (degrade: skip cols).
+  const pageCols: Array<{ fieldKey: string; label: string; fieldType: string; pfKey: string }> = [];
+  const pageValuesByRecord = new Map<number, Record<string, unknown>>();
+  const wantedPfKeys = (t.pageFieldKeys ?? []).filter((k) => typeof k === "string" && k);
+  if (t.pageId != null && wantedPfKeys.length > 0) {
+    const pageEntityId = await resolvePageEntityId(t.pageId);
+    if (pageEntityId === t.entityId) {
+      const pfs = await db
+        .select({
+          fieldKey: pageFieldsTable.fieldKey,
+          nameJson: pageFieldsTable.nameJson,
+          fieldType: pageFieldsTable.fieldType,
+        })
+        .from(pageFieldsTable)
+        .where(and(eq(pageFieldsTable.pageId, t.pageId), eq(pageFieldsTable.isActive, true)));
+      const pfByKey = new Map(pfs.map((f) => [f.fieldKey, f]));
+      for (const key of wantedPfKeys) {
+        const pf = pfByKey.get(key);
+        if (!pf) continue;
+        pageCols.push({
+          fieldKey: `__pf_${key}`,
+          label: resolveML(pf.nameJson) || key,
+          fieldType: pf.fieldType,
+          pfKey: key,
+        });
+      }
+      if (pageCols.length > 0 && baseIds.length > 0) {
+        const pvs = await db
+          .select({ recordId: pageRecordValuesTable.recordId, valuesJson: pageRecordValuesTable.valuesJson })
+          .from(pageRecordValuesTable)
+          .where(and(eq(pageRecordValuesTable.pageId, t.pageId), inArray(pageRecordValuesTable.recordId, baseIds)));
+        for (const pv of pvs) {
+          pageValuesByRecord.set(pv.recordId, (pv.valuesJson as Record<string, unknown>) ?? {});
+        }
+      }
+    }
+  }
+
+  const allColumns = [
+    ...columns,
+    ...pageCols.map((pc) => ({ fieldKey: pc.fieldKey, label: pc.label, fieldType: pc.fieldType })),
+    ...relCols.map((rc) => ({ fieldKey: rc.fieldKey, label: rc.label, fieldType: rc.fieldType })),
+  ];
 
   const rows = records.map((r) => {
     const all = (r.valuesJson ?? {}) as Record<string, unknown>;
@@ -1176,6 +1279,10 @@ async function computeTableData(
       } else {
         values[c.fieldKey] = all[c.fieldKey] ?? null;
       }
+    }
+    for (const pc of pageCols) {
+      const pv = pageValuesByRecord.get(r.id);
+      values[pc.fieldKey] = pv ? pv[pc.pfKey] ?? null : null;
     }
     for (const rc of relCols) {
       const linkedId = rc.linkMap.get(r.id);

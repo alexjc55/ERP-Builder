@@ -110,3 +110,11 @@ Must be enforced on **every** path that can change page type, against the **effe
 
 ## Notes table column resize
 - Notes-table columns are resizable by dragging a right-edge grip (double-click resets). Widths are **per-user/per-browser only** — stored in localStorage `erp:notescolwidths:${widgetId}`, keyed by **positional column index** (the notes table has no header keys), NOT server-persisted. **Why:** mirrors the records table (`EntityRecords`) convention; an admin therefore CANNOT push widths to all viewers — if shared widths are ever needed, add a `colWidths` array to `NotesConfig` (OpenAPI → codegen → server sanitize/validate). **How to apply:** the `useNotesColResize` hook + `notesColStyle` + `NotesResizeGrip` live in `DashboardView.tsx`; auto-layout tables need `width+minWidth+maxWidth` (all three) on cells to honour a forced width; the grip must `stopPropagation` so it doesn't trigger the cell's click-to-edit.
+
+## Page-local columns in the table widget
+`TableConfig` carries `pageId` + `pageFieldKeys`: page-local fields of a page of the SAME entity
+(bound or mirror page — server-validated) render as extra columns, returned as synthetic
+`__pf_${key}` entries resolved from `page_record_values`. Only `isActive` page fields qualify (no
+pivotEnabled gate — tables show raw values, unlike pivot dims). Entity change in the editor resets
+`pageId`/`pageFieldKeys`. Values remain admin-authoritative like all widget data (page-access +
+per-widget role gates happen before compute).

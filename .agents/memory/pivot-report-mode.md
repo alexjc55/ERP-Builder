@@ -208,3 +208,21 @@ pivot view (an admin-authored, role-gated pivot surface) lets a caller out of th
 Body `pivot` is intentionally NOT required to equal `view.configJson.pivot` — this endpoint is
 permission-scoped at compute, so it leaks nothing the viewer can't already read, and the live filter
 bar is meant to drive the config. Role visibility here is a PRESENTATION gate, not a data boundary.
+
+## Page-local fields as pivot dims/measures (all three admin-authoritative surfaces)
+The pivot widget, pivot PAGE custom config, AND the dashboard table widget can now use page-local
+("поля страницы") fields, via an explicit `pageId` carried in the config (`WidgetPivotConfig.pageId`,
+`PivotPageConfigValue.pageId`, `TableConfig.pageId + pageFieldKeys`). Durable rules:
+- The `pageId` MUST resolve to a page of the SAME entity (its bound page or a mirror page) —
+  validated on save ("Page X does not belong to entity Y") and mirrored in the UI page picker.
+- Page dims/measures use `source:"page"` in the dim/measure; pivot gates re-check page-field
+  `pivotEnabled` (+ isActive) at COMPUTE time → opt-in loss degrades to an empty result, never an
+  error. Table page columns require only `isActive` (no pivotEnabled gate — table shows raw values).
+- Table page columns come back as synthetic `__pf_${key}` columns resolved from `page_record_values`.
+- Client persists `pageId` only when a page dim/measure actually uses it (`usesPage` check), and
+  changing/dropping the page context resets page-sourced dims/measures in the editor.
+- `DraftDim.source` gained `"page"` in the shared ViewConfigEditors; `PivotDimEditor` takes an
+  OPTIONAL `pageDimFields` prop (default `[]`, options namespaced `p:<key>`) so entity-views editors
+  stay entity|status-only — back-compat by default, page support only where a page context exists.
+- Multi-entity note: page-local fields + relation/lookup dims are the sanctioned "multiple entities"
+  coverage; a true multi-entity UNION pivot is explicitly out of scope.
