@@ -146,7 +146,8 @@ import { MultilingualInput } from "@/components/MultilingualInput";
 import { CreateUserDialog } from "@/components/CreateUserDialog";
 import { PageFieldConfigDialog } from "@/components/PageFieldConfigDialog";
 import { formatFormulaResult, evaluateFormula } from "@workspace/formula";
-import { computeRowFormatting, type FormatField } from "@/lib/formatRules";
+import { computeRowFormatting, ruleMatches, type FormatField } from "@/lib/formatRules";
+import type { FieldFormatRule } from "@workspace/api-client-react";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus, Zap } from "lucide-react";
@@ -2962,65 +2963,87 @@ export function EntityRecords({
             );
           }
           const common = (g.values as Record<string, unknown> | undefined)?.[totalKey];
+          const hasCommon = sum === undefined && common !== undefined && common !== null;
+          let commonContent: React.ReactNode = null;
+          let commonCellColor: string | undefined;
+          let commonTextColor: string | undefined;
+          if (hasCommon) {
+            // Resolve the field + value to render. Relation/lookup columns
+            // carry the projected value as raw text from the server; render
+            // them through the same synthetic relField the normal cells use
+            // (projected type + options).
+            let renderField: Field;
+            let renderValue: unknown;
+            if (
+              col.kind === "entity" &&
+              (col.field.fieldType === "relation" || col.field.fieldType === "lookup")
+            ) {
+              let relVal: unknown = common;
+              if (typeof relVal === "string" && relVal.startsWith("{")) {
+                try {
+                  relVal = JSON.parse(relVal);
+                } catch {
+                  /* keep the raw string */
+                }
+              }
+              const meta = entityRelatedColMeta.get(col.field.fieldKey);
+              const rt = isFileValue(relVal)
+                ? "file"
+                : (meta?.relatedFieldType ??
+                  knownRelatedFieldTypes.get(col.field.fieldKey) ??
+                  "text");
+              // The server projects the related value as raw TEXT
+              // (`->>`), so a boolean arrives as "true"/"false" — coerce
+              // it back or renderCellValue treats "false" as truthy.
+              if (rt === "boolean" && typeof relVal === "string") {
+                relVal = relVal === "true";
+              }
+              renderField = {
+                ...col.field,
+                fieldType: rt as Field["fieldType"],
+                optionsJson: meta?.optionsJson ?? [],
+              } as unknown as Field;
+              renderValue = relVal;
+            } else {
+              renderField =
+                col.kind === "entity"
+                  ? col.field
+                  : ({ ...col.field, permissionsJson: {}, entityId: 0 } as unknown as Field);
+              renderValue = common;
+            }
+            // Conditional formatting: since every row in the group shares this
+            // value, the first matching rule colours the group cell exactly
+            // like it colours the individual cells (cell fill + text colour).
+            const rules =
+              ((col.field as { formatRulesJson?: FieldFormatRule[] | null }).formatRulesJson ?? []);
+            for (const rule of rules) {
+              if (ruleMatches(rule, renderValue)) {
+                if (rule.cellColor) commonCellColor = rule.cellColor;
+                if (rule.textColor) commonTextColor = rule.textColor;
+                break;
+              }
+            }
+            // textColor is passed INTO renderCellValue (like normal cells do) —
+            // inner elements carry their own colour classes, so an inherited
+            // wrapper colour would not reach them.
+            commonContent = renderCellValue(renderField, renderValue, t, userNames, commonTextColor, ml);
+          }
           return (
             <td
               key={col.pinKey}
               className="px-4 py-2.5 align-middle"
-              style={{ ...pinStyle(col.pinKey, groupBg), ...colWidthStyle(col.pinKey) }}
+              style={{
+                ...pinStyle(col.pinKey, commonCellColor ?? groupBg),
+                ...colWidthStyle(col.pinKey),
+                ...(commonCellColor ? { backgroundColor: commonCellColor } : undefined),
+              }}
             >
               {sum !== undefined ? (
                 <span className="font-semibold text-emerald-700 whitespace-nowrap">
                   {sum.toLocaleString("ru-RU")}
                 </span>
-              ) : common !== undefined && common !== null ? (
-                <span className="text-slate-500 block max-w-[240px] truncate">
-                  {(() => {
-                    // Relation/lookup columns carry the projected value as raw
-                    // text from the server; render it through the same synthetic
-                    // relField the normal cells use (projected type + options).
-                    if (
-                      col.kind === "entity" &&
-                      (col.field.fieldType === "relation" || col.field.fieldType === "lookup")
-                    ) {
-                      let relVal: unknown = common;
-                      if (typeof relVal === "string" && relVal.startsWith("{")) {
-                        try {
-                          relVal = JSON.parse(relVal);
-                        } catch {
-                          /* keep the raw string */
-                        }
-                      }
-                      const meta = entityRelatedColMeta.get(col.field.fieldKey);
-                      const rt = isFileValue(relVal)
-                        ? "file"
-                        : (meta?.relatedFieldType ??
-                          knownRelatedFieldTypes.get(col.field.fieldKey) ??
-                          "text");
-                      // The server projects the related value as raw TEXT
-                      // (`->>`), so a boolean arrives as "true"/"false" — coerce
-                      // it back or renderCellValue treats "false" as truthy.
-                      if (rt === "boolean" && typeof relVal === "string") {
-                        relVal = relVal === "true";
-                      }
-                      const relField = {
-                        ...col.field,
-                        fieldType: rt as Field["fieldType"],
-                        optionsJson: meta?.optionsJson ?? [],
-                      } as unknown as Field;
-                      return renderCellValue(relField, relVal, t, userNames, undefined, ml);
-                    }
-                    return renderCellValue(
-                      col.kind === "entity"
-                        ? col.field
-                        : ({ ...col.field, permissionsJson: {}, entityId: 0 } as unknown as Field),
-                      common,
-                      t,
-                      userNames,
-                      undefined,
-                      ml,
-                    );
-                  })()}
-                </span>
+              ) : hasCommon ? (
+                <span className="text-slate-500 block max-w-[240px] truncate">{commonContent}</span>
               ) : null}
             </td>
           );
