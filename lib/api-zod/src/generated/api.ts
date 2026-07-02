@@ -1228,6 +1228,7 @@ export const ListPagesResponseItem = zod.object({
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
+  "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display\/aggregation-only, never a security boundary.'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "children": zod.array(zod.unknown()).optional(),
@@ -1337,6 +1338,7 @@ export const CreatePageBody = zod.object({
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
+  "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.'),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createPageBodyIsActiveDefault)
 })
@@ -1444,6 +1446,7 @@ export const GetPageResponse = zod.object({
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
+  "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display\/aggregation-only, never a security boundary.'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "children": zod.array(zod.unknown()).optional(),
@@ -1553,6 +1556,7 @@ export const UpdatePageBody = zod.object({
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
+  "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.'),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
@@ -1652,6 +1656,7 @@ export const UpdatePageResponse = zod.object({
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
+  "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display\/aggregation-only, never a security boundary.'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "children": zod.array(zod.unknown()).optional(),
@@ -4716,7 +4721,7 @@ export const queryEntityRecordsBodyPageDefault = 1;
 export const queryEntityRecordsBodyPageSizeDefault = 50;
 export const queryEntityRecordsBodyPageSizeMax = 200;
 
-
+export const queryEntityRecordsBodyGroupedDefault = false;
 
 export const QueryEntityRecordsBody = zod.object({
   "filters": zod.array(zod.object({
@@ -4744,7 +4749,11 @@ export const QueryEntityRecordsBody = zod.object({
   "archived": zod.enum(['active', 'archived', 'all']).default(queryEntityRecordsBodyArchivedDefault),
   "page": zod.number().min(1).default(queryEntityRecordsBodyPageDefault),
   "pageSize": zod.number().min(1).max(queryEntityRecordsBodyPageSizeMax).default(queryEntityRecordsBodyPageSizeDefault),
-  "pageId": zod.number().optional().describe('Optional mirror-page context (see RecordInput.pageId): applies the mirror page\'s view-rights override and field-access when querying records through it.')
+  "pageId": zod.number().optional().describe('Optional mirror-page context (see RecordInput.pageId): applies the mirror page\'s view-rights override and field-access when querying records through it.'),
+  "grouped": zod.boolean().default(queryEntityRecordsBodyGroupedDefault).describe('When true (and pageId refers to a mirror page with groupByFieldKey set), the response includes `groups`: one bucket per distinct value of the page\'s group field, with count and per-column sums computed over the FULL filtered set (same raw-values invariant as numericTotals). Requires pageId.'),
+  "groupValue": zod.object({
+  "value": zod.string().nullish()
+}).optional().describe('Restrict the returned rows to ONE group of the page\'s groupByFieldKey (requires pageId on a grouped mirror page). For a scalar group field `value` is the stored value; for a relation group field it is the linked record id as a string. value=null selects the \"no value \/ no link\" group.')
 })
 
 export const QueryEntityRecordsResponse = zod.object({
@@ -4759,7 +4768,13 @@ export const QueryEntityRecordsResponse = zod.object({
   "updatedAt": zod.coerce.date()
 })),
   "total": zod.number(),
-  "numericTotals": zod.record(zod.string(), zod.number()).optional().describe('Sum per numeric field flagged showColumnTotal, over the full filtered set (all pages).')
+  "numericTotals": zod.record(zod.string(), zod.number()).optional().describe('Sum per numeric field flagged showColumnTotal, over the full filtered set (all pages).'),
+  "groups": zod.array(zod.object({
+  "key": zod.string().nullable().describe('Group key — the stored scalar value, or the linked record id as a string for a relation group field. Null = the \"no value\" group.'),
+  "label": zod.string().nullish().describe('Human-readable group label (resolved linked-record projection for relation group fields). Null when the viewer may not see the projected value.'),
+  "count": zod.number(),
+  "sums": zod.record(zod.string(), zod.number()).describe('Per-column sums for visible numeric\/formula columns flagged showColumnTotal (same keys as numericTotals), over this group\'s rows.')
+})).optional().describe('Present only when the query was sent with grouped=true on a mirror page with groupByFieldKey. One bucket per distinct group value over the FULL filtered set, ordered by label (the empty group last).')
 })
 
 

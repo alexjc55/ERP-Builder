@@ -4277,6 +4277,9 @@ components:
             - $ref: "#/components/schemas/PageQuickFilter"
             - type: "null"
           description: Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter).
+        groupByFieldKey:
+          type: ["string", "null"]
+          description: Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display/aggregation-only, never a security boundary.
         sortOrder:
           type: integer
         isActive:
@@ -4349,6 +4352,9 @@ components:
             - $ref: "#/components/schemas/PageQuickFilter"
             - type: "null"
           description: Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter).
+        groupByFieldKey:
+          type: ["string", "null"]
+          description: Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.
         sortOrder:
           type: integer
         isActive:
@@ -4409,6 +4415,9 @@ components:
             - $ref: "#/components/schemas/PageQuickFilter"
             - type: "null"
           description: Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter).
+        groupByFieldKey:
+          type: ["string", "null"]
+          description: Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.
         sortOrder:
           type: integer
         isActive:
@@ -6927,6 +6936,26 @@ components:
             Optional mirror-page context (see RecordInput.pageId): applies the
             mirror page's view-rights override and field-access when querying
             records through it.
+        grouped:
+          type: boolean
+          default: false
+          description: >-
+            When true (and pageId refers to a mirror page with groupByFieldKey
+            set), the response includes `groups`: one bucket per distinct value
+            of the page's group field, with count and per-column sums computed
+            over the FULL filtered set (same raw-values invariant as
+            numericTotals). Requires pageId.
+        groupValue:
+          type: object
+          description: >-
+            Restrict the returned rows to ONE group of the page's
+            groupByFieldKey (requires pageId on a grouped mirror page). For a
+            scalar group field `value` is the stored value; for a relation
+            group field it is the linked record id as a string. value=null
+            selects the "no value / no link" group.
+          properties:
+            value:
+              type: ["string", "null"]
 
     RecordQueryResult:
       type: object
@@ -6943,6 +6972,32 @@ components:
           additionalProperties:
             type: number
           description: Sum per numeric field flagged showColumnTotal, over the full filtered set (all pages).
+        groups:
+          type: array
+          description: >-
+            Present only when the query was sent with grouped=true on a mirror
+            page with groupByFieldKey. One bucket per distinct group value over
+            the FULL filtered set, ordered by label (the empty group last).
+          items:
+            $ref: "#/components/schemas/RecordGroup"
+
+    RecordGroup:
+      type: object
+      required: [key, count, sums]
+      properties:
+        key:
+          type: ["string", "null"]
+          description: Group key — the stored scalar value, or the linked record id as a string for a relation group field. Null = the "no value" group.
+        label:
+          type: ["string", "null"]
+          description: Human-readable group label (resolved linked-record projection for relation group fields). Null when the viewer may not see the projected value.
+        count:
+          type: integer
+        sums:
+          type: object
+          additionalProperties:
+            type: number
+          description: Per-column sums for visible numeric/formula columns flagged showColumnTotal (same keys as numericTotals), over this group's rows.
 
     FilterValuesQuery:
       type: object

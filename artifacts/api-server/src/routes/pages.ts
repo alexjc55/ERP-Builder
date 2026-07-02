@@ -97,6 +97,31 @@ async function entityExists(entityId: number): Promise<boolean> {
   return Boolean(e);
 }
 
+/**
+ * Validates a mirror-page groupByFieldKey against the mirror entity's ACTIVE
+ * fields. Returns an error message, or null when the key is usable. Allowed:
+ * any stored scalar field, or a relation/lookup field that resolves to a
+ * single-link direction (grouping by the linked record). Rejected: function
+ * (not stored) and file (no meaningful group key) fields, unknown keys, and
+ * multi-link relations.
+ */
+async function validateGroupByField(mirrorEntityId: number, fieldKey: string): Promise<string | null> {
+  const fields = await db
+    .select()
+    .from(entityFieldsTable)
+    .where(and(eq(entityFieldsTable.entityId, mirrorEntityId), eq(entityFieldsTable.isActive, true)));
+  const f = fields.find((x) => x.fieldKey === fieldKey);
+  if (!f) return "Group field not found on the mirrored entity";
+  if (f.fieldType === "function" || f.fieldType === "file") {
+    return "This field type cannot be used for grouping";
+  }
+  if (f.fieldType === "relation" || f.fieldType === "lookup") {
+    const meta = await buildRelationMeta(mirrorEntityId, [f]);
+    if (!meta.get(fieldKey)) return "Only single-link relation fields can be used for grouping";
+  }
+  return null;
+}
+
 /** True if some entity is bound to this page (entities.page_id === pageId). */
 async function pageHasBoundEntity(pageId: number): Promise<boolean> {
   const [e] = await db
@@ -146,7 +171,25 @@ router.post("/pages", requireAuth, requireAdmin("pages"), async (req, res): Prom
     }
   }
 
-  const [page] = await db.insert(pagesTable).values(parsed.data).returning();
+  // Grouping is a mirror-page-only setting and must point at a usable field
+  // of the mirrored entity.
+  const createGroupBy = parsed.data.groupByFieldKey || null;
+  if (createGroupBy != null) {
+    if (parsed.data.mirrorEntityId == null) {
+      res.status(400).json({ error: "Grouping is only available on mirror pages" });
+      return;
+    }
+    const gErr = await validateGroupByField(parsed.data.mirrorEntityId, createGroupBy);
+    if (gErr) {
+      res.status(400).json({ error: gErr });
+      return;
+    }
+  }
+
+  const [page] = await db
+    .insert(pagesTable)
+    .values({ ...parsed.data, groupByFieldKey: createGroupBy })
+    .returning();
   res.status(201).json({ ...page, children: [] });
 });
 
@@ -324,6 +367,7 @@ router.put("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): P
   if ("pivotConfigJson" in body) updateData.pivotConfigJson = body.pivotConfigJson ?? null;
   if ("widgetsCollapsedDefault" in body) updateData.widgetsCollapsedDefault = body.widgetsCollapsedDefault ?? false;
   if ("defaultQuickFilterJson" in body) updateData.defaultQuickFilterJson = body.defaultQuickFilterJson ?? null;
+  if ("groupByFieldKey" in body) updateData.groupByFieldKey = body.groupByFieldKey || null;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
   if (body.isActive != null) updateData.isActive = body.isActive;
 
@@ -347,6 +391,7 @@ router.put("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): P
       isDashboard: pagesTable.isDashboard,
       isPivot: pagesTable.isPivot,
       pivotEntityId: pagesTable.pivotEntityId,
+      groupByFieldKey: pagesTable.groupByFieldKey,
     })
     .from(pagesTable)
     .where(eq(pagesTable.id, params.data.id));
@@ -401,6 +446,27 @@ router.put("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): P
     if (hasBoundEntity) {
       res.status(409).json({ error: "This page already has a bound entity; it cannot be a pivot page" });
       return;
+    }
+  }
+
+  // Grouping against the EFFECTIVE final state: explicitly setting a group on a
+  // non-mirror page is an error; a page that STOPS being a mirror silently
+  // drops its stale grouping instead of blocking the type change.
+  const effGroupBy =
+    "groupByFieldKey" in updateData ? (updateData.groupByFieldKey as string | null) : current.groupByFieldKey;
+  if (effGroupBy != null) {
+    if (effMirrorEntityId == null) {
+      if ("groupByFieldKey" in body && body.groupByFieldKey) {
+        res.status(400).json({ error: "Grouping is only available on mirror pages" });
+        return;
+      }
+      updateData.groupByFieldKey = null;
+    } else {
+      const gErr = await validateGroupByField(effMirrorEntityId, effGroupBy);
+      if (gErr) {
+        res.status(400).json({ error: gErr });
+        return;
+      }
     }
   }
 

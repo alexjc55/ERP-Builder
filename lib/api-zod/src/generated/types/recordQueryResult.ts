@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EntityRecord } from './entityRecord';
+import type { RecordGroup } from './recordGroup';
 import type { RecordQueryResultNumericTotals } from './recordQueryResultNumericTotals';
 
 export interface RecordQueryResult {
@@ -13,4 +14,6 @@ export interface RecordQueryResult {
   total: number;
   /** Sum per numeric field flagged showColumnTotal, over the full filtered set (all pages). */
   numericTotals?: RecordQueryResultNumericTotals;
+  /** Present only when the query was sent with grouped=true on a mirror page with groupByFieldKey. One bucket per distinct group value over the FULL filtered set, ordered by label (the empty group last). */
+  groups?: RecordGroup[];
 }

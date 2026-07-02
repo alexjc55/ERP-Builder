@@ -3516,6 +3516,24 @@
     "he": "לא נמצאו דפים"
   },
   {
+    "key": "pages.groupBy",
+    "ru": "Группировать по",
+    "en": "Group by",
+    "he": "קבץ לפי"
+  },
+  {
+    "key": "pages.groupByHint",
+    "ru": "Записи будут сгруппированы по значению этого поля: свёрнутые группы с количеством и суммами (для полей с включённым «Итог по колонке»).",
+    "en": "Records will be grouped by this field's value: collapsed groups with a count and sums (for fields with \"Column total\" enabled).",
+    "he": "הרשומות יקובצו לפי ערך שדה זה: קבוצות מכווצות עם ספירה וסכומים (לשדות עם \"סיכום עמודה\" מופעל)."
+  },
+  {
+    "key": "pages.groupByNone",
+    "ru": "— Без группировки —",
+    "en": "— No grouping —",
+    "he": "— ללא קיבוץ —"
+  },
+  {
     "key": "pages.mirrorEntity",
     "ru": "Связанная сущность (живые данные)",
     "en": "Linked entity (live data)",
@@ -4318,6 +4336,12 @@
     "ru": "Изменений пока нет",
     "en": "No changes yet",
     "he": "אין שינויים עדיין"
+  },
+  {
+    "key": "records.groupEmpty",
+    "ru": "Без значения",
+    "en": "No value",
+    "he": "ללא ערך"
   },
   {
     "key": "records.inArchive",

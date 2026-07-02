@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable, pageFieldsTable, pageRecordValuesTable, relationsTable, recordLinksTable, viewsTable } from "@workspace/db";
+import { db, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable, pageFieldsTable, pageRecordValuesTable, pagesTable, relationsTable, recordLinksTable, viewsTable } from "@workspace/db";
 import { eq, asc, desc, and, or, sql, inArray, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { evaluateFormula, normalizeDecimals } from "@workspace/formula";
@@ -16,6 +16,7 @@ import {
   effectiveRecordPerm,
   resolveFieldAccess,
   mostPermissiveFieldPerm,
+  canRecord,
 } from "../middlewares/permissions";
 import {
   ListEntityRecordsParams,
@@ -43,7 +44,16 @@ import {
 } from "@workspace/api-zod";
 import type { EntityField, InsertAuditLog, FileSource, FileFieldConfig, FieldValidationRule } from "@workspace/db";
 import { optionValues } from "../lib/selectOptions";
-import { buildRecordQuery, buildPageLocalCondition, type RecordQuerySpec, type FilterCondition } from "./record-query";
+import {
+  buildRecordQuery,
+  buildPageLocalCondition,
+  relationLinkFilter,
+  relationLinkedIdScalar,
+  relationValueScalar,
+  type RecordQuerySpec,
+  type FilterCondition,
+  type RelationFilterMeta,
+} from "./record-query";
 import { buildRelationMeta, ownScopeWhere, isRecordOwned } from "./own-scope";
 import { computePivot } from "./pivot-compute";
 import { isGoogleDriveModuleEnabled } from "../lib/googleDrive";
@@ -842,6 +852,98 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     }
   }
 
+  // ---- Mirror-page grouping (pages.groupByFieldKey) -------------------------
+  // `grouped: true` asks for group buckets in the response; `groupValue`
+  // narrows the ROW set to a single group (used when the client expands one
+  // group). Both require the pageId of a mirror page with grouping configured.
+  // Boundary: the group field must be VISIBLE for this viewer — when it is
+  // hidden, grouping silently degrades (no groups; groupValue rejected) so
+  // group keys/labels can never leak a hidden field's values. For a relation
+  // group field the label is the linked record's projected relatedFieldKey —
+  // that projection carries its OWN boundary on the linked entity (the same
+  // gate the related-values column applies): when the viewer lacks record-view
+  // on the linked entity or the projected field is hidden there, the label is
+  // withheld (null) while grouping still works via the opaque linked-record id.
+  const wantGroups = body.data.grouped === true;
+  const groupValueSpec = body.data.groupValue as { value?: string | null } | undefined;
+  let groupField: EntityField | null = null;
+  let groupRelMeta: RelationFilterMeta | undefined;
+  let groupLabelAllowed = true;
+  // Groups are always computed over the full filtered set WITHOUT the
+  // groupValue narrowing, so expanding one group still returns every bucket.
+  const groupsClauses = [...clauses];
+  if (wantGroups || groupValueSpec !== undefined) {
+    const gPageId = body.data.pageId;
+    if (gPageId == null) {
+      res.status(400).json({ error: "grouped/groupValue require pageId" });
+      return;
+    }
+    const [gPage] = await db
+      .select({ groupByFieldKey: pagesTable.groupByFieldKey })
+      .from(pagesTable)
+      .where(eq(pagesTable.id, gPageId));
+    const gKey = gPage?.groupByFieldKey ?? null;
+    if (gKey) {
+      groupField = visibleFields.find((f) => f.fieldKey === gKey) ?? null;
+      if (groupField && (groupField.fieldType === "relation" || groupField.fieldType === "lookup")) {
+        groupRelMeta = relationMeta.get(gKey);
+        if (!groupRelMeta) {
+          groupField = null; // not a single-link relation → grouping unavailable
+        } else {
+          // Re-apply the LINKED entity's boundary for the projected label — the
+          // same gate the related-values column uses. Without it a group label
+          // would expose a projected field the viewer cannot see through the
+          // column itself. Key (linked record id) stays usable either way.
+          const [gRel] = await db
+            .select()
+            .from(relationsTable)
+            .where(eq(relationsTable.id, groupRelMeta.relationId));
+          const gRelatedEntityId = gRel
+            ? groupRelMeta.direction === "source"
+              ? gRel.targetEntityId
+              : gRel.sourceEntityId
+            : null;
+          if (gRelatedEntityId == null || !canRecord(perms, gRelatedEntityId, "view")) {
+            groupLabelAllowed = false;
+          } else {
+            const [gRelatedField] = await db
+              .select()
+              .from(entityFieldsTable)
+              .where(
+                and(
+                  eq(entityFieldsTable.entityId, gRelatedEntityId),
+                  eq(entityFieldsTable.fieldKey, groupRelMeta.relatedFieldKey),
+                  eq(entityFieldsTable.isActive, true),
+                ),
+              );
+            const gLabelRoleIds = await getUserRoleIds(req);
+            groupLabelAllowed =
+              !!gRelatedField &&
+              resolveFieldAccess(gRelatedField, perms, gLabelRoleIds, gRelatedEntityId) !== "hidden";
+          }
+        }
+      }
+    }
+    if (!groupField && groupValueSpec !== undefined) {
+      res.status(400).json({ error: "Grouping is not available on this page" });
+      return;
+    }
+    if (groupField && groupValueSpec !== undefined) {
+      const v = groupValueSpec.value ?? null;
+      if (groupRelMeta) {
+        const linkedId = v === null ? null : Number(v);
+        if (linkedId !== null && (!Number.isInteger(linkedId) || linkedId <= 0)) {
+          clauses.push(sql`false`);
+        } else {
+          clauses.push(relationLinkFilter(groupRelMeta, linkedId));
+        }
+      } else {
+        const expr = sql`(${entityRecordsTable.valuesJson} ->> ${groupField.fieldKey})`;
+        clauses.push(v === null ? sql`(${expr} IS NULL OR ${expr} = '')` : sql`${expr} = ${v}`);
+      }
+    }
+  }
+
   const where = and(...clauses)!;
 
   const { page, pageSize } = body.data;
@@ -1004,10 +1106,159 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     }
   }
 
+  // Group buckets: one JS pass over the FULL filtered set (WITHOUT the
+  // groupValue narrowing — expanding one group must still return every bucket).
+  // Sums follow the exact numericTotals semantics: only columns flagged
+  // showColumnTotal, evaluated over the RAW stored values INCLUDING fields
+  // hidden for this viewer (the true-total product decision above), with
+  // per-row rounding for formula fields — so a group's sum always reconciles
+  // with the flat column total.
+  let groups:
+    | { key: string | null; label: string | null; count: number; sums: Record<string, number> }[]
+    | undefined;
+  if (wantGroups && groupField) {
+    const groupsWhere = and(...groupsClauses)!;
+    const keyExpr = groupRelMeta
+      ? relationLinkedIdScalar(groupRelMeta)
+      : sql`(${entityRecordsTable.valuesJson} ->> ${groupField.fieldKey})`;
+    // Label boundary: the projected linked-field value is only selected when the
+    // viewer may see it on the linked entity (groupLabelAllowed); otherwise the
+    // label is withheld and the client falls back to the opaque key.
+    const labelExpr = groupRelMeta
+      ? groupLabelAllowed
+        ? relationValueScalar(groupRelMeta)
+        : sql`NULL`
+      : keyExpr;
+    const gRows = await db
+      .select({
+        id: entityRecordsTable.id,
+        values: entityRecordsTable.valuesJson,
+        gkey: sql<string | null>`${keyExpr}`,
+        glabel: sql<string | null>`${labelExpr}`,
+      })
+      .from(entityRecordsTable)
+      .where(groupsWhere);
+
+    // Page-local sum columns (number + formula flagged showColumnTotal), gated
+    // by per-viewer page-field visibility exactly like the flat totals above.
+    const gPageId = body.data.pageId!;
+    const gRoleIds = await getUserRoleIds(req);
+    const gPfRows = await db
+      .select()
+      .from(pageFieldsTable)
+      .where(
+        and(
+          eq(pageFieldsTable.pageId, gPageId),
+          eq(pageFieldsTable.isActive, true),
+          eq(pageFieldsTable.showColumnTotal, true),
+        ),
+      );
+    const gPfSumFields = gPfRows.filter(
+      (pf) =>
+        (pf.fieldType === "number" || pf.fieldType === "function") &&
+        mostPermissiveFieldPerm(pf.permissionsJson, gRoleIds, "view") !== "hidden",
+    );
+    const gPvByRec = new Map<number, Record<string, unknown>>();
+    if (gPfSumFields.length > 0 && gRows.length > 0) {
+      const pv = await db
+        .select({ recordId: pageRecordValuesTable.recordId, values: pageRecordValuesTable.valuesJson })
+        .from(pageRecordValuesTable)
+        .where(
+          and(
+            eq(pageRecordValuesTable.pageId, gPageId),
+            inArray(
+              pageRecordValuesTable.recordId,
+              gRows.map((r) => r.id),
+            ),
+          ),
+        );
+      for (const r of pv) gPvByRec.set(r.recordId, (r.values as Record<string, unknown> | null) ?? {});
+    }
+
+    // Mirrors the SQL NUMERIC_RE gate: only clean numeric text contributes.
+    const NUM_JS_RE = /^-?[0-9]+(\.[0-9]+)?$/;
+    const numVal = (raw: unknown): number => {
+      if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+      if (typeof raw === "string" && NUM_JS_RE.test(raw)) return Number(raw);
+      return 0;
+    };
+    type GroupBucket = { key: string | null; label: string | null; count: number; sums: Record<string, number> };
+    const buckets = new Map<string, GroupBucket>();
+    for (const r of gRows) {
+      // Empty string and NULL both mean "no value" — one shared bucket.
+      const rawKey = r.gkey == null || r.gkey === "" ? null : r.gkey;
+      const mapKey = rawKey === null ? "\u0000" : rawKey;
+      let b = buckets.get(mapKey);
+      if (!b) {
+        b = {
+          key: rawKey,
+          label: rawKey === null ? null : groupRelMeta ? (r.glabel ?? null) : rawKey,
+          count: 0,
+          sums: {},
+        };
+        buckets.set(mapKey, b);
+      }
+      b.count += 1;
+      const vals = (r.values as Record<string, unknown> | null) ?? {};
+      for (const f of totalFields) b.sums[f.fieldKey] = (b.sums[f.fieldKey] ?? 0) + numVal(vals[f.fieldKey]);
+      for (const f of formulaTotalFields) {
+        const cfg = f.formulaConfigJson as { expression?: string; decimals?: number | null } | null;
+        const expr = (cfg?.expression ?? "").trim();
+        if (!expr) continue;
+        const d = normalizeDecimals(cfg?.decimals);
+        try {
+          const out = evaluateFormula(expr, vals);
+          if (typeof out === "number" && Number.isFinite(out))
+            b.sums[f.fieldKey] = (b.sums[f.fieldKey] ?? 0) + (d != null ? Number(out.toFixed(d)) : out);
+        } catch {
+          // Skip rows whose formula fails to parse/evaluate.
+        }
+      }
+      for (const pf of gPfSumFields) {
+        const totalKey = `pf:${pf.id}`;
+        const pvVals = gPvByRec.get(r.id) ?? {};
+        if (pf.fieldType === "number") {
+          b.sums[totalKey] = (b.sums[totalKey] ?? 0) + numVal(pvVals[pf.fieldKey]);
+        } else {
+          const cfg = pf.formulaConfigJson as { expression?: string; decimals?: number | null } | null;
+          const expr = (cfg?.expression ?? "").trim();
+          if (!expr) continue;
+          const d = normalizeDecimals(cfg?.decimals);
+          try {
+            const out = evaluateFormula(expr, { ...vals, ...pvVals });
+            if (typeof out === "number" && Number.isFinite(out))
+              b.sums[totalKey] = (b.sums[totalKey] ?? 0) + (d != null ? Number(out.toFixed(d)) : out);
+          } catch {
+            // Skip rows whose formula fails to parse/evaluate.
+          }
+        }
+      }
+    }
+    // Final per-group rounding for formula sums (matches the flat totals).
+    for (const b of buckets.values()) {
+      for (const f of formulaTotalFields) {
+        const d = normalizeDecimals((f.formulaConfigJson as { decimals?: number | null } | null)?.decimals);
+        if (d != null && b.sums[f.fieldKey] != null) b.sums[f.fieldKey] = Number(b.sums[f.fieldKey]!.toFixed(d));
+      }
+      for (const pf of gPfSumFields) {
+        if (pf.fieldType !== "function") continue;
+        const d = normalizeDecimals((pf.formulaConfigJson as { decimals?: number | null } | null)?.decimals);
+        const k = `pf:${pf.id}`;
+        if (d != null && b.sums[k] != null) b.sums[k] = Number(b.sums[k]!.toFixed(d));
+      }
+    }
+    groups = [...buckets.values()].sort((a, b) => {
+      if (a.key === null) return 1;
+      if (b.key === null) return -1;
+      return (a.label ?? a.key).localeCompare(b.label ?? b.key, "ru", { numeric: true, sensitivity: "base" });
+    });
+  }
+
   res.json({
     data: data.map((r) => stripHidden(r, hidden)),
     total: countRow?.count ?? 0,
     ...(numericTotals ? { numericTotals } : {}),
+    ...(groups ? { groups } : {}),
   });
 });
 

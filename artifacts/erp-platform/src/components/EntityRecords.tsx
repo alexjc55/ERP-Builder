@@ -60,6 +60,7 @@ import {
   type ViewConfig,
   type Transition,
   type RecordQuery,
+  type RecordGroup,
   type PivotQuery,
   type PivotConfig,
   type SortSpec,
@@ -167,6 +168,12 @@ import {
 const NO_STATUS = "__none__";
 const NO_VIEW = "__all__";
 const PAGE_SIZE = 50;
+/**
+ * Client sentinel for the "no value" group bucket of a grouped mirror page
+ * (the server's group key is `null`, which can't be a React state string).
+ * NUL-prefixed so it can never collide with a real stored value.
+ */
+const NULL_GROUP_KEY = "\u0000__null__";
 
 // The status cell background is the status color at ~12% over white (very light),
 // so light-colored statuses (yellow, light green) become unreadable if the text
@@ -915,6 +922,7 @@ export function EntityRecords({
   mirrorColumnOrder,
   columnGroups,
   defaultQuickFilter,
+  groupByFieldKey,
 }: {
   entityId: number;
   /**
@@ -986,6 +994,18 @@ export function EntityRecords({
     excludeFieldFilters?: Record<string, string[]>;
     excludeStatusIds?: number[];
   } | null;
+  /**
+   * Mirror-page grouping (from `page.groupByFieldKey`): when set, records are
+   * shown as collapsed group rows (one per distinct value of this source-entity
+   * field) with server-computed count + per-column sums, and expanding a group
+   * (accordion — one at a time) loads that group's normal editable rows. The
+   * groups themselves are computed server-side over the FULL filtered set with
+   * the same raw-values invariant as numericTotals; per-row/field security still
+   * applies to the expanded rows. Display falls back to the flat table when the
+   * server does not return groups (e.g. the group field became hidden for this
+   * viewer).
+   */
+  groupByFieldKey?: string;
 }) {
   const ml = useML();
   const t = useT();
@@ -1661,6 +1681,13 @@ export function EntityRecords({
   const [numericTotals, setNumericTotals] = useState<Record<string, number>>({});
   const [recordsLoading, setRecordsLoading] = useState(true);
   const [refreshTick, setRefreshTick] = useState(0);
+  // Mirror-page grouping: server-computed group buckets + which group is
+  // expanded (accordion — at most one). NULL_GROUP_KEY is the client sentinel
+  // for the "no value" bucket (server key = null). `null` = the server did NOT
+  // return groups (grouping off, or it silently degraded because the group
+  // field is hidden/unavailable for this viewer) → render the flat table.
+  const [groups, setGroups] = useState<RecordGroup[] | null>(null);
+  const [expandedGroupKey, setExpandedGroupKey] = useState<string | undefined>(undefined);
 
   const selectedView: View | undefined =
     selectedViewId === NO_VIEW ? undefined : views.find((v: View) => String(v.id) === selectedViewId);
@@ -1679,7 +1706,14 @@ export function EntityRecords({
     setPageDateFilters({});
     setPage(1);
     setViewInitialized(false);
+    setExpandedGroupKey(undefined);
   }, [entityId]);
+
+  // Collapse the accordion when the page's group field changes (or grouping is
+  // turned off) so a stale group key never filters the query.
+  useEffect(() => {
+    setExpandedGroupKey(undefined);
+  }, [groupByFieldKey]);
 
   // Auto-select the entity's default view once its views load (only on first arrival).
   useEffect(() => {
@@ -1790,6 +1824,12 @@ export function EntityRecords({
   const activeExcludeStatusIds = applyExclusion && excludeStatusIds.length > 0 ? excludeStatusIds : undefined;
   const excludeKey = JSON.stringify([activeExcludeFilters, activeExcludeStatusIds]);
 
+  // Mirror-page grouping is active whenever the page carries groupByFieldKey.
+  // Setup mode keeps the flat table (admins need the full column/row toolkit).
+  // The server may still decline to group (hidden/unavailable group field) — it
+  // then simply omits `groups` and the client falls back to the flat table.
+  const groupingActive = Boolean(groupByFieldKey) && !setupMode;
+
   const recordQuery: RecordQuery = useMemo(
     () => ({
       filters: [...baseFilters, ...adHocFilters, ...dateFilterConditions],
@@ -1803,9 +1843,20 @@ export function EntityRecords({
       archived,
       page,
       pageSize: PAGE_SIZE,
+      // Grouped mirror page: always ask for the group buckets; when a group is
+      // expanded, ALSO narrow the row page to that one group so the normal
+      // inline-edit/pagination path serves the expanded rows unchanged.
+      ...(groupingActive
+        ? {
+            grouped: true,
+            ...(expandedGroupKey !== undefined
+              ? { groupValue: { value: expandedGroupKey === NULL_GROUP_KEY ? null : expandedGroupKey } }
+              : {}),
+          }
+        : {}),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [baseFiltersKey, selectedConfig.filterConjunction, sortsKey, adHocKey, dateKey, pageAdHocKey, pageDateKey, statusKey, excludeKey, search, archived, page],
+    [baseFiltersKey, selectedConfig.filterConjunction, sortsKey, adHocKey, dateKey, pageAdHocKey, pageDateKey, statusKey, excludeKey, search, archived, page, groupingActive, expandedGroupKey],
   );
 
   // Pivot (Сводная таблица): a view whose configJson.viewType is "pivot" carries a
@@ -2141,12 +2192,14 @@ export function EntityRecords({
         setRecords(res.data);
         setTotal(res.total);
         setNumericTotals(res.numericTotals ?? {});
+        setGroups(res.groups ?? null);
       })
       .catch((err) => {
         if (cancelled) return;
         setRecords([]);
         setTotal(0);
         setNumericTotals({});
+        setGroups(null);
         toast({ title: t("records.loadError", "Ошибка загрузки записей"), description: extractError(err), variant: "destructive" });
       })
       .finally(() => {
@@ -2845,6 +2898,88 @@ export function EntityRecords({
       </Card>
     );
   }
+
+  // ----- Grouped mirror page (accordion) rendering helpers -----
+  // Groups render as collapsed header rows; at most one group is expanded and
+  // its rows (the server-narrowed `records` page) appear right below its
+  // header. Headers BEFORE + INCLUDING the expanded group render above the row
+  // block, the rest render after it, so the visual order is stable.
+  const showGroups = groupingActive && groups !== null;
+  const groupKeyOf = (g: RecordGroup) => (g.key == null ? NULL_GROUP_KEY : g.key);
+  const groupList = showGroups ? (groups as RecordGroup[]) : [];
+  const expandedGroupIndex = showGroups
+    ? groupList.findIndex((g) => groupKeyOf(g) === expandedGroupKey)
+    : -1;
+  const groupsBeforeExpanded = showGroups
+    ? expandedGroupIndex >= 0
+      ? groupList.slice(0, expandedGroupIndex + 1)
+      : groupList
+    : [];
+  const groupsAfterExpanded =
+    showGroups && expandedGroupIndex >= 0 ? groupList.slice(expandedGroupIndex + 1) : [];
+
+  const renderGroupRow = (g: RecordGroup) => {
+    const gk = groupKeyOf(g);
+    const expanded = expandedGroupKey === gk;
+    const groupBg = expanded ? "#eef2ff" : "#f8fafc";
+    return (
+      <tr
+        key={`grp-${gk}`}
+        className="cursor-pointer select-none border-b border-slate-200 transition-colors hover:bg-slate-100"
+        style={{ backgroundColor: groupBg }}
+        onClick={() => {
+          setExpandedGroupKey(expanded ? undefined : gk);
+          setPage(1);
+        }}
+      >
+        {orderedColumns.map((col, idx) => {
+          const totalKey = col.kind === "entity" ? col.field.fieldKey : col.pinKey;
+          const sum = g.sums?.[totalKey];
+          if (idx === 0) {
+            return (
+              <td
+                key={col.pinKey}
+                className="px-3 py-2.5 align-middle"
+                style={{ ...pinStyle(col.pinKey, groupBg), ...colWidthStyle(col.pinKey) }}
+              >
+                <span className="inline-flex items-center gap-1.5 font-medium text-slate-800">
+                  {expanded ? (
+                    <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 text-slate-500 shrink-0 rtl:rotate-180" />
+                  )}
+                  <span className="whitespace-nowrap max-w-[320px] truncate">
+                    {g.label ?? g.key ?? t("records.groupEmpty", "Без значения")}
+                  </span>
+                  <span className="text-xs font-normal text-slate-400">({g.count})</span>
+                  {sum !== undefined && (
+                    <span className="ml-2 font-semibold text-emerald-700 whitespace-nowrap">
+                      {sum.toLocaleString("ru-RU")}
+                    </span>
+                  )}
+                </span>
+              </td>
+            );
+          }
+          return (
+            <td
+              key={col.pinKey}
+              className="px-4 py-2.5 align-middle"
+              style={{ ...pinStyle(col.pinKey, groupBg), ...colWidthStyle(col.pinKey) }}
+            >
+              {sum !== undefined ? (
+                <span className="font-semibold text-emerald-700 whitespace-nowrap">
+                  {sum.toLocaleString("ru-RU")}
+                </span>
+              ) : null}
+            </td>
+          );
+        })}
+        {showStatusColumn && <td style={colWidthStyle("__status__")} />}
+        {showActionsColumn && <td />}
+      </tr>
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -3700,7 +3835,7 @@ export function EntityRecords({
                   </tr>
                 </thead>
                 <tbody>
-                  {records.length === 0 && (
+                  {(showGroups ? groupList.length === 0 : records.length === 0) && (
                     <tr>
                       <td
                         colSpan={orderedColumns.length + (showStatusColumn ? 1 : 0) + (showActionsColumn ? 1 : 0)}
@@ -3712,7 +3847,7 @@ export function EntityRecords({
                       </td>
                     </tr>
                   )}
-                  {canCreate && !setupMode && addingRow && (
+                  {canCreate && !setupMode && !showGroups && addingRow && (
                     <tr className="border-b border-blue-100 bg-blue-50/40">
                       {orderedColumns.map((col) => {
                         if (col.kind === "page") {
@@ -3840,7 +3975,7 @@ export function EntityRecords({
                       )}
                     </tr>
                   )}
-                  {canCreate && !setupMode && !addingRow && (
+                  {canCreate && !setupMode && !showGroups && !addingRow && (
                     <tr className="border-b border-slate-100">
                       <td colSpan={orderedColumns.length + (showStatusColumn ? 1 : 0) + (showActionsColumn ? 1 : 0)} className="px-2 py-2">
                         <button
@@ -3854,7 +3989,8 @@ export function EntityRecords({
                       </td>
                     </tr>
                   )}
-                  {records.map((record: EntityRecord, rowIndex: number) => {
+                  {showGroups && groupsBeforeExpanded.map(renderGroupRow)}
+                  {(!showGroups || expandedGroupIndex >= 0) && records.map((record: EntityRecord, rowIndex: number) => {
                     const values = (record.valuesJson ?? {}) as Record<string, unknown>;
                     const pageValues = pageValuesByRecord.get(record.id) ?? {};
                     const allValues = { ...values, ...pageValues };
@@ -4296,6 +4432,7 @@ export function EntityRecords({
                       </tr>
                     );
                   })}
+                  {showGroups && groupsAfterExpanded.map(renderGroupRow)}
                 </tbody>
               </table>
             </div>
@@ -4303,7 +4440,7 @@ export function EntityRecords({
         </CardContent>
       </Card>
 
-      {total > 0 && (
+      {total > 0 && (!showGroups || expandedGroupIndex >= 0) && (
         <div className="flex items-center justify-between text-sm text-slate-500">
           <span>
             {t("records.shown", "Показано")} {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} {t("records.of", "из")} {total}

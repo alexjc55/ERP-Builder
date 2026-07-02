@@ -52,6 +52,11 @@ export interface Page {
   widgetsCollapsedDefault?: boolean;
   /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
   defaultQuickFilterJson?: PageQuickFilter | null;
+  /**
+     * Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display/aggregation-only, never a security boundary.
+     * @nullable
+     */
+  groupByFieldKey?: string | null;
   sortOrder: number;
   isActive: boolean;
   children?: Page[];

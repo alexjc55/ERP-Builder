@@ -127,6 +127,33 @@ export function relationValueScalar(meta: RelationFilterMeta): SQL {
 }
 
 /**
+ * Scalar correlated subquery returning the LINKED RECORD ID (as text) of the
+ * base row's single linked record for a `relation`/`lookup` field. Used as the
+ * GROUP KEY for mirror-page grouping: grouping by the linked record id (not by
+ * its projected label) keeps two distinct linked records with an identical
+ * projected value in separate groups. Mirrors {@link relationValueScalar}.
+ */
+export function relationLinkedIdScalar(meta: RelationFilterMeta): SQL {
+  const baseCol = meta.direction === "source" ? sql`rl.source_record_id` : sql`rl.target_record_id`;
+  const linkedCol = meta.direction === "source" ? sql`rl.target_record_id` : sql`rl.source_record_id`;
+  return sql`(SELECT (${linkedCol})::text FROM ${recordLinksTable} rl WHERE rl.relation_id = ${meta.relationId} AND ${baseCol} = ${entityRecordsTable.id} LIMIT 1)`;
+}
+
+/**
+ * EXISTS predicate: the base row is linked (via this single-link relation) to
+ * the given linked record id. Used to restrict a grouped mirror-page query to
+ * ONE relation group. Pass `null` to select the "no link" group (NOT EXISTS).
+ */
+export function relationLinkFilter(meta: RelationFilterMeta, linkedId: number | null): SQL {
+  const baseCol = meta.direction === "source" ? sql`rl.source_record_id` : sql`rl.target_record_id`;
+  const linkedCol = meta.direction === "source" ? sql`rl.target_record_id` : sql`rl.source_record_id`;
+  if (linkedId === null) {
+    return sql`NOT EXISTS (SELECT 1 FROM ${recordLinksTable} rl WHERE rl.relation_id = ${meta.relationId} AND ${baseCol} = ${entityRecordsTable.id})`;
+  }
+  return sql`EXISTS (SELECT 1 FROM ${recordLinksTable} rl WHERE rl.relation_id = ${meta.relationId} AND ${baseCol} = ${entityRecordsTable.id} AND ${linkedCol} = ${linkedId})`;
+}
+
+/**
  * Row-ownership EXISTS for a `relation`/`lookup` owner field: the base row has a
  * single linked record whose projected (user-type) `relatedFieldKey` equals
  * `userId`. Used by the own-scope ("Только свои") boundary so ownership can be

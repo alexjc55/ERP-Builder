@@ -72,6 +72,14 @@ export const pagesTable = pgTable("pages", {
     statusIds?: number[];
     search?: string | null;
   }>(),
+  // Mirror-page GROUPING: when set (only meaningful on a mirror page), the
+  // records table renders grouped by this source-entity field key. Supports
+  // scalar fields (grouped by the stored value) and relation fields (grouped by
+  // the linked record via record_links). Group rows are read-only aggregates
+  // (count + per-column sums for fields flagged showColumnTotal), computed
+  // server-side over the full filtered set — same raw-values invariant as
+  // numericTotals. Display/aggregation-level only — never a security boundary.
+  groupByFieldKey: text("group_by_field_key"),
   // Default collapsed state of the analytics widgets block shown above a page's
   // records table. Admin-configurable; each viewer's own toggle is remembered
   // client-side (localStorage) and falls back to this default.

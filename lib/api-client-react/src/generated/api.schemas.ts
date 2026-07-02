@@ -1058,6 +1058,11 @@ export interface Page {
   widgetsCollapsedDefault?: boolean;
   /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
   defaultQuickFilterJson?: PageQuickFilter | null;
+  /**
+     * Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display/aggregation-only, never a security boundary.
+     * @nullable
+     */
+  groupByFieldKey?: string | null;
   sortOrder: number;
   isActive: boolean;
   children?: Page[];
@@ -1117,6 +1122,11 @@ export interface PageInput {
   widgetsCollapsedDefault?: boolean;
   /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
   defaultQuickFilterJson?: PageQuickFilter | null;
+  /**
+     * Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.
+     * @nullable
+     */
+  groupByFieldKey?: string | null;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -1173,6 +1183,11 @@ export interface PageUpdate {
   widgetsCollapsedDefault?: boolean;
   /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
   defaultQuickFilterJson?: PageQuickFilter | null;
+  /**
+     * Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.
+     * @nullable
+     */
+  groupByFieldKey?: string | null;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -2957,6 +2972,14 @@ export const RecordQueryFilterConjunction = {
   or: 'or',
 } as const;
 
+/**
+ * Restrict the returned rows to ONE group of the page's groupByFieldKey (requires pageId on a grouped mirror page). For a scalar group field `value` is the stored value; for a relation group field it is the linked record id as a string. value=null selects the "no value / no link" group.
+ */
+export type RecordQueryGroupValue = {
+  /** @nullable */
+  value?: string | null;
+};
+
 export interface RecordQuery {
   filters?: FilterCondition[];
   /** Filter conditions on PAGE-LOCAL fields (values stored in page_record_values), keyed by page-field fieldKey. Requires pageId. Each condition is AND-combined with the rest of the query. Only visible (per-role) filterable page-local fields are accepted. */
@@ -2979,6 +3002,10 @@ export interface RecordQuery {
   pageSize?: number;
   /** Optional mirror-page context (see RecordInput.pageId): applies the mirror page's view-rights override and field-access when querying records through it. */
   pageId?: number;
+  /** When true (and pageId refers to a mirror page with groupByFieldKey set), the response includes `groups`: one bucket per distinct value of the page's group field, with count and per-column sums computed over the FULL filtered set (same raw-values invariant as numericTotals). Requires pageId. */
+  grouped?: boolean;
+  /** Restrict the returned rows to ONE group of the page's groupByFieldKey (requires pageId on a grouped mirror page). For a scalar group field `value` is the stored value; for a relation group field it is the linked record id as a string. value=null selects the "no value / no link" group. */
+  groupValue?: RecordQueryGroupValue;
 }
 
 /**
@@ -2986,11 +3013,34 @@ export interface RecordQuery {
  */
 export type RecordQueryResultNumericTotals = {[key: string]: number};
 
+/**
+ * Per-column sums for visible numeric/formula columns flagged showColumnTotal (same keys as numericTotals), over this group's rows.
+ */
+export type RecordGroupSums = {[key: string]: number};
+
+export interface RecordGroup {
+  /**
+     * Group key — the stored scalar value, or the linked record id as a string for a relation group field. Null = the "no value" group.
+     * @nullable
+     */
+  key: string | null;
+  /**
+     * Human-readable group label (resolved linked-record projection for relation group fields). Null when the viewer may not see the projected value.
+     * @nullable
+     */
+  label?: string | null;
+  count: number;
+  /** Per-column sums for visible numeric/formula columns flagged showColumnTotal (same keys as numericTotals), over this group's rows. */
+  sums: RecordGroupSums;
+}
+
 export interface RecordQueryResult {
   data: EntityRecord[];
   total: number;
   /** Sum per numeric field flagged showColumnTotal, over the full filtered set (all pages). */
   numericTotals?: RecordQueryResultNumericTotals;
+  /** Present only when the query was sent with grouped=true on a mirror page with groupByFieldKey. One bucket per distinct group value over the FULL filtered set, ordered by label (the empty group last). */
+  groups?: RecordGroup[];
 }
 
 export type FilterValuesQueryFilterConjunction = typeof FilterValuesQueryFilterConjunction[keyof typeof FilterValuesQueryFilterConjunction];

@@ -80,6 +80,7 @@ export default function PagesPage() {
   const [isActive, setIsActive] = useState(true);
   const [mirrorEntityId, setMirrorEntityId] = useState<string>("none");
   const [mirrorFieldKeys, setMirrorFieldKeys] = useState<string[]>([]);
+  const [groupByFieldKey, setGroupByFieldKey] = useState<string>("none");
   const [pageType, setPageType] = useState<"normal" | "mirror" | "dashboard" | "pivot">("normal");
   const [pivotEntityId, setPivotEntityId] = useState<string>("none");
   const [pivotConfig, setPivotConfig] = useState<PivotPageConfigValue | null>(null);
@@ -146,6 +147,7 @@ export default function PagesPage() {
     setIsActive(true);
     setMirrorEntityId("none");
     setMirrorFieldKeys([]);
+    setGroupByFieldKey("none");
     setPageType("normal");
     setPivotEntityId("none");
     setPivotConfig(null);
@@ -165,6 +167,7 @@ export default function PagesPage() {
     setIsActive(page.isActive);
     setMirrorEntityId(page.mirrorEntityId ? String(page.mirrorEntityId) : "none");
     setMirrorFieldKeys(page.mirrorFieldKeysJson ?? []);
+    setGroupByFieldKey(page.groupByFieldKey || "none");
     setPageType(
       page.isPivot ? "pivot" : page.isDashboard ? "dashboard" : page.mirrorEntityId ? "mirror" : "normal",
     );
@@ -190,6 +193,7 @@ export default function PagesPage() {
     if (v !== "mirror") {
       setMirrorEntityId("none");
       setMirrorFieldKeys([]);
+      setGroupByFieldKey("none");
     }
     if (v !== "pivot") {
       setPivotEntityId("none");
@@ -218,6 +222,8 @@ export default function PagesPage() {
       mirrorEntityId: pageType === "mirror" && mirrorEntityId !== "none" ? Number(mirrorEntityId) : null,
       mirrorFieldKeysJson:
         pageType === "mirror" && mirrorEntityId !== "none" && mirrorFieldKeys.length > 0 ? mirrorFieldKeys : null,
+      groupByFieldKey:
+        pageType === "mirror" && mirrorEntityId !== "none" && groupByFieldKey !== "none" ? groupByFieldKey : null,
       isDashboard: pageType === "dashboard",
       isPivot,
       pivotEntityId: isPivot && pivotEntityId !== "none" ? Number(pivotEntityId) : null,
@@ -451,6 +457,7 @@ export default function PagesPage() {
                     onValueChange={(v) => {
                       setMirrorEntityId(v);
                       setMirrorFieldKeys([]);
+                      setGroupByFieldKey("none");
                     }}
                   >
                     <SelectTrigger>
@@ -474,13 +481,22 @@ export default function PagesPage() {
                     )}
                   </p>
                   {mirrorEntityId !== "none" && (
-                    <MirrorFieldPicker
-                      entityId={Number(mirrorEntityId)}
-                      selected={mirrorFieldKeys}
-                      onChange={setMirrorFieldKeys}
-                      ml={ml}
-                      t={t}
-                    />
+                    <>
+                      <GroupByFieldSelect
+                        entityId={Number(mirrorEntityId)}
+                        value={groupByFieldKey}
+                        onChange={setGroupByFieldKey}
+                        ml={ml}
+                        t={t}
+                      />
+                      <MirrorFieldPicker
+                        entityId={Number(mirrorEntityId)}
+                        selected={mirrorFieldKeys}
+                        onChange={setMirrorFieldKeys}
+                        ml={ml}
+                        t={t}
+                      />
+                    </>
                   )}
                 </>
               )}
@@ -555,6 +571,55 @@ export default function PagesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+/**
+ * "Group by" selector for a mirror page: any active stored field of the
+ * mirrored entity except function/file (not groupable — server enforces the
+ * same rule, plus single-link for relation/lookup).
+ */
+function GroupByFieldSelect({
+  entityId,
+  value,
+  onChange,
+  ml,
+  t,
+}: {
+  entityId: number;
+  value: string;
+  onChange: (v: string) => void;
+  ml: (v: unknown) => string;
+  t: (key: string, fallback: string) => string;
+}) {
+  const { data: fields = [] } = useListEntityFields(entityId);
+  const groupable = fields.filter(
+    (f: Field) => f.isActive && f.fieldType !== "function" && f.fieldType !== "file",
+  );
+
+  return (
+    <div className="space-y-1.5 pt-1">
+      <Label>{t("pages.groupBy", "Группировать по")}</Label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger>
+          <SelectValue placeholder={t("pages.groupByNone", "— Без группировки —")} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">{t("pages.groupByNone", "— Без группировки —")}</SelectItem>
+          {groupable.map((f: Field) => (
+            <SelectItem key={f.id} value={f.fieldKey}>
+              {ml(f.nameJson) || f.fieldKey}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <p className="text-xs text-slate-400">
+        {t(
+          "pages.groupByHint",
+          "Записи будут сгруппированы по значению этого поля: свёрнутые группы с количеством и суммами (для полей с включённым «Итог по колонке»).",
+        )}
+      </p>
     </div>
   );
 }

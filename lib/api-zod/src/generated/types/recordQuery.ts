@@ -9,6 +9,7 @@ import type { ArchiveFilter } from './archiveFilter';
 import type { ExcludeFilter } from './excludeFilter';
 import type { FilterCondition } from './filterCondition';
 import type { RecordQueryFilterConjunction } from './recordQueryFilterConjunction';
+import type { RecordQueryGroupValue } from './recordQueryGroupValue';
 import type { SortSpec } from './sortSpec';
 
 export interface RecordQuery {
@@ -33,4 +34,8 @@ export interface RecordQuery {
   pageSize?: number;
   /** Optional mirror-page context (see RecordInput.pageId): applies the mirror page's view-rights override and field-access when querying records through it. */
   pageId?: number;
+  /** When true (and pageId refers to a mirror page with groupByFieldKey set), the response includes `groups`: one bucket per distinct value of the page's group field, with count and per-column sums computed over the FULL filtered set (same raw-values invariant as numericTotals). Requires pageId. */
+  grouped?: boolean;
+  /** Restrict the returned rows to ONE group of the page's groupByFieldKey (requires pageId on a grouped mirror page). For a scalar group field `value` is the stored value; for a relation group field it is the linked record id as a string. value=null selects the "no value / no link" group. */
+  groupValue?: RecordQueryGroupValue;
 }
