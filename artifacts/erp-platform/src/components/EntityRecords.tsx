@@ -2961,6 +2961,7 @@ export function EntityRecords({
               </td>
             );
           }
+          const common = (g.values as Record<string, unknown> | undefined)?.[totalKey];
           return (
             <td
               key={col.pinKey}
@@ -2970,6 +2971,55 @@ export function EntityRecords({
               {sum !== undefined ? (
                 <span className="font-semibold text-emerald-700 whitespace-nowrap">
                   {sum.toLocaleString("ru-RU")}
+                </span>
+              ) : common !== undefined && common !== null ? (
+                <span className="text-slate-500 block max-w-[240px] truncate">
+                  {(() => {
+                    // Relation/lookup columns carry the projected value as raw
+                    // text from the server; render it through the same synthetic
+                    // relField the normal cells use (projected type + options).
+                    if (
+                      col.kind === "entity" &&
+                      (col.field.fieldType === "relation" || col.field.fieldType === "lookup")
+                    ) {
+                      let relVal: unknown = common;
+                      if (typeof relVal === "string" && relVal.startsWith("{")) {
+                        try {
+                          relVal = JSON.parse(relVal);
+                        } catch {
+                          /* keep the raw string */
+                        }
+                      }
+                      const meta = entityRelatedColMeta.get(col.field.fieldKey);
+                      const rt = isFileValue(relVal)
+                        ? "file"
+                        : (meta?.relatedFieldType ??
+                          knownRelatedFieldTypes.get(col.field.fieldKey) ??
+                          "text");
+                      // The server projects the related value as raw TEXT
+                      // (`->>`), so a boolean arrives as "true"/"false" — coerce
+                      // it back or renderCellValue treats "false" as truthy.
+                      if (rt === "boolean" && typeof relVal === "string") {
+                        relVal = relVal === "true";
+                      }
+                      const relField = {
+                        ...col.field,
+                        fieldType: rt as Field["fieldType"],
+                        optionsJson: meta?.optionsJson ?? [],
+                      } as unknown as Field;
+                      return renderCellValue(relField, relVal, t, userNames, undefined, ml);
+                    }
+                    return renderCellValue(
+                      col.kind === "entity"
+                        ? col.field
+                        : ({ ...col.field, permissionsJson: {}, entityId: 0 } as unknown as Field),
+                      common,
+                      t,
+                      userNames,
+                      undefined,
+                      ml,
+                    );
+                  })()}
                 </span>
               ) : null}
             </td>

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RecordGroupSums } from './recordGroupSums';
+import type { RecordGroupValues } from './recordGroupValues';
 
 export interface RecordGroup {
   /**
@@ -21,4 +22,6 @@ export interface RecordGroup {
   count: number;
   /** Per-column sums for visible numeric/formula columns flagged showColumnTotal (same keys as numericTotals), over this group's rows. */
   sums: RecordGroupSums;
+  /** Per-column COMMON value — present for a column when every row in the group shares the same non-empty value. Keys match the sums keys (entity fieldKey / page-local `pf:{id}`). Only visible columns are included; relation/lookup columns carry the projected value and are gated by the linked entity's field boundary (like the group label). */
+  values?: RecordGroupValues;
 }

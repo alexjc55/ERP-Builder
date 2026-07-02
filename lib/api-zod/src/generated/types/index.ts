@@ -200,6 +200,7 @@ export * from './pivotTotal';
 export * from './recordDelete';
 export * from './recordGroup';
 export * from './recordGroupSums';
+export * from './recordGroupValues';
 export * from './recordInput';
 export * from './recordInputValuesJson';
 export * from './recordLink';

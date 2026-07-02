@@ -1129,37 +1129,101 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         ? relationValueScalar(groupRelMeta)
         : sql`NULL`
       : keyExpr;
+
+    // Relation/lookup columns can carry a group-common value too. The displayed
+    // value is the projected relatedFieldKey, which must pass the FULL
+    // linked-entity boundary before it is selected at all:
+    //   - entity view permission on the linked entity,
+    //   - projected field active and not hidden for this viewer,
+    //   - NO row-level restrictions on the linked entity (own-scope or hidden
+    //     row statuses) — the raw scalar projection cannot re-apply per-row
+    //     visibility, so any row restriction skips the column entirely.
+    const gCommonRoleIds = await getUserRoleIds(req);
+    const relCommonCols: { fieldKey: string; meta: RelationFilterMeta }[] = [];
+    {
+      const relFields = visibleFields.filter(
+        (f) => (f.fieldType === "relation" || f.fieldType === "lookup") && relationMeta.has(f.fieldKey),
+      );
+      if (relFields.length > 0) {
+        const relIds = [...new Set(relFields.map((f) => relationMeta.get(f.fieldKey)!.relationId))];
+        const relRows = await db.select().from(relationsTable).where(inArray(relationsTable.id, relIds));
+        const relById = new Map(relRows.map((r) => [r.id, r]));
+        // Resolve each column's linked entity, then batch-load the projected
+        // fields in ONE query (no per-column round trip).
+        const wanted: { fieldKey: string; meta: RelationFilterMeta; relatedEntityId: number }[] = [];
+        for (const f of relFields) {
+          const meta = relationMeta.get(f.fieldKey)!;
+          const rel = relById.get(meta.relationId);
+          if (!rel) continue;
+          const relatedEntityId = meta.direction === "source" ? rel.targetEntityId : rel.sourceEntityId;
+          if (!canRecord(perms, relatedEntityId, "view")) continue;
+          if (effectiveScope(perms, relatedEntityId).scope !== "all") continue;
+          if (effectiveStatusVisibility(perms, relatedEntityId).hiddenRowStatusIds.length > 0) continue;
+          wanted.push({ fieldKey: f.fieldKey, meta, relatedEntityId });
+        }
+        if (wanted.length > 0) {
+          const relatedFieldRows = await db
+            .select()
+            .from(entityFieldsTable)
+            .where(
+              and(
+                inArray(entityFieldsTable.entityId, [...new Set(wanted.map((w) => w.relatedEntityId))]),
+                inArray(entityFieldsTable.fieldKey, [...new Set(wanted.map((w) => w.meta.relatedFieldKey))]),
+                eq(entityFieldsTable.isActive, true),
+              ),
+            );
+          const relatedFieldByPair = new Map(relatedFieldRows.map((rf) => [`${rf.entityId}\u0000${rf.fieldKey}`, rf]));
+          for (const w of wanted) {
+            const relatedField = relatedFieldByPair.get(`${w.relatedEntityId}\u0000${w.meta.relatedFieldKey}`);
+            if (!relatedField || resolveFieldAccess(relatedField, perms, gCommonRoleIds, w.relatedEntityId) === "hidden")
+              continue;
+            relCommonCols.push({ fieldKey: w.fieldKey, meta: w.meta });
+          }
+        }
+      }
+    }
+    const relValSel: Record<string, SQL<string | null>> = {};
+    for (const rc of relCommonCols) {
+      relValSel[`relval__${rc.fieldKey}`] = sql<string | null>`${relationValueScalar(rc.meta)}`;
+    }
+
     const gRows = await db
       .select({
         id: entityRecordsTable.id,
         values: entityRecordsTable.valuesJson,
         gkey: sql<string | null>`${keyExpr}`,
         glabel: sql<string | null>`${labelExpr}`,
+        ...relValSel,
       })
       .from(entityRecordsTable)
       .where(groupsWhere);
 
-    // Page-local sum columns (number + formula flagged showColumnTotal), gated
-    // by per-viewer page-field visibility exactly like the flat totals above.
+    // Page-local columns, gated by per-viewer page-field visibility exactly
+    // like the flat totals above. Sum columns = number/function flagged
+    // showColumnTotal; the rest of the value-backed visible ones participate in
+    // the group-common-value pass instead.
     const gPageId = body.data.pageId!;
-    const gRoleIds = await getUserRoleIds(req);
+    const gRoleIds = gCommonRoleIds;
     const gPfRows = await db
       .select()
       .from(pageFieldsTable)
-      .where(
-        and(
-          eq(pageFieldsTable.pageId, gPageId),
-          eq(pageFieldsTable.isActive, true),
-          eq(pageFieldsTable.showColumnTotal, true),
-        ),
-      );
-    const gPfSumFields = gPfRows.filter(
-      (pf) =>
-        (pf.fieldType === "number" || pf.fieldType === "function") &&
-        mostPermissiveFieldPerm(pf.permissionsJson, gRoleIds, "view") !== "hidden",
+      .where(and(eq(pageFieldsTable.pageId, gPageId), eq(pageFieldsTable.isActive, true)));
+    const gPfVisible = gPfRows.filter(
+      (pf) => mostPermissiveFieldPerm(pf.permissionsJson, gRoleIds, "view") !== "hidden",
     );
+    const gPfSumFields = gPfVisible.filter(
+      (pf) => pf.showColumnTotal && (pf.fieldType === "number" || pf.fieldType === "function"),
+    );
+    const gPfSumIds = new Set(gPfSumFields.map((pf) => pf.id));
+    // Value-backed page-local fields for the common-value pass (relation/lookup
+    // page fields resolve via record links, file values are objects — skip both).
+    const PF_COMMON_SKIP = new Set(["relation", "lookup", "file"]);
+    const gPfScalarCommon = gPfVisible.filter(
+      (pf) => !gPfSumIds.has(pf.id) && pf.fieldType !== "function" && !PF_COMMON_SKIP.has(pf.fieldType),
+    );
+    const gPfFormulaCommon = gPfVisible.filter((pf) => !gPfSumIds.has(pf.id) && pf.fieldType === "function");
     const gPvByRec = new Map<number, Record<string, unknown>>();
-    if (gPfSumFields.length > 0 && gRows.length > 0) {
+    if ((gPfSumFields.length > 0 || gPfScalarCommon.length > 0 || gPfFormulaCommon.length > 0) && gRows.length > 0) {
       const pv = await db
         .select({ recordId: pageRecordValuesTable.recordId, values: pageRecordValuesTable.valuesJson })
         .from(pageRecordValuesTable)
@@ -1182,21 +1246,79 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       if (typeof raw === "string" && NUM_JS_RE.test(raw)) return Number(raw);
       return 0;
     };
-    type GroupBucket = { key: string | null; label: string | null; count: number; sums: Record<string, number> };
+    // Common-value pass: entity fields with a stored scalar (sum columns are
+    // excluded — they already show a sum; relation/lookup go through the
+    // boundary-gated relCommonCols projection; file values are objects → skip).
+    const sumKeySet = new Set([...totalFields, ...formulaTotalFields].map((f) => f.fieldKey));
+    const ENTITY_COMMON_SKIP = new Set(["relation", "lookup", "file"]);
+    const gScalarCommon = visibleFields.filter(
+      (f) => !sumKeySet.has(f.fieldKey) && f.fieldType !== "function" && !ENTITY_COMMON_SKIP.has(f.fieldType),
+    );
+    const gFormulaCommon = visibleFields.filter(
+      (f) => !sumKeySet.has(f.fieldKey) && f.fieldType === "function",
+    );
+
+    type GroupBucket = {
+      key: string | null;
+      label: string | null;
+      count: number;
+      sums: Record<string, number>;
+      common: Map<string, unknown>;
+      mixed: Set<string>;
+    };
     const buckets = new Map<string, GroupBucket>();
+    // Empty (null/'' /undefined) never yields a common value: a column shows a
+    // group value only when EVERY row carries the same NON-empty value.
+    const normCommon = (v: unknown): unknown => (v === undefined || v === null || v === "" ? null : v);
+    const trackCommon = (b: GroupBucket, colKey: string, raw: unknown, firstRow: boolean) => {
+      if (b.mixed.has(colKey)) return;
+      const v = normCommon(raw);
+      if (firstRow) {
+        if (v !== null) b.common.set(colKey, v);
+        else b.mixed.add(colKey);
+        return;
+      }
+      const prev = b.common.get(colKey);
+      if (prev === undefined || JSON.stringify(prev) !== JSON.stringify(v)) {
+        b.mixed.add(colKey);
+        b.common.delete(colKey);
+      }
+    };
+    const evalFormulaVal = (
+      f: { formulaConfigJson: unknown },
+      scope: Record<string, unknown>,
+    ): unknown => {
+      const cfg = f.formulaConfigJson as { expression?: string; decimals?: number | null } | null;
+      const expr = (cfg?.expression ?? "").trim();
+      if (!expr) return null;
+      try {
+        const out = evaluateFormula(expr, scope);
+        if (typeof out === "number" && Number.isFinite(out)) {
+          const d = normalizeDecimals(cfg?.decimals);
+          return d != null ? Number(out.toFixed(d)) : out;
+        }
+        return out ?? null;
+      } catch {
+        return null;
+      }
+    };
     for (const r of gRows) {
       // Empty string and NULL both mean "no value" — one shared bucket.
       const rawKey = r.gkey == null || r.gkey === "" ? null : r.gkey;
       const mapKey = rawKey === null ? "\u0000" : rawKey;
       let b = buckets.get(mapKey);
+      let firstRow = false;
       if (!b) {
         b = {
           key: rawKey,
           label: rawKey === null ? null : groupRelMeta ? (r.glabel ?? null) : rawKey,
           count: 0,
           sums: {},
+          common: new Map(),
+          mixed: new Set(),
         };
         buckets.set(mapKey, b);
+        firstRow = true;
       }
       b.count += 1;
       const vals = (r.values as Record<string, unknown> | null) ?? {};
@@ -1233,6 +1355,19 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           }
         }
       }
+      // Common-value tracking: stored scalars, evaluated formulas, boundary-gated
+      // relation projections and page-local values (keys match the sums keys).
+      for (const f of gScalarCommon) trackCommon(b, f.fieldKey, vals[f.fieldKey], firstRow);
+      for (const f of gFormulaCommon) trackCommon(b, f.fieldKey, evalFormulaVal(f, vals), firstRow);
+      for (const rc of relCommonCols) {
+        trackCommon(b, rc.fieldKey, (r as Record<string, unknown>)[`relval__${rc.fieldKey}`], firstRow);
+      }
+      if (gPfScalarCommon.length > 0 || gPfFormulaCommon.length > 0) {
+        const pvVals = gPvByRec.get(r.id) ?? {};
+        for (const pf of gPfScalarCommon) trackCommon(b, `pf:${pf.id}`, pvVals[pf.fieldKey], firstRow);
+        for (const pf of gPfFormulaCommon)
+          trackCommon(b, `pf:${pf.id}`, evalFormulaVal(pf, { ...vals, ...pvVals }), firstRow);
+      }
     }
     // Final per-group rounding for formula sums (matches the flat totals).
     for (const b of buckets.values()) {
@@ -1247,11 +1382,23 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         if (d != null && b.sums[k] != null) b.sums[k] = Number(b.sums[k]!.toFixed(d));
       }
     }
-    groups = [...buckets.values()].sort((a, b) => {
-      if (a.key === null) return 1;
-      if (b.key === null) return -1;
-      return (a.label ?? a.key).localeCompare(b.label ?? b.key, "ru", { numeric: true, sensitivity: "base" });
-    });
+    groups = [...buckets.values()]
+      .sort((a, b) => {
+        if (a.key === null) return 1;
+        if (b.key === null) return -1;
+        return (a.label ?? a.key).localeCompare(b.label ?? b.key, "ru", { numeric: true, sensitivity: "base" });
+      })
+      .map((b) => {
+        const values: Record<string, unknown> = {};
+        for (const [k, v] of b.common) values[k] = v;
+        return {
+          key: b.key,
+          label: b.label,
+          count: b.count,
+          sums: b.sums,
+          ...(Object.keys(values).length > 0 ? { values } : {}),
+        };
+      });
   }
 
   res.json({

@@ -4773,7 +4773,8 @@ export const QueryEntityRecordsResponse = zod.object({
   "key": zod.string().nullable().describe('Group key — the stored scalar value, or the linked record id as a string for a relation group field. Null = the \"no value\" group.'),
   "label": zod.string().nullish().describe('Human-readable group label (resolved linked-record projection for relation group fields). Null when the viewer may not see the projected value.'),
   "count": zod.number(),
-  "sums": zod.record(zod.string(), zod.number()).describe('Per-column sums for visible numeric\/formula columns flagged showColumnTotal (same keys as numericTotals), over this group\'s rows.')
+  "sums": zod.record(zod.string(), zod.number()).describe('Per-column sums for visible numeric\/formula columns flagged showColumnTotal (same keys as numericTotals), over this group\'s rows.'),
+  "values": zod.record(zod.string(), zod.unknown()).optional().describe('Per-column COMMON value — present for a column when every row in the group shares the same non-empty value. Keys match the sums keys (entity fieldKey \/ page-local `pf:{id}`). Only visible columns are included; relation\/lookup columns carry the projected value and are gated by the linked entity\'s field boundary (like the group label).')
 })).optional().describe('Present only when the query was sent with grouped=true on a mirror page with groupByFieldKey. One bucket per distinct group value over the FULL filtered set, ordered by label (the empty group last).')
 })
 

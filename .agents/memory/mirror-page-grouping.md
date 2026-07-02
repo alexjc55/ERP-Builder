@@ -19,6 +19,13 @@ A mirror page can set `groupByFieldKey` — a source-entity field (incl. a singl
 - **Relation group LABEL carries its own boundary**: the projected linked-entity field is re-checked with the same gate as the related-values column (`canRecord(view)` on the linked entity + `resolveFieldAccess !== "hidden"`). If not allowed → `labelExpr = NULL`, label withheld, grouping still works via the opaque id key. Without this the group header would leak a projected value the rendered column itself hides.
 - Group sums follow the numericTotals invariant exactly: only `showColumnTotal` columns (entity number/function + page-local `pf:${id}` fields, page-local ones permission-gated), summed over RAW stored values (true-total product decision), per-row rounding for formulas — so group sums reconcile with the flat column total.
 
+## Group-common values (`RecordGroup.values`)
+- A group row cell also shows the column's value when EVERY row in the group carries the SAME non-empty value (`null`/`''` never yields one; any mismatch or empty → no value). Keys mirror the sums keys (entity fieldKey / `pf:{id}`); sum-flagged columns are excluded (sum wins).
+- Covered columns: entity scalars, function fields (evaluated per row), page-local value-backed fields (perm-gated), and relation/lookup projections. File columns skipped for entity/page-local (object values); relation projections that ARE files arrive as raw JSON text and the client detects them by shape.
+- **Relation/lookup common values carry a STRICTER boundary than the group label**: besides `canRecord(view)` + projected field not hidden, the column is skipped entirely if the viewer has ANY row-level restriction on the linked entity (own scope or hiddenRowStatusIds) — the raw scalar projection cannot re-apply per-row visibility, so restriction ⇒ no common value at all. Related projected fields are batch-loaded in one query (no N+1).
+- Client renders relation/lookup commons through the same synthetic relField as normal cells (`entityRelatedColMeta` + `knownRelatedFieldTypes` + optionsJson); the server projects via `->>` (TEXT), so booleans arrive as "true"/"false" and MUST be coerced before renderCellValue ("false" is truthy).
+- Group counts reflect the ACTIVE UI filters (incl. the page's SOFT default quick-filter), so a group can legitimately show fewer rows than the raw record count — commons are computed over that same filtered set.
+
 ## Client rules (EntityRecords)
 - `groupingActive = groupByFieldKey set && !setupMode` (setup mode always flat).
 - Expanded group's rows come through the SAME query path (inline edit, pagination unchanged); `numericTotals` while expanded = that group only (accepted).
