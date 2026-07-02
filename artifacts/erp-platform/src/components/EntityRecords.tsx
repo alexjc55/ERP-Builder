@@ -3048,7 +3048,31 @@ export function EntityRecords({
             </td>
           );
         })}
-        {showStatusColumn && <td style={colWidthStyle("__status__")} />}
+        {showStatusColumn && (() => {
+          // Common status: server puts the shared statusId under the reserved
+          // "__status__" key when every row in the group has the same status.
+          const rawStatus = (g.values as Record<string, unknown> | undefined)?.["__status__"];
+          const commonStatus =
+            rawStatus !== undefined && rawStatus !== null ? statusById.get(Number(rawStatus)) : undefined;
+          return (
+            <td
+              className="px-4 py-2.5 align-middle"
+              style={{
+                ...colWidthStyle("__status__"),
+                ...(commonStatus ? { backgroundColor: `${commonStatus.color}20` } : {}),
+              }}
+            >
+              {commonStatus ? (
+                <span
+                  className="inline-flex items-center font-medium whitespace-nowrap"
+                  style={{ color: readableStatusTextColor(commonStatus.color) }}
+                >
+                  {ml(commonStatus.nameJson)}
+                </span>
+              ) : null}
+            </td>
+          );
+        })()}
         {showActionsColumn && <td />}
       </tr>
     );

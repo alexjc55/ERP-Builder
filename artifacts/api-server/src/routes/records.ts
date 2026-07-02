@@ -1191,6 +1191,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       .select({
         id: entityRecordsTable.id,
         values: entityRecordsTable.valuesJson,
+        statusId: entityRecordsTable.statusId,
         gkey: sql<string | null>`${keyExpr}`,
         glabel: sql<string | null>`${labelExpr}`,
         ...relValSel,
@@ -1358,6 +1359,11 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       // Common-value tracking: stored scalars, evaluated formulas, boundary-gated
       // relation projections and page-local values (keys match the sums keys).
       for (const f of gScalarCommon) trackCommon(b, f.fieldKey, vals[f.fieldKey], firstRow);
+      // Common status: the reserved "__status__" key carries the shared statusId
+      // when EVERY row in the group has the same non-null status. Rows are
+      // already filtered by the row boundary (hiddenRowStatusIds), so any
+      // status that reaches here is visible to the viewer.
+      trackCommon(b, "__status__", r.statusId, firstRow);
       for (const f of gFormulaCommon) trackCommon(b, f.fieldKey, evalFormulaVal(f, vals), firstRow);
       for (const rc of relCommonCols) {
         trackCommon(b, rc.fieldKey, (r as Record<string, unknown>)[`relval__${rc.fieldKey}`], firstRow);
