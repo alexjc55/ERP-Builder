@@ -30,6 +30,7 @@ import {
   validateUserRefs,
   checkDependentValues,
   checkValidationRules,
+  checkImmutableFields,
   statusBelongsToEntity,
   checkUniqueKeys,
   defaultStatusId,
@@ -451,6 +452,11 @@ export async function systemUpdateRecord(
       const validationErr = checkValidationRules(fields, result.values);
       if (validationErr) {
         log.error({ recordId, error: validationErr }, "Automation set_field validation-rule violation");
+        return false;
+      }
+      const immErr = checkImmutableFields(fields, result.values, existingValues);
+      if (immErr) {
+        log.error({ recordId, error: immErr }, "Automation set_field immutable-field violation");
         return false;
       }
       update.valuesJson = result.values;
