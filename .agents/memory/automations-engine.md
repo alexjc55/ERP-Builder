@@ -19,6 +19,27 @@ server type unchanged → a misleading "no overlap" TS2367 at the new branch.
 must edit BOTH `automations.ts` (zod enum/fields) and `openapi.yaml`, then
 `pnpm run typecheck:libs` to rebuild lib declarations before the server typecheck.
 
+## System write path parity
+
+`systemUpdateRecord` (the AS-SYSTEM write used by set_field / update_records_where)
+must mirror the HTTP records-update pipeline except RBAC/transition checks. That
+includes the `lockAfterCreate` immutable-field guard on FINAL values — automations
+must NOT be able to rewrite immutable fields. Any new record-write guard added to
+the HTTP path must be replicated here.
+
+## Date-trigger idempotency (scheduler)
+
+The `date_reached` sweep claims a run row (partial-unique `dedupeKey`
+`(automationId, recordId, dedupeKey)`), then executes and **upserts the final
+outcome ONTO the claim row** (writeRun does `onConflictDoUpdate` when dedupeKey is
+non-null) — exactly one durable row per (automation, record, due instant), and a
+lost-claim conflict on a later sweep means "already fired, skip". Never let the
+outcome land on a second dedupe-less row: it splits the history and a crash between
+claim and run would leave a bare `{claimed:true}` marker with no outcome.
+
+Gotcha when testing by hand: `safeConditions` silently returns `[]` on ANY schema
+mismatch (e.g. operator "equals" instead of "eq") → automation runs unconditionally.
+
 ## Mapping value modes (create_record / update_records_where)
 
 `AutomationMapping.sourceType` ∈ `literal | field | combined`:

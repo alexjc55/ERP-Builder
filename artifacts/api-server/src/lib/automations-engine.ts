@@ -102,7 +102,7 @@ interface RunLogInput {
 
 async function writeRun(input: RunLogInput, log: Log): Promise<void> {
   try {
-    await db.insert(entityAutomationRunsTable).values({
+    const values = {
       automationId: input.automationId,
       entityId: input.entityId,
       recordId: input.recordId,
@@ -110,7 +110,30 @@ async function writeRun(input: RunLogInput, log: Log): Promise<void> {
       triggerName: input.triggerName ?? null,
       detailJson: input.detail ?? {},
       dedupeKey: input.dedupeKey ?? null,
-    });
+    };
+    if (input.dedupeKey != null) {
+      // Deduped runs (date scheduler): the claim row already exists — record the
+      // final outcome ON that row so there is exactly one durable row per
+      // (automation, record, due instant).
+      await db
+        .insert(entityAutomationRunsTable)
+        .values(values)
+        .onConflictDoUpdate({
+          target: [
+            entityAutomationRunsTable.automationId,
+            entityAutomationRunsTable.recordId,
+            entityAutomationRunsTable.dedupeKey,
+          ],
+          targetWhere: sql`${entityAutomationRunsTable.dedupeKey} is not null`,
+          set: {
+            status: input.status,
+            triggerName: input.triggerName ?? null,
+            detailJson: input.detail ?? {},
+          },
+        });
+    } else {
+      await db.insert(entityAutomationRunsTable).values(values);
+    }
   } catch (err) {
     log.error({ err, automationId: input.automationId }, "Failed to write automation run log");
   }
@@ -958,9 +981,9 @@ export async function runDateSweep(now: Date = new Date()): Promise<void> {
       }
       if (!claimed) continue;
 
-      // Re-evaluate conditions and run actions. The claim row already exists as
-      // the idempotency marker; record the outcome on a fresh run row.
-      await runOne(automation, trigger, automation.entityId, row.id, null, "date_reached", null);
+      // Re-evaluate conditions and run actions. The claim row is the idempotency
+      // marker; passing dedupeKey makes writeRun upsert the final outcome onto it.
+      await runOne(automation, trigger, automation.entityId, row.id, null, "date_reached", dedupeKey);
     }
   }
 }
