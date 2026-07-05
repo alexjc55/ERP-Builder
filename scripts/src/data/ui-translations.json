@@ -1872,6 +1872,18 @@
     "he": "ערך"
   },
   {
+    "key": "fields.formatValueFrom",
+    "ru": "от",
+    "en": "from",
+    "he": "מ"
+  },
+  {
+    "key": "fields.formatValueTo",
+    "ru": "до",
+    "en": "to",
+    "he": "עד"
+  },
+  {
     "key": "fields.validationRules",
     "ru": "Правила заполнения",
     "en": "Fill rules",
@@ -2116,6 +2128,12 @@
     "ru": "меньше или равно",
     "en": "less or equal",
     "he": "קטן או שווה"
+  },
+  {
+    "key": "fields.op.between",
+    "ru": "в диапазоне",
+    "en": "in range",
+    "he": "בטווח"
   },
   {
     "key": "fields.op.notContains",

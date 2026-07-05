@@ -58,6 +58,15 @@ export function ruleMatches(rule: FieldFormatRule, value: unknown): boolean {
       const b = asNum(target);
       return a != null && b != null && a <= b;
     }
+    case "between": {
+      // Inclusive range: value2 is the upper bound. Bounds may be entered in
+      // either order, so normalize (min/max) before comparing.
+      const a = asNum(value);
+      const lo = asNum(target);
+      const hi = asNum(rule.value2 ?? "");
+      if (a == null || lo == null || hi == null) return false;
+      return a >= Math.min(lo, hi) && a <= Math.max(lo, hi);
+    }
     default:
       return false;
   }

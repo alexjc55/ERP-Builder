@@ -28,11 +28,43 @@ const OPERATORS: { value: FormatOperator; label: string; needsValue: boolean }[]
   { value: "lt", label: "меньше", needsValue: true },
   { value: "gte", label: "больше или равно", needsValue: true },
   { value: "lte", label: "меньше или равно", needsValue: true },
+  { value: "between", label: "в диапазоне", needsValue: true },
+];
+
+// Always-numeric field types get the comparison + range operator set.
+const NUMERIC_OPS: FormatOperator[] = [
+  "equals",
+  "notEquals",
+  "gt",
+  "lt",
+  "gte",
+  "lte",
+  "between",
+  "empty",
+  "notEmpty",
+];
+// A formula may return either text or a number, so it gets the union of the
+// text (contains/notContains) and numeric (gt/lt/…/between) operators.
+const FORMULA_OPS: FormatOperator[] = [
+  "equals",
+  "notEquals",
+  "contains",
+  "notContains",
+  "gt",
+  "lt",
+  "gte",
+  "lte",
+  "between",
+  "empty",
+  "notEmpty",
 ];
 
 function operatorsForType(fieldType: FieldType): { value: FormatOperator; label: string; needsValue: boolean }[] {
-  if (fieldType === "number") {
-    return OPERATORS.filter((o) => ["equals", "notEquals", "gt", "lt", "gte", "lte", "empty", "notEmpty"].includes(o.value));
+  if (fieldType === "function") {
+    return OPERATORS.filter((o) => FORMULA_OPS.includes(o.value));
+  }
+  if (fieldType === "number" || fieldType === "percent") {
+    return OPERATORS.filter((o) => NUMERIC_OPS.includes(o.value));
   }
   if (fieldType === "boolean") {
     return OPERATORS.filter((o) => ["equals"].includes(o.value));
@@ -292,10 +324,39 @@ export function FieldFormatRulesEditor({
         </Select>
       );
     }
+    // A formula field can hold text or numbers, so the input type follows the
+    // operator (comparison/range → number, contains/equals → text); number and
+    // percent are always numeric.
+    const numericOp = ["gt", "lt", "gte", "lte", "between"].includes(rule.operator);
+    const numeric =
+      fieldType === "number" ||
+      fieldType === "percent" ||
+      (fieldType === "function" && numericOp);
+    if (rule.operator === "between") {
+      return (
+        <div className="flex items-center gap-1.5">
+          <Input
+            className="h-8"
+            type={numeric ? "number" : "text"}
+            value={rule.value ?? ""}
+            onChange={(e) => update(idx, { value: e.target.value })}
+            placeholder={t("fields.formatValueFrom", "от")}
+          />
+          <span className="text-xs text-slate-400">–</span>
+          <Input
+            className="h-8"
+            type={numeric ? "number" : "text"}
+            value={rule.value2 ?? ""}
+            onChange={(e) => update(idx, { value2: e.target.value })}
+            placeholder={t("fields.formatValueTo", "до")}
+          />
+        </div>
+      );
+    }
     return (
       <Input
         className="h-8"
-        type={fieldType === "number" ? "number" : "text"}
+        type={numeric ? "number" : "text"}
         value={rule.value ?? ""}
         onChange={(e) => update(idx, { value: e.target.value })}
         placeholder={t("fields.formatValue", "значение")}

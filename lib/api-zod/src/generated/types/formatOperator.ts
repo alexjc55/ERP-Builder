@@ -20,4 +20,5 @@ export const FormatOperator = {
   lt: 'lt',
   gte: 'gte',
   lte: 'lte',
+  between: 'between',
 } as const;

@@ -38,7 +38,8 @@ export type FormatOperator =
   | "gt"
   | "lt"
   | "gte"
-  | "lte";
+  | "lte"
+  | "between";
 
 /**
  * One conditional-formatting rule. When the cell value matches `operator`/`value`
@@ -50,6 +51,8 @@ export type FormatOperator =
 export type FieldFormatRule = {
   operator: FormatOperator;
   value?: string;
+  /** Upper bound for the `between` operator (inclusive). Ignored otherwise. */
+  value2?: string;
   cellColor?: string;
   rowColor?: string;
   textColor?: string;

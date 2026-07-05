@@ -5067,6 +5067,7 @@ components:
         - lt
         - gte
         - lte
+        - between
 
     FieldFormatRule:
       type: object
@@ -5076,10 +5077,14 @@ components:
         operator/value, the cell is painted cellColor and/or the row rowColor,
         and the cell text is painted textColor.
         Rules are evaluated in order; first match wins per field.
+        For the `between` operator, `value` is the lower bound and `value2`
+        the upper bound (both inclusive).
       properties:
         operator:
           $ref: "#/components/schemas/FormatOperator"
         value:
+          type: string
+        value2:
           type: string
         cellColor:
           type: string

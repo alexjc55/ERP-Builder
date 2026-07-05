@@ -2615,12 +2615,13 @@ export const ListEntityFieldsResponseItem = zod.object({
   "allowCreate": zod.boolean().optional()
 }).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected. `allowCreate` lets a user be created inline from the value picker, with the new account\'s role limited to `allowedRoleIds`.'),
   "formatRulesJson": zod.array(zod.object({
-  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
+  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte', 'between']),
   "value": zod.string().optional(),
+  "value2": zod.string().optional(),
   "cellColor": zod.string().optional(),
   "rowColor": zod.string().optional(),
   "textColor": zod.string().optional()
-}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional(),
   "validationRulesJson": zod.array(zod.object({
   "applyToValues": zod.array(zod.string()).optional().describe('When non-empty, the rule applies only if THIS field\'s new value is one of these. Empty\/absent = applies to any non-empty value.'),
   "conditionFieldKey": zod.string(),
@@ -2724,12 +2725,13 @@ export const CreateEntityFieldBody = zod.object({
   "allowCreate": zod.boolean().optional()
 }).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected. `allowCreate` lets a user be created inline from the value picker, with the new account\'s role limited to `allowedRoleIds`.'),
   "formatRulesJson": zod.array(zod.object({
-  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
+  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte', 'between']),
   "value": zod.string().optional(),
+  "value2": zod.string().optional(),
   "cellColor": zod.string().optional(),
   "rowColor": zod.string().optional(),
   "textColor": zod.string().optional()
-}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional(),
   "validationRulesJson": zod.array(zod.object({
   "applyToValues": zod.array(zod.string()).optional().describe('When non-empty, the rule applies only if THIS field\'s new value is one of these. Empty\/absent = applies to any non-empty value.'),
   "conditionFieldKey": zod.string(),
@@ -2822,12 +2824,13 @@ export const GetFieldResponse = zod.object({
   "allowCreate": zod.boolean().optional()
 }).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected. `allowCreate` lets a user be created inline from the value picker, with the new account\'s role limited to `allowedRoleIds`.'),
   "formatRulesJson": zod.array(zod.object({
-  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
+  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte', 'between']),
   "value": zod.string().optional(),
+  "value2": zod.string().optional(),
   "cellColor": zod.string().optional(),
   "rowColor": zod.string().optional(),
   "textColor": zod.string().optional()
-}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional(),
   "validationRulesJson": zod.array(zod.object({
   "applyToValues": zod.array(zod.string()).optional().describe('When non-empty, the rule applies only if THIS field\'s new value is one of these. Empty\/absent = applies to any non-empty value.'),
   "conditionFieldKey": zod.string(),
@@ -2920,12 +2923,13 @@ export const UpdateFieldBody = zod.object({
   "allowCreate": zod.boolean().optional()
 }).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected. `allowCreate` lets a user be created inline from the value picker, with the new account\'s role limited to `allowedRoleIds`.'),
   "formatRulesJson": zod.array(zod.object({
-  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
+  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte', 'between']),
   "value": zod.string().optional(),
+  "value2": zod.string().optional(),
   "cellColor": zod.string().optional(),
   "rowColor": zod.string().optional(),
   "textColor": zod.string().optional()
-}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional(),
   "validationRulesJson": zod.array(zod.object({
   "applyToValues": zod.array(zod.string()).optional().describe('When non-empty, the rule applies only if THIS field\'s new value is one of these. Empty\/absent = applies to any non-empty value.'),
   "conditionFieldKey": zod.string(),
@@ -3010,12 +3014,13 @@ export const UpdateFieldResponse = zod.object({
   "allowCreate": zod.boolean().optional()
 }).optional().describe('Per-field configuration for a `user`-type field. `allowedRoleIds` restricts selectable users to those roles. Empty or unset means any user may be selected. `allowCreate` lets a user be created inline from the value picker, with the new account\'s role limited to `allowedRoleIds`.'),
   "formatRulesJson": zod.array(zod.object({
-  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
+  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte', 'between']),
   "value": zod.string().optional(),
+  "value2": zod.string().optional(),
   "cellColor": zod.string().optional(),
   "rowColor": zod.string().optional(),
   "textColor": zod.string().optional()
-}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional(),
   "validationRulesJson": zod.array(zod.object({
   "applyToValues": zod.array(zod.string()).optional().describe('When non-empty, the rule applies only if THIS field\'s new value is one of these. Empty\/absent = applies to any non-empty value.'),
   "conditionFieldKey": zod.string(),
@@ -3132,12 +3137,13 @@ export const ListPageFieldsResponseItem = zod.object({
 })
 })),
   "formatRulesJson": zod.array(zod.object({
-  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
+  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte', 'between']),
   "value": zod.string().optional(),
+  "value2": zod.string().optional(),
   "cellColor": zod.string().optional(),
   "rowColor": zod.string().optional(),
   "textColor": zod.string().optional()
-}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
   "decimals": zod.number().min(listPageFieldsResponseFormulaConfigJsonDecimalsMin).max(listPageFieldsResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
@@ -3214,12 +3220,13 @@ export const CreatePageFieldBody = zod.object({
 })
 })).optional(),
   "formatRulesJson": zod.array(zod.object({
-  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
+  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte', 'between']),
   "value": zod.string().optional(),
+  "value2": zod.string().optional(),
   "cellColor": zod.string().optional(),
   "rowColor": zod.string().optional(),
   "textColor": zod.string().optional()
-}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
   "decimals": zod.number().min(createPageFieldBodyFormulaConfigJsonDecimalsMin).max(createPageFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
@@ -3287,12 +3294,13 @@ export const UpdatePageFieldBody = zod.object({
 })
 })).optional(),
   "formatRulesJson": zod.array(zod.object({
-  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
+  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte', 'between']),
   "value": zod.string().optional(),
+  "value2": zod.string().optional(),
   "cellColor": zod.string().optional(),
   "rowColor": zod.string().optional(),
   "textColor": zod.string().optional()
-}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
   "decimals": zod.number().min(updatePageFieldBodyFormulaConfigJsonDecimalsMin).max(updatePageFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
@@ -3354,12 +3362,13 @@ export const UpdatePageFieldResponse = zod.object({
 })
 })),
   "formatRulesJson": zod.array(zod.object({
-  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte']),
+  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte', 'between']),
   "value": zod.string().optional(),
+  "value2": zod.string().optional(),
   "cellColor": zod.string().optional(),
   "rowColor": zod.string().optional(),
   "textColor": zod.string().optional()
-}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field.')).optional(),
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
   "decimals": zod.number().min(updatePageFieldResponseFormulaConfigJsonDecimalsMin).max(updatePageFieldResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
