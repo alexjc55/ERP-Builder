@@ -1322,6 +1322,31 @@ export function EntityRecords({
     },
   });
 
+  // Storable page-local fields (function/relation/lookup are derived, never stored)
+  // and, among them, the required ones. Required page fields must not be left
+  // empty; because page values are filled one cell at a time, editing a single
+  // cell on a record whose other required page fields are still empty is handled
+  // by a dialog (below) that forces all required fields to be filled at once.
+  const storablePageFields = useMemo(
+    () =>
+      pageFields.filter(
+        (pf: PageField) =>
+          pf.fieldType !== "function" && pf.fieldType !== "relation" && pf.fieldType !== "lookup",
+      ),
+    [pageFields],
+  );
+  const requiredPageFields = useMemo(
+    () => storablePageFields.filter((pf: PageField) => pf.isRequired),
+    [storablePageFields],
+  );
+  const isPageValueEmpty = (v: unknown) => v === "" || v === undefined || v === null;
+  // When set, the "fill all required page fields" dialog is open for this record,
+  // seeded with the record's current page values (including the edit that opened it).
+  const [pageRequiredDialog, setPageRequiredDialog] = useState<{
+    recordId: number;
+    form: FormState;
+  } | null>(null);
+
   // Relation page-fields surface one field of a single linked record. Their
   // values are NOT stored on the page (unlike page-local fields) — they are
   // resolved live from the linked record via a dedicated endpoint that re-applies
@@ -2591,7 +2616,38 @@ export function EntityRecords({
     if (next === "" || next === undefined || next === null) delete merged[field.fieldKey];
     else merged[field.fieldKey] = next;
     setEditingCell(null);
+    // Required page fields must not be left empty. If, after this single-cell edit,
+    // any required page field would still be empty, don't save the partial map —
+    // open a dialog seeded with the record's page values (including this edit) that
+    // requires all required fields to be filled before saving them together.
+    const missingRequired = requiredPageFields.filter((pf) => isPageValueEmpty(merged[pf.fieldKey]));
+    if (missingRequired.length > 0) {
+      const form: FormState = {};
+      for (const pf of storablePageFields) {
+        form[pf.fieldKey] = valueToForm(pf as unknown as Field, merged[pf.fieldKey]);
+      }
+      setPageRequiredDialog({ recordId: record.id, form });
+      return;
+    }
     setPageValuesMutation.mutate({ pageId, recordId: record.id, data: { valuesJson: merged } });
+  };
+
+  // Commit the "fill all required page fields" dialog: rebuild the full page-value
+  // map from the dialog form and save it in one write (so no required field is left
+  // empty). Save is only reachable when every required field is filled.
+  const commitPageRequiredDialog = () => {
+    if (pageId == null || pageRequiredDialog == null) return;
+    const { recordId, form } = pageRequiredDialog;
+    const valuesJson: Record<string, unknown> = {};
+    for (const pf of storablePageFields) {
+      const val = cellValueForPayload(pf as unknown as Field, form[pf.fieldKey]);
+      if (val === "" || val === undefined || val === null) continue;
+      valuesJson[pf.fieldKey] = val;
+    }
+    setPageValuesMutation.mutate(
+      { pageId, recordId, data: { valuesJson } },
+      { onSuccess: () => setPageRequiredDialog(null) },
+    );
   };
 
   // Build a synthetic Field for a relation page-field so it can reuse the same
@@ -4708,6 +4764,71 @@ export function EntityRecords({
           onSaved={() => { invalidatePageFields(); }}
         />
       )}
+      <Dialog open={pageRequiredDialog != null} onOpenChange={(o) => { if (!o) setPageRequiredDialog(null); }}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t("records.pageRequiredTitle", "Заполните обязательные поля")}</DialogTitle>
+            <DialogDescription>
+              {t(
+                "records.pageRequiredDesc",
+                "Все обязательные поля должны быть заполнены. Заполните их и сохраните.",
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {pageRequiredDialog != null && (
+            <div className="space-y-4 py-2">
+              {storablePageFields
+                .filter((pf) => pf.isRequired || !isPageValueEmpty(pageRequiredDialog.form[pf.fieldKey]))
+                .map((pf) => {
+                  const pfField = { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
+                  const missing = pf.isRequired && isPageValueEmpty(pageRequiredDialog.form[pf.fieldKey]);
+                  return (
+                    <div key={pf.id} className="space-y-1.5">
+                      <Label className="text-sm">
+                        {ml(pf.nameJson) || pf.fieldKey}
+                        {pf.isRequired && <span className="ml-1 text-red-500">*</span>}
+                      </Label>
+                      <FieldInput
+                        field={pfField}
+                        value={pageRequiredDialog.form[pf.fieldKey]}
+                        userOptions={userOptions}
+                        onChange={(v) =>
+                          setPageRequiredDialog((prev) =>
+                            prev == null ? prev : { ...prev, form: { ...prev.form, [pf.fieldKey]: v } },
+                          )
+                        }
+                      />
+                      {missing && (
+                        <p className="text-xs text-red-500">
+                          {t("records.pageRequiredField", "Обязательное поле")}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPageRequiredDialog(null)}>
+              {t("records.cancel", "Отмена")}
+            </Button>
+            <Button
+              onClick={commitPageRequiredDialog}
+              disabled={
+                setPageValuesMutation.isPending ||
+                pageRequiredDialog == null ||
+                requiredPageFields.some((pf) => isPageValueEmpty(pageRequiredDialog.form[pf.fieldKey]))
+              }
+            >
+              {setPageValuesMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                t("records.save", "Сохранить")
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {canEditMirrorLabels && (
         <MirrorFieldLabelDialog
           field={mirrorLabelField}

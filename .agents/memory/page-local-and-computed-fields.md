@@ -50,6 +50,15 @@ required fields at once), so inline edits merge into an already-complete map. Pa
 values have no such atomic gate, so the same rule cannot apply. Keep required as a
 cosmetic hint in the add-row UI if desired; do not reintroduce the server block.
 
+Requiredness is instead enforced in the CLIENT: an inline page-cell edit that
+would leave any required page field empty opens a "fill all required" dialog
+(seeded with the record's current page values + the edit) that blocks Save until
+every required field is non-empty, then writes the whole map in one request.
+After all required are filled, single-cell inline edits save directly again. This
+gives real required enforcement at the UI without the server-side deadlock, and
+leaves the write path open for the upcoming page-field automations (system writes
+that may legitimately set page fields partially).
+
 ## RBAC is a hard server boundary on page-value endpoints (do not regress)
 
 The page-local record-values API is NOT admin-only metadata — it carries real
