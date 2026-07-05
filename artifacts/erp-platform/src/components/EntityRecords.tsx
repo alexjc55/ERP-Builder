@@ -145,7 +145,7 @@ import { FieldConfigDialog } from "@/components/FieldConfigDialog";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { CreateUserDialog } from "@/components/CreateUserDialog";
 import { PageFieldConfigDialog } from "@/components/PageFieldConfigDialog";
-import { formatFormulaResult, evaluateFormula } from "@workspace/formula";
+import { formatFormulaResult, evaluateFormula, buildFormulaScope, type FormulaFieldDef } from "@workspace/formula";
 import { computeRowFormatting, ruleMatches, type FormatField } from "@/lib/formatRules";
 import type { FieldFormatRule } from "@workspace/api-client-react";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
@@ -1318,6 +1318,31 @@ export function EntityRecords({
       return out;
     },
     [userFormulaFieldKeys, userNames],
+  );
+  // Formula (`function`) fields can reference OTHER formula fields by key. Their
+  // value is never stored, so we describe every formula field here and wrap each
+  // record's values in `buildFormulaScope` (below) so a `{other_formula}` ref
+  // resolves lazily (with cycle protection) instead of coming back empty. Uses
+  // ALL fields (entity + page-local), not just displayed ones, so a formula may
+  // reference a formula column that is hidden or not shown in the table.
+  const formulaFieldDefs = useMemo<FormulaFieldDef[]>(
+    () => [
+      ...allFields
+        .filter((f: Field) => f.fieldType === "function")
+        .map((f: Field) => ({
+          key: f.fieldKey,
+          expression: f.formulaConfigJson?.expression ?? "",
+          decimals: f.formulaConfigJson?.decimals ?? null,
+        })),
+      ...pageFields
+        .filter((pf: PageField) => pf.fieldType === "function")
+        .map((pf: PageField) => ({
+          key: pf.fieldKey,
+          expression: pf.formulaConfigJson?.expression ?? "",
+          decimals: pf.formulaConfigJson?.decimals ?? null,
+        })),
+    ],
+    [allFields, pageFields],
   );
   const pageValuesByRecord = useMemo(() => {
     const m = new Map<number, Record<string, unknown>>();
@@ -4173,7 +4198,7 @@ export function EntityRecords({
                     const values = (record.valuesJson ?? {}) as Record<string, unknown>;
                     const pageValues = pageValuesByRecord.get(record.id) ?? {};
                     const allValues = { ...values, ...pageValues };
-                    const formulaValues = resolveFormulaValues(allValues);
+                    const formulaValues = buildFormulaScope(resolveFormulaValues(allValues), formulaFieldDefs);
                     const status = record.statusId != null ? statusById.get(record.statusId) : undefined;
                     // Conditional formatting across both entity and page columns.
                     const formatFields: FormatField[] = [
@@ -4196,7 +4221,7 @@ export function EntityRecords({
                         if (entityRel) return entityRel.value;
                         return relatedByRecord.get(record.id)?.get(key)?.value;
                       }
-                      return def ? fieldRawValue({ fieldKey: key, ...def }, allValues) : allValues[key];
+                      return def ? fieldRawValue({ fieldKey: key, ...def }, formulaValues) : formulaValues[key];
                     });
                     // Resolve the row background once so pinned (sticky) cells and
                     // the non-pinned row stay consistent. Priority: conditional

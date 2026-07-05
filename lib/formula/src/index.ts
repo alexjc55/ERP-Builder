@@ -360,6 +360,66 @@ export function evaluateFormula(expression: string, values: Record<string, unkno
   return evalNode(ast, values);
 }
 
+export interface FormulaFieldDef {
+  key: string;
+  expression: string;
+  decimals?: number | null;
+}
+
+/**
+ * Build a values scope that lets one `function`-type (formula) field reference
+ * another formula's computed result. A formula's value is never stored, so the
+ * plain `base` map (record valuesJson, page values, …) does not contain it — a
+ * reference like `{other_formula}` would otherwise resolve to null.
+ *
+ * The returned Proxy resolves keys as follows: a key present in `base` (any
+ * stored field) returns its stored value; a key that is a formula field and is
+ * NOT in `base` is evaluated on first access and memoized. Self/cyclic
+ * references resolve to null (cycle guard) so a bad config can never infinitely
+ * recurse. The cached formula result is the RAW (unrounded) value, so chained
+ * formulas keep full precision — each display/total site still rounds to its
+ * own `decimals`.
+ *
+ * Returns `base` unchanged when there are no formula fields (zero overhead).
+ */
+export function buildFormulaScope(
+  base: Record<string, unknown>,
+  formulas: FormulaFieldDef[],
+): Record<string, unknown> {
+  const defs = new Map<string, FormulaFieldDef>();
+  for (const f of formulas) {
+    if (f.key && (f.expression ?? "").trim()) defs.set(f.key, f);
+  }
+  if (defs.size === 0) return base;
+
+  const cache = new Map<string, FormulaValue>();
+  const inProgress = new Set<string>();
+
+  const scope: Record<string, unknown> = new Proxy(base, {
+    get(target, prop) {
+      if (typeof prop === "string" && !(prop in target) && defs.has(prop)) {
+        if (cache.has(prop)) return cache.get(prop);
+        if (inProgress.has(prop)) return null; // cycle guard
+        inProgress.add(prop);
+        let val: FormulaValue = null;
+        try {
+          val = evaluateFormula(defs.get(prop)!.expression, scope);
+        } catch {
+          val = null;
+        }
+        inProgress.delete(prop);
+        cache.set(prop, val);
+        return val;
+      }
+      return (target as Record<string, unknown>)[prop as string];
+    },
+    has(target, prop) {
+      return prop in target || (typeof prop === "string" && defs.has(prop));
+    },
+  });
+  return scope;
+}
+
 /**
  * Normalize a user/stored "decimal places" value into a bounded integer (0–10),
  * or null when absent/invalid. Used at every write/display boundary so the

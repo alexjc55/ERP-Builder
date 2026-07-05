@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable, pageFieldsTable, pageRecordValuesTable, pagesTable, relationsTable, recordLinksTable, viewsTable } from "@workspace/db";
 import { eq, asc, desc, and, or, sql, inArray, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { evaluateFormula, normalizeDecimals } from "@workspace/formula";
+import { buildFormulaScope, evaluateFormula, normalizeDecimals, type FormulaFieldDef } from "@workspace/formula";
 import type { Request } from "express";
 import { requireAuth } from "../middlewares/auth";
 import {
@@ -797,6 +797,16 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   // Restrict the query whitelist to visible fields so any reference to a hidden field
   // is rejected as an unknown field and search never touches hidden values.
   const visibleFields = fields.filter((f) => !hidden.has(f.fieldKey));
+  // Formula fields can reference OTHER formula fields by key. A formula's value is
+  // never stored, so wrapping the raw values map in `buildFormulaScope` lets those
+  // references resolve (lazily, with cycle protection). Built from ALL active
+  // fields (not just visible) so a formula may reference a hidden formula — the
+  // same "totals compute over the true raw values" decision used below.
+  const toFormulaDef = (f: { fieldKey: string; formulaConfigJson: unknown }): FormulaFieldDef => {
+    const cfg = f.formulaConfigJson as { expression?: string; decimals?: number | null } | null;
+    return { key: f.fieldKey, expression: cfg?.expression ?? "", decimals: cfg?.decimals ?? null };
+  };
+  const entityFormulaDefs = fields.filter((f) => f.fieldType === "function").map(toFormulaDef);
   const relationMeta = await buildRelationMeta(entityId, visibleFields);
   const built = buildRecordQuery(visibleFields, body.data as RecordQuerySpec, relationMeta);
   if ("error" in built) {
@@ -1041,7 +1051,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         // correctness of the total is prioritized over that aggregate confidentiality.
         const vals = (r.values as Record<string, unknown> | null) ?? {};
         try {
-          const out = evaluateFormula(expr, vals);
+          const out = evaluateFormula(expr, buildFormulaScope(vals, entityFormulaDefs));
           if (typeof out === "number" && Number.isFinite(out)) {
             // Round EACH per-row result to the field's configured decimals before
             // summing, so the total equals the sum of the values the user actually
@@ -1072,6 +1082,20 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   const totalsPageId = body.data.pageId;
   if (totalsPageId != null) {
     const roleIds = await getUserRoleIds(req);
+    // Cross-formula resolution needs EVERY active page formula field for this
+    // page — a total-enabled page formula may reference another page formula that
+    // is NOT itself total-enabled — so pull them independently of the
+    // showColumnTotal gate applied to the totals subset below.
+    const pageAllFormulaRows = await db
+      .select({ fieldKey: pageFieldsTable.fieldKey, formulaConfigJson: pageFieldsTable.formulaConfigJson })
+      .from(pageFieldsTable)
+      .where(
+        and(
+          eq(pageFieldsTable.pageId, totalsPageId),
+          eq(pageFieldsTable.isActive, true),
+          eq(pageFieldsTable.fieldType, "function"),
+        ),
+      );
     // Flat totals row (общий результат) is opt-in per field, so only pull page
     // fields flagged showColumnTotal. Percent columns average (not sum) but are
     // still gated by the same flag here; their ALWAYS-shown per-group averages
@@ -1113,6 +1137,9 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       const pvByRecord = new Map<number, Record<string, unknown>>();
       for (const r of pvRows) pvByRecord.set(r.recordId, (r.values as Record<string, unknown> | null) ?? {});
       numericTotals = numericTotals ?? {};
+      // Page-local formulas evaluate over {entity ∪ page} values and may reference
+      // either entity or page formula fields by key.
+      const pageScopeFormulaDefs = [...entityFormulaDefs, ...pageAllFormulaRows.map(toFormulaDef)];
       for (const pf of pageTotalFields) {
         // Namespace page totals by the stable page-field id (`pf:<id>`) so they
         // can never collide with an entity field that happens to share the same
@@ -1135,7 +1162,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           for (const r of recRows) {
             const merged = { ...((r.values as Record<string, unknown> | null) ?? {}), ...(pvByRecord.get(r.id) ?? {}) };
             try {
-              const out = evaluateFormula(expr, merged);
+              const out = evaluateFormula(expr, buildFormulaScope(merged, pageScopeFormulaDefs));
               // Round each per-row result to the configured decimals before summing
               // so the total matches the sum of the per-row values the user sees.
               if (typeof out === "number" && Number.isFinite(out)) sum += d != null ? Number(out.toFixed(d)) : out;
@@ -1295,6 +1322,12 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         !PF_COMMON_SKIP.has(pf.fieldType),
     );
     const gPfFormulaCommon = gPfVisible.filter((pf) => !gPfSumIds.has(pf.id) && pf.fieldType === "function");
+    // Cross-formula resolution scope for the grouped page: entity formulas ∪ this
+    // page's formula fields (page formulas evaluate over {entity ∪ page} values).
+    const gPfScopeFormulaDefs = [
+      ...entityFormulaDefs,
+      ...gPfRows.filter((pf) => pf.fieldType === "function").map(toFormulaDef),
+    ];
     const gPvByRec = new Map<number, Record<string, unknown>>();
     if (
       (gPfSumFields.length > 0 ||
@@ -1425,7 +1458,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         if (!expr) continue;
         const d = normalizeDecimals(cfg?.decimals);
         try {
-          const out = evaluateFormula(expr, vals);
+          const out = evaluateFormula(expr, buildFormulaScope(vals, entityFormulaDefs));
           if (typeof out === "number" && Number.isFinite(out))
             b.sums[f.fieldKey] = (b.sums[f.fieldKey] ?? 0) + (d != null ? Number(out.toFixed(d)) : out);
         } catch {
@@ -1443,7 +1476,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           if (!expr) continue;
           const d = normalizeDecimals(cfg?.decimals);
           try {
-            const out = evaluateFormula(expr, { ...vals, ...pvVals });
+            const out = evaluateFormula(expr, buildFormulaScope({ ...vals, ...pvVals }, gPfScopeFormulaDefs));
             if (typeof out === "number" && Number.isFinite(out))
               b.sums[totalKey] = (b.sums[totalKey] ?? 0) + (d != null ? Number(out.toFixed(d)) : out);
           } catch {
@@ -1478,7 +1511,8 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       // already filtered by the row boundary (hiddenRowStatusIds), so any
       // status that reaches here is visible to the viewer.
       trackCommon(b, "__status__", r.statusId, firstRow);
-      for (const f of gFormulaCommon) trackCommon(b, f.fieldKey, evalFormulaVal(f, vals), firstRow);
+      for (const f of gFormulaCommon)
+        trackCommon(b, f.fieldKey, evalFormulaVal(f, buildFormulaScope(vals, entityFormulaDefs)), firstRow);
       for (const rc of relCommonCols) {
         trackCommon(b, rc.fieldKey, (r as Record<string, unknown>)[`relval__${rc.fieldKey}`], firstRow);
       }
@@ -1486,7 +1520,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         const pvVals = gPvByRec.get(r.id) ?? {};
         for (const pf of gPfScalarCommon) trackCommon(b, `pf:${pf.id}`, pvVals[pf.fieldKey], firstRow);
         for (const pf of gPfFormulaCommon)
-          trackCommon(b, `pf:${pf.id}`, evalFormulaVal(pf, { ...vals, ...pvVals }), firstRow);
+          trackCommon(b, `pf:${pf.id}`, evalFormulaVal(pf, buildFormulaScope({ ...vals, ...pvVals }, gPfScopeFormulaDefs)), firstRow);
       }
     }
     // Final per-group rounding for formula sums (matches the flat totals).
