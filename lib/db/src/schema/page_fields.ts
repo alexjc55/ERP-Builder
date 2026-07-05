@@ -2,7 +2,7 @@ import { pgTable, serial, jsonb, text, integer, boolean, timestamp, unique } fro
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { pagesTable } from "./pages";
-import type { FieldFormatRule, FormulaFieldConfig, FieldPermissions, RelationFieldConfig } from "./fields";
+import type { FieldFormatRule, FormulaFieldConfig, FieldPermissions, RelationFieldConfig, PercentFieldConfig } from "./fields";
 
 /**
  * Page-local field definitions. A mirror page shows another entity's records,
@@ -30,6 +30,7 @@ export const pageFieldsTable = pgTable(
     optionsJson: jsonb("options_json").notNull().default([]),
     formatRulesJson: jsonb("format_rules_json").$type<FieldFormatRule[]>().notNull().default([]),
     formulaConfigJson: jsonb("formula_config_json").$type<FormulaFieldConfig>().notNull().default({}),
+    percentConfigJson: jsonb("percent_config_json").$type<PercentFieldConfig>().notNull().default({}),
     relationConfigJson: jsonb("relation_config_json").$type<RelationFieldConfig>().notNull().default({}),
     permissionsJson: jsonb("permissions_json").$type<FieldPermissions>().notNull().default({}),
     showInTable: boolean("show_in_table").notNull().default(true),

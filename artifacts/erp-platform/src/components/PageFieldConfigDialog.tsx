@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/select";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { SelectOptionsEditor } from "@/components/SelectOptionsEditor";
+import { PercentOptionsEditor } from "@/components/PercentOptionsEditor";
 import { normalizeSelectOptions, type SelectOption } from "@/lib/selectOptions";
 import { FieldFormatRulesEditor } from "@/components/FieldFormatRulesEditor";
 import { ColorPickerControl } from "@/components/ColorPickerControl";
@@ -63,6 +64,7 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "text", label: "Текст" },
   { value: "textarea", label: "Многострочный текст" },
   { value: "number", label: "Число" },
+  { value: "percent", label: "Проценты" },
   { value: "boolean", label: "Да / Нет" },
   { value: "date", label: "Дата" },
   { value: "datetime", label: "Дата и время" },
@@ -152,6 +154,8 @@ export function PageFieldConfigDialog({
   const [formatRules, setFormatRules] = useState<FieldFormatRule[]>([]);
   const [formula, setFormula] = useState("");
   const [formulaDecimals, setFormulaDecimals] = useState("");
+  const [percentMode, setPercentMode] = useState<"list" | "value">("value");
+  const [percentDecimals, setPercentDecimals] = useState("");
   const [relationId, setRelationId] = useState<number | null>(null);
   const [relatedFieldKey, setRelatedFieldKey] = useState("");
   // relation + lookup: when set, the field projects a PAGE-LOCAL field of the
@@ -186,6 +190,10 @@ export function PageFieldConfigDialog({
       setFormulaDecimals(
         field.formulaConfigJson?.decimals != null ? String(field.formulaConfigJson.decimals) : "",
       );
+      setPercentMode(field.percentConfigJson?.mode === "list" ? "list" : "value");
+      setPercentDecimals(
+        field.percentConfigJson?.decimals != null ? String(field.percentConfigJson.decimals) : "",
+      );
       setRelationId(field.relationConfigJson?.relationId ?? null);
       setRelatedFieldKey(field.relationConfigJson?.relatedFieldKey ?? "");
       setRelatedPageId(field.relationConfigJson?.relatedPageId ?? null);
@@ -209,6 +217,8 @@ export function PageFieldConfigDialog({
       setFormatRules([]);
       setFormula("");
       setFormulaDecimals("");
+      setPercentMode("value");
+      setPercentDecimals("");
       setRelationId(null);
       setRelatedFieldKey("");
       setRelatedPageId(null);
@@ -320,6 +330,15 @@ export function PageFieldConfigDialog({
                 : {}),
             }
           : {},
+      percentConfigJson:
+        fieldType === "percent"
+          ? {
+              mode: percentMode,
+              ...(normalizeDecimals(percentDecimals) != null
+                ? { decimals: normalizeDecimals(percentDecimals) as number }
+                : {}),
+            }
+          : {},
       relationConfigJson:
         fieldType === "lookup"
           ? { relationId, relatedFieldKey: relatedFieldKey || null, relatedPageId }
@@ -389,6 +408,46 @@ export function PageFieldConfigDialog({
             </div>
             {fieldType === "select" && (
               <SelectOptionsEditor value={options} onChange={setOptions} t={t} />
+            )}
+            {fieldType === "percent" && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label>{t("fields.percentMode", "Режим ввода")}</Label>
+                  <Select value={percentMode} onValueChange={(v) => setPercentMode(v as "list" | "value")}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="value">{t("fields.percentModeValue", "Значение (ввод числа)")}</SelectItem>
+                      <SelectItem value="list">{t("fields.percentModeList", "Список (выбор из вариантов)")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {percentMode === "list" && (
+                  <PercentOptionsEditor value={options} onChange={setOptions} t={t} />
+                )}
+                <div className="space-y-1.5">
+                  <Label htmlFor="pfcd-percent-decimals">
+                    {t("fields.percentDecimals", "Знаков после запятой (округление)")}
+                  </Label>
+                  <Input
+                    id="pfcd-percent-decimals"
+                    type="number"
+                    min={0}
+                    max={10}
+                    value={percentDecimals}
+                    onChange={(e) => setPercentDecimals(e.target.value)}
+                    placeholder={t("fields.formulaDecimalsNone", "Без округления")}
+                    className="w-48"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {t(
+                      "fields.percentDecimalsHint",
+                      "Округление при отображении. Итог по столбцу — среднее значение.",
+                    )}
+                  </p>
+                </div>
+              </div>
             )}
             {fieldType === "function" && (
               <div className="space-y-3">

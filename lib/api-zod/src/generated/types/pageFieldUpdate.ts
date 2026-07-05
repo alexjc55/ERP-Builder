@@ -10,6 +10,7 @@ import type { FieldPermissions } from './fieldPermissions';
 import type { FieldType } from './fieldType';
 import type { FormulaFieldConfig } from './formulaFieldConfig';
 import type { MultilingualText } from './multilingualText';
+import type { PercentFieldConfig } from './percentFieldConfig';
 import type { RelationFieldConfig } from './relationFieldConfig';
 import type { SelectOption } from './selectOption';
 
@@ -26,6 +27,7 @@ export interface PageFieldUpdate {
   optionsJson?: SelectOption[];
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
+  percentConfigJson?: PercentFieldConfig;
   relationConfigJson?: RelationFieldConfig;
   permissionsJson?: FieldPermissions;
   showInTable?: boolean;

@@ -13,6 +13,7 @@ import type { FieldValidationRule } from './fieldValidationRule';
 import type { FileFieldConfig } from './fileFieldConfig';
 import type { FormulaFieldConfig } from './formulaFieldConfig';
 import type { MultilingualText } from './multilingualText';
+import type { PercentFieldConfig } from './percentFieldConfig';
 import type { RelationFieldConfig } from './relationFieldConfig';
 import type { SelectOption } from './selectOption';
 import type { UserFieldConfig } from './userFieldConfig';
@@ -33,6 +34,7 @@ export interface FieldInput {
   formatRulesJson?: FieldFormatRule[];
   validationRulesJson?: FieldValidationRule[];
   formulaConfigJson?: FormulaFieldConfig;
+  percentConfigJson?: PercentFieldConfig;
   dependencyConfigJson?: DependencyFieldConfig;
   relationConfigJson?: RelationFieldConfig;
   isKey?: boolean;

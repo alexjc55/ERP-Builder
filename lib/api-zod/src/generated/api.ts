@@ -2574,6 +2574,9 @@ export const ListEntityFieldsParams = zod.object({
 export const listEntityFieldsResponseFormulaConfigJsonDecimalsMin = 0;
 export const listEntityFieldsResponseFormulaConfigJsonDecimalsMax = 10;
 
+export const listEntityFieldsResponsePercentConfigJsonDecimalsMin = 0;
+export const listEntityFieldsResponsePercentConfigJsonDecimalsMax = 10;
+
 
 
 export const ListEntityFieldsResponseItem = zod.object({
@@ -2590,7 +2593,7 @@ export const ListEntityFieldsResponseItem = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "defaultToToday": zod.boolean().optional(),
@@ -2629,6 +2632,10 @@ export const ListEntityFieldsResponseItem = zod.object({
   "expression": zod.string().optional(),
   "decimals": zod.number().min(listEntityFieldsResponseFormulaConfigJsonDecimalsMin).max(listEntityFieldsResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
+  "percentConfigJson": zod.object({
+  "mode": zod.enum(['list', 'value']).nullish(),
+  "decimals": zod.number().min(listEntityFieldsResponsePercentConfigJsonDecimalsMin).max(listEntityFieldsResponsePercentConfigJsonDecimalsMax).nullish()
+}).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
   "dependencyConfigJson": zod.object({
   "dependsOnFieldKey": zod.string().optional(),
   "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
@@ -2670,6 +2677,9 @@ export const createEntityFieldBodyDefaultToTodayDefault = false;
 export const createEntityFieldBodyFormulaConfigJsonDecimalsMin = 0;
 export const createEntityFieldBodyFormulaConfigJsonDecimalsMax = 10;
 
+export const createEntityFieldBodyPercentConfigJsonDecimalsMin = 0;
+export const createEntityFieldBodyPercentConfigJsonDecimalsMax = 10;
+
 export const createEntityFieldBodyIsKeyDefault = false;
 export const createEntityFieldBodyLockAfterCreateDefault = false;
 export const createEntityFieldBodyIsFilterableDefault = false;
@@ -2692,7 +2702,7 @@ export const CreateEntityFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent']),
   "isRequired": zod.boolean().default(createEntityFieldBodyIsRequiredDefault),
   "defaultValue": zod.string().nullish(),
   "defaultToToday": zod.boolean().default(createEntityFieldBodyDefaultToTodayDefault),
@@ -2731,6 +2741,10 @@ export const CreateEntityFieldBody = zod.object({
   "expression": zod.string().optional(),
   "decimals": zod.number().min(createEntityFieldBodyFormulaConfigJsonDecimalsMin).max(createEntityFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
+  "percentConfigJson": zod.object({
+  "mode": zod.enum(['list', 'value']).nullish(),
+  "decimals": zod.number().min(createEntityFieldBodyPercentConfigJsonDecimalsMin).max(createEntityFieldBodyPercentConfigJsonDecimalsMax).nullish()
+}).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
   "dependencyConfigJson": zod.object({
   "dependsOnFieldKey": zod.string().optional(),
   "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
@@ -2767,6 +2781,9 @@ export const GetFieldParams = zod.object({
 export const getFieldResponseFormulaConfigJsonDecimalsMin = 0;
 export const getFieldResponseFormulaConfigJsonDecimalsMax = 10;
 
+export const getFieldResponsePercentConfigJsonDecimalsMin = 0;
+export const getFieldResponsePercentConfigJsonDecimalsMax = 10;
+
 
 
 export const GetFieldResponse = zod.object({
@@ -2783,7 +2800,7 @@ export const GetFieldResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "defaultToToday": zod.boolean().optional(),
@@ -2822,6 +2839,10 @@ export const GetFieldResponse = zod.object({
   "expression": zod.string().optional(),
   "decimals": zod.number().min(getFieldResponseFormulaConfigJsonDecimalsMin).max(getFieldResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
+  "percentConfigJson": zod.object({
+  "mode": zod.enum(['list', 'value']).nullish(),
+  "decimals": zod.number().min(getFieldResponsePercentConfigJsonDecimalsMin).max(getFieldResponsePercentConfigJsonDecimalsMax).nullish()
+}).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
   "dependencyConfigJson": zod.object({
   "dependsOnFieldKey": zod.string().optional(),
   "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
@@ -2860,6 +2881,9 @@ export const UpdateFieldParams = zod.object({
 export const updateFieldBodyFormulaConfigJsonDecimalsMin = 0;
 export const updateFieldBodyFormulaConfigJsonDecimalsMax = 10;
 
+export const updateFieldBodyPercentConfigJsonDecimalsMin = 0;
+export const updateFieldBodyPercentConfigJsonDecimalsMax = 10;
+
 
 
 export const UpdateFieldBody = zod.object({
@@ -2874,7 +2898,7 @@ export const UpdateFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']).optional(),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent']).optional(),
   "isRequired": zod.boolean().optional(),
   "defaultValue": zod.string().nullish(),
   "defaultToToday": zod.boolean().optional(),
@@ -2913,6 +2937,10 @@ export const UpdateFieldBody = zod.object({
   "expression": zod.string().optional(),
   "decimals": zod.number().min(updateFieldBodyFormulaConfigJsonDecimalsMin).max(updateFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
+  "percentConfigJson": zod.object({
+  "mode": zod.enum(['list', 'value']).nullish(),
+  "decimals": zod.number().min(updateFieldBodyPercentConfigJsonDecimalsMin).max(updateFieldBodyPercentConfigJsonDecimalsMax).nullish()
+}).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
   "dependencyConfigJson": zod.object({
   "dependsOnFieldKey": zod.string().optional(),
   "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
@@ -2941,6 +2969,9 @@ export const UpdateFieldBody = zod.object({
 export const updateFieldResponseFormulaConfigJsonDecimalsMin = 0;
 export const updateFieldResponseFormulaConfigJsonDecimalsMax = 10;
 
+export const updateFieldResponsePercentConfigJsonDecimalsMin = 0;
+export const updateFieldResponsePercentConfigJsonDecimalsMax = 10;
+
 
 
 export const UpdateFieldResponse = zod.object({
@@ -2957,7 +2988,7 @@ export const UpdateFieldResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "defaultToToday": zod.boolean().optional(),
@@ -2996,6 +3027,10 @@ export const UpdateFieldResponse = zod.object({
   "expression": zod.string().optional(),
   "decimals": zod.number().min(updateFieldResponseFormulaConfigJsonDecimalsMin).max(updateFieldResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
+  "percentConfigJson": zod.object({
+  "mode": zod.enum(['list', 'value']).nullish(),
+  "decimals": zod.number().min(updateFieldResponsePercentConfigJsonDecimalsMin).max(updateFieldResponsePercentConfigJsonDecimalsMax).nullish()
+}).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
   "dependencyConfigJson": zod.object({
   "dependsOnFieldKey": zod.string().optional(),
   "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
@@ -3064,6 +3099,9 @@ export const ListPageFieldsParams = zod.object({
 export const listPageFieldsResponseFormulaConfigJsonDecimalsMin = 0;
 export const listPageFieldsResponseFormulaConfigJsonDecimalsMax = 10;
 
+export const listPageFieldsResponsePercentConfigJsonDecimalsMin = 0;
+export const listPageFieldsResponsePercentConfigJsonDecimalsMax = 10;
+
 
 
 export const ListPageFieldsResponseItem = zod.object({
@@ -3080,7 +3118,7 @@ export const ListPageFieldsResponseItem = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent']),
   "isRequired": zod.boolean(),
   "isFilterable": zod.boolean().optional(),
   "pivotEnabled": zod.boolean().optional(),
@@ -3104,6 +3142,10 @@ export const ListPageFieldsResponseItem = zod.object({
   "expression": zod.string().optional(),
   "decimals": zod.number().min(listPageFieldsResponseFormulaConfigJsonDecimalsMin).max(listPageFieldsResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
+  "percentConfigJson": zod.object({
+  "mode": zod.enum(['list', 'value']).nullish(),
+  "decimals": zod.number().min(listPageFieldsResponsePercentConfigJsonDecimalsMin).max(listPageFieldsResponsePercentConfigJsonDecimalsMax).nullish()
+}).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
@@ -3138,6 +3180,9 @@ export const createPageFieldBodyPivotEnabledDefault = false;
 export const createPageFieldBodyFormulaConfigJsonDecimalsMin = 0;
 export const createPageFieldBodyFormulaConfigJsonDecimalsMax = 10;
 
+export const createPageFieldBodyPercentConfigJsonDecimalsMin = 0;
+export const createPageFieldBodyPercentConfigJsonDecimalsMax = 10;
+
 export const createPageFieldBodyShowInTableDefault = true;
 export const createPageFieldBodyIsPinnedDefault = false;
 export const createPageFieldBodyShowColumnTotalDefault = false;
@@ -3155,7 +3200,7 @@ export const CreatePageFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent']),
   "isRequired": zod.boolean().default(createPageFieldBodyIsRequiredDefault),
   "isFilterable": zod.boolean().default(createPageFieldBodyIsFilterableDefault),
   "pivotEnabled": zod.boolean().default(createPageFieldBodyPivotEnabledDefault),
@@ -3179,6 +3224,10 @@ export const CreatePageFieldBody = zod.object({
   "expression": zod.string().optional(),
   "decimals": zod.number().min(createPageFieldBodyFormulaConfigJsonDecimalsMin).max(createPageFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
+  "percentConfigJson": zod.object({
+  "mode": zod.enum(['list', 'value']).nullish(),
+  "decimals": zod.number().min(createPageFieldBodyPercentConfigJsonDecimalsMin).max(createPageFieldBodyPercentConfigJsonDecimalsMax).nullish()
+}).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
@@ -3207,6 +3256,9 @@ export const UpdatePageFieldParams = zod.object({
 export const updatePageFieldBodyFormulaConfigJsonDecimalsMin = 0;
 export const updatePageFieldBodyFormulaConfigJsonDecimalsMax = 10;
 
+export const updatePageFieldBodyPercentConfigJsonDecimalsMin = 0;
+export const updatePageFieldBodyPercentConfigJsonDecimalsMax = 10;
+
 
 
 export const UpdatePageFieldBody = zod.object({
@@ -3221,7 +3273,7 @@ export const UpdatePageFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']).optional(),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent']).optional(),
   "isRequired": zod.boolean().optional(),
   "isFilterable": zod.boolean().optional(),
   "pivotEnabled": zod.boolean().optional(),
@@ -3245,6 +3297,10 @@ export const UpdatePageFieldBody = zod.object({
   "expression": zod.string().optional(),
   "decimals": zod.number().min(updatePageFieldBodyFormulaConfigJsonDecimalsMin).max(updatePageFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
+  "percentConfigJson": zod.object({
+  "mode": zod.enum(['list', 'value']).nullish(),
+  "decimals": zod.number().min(updatePageFieldBodyPercentConfigJsonDecimalsMin).max(updatePageFieldBodyPercentConfigJsonDecimalsMax).nullish()
+}).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
@@ -3265,6 +3321,9 @@ export const UpdatePageFieldBody = zod.object({
 export const updatePageFieldResponseFormulaConfigJsonDecimalsMin = 0;
 export const updatePageFieldResponseFormulaConfigJsonDecimalsMax = 10;
 
+export const updatePageFieldResponsePercentConfigJsonDecimalsMin = 0;
+export const updatePageFieldResponsePercentConfigJsonDecimalsMax = 10;
+
 
 
 export const UpdatePageFieldResponse = zod.object({
@@ -3281,7 +3340,7 @@ export const UpdatePageFieldResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent']),
   "isRequired": zod.boolean(),
   "isFilterable": zod.boolean().optional(),
   "pivotEnabled": zod.boolean().optional(),
@@ -3305,6 +3364,10 @@ export const UpdatePageFieldResponse = zod.object({
   "expression": zod.string().optional(),
   "decimals": zod.number().min(updatePageFieldResponseFormulaConfigJsonDecimalsMin).max(updatePageFieldResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
 }).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
+  "percentConfigJson": zod.object({
+  "mode": zod.enum(['list', 'value']).nullish(),
+  "decimals": zod.number().min(updatePageFieldResponsePercentConfigJsonDecimalsMin).max(updatePageFieldResponsePercentConfigJsonDecimalsMax).nullish()
+}).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
   "relationConfigJson": zod.object({
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),

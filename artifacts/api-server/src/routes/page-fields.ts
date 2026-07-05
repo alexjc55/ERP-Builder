@@ -20,7 +20,7 @@ import {
 } from "@workspace/db";
 import { eq, asc, desc, and, ne, inArray, or, sql, type SQL } from "drizzle-orm";
 import { relationLinkLockViolation } from "../lib/relation-lock";
-import { sanitizeOptionsInput, normalizeOptions, optionValues, type SelectOption } from "../lib/selectOptions";
+import { sanitizeOptionsInput, normalizeOptions, optionValues, optionNumbers, type SelectOption } from "../lib/selectOptions";
 import { requireAuth } from "../middlewares/auth";
 import {
   requireAdmin,
@@ -82,6 +82,10 @@ function clampFormulaDecimals<T>(cfg: T): T {
   }
   return cfg;
 }
+
+// A percent-field option value must be a plain number (stored record value is
+// numeric so it can be averaged and used in formulas).
+const PERCENT_NUM_RE = /^-?[0-9]+(\.[0-9]+)?$/;
 
 // Drizzle wraps the pg driver error, so the SQLSTATE code (23505 for a unique
 // violation) can live on err.cause rather than the top-level error. Walk the
@@ -335,6 +339,18 @@ function validatePageValues(
         cleaned[field.fieldKey] = raw;
         break;
       }
+      case "percent": {
+        // Stored as a NUMBER (30 = 30%) so it works in formulas and averages.
+        const num = typeof raw === "number" ? raw : Number(raw);
+        if (typeof raw === "boolean" || (typeof raw === "string" && raw.trim() === "") || !Number.isFinite(num)) {
+          return { error: `Field "${field.fieldKey}" must be a number` };
+        }
+        if ((field.percentConfigJson?.mode ?? "value") === "list" && !optionNumbers(field.optionsJson).has(num)) {
+          return { error: `Field "${field.fieldKey}" must be one of the allowed options` };
+        }
+        cleaned[field.fieldKey] = num;
+        break;
+      }
       case "date":
       case "datetime": {
         if (typeof raw !== "string" || Number.isNaN(Date.parse(raw))) return { error: `Field "${field.fieldKey}" must be a valid date` };
@@ -411,6 +427,16 @@ router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (
     res.status(400).json({ error: "Select fields require at least one option" });
     return;
   }
+  if (parsed.data.fieldType === "percent" && (parsed.data.percentConfigJson?.mode ?? "value") === "list") {
+    if (createOptions.length === 0) {
+      res.status(400).json({ error: "Поле «Проценты» в режиме списка требует хотя бы один вариант" });
+      return;
+    }
+    if (createOptions.some((o) => !PERCENT_NUM_RE.test(o.value))) {
+      res.status(400).json({ error: "Значения вариантов процентного поля должны быть числами" });
+      return;
+    }
+  }
   const createPageName = parsed.data.nameJson as Record<string, unknown> | null | undefined;
   if (!createPageName || !Object.values(createPageName).some((v) => typeof v === "string" && v.trim() !== "")) {
     res.status(400).json({ error: "Укажите название хотя бы на одном языке" });
@@ -439,6 +465,7 @@ router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (
         ...parsed.data,
         optionsJson: createOptions,
         formulaConfigJson: clampFormulaDecimals(parsed.data.formulaConfigJson),
+        percentConfigJson: clampFormulaDecimals(parsed.data.percentConfigJson),
         relationConfigJson: relationConfigToInsert ?? {},
         fieldKey: key,
         pageId: params.data.pageId,
@@ -534,6 +561,20 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
       return;
     }
   }
+  {
+    const nextPercentMode = body.percentConfigJson?.mode ?? current.percentConfigJson?.mode ?? "value";
+    if (nextType === "percent" && nextPercentMode === "list") {
+      const nextOpts = sanitizedOptions ?? normalizeOptions(current.optionsJson);
+      if (nextOpts.length === 0) {
+        res.status(400).json({ error: "Поле «Проценты» в режиме списка требует хотя бы один вариант" });
+        return;
+      }
+      if (nextOpts.some((o) => !PERCENT_NUM_RE.test(o.value))) {
+        res.status(400).json({ error: "Значения вариантов процентного поля должны быть числами" });
+        return;
+      }
+    }
+  }
   let relationConfigToPersist: RelationFieldConfig | null | undefined;
   if (nextType === "relation" || nextType === "lookup") {
     const nextCfg =
@@ -567,6 +608,8 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
   if (body.formatRulesJson != null) updateData.formatRulesJson = body.formatRulesJson;
   if (body.formulaConfigJson != null)
     updateData.formulaConfigJson = clampFormulaDecimals(body.formulaConfigJson);
+  if (body.percentConfigJson != null)
+    updateData.percentConfigJson = clampFormulaDecimals(body.percentConfigJson);
   if (relationConfigToPersist !== undefined) {
     updateData.relationConfigJson = relationConfigToPersist ?? {};
   } else if ("relationConfigJson" in body) {

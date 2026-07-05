@@ -25,4 +25,5 @@ export const FieldType = {
   function: 'function',
   relation: 'relation',
   lookup: 'lookup',
+  percent: 'percent',
 } as const;

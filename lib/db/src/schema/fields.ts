@@ -88,9 +88,21 @@ export type FieldValidationRule = {
 /**
  * Per-field configuration for a `function`-type field. `expression` is a safe
  * formula referencing other fields of the same record via `{field_key}`. It is
- * evaluated at read time (never stored) by a sandboxed evaluator.
+ * evaluated at read time (never stored) by a sandboxed evaluator. `decimals`
+ * rounds a numeric result on display.
  */
-export type FormulaFieldConfig = { expression?: string };
+export type FormulaFieldConfig = { expression?: string; decimals?: number | null };
+
+/**
+ * Per-field configuration for a `percent`-type field. The value is stored as a
+ * plain number (30 = 30%) so it can be used in formulas and averaged. `mode`
+ * chooses the input: `list` = pick from numeric preset options (stored in
+ * `optionsJson`, values are numeric strings), `value` = free numeric entry (like
+ * a number field). `decimals` rounds the displayed value/average. Percent fields
+ * always aggregate as the AVERAGE over records that have a value (in mirror-page
+ * grouped rows and the records totals row), independent of `showColumnTotal`.
+ */
+export type PercentFieldConfig = { mode?: "list" | "value" | null; decimals?: number | null };
 
 /**
  * Per-field configuration for a dependent ("cascading") field. When
@@ -144,6 +156,7 @@ export const entityFieldsTable = pgTable(
     // distinct from the cosmetic formatRulesJson. Empty [] = no constraints.
     validationRulesJson: jsonb("validation_rules_json").$type<FieldValidationRule[]>().notNull().default([]),
     formulaConfigJson: jsonb("formula_config_json").$type<FormulaFieldConfig>().notNull().default({}),
+    percentConfigJson: jsonb("percent_config_json").$type<PercentFieldConfig>().notNull().default({}),
     dependencyConfigJson: jsonb("dependency_config_json").$type<DependencyFieldConfig>().notNull().default({}),
     // Per-field config for a `relation`-type entity field (the relation it binds to
     // and which target field to display). Empty {} for non-relation fields.

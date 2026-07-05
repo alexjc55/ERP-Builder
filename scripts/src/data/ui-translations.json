@@ -2340,6 +2340,60 @@
     "he": "מספר"
   },
   {
+    "key": "fields.type.percent",
+    "ru": "Проценты",
+    "en": "Percent",
+    "he": "אחוזים"
+  },
+  {
+    "key": "fields.percentMode",
+    "ru": "Режим ввода",
+    "en": "Input mode",
+    "he": "מצב קלט"
+  },
+  {
+    "key": "fields.percentModeValue",
+    "ru": "Значение (ввод числа)",
+    "en": "Value (numeric entry)",
+    "he": "ערך (הזנת מספר)"
+  },
+  {
+    "key": "fields.percentModeList",
+    "ru": "Список (выбор из вариантов)",
+    "en": "List (select from options)",
+    "he": "רשימה (בחירה מאפשרויות)"
+  },
+  {
+    "key": "fields.percentDecimals",
+    "ru": "Знаков после запятой (округление)",
+    "en": "Decimal places (rounding)",
+    "he": "מספר ספרות אחרי הנקודה (עיגול)"
+  },
+  {
+    "key": "fields.percentDecimalsHint",
+    "ru": "Округление при отображении. Итог по столбцу — среднее значение.",
+    "en": "Rounding for display. Column total is the average.",
+    "he": "עיגול לתצוגה. הסיכום בעמודה הוא הממוצע."
+  },
+  {
+    "key": "fields.percentOptions",
+    "ru": "Варианты (числа)",
+    "en": "Options (numbers)",
+    "he": "אפשרויות (מספרים)"
+  },
+  {
+    "key": "fields.percentOptionsHint",
+    "ru": "Каждый вариант — число (например 25 или 12.5). В списке показывается как «25%».",
+    "en": "Each option is a number (e.g. 25 or 12.5). Shown in the list as \"25%\".",
+    "he": "כל אפשרות היא מספר (למשל 25 או 12.5). מוצג ברשימה כ-\"25%\"."
+  },
+  {
+    "key": "fields.percentOptionAdd",
+    "ru": "Добавить вариант",
+    "en": "Add option",
+    "he": "הוסף אפשרות"
+  },
+  {
     "key": "fields.type.phone",
     "ru": "Телефон",
     "en": "Phone",

@@ -44,6 +44,20 @@ export function optionValues(raw: unknown): Set<string> {
   return new Set(normalizeOptions(raw).map((o) => o.value));
 }
 
+/**
+ * Set of the NUMERIC values of options (for percent list-mode). Options are
+ * compared by numeric equivalence, not string, so "12.50"/"001" match 12.5/1.
+ * Non-numeric option values are dropped.
+ */
+export function optionNumbers(raw: unknown): Set<number> {
+  const out = new Set<number>();
+  for (const o of normalizeOptions(raw)) {
+    const n = Number(o.value);
+    if (Number.isFinite(n)) out.add(n);
+  }
+  return out;
+}
+
 /** Best human-readable labels (ru→en→he, fallback to value) — for error messages. */
 export function optionLabels(raw: unknown): string[] {
   return normalizeOptions(raw).map((o) => o.labelJson.ru || o.labelJson.en || o.labelJson.he || o.value);

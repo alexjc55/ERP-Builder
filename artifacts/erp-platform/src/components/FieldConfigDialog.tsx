@@ -72,6 +72,7 @@ import {
 } from "@/components/ui/select";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { SelectOptionsEditor } from "@/components/SelectOptionsEditor";
+import { PercentOptionsEditor } from "@/components/PercentOptionsEditor";
 import { normalizeSelectOptions, type SelectOption } from "@/lib/selectOptions";
 import { FieldFormatRulesEditor } from "@/components/FieldFormatRulesEditor";
 import { FieldValidationRulesEditor, type OtherField } from "@/components/FieldValidationRulesEditor";
@@ -89,6 +90,7 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "text", label: "Текст" },
   { value: "textarea", label: "Многострочный текст" },
   { value: "number", label: "Число" },
+  { value: "percent", label: "Проценты" },
   { value: "boolean", label: "Да / Нет" },
   { value: "date", label: "Дата" },
   { value: "datetime", label: "Дата и время" },
@@ -188,6 +190,8 @@ export function FieldConfigDialog({
   const [validationRules, setValidationRules] = useState<FieldValidationRule[]>([]);
   const [formula, setFormula] = useState("");
   const [formulaDecimals, setFormulaDecimals] = useState("");
+  const [percentMode, setPercentMode] = useState<"list" | "value">("value");
+  const [percentDecimals, setPercentDecimals] = useState("");
   const [dependsOnFieldKey, setDependsOnFieldKey] = useState("");
   const [relatedFilterFieldKey, setRelatedFilterFieldKey] = useState("");
   const [isKey, setIsKey] = useState(false);
@@ -247,6 +251,10 @@ export function FieldConfigDialog({
       setFormulaDecimals(
         field.formulaConfigJson?.decimals != null ? String(field.formulaConfigJson.decimals) : "",
       );
+      setPercentMode(field.percentConfigJson?.mode === "list" ? "list" : "value");
+      setPercentDecimals(
+        field.percentConfigJson?.decimals != null ? String(field.percentConfigJson.decimals) : "",
+      );
       setDependsOnFieldKey(field.dependencyConfigJson?.dependsOnFieldKey ?? "");
       setRelatedFilterFieldKey(field.dependencyConfigJson?.relatedFilterFieldKey ?? "");
       setIsKey(field.isKey ?? false);
@@ -281,6 +289,8 @@ export function FieldConfigDialog({
       setValidationRules([]);
       setFormula("");
       setFormulaDecimals("");
+      setPercentMode("value");
+      setPercentDecimals("");
       setDependsOnFieldKey("");
       setRelatedFilterFieldKey("");
       setIsKey(false);
@@ -430,6 +440,15 @@ export function FieldConfigDialog({
               expression: formula.trim(),
               ...(normalizeDecimals(formulaDecimals) != null
                 ? { decimals: normalizeDecimals(formulaDecimals) as number }
+                : {}),
+            }
+          : {},
+      percentConfigJson:
+        fieldType === "percent"
+          ? {
+              mode: percentMode,
+              ...(normalizeDecimals(percentDecimals) != null
+                ? { decimals: normalizeDecimals(percentDecimals) as number }
                 : {}),
             }
           : {},
@@ -690,6 +709,46 @@ export function FieldConfigDialog({
             )}
             {fieldType === "select" && (
               <SelectOptionsEditor value={options} onChange={setOptions} t={t} />
+            )}
+            {fieldType === "percent" && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label>{t("fields.percentMode", "Режим ввода")}</Label>
+                  <Select value={percentMode} onValueChange={(v) => setPercentMode(v as "list" | "value")}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="value">{t("fields.percentModeValue", "Значение (ввод числа)")}</SelectItem>
+                      <SelectItem value="list">{t("fields.percentModeList", "Список (выбор из вариантов)")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {percentMode === "list" && (
+                  <PercentOptionsEditor value={options} onChange={setOptions} t={t} />
+                )}
+                <div className="space-y-1.5">
+                  <Label htmlFor="fcd-percent-decimals">
+                    {t("fields.percentDecimals", "Знаков после запятой (округление)")}
+                  </Label>
+                  <Input
+                    id="fcd-percent-decimals"
+                    type="number"
+                    min={0}
+                    max={10}
+                    value={percentDecimals}
+                    onChange={(e) => setPercentDecimals(e.target.value)}
+                    placeholder={t("fields.formulaDecimalsNone", "Без округления")}
+                    className="w-48"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {t(
+                      "fields.percentDecimalsHint",
+                      "Округление при отображении. Итог по столбцу — среднее значение.",
+                    )}
+                  </p>
+                </div>
+              </div>
             )}
             {fieldType === "file" && (
               <div className="space-y-2">

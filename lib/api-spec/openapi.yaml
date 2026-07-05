@@ -5052,6 +5052,7 @@ components:
         - function
         - relation
         - lookup
+        - percent
 
     FormatOperator:
       type: string
@@ -5147,6 +5148,29 @@ components:
             Optional. When set and the formula result is numeric, the value is
             rounded and shown with this many decimal places. Null/omitted means
             no rounding. Ignored for non-numeric (text/boolean) results.
+
+    PercentFieldConfig:
+      type: object
+      description: >-
+        Per-field configuration for a `percent`-type field. The value is stored
+        as a plain number (30 = 30%) so it works in formulas and can be
+        averaged. `mode` chooses the input: `list` picks from numeric preset
+        options (in optionsJson), `value` is free numeric entry. `decimals`
+        rounds the displayed value/average. Percent fields always aggregate as
+        the AVERAGE over records that have a value, independent of
+        showColumnTotal.
+      properties:
+        mode:
+          type: string
+          enum:
+            - list
+            - value
+          nullable: true
+        decimals:
+          type: integer
+          minimum: 0
+          maximum: 10
+          nullable: true
 
     DependencyFieldConfig:
       type: object
@@ -5258,6 +5282,8 @@ components:
             $ref: "#/components/schemas/FieldValidationRule"
         formulaConfigJson:
           $ref: "#/components/schemas/FormulaFieldConfig"
+        percentConfigJson:
+          $ref: "#/components/schemas/PercentFieldConfig"
         dependencyConfigJson:
           $ref: "#/components/schemas/DependencyFieldConfig"
         relationConfigJson:
@@ -5335,6 +5361,8 @@ components:
             $ref: "#/components/schemas/FieldValidationRule"
         formulaConfigJson:
           $ref: "#/components/schemas/FormulaFieldConfig"
+        percentConfigJson:
+          $ref: "#/components/schemas/PercentFieldConfig"
         dependencyConfigJson:
           $ref: "#/components/schemas/DependencyFieldConfig"
         relationConfigJson:
@@ -5429,6 +5457,8 @@ components:
             $ref: "#/components/schemas/FieldValidationRule"
         formulaConfigJson:
           $ref: "#/components/schemas/FormulaFieldConfig"
+        percentConfigJson:
+          $ref: "#/components/schemas/PercentFieldConfig"
         dependencyConfigJson:
           $ref: "#/components/schemas/DependencyFieldConfig"
         relationConfigJson:
@@ -5756,6 +5786,8 @@ components:
             $ref: "#/components/schemas/FieldFormatRule"
         formulaConfigJson:
           $ref: "#/components/schemas/FormulaFieldConfig"
+        percentConfigJson:
+          $ref: "#/components/schemas/PercentFieldConfig"
         relationConfigJson:
           $ref: "#/components/schemas/RelationFieldConfig"
         permissionsJson:
@@ -5816,6 +5848,8 @@ components:
             $ref: "#/components/schemas/FieldFormatRule"
         formulaConfigJson:
           $ref: "#/components/schemas/FormulaFieldConfig"
+        percentConfigJson:
+          $ref: "#/components/schemas/PercentFieldConfig"
         relationConfigJson:
           $ref: "#/components/schemas/RelationFieldConfig"
         permissionsJson:
@@ -5870,6 +5904,8 @@ components:
             $ref: "#/components/schemas/FieldFormatRule"
         formulaConfigJson:
           $ref: "#/components/schemas/FormulaFieldConfig"
+        percentConfigJson:
+          $ref: "#/components/schemas/PercentFieldConfig"
         relationConfigJson:
           $ref: "#/components/schemas/RelationFieldConfig"
         permissionsJson:

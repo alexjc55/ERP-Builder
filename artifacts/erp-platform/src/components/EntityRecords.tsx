@@ -281,8 +281,17 @@ function valueIsSet(v: unknown): boolean {
 function valueToForm(field: Field, value: unknown): CellValue {
   if (field.fieldType === "boolean") return value === true;
   if (field.fieldType === "number") return typeof value === "number" ? value : "";
+  // Percent stores a NUMBER; the list-mode Select needs the option's string value
+  // and the value-mode number input accepts a string, so stringify uniformly.
+  if (field.fieldType === "percent") return value == null || value === "" ? "" : String(value);
   if (field.fieldType === "file") return isFileValue(value) ? value : "";
   return typeof value === "string" ? value : value == null ? "" : String(value);
+}
+
+/** Format a numeric column total/average for display (percent columns get a % suffix). */
+function formatTotalValue(field: { fieldType: string }, n: number): string {
+  const s = n.toLocaleString("ru-RU");
+  return field.fieldType === "percent" ? `${s}%` : s;
 }
 
 /** Build the payload values object from form state, dropping empty optional values. */
@@ -302,7 +311,7 @@ function formToValues(fields: Field[], form: FormState): Record<string, unknown>
       continue;
     }
     if (raw === "" || raw === undefined || raw === null) continue;
-    if (field.fieldType === "number") {
+    if (field.fieldType === "number" || field.fieldType === "percent") {
       out[field.fieldKey] = Number(raw);
     } else {
       out[field.fieldKey] = raw;
@@ -350,6 +359,14 @@ function renderCellValue(field: Field, value: unknown, t: (key: string, def: str
         <FileCell value={value} />
       </span>
     );
+  }
+  if (field.fieldType === "percent") {
+    // Stored as a number (30 → "30%"); round to the field's configured decimals.
+    const num = typeof value === "number" ? value : Number(value);
+    if (!Number.isFinite(num)) return <span className="text-slate-700" style={colorStyle}>{String(value)}</span>;
+    const d = field.percentConfigJson?.decimals;
+    const shown = d != null ? num.toFixed(d) : String(num);
+    return <span className="text-slate-700" style={colorStyle}>{shown}%</span>;
   }
   if (field.fieldType === "date" || field.fieldType === "datetime") {
     // Stored value is ISO (yyyy-MM-dd or full ISO datetime). Display it in the
@@ -3020,7 +3037,7 @@ export function EntityRecords({
                   <span className="text-xs font-normal text-slate-400">({g.count})</span>
                   {sum !== undefined && (
                     <span className="ml-2 font-semibold text-emerald-700 whitespace-nowrap">
-                      {sum.toLocaleString("ru-RU")}
+                      {formatTotalValue(col.field, sum)}
                     </span>
                   )}
                 </span>
@@ -3105,7 +3122,7 @@ export function EntityRecords({
             >
               {sum !== undefined ? (
                 <span className="font-semibold text-emerald-700 whitespace-nowrap">
-                  {sum.toLocaleString("ru-RU")}
+                  {formatTotalValue(col.field, sum)}
                 </span>
               ) : hasCommon ? (
                 <span className="text-slate-500 block max-w-[240px] truncate">{commonContent}</span>
@@ -3656,7 +3673,7 @@ export function EntityRecords({
                           >
                             {hasTotal ? (
                               <span className="font-bold whitespace-nowrap" style={{ color: textColor }}>
-                                {numericTotals[totalKey].toLocaleString("ru-RU")}
+                                {formatTotalValue(fld, numericTotals[totalKey])}
                               </span>
                             ) : null}
                           </th>
@@ -6780,7 +6797,26 @@ function InlineCellEditor({
     );
   }
 
-  if (field.fieldType === "number") {
+  if (field.fieldType === "percent" && (field.percentConfigJson?.mode ?? "value") === "list") {
+    const options = normalizeSelectOptions(field.optionsJson).map((o) => ({ value: o.value, label: ml(o.labelJson) || `${o.value}%` }));
+    return (
+      <Select
+        defaultOpen
+        value={draft ? String(draft) : ""}
+        onValueChange={(v) => commitOnce(v)}
+        onOpenChange={(o) => { if (!o && !committedRef.current) onCancel(); }}
+      >
+        <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t("records.selectValue", "Выберите значение")} /></SelectTrigger>
+        <SelectContent>
+          {options.map((o) => (
+            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
+  }
+
+  if (field.fieldType === "number" || field.fieldType === "percent") {
     const dotHint = t(
       "records.numberDotHint",
       "Используйте точку как десятичный разделитель, например 11.6",
@@ -6965,6 +7001,24 @@ function FieldInput({
       );
     case "number":
       return <NumberInput value={value} onChange={onChange} disabled={disabled} />;
+    case "percent": {
+      if ((field.percentConfigJson?.mode ?? "value") === "list") {
+        const options = normalizeSelectOptions(field.optionsJson);
+        return (
+          <Select value={value ? String(value) : ""} onValueChange={onChange} disabled={disabled}>
+            <SelectTrigger>
+              <SelectValue placeholder={t("records.selectValue", "Выберите значение")} />
+            </SelectTrigger>
+            <SelectContent>
+              {options.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{ml(opt.labelJson) || `${opt.value}%`}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        );
+      }
+      return <NumberInput value={value} onChange={onChange} disabled={disabled} />;
+    }
     case "date":
       return <Input type="date" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} disabled={disabled} />;
     case "datetime":

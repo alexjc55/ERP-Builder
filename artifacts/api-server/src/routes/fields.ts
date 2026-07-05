@@ -49,6 +49,10 @@ function clampFormulaDecimals<T>(cfg: T): T {
   return cfg;
 }
 
+// A percent-field option value must be a plain number (the stored record value is
+// numeric so it can be averaged and used in formulas).
+const PERCENT_NUM_RE = /^-?[0-9]+(\.[0-9]+)?$/;
+
 /**
  * Eligibility of a relation as an entity `relation` field on `entityId`.
  * Scoped (task contract) to the SOURCE side of a to-one relation: this entity is
@@ -278,6 +282,16 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
     res.status(400).json({ error: "Select fields require at least one option" });
     return;
   }
+  if (parsed.data.fieldType === "percent" && (parsed.data.percentConfigJson?.mode ?? "value") === "list") {
+    if (createOptions.length === 0) {
+      res.status(400).json({ error: "Поле «Проценты» в режиме списка требует хотя бы один вариант" });
+      return;
+    }
+    if (createOptions.some((o) => !PERCENT_NUM_RE.test(o.value))) {
+      res.status(400).json({ error: "Значения вариантов процентного поля должны быть числами" });
+      return;
+    }
+  }
 
   // isKey enforces uniqueness over a stored scalar value, so it is meaningless
   // for file (object), function (computed) and relation (derived) fields.
@@ -318,6 +332,7 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
         ...parsed.data,
         optionsJson: createOptions,
         formulaConfigJson: clampFormulaDecimals(parsed.data.formulaConfigJson),
+        percentConfigJson: clampFormulaDecimals(parsed.data.percentConfigJson),
         relationConfigJson: relationConfig ?? {},
         fieldKey: key,
         entityId: params.data.entityId,
@@ -473,6 +488,20 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
       return;
     }
   }
+  {
+    const nextPercentMode = body.percentConfigJson?.mode ?? current.percentConfigJson?.mode ?? "value";
+    if (nextType === "percent" && nextPercentMode === "list") {
+      const nextOpts = sanitizedOptions ?? normalizeOptions(current.optionsJson);
+      if (nextOpts.length === 0) {
+        res.status(400).json({ error: "Поле «Проценты» в режиме списка требует хотя бы один вариант" });
+        return;
+      }
+      if (nextOpts.some((o) => !PERCENT_NUM_RE.test(o.value))) {
+        res.status(400).json({ error: "Значения вариантов процентного поля должны быть числами" });
+        return;
+      }
+    }
+  }
 
   // isKey operates on a stored JSONB scalar value, which file/function (no stored
   // value), lookup (derived mirror) and relation (value is a derived record_link,
@@ -554,6 +583,8 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   if (body.validationRulesJson != null) updateData.validationRulesJson = body.validationRulesJson;
   if (body.formulaConfigJson != null)
     updateData.formulaConfigJson = clampFormulaDecimals(body.formulaConfigJson);
+  if (body.percentConfigJson != null)
+    updateData.percentConfigJson = clampFormulaDecimals(body.percentConfigJson);
   if ("dependencyConfigJson" in body) updateData.dependencyConfigJson = body.dependencyConfigJson ?? {};
   // Persist the validated relation config when this is/becomes a relation field;
   // reset it to {} when switching a former relation field away from that type.

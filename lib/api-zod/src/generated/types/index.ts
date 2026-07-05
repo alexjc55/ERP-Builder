@@ -181,6 +181,8 @@ export * from './pageRelationOptions';
 export * from './pageUpdate';
 export * from './pageUpdateColumnGroupsJson';
 export * from './pageUpdateMirrorFieldLabelsJson';
+export * from './percentFieldConfig';
+export * from './percentFieldConfigMode';
 export * from './pivotAxisItem';
 export * from './pivotCell';
 export * from './pivotConfig';

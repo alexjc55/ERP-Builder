@@ -1964,6 +1964,7 @@ export const FieldType = {
   function: 'function',
   relation: 'relation',
   lookup: 'lookup',
+  percent: 'percent',
 } as const;
 
 export type FormatOperator = typeof FormatOperator[keyof typeof FormatOperator];
@@ -2027,6 +2028,26 @@ export interface FormulaFieldConfig {
   expression?: string;
   /**
      * Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null/omitted means no rounding. Ignored for non-numeric (text/boolean) results.
+     * @minimum 0
+     * @maximum 10
+     */
+  decimals?: number | null;
+}
+
+export type PercentFieldConfigMode = typeof PercentFieldConfigMode[keyof typeof PercentFieldConfigMode] | null;
+
+
+export const PercentFieldConfigMode = {
+  list: 'list',
+  value: 'value',
+} as const;
+
+/**
+ * Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.
+ */
+export interface PercentFieldConfig {
+  mode?: PercentFieldConfigMode;
+  /**
      * @minimum 0
      * @maximum 10
      */
@@ -2117,6 +2138,7 @@ export interface Field {
   formatRulesJson?: FieldFormatRule[];
   validationRulesJson?: FieldValidationRule[];
   formulaConfigJson?: FormulaFieldConfig;
+  percentConfigJson?: PercentFieldConfig;
   dependencyConfigJson?: DependencyFieldConfig;
   relationConfigJson?: RelationFieldConfig;
   isKey?: boolean;
@@ -2155,6 +2177,7 @@ export interface FieldInput {
   formatRulesJson?: FieldFormatRule[];
   validationRulesJson?: FieldValidationRule[];
   formulaConfigJson?: FormulaFieldConfig;
+  percentConfigJson?: PercentFieldConfig;
   dependencyConfigJson?: DependencyFieldConfig;
   relationConfigJson?: RelationFieldConfig;
   isKey?: boolean;
@@ -2201,6 +2224,7 @@ export interface FieldUpdate {
   formatRulesJson?: FieldFormatRule[];
   validationRulesJson?: FieldValidationRule[];
   formulaConfigJson?: FormulaFieldConfig;
+  percentConfigJson?: PercentFieldConfig;
   dependencyConfigJson?: DependencyFieldConfig;
   relationConfigJson?: RelationFieldConfig;
   isKey?: boolean;
@@ -2370,6 +2394,7 @@ export interface PageField {
   optionsJson: SelectOption[];
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
+  percentConfigJson?: PercentFieldConfig;
   relationConfigJson?: RelationFieldConfig;
   permissionsJson?: FieldPermissions;
   showInTable?: boolean;
@@ -2400,6 +2425,7 @@ export interface PageFieldInput {
   optionsJson?: SelectOption[];
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
+  percentConfigJson?: PercentFieldConfig;
   relationConfigJson?: RelationFieldConfig;
   permissionsJson?: FieldPermissions;
   showInTable?: boolean;
@@ -2428,6 +2454,7 @@ export interface PageFieldUpdate {
   optionsJson?: SelectOption[];
   formatRulesJson?: FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
+  percentConfigJson?: PercentFieldConfig;
   relationConfigJson?: RelationFieldConfig;
   permissionsJson?: FieldPermissions;
   showInTable?: boolean;

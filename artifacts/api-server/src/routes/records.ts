@@ -43,7 +43,7 @@ import {
   PivotEntityRecordsBody,
 } from "@workspace/api-zod";
 import type { EntityField, InsertAuditLog, FileSource, FileFieldConfig, FieldValidationRule } from "@workspace/db";
-import { optionValues } from "../lib/selectOptions";
+import { optionValues, optionNumbers } from "../lib/selectOptions";
 import {
   buildRecordQuery,
   buildPageLocalCondition,
@@ -299,6 +299,20 @@ export function validateValues(fields: EntityField[], values: Record<string, unk
         if (typeof raw !== "string") return { error: `Field "${field.fieldKey}" must be a string` };
         if (!optionValues(field.optionsJson).has(raw)) return { error: `Field "${field.fieldKey}" must be one of the allowed options` };
         cleaned[field.fieldKey] = raw;
+        break;
+      }
+      case "percent": {
+        // Stored as a NUMBER (30 = 30%) so it works in formulas and averages.
+        const num = typeof raw === "number" ? raw : Number(raw);
+        if (typeof raw === "boolean" || (typeof raw === "string" && raw.trim() === "") || !Number.isFinite(num)) {
+          return { error: `Field "${field.fieldKey}" must be a number` };
+        }
+        // List mode: the value must be one of the numeric preset options,
+        // compared by numeric equivalence (so "12.50" matches 12.5).
+        if ((field.percentConfigJson?.mode ?? "value") === "list" && !optionNumbers(field.optionsJson).has(num)) {
+          return { error: `Field "${field.fieldKey}" must be one of the allowed options` };
+        }
+        cleaned[field.fieldKey] = num;
         break;
       }
       case "user": {
@@ -967,6 +981,9 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   // text is skipped so an unguarded ::numeric cast can never error.
   const NUMERIC_RE = "^-?[0-9]+(\\.[0-9]+)?$";
   const totalFields = visibleFields.filter((f) => f.fieldType === "number" && f.showColumnTotal);
+  // Percent fields ALWAYS aggregate (not gated by showColumnTotal) as the AVERAGE
+  // over records that have a numeric value (empties are ignored, not counted as 0).
+  const percentFields = visibleFields.filter((f) => f.fieldType === "percent");
   // Function (formula) fields can also opt into a column total. Their value is not
   // stored, so we evaluate the formula per row over the FULL filtered set and sum
   // the finite numeric results (non-numeric/error rows contribute nothing).
@@ -974,16 +991,28 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     (f) => f.fieldType === "function" && f.showColumnTotal,
   );
   let numericTotals: Record<string, number> | undefined;
-  if (totalFields.length > 0) {
+  if (totalFields.length > 0 || percentFields.length > 0) {
     const sel: Record<string, SQL<number>> = {};
     for (const f of totalFields) {
       const k = f.fieldKey;
       sel[k] = sql<number>`COALESCE(SUM(CASE WHEN (${entityRecordsTable.valuesJson} ->> ${k}) ~ ${NUMERIC_RE} THEN (${entityRecordsTable.valuesJson} ->> ${k})::numeric ELSE 0 END), 0)::float8`;
     }
+    for (const f of percentFields) {
+      const k = f.fieldKey;
+      // NULL for non-numeric/empty rows so AVG skips them (average only over filled).
+      sel[k] = sql<number>`AVG(CASE WHEN (${entityRecordsTable.valuesJson} ->> ${k}) ~ ${NUMERIC_RE} THEN (${entityRecordsTable.valuesJson} ->> ${k})::numeric ELSE NULL END)::float8`;
+    }
     const [row] = await db.select(sel).from(entityRecordsTable).where(where);
     numericTotals = {};
     for (const f of totalFields) {
       numericTotals[f.fieldKey] = Number((row as Record<string, unknown> | undefined)?.[f.fieldKey] ?? 0);
+    }
+    for (const f of percentFields) {
+      const v = (row as Record<string, unknown> | undefined)?.[f.fieldKey];
+      if (v == null) continue; // no filled rows → no average to show
+      const d = normalizeDecimals(f.percentConfigJson?.decimals);
+      const n = Number(v);
+      numericTotals[f.fieldKey] = d != null ? Number(n.toFixed(d)) : n;
     }
   }
   if (formulaTotalFields.length > 0) {
@@ -1039,6 +1068,9 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   const totalsPageId = body.data.pageId;
   if (totalsPageId != null) {
     const roleIds = await getUserRoleIds(req);
+    // Percent page fields always aggregate (average), NOT gated by
+    // showColumnTotal — so fetch active page fields that are EITHER
+    // showColumnTotal (number/function) OR percent.
     const pageFieldRows = await db
       .select()
       .from(pageFieldsTable)
@@ -1046,15 +1078,21 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         and(
           eq(pageFieldsTable.pageId, totalsPageId),
           eq(pageFieldsTable.isActive, true),
-          eq(pageFieldsTable.showColumnTotal, true),
+          or(eq(pageFieldsTable.showColumnTotal, true), eq(pageFieldsTable.fieldType, "percent")),
         ),
       );
     const pageTotalFields = pageFieldRows.filter(
       (pf) =>
-        (pf.fieldType === "number" || pf.fieldType === "function") &&
+        ((pf.fieldType === "number" || pf.fieldType === "function") && pf.showColumnTotal === true) &&
         mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view") !== "hidden",
     );
-    if (pageTotalFields.length > 0) {
+    // Percent page fields: average over records WITH a value, always shown.
+    const pagePercentFields = pageFieldRows.filter(
+      (pf) =>
+        pf.fieldType === "percent" &&
+        mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view") !== "hidden",
+    );
+    if (pageTotalFields.length > 0 || pagePercentFields.length > 0) {
       const recRows = await db
         .select({ id: entityRecordsTable.id, values: entityRecordsTable.valuesJson })
         .from(entityRecordsTable)
@@ -1101,6 +1139,28 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
             }
           }
           numericTotals[totalKey] = d != null ? Number(sum.toFixed(d)) : sum;
+        }
+      }
+      // Percent page fields: arithmetic mean over records that HAVE a value
+      // (empties ignored). Always shown (not gated by showColumnTotal).
+      for (const pf of pagePercentFields) {
+        const totalKey = `pf:${pf.id}`;
+        const d = normalizeDecimals(pf.percentConfigJson?.decimals);
+        let sum = 0;
+        let count = 0;
+        for (const r of recRows) {
+          const raw = (pvByRecord.get(r.id) ?? {})[pf.fieldKey];
+          let n: number | null = null;
+          if (typeof raw === "number" && Number.isFinite(raw)) n = raw;
+          else if (typeof raw === "string" && raw.trim() !== "" && Number.isFinite(Number(raw))) n = Number(raw);
+          if (n != null) {
+            sum += n;
+            count += 1;
+          }
+        }
+        if (count > 0) {
+          const avg = sum / count;
+          numericTotals[totalKey] = d != null ? Number(avg.toFixed(d)) : avg;
         }
       }
     }
@@ -1216,11 +1276,18 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       (pf) => pf.showColumnTotal && (pf.fieldType === "number" || pf.fieldType === "function"),
     );
     const gPfSumIds = new Set(gPfSumFields.map((pf) => pf.id));
+    // Page-local percent fields: always averaged per group (not gated by showColumnTotal).
+    const gPfPercentFields = gPfVisible.filter((pf) => pf.fieldType === "percent");
     // Value-backed page-local fields for the common-value pass (relation/lookup
-    // page fields resolve via record links, file values are objects — skip both).
+    // page fields resolve via record links, file values are objects — skip both;
+    // percent goes through the average pass, not the common-value pass).
     const PF_COMMON_SKIP = new Set(["relation", "lookup", "file"]);
     const gPfScalarCommon = gPfVisible.filter(
-      (pf) => !gPfSumIds.has(pf.id) && pf.fieldType !== "function" && !PF_COMMON_SKIP.has(pf.fieldType),
+      (pf) =>
+        !gPfSumIds.has(pf.id) &&
+        pf.fieldType !== "function" &&
+        pf.fieldType !== "percent" &&
+        !PF_COMMON_SKIP.has(pf.fieldType),
     );
     const gPfFormulaCommon = gPfVisible.filter((pf) => !gPfSumIds.has(pf.id) && pf.fieldType === "function");
     const gPvByRec = new Map<number, Record<string, unknown>>();
@@ -1247,13 +1314,24 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       if (typeof raw === "string" && NUM_JS_RE.test(raw)) return Number(raw);
       return 0;
     };
+    // Like numVal but returns null for empty/non-numeric, so percent averages
+    // count only filled rows (an empty cell must not drag the average toward 0).
+    const numOrNull = (raw: unknown): number | null => {
+      if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+      if (typeof raw === "string" && NUM_JS_RE.test(raw)) return Number(raw);
+      return null;
+    };
     // Common-value pass: entity fields with a stored scalar (sum columns are
     // excluded — they already show a sum; relation/lookup go through the
     // boundary-gated relCommonCols projection; file values are objects → skip).
     const sumKeySet = new Set([...totalFields, ...formulaTotalFields].map((f) => f.fieldKey));
     const ENTITY_COMMON_SKIP = new Set(["relation", "lookup", "file"]);
     const gScalarCommon = visibleFields.filter(
-      (f) => !sumKeySet.has(f.fieldKey) && f.fieldType !== "function" && !ENTITY_COMMON_SKIP.has(f.fieldType),
+      (f) =>
+        !sumKeySet.has(f.fieldKey) &&
+        f.fieldType !== "function" &&
+        f.fieldType !== "percent" &&
+        !ENTITY_COMMON_SKIP.has(f.fieldType),
     );
     const gFormulaCommon = visibleFields.filter(
       (f) => !sumKeySet.has(f.fieldKey) && f.fieldType === "function",
@@ -1264,6 +1342,10 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       label: string | null;
       count: number;
       sums: Record<string, number>;
+      // Percent columns aggregate as an average: accumulate the running sum and
+      // the count of FILLED rows, then divide once at the end into `sums`.
+      pctSum: Record<string, number>;
+      pctCnt: Record<string, number>;
       common: Map<string, unknown>;
       mixed: Set<string>;
     };
@@ -1315,6 +1397,8 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           label: rawKey === null ? null : groupRelMeta ? (r.glabel ?? null) : rawKey,
           count: 0,
           sums: {},
+          pctSum: {},
+          pctCnt: {},
           common: new Map(),
           mixed: new Set(),
         };
@@ -1356,6 +1440,25 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           }
         }
       }
+      // Percent averages: accumulate sum + filled-count per group (entity + page-local).
+      for (const f of percentFields) {
+        const n = numOrNull(vals[f.fieldKey]);
+        if (n !== null) {
+          b.pctSum[f.fieldKey] = (b.pctSum[f.fieldKey] ?? 0) + n;
+          b.pctCnt[f.fieldKey] = (b.pctCnt[f.fieldKey] ?? 0) + 1;
+        }
+      }
+      if (gPfPercentFields.length > 0) {
+        const pvVals = gPvByRec.get(r.id) ?? {};
+        for (const pf of gPfPercentFields) {
+          const k = `pf:${pf.id}`;
+          const n = numOrNull(pvVals[pf.fieldKey]);
+          if (n !== null) {
+            b.pctSum[k] = (b.pctSum[k] ?? 0) + n;
+            b.pctCnt[k] = (b.pctCnt[k] ?? 0) + 1;
+          }
+        }
+      }
       // Common-value tracking: stored scalars, evaluated formulas, boundary-gated
       // relation projections and page-local values (keys match the sums keys).
       for (const f of gScalarCommon) trackCommon(b, f.fieldKey, vals[f.fieldKey], firstRow);
@@ -1386,6 +1489,25 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         const d = normalizeDecimals((pf.formulaConfigJson as { decimals?: number | null } | null)?.decimals);
         const k = `pf:${pf.id}`;
         if (d != null && b.sums[k] != null) b.sums[k] = Number(b.sums[k]!.toFixed(d));
+      }
+      // Percent columns: divide the running sum by the filled-row count into `sums`
+      // (rounded to the field's decimals). Skipped when no row in the group is filled.
+      for (const f of percentFields) {
+        const cnt = b.pctCnt[f.fieldKey] ?? 0;
+        if (cnt > 0) {
+          const d = normalizeDecimals(f.percentConfigJson?.decimals);
+          const avg = b.pctSum[f.fieldKey]! / cnt;
+          b.sums[f.fieldKey] = d != null ? Number(avg.toFixed(d)) : avg;
+        }
+      }
+      for (const pf of gPfPercentFields) {
+        const k = `pf:${pf.id}`;
+        const cnt = b.pctCnt[k] ?? 0;
+        if (cnt > 0) {
+          const d = normalizeDecimals(pf.percentConfigJson?.decimals);
+          const avg = b.pctSum[k]! / cnt;
+          b.sums[k] = d != null ? Number(avg.toFixed(d)) : avg;
+        }
       }
     }
     groups = [...buckets.values()]
