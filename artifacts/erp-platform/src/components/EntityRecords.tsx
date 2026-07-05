@@ -2616,6 +2616,15 @@ export function EntityRecords({
     if (next === "" || next === undefined || next === null) delete merged[field.fieldKey];
     else merged[field.fieldKey] = next;
     setEditingCell(null);
+    // Auto-substitute the configured default for any empty REQUIRED page field so
+    // a field with a "value by default" is pre-filled (the user can still change it
+    // in the dialog below). Defaults are coerced to the field's payload type.
+    for (const pf of requiredPageFields) {
+      if (!isPageValueEmpty(merged[pf.fieldKey])) continue;
+      if (pf.defaultValue == null || pf.defaultValue === "") continue;
+      const dv = cellValueForPayload(pf as unknown as Field, pf.defaultValue as CellValue);
+      if (!isPageValueEmpty(dv)) merged[pf.fieldKey] = dv;
+    }
     // Required page fields must not be left empty. If, after this single-cell edit,
     // any required page field would still be empty, don't save the partial map —
     // open a dialog seeded with the record's page values (including this edit) that
@@ -6869,7 +6878,7 @@ function NumberInput({
       <Input
         type="text"
         inputMode="decimal"
-        placeholder={t("records.numberPlaceholder", "Например: 11.6")}
+        placeholder={t("records.numberPlaceholder", "Введите число")}
         title={dotHint}
         value={value === "" || value === undefined || value === null ? "" : String(value)}
         onChange={(e) => {
