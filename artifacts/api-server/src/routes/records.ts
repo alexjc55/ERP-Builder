@@ -981,9 +981,13 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   // text is skipped so an unguarded ::numeric cast can never error.
   const NUMERIC_RE = "^-?[0-9]+(\\.[0-9]+)?$";
   const totalFields = visibleFields.filter((f) => f.fieldType === "number" && f.showColumnTotal);
-  // Percent fields ALWAYS aggregate (not gated by showColumnTotal) as the AVERAGE
-  // over records that have a numeric value (empties are ignored, not counted as 0).
+  // Percent fields aggregate as the AVERAGE over records that have a numeric value
+  // (empties are ignored, not counted as 0). `percentFields` (ALL percent columns)
+  // feeds the per-group averages, which are always shown; `percentTotalFields` is
+  // the showColumnTotal-gated subset for the flat totals row (общий результат),
+  // which — like number/formula totals — is opt-in per field.
   const percentFields = visibleFields.filter((f) => f.fieldType === "percent");
+  const percentTotalFields = percentFields.filter((f) => f.showColumnTotal);
   // Function (formula) fields can also opt into a column total. Their value is not
   // stored, so we evaluate the formula per row over the FULL filtered set and sum
   // the finite numeric results (non-numeric/error rows contribute nothing).
@@ -991,13 +995,13 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     (f) => f.fieldType === "function" && f.showColumnTotal,
   );
   let numericTotals: Record<string, number> | undefined;
-  if (totalFields.length > 0 || percentFields.length > 0) {
+  if (totalFields.length > 0 || percentTotalFields.length > 0) {
     const sel: Record<string, SQL<number>> = {};
     for (const f of totalFields) {
       const k = f.fieldKey;
       sel[k] = sql<number>`COALESCE(SUM(CASE WHEN (${entityRecordsTable.valuesJson} ->> ${k}) ~ ${NUMERIC_RE} THEN (${entityRecordsTable.valuesJson} ->> ${k})::numeric ELSE 0 END), 0)::float8`;
     }
-    for (const f of percentFields) {
+    for (const f of percentTotalFields) {
       const k = f.fieldKey;
       // NULL for non-numeric/empty rows so AVG skips them (average only over filled).
       sel[k] = sql<number>`AVG(CASE WHEN (${entityRecordsTable.valuesJson} ->> ${k}) ~ ${NUMERIC_RE} THEN (${entityRecordsTable.valuesJson} ->> ${k})::numeric ELSE NULL END)::float8`;
@@ -1007,7 +1011,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     for (const f of totalFields) {
       numericTotals[f.fieldKey] = Number((row as Record<string, unknown> | undefined)?.[f.fieldKey] ?? 0);
     }
-    for (const f of percentFields) {
+    for (const f of percentTotalFields) {
       const v = (row as Record<string, unknown> | undefined)?.[f.fieldKey];
       if (v == null) continue; // no filled rows → no average to show
       const d = normalizeDecimals(f.percentConfigJson?.decimals);
@@ -1068,9 +1072,10 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   const totalsPageId = body.data.pageId;
   if (totalsPageId != null) {
     const roleIds = await getUserRoleIds(req);
-    // Percent page fields always aggregate (average), NOT gated by
-    // showColumnTotal — so fetch active page fields that are EITHER
-    // showColumnTotal (number/function) OR percent.
+    // Flat totals row (общий результат) is opt-in per field, so only pull page
+    // fields flagged showColumnTotal. Percent columns average (not sum) but are
+    // still gated by the same flag here; their ALWAYS-shown per-group averages
+    // are computed separately in the grouping pass below.
     const pageFieldRows = await db
       .select()
       .from(pageFieldsTable)
@@ -1078,15 +1083,15 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         and(
           eq(pageFieldsTable.pageId, totalsPageId),
           eq(pageFieldsTable.isActive, true),
-          or(eq(pageFieldsTable.showColumnTotal, true), eq(pageFieldsTable.fieldType, "percent")),
+          eq(pageFieldsTable.showColumnTotal, true),
         ),
       );
     const pageTotalFields = pageFieldRows.filter(
       (pf) =>
-        ((pf.fieldType === "number" || pf.fieldType === "function") && pf.showColumnTotal === true) &&
+        (pf.fieldType === "number" || pf.fieldType === "function") &&
         mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view") !== "hidden",
     );
-    // Percent page fields: average over records WITH a value, always shown.
+    // Percent page fields flagged showColumnTotal: average over records WITH a value.
     const pagePercentFields = pageFieldRows.filter(
       (pf) =>
         pf.fieldType === "percent" &&
@@ -1291,7 +1296,13 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     );
     const gPfFormulaCommon = gPfVisible.filter((pf) => !gPfSumIds.has(pf.id) && pf.fieldType === "function");
     const gPvByRec = new Map<number, Record<string, unknown>>();
-    if ((gPfSumFields.length > 0 || gPfScalarCommon.length > 0 || gPfFormulaCommon.length > 0) && gRows.length > 0) {
+    if (
+      (gPfSumFields.length > 0 ||
+        gPfScalarCommon.length > 0 ||
+        gPfFormulaCommon.length > 0 ||
+        gPfPercentFields.length > 0) &&
+      gRows.length > 0
+    ) {
       const pv = await db
         .select({ recordId: pageRecordValuesTable.recordId, values: pageRecordValuesTable.valuesJson })
         .from(pageRecordValuesTable)
