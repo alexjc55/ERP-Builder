@@ -420,10 +420,17 @@ export function FieldConfigDialog({
       isFilterable,
       showInTable,
       isPinned,
-      showColumnTotal: fieldType === "number" || fieldType === "function" ? showColumnTotal : false,
+      showColumnTotal:
+        fieldType === "number" || fieldType === "function" || fieldType === "percent" ? showColumnTotal : false,
       wrapText,
-      totalFillColor: (fieldType === "number" || fieldType === "function") && showColumnTotal && totalFillColor ? totalFillColor : null,
-      totalTextColor: (fieldType === "number" || fieldType === "function") && showColumnTotal && totalTextColor ? totalTextColor : null,
+      totalFillColor:
+        (fieldType === "number" || fieldType === "function" || fieldType === "percent") && showColumnTotal && totalFillColor
+          ? totalFillColor
+          : null,
+      totalTextColor:
+        (fieldType === "number" || fieldType === "function" || fieldType === "percent") && showColumnTotal && totalTextColor
+          ? totalTextColor
+          : null,
       fileConfigJson:
         fieldType === "file"
           ? {
@@ -949,15 +956,19 @@ export function FieldConfigDialog({
                   <Label htmlFor="fcd-lock-after-create">{t("fields.lockAfterCreate", "Запрет изменения после создания")}</Label>
                 </div>
               )}
-              {(fieldType === "number" || fieldType === "function") && (
+              {(fieldType === "number" || fieldType === "function" || fieldType === "percent") && (
                 <div className="flex items-center gap-2">
                   <Switch checked={showColumnTotal} onCheckedChange={setShowColumnTotal} id="fcd-show-column-total" />
-                  <Label htmlFor="fcd-show-column-total">{t("fields.showColumnTotal", "Показывать сумму столбца")}</Label>
+                  <Label htmlFor="fcd-show-column-total">
+                    {fieldType === "percent"
+                      ? t("fields.showColumnAvg", "Показывать среднее по колонке")
+                      : t("fields.showColumnTotal", "Показывать сумму столбца")}
+                  </Label>
                 </div>
               )}
             </div>
 
-            {(fieldType === "number" || fieldType === "function") && showColumnTotal && (
+            {(fieldType === "number" || fieldType === "function" || fieldType === "percent") && showColumnTotal && (
               <div className="rounded-md border border-slate-100 bg-slate-50/50 p-3 space-y-2">
                 <p className="text-xs text-slate-500">
                   {t("fields.totalColorsHint", "Цвета ячейки итога столбца (необязательно)")}

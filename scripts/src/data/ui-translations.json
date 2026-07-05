@@ -2208,6 +2208,12 @@
     "he": "הצג סכום עמודה"
   },
   {
+    "key": "fields.showColumnAvg",
+    "ru": "Показывать среднее по колонке",
+    "en": "Show column average",
+    "he": "הצג ממוצע עמודה"
+  },
+  {
     "key": "fields.formulaDecimals",
     "ru": "Знаков после запятой (округление)",
     "en": "Decimal places (rounding)",
