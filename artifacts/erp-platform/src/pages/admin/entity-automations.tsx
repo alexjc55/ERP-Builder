@@ -15,6 +15,9 @@ import {
   useListEntities,
   useListUserOptions,
   useGetEntityRelatedCandidates,
+  useListPages,
+  useListPageFields,
+  getListPageFieldsQueryKey,
   type Automation,
   type AutomationTrigger,
   type AutomationCondition,
@@ -26,6 +29,8 @@ import {
   type Status,
   type Field,
   type Entity,
+  type Page,
+  type PageField,
   type UserOption,
   type MultilingualText,
 } from "@workspace/api-client-react";
@@ -113,8 +118,21 @@ type ConditionDraft = {
   /** "literal" = fixed value; "field" = read from the triggering record's field. */
   valueSource: "literal" | "field";
   valueFieldKey: string;
+  /** "entity" = the triggering record's own field; "page" = a page-local field on a mirror page. */
+  fieldSource: "entity" | "page";
+  /** The mirror page whose page-field to read when fieldSource is "page". */
+  pageId: string;
 };
-type MappingDraft = { targetFieldKey: string; sourceType: "literal" | "field" | "combined"; value: string; sourceFieldKey: string };
+type MappingDraft = {
+  targetFieldKey: string;
+  sourceType: "literal" | "field" | "combined";
+  value: string;
+  sourceFieldKey: string;
+  /** For sourceType "field": "entity" = triggering record's field; "page" = a page-local field. */
+  sourceFieldSource: "entity" | "page";
+  /** The mirror page to read from when sourceFieldSource is "page". */
+  sourcePageId: string;
+};
 type ActionDraft = {
   type: AutomationActionType;
   fieldKey: string;
@@ -125,6 +143,10 @@ type ActionDraft = {
   match: ConditionDraft[];
   url: string;
   includeRecord: boolean;
+  /** For set_field: "entity" = triggering record's field; "page" = a page-local field on a mirror page. */
+  targetFieldSource: "entity" | "page";
+  /** The mirror page to write to when targetFieldSource is "page". */
+  targetPageId: string;
   /** Transient (not persisted): explicit ack that an empty-match update hits ALL records. */
   confirmAllRecords: boolean;
 };
@@ -155,6 +177,7 @@ const TRIGGER_TYPES: { value: AutomationTriggerType; labelKey: string; label: st
   { value: "field_changed", labelKey: "auto.trig.field_changed", label: "Изменение поля" },
   { value: "status_changed", labelKey: "auto.trig.status_changed", label: "Смена статуса" },
   { value: "date_reached", labelKey: "auto.trig.date_reached", label: "Наступление даты" },
+  { value: "page_field_changed", labelKey: "auto.trig.page_field_changed", label: "Изменение поля страницы" },
 ];
 
 const ACTION_TYPES: { value: AutomationActionType; labelKey: string; label: string }[] = [
@@ -180,6 +203,8 @@ function emptyAction(defaultFieldKey: string): ActionDraft {
     match: [],
     url: "",
     includeRecord: true,
+    targetFieldSource: "entity",
+    targetPageId: "",
     confirmAllRecords: false,
   };
 }
@@ -324,12 +349,19 @@ export default function EntityAutomationsPage() {
   const [trigFrom, setTrigFrom] = useState<string>(ANY);
   const [trigTo, setTrigTo] = useState<string>(ANY);
   const [trigOffset, setTrigOffset] = useState("0");
+  const [trigPageId, setTrigPageId] = useState<string>("");
+  const [trigPageFieldKey, setTrigPageFieldKey] = useState<string>("");
   const [conditions, setConditions] = useState<ConditionDraft[]>([]);
   const [conditionConjunction, setConditionConjunction] = useState<"and" | "or">("and");
   const [actions, setActions] = useState<ActionDraft[]>([]);
 
   const { data: entities = [] } = useListEntities();
   const entity = entities.find((e: Entity) => e.id === entityId);
+
+  // Page-local fields exist only on MIRROR pages of THIS entity; those pages are
+  // the only valid targets/sources for page-field trigger/condition/set/mapping.
+  const { data: allPages = [] } = useListPages();
+  const mirrorPages = (allPages as Page[]).filter((p) => p.mirrorEntityId === entityId);
 
   const { data: automations = [], isLoading } = useListEntityAutomations(entityId);
   const { data: statuses = [] } = useListEntityStatuses(entityId);
@@ -410,6 +442,8 @@ export default function EntityAutomationsPage() {
     setTrigFrom(ANY);
     setTrigTo(ANY);
     setTrigOffset("0");
+    setTrigPageId("");
+    setTrigPageFieldKey("");
     setConditions([]);
     setConditionConjunction("and");
     setActions([emptyAction(fields[0]?.fieldKey ?? "")]);
@@ -427,6 +461,8 @@ export default function EntityAutomationsPage() {
     setTrigFrom(trig.fromStatusId == null ? ANY : String(trig.fromStatusId));
     setTrigTo(trig.toStatusId == null ? ANY : String(trig.toStatusId));
     setTrigOffset(String(trig.offsetDays ?? 0));
+    setTrigPageId(trig.type === "page_field_changed" && trig.pageId != null ? String(trig.pageId) : "");
+    setTrigPageFieldKey(trig.type === "page_field_changed" ? trig.fieldKey ?? "" : "");
     setConditions((a.conditionsJson ?? []).map(conditionToDraft));
     setConditionConjunction(a.conditionConjunction === "or" ? "or" : "and");
     setActions((a.actionsJson ?? []).map(actionToDraft));
@@ -439,6 +475,8 @@ export default function EntityAutomationsPage() {
     value: c.value == null ? "" : String(c.value),
     valueSource: c.valueSource === "field" ? "field" : "literal",
     valueFieldKey: c.valueFieldKey ?? "",
+    fieldSource: c.fieldSource === "page" ? "page" : "entity",
+    pageId: c.pageId == null ? "" : String(c.pageId),
   });
 
   const actionToDraft = (a: AutomationAction): ActionDraft => ({
@@ -452,10 +490,14 @@ export default function EntityAutomationsPage() {
       sourceType: m.sourceType,
       value: m.value == null ? "" : String(m.value),
       sourceFieldKey: m.sourceFieldKey ?? "",
+      sourceFieldSource: m.sourceFieldSource === "page" ? "page" : "entity",
+      sourcePageId: m.sourcePageId == null ? "" : String(m.sourcePageId),
     })),
     match: (a.match ?? []).map(conditionToDraft),
     url: a.url ?? "",
     includeRecord: a.includeRecord ?? true,
+    targetFieldSource: a.type === "set_field" && a.targetFieldSource === "page" ? "page" : "entity",
+    targetPageId: a.type === "set_field" && a.targetPageId != null ? String(a.targetPageId) : "",
     confirmAllRecords: false,
   });
 
@@ -482,6 +524,15 @@ export default function EntityAutomationsPage() {
       .map((c) => {
         const isStatus = c.fieldKey === STATUS_KEY;
         const out: AutomationCondition = { fieldKey: c.fieldKey, operator: c.operator };
+        // A page-sourced condition reads a page-local field on a mirror page; its
+        // value stays a literal (the server coerces per page-field type at
+        // compare time), so no entity-field coercion is applied here.
+        if (c.fieldSource === "page" && c.pageId) {
+          out.fieldSource = "page";
+          out.pageId = Number(c.pageId);
+          if (!noValueOp(c.operator)) out.value = c.value === "" ? null : c.value;
+          return out;
+        }
         if (!noValueOp(c.operator)) {
           if (c.valueSource === "field" && c.valueFieldKey) {
             // Dynamic: compare against the triggering record's field at run time.
@@ -511,13 +562,26 @@ export default function EntityAutomationsPage() {
       trigger.fromStatusId = trigFrom === ANY ? null : Number(trigFrom);
       trigger.toStatusId = trigTo === ANY ? null : Number(trigTo);
     }
+    if (triggerType === "page_field_changed") {
+      if (!trigPageId) { toast({ title: t("auto.specifyPage", "Укажите страницу триггера"), variant: "destructive" }); return; }
+      if (!trigPageFieldKey) { toast({ title: t("auto.specifyPageField", "Укажите поле страницы"), variant: "destructive" }); return; }
+      trigger.pageId = Number(trigPageId);
+      trigger.fieldKey = trigPageFieldKey;
+    }
 
     // Build actions.
     const builtActions: AutomationAction[] = [];
     for (const a of actions) {
       if (a.type === "set_field") {
         if (!a.fieldKey) { toast({ title: t("auto.specifyActionField", "Укажите поле действия"), variant: "destructive" }); return; }
-        builtActions.push({ type: "set_field", fieldKey: a.fieldKey, value: coerce(a.fieldKey, a.value, fieldByKey, false) });
+        if (a.targetFieldSource === "page") {
+          if (!a.targetPageId) { toast({ title: t("auto.specifyPage", "Укажите страницу триггера"), variant: "destructive" }); return; }
+          // Page value stays a raw string; the server validates/coerces it per
+          // page-field type when writing (systemSetPageValue → validatePageValues).
+          builtActions.push({ type: "set_field", fieldKey: a.fieldKey, value: a.value === "" ? null : a.value, targetFieldSource: "page", targetPageId: Number(a.targetPageId) });
+        } else {
+          builtActions.push({ type: "set_field", fieldKey: a.fieldKey, value: coerce(a.fieldKey, a.value, fieldByKey, false) });
+        }
       } else if (a.type === "change_status") {
         if (!a.statusId) { toast({ title: t("auto.specifyStatus", "Укажите статус"), variant: "destructive" }); return; }
         builtActions.push({ type: "change_status", statusId: Number(a.statusId) });
@@ -533,7 +597,10 @@ export default function EntityAutomationsPage() {
           .filter((m) => m.targetFieldKey)
           .map((m) =>
             m.sourceType === "field"
-              ? { targetFieldKey: m.targetFieldKey, sourceType: "field", sourceFieldKey: m.sourceFieldKey }
+              ? m.sourceFieldSource === "page" && m.sourcePageId
+                ? // Read the source value from a page-local field of the triggering record.
+                  { targetFieldKey: m.targetFieldKey, sourceType: "field", sourceFieldKey: m.sourceFieldKey, sourceFieldSource: "page", sourcePageId: Number(m.sourcePageId) }
+                : { targetFieldKey: m.targetFieldKey, sourceType: "field", sourceFieldKey: m.sourceFieldKey }
               : m.sourceType === "combined"
                 ? { targetFieldKey: m.targetFieldKey, sourceType: "combined", value: m.value }
                 : { targetFieldKey: m.targetFieldKey, sourceType: "literal", value: coerce(m.targetFieldKey, m.value, tMap, false) },
@@ -582,6 +649,10 @@ export default function EntityAutomationsPage() {
     const base = t(TRIGGER_TYPES.find((x) => x.value === trig.type)?.labelKey ?? "", TRIGGER_TYPES.find((x) => x.value === trig.type)?.label ?? trig.type);
     if (trig.type === "field_changed" && trig.fieldKey) return `${base}: ${trig.fieldKey}`;
     if (trig.type === "date_reached" && trig.fieldKey) return `${base}: ${trig.fieldKey}${trig.offsetDays ? ` ${trig.offsetDays > 0 ? "+" : ""}${trig.offsetDays}д` : ""}`;
+    if (trig.type === "page_field_changed" && trig.fieldKey) {
+      const pg = mirrorPages.find((p) => p.id === trig.pageId);
+      return `${base}: ${pg ? ml(pg.nameJson) || `#${trig.pageId}` : `#${trig.pageId}`} · ${trig.fieldKey}`;
+    }
     if (trig.type === "status_changed") {
       const f = trig.fromStatusId == null ? "*" : ml(statusById.get(trig.fromStatusId)?.nameJson) || `#${trig.fromStatusId}`;
       const to = trig.toStatusId == null ? "*" : ml(statusById.get(trig.toStatusId)?.nameJson) || `#${trig.toStatusId}`;
@@ -695,10 +766,13 @@ export default function EntityAutomationsPage() {
     ownerEntityId?: number;
     /** When set, the value may be sourced from one of these triggering-record fields. */
     fieldSourceOptions?: Field[];
+    /** When set (top-level conditions only), a condition may read a page-local field on one of these mirror pages. */
+    mirrorPages?: Page[];
   }): ReactElement => {
     const upd = (i: number, patch: Partial<ConditionDraft>) => onChange(list.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
-    const add = () => onChange([...list, { fieldKey: allowStatus ? STATUS_KEY : fopts[0]?.fieldKey ?? "", operator: "eq", value: "", valueSource: "literal", valueFieldKey: "" }]);
+    const add = () => onChange([...list, { fieldKey: allowStatus ? STATUS_KEY : fopts[0]?.fieldKey ?? "", operator: "eq", value: "", valueSource: "literal", valueFieldKey: "", fieldSource: "entity", pageId: "" }]);
     const rm = (i: number) => onChange(list.filter((_, idx) => idx !== i));
+    const allowPage = !!mirrorPages && mirrorPages.length > 0;
     return (
       <div className="space-y-2">
         {onConjunctionChange && list.length > 1 && (
@@ -715,35 +789,64 @@ export default function EntityAutomationsPage() {
         )}
         {list.map((c, i) => (
           <div key={i} className="flex items-center gap-1.5">
-            <Select value={c.fieldKey} onValueChange={(v) => upd(i, { fieldKey: v, value: "" })}>
-              <SelectTrigger className="w-40"><SelectValue placeholder={t("auto.field", "Поле")} /></SelectTrigger>
-              <SelectContent>
-                {allowStatus && <SelectItem value={STATUS_KEY}>{t("auto.recordStatus", "Статус записи")}</SelectItem>}
-                {fopts.map((f) => (<SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson) || f.fieldKey}</SelectItem>))}
-              </SelectContent>
-            </Select>
+            {allowPage && (
+              <Select value={c.fieldSource} onValueChange={(v) => upd(i, { fieldSource: v as "entity" | "page", fieldKey: v === "page" ? "" : (allowStatus ? STATUS_KEY : fopts[0]?.fieldKey ?? ""), value: "", valueSource: "literal", valueFieldKey: "", pageId: "" })}>
+                <SelectTrigger className="w-28 shrink-0"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="entity">{t("auto.sourceEntity", "Запись")}</SelectItem>
+                  <SelectItem value="page">{t("auto.sourcePage", "Страница")}</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+            {c.fieldSource === "page" ? (
+              <>
+                <Select value={c.pageId} onValueChange={(v) => upd(i, { pageId: v, fieldKey: "" })}>
+                  <SelectTrigger className="w-40"><SelectValue placeholder={t("auto.page", "Страница")} /></SelectTrigger>
+                  <SelectContent>{(mirrorPages ?? []).map((p) => (<SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson) || `#${p.id}`}</SelectItem>))}</SelectContent>
+                </Select>
+                {c.pageId && (
+                  <PageFieldSelect pageId={Number(c.pageId)} value={c.fieldKey} onChange={(v) => upd(i, { fieldKey: v, value: "" })} ml={ml} t={t} className="w-40" placeholder={t("auto.pageField", "Поле страницы")} />
+                )}
+              </>
+            ) : (
+              <Select value={c.fieldKey} onValueChange={(v) => upd(i, { fieldKey: v, value: "" })}>
+                <SelectTrigger className="w-40"><SelectValue placeholder={t("auto.field", "Поле")} /></SelectTrigger>
+                <SelectContent>
+                  {allowStatus && <SelectItem value={STATUS_KEY}>{t("auto.recordStatus", "Статус записи")}</SelectItem>}
+                  {fopts.map((f) => (<SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson) || f.fieldKey}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            )}
             <Select value={c.operator} onValueChange={(v) => upd(i, { operator: v as AutomationConditionOperator })}>
               <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
               <SelectContent>{OPERATORS.map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent>
             </Select>
-            {!noValueOp(c.operator) && fieldSourceOptions && (
-              <Select value={c.valueSource} onValueChange={(v) => upd(i, { valueSource: v as "literal" | "field", value: "", valueFieldKey: "" })}>
-                <SelectTrigger className="w-32 shrink-0"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="literal">{t("auto.literal", "Значение")}</SelectItem>
-                  <SelectItem value="field">{t("auto.fromTriggerField", "Из поля записи")}</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-            {!noValueOp(c.operator) && (
-              fieldSourceOptions && c.valueSource === "field" ? (
-                <Select value={c.valueFieldKey} onValueChange={(v) => upd(i, { valueFieldKey: v })}>
-                  <SelectTrigger className="flex-1"><SelectValue placeholder={t("auto.sourceField", "Поле-источник")} /></SelectTrigger>
-                  <SelectContent>{fieldSourceOptions.map((f) => (<SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson) || f.fieldKey}</SelectItem>))}</SelectContent>
-                </Select>
-              ) : (
-                <ValueControl fieldKey={c.fieldKey} raw={c.value} onChange={(v) => upd(i, { value: v })} fmap={fmap} sts={sts} statusKey={c.fieldKey === STATUS_KEY} ownerEntityId={ownerEntityId} />
+            {c.fieldSource === "page" ? (
+              !noValueOp(c.operator) && (
+                <Input className="flex-1" value={c.value} onChange={(e) => upd(i, { value: e.target.value })} placeholder={t("auto.pickValue", "Выберите значение")} />
               )
+            ) : (
+              <>
+                {!noValueOp(c.operator) && fieldSourceOptions && (
+                  <Select value={c.valueSource} onValueChange={(v) => upd(i, { valueSource: v as "literal" | "field", value: "", valueFieldKey: "" })}>
+                    <SelectTrigger className="w-32 shrink-0"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="literal">{t("auto.literal", "Значение")}</SelectItem>
+                      <SelectItem value="field">{t("auto.fromTriggerField", "Из поля записи")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+                {!noValueOp(c.operator) && (
+                  fieldSourceOptions && c.valueSource === "field" ? (
+                    <Select value={c.valueFieldKey} onValueChange={(v) => upd(i, { valueFieldKey: v })}>
+                      <SelectTrigger className="flex-1"><SelectValue placeholder={t("auto.sourceField", "Поле-источник")} /></SelectTrigger>
+                      <SelectContent>{fieldSourceOptions.map((f) => (<SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson) || f.fieldKey}</SelectItem>))}</SelectContent>
+                    </Select>
+                  ) : (
+                    <ValueControl fieldKey={c.fieldKey} raw={c.value} onChange={(v) => upd(i, { value: v })} fmap={fmap} sts={sts} statusKey={c.fieldKey === STATUS_KEY} ownerEntityId={ownerEntityId} />
+                  )
+                )}
+              </>
             )}
             <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-400 shrink-0" onClick={() => rm(i)}>
               <X className="w-3.5 h-3.5" />
@@ -912,13 +1015,29 @@ export default function EntityAutomationsPage() {
                     </Select>
                   </>
                 )}
+                {triggerType === "page_field_changed" && (
+                  <>
+                    <Select value={trigPageId} onValueChange={(v) => { setTrigPageId(v); setTrigPageFieldKey(""); }}>
+                      <SelectTrigger className="w-52"><SelectValue placeholder={t("auto.page", "Страница")} /></SelectTrigger>
+                      <SelectContent>
+                        {mirrorPages.map((p) => (<SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson) || `#${p.id}`}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                    {trigPageId && (
+                      <PageFieldSelect pageId={Number(trigPageId)} value={trigPageFieldKey} onChange={setTrigPageFieldKey} ml={ml} t={t} className="w-44" placeholder={t("auto.pageField", "Поле страницы")} />
+                    )}
+                  </>
+                )}
               </div>
+              {triggerType === "page_field_changed" && mirrorPages.length === 0 && (
+                <p className="text-xs text-amber-600">{t("auto.noMirrorPages", "Нет зеркальных страниц этой сущности с полями страницы.")}</p>
+              )}
             </div>
 
             {/* Conditions */}
             <div className="space-y-2 rounded-md border border-slate-200 p-3">
               <Label className="text-sm font-semibold">{t("auto.conditions", "Условия")}</Label>
-              <ConditionsEditor list={conditions} onChange={setConditions} fopts={fields} fmap={fieldByKey} sts={statuses} allowStatus conjunction={conditionConjunction} onConjunctionChange={setConditionConjunction} ownerEntityId={entityId} />
+              <ConditionsEditor list={conditions} onChange={setConditions} fopts={fields} fmap={fieldByKey} sts={statuses} allowStatus conjunction={conditionConjunction} onConjunctionChange={setConditionConjunction} ownerEntityId={entityId} mirrorPages={mirrorPages} />
             </div>
 
             {/* Actions */}
@@ -939,6 +1058,7 @@ export default function EntityAutomationsPage() {
                   t={t}
                   ValueControl={ValueControl}
                   ConditionsEditor={ConditionsEditor}
+                  mirrorPages={mirrorPages}
                   onChange={(patch) => setAction(i, patch)}
                   onRemove={() => removeAction(i)}
                   onMove={(dir) => moveAction(i, dir)}
@@ -1049,7 +1169,45 @@ type ConditionsEditorComp = (props: {
   onConjunctionChange?: (next: "and" | "or") => void;
   ownerEntityId?: number;
   fieldSourceOptions?: Field[];
+  mirrorPages?: Page[];
 }) => ReactElement;
+
+/**
+ * Select of a mirror page's active page-local fields. When `storableOnly`, the
+ * relation/lookup/function types (which have no stored scalar to read or write)
+ * are excluded — used for set_field targets and field-mapping sources.
+ */
+function PageFieldSelect({
+  pageId,
+  value,
+  onChange,
+  ml,
+  t,
+  className,
+  placeholder,
+  storableOnly = false,
+}: {
+  pageId: number;
+  value: string;
+  onChange: (v: string) => void;
+  ml: (val: MultilingualText | string | undefined | null) => string;
+  t: (k: string, d: string) => string;
+  className?: string;
+  placeholder?: string;
+  storableOnly?: boolean;
+}): ReactElement {
+  const { data: pageFieldsRaw = [] } = useListPageFields(pageId, { query: { enabled: pageId > 0, queryKey: getListPageFieldsQueryKey(pageId) } });
+  const NON_STORABLE = new Set(["relation", "lookup", "function"]);
+  const pageFields = (pageFieldsRaw as PageField[])
+    .filter((f) => f.isActive && (!storableOnly || !NON_STORABLE.has(f.fieldType)))
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className={className ?? "w-40"}><SelectValue placeholder={placeholder ?? t("auto.pageField", "Поле страницы")} /></SelectTrigger>
+      <SelectContent>{pageFields.map((f) => (<SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson) || f.fieldKey}</SelectItem>))}</SelectContent>
+    </Select>
+  );
+}
 
 /**
  * One action editor card. Rendered once per action so cross-entity hooks
@@ -1069,6 +1227,7 @@ function ActionCard({
   t,
   ValueControl,
   ConditionsEditor,
+  mirrorPages,
   onChange,
   onRemove,
   onMove,
@@ -1086,6 +1245,7 @@ function ActionCard({
   t: (k: string, d: string) => string;
   ValueControl: ValueControlComp;
   ConditionsEditor: ConditionsEditorComp;
+  mirrorPages: Page[];
   onChange: (patch: Partial<ActionDraft>) => void;
   onRemove: () => void;
   onMove: (dir: -1 | 1) => void;
@@ -1105,7 +1265,7 @@ function ActionCard({
   }, [targetId, targetFieldsKey, onTargetFieldsLoaded]);
 
   const updMapping = (i: number, patch: Partial<MappingDraft>) => onChange({ mapping: draft.mapping.map((m, idx) => (idx === i ? { ...m, ...patch } : m)) });
-  const addMapping = () => onChange({ mapping: [...draft.mapping, { targetFieldKey: targetFields[0]?.fieldKey ?? "", sourceType: "literal", value: "", sourceFieldKey: currentFields[0]?.fieldKey ?? "" }] });
+  const addMapping = () => onChange({ mapping: [...draft.mapping, { targetFieldKey: targetFields[0]?.fieldKey ?? "", sourceType: "literal", value: "", sourceFieldKey: currentFields[0]?.fieldKey ?? "", sourceFieldSource: "entity", sourcePageId: "" }] });
   const rmMapping = (i: number) => onChange({ mapping: draft.mapping.filter((_, idx) => idx !== i) });
 
   return (
@@ -1125,12 +1285,37 @@ function ActionCard({
 
       {draft.type === "set_field" && (
         <div className="flex items-center gap-1.5 pl-7">
-          <Select value={draft.fieldKey} onValueChange={(v) => onChange({ fieldKey: v, value: "" })}>
-            <SelectTrigger className="w-44"><SelectValue placeholder={t("auto.field", "Поле")} /></SelectTrigger>
-            <SelectContent>{currentFields.map((f) => (<SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson) || f.fieldKey}</SelectItem>))}</SelectContent>
-          </Select>
-          <span className="text-slate-400">=</span>
-          <ValueControl fieldKey={draft.fieldKey} raw={draft.value} onChange={(v) => onChange({ value: v })} fmap={currentFieldByKey} sts={currentStatuses} statusKey={false} ownerEntityId={currentEntityId} />
+          {mirrorPages.length > 0 && (
+            <Select value={draft.targetFieldSource} onValueChange={(v) => onChange({ targetFieldSource: v as "entity" | "page", fieldKey: "", value: "", targetPageId: "" })}>
+              <SelectTrigger className="w-28 shrink-0"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="entity">{t("auto.sourceEntity", "Запись")}</SelectItem>
+                <SelectItem value="page">{t("auto.sourcePage", "Страница")}</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+          {draft.targetFieldSource === "page" ? (
+            <>
+              <Select value={draft.targetPageId} onValueChange={(v) => onChange({ targetPageId: v, fieldKey: "" })}>
+                <SelectTrigger className="w-40"><SelectValue placeholder={t("auto.page", "Страница")} /></SelectTrigger>
+                <SelectContent>{mirrorPages.map((p) => (<SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson) || `#${p.id}`}</SelectItem>))}</SelectContent>
+              </Select>
+              {draft.targetPageId && (
+                <PageFieldSelect pageId={Number(draft.targetPageId)} value={draft.fieldKey} onChange={(v) => onChange({ fieldKey: v, value: "" })} ml={ml} t={t} className="w-44" storableOnly />
+              )}
+              <span className="text-slate-400">=</span>
+              <Input className="flex-1" value={draft.value} onChange={(e) => onChange({ value: e.target.value })} placeholder={t("auto.pickValue", "Выберите значение")} />
+            </>
+          ) : (
+            <>
+              <Select value={draft.fieldKey} onValueChange={(v) => onChange({ fieldKey: v, value: "" })}>
+                <SelectTrigger className="w-44"><SelectValue placeholder={t("auto.field", "Поле")} /></SelectTrigger>
+                <SelectContent>{currentFields.map((f) => (<SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson) || f.fieldKey}</SelectItem>))}</SelectContent>
+              </Select>
+              <span className="text-slate-400">=</span>
+              <ValueControl fieldKey={draft.fieldKey} raw={draft.value} onChange={(v) => onChange({ value: v })} fmap={currentFieldByKey} sts={currentStatuses} statusKey={false} ownerEntityId={currentEntityId} />
+            </>
+          )}
         </div>
       )}
 
@@ -1205,10 +1390,38 @@ function ActionCard({
                       </SelectContent>
                     </Select>
                     {m.sourceType === "field" ? (
-                      <Select value={m.sourceFieldKey} onValueChange={(v) => updMapping(i, { sourceFieldKey: v })}>
-                        <SelectTrigger className="flex-1 min-w-0"><SelectValue placeholder={t("auto.sourceField", "Поле-источник")} /></SelectTrigger>
-                        <SelectContent>{currentFields.map((f) => (<SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson) || f.fieldKey}</SelectItem>))}</SelectContent>
-                      </Select>
+                      mirrorPages.length > 0 ? (
+                        <>
+                          <Select value={m.sourceFieldSource ?? "entity"} onValueChange={(v) => updMapping(i, { sourceFieldSource: v as "entity" | "page", sourceFieldKey: "", sourcePageId: "" })}>
+                            <SelectTrigger className="w-24 shrink-0"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="entity">{t("auto.sourceEntity", "Запись")}</SelectItem>
+                              <SelectItem value="page">{t("auto.sourcePage", "Страница")}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {m.sourceFieldSource === "page" ? (
+                            <>
+                              <Select value={m.sourcePageId ?? ""} onValueChange={(v) => updMapping(i, { sourcePageId: v, sourceFieldKey: "" })}>
+                                <SelectTrigger className="w-36 shrink-0"><SelectValue placeholder={t("auto.page", "Страница")} /></SelectTrigger>
+                                <SelectContent>{mirrorPages.map((p) => (<SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson) || `#${p.id}`}</SelectItem>))}</SelectContent>
+                              </Select>
+                              {m.sourcePageId && (
+                                <PageFieldSelect pageId={Number(m.sourcePageId)} value={m.sourceFieldKey} onChange={(v) => updMapping(i, { sourceFieldKey: v })} ml={ml} t={t} className="flex-1 min-w-0" storableOnly />
+                              )}
+                            </>
+                          ) : (
+                            <Select value={m.sourceFieldKey} onValueChange={(v) => updMapping(i, { sourceFieldKey: v })}>
+                              <SelectTrigger className="flex-1 min-w-0"><SelectValue placeholder={t("auto.sourceField", "Поле-источник")} /></SelectTrigger>
+                              <SelectContent>{currentFields.map((f) => (<SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson) || f.fieldKey}</SelectItem>))}</SelectContent>
+                            </Select>
+                          )}
+                        </>
+                      ) : (
+                        <Select value={m.sourceFieldKey} onValueChange={(v) => updMapping(i, { sourceFieldKey: v })}>
+                          <SelectTrigger className="flex-1 min-w-0"><SelectValue placeholder={t("auto.sourceField", "Поле-источник")} /></SelectTrigger>
+                          <SelectContent>{currentFields.map((f) => (<SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson) || f.fieldKey}</SelectItem>))}</SelectContent>
+                        </Select>
+                      )
                     ) : m.sourceType === "combined" ? (
                       <span className="flex-1 min-w-0 truncate text-xs text-slate-400">{t("auto.combinedTemplateBelow", "Шаблон ниже")}</span>
                     ) : (

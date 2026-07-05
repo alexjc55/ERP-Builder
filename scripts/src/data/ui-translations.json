@@ -8814,6 +8814,42 @@
     "he": "הגיע תאריך"
   },
   {
+    "key": "auto.trig.page_field_changed",
+    "ru": "Изменение поля страницы",
+    "en": "Page field changed",
+    "he": "שדה עמוד השתנה"
+  },
+  {
+    "key": "auto.page",
+    "ru": "Страница",
+    "en": "Page",
+    "he": "עמוד"
+  },
+  {
+    "key": "auto.pageField",
+    "ru": "Поле страницы",
+    "en": "Page field",
+    "he": "שדה עמוד"
+  },
+  {
+    "key": "auto.sourceEntity",
+    "ru": "Запись",
+    "en": "Record",
+    "he": "רשומה"
+  },
+  {
+    "key": "auto.sourcePage",
+    "ru": "Страница",
+    "en": "Page",
+    "he": "עמוד"
+  },
+  {
+    "key": "auto.noMirrorPages",
+    "ru": "Нет зеркальных страниц этой сущности с полями страницы.",
+    "en": "No mirror pages of this entity with page fields.",
+    "he": "אין עמודי מראה של ישות זו עם שדות עמוד."
+  },
+  {
     "key": "auto.act.set_field",
     "ru": "Установить поле",
     "en": "Set field",

@@ -6203,6 +6203,19 @@ components:
         operator:
           type: string
           enum: [eq, neq, contains, gt, lt, gte, lte, empty, notEmpty]
+        fieldSource:
+          type: string
+          enum: [entity, page]
+          description: >-
+            Where the LEFT operand (`fieldKey`) is read from. "entity" (default
+            when absent) reads the triggering entity record's field (or
+            "__status__"). "page" reads a page-local field of a MIRROR page
+            (`pageId`) of this entity at (pageId, triggeringRecordId). Only for
+            top-level conditions; in an update_records_where match a page operand
+            fails closed (reads empty).
+        pageId:
+          type: integer
+          description: The mirror page whose page-field to read when fieldSource is "page".
         valueSource:
           type: string
           enum: [literal, field]
@@ -6221,7 +6234,7 @@ components:
       properties:
         type:
           type: string
-          enum: [record_created, record_updated, field_changed, status_changed, date_reached]
+          enum: [record_created, record_updated, field_changed, status_changed, date_reached, page_field_changed]
         fieldKey:
           type: string
         fromStatusId:
@@ -6230,6 +6243,11 @@ components:
           type: ["integer", "null"]
         offsetDays:
           type: integer
+        pageId:
+          type: integer
+          description: >-
+            For page_field_changed: the mirror page whose page-field save fires
+            the trigger (with `fieldKey`).
 
     AutomationMapping:
       type: object
@@ -6246,6 +6264,17 @@ components:
         value: {}
         sourceFieldKey:
           type: string
+        sourceFieldSource:
+          type: string
+          enum: [entity, page]
+          description: >-
+            When sourceType is "field", where `sourceFieldKey` is read from.
+            "entity" (default when absent) reads the triggering entity record.
+            "page" reads a page-local field of a MIRROR page (`sourcePageId`) of
+            this entity at (sourcePageId, triggeringRecordId).
+        sourcePageId:
+          type: integer
+          description: The mirror page to read from when sourceFieldSource is "page".
 
     AutomationAction:
       type: object
@@ -6257,6 +6286,16 @@ components:
         fieldKey:
           type: string
         value: {}
+        targetFieldSource:
+          type: string
+          enum: [entity, page]
+          description: >-
+            For set_field: where to write. "entity" (default when absent) sets the
+            triggering entity record's field. "page" writes a page-local field on a
+            MIRROR page (`targetPageId`) of this entity at (targetPageId, recordId).
+        targetPageId:
+          type: integer
+          description: The mirror page to write to when targetFieldSource is "page".
         statusId:
           type: ["integer", "null"]
         targetEntityId:

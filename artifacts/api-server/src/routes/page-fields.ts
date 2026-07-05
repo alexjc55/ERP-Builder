@@ -35,6 +35,7 @@ import {
   mostPermissiveFieldPerm,
 } from "../middlewares/permissions";
 import { ownScopeWhere, isRecordOwned } from "./own-scope";
+import { emitEvent, EVENT_PAGE_FIELD_SAVED } from "../lib/events";
 import {
   ListPageFieldsParams,
   CreatePageFieldParams,
@@ -268,11 +269,28 @@ function isEmpty(v: unknown): boolean {
 }
 
 /**
+ * Return the set of keys whose value differs between two page-value maps
+ * (including keys added or removed). Values are compared by JSON identity — the
+ * stored values are JSONB scalars/arrays, so this is a stable equality check.
+ */
+function diffChangedKeys(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+): string[] {
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  const changed: string[] = [];
+  for (const k of keys) {
+    if (JSON.stringify(before[k] ?? null) !== JSON.stringify(after[k] ?? null)) changed.push(k);
+  }
+  return changed;
+}
+
+/**
  * Validate a page-local values object against the page's active page-fields.
  * `function`-type fields are computed at read time and are never stored, so any
  * incoming value for them is ignored. Unknown keys are rejected.
  */
-function validatePageValues(
+export function validatePageValues(
   fields: PageField[],
   values: Record<string, unknown>,
 ): { values: Record<string, unknown> } | { error: string } {
@@ -777,6 +795,25 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
       .where(eq(pageRecordValuesTable.id, existing.id));
   } else {
     await db.insert(pageRecordValuesTable).values({ pageId, recordId, valuesJson: result.values });
+  }
+  // Emit a best-effort event for any page-field whose value actually changed,
+  // so automations with a `page_field_changed` trigger can react. The event
+  // carries the page's effective entity so the engine can find that entity's
+  // automations. Never let a failed emit break the write.
+  const changedPageFieldKeys = diffChangedKeys(
+    (existing?.valuesJson as Record<string, unknown> | undefined) ?? {},
+    result.values,
+  );
+  if (changedPageFieldKeys.length > 0) {
+    await emitEvent(
+      {
+        eventName: EVENT_PAGE_FIELD_SAVED,
+        entityId,
+        recordId,
+        payload: { pageId, changedPageFieldKeys, actorUserId: req.user!.userId },
+      },
+      req.log,
+    );
   }
   res.json({ recordId, valuesJson: result.values });
 });

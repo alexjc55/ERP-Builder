@@ -30,6 +30,18 @@ export const automationConditionSchema = z.object({
   fieldKey: z.string().min(1),
   operator: z.enum(["eq", "neq", "contains", "gt", "lt", "gte", "lte", "empty", "notEmpty"]),
   /**
+   * Where the LEFT operand (`fieldKey`) is read from.
+   * - "entity" (default when absent): a field of the triggering entity record
+   *   (or `__status__` for its status).
+   * - "page": a page-local field of a MIRROR page of this entity, read from
+   *   `(pageId, triggeringRecordId)`. Only supported for TOP-LEVEL automation
+   *   conditions — never in an `update_records_where` match (those test other
+   *   rows), where a page operand fails closed (reads empty).
+   */
+  fieldSource: z.enum(["entity", "page"]).optional(),
+  /** The mirror page whose page-field to read (required when `fieldSource` is "page"). */
+  pageId: z.number().int().optional(),
+  /**
    * How the comparison value is sourced.
    * - "literal" (default when absent): compare against the fixed `value`.
    * - "field": compare against the TRIGGERING record's `valueFieldKey` value,
@@ -70,6 +82,16 @@ export const automationTriggerSchema = z.discriminatedUnion("type", [
     fieldKey: z.string().min(1),
     offsetDays: z.number().int().optional(),
   }),
+  /**
+   * Fires when a page-local field (`fieldKey`) on a MIRROR page (`pageId`) of
+   * this entity is saved with a changed value. The triggering record is the
+   * entity record whose page value changed.
+   */
+  z.object({
+    type: z.literal("page_field_changed"),
+    pageId: z.number().int(),
+    fieldKey: z.string().min(1),
+  }),
 ]);
 export type AutomationTrigger = z.infer<typeof automationTriggerSchema>;
 
@@ -85,13 +107,32 @@ export const automationMappingSchema = z.object({
   sourceType: z.enum(["literal", "field", "combined"]),
   value: z.unknown().optional(),
   sourceFieldKey: z.string().optional(),
+  /**
+   * When `sourceType` is "field", where `sourceFieldKey` is read from.
+   * - "entity" (default when absent): the triggering entity record's field.
+   * - "page": a page-local field of a MIRROR page (`sourcePageId`) of this
+   *   entity, read from `(sourcePageId, triggeringRecordId)`.
+   */
+  sourceFieldSource: z.enum(["entity", "page"]).optional(),
+  /** The mirror page to read from (required when `sourceFieldSource` is "page"). */
+  sourcePageId: z.number().int().optional(),
 });
 export type AutomationMapping = z.infer<typeof automationMappingSchema>;
 
 /** Actions: executed in order, as the system. */
 export const automationActionSchema = z.discriminatedUnion("type", [
-  /** Set a field on the triggering record. */
-  z.object({ type: z.literal("set_field"), fieldKey: z.string().min(1), value: z.unknown() }),
+  /**
+   * Set a field on the triggering record. When `targetFieldSource` is "page",
+   * writes a page-local field on a MIRROR page (`targetPageId`) of this entity
+   * at `(targetPageId, triggeringRecordId)` instead of the entity record.
+   */
+  z.object({
+    type: z.literal("set_field"),
+    fieldKey: z.string().min(1),
+    value: z.unknown(),
+    targetFieldSource: z.enum(["entity", "page"]).optional(),
+    targetPageId: z.number().int().optional(),
+  }),
   /** Move the triggering record to a status directly (overrides «Процессы»). */
   z.object({ type: z.literal("change_status"), statusId: z.number().int() }),
   /** Create a new record on `targetEntityId` (this or another entity). */

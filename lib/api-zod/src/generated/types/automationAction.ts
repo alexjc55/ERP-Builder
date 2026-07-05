@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { AutomationActionTargetFieldSource } from './automationActionTargetFieldSource';
 import type { AutomationActionType } from './automationActionType';
 import type { AutomationCondition } from './automationCondition';
 import type { AutomationMapping } from './automationMapping';
@@ -13,6 +14,10 @@ export interface AutomationAction {
   type: AutomationActionType;
   fieldKey?: string;
   value?: unknown;
+  /** For set_field: where to write. "entity" (default when absent) sets the triggering entity record's field. "page" writes a page-local field on a MIRROR page (`targetPageId`) of this entity at (targetPageId, recordId). */
+  targetFieldSource?: AutomationActionTargetFieldSource;
+  /** The mirror page to write to when targetFieldSource is "page". */
+  targetPageId?: number;
   /** @nullable */
   statusId?: number | null;
   targetEntityId?: number;

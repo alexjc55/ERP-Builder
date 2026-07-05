@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { AutomationConditionFieldSource } from './automationConditionFieldSource';
 import type { AutomationConditionOperator } from './automationConditionOperator';
 import type { AutomationConditionValueSource } from './automationConditionValueSource';
 
@@ -12,6 +13,10 @@ export interface AutomationCondition {
   /** A real field key, or "__status__" to compare the record's statusId. */
   fieldKey: string;
   operator: AutomationConditionOperator;
+  /** Where the LEFT operand (`fieldKey`) is read from. "entity" (default when absent) reads the triggering entity record's field (or "__status__"). "page" reads a page-local field of a MIRROR page (`pageId`) of this entity at (pageId, triggeringRecordId). Only for top-level conditions; in an update_records_where match a page operand fails closed (reads empty). */
+  fieldSource?: AutomationConditionFieldSource;
+  /** The mirror page whose page-field to read when fieldSource is "page". */
+  pageId?: number;
   /** How the comparison value is sourced. "literal" (default when absent) uses the fixed `value`. "field" reads the triggering record's `valueFieldKey` at run time, scoping the rule to the record that fired it. */
   valueSource?: AutomationConditionValueSource;
   value?: unknown;

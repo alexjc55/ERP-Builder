@@ -2628,6 +2628,17 @@ export const AutomationConditionOperator = {
 } as const;
 
 /**
+ * Where the LEFT operand (`fieldKey`) is read from. "entity" (default when absent) reads the triggering entity record's field (or "__status__"). "page" reads a page-local field of a MIRROR page (`pageId`) of this entity at (pageId, triggeringRecordId). Only for top-level conditions; in an update_records_where match a page operand fails closed (reads empty).
+ */
+export type AutomationConditionFieldSource = typeof AutomationConditionFieldSource[keyof typeof AutomationConditionFieldSource];
+
+
+export const AutomationConditionFieldSource = {
+  entity: 'entity',
+  page: 'page',
+} as const;
+
+/**
  * How the comparison value is sourced. "literal" (default when absent) uses the fixed `value`. "field" reads the triggering record's `valueFieldKey` at run time, scoping the rule to the record that fired it.
  */
 export type AutomationConditionValueSource = typeof AutomationConditionValueSource[keyof typeof AutomationConditionValueSource];
@@ -2642,6 +2653,10 @@ export interface AutomationCondition {
   /** A real field key, or "__status__" to compare the record's statusId. */
   fieldKey: string;
   operator: AutomationConditionOperator;
+  /** Where the LEFT operand (`fieldKey`) is read from. "entity" (default when absent) reads the triggering entity record's field (or "__status__"). "page" reads a page-local field of a MIRROR page (`pageId`) of this entity at (pageId, triggeringRecordId). Only for top-level conditions; in an update_records_where match a page operand fails closed (reads empty). */
+  fieldSource?: AutomationConditionFieldSource;
+  /** The mirror page whose page-field to read when fieldSource is "page". */
+  pageId?: number;
   /** How the comparison value is sourced. "literal" (default when absent) uses the fixed `value`. "field" reads the triggering record's `valueFieldKey` at run time, scoping the rule to the record that fired it. */
   valueSource?: AutomationConditionValueSource;
   value?: unknown;
@@ -2658,6 +2673,7 @@ export const AutomationTriggerType = {
   field_changed: 'field_changed',
   status_changed: 'status_changed',
   date_reached: 'date_reached',
+  page_field_changed: 'page_field_changed',
 } as const;
 
 export interface AutomationTrigger {
@@ -2668,6 +2684,8 @@ export interface AutomationTrigger {
   /** @nullable */
   toStatusId?: number | null;
   offsetDays?: number;
+  /** For page_field_changed: the mirror page whose page-field save fires the trigger (with `fieldKey`). */
+  pageId?: number;
 }
 
 export type AutomationMappingSourceType = typeof AutomationMappingSourceType[keyof typeof AutomationMappingSourceType];
@@ -2679,11 +2697,26 @@ export const AutomationMappingSourceType = {
   combined: 'combined',
 } as const;
 
+/**
+ * When sourceType is "field", where `sourceFieldKey` is read from. "entity" (default when absent) reads the triggering entity record. "page" reads a page-local field of a MIRROR page (`sourcePageId`) of this entity at (sourcePageId, triggeringRecordId).
+ */
+export type AutomationMappingSourceFieldSource = typeof AutomationMappingSourceFieldSource[keyof typeof AutomationMappingSourceFieldSource];
+
+
+export const AutomationMappingSourceFieldSource = {
+  entity: 'entity',
+  page: 'page',
+} as const;
+
 export interface AutomationMapping {
   targetFieldKey: string;
   sourceType: AutomationMappingSourceType;
   value?: unknown;
   sourceFieldKey?: string;
+  /** When sourceType is "field", where `sourceFieldKey` is read from. "entity" (default when absent) reads the triggering entity record. "page" reads a page-local field of a MIRROR page (`sourcePageId`) of this entity at (sourcePageId, triggeringRecordId). */
+  sourceFieldSource?: AutomationMappingSourceFieldSource;
+  /** The mirror page to read from when sourceFieldSource is "page". */
+  sourcePageId?: number;
 }
 
 export type AutomationActionType = typeof AutomationActionType[keyof typeof AutomationActionType];
@@ -2697,10 +2730,25 @@ export const AutomationActionType = {
   webhook: 'webhook',
 } as const;
 
+/**
+ * For set_field: where to write. "entity" (default when absent) sets the triggering entity record's field. "page" writes a page-local field on a MIRROR page (`targetPageId`) of this entity at (targetPageId, recordId).
+ */
+export type AutomationActionTargetFieldSource = typeof AutomationActionTargetFieldSource[keyof typeof AutomationActionTargetFieldSource];
+
+
+export const AutomationActionTargetFieldSource = {
+  entity: 'entity',
+  page: 'page',
+} as const;
+
 export interface AutomationAction {
   type: AutomationActionType;
   fieldKey?: string;
   value?: unknown;
+  /** For set_field: where to write. "entity" (default when absent) sets the triggering entity record's field. "page" writes a page-local field on a MIRROR page (`targetPageId`) of this entity at (targetPageId, recordId). */
+  targetFieldSource?: AutomationActionTargetFieldSource;
+  /** The mirror page to write to when targetFieldSource is "page". */
+  targetPageId?: number;
   /** @nullable */
   statusId?: number | null;
   targetEntityId?: number;

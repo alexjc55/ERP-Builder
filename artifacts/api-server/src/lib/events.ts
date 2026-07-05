@@ -18,6 +18,8 @@ export const EVENT_RECORD_UPDATED = "record.updated";
 export const EVENT_RECORD_DELETED = "record.deleted";
 export const EVENT_STATUS_CHANGED = "status.changed";
 export const EVENT_USER_CREATED = "user.created";
+/** A page-local field value was saved (changed) for a record on a mirror page. */
+export const EVENT_PAGE_FIELD_SAVED = "page_field.saved";
 
 /** Wildcard subscription key — receives every event. */
 export const EVENT_ANY = "*";

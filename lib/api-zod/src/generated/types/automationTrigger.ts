@@ -15,4 +15,6 @@ export interface AutomationTrigger {
   /** @nullable */
   toStatusId?: number | null;
   offsetDays?: number;
+  /** For page_field_changed: the mirror page whose page-field save fires the trigger (with `fieldKey`). */
+  pageId?: number;
 }

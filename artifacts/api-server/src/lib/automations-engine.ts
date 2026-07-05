@@ -10,8 +10,12 @@ import {
   relationsTable,
   recordLinksTable,
   usersTable,
+  pagesTable,
+  pageFieldsTable,
+  pageRecordValuesTable,
   type EntityAutomation,
   type EntityField,
+  type PageField,
   type AutomationTrigger,
   type AutomationCondition,
   type AutomationAction,
@@ -51,8 +55,10 @@ import {
   EVENT_RECORD_CREATED,
   EVENT_RECORD_UPDATED,
   EVENT_STATUS_CHANGED,
+  EVENT_PAGE_FIELD_SAVED,
   type EventInput,
 } from "./events";
+import { validatePageValues } from "../routes/page-fields";
 import { isGoogleDriveModuleEnabled } from "./googleDrive";
 import { logger } from "./logger";
 
@@ -227,6 +233,50 @@ async function loadRelationValues(
   return out;
 }
 
+/**
+ * Resolved page-local context for one automation run, keyed by pageId. A page
+ * field's stored value lives in `page_record_values` keyed by (pageId,
+ * recordId) — never in the record's own `values_json` — so any page operand must
+ * be read through here, not through the record's values map.
+ */
+type PageContext = {
+  values: Record<string, unknown>;
+  fieldByKey: Map<string, PageField>;
+};
+
+/**
+ * Load the page-local values + active field defs for a record on the given
+ * pages. Only pages actually referenced by the automation are loaded. Missing
+ * values → empty map, so a page operand fails closed (empty) rather than
+ * throwing.
+ */
+async function loadPageContexts(
+  pageIds: number[],
+  recordId: number,
+): Promise<Map<number, PageContext>> {
+  const out = new Map<number, PageContext>();
+  const unique = [...new Set(pageIds)].filter((id) => Number.isInteger(id));
+  if (unique.length === 0) return out;
+  const fields = await db
+    .select()
+    .from(pageFieldsTable)
+    .where(and(inArray(pageFieldsTable.pageId, unique), eq(pageFieldsTable.isActive, true)));
+  const rows = await db
+    .select()
+    .from(pageRecordValuesTable)
+    .where(and(inArray(pageRecordValuesTable.pageId, unique), eq(pageRecordValuesTable.recordId, recordId)));
+  const valuesByPage = new Map<number, Record<string, unknown>>();
+  for (const r of rows) valuesByPage.set(r.pageId, (r.valuesJson as Record<string, unknown>) ?? {});
+  for (const pid of unique) {
+    const pageFields = fields.filter((f) => f.pageId === pid);
+    out.set(pid, {
+      values: valuesByPage.get(pid) ?? {},
+      fieldByKey: new Map(pageFields.map((f) => [f.fieldKey, f])),
+    });
+  }
+  return out;
+}
+
 /** True when `record` satisfies a single condition. */
 function evalCondition(
   cond: AutomationCondition,
@@ -234,12 +284,42 @@ function evalCondition(
   statusId: number | null,
   fieldByKey: Map<string, EntityField>,
   triggerValues: Record<string, unknown>,
+  pageContexts: Map<number, PageContext>,
 ): boolean {
   const isStatus = cond.fieldKey === CONDITION_STATUS_KEY;
+  // A page-sourced condition reads its operand from a page-local field
+  // (pageId + fieldKey), resolved via the pre-loaded page context. Its type
+  // comes from the page field def. Relation/lookup page fields are unstored, so
+  // they fail closed (empty). Only top-level conditions carry `fieldSource:
+  // "page"`; `update_records_where` matches reject it server-side.
+  if (cond.fieldSource === "page") {
+    const ctx = cond.pageId != null ? pageContexts.get(cond.pageId) : undefined;
+    const pf = ctx?.fieldByKey.get(cond.fieldKey);
+    const pType = pf?.fieldType ?? "text";
+    const pActual =
+      pType === "relation" || pType === "lookup" || pType === "function"
+        ? undefined
+        : ctx?.values[cond.fieldKey];
+    return evalScalarCondition(cond, pActual, pType, triggerValues);
+  }
   const actual = isStatus ? statusId : values[cond.fieldKey];
   const field = fieldByKey.get(cond.fieldKey);
   const type = isStatus ? "status" : field?.fieldType ?? "text";
+  return evalScalarCondition(cond, actual, type, triggerValues, isStatus);
+}
 
+/**
+ * Compare a single already-resolved operand (`actual`) against the condition,
+ * for a field of `type`. Shared by entity-field conditions and page-field
+ * conditions so both use identical operator/coercion semantics.
+ */
+function evalScalarCondition(
+  cond: AutomationCondition,
+  actual: unknown,
+  type: string,
+  triggerValues: Record<string, unknown>,
+  isStatus = false,
+): boolean {
   // The comparison value is either a fixed literal or pulled from the TRIGGERING
   // record's field (`valueSource: "field"`), resolved here at run time. The
   // resolved raw value is then compared exactly like a literal would be. A
@@ -324,9 +404,15 @@ function evalConditions(
    * resolve conditions whose `valueSource` is "field".
    */
   triggerValues: Record<string, unknown> = values,
+  /**
+   * Page-local contexts for any `fieldSource: "page"` conditions. Empty for
+   * `update_records_where` matches — those reject page conditions server-side,
+   * so a page operand there fails closed.
+   */
+  pageContexts: Map<number, PageContext> = new Map(),
 ): boolean {
   if (conditions.length === 0) return true;
-  const test = (c: AutomationCondition) => evalCondition(c, values, statusId, fieldByKey, triggerValues);
+  const test = (c: AutomationCondition) => evalCondition(c, values, statusId, fieldByKey, triggerValues, pageContexts);
   return conjunction === "or" ? conditions.some(test) : conditions.every(test);
 }
 
@@ -698,13 +784,39 @@ function interpolateTemplate(template: string, display: Record<string, string>):
 
 async function buildMappedValues(
   mapping: AutomationMapping[],
-  ctx: { entityId: number; values: Record<string, unknown>; statusId: number | null },
+  ctx: {
+    entityId: number;
+    values: Record<string, unknown>;
+    statusId: number | null;
+    /** Page contexts of the TRIGGERING record, for `sourceFieldSource: "page"`. */
+    pageContexts?: Map<number, PageContext>;
+  },
 ): Promise<Record<string, unknown>> {
   const out: Record<string, unknown> = {};
   let display: Record<string, string> | null = null;
   for (const m of mapping) {
     if (m.sourceType === "field") {
-      if (m.sourceFieldKey && m.sourceFieldKey in ctx.values) out[m.targetFieldKey] = ctx.values[m.sourceFieldKey];
+      // A page-sourced mapping reads the value from a page-local field of the
+      // triggering record (sourcePageId + sourceFieldKey). Only meaningful for
+      // sourceType "field"; validated server-side. Relation/lookup/function page
+      // fields are unstored → nothing is mapped (fail closed).
+      if (m.sourceFieldSource === "page") {
+        const ctxPage = m.sourcePageId != null ? ctx.pageContexts?.get(m.sourcePageId) : undefined;
+        const pf = m.sourceFieldKey ? ctxPage?.fieldByKey.get(m.sourceFieldKey) : undefined;
+        const pType = pf?.fieldType ?? "text";
+        if (
+          m.sourceFieldKey &&
+          ctxPage &&
+          pType !== "relation" &&
+          pType !== "lookup" &&
+          pType !== "function" &&
+          m.sourceFieldKey in ctxPage.values
+        ) {
+          out[m.targetFieldKey] = ctxPage.values[m.sourceFieldKey];
+        }
+      } else if (m.sourceFieldKey && m.sourceFieldKey in ctx.values) {
+        out[m.targetFieldKey] = ctx.values[m.sourceFieldKey];
+      }
     } else if (m.sourceType === "combined") {
       if (!display) display = await buildDisplayValues(ctx);
       out[m.targetFieldKey] = interpolateTemplate(typeof m.value === "string" ? m.value : "", display);
@@ -715,10 +827,95 @@ async function buildMappedValues(
   return out;
 }
 
+/**
+ * Set a single page-local field value AS THE SYSTEM (bypasses RBAC), for the
+ * triggering record on `pageId`. Validates the value against the page's active
+ * field defs, merges it onto the stored map, writes `page_record_values`, and
+ * emits EVENT_PAGE_FIELD_SAVED so a `page_field_changed` automation can cascade.
+ * Returns false (logged) if the page/field is invalid or the value is rejected.
+ */
+async function systemSetPageValue(
+  pageId: number,
+  recordId: number,
+  fieldKey: string,
+  value: unknown,
+  entityId: number,
+  actorUserId: number | null,
+  log: Log,
+): Promise<boolean> {
+  try {
+    // Runtime hard boundary (fail closed): the target page MUST still be a
+    // mirror page of THIS automation's entity. Metadata can drift after the
+    // automation was saved (page retyped, mirror re-pointed, page deleted), so
+    // re-verify here rather than trusting the stored targetPageId — otherwise an
+    // AS SYSTEM write could land in a foreign page.
+    const [page] = await db
+      .select({ id: pagesTable.id, mirrorEntityId: pagesTable.mirrorEntityId })
+      .from(pagesTable)
+      .where(eq(pagesTable.id, pageId));
+    if (!page || page.mirrorEntityId !== entityId) {
+      log.error({ pageId, entityId }, "systemSetPageValue: page is not a mirror page of the automation entity");
+      return false;
+    }
+    const pageFields = await db
+      .select()
+      .from(pageFieldsTable)
+      .where(and(eq(pageFieldsTable.pageId, pageId), eq(pageFieldsTable.isActive, true)));
+    if (!pageFields.some((f) => f.fieldKey === fieldKey)) {
+      log.error({ pageId, fieldKey }, "systemSetPageValue: unknown or inactive page field");
+      return false;
+    }
+    const [existing] = await db
+      .select({ id: pageRecordValuesTable.id, valuesJson: pageRecordValuesTable.valuesJson })
+      .from(pageRecordValuesTable)
+      .where(and(eq(pageRecordValuesTable.pageId, pageId), eq(pageRecordValuesTable.recordId, recordId)));
+    const current = (existing?.valuesJson as Record<string, unknown> | undefined) ?? {};
+    const merged = { ...current, [fieldKey]: value };
+    const result = validatePageValues(pageFields, merged);
+    if ("error" in result) {
+      log.error({ pageId, fieldKey, error: result.error }, "systemSetPageValue: validation failed");
+      return false;
+    }
+    if (existing) {
+      await db
+        .update(pageRecordValuesTable)
+        .set({ valuesJson: result.values })
+        .where(eq(pageRecordValuesTable.id, existing.id));
+    } else {
+      await db.insert(pageRecordValuesTable).values({ pageId, recordId, valuesJson: result.values });
+    }
+    const changed =
+      JSON.stringify(current[fieldKey] ?? null) !== JSON.stringify(result.values[fieldKey] ?? null);
+    if (changed) {
+      await emitEvent(
+        {
+          eventName: EVENT_PAGE_FIELD_SAVED,
+          entityId,
+          recordId,
+          payload: { pageId, changedPageFieldKeys: [fieldKey], actorUserId },
+        },
+        log,
+      );
+    }
+    return true;
+  } catch (err) {
+    log.error({ err, pageId, recordId, fieldKey }, "systemSetPageValue failed");
+    return false;
+  }
+}
+
 /** Execute one automation's actions in order. Returns a per-action summary. */
 async function runActions(
   actions: AutomationAction[],
-  ctx: { entityId: number; recordId: number; values: Record<string, unknown>; statusId: number | null; actorUserId: number | null },
+  ctx: {
+    entityId: number;
+    recordId: number;
+    values: Record<string, unknown>;
+    statusId: number | null;
+    actorUserId: number | null;
+    /** Page contexts of the triggering record, for page source/target refs. */
+    pageContexts: Map<number, PageContext>;
+  },
   log: Log,
 ): Promise<{ type: string; ok: boolean }[]> {
   const summary: { type: string; ok: boolean }[] = [];
@@ -726,13 +923,22 @@ async function runActions(
     let ok = false;
     switch (action.type) {
       case "set_field":
-        ok = await systemUpdateRecord(ctx.recordId, { [action.fieldKey]: action.value }, undefined, ctx.actorUserId, log);
+        // A set_field can target a page-local field of the triggering record
+        // (targetFieldSource "page" + targetPageId), written AS SYSTEM.
+        if (action.targetFieldSource === "page") {
+          ok =
+            action.targetPageId != null
+              ? await systemSetPageValue(action.targetPageId, ctx.recordId, action.fieldKey, action.value, ctx.entityId, ctx.actorUserId, log)
+              : false;
+        } else {
+          ok = await systemUpdateRecord(ctx.recordId, { [action.fieldKey]: action.value }, undefined, ctx.actorUserId, log);
+        }
         break;
       case "change_status":
         ok = await systemUpdateRecord(ctx.recordId, undefined, action.statusId, ctx.actorUserId, log);
         break;
       case "create_record": {
-        const values = await buildMappedValues(action.mapping ?? [], { entityId: ctx.entityId, values: ctx.values, statusId: ctx.statusId });
+        const values = await buildMappedValues(action.mapping ?? [], { entityId: ctx.entityId, values: ctx.values, statusId: ctx.statusId, pageContexts: ctx.pageContexts });
         const id = await systemCreateRecord(action.targetEntityId, values, action.statusId, ctx.actorUserId, log);
         ok = id != null;
         break;
@@ -744,11 +950,14 @@ async function runActions(
           .select()
           .from(entityRecordsTable)
           .where(and(eq(entityRecordsTable.entityId, action.targetEntityId), sql`${entityRecordsTable.archivedAt} is null`));
-        const mappedValues = await buildMappedValues(action.mapping ?? [], { entityId: ctx.entityId, values: ctx.values, statusId: ctx.statusId });
+        const mappedValues = await buildMappedValues(action.mapping ?? [], { entityId: ctx.entityId, values: ctx.values, statusId: ctx.statusId, pageContexts: ctx.pageContexts });
         const relValues = await loadRelationValues(action.targetEntityId, rows.map((r) => r.id), targetFields);
         let allOk = true;
         for (const row of rows) {
           const rv = { ...((row.valuesJson as Record<string, unknown>) ?? {}), ...(relValues.get(row.id) ?? {}) };
+          // Match conditions run against each CANDIDATE target row and get NO
+          // page context — page operands are rejected there server-side and fail
+          // closed here.
           if (!evalConditions(action.match ?? [], rv, row.statusId ?? null, fieldByKey, "and", ctx.values)) continue;
           const updated = await systemUpdateRecord(row.id, mappedValues, undefined, ctx.actorUserId, log);
           if (!updated) allOk = false;
@@ -788,7 +997,7 @@ function safeActions(raw: unknown): AutomationAction[] {
   return parsed.success ? parsed.data : [];
 }
 
-type EventKind = "record.created" | "record.updated" | "status.changed";
+type EventKind = "record.created" | "record.updated" | "status.changed" | "page_field.saved";
 
 function triggerMatchesEvent(
   trigger: AutomationTrigger,
@@ -813,9 +1022,44 @@ function triggerMatchesEvent(
       if (trigger.toStatusId != null && trigger.toStatusId !== to) return false;
       return true;
     }
+    case "page_field_changed": {
+      // Fires when the given page-local field is saved (value actually changed)
+      // on the given page. The emitting route reports the specific page +
+      // changed keys; both must match.
+      if (kind !== "page_field.saved") return false;
+      if ((payload.pageId ?? null) !== trigger.pageId) return false;
+      const changed = Array.isArray(payload.changedPageFieldKeys) ? (payload.changedPageFieldKeys as string[]) : [];
+      return changed.includes(trigger.fieldKey);
+    }
     case "date_reached":
       return false; // scheduler-only
   }
+}
+
+/**
+ * Collect every pageId referenced by an automation (its page trigger, any
+ * page-sourced condition, page-source mapping, or page-target set_field) so the
+ * run can pre-load exactly those page contexts for the triggering record.
+ */
+function collectReferencedPageIds(
+  trigger: AutomationTrigger,
+  conditions: AutomationCondition[],
+  actions: AutomationAction[],
+): number[] {
+  const ids = new Set<number>();
+  if (trigger.type === "page_field_changed" && trigger.pageId != null) ids.add(trigger.pageId);
+  for (const c of conditions) {
+    if (c.fieldSource === "page" && c.pageId != null) ids.add(c.pageId);
+  }
+  for (const a of actions) {
+    if (a.type === "set_field" && a.targetFieldSource === "page" && a.targetPageId != null) ids.add(a.targetPageId);
+    if (a.type === "create_record" || a.type === "update_records_where") {
+      for (const m of a.mapping ?? []) {
+        if (m.sourceFieldSource === "page" && m.sourcePageId != null) ids.add(m.sourcePageId);
+      }
+    }
+  }
+  return [...ids];
 }
 
 async function dispatchEvent(kind: EventKind, ev: { entityId: number | null; recordId: number | null; payloadJson: unknown }): Promise<void> {
@@ -881,17 +1125,26 @@ async function runOne(
     const values = { ...((record.valuesJson as Record<string, unknown>) ?? {}), ...(relValues.get(recordId) ?? {}) };
 
     const conditions = safeConditions(automation.conditionsJson);
+    const actions = safeActions(automation.actionsJson);
     const conjunction = automation.conditionConjunction === "or" ? "or" : "and";
-    if (!evalConditions(conditions, values, record.statusId ?? null, fieldByKey, conjunction)) {
+
+    // Pre-load the page-local contexts of the TRIGGERING record for every page
+    // this automation references (trigger/condition/mapping/target), so page
+    // operands read consistent values throughout the run.
+    const pageContexts = await loadPageContexts(
+      collectReferencedPageIds(trigger, conditions, actions),
+      recordId,
+    );
+
+    if (!evalConditions(conditions, values, record.statusId ?? null, fieldByKey, conjunction, values, pageContexts)) {
       await writeRun({ automationId: automation.id, entityId, recordId, status: "skipped", triggerName, detail: { reason: "conditions not met" }, dedupeKey }, log);
       return;
     }
 
-    const actions = safeActions(automation.actionsJson);
     const nextChain = new Set(chain);
     nextChain.add(key);
     const summary = await cascade.run({ depth: depth + 1, chain: nextChain }, () =>
-      runActions(actions, { entityId, recordId, values, statusId: record.statusId ?? null, actorUserId }, log),
+      runActions(actions, { entityId, recordId, values, statusId: record.statusId ?? null, actorUserId, pageContexts }, log),
     );
     const allOk = summary.every((s) => s.ok);
     await writeRun({
@@ -1016,6 +1269,7 @@ export function initAutomations(): void {
   subscribe(EVENT_RECORD_CREATED, (ev) => scheduleDispatch("record.created", ev));
   subscribe(EVENT_RECORD_UPDATED, (ev) => scheduleDispatch("record.updated", ev));
   subscribe(EVENT_STATUS_CHANGED, (ev) => scheduleDispatch("status.changed", ev));
+  subscribe(EVENT_PAGE_FIELD_SAVED, (ev) => scheduleDispatch("page_field.saved", ev));
 
   schedulerTimer = setInterval(() => {
     runDateSweep().catch((err) => logger.error({ err }, "Date sweep crashed"));

@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { AutomationMappingSourceFieldSource } from './automationMappingSourceFieldSource';
 import type { AutomationMappingSourceType } from './automationMappingSourceType';
 
 export interface AutomationMapping {
@@ -12,4 +13,8 @@ export interface AutomationMapping {
   sourceType: AutomationMappingSourceType;
   value?: unknown;
   sourceFieldKey?: string;
+  /** When sourceType is "field", where `sourceFieldKey` is read from. "entity" (default when absent) reads the triggering entity record. "page" reads a page-local field of a MIRROR page (`sourcePageId`) of this entity at (sourcePageId, triggeringRecordId). */
+  sourceFieldSource?: AutomationMappingSourceFieldSource;
+  /** The mirror page to read from when sourceFieldSource is "page". */
+  sourcePageId?: number;
 }

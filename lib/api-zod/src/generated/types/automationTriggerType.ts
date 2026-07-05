@@ -15,4 +15,5 @@ export const AutomationTriggerType = {
   field_changed: 'field_changed',
   status_changed: 'status_changed',
   date_reached: 'date_reached',
+  page_field_changed: 'page_field_changed',
 } as const;

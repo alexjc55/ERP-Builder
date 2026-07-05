@@ -55,3 +55,20 @@ mismatch (e.g. operator "equals" instead of "eq") → automation runs unconditio
 
 The combined editor reuses `FormulaEditor` with `hideFunctions` (it is plain string
 interpolation, not arithmetic) and a synthetic `{__status__}` field chip.
+
+## Page-local fields in automations (mirror pages)
+
+Page-local fields live only on MIRROR pages (`pages.mirrorEntityId === automation.entityId`).
+The automations engine supports them in 4 spots + a new internal event
+(`page_value_changed` → trigger `page_field_changed`): trigger, TOP-LEVEL conditions
+(never `update_records_where.match`), `set_field` target, and mapping source
+(`sourceType:"field"` only). Client passes page values as RAW strings (no coerce) —
+the server coerces at compare time and `validatePageValues` coerces on write.
+
+**Runtime hard boundary (fail closed):** an AS-SYSTEM write to a page field
+(`systemSetPageValue`) must RE-VERIFY at run time that the target page is still a
+mirror page of the automation's entity (`page.mirrorEntityId === entityId`), not
+trust the stored `targetPageId`. Metadata drifts (page retyped, mirror re-pointed,
+deleted) after the automation was saved; save-time validation in `validateSpec` is
+not enough. Same principle applies to any future system write that resolves a
+metadata ref captured earlier.

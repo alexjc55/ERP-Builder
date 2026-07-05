@@ -6,6 +6,8 @@ import {
   entitiesTable,
   entityFieldsTable,
   entityStatusesTable,
+  pagesTable,
+  pageFieldsTable,
   automationTriggerSchema,
   automationConditionSchema,
   automationActionSchema,
@@ -63,12 +65,61 @@ async function validateSpec(
   const keys = await activeFieldKeys(entityId);
   const statusIds = await statusIdsOf(entityId);
 
+  // Page-local field references (trigger/condition/mapping/set_field targets)
+  // only exist on MIRROR pages of THIS entity. A page ref must (a) point at a
+  // mirror page of this entity and (b) name an active page-field on it. The
+  // active page-fields (with type, for storability checks) are cached per page.
+  const mirrorPageIds = new Set(
+    (
+      await db
+        .select({ id: pagesTable.id })
+        .from(pagesTable)
+        .where(eq(pagesTable.mirrorEntityId, entityId))
+    ).map((r) => r.id),
+  );
+  const pageFieldCache = new Map<number, Map<string, string>>();
+  const pageFieldsOf = async (pageId: number): Promise<Map<string, string>> => {
+    const cached = pageFieldCache.get(pageId);
+    if (cached) return cached;
+    const rows = await db
+      .select({ fieldKey: pageFieldsTable.fieldKey, fieldType: pageFieldsTable.fieldType })
+      .from(pageFieldsTable)
+      .where(and(eq(pageFieldsTable.pageId, pageId), eq(pageFieldsTable.isActive, true)));
+    const m = new Map(rows.map((r) => [r.fieldKey, r.fieldType]));
+    pageFieldCache.set(pageId, m);
+    return m;
+  };
+  /** Page-local field types whose value is computed/reference-only (never a stored scalar we can read or write here). */
+  const NON_STORABLE_PAGE_TYPES = new Set(["relation", "lookup", "function"]);
+  /**
+   * Validate a (pageId, fieldKey) reference: page mirrors this entity, field is
+   * active, and (when `storableOnly`) the field type is a stored scalar.
+   */
+  const checkPageRef = async (
+    pageId: number,
+    fieldKey: string,
+    label: string,
+    storableOnly = false,
+  ): Promise<string | null> => {
+    if (!mirrorPageIds.has(pageId)) return `${label} page is not a mirror page of this entity`;
+    const pf = await pageFieldsOf(pageId);
+    const type = pf.get(fieldKey);
+    if (type == null) return `Unknown ${label} page field: ${fieldKey}`;
+    if (storableOnly && NON_STORABLE_PAGE_TYPES.has(type))
+      return `${label} page field is not a writable value: ${fieldKey}`;
+    return null;
+  };
+
   // Trigger field/status references.
   if (trigger.type === "field_changed" && !keys.has(trigger.fieldKey)) return `Unknown trigger field: ${trigger.fieldKey}`;
   if (trigger.type === "date_reached" && !keys.has(trigger.fieldKey)) return `Unknown trigger field: ${trigger.fieldKey}`;
   if (trigger.type === "status_changed") {
     if (trigger.fromStatusId != null && !statusIds.has(trigger.fromStatusId)) return "Unknown trigger fromStatus";
     if (trigger.toStatusId != null && !statusIds.has(trigger.toStatusId)) return "Unknown trigger toStatus";
+  }
+  if (trigger.type === "page_field_changed") {
+    const err = await checkPageRef(trigger.pageId, trigger.fieldKey, "trigger");
+    if (err) return err;
   }
 
   const checkCondition = (c: AutomationCondition, validKeys: Set<string>): string | null => {
@@ -83,7 +134,20 @@ async function validateSpec(
     if (!validKeys.has(c.fieldKey)) return `Unknown condition field: ${c.fieldKey}`;
     return null;
   };
+  // Top-level conditions may source from a page field; `update_records_where`
+  // matches may NOT (they run against candidate target rows with no page ctx).
   for (const c of conditions) {
+    if (c.fieldSource === "page") {
+      if (c.pageId == null) return "Missing pageId for page-sourced condition";
+      const err = await checkPageRef(c.pageId, c.fieldKey, "condition");
+      if (err) return err;
+      // valueSource "field" is still validated against this entity's own fields.
+      if (c.valueSource === "field") {
+        if (!c.valueFieldKey) return "Missing valueFieldKey for field-sourced condition";
+        if (!keys.has(c.valueFieldKey)) return `Unknown condition value field: ${c.valueFieldKey}`;
+      }
+      continue;
+    }
     const err = checkCondition(c, keys);
     if (err) return err;
   }
@@ -107,7 +171,15 @@ async function validateSpec(
 
   for (const a of actions) {
     if (a.type === "set_field") {
-      if (!keys.has(a.fieldKey)) return `Unknown field in set_field action: ${a.fieldKey}`;
+      // A set_field can target a page-local field (targetFieldSource "page") on
+      // a mirror page of this entity; the value must be a writable scalar.
+      if (a.targetFieldSource === "page") {
+        if (a.targetPageId == null) return "Missing targetPageId for page-targeted set_field";
+        const err = await checkPageRef(a.targetPageId, a.fieldKey, "set_field", true);
+        if (err) return err;
+      } else if (!keys.has(a.fieldKey)) {
+        return `Unknown field in set_field action: ${a.fieldKey}`;
+      }
     } else if (a.type === "change_status") {
       if (!statusIds.has(a.statusId)) return "Unknown status in change_status action";
     } else if (a.type === "create_record" || a.type === "update_records_where") {
@@ -115,8 +187,18 @@ async function validateSpec(
       if (!tk) return `Unknown target entity: ${a.targetEntityId}`;
       for (const m of a.mapping ?? []) {
         if (!tk.has(m.targetFieldKey)) return `Unknown target field in mapping: ${m.targetFieldKey}`;
-        if (m.sourceType === "field" && (!m.sourceFieldKey || !keys.has(m.sourceFieldKey)))
+        // A page-sourced mapping (only valid for sourceType "field") reads a
+        // page-local field of the triggering record on a mirror page of this
+        // entity; the value must be a readable scalar.
+        if (m.sourceFieldSource === "page") {
+          if (m.sourceType !== "field") return "Page source is only valid for a field mapping";
+          if (m.sourcePageId == null) return "Missing sourcePageId for page-sourced mapping";
+          if (!m.sourceFieldKey) return "Missing sourceFieldKey for page-sourced mapping";
+          const err = await checkPageRef(m.sourcePageId, m.sourceFieldKey, "mapping source", true);
+          if (err) return err;
+        } else if (m.sourceType === "field" && (!m.sourceFieldKey || !keys.has(m.sourceFieldKey))) {
           return `Unknown source field in mapping: ${m.sourceFieldKey ?? "(none)"}`;
+        }
       }
       if (a.type === "create_record" && a.statusId != null) {
         const ts = await targetStatusFor(a.targetEntityId);
@@ -124,6 +206,9 @@ async function validateSpec(
       }
       if (a.type === "update_records_where") {
         for (const c of a.match ?? []) {
+          // Match conditions run against candidate target rows and cannot read a
+          // page field (no page context there) — reject page sourcing outright.
+          if (c.fieldSource === "page") return "A match condition cannot read a page field";
           const err = checkCondition(c, tk);
           if (err) return err.replace("condition field", "match field");
         }
