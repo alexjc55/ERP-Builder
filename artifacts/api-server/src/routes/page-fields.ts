@@ -289,7 +289,14 @@ function validatePageValues(
       continue;
     const raw = values[field.fieldKey];
     if (isEmpty(raw)) {
-      if (field.isRequired) return { error: `Field "${field.fieldKey}" is required` };
+      // Page-local values are filled INCREMENTALLY (inline, one cell at a time)
+      // and a mirror-page row is created as a two-step, non-atomic write (entity
+      // record first, page values after) — so there is no single moment where the
+      // whole page-value map is submitted. Enforcing `isRequired` here would make
+      // required page fields unfillable inline: the first single-cell save would
+      // fail because the OTHER still-empty required fields look "missing". So
+      // requiredness on page fields is a client-side hint only; the server
+      // type-validates whatever is provided and skips empties.
       continue;
     }
     switch (field.fieldType) {

@@ -31,6 +31,25 @@ JSONB value map, kept fully distinct from the mirrored entity's own field values
 storage so a mirror page can extend a shared entity view without mutating the
 underlying entity or other pages that mirror it.
 
+## Requiredness on page fields is a CLIENT-SIDE hint only (never a server hard-block)
+
+`validatePageValues` (the page record-values PUT) must NOT reject on `isRequired`.
+It type-validates whatever keys are provided and skips empties.
+
+**Why:** page values are filled *incrementally* — inline, one cell at a time —
+and a mirror-page row is created as a two-step, non-atomic write (entity record
+first, page values after). There is no single moment where the whole page-value
+map is submitted. If the server enforced `isRequired` across all active page
+fields, the first single-cell save of a required field would fail because the
+OTHER still-empty required fields look "missing" → the row becomes unfillable.
+This bit real usage: adding required page fields to a page with pre-existing rows
+made those rows impossible to edit inline ("Не удалось сохранить значение").
+This DIVERGES from the entity records path (`records.ts`), which DOES hard-enforce
+required — but entity records have an atomic create (the add-row modal submits all
+required fields at once), so inline edits merge into an already-complete map. Page
+values have no such atomic gate, so the same rule cannot apply. Keep required as a
+cosmetic hint in the add-row UI if desired; do not reintroduce the server block.
+
 ## RBAC is a hard server boundary on page-value endpoints (do not regress)
 
 The page-local record-values API is NOT admin-only metadata — it carries real
