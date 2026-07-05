@@ -4814,6 +4814,7 @@ export const queryEntityRecordsBodyPageSizeDefault = 50;
 export const queryEntityRecordsBodyPageSizeMax = 200;
 
 export const queryEntityRecordsBodyGroupedDefault = false;
+export const queryEntityRecordsBodyWithRowGroupsDefault = false;
 
 export const QueryEntityRecordsBody = zod.object({
   "filters": zod.array(zod.object({
@@ -4845,7 +4846,8 @@ export const QueryEntityRecordsBody = zod.object({
   "grouped": zod.boolean().default(queryEntityRecordsBodyGroupedDefault).describe('When true (and pageId refers to a mirror page with groupByFieldKey set), the response includes `groups`: one bucket per distinct value of the page\'s group field, with count and per-column sums computed over the FULL filtered set (same raw-values invariant as numericTotals). Requires pageId.'),
   "groupValue": zod.object({
   "value": zod.string().nullish()
-}).optional().describe('Restrict the returned rows to ONE group of the page\'s groupByFieldKey (requires pageId on a grouped mirror page). For a scalar group field `value` is the stored value; for a relation group field it is the linked record id as a string. value=null selects the \"no value \/ no link\" group.')
+}).optional().describe('Restrict the returned rows to ONE group of the page\'s groupByFieldKey (requires pageId on a grouped mirror page). For a scalar group field `value` is the stored value; for a relation group field it is the linked record id as a string. value=null selects the \"no value \/ no link\" group.'),
+  "withRowGroups": zod.boolean().default(queryEntityRecordsBodyWithRowGroupsDefault).describe('\"Expand all groups\" mode on a grouped mirror page (requires pageId, grouped=true and NO groupValue). Rows are ordered so each group is contiguous, and the response adds `rowGroups` mapping each returned record id to its group key so the client can render every group expanded at once. Ignored when the page has no group field.')
 })
 
 export const QueryEntityRecordsResponse = zod.object({
@@ -4867,7 +4869,8 @@ export const QueryEntityRecordsResponse = zod.object({
   "count": zod.number(),
   "sums": zod.record(zod.string(), zod.number()).describe('Per-column sums for visible numeric\/formula columns flagged showColumnTotal (same keys as numericTotals), over this group\'s rows.'),
   "values": zod.record(zod.string(), zod.unknown()).optional().describe('Per-column COMMON value — present for a column when every row in the group shares the same non-empty value. Keys match the sums keys (entity fieldKey \/ page-local `pf:{id}`). Only visible columns are included; relation\/lookup columns carry the projected value and are gated by the linked entity\'s field boundary (like the group label).')
-})).optional().describe('Present only when the query was sent with grouped=true on a mirror page with groupByFieldKey. One bucket per distinct group value over the FULL filtered set, ordered by label (the empty group last).')
+})).optional().describe('Present only when the query was sent with grouped=true on a mirror page with groupByFieldKey. One bucket per distinct group value over the FULL filtered set, ordered by label (the empty group last).'),
+  "rowGroups": zod.record(zod.string(), zod.string().nullable()).optional().describe('Present only when the query was sent with withRowGroups=true on a grouped mirror page. Maps each returned record id (as a string key) to its group key (the same key space as RecordGroup.key; null = the \"no value\" group), so the client can render every group expanded.')
 })
 
 

@@ -212,6 +212,7 @@ export * from './recordQueryFilterConjunction';
 export * from './recordQueryGroupValue';
 export * from './recordQueryResult';
 export * from './recordQueryResultNumericTotals';
+export * from './recordQueryResultRowGroups';
 export * from './recordScope';
 export * from './recordUpdate';
 export * from './recordUpdateValuesJson';

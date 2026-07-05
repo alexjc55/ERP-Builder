@@ -3055,12 +3055,19 @@ export interface RecordQuery {
   grouped?: boolean;
   /** Restrict the returned rows to ONE group of the page's groupByFieldKey (requires pageId on a grouped mirror page). For a scalar group field `value` is the stored value; for a relation group field it is the linked record id as a string. value=null selects the "no value / no link" group. */
   groupValue?: RecordQueryGroupValue;
+  /** "Expand all groups" mode on a grouped mirror page (requires pageId, grouped=true and NO groupValue). Rows are ordered so each group is contiguous, and the response adds `rowGroups` mapping each returned record id to its group key so the client can render every group expanded at once. Ignored when the page has no group field. */
+  withRowGroups?: boolean;
 }
 
 /**
  * Sum per numeric field flagged showColumnTotal, over the full filtered set (all pages).
  */
 export type RecordQueryResultNumericTotals = {[key: string]: number};
+
+/**
+ * Present only when the query was sent with withRowGroups=true on a grouped mirror page. Maps each returned record id (as a string key) to its group key (the same key space as RecordGroup.key; null = the "no value" group), so the client can render every group expanded.
+ */
+export type RecordQueryResultRowGroups = {[key: string]: string | null};
 
 /**
  * Per-column sums for visible numeric/formula columns flagged showColumnTotal (same keys as numericTotals), over this group's rows.
@@ -3097,6 +3104,8 @@ export interface RecordQueryResult {
   numericTotals?: RecordQueryResultNumericTotals;
   /** Present only when the query was sent with grouped=true on a mirror page with groupByFieldKey. One bucket per distinct group value over the FULL filtered set, ordered by label (the empty group last). */
   groups?: RecordGroup[];
+  /** Present only when the query was sent with withRowGroups=true on a grouped mirror page. Maps each returned record id (as a string key) to its group key (the same key space as RecordGroup.key; null = the "no value" group), so the client can render every group expanded. */
+  rowGroups?: RecordQueryResultRowGroups;
 }
 
 export type FilterValuesQueryFilterConjunction = typeof FilterValuesQueryFilterConjunction[keyof typeof FilterValuesQueryFilterConjunction];

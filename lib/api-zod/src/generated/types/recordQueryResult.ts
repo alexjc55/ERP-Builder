@@ -8,6 +8,7 @@
 import type { EntityRecord } from './entityRecord';
 import type { RecordGroup } from './recordGroup';
 import type { RecordQueryResultNumericTotals } from './recordQueryResultNumericTotals';
+import type { RecordQueryResultRowGroups } from './recordQueryResultRowGroups';
 
 export interface RecordQueryResult {
   data: EntityRecord[];
@@ -16,4 +17,6 @@ export interface RecordQueryResult {
   numericTotals?: RecordQueryResultNumericTotals;
   /** Present only when the query was sent with grouped=true on a mirror page with groupByFieldKey. One bucket per distinct group value over the FULL filtered set, ordered by label (the empty group last). */
   groups?: RecordGroup[];
+  /** Present only when the query was sent with withRowGroups=true on a grouped mirror page. Maps each returned record id (as a string key) to its group key (the same key space as RecordGroup.key; null = the "no value" group), so the client can render every group expanded. */
+  rowGroups?: RecordQueryResultRowGroups;
 }

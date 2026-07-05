@@ -7011,6 +7011,15 @@ components:
           properties:
             value:
               type: ["string", "null"]
+        withRowGroups:
+          type: boolean
+          default: false
+          description: >-
+            "Expand all groups" mode on a grouped mirror page (requires pageId,
+            grouped=true and NO groupValue). Rows are ordered so each group is
+            contiguous, and the response adds `rowGroups` mapping each returned
+            record id to its group key so the client can render every group
+            expanded at once. Ignored when the page has no group field.
 
     RecordQueryResult:
       type: object
@@ -7035,6 +7044,15 @@ components:
             the FULL filtered set, ordered by label (the empty group last).
           items:
             $ref: "#/components/schemas/RecordGroup"
+        rowGroups:
+          type: object
+          additionalProperties:
+            type: ["string", "null"]
+          description: >-
+            Present only when the query was sent with withRowGroups=true on a
+            grouped mirror page. Maps each returned record id (as a string key)
+            to its group key (the same key space as RecordGroup.key; null = the
+            "no value" group), so the client can render every group expanded.
 
     RecordGroup:
       type: object

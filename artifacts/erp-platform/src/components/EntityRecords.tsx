@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, type CSSProperties } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, Fragment, type CSSProperties } from "react";
 import {
   useListEntityRecords,
   useGetRecord,
@@ -150,7 +150,7 @@ import { computeRowFormatting, ruleMatches, type FormatField } from "@/lib/forma
 import type { FieldFormatRule } from "@workspace/api-client-react";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus, Zap } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus, Zap, ChevronsUpDown, ChevronsDownUp } from "lucide-react";
 import { Link, useLocation, useSearch } from "wouter";
 import { Calendar } from "@/components/ui/calendar";
 import type { DateRange } from "react-day-picker";
@@ -1756,6 +1756,16 @@ export function EntityRecords({
   // field is hidden/unavailable for this viewer) → render the flat table.
   const [groups, setGroups] = useState<RecordGroup[] | null>(null);
   const [expandedGroupKey, setExpandedGroupKey] = useState<string | undefined>(undefined);
+  // "Expand all groups" mode: every group open at once. Mutually exclusive with
+  // the single-group accordion (expandedGroupKey). rowGroupMap (record id →
+  // group key) is returned by the server in this mode so the client can render
+  // each record under its own group header.
+  const [expandAll, setExpandAll] = useState(false);
+  const [rowGroupMap, setRowGroupMap] = useState<Record<string, string | null>>({});
+  // First successful load only: the skeleton replaces the table on the INITIAL
+  // fetch; later refetches (inline edit, group expand/collapse, filter change)
+  // keep the previous table on screen so it never blinks out from under the user.
+  const [hasLoadedRecords, setHasLoadedRecords] = useState(false);
 
   const selectedView: View | undefined =
     selectedViewId === NO_VIEW ? undefined : views.find((v: View) => String(v.id) === selectedViewId);
@@ -1917,14 +1927,19 @@ export function EntityRecords({
       ...(groupingActive
         ? {
             grouped: true,
-            ...(expandedGroupKey !== undefined
-              ? { groupValue: { value: expandedGroupKey === NULL_GROUP_KEY ? null : expandedGroupKey } }
-              : {}),
+            // "Expand all" opens every group at once (withRowGroups → the server
+            // tags each row with its group key); otherwise a single expanded
+            // group narrows the page to that one bucket (accordion).
+            ...(expandAll
+              ? { withRowGroups: true }
+              : expandedGroupKey !== undefined
+                ? { groupValue: { value: expandedGroupKey === NULL_GROUP_KEY ? null : expandedGroupKey } }
+                : {}),
           }
         : {}),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [baseFiltersKey, selectedConfig.filterConjunction, sortsKey, adHocKey, dateKey, pageAdHocKey, pageDateKey, statusKey, excludeKey, search, archived, page, groupingActive, expandedGroupKey],
+    [baseFiltersKey, selectedConfig.filterConjunction, sortsKey, adHocKey, dateKey, pageAdHocKey, pageDateKey, statusKey, excludeKey, search, archived, page, groupingActive, expandedGroupKey, expandAll],
   );
 
   // Pivot (Сводная таблица): a view whose configJson.viewType is "pivot" carries a
@@ -2261,6 +2276,7 @@ export function EntityRecords({
         setTotal(res.total);
         setNumericTotals(res.numericTotals ?? {});
         setGroups(res.groups ?? null);
+        setRowGroupMap((res as { rowGroups?: Record<string, string | null> }).rowGroups ?? {});
       })
       .catch((err) => {
         if (cancelled) return;
@@ -2268,10 +2284,14 @@ export function EntityRecords({
         setTotal(0);
         setNumericTotals({});
         setGroups(null);
+        setRowGroupMap({});
         toast({ title: t("records.loadError", "Ошибка загрузки записей"), description: extractError(err), variant: "destructive" });
       })
       .finally(() => {
-        if (!cancelled) setRecordsLoading(false);
+        if (!cancelled) {
+          setRecordsLoading(false);
+          setHasLoadedRecords(true);
+        }
       });
     return () => {
       cancelled = true;
@@ -3015,28 +3035,48 @@ export function EntityRecords({
   const showGroups = groupingActive && groups !== null;
   const groupKeyOf = (g: RecordGroup) => (g.key == null ? NULL_GROUP_KEY : g.key);
   const groupList = showGroups ? (groups as RecordGroup[]) : [];
-  const expandedGroupIndex = showGroups
+  // In "expand all" mode headers are interleaved WITH the rows (see the body
+  // render), so the before/after header blocks are empty and every group counts
+  // as expanded. Otherwise the single-accordion split applies.
+  const expandedGroupIndex = showGroups && !expandAll
     ? groupList.findIndex((g) => groupKeyOf(g) === expandedGroupKey)
     : -1;
-  const groupsBeforeExpanded = showGroups
+  const groupsBeforeExpanded = showGroups && !expandAll
     ? expandedGroupIndex >= 0
       ? groupList.slice(0, expandedGroupIndex + 1)
       : groupList
     : [];
   const groupsAfterExpanded =
-    showGroups && expandedGroupIndex >= 0 ? groupList.slice(expandedGroupIndex + 1) : [];
+    showGroups && !expandAll && expandedGroupIndex >= 0 ? groupList.slice(expandedGroupIndex + 1) : [];
+  const groupByKey = (() => {
+    const m = new Map<string, RecordGroup>();
+    for (const g of groupList) m.set(groupKeyOf(g), g);
+    return m;
+  })();
 
   const renderGroupRow = (g: RecordGroup) => {
     const gk = groupKeyOf(g);
-    const expanded = expandedGroupKey === gk;
-    const groupBg = expanded ? "#eef2ff" : "#f8fafc";
+    const expanded = expandAll || expandedGroupKey === gk;
+    // Expanded group headers get a clearly saturated fill (indigo-100) with an
+    // indigo left accent so it's obvious where one group ends and the next
+    // begins; collapsed headers stay the pale neutral band.
+    const groupBg = expanded ? "#e0e7ff" : "#f8fafc";
     return (
       <tr
         key={`grp-${gk}`}
-        className="cursor-pointer select-none border-b border-slate-200 transition-colors hover:bg-slate-100"
+        className={`cursor-pointer select-none border-b transition-colors hover:brightness-95 ${
+          expanded ? "border-indigo-300 shadow-[inset_3px_0_0_0_#6366f1]" : "border-slate-200"
+        }`}
         style={{ backgroundColor: groupBg }}
         onClick={() => {
-          setExpandedGroupKey(expanded ? undefined : gk);
+          // In expand-all mode, clicking a header focuses just that group
+          // (leaves expand-all and opens the clicked one). Otherwise toggle it.
+          if (expandAll) {
+            setExpandAll(false);
+            setExpandedGroupKey(gk);
+          } else {
+            setExpandedGroupKey(expanded ? undefined : gk);
+          }
           setPage(1);
         }}
       >
@@ -3259,6 +3299,32 @@ export function EntityRecords({
                 </button>
               ))}
             </div>
+          )}
+          {showGroups && !setupMode && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (expandAll) {
+                  setExpandAll(false);
+                  setExpandedGroupKey(undefined);
+                } else {
+                  setExpandAll(true);
+                  setExpandedGroupKey(undefined);
+                }
+                setPage(1);
+              }}
+              className="w-full sm:w-auto justify-center gap-2"
+            >
+              {expandAll ? (
+                <ChevronsDownUp className="w-4 h-4 shrink-0" />
+              ) : (
+                <ChevronsUpDown className="w-4 h-4 shrink-0" />
+              )}
+              {expandAll
+                ? t("records.collapseAllGroups", "Свернуть все группы")
+                : t("records.expandAllGroups", "Развернуть все группы")}
+            </Button>
           )}
           {calendarAvailable && !setupMode && (
             <div className="flex items-center justify-center w-full sm:w-auto rounded-md border border-slate-200 p-0.5 bg-white">
@@ -3638,7 +3704,7 @@ export function EntityRecords({
       <>
       <Card className="border-0 rounded-none shadow-none">
         <CardContent className="p-0">
-          {recordsLoading ? (
+          {recordsLoading && !hasLoadedRecords ? (
             <div className="p-4 space-y-2">
               {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
             </div>
@@ -4194,7 +4260,7 @@ export function EntityRecords({
                     </tr>
                   )}
                   {showGroups && groupsBeforeExpanded.map(renderGroupRow)}
-                  {(!showGroups || expandedGroupIndex >= 0) && records.map((record: EntityRecord, rowIndex: number) => {
+                  {(!showGroups || expandedGroupIndex >= 0 || expandAll) && records.map((record: EntityRecord, rowIndex: number) => {
                     const values = (record.valuesJson ?? {}) as Record<string, unknown>;
                     const pageValues = pageValuesByRecord.get(record.id) ?? {};
                     const allValues = { ...values, ...pageValues };
@@ -4235,9 +4301,25 @@ export function EntityRecords({
                         ? (stripeColor ?? "#f8fafc")
                         : "#ffffff";
                     const rowBgForTr = rowBgConcrete === "#ffffff" ? undefined : rowBgConcrete;
+                    // Expand-all: emit the group header row whenever this record's
+                    // group differs from the previous record's (rows arrive
+                    // ordered by group from the server, so each header shows once
+                    // per contiguous run).
+                    let interleavedHeader: RecordGroup | undefined;
+                    if (expandAll) {
+                      const gkOf = (rec: EntityRecord | undefined) => {
+                        if (!rec) return undefined;
+                        const v = rowGroupMap[String(rec.id)];
+                        return v == null ? NULL_GROUP_KEY : v;
+                      };
+                      const curGk = gkOf(record);
+                      const prevGk = gkOf(records[rowIndex - 1]);
+                      if (curGk !== undefined && curGk !== prevGk) interleavedHeader = groupByKey.get(curGk);
+                    }
                     return (
+                      <Fragment key={record.id}>
+                      {interleavedHeader && renderGroupRow(interleavedHeader)}
                       <tr
-                        key={record.id}
                         className="border-b border-slate-100 hover:bg-slate-50"
                         style={rowBgForTr ? { backgroundColor: rowBgForTr } : undefined}
                       >
@@ -4634,6 +4716,7 @@ export function EntityRecords({
                         </td>
                         )}
                       </tr>
+                      </Fragment>
                     );
                   })}
                   {showGroups && groupsAfterExpanded.map(renderGroupRow)}
@@ -4644,7 +4727,7 @@ export function EntityRecords({
         </CardContent>
       </Card>
 
-      {total > 0 && (!showGroups || expandedGroupIndex >= 0) && (
+      {total > 0 && (!showGroups || expandedGroupIndex >= 0 || expandAll) && (
         <div className="flex items-center justify-between text-sm text-slate-500">
           <span>
             {t("records.shown", "Показано")} {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} {t("records.of", "из")} {total}

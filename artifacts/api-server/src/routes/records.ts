@@ -973,6 +973,19 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   const { page, pageSize } = body.data;
   const offset = (page - 1) * pageSize;
 
+  // "Expand all groups" mode: valid only on a grouped mirror page and only when
+  // NOT narrowing to a single group. Rows are ordered so each group is
+  // contiguous (group key first, then the user's sorts), and the response adds
+  // `rowGroups` (record id → group key) so the client can render every group
+  // expanded at once. Ignored when the page has no usable group field.
+  const wantRowGroups = body.data.withRowGroups === true && !!groupField && groupValueSpec === undefined;
+  const rowGroupKeyExpr =
+    wantRowGroups && groupField
+      ? groupRelMeta
+        ? relationLinkedIdScalar(groupRelMeta)
+        : sql`(${entityRecordsTable.valuesJson} ->> ${groupField.fieldKey})`
+      : null;
+
   const [countRow] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(entityRecordsTable)
@@ -982,9 +995,29 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     .select()
     .from(entityRecordsTable)
     .where(where)
-    .orderBy(...built.orderBy)
+    .orderBy(...(rowGroupKeyExpr ? [sql`${rowGroupKeyExpr} ASC NULLS LAST`, ...built.orderBy] : built.orderBy))
     .limit(pageSize)
     .offset(offset);
+
+  // Row → group-key map for the returned page (same key space as RecordGroup.key,
+  // null = the "no value" group). Computed with the SAME key expression the
+  // buckets use so client partitioning lines up exactly. One extra query bounded
+  // to the current page.
+  let rowGroups: Record<string, string | null> | undefined;
+  if (rowGroupKeyExpr) {
+    const ids = data.map((r) => r.id);
+    rowGroups = {};
+    if (ids.length > 0) {
+      const keyed = await db
+        .select({ id: entityRecordsTable.id, k: rowGroupKeyExpr })
+        .from(entityRecordsTable)
+        .where(inArray(entityRecordsTable.id, ids));
+      for (const row of keyed) {
+        const raw = (row as { k: unknown }).k;
+        rowGroups[String(row.id)] = raw == null || raw === "" ? null : String(raw);
+      }
+    }
+  }
 
   // Column totals: sum each visible numeric field flagged showColumnTotal over the
   // FULL filtered set (every page), not just the current page. Non-numeric stored
@@ -1579,6 +1612,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     total: countRow?.count ?? 0,
     ...(numericTotals ? { numericTotals } : {}),
     ...(groups ? { groups } : {}),
+    ...(rowGroups ? { rowGroups } : {}),
   });
 });
 

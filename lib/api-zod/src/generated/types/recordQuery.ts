@@ -38,4 +38,6 @@ export interface RecordQuery {
   grouped?: boolean;
   /** Restrict the returned rows to ONE group of the page's groupByFieldKey (requires pageId on a grouped mirror page). For a scalar group field `value` is the stored value; for a relation group field it is the linked record id as a string. value=null selects the "no value / no link" group. */
   groupValue?: RecordQueryGroupValue;
+  /** "Expand all groups" mode on a grouped mirror page (requires pageId, grouped=true and NO groupValue). Rows are ordered so each group is contiguous, and the response adds `rowGroups` mapping each returned record id to its group key so the client can render every group expanded at once. Ignored when the page has no group field. */
+  withRowGroups?: boolean;
 }

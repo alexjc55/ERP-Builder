@@ -4422,6 +4422,18 @@
     "he": "ללא ערך"
   },
   {
+    "key": "records.expandAllGroups",
+    "ru": "Развернуть все группы",
+    "en": "Expand all groups",
+    "he": "הרחב את כל הקבוצות"
+  },
+  {
+    "key": "records.collapseAllGroups",
+    "ru": "Свернуть все группы",
+    "en": "Collapse all groups",
+    "he": "כווץ את כל הקבוצות"
+  },
+  {
     "key": "records.inArchive",
     "ru": "В архиве",
     "en": "Archived",
