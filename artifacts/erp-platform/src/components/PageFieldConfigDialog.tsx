@@ -280,8 +280,35 @@ export function PageFieldConfigDialog({
   // field; list page fields first and de-duplicate by key to match that precedence
   // (and to avoid duplicate React keys among the chips).
   const formulaFields: FormulaFieldRef[] = (() => {
+    // Page formulas may reference other page-local formulas as well as source
+    // (mirrored-entity) fields passed in via sourceFields — both are offered now.
+    // Guard against a page-local formula whose reference chain leads back to this
+    // field; entity formulas cannot reference page-local fields, so cross-scope
+    // cycles are impossible and source refs are always safe to offer.
+    const pageExprByKey = new Map<string, string>(
+      existingFields
+        .filter((f: PageField) => f.fieldType === "function")
+        .map((f: PageField) => [f.fieldKey, f.formulaConfigJson?.expression ?? ""]),
+    );
+    const wouldCycle = (candidateKey: string): boolean => {
+      if (!field) return false;
+      const selfKey = field.fieldKey;
+      const seen = new Set<string>();
+      const stack = [candidateKey];
+      while (stack.length) {
+        const cur = stack.pop()!;
+        if (cur === selfKey) return true;
+        if (seen.has(cur)) continue;
+        seen.add(cur);
+        const expr = pageExprByKey.get(cur);
+        if (expr) for (const m of expr.matchAll(/\{([^}]+)\}/g)) stack.push(m[1].trim());
+      }
+      return false;
+    };
     const pageRefs = existingFields
-      .filter((f: PageField) => f.id !== field?.id && f.fieldType !== "function")
+      .filter(
+        (f: PageField) => f.id !== field?.id && !(f.fieldType === "function" && wouldCycle(f.fieldKey)),
+      )
       .map((f: PageField) => ({ key: f.fieldKey, label: ml(f.nameJson) || f.fieldKey }));
     const seen = new Set(pageRefs.map((r) => r.key));
     return [...pageRefs, ...sourceFields.filter((r) => !seen.has(r.key))];

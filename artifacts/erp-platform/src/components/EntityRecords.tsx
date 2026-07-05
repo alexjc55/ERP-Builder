@@ -4809,9 +4809,10 @@ export function EntityRecords({
           entityId={entityId}
           field={pageColumnField}
           nextSortOrder={allPageFields.length + 1}
-          sourceFields={allFields
-            .filter((f: Field) => f.fieldType !== "function")
-            .map((f: Field) => ({ key: f.fieldKey, label: ml(f.nameJson) || f.fieldKey }))}
+          sourceFields={allFields.map((f: Field) => ({
+            key: f.fieldKey,
+            label: ml(f.nameJson) || f.fieldKey,
+          }))}
           onSaved={() => { invalidatePageFields(); }}
         />
       )}

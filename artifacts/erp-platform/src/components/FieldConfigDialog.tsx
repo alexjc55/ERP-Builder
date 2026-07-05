@@ -359,9 +359,35 @@ export function FieldConfigDialog({
   const manualKeyTaken = trimmedKey !== "" && existingKeys.has(trimmedKey);
   const effectiveKey = trimmedKey || generatedKey;
 
-  // Fields a formula can reference: this entity's other non-formula columns.
+  // Fields a formula can reference: this entity's other columns, INCLUDING other
+  // formula fields (a formula may use another formula's computed result). Exclude
+  // self and any formula whose reference chain leads back to this field, so the
+  // picker never offers a chip that would create a cycle (cycles resolve to null
+  // at read time, but there is no reason to suggest one).
+  const formulaExprByKey = new Map<string, string>(
+    existingFields
+      .filter((f: Field) => f.fieldType === "function")
+      .map((f: Field) => [f.fieldKey, f.formulaConfigJson?.expression ?? ""]),
+  );
+  const formulaWouldCycle = (candidateKey: string): boolean => {
+    if (!field) return false;
+    const selfKey = field.fieldKey;
+    const seen = new Set<string>();
+    const stack = [candidateKey];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      if (cur === selfKey) return true;
+      if (seen.has(cur)) continue;
+      seen.add(cur);
+      const expr = formulaExprByKey.get(cur);
+      if (expr) for (const m of expr.matchAll(/\{([^}]+)\}/g)) stack.push(m[1].trim());
+    }
+    return false;
+  };
   const formulaFields: FormulaFieldRef[] = existingFields
-    .filter((f: Field) => f.id !== field?.id && f.fieldType !== "function")
+    .filter(
+      (f: Field) => f.id !== field?.id && !(f.fieldType === "function" && formulaWouldCycle(f.fieldKey)),
+    )
     .map((f: Field) => ({ key: f.fieldKey, label: ml(f.nameJson) || f.fieldKey }));
 
   // Candidate parent fields for a dependency: any OTHER field whose own
