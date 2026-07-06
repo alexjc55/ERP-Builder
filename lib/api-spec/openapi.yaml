@@ -4257,6 +4257,11 @@ components:
           additionalProperties:
             type: integer
           description: 'Per-mirror-page column-group override for entity columns, keyed by "e:<fieldKey>" -> column_groups.id (0 = force no group; absent = inherit the field base). Display-only.'
+        mirrorPinnedJson:
+          type: ["object", "null"]
+          additionalProperties:
+            type: boolean
+          description: 'Per-mirror-page pin (sticky column) override for entity columns, keyed by "e:<fieldKey>" -> boolean (absent = inherit the field base isPinned). Display-only.'
         isDashboard:
           type: boolean
         isPivot:
@@ -4330,6 +4335,11 @@ components:
           additionalProperties:
             type: integer
           description: 'Per-mirror-page column-group override for entity columns, keyed by "e:<fieldKey>" -> column_groups.id (0 = force no group; absent = inherit the field base). Display-only.'
+        mirrorPinnedJson:
+          type: ["object", "null"]
+          additionalProperties:
+            type: boolean
+          description: 'Per-mirror-page pin (sticky column) override for entity columns, keyed by "e:<fieldKey>" -> boolean (absent = inherit the field base isPinned). Display-only.'
         isDashboard:
           type: boolean
         isPivot:
@@ -4395,6 +4405,11 @@ components:
           additionalProperties:
             type: integer
           description: 'Per-mirror-page column-group override for entity columns, keyed by "e:<fieldKey>" -> column_groups.id (0 = force no group; absent = inherit the field base). Display-only.'
+        mirrorPinnedJson:
+          type: ["object", "null"]
+          additionalProperties:
+            type: boolean
+          description: 'Per-mirror-page pin (sticky column) override for entity columns, keyed by "e:<fieldKey>" -> boolean (absent = inherit the field base isPinned). Display-only.'
         isDashboard:
           type: boolean
         isPivot:

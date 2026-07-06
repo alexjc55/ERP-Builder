@@ -831,6 +831,12 @@ export type PageMirrorFieldLabelsJson = {[key: string]: MultilingualText} | null
 export type PageColumnGroupsJson = {[key: string]: number} | null;
 
 /**
+ * Per-mirror-page pin (sticky column) override for entity columns, keyed by "e:<fieldKey>" -> boolean (absent = inherit the field base isPinned). Display-only.
+ * @nullable
+ */
+export type PageMirrorPinnedJson = {[key: string]: boolean} | null;
+
+/**
  * entity = use the entity's defaultPivotJson; view = use the referenced pivot view's pivot config (viewId); custom = use the inline `pivot`.
  */
 export type PivotPageConfigSource = typeof PivotPageConfigSource[keyof typeof PivotPageConfigSource];
@@ -1050,6 +1056,11 @@ export interface Page {
      * @nullable
      */
   columnGroupsJson?: PageColumnGroupsJson;
+  /**
+     * Per-mirror-page pin (sticky column) override for entity columns, keyed by "e:<fieldKey>" -> boolean (absent = inherit the field base isPinned). Display-only.
+     * @nullable
+     */
+  mirrorPinnedJson?: PageMirrorPinnedJson;
   isDashboard?: boolean;
   /** Pivot page — renders a single admin-authoritative cross-tab (Сводная таблица). Mutually exclusive with a bound entity, mirror and dashboard. */
   isPivot?: boolean;
@@ -1087,6 +1098,12 @@ export type PageInputMirrorFieldLabelsJson = {[key: string]: MultilingualText} |
  */
 export type PageInputColumnGroupsJson = {[key: string]: number} | null;
 
+/**
+ * Per-mirror-page pin (sticky column) override for entity columns, keyed by "e:<fieldKey>" -> boolean (absent = inherit the field base isPinned). Display-only.
+ * @nullable
+ */
+export type PageInputMirrorPinnedJson = {[key: string]: boolean} | null;
+
 export interface PageInput {
   nameJson: MultilingualText;
   descriptionJson?: MultilingualText;
@@ -1114,6 +1131,11 @@ export interface PageInput {
      * @nullable
      */
   columnGroupsJson?: PageInputColumnGroupsJson;
+  /**
+     * Per-mirror-page pin (sticky column) override for entity columns, keyed by "e:<fieldKey>" -> boolean (absent = inherit the field base isPinned). Display-only.
+     * @nullable
+     */
+  mirrorPinnedJson?: PageInputMirrorPinnedJson;
   isDashboard?: boolean;
   /** Pivot page — renders a single admin-authoritative cross-tab. Mutually exclusive with a bound entity, mirror and dashboard. */
   isPivot?: boolean;
@@ -1148,6 +1170,12 @@ export type PageUpdateMirrorFieldLabelsJson = {[key: string]: MultilingualText} 
  */
 export type PageUpdateColumnGroupsJson = {[key: string]: number} | null;
 
+/**
+ * Per-mirror-page pin (sticky column) override for entity columns, keyed by "e:<fieldKey>" -> boolean (absent = inherit the field base isPinned). Display-only.
+ * @nullable
+ */
+export type PageUpdateMirrorPinnedJson = {[key: string]: boolean} | null;
+
 export interface PageUpdate {
   nameJson?: MultilingualText;
   descriptionJson?: MultilingualText;
@@ -1175,6 +1203,11 @@ export interface PageUpdate {
      * @nullable
      */
   columnGroupsJson?: PageUpdateColumnGroupsJson;
+  /**
+     * Per-mirror-page pin (sticky column) override for entity columns, keyed by "e:<fieldKey>" -> boolean (absent = inherit the field base isPinned). Display-only.
+     * @nullable
+     */
+  mirrorPinnedJson?: PageUpdateMirrorPinnedJson;
   isDashboard?: boolean;
   /** Pivot page — renders a single admin-authoritative cross-tab. Mutually exclusive with a bound entity, mirror and dashboard. */
   isPivot?: boolean;

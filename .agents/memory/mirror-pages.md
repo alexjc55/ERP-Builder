@@ -163,3 +163,19 @@ interleaved order, independent of the source entity's field `sortOrder`. Stored 
     apart from entity columns. Normal view stays byte-for-byte identical — this does
     NOT violate the page-local "look identical in normal view" invariant because it
     is gated on `setupMode && isMirror && isPageCol`.
+
+**Per-mirror-page ENTITY-column OVERRIDES follow ONE pattern (token map on `pages`).**
+Any setting that lives on the source field but must be overridable per mirror page
+(without mutating the shared field) is stored as a `pages.*Json` map keyed by the
+unified token `e:<fieldKey>` (entity col) — `columnGroupsJson` (→ groupId, 0=force
+none), `mirrorPinnedJson` (→ boolean pin/sticky). **Absent token = inherit the
+field base; present = override.** Invariants that MUST stay consistent for each:
+- Resolve as `override ?? field.base`; PAGE-LOCAL columns (`p:<fieldKey>`) NEVER read
+  the override — their own `page_fields` column is already per-page authoritative.
+- Write only from setup mode via `useUpdatePage` (gated client `canAdmin("pages")`,
+  server `requireAdmin("pages")`); persist `Object.keys(next).length ? next : null`,
+  and DROP the token when the chosen value equals the field base (re-inherit).
+- All display-only — never a security boundary (real hiding/scope stays entity RBAC).
+- Add to the page UPDATE allowlist (`if ("xJson" in body)`); CREATE flows via Zod.
+  OpenAPI has THREE page blocks (response/input/update) — add the prop to all three,
+  then run codegen. Thread the prop in `dynamic.tsx` ONLY for mirror pages.

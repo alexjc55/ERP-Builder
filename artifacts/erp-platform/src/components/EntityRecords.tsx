@@ -939,6 +939,7 @@ export function EntityRecords({
   fieldLabelOverrides,
   mirrorColumnOrder,
   columnGroups,
+  mirrorPinned,
   defaultQuickFilter,
   groupByFieldKey,
 }: {
@@ -997,6 +998,16 @@ export function EntityRecords({
    * entity's base group is never mutated from a mirror. Display-only.
    */
   columnGroups?: Record<string, number>;
+  /**
+   * Per-mirror-page PIN (sticky column) OVERRIDE map for ENTITY columns, keyed by
+   * the unified token `e:<fieldKey>` → boolean. When a token is present it
+   * overrides the source field's base `isPinned` for this mirror page only
+   * (pin/unpin independently of the entity page); absent ⇒ inherit the field's
+   * base. Sourced from `page.mirrorPinnedJson`. Page-local columns are never
+   * stored here — their own `page_fields.isPinned` is already per-page editable.
+   * Display-only.
+   */
+  mirrorPinned?: Record<string, boolean>;
   /**
    * Per-page SOFT default quick-filter (from `page.defaultQuickFilterJson`).
    * Seeds the user-adjustable filter bar (field dropdowns + status quick-filter)
@@ -1210,6 +1221,42 @@ export function EntityRecords({
   };
   const canAssignGroup = (col: UnifiedCol): boolean =>
     isMirror ? canAdmin("pages") : col.kind === "entity" ? canConfigureColumns : canAdmin("pages");
+
+  // Setup-mode PIN (sticky column) toggle for a MIRROR page's ENTITY column.
+  // On the entity's own page the pin lives on the field (FieldConfigDialog); on a
+  // mirror page the source field is never edited, so the pin is a per-page
+  // override in page.mirrorPinnedJson. Setting the override back to the field's
+  // base drops the token so the column re-inherits the base isPinned.
+  const updateMirrorPinMutation = useUpdatePage({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListPagesQueryKey() });
+        toast({ title: t("records.pinUpdated", "Закрепление колонки обновлено") });
+      },
+      onError: () =>
+        toast({ title: t("records.pinUpdateError", "Не удалось обновить закрепление"), variant: "destructive" }),
+    },
+  });
+  // Effective pin for a column: on a mirror page an ENTITY column honours the
+  // per-page override when present, otherwise the field's base isPinned. Page-
+  // local columns (and every column on a normal page) always use the field base.
+  const resolvePinned = (col: UnifiedCol): boolean => {
+    if (isMirror && col.kind === "entity") {
+      const ov = mirrorPinned?.[col.token];
+      if (ov !== undefined) return ov;
+    }
+    return Boolean(col.field.isPinned);
+  };
+  const setMirrorPin = (col: UnifiedCol, pinned: boolean) => {
+    if (pageId == null) return;
+    const next: Record<string, boolean> = { ...(mirrorPinned ?? {}) };
+    if (pinned === Boolean(col.field.isPinned)) delete next[col.token];
+    else next[col.token] = pinned;
+    updateMirrorPinMutation.mutate({
+      id: pageId,
+      data: { mirrorPinnedJson: Object.keys(next).length > 0 ? next : null },
+    });
+  };
 
   const { data: rawAllFields = [], isLoading: fieldsLoading } = useListEntityFields(entityId);
   // On a mirror page, apply display-only per-field label overrides at the source
@@ -2933,10 +2980,16 @@ export function EntityRecords({
   const pinnedKeys = useMemo(() => {
     const s = new Set<string>();
     if (!setupMode) {
-      for (const col of orderedColumns) if (col.field.isPinned) s.add(col.pinKey);
+      for (const col of orderedColumns) {
+        const pinned =
+          isMirror && col.kind === "entity" && mirrorPinned?.[col.token] !== undefined
+            ? Boolean(mirrorPinned[col.token])
+            : Boolean(col.field.isPinned);
+        if (pinned) s.add(col.pinKey);
+      }
     }
     return s;
-  }, [orderedColumns, setupMode]);
+  }, [orderedColumns, setupMode, isMirror, mirrorPinned]);
   const pinnedOrder = useMemo(() => {
     const keys: string[] = [];
     for (const col of orderedColumns) if (pinnedKeys.has(col.pinKey)) keys.push(col.pinKey);
@@ -3709,7 +3762,7 @@ export function EntityRecords({
               {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto pb-3">
               <table
                 className="w-full text-sm"
                 style={borderColor ? ({ "--erp-table-border": borderColor } as CSSProperties) : undefined}
@@ -4056,6 +4109,19 @@ export function EntityRecords({
                                 ))}
                               </SelectContent>
                             </Select>
+                          </div>
+                        )}
+                        {setupMode && isMirror && col.kind === "entity" && canAdmin("pages") && (
+                          <div className="mt-1.5 flex items-center justify-center gap-1.5">
+                            <Switch
+                              checked={resolvePinned(col)}
+                              onCheckedChange={(v) => setMirrorPin(col, v)}
+                              disabled={updateMirrorPinMutation.isPending}
+                              className="scale-90"
+                            />
+                            <span className="text-[11px] font-normal text-slate-500">
+                              {t("records.pinColumn", "Закрепить")}
+                            </span>
                           </div>
                         )}
                         <ResizeHandle colKey={pinKey} />

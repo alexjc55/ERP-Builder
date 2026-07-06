@@ -8,6 +8,7 @@
 import type { MultilingualText } from './multilingualText';
 import type { PageColumnGroupsJson } from './pageColumnGroupsJson';
 import type { PageMirrorFieldLabelsJson } from './pageMirrorFieldLabelsJson';
+import type { PageMirrorPinnedJson } from './pageMirrorPinnedJson';
 import type { PageQuickFilter } from './pageQuickFilter';
 import type { PivotPageConfig } from './pivotPageConfig';
 
@@ -39,6 +40,11 @@ export interface Page {
      * @nullable
      */
   columnGroupsJson?: PageColumnGroupsJson;
+  /**
+     * Per-mirror-page pin (sticky column) override for entity columns, keyed by "e:<fieldKey>" -> boolean (absent = inherit the field base isPinned). Display-only.
+     * @nullable
+     */
+  mirrorPinnedJson?: PageMirrorPinnedJson;
   isDashboard?: boolean;
   /** Pivot page — renders a single admin-authoritative cross-tab (Сводная таблица). Mutually exclusive with a bound entity, mirror and dashboard. */
   isPivot?: boolean;

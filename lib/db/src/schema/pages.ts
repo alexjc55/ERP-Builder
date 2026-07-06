@@ -41,6 +41,14 @@ export const pagesTable = pgTable("pages", {
   // "force no group"; absent means "inherit the field's base group". Page-local
   // columns are never stored here (their base on page_fields is authoritative).
   columnGroupsJson: jsonb("column_groups_json").$type<Record<string, number>>(),
+  // Per-page PIN (sticky column) OVERRIDE map for entity (source) columns, keyed
+  // by the unified token "e:<fieldKey>" → boolean. Only meaningful on a mirror
+  // page: it lets the mirror pin/unpin a column INDEPENDENTLY of the source
+  // field's base `isPinned` (e.g. pinned on the mirror but not on the entity
+  // page). A key present overrides; absent means "inherit the field's base
+  // isPinned". Page-local columns are never stored here (their base on
+  // page_fields is authoritative and already per-page editable). Display-only.
+  mirrorPinnedJson: jsonb("mirror_pinned_json").$type<Record<string, boolean>>(),
   // Dashboard page: when true, this page renders admin-defined dashboard widgets
   // instead of entity records. Mutually exclusive with a bound entity and with
   // mirrorEntityId (enforced in the API and the pages editor). The renderer reads
