@@ -3109,15 +3109,17 @@ export function EntityRecords({
   const renderGroupRow = (g: RecordGroup) => {
     const gk = groupKeyOf(g);
     const expanded = expandAll || expandedGroupKey === gk;
-    // Expanded group headers get a clearly saturated fill (indigo-100) with an
-    // indigo left accent so it's obvious where one group ends and the next
-    // begins; collapsed headers stay the pale neutral band.
+    // Every group header carries a strong top border (border-t-2) so the start
+    // of each group block is a clear line — this is what visually separates an
+    // expanded group's data rows from the NEXT group's header. Expanded headers
+    // additionally get a saturated fill + indigo left accent; collapsed headers
+    // stay the pale neutral band.
     const groupBg = expanded ? "#e0e7ff" : "#f8fafc";
     return (
       <tr
         key={`grp-${gk}`}
-        className={`cursor-pointer select-none border-b transition-colors hover:brightness-95 ${
-          expanded ? "border-indigo-300 shadow-[inset_3px_0_0_0_#6366f1]" : "border-slate-200"
+        className={`cursor-pointer select-none border-b border-t-2 border-t-slate-300 transition-colors hover:brightness-95 ${
+          expanded ? "border-b-indigo-300 shadow-[inset_3px_0_0_0_#6366f1]" : "border-b-slate-200"
         }`}
         style={{ backgroundColor: groupBg }}
         onClick={() => {
