@@ -1791,6 +1791,14 @@ export function EntityRecords({
   // each record under its own group header.
   const [expandAll, setExpandAll] = useState(false);
   const [rowGroupMap, setRowGroupMap] = useState<Record<string, string | null>>({});
+  // Which group selection the CURRENTLY-loaded `records` belong to. On a grouped
+  // mirror page the row set is server-narrowed to the expanded group; while the
+  // narrowing fetch is in flight the previous (collapsed = full, or other-group)
+  // rows are still in `records`, so rendering them under the freshly-expanded
+  // header flashes the wrong rows. We stamp each successful fetch with its group
+  // signature and only render rows once the loaded signature matches the current
+  // one. Undefined = nothing loaded yet.
+  const [loadedGroupSig, setLoadedGroupSig] = useState<string | undefined>(undefined);
   // First successful load only: the skeleton replaces the table on the INITIAL
   // fetch; later refetches (inline edit, group expand/collapse, filter change)
   // keep the previous table on screen so it never blinks out from under the user.
@@ -2298,6 +2306,9 @@ export function EntityRecords({
     }
     let cancelled = false;
     setRecordsLoading(true);
+    // Group signature this fetch is for, so the render can tell whether the rows
+    // it holds match the currently-expanded group (see loadedGroupSig).
+    const sigForFetch = expandAll ? "__all__" : (expandedGroupKey ?? "__none__");
     runQuery({ entityId, data: { ...recordQuery, pageId: permPageId } })
       .then((res) => {
         if (cancelled) return;
@@ -2306,6 +2317,7 @@ export function EntityRecords({
         setNumericTotals(res.numericTotals ?? {});
         setGroups(res.groups ?? null);
         setRowGroupMap((res as { rowGroups?: Record<string, string | null> }).rowGroups ?? {});
+        setLoadedGroupSig(sigForFetch);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -3068,6 +3080,11 @@ export function EntityRecords({
   // header. Headers BEFORE + INCLUDING the expanded group render above the row
   // block, the rest render after it, so the visual order is stable.
   const showGroups = groupingActive && groups !== null;
+  // The group selection the current render targets; `records` are only trusted
+  // once the last completed fetch was for this same signature (else we'd flash
+  // the previous group's / the full collapsed row set under the new header).
+  const currentGroupSig = expandAll ? "__all__" : (expandedGroupKey ?? "__none__");
+  const groupRowsReady = !showGroups || loadedGroupSig === currentGroupSig;
   const groupKeyOf = (g: RecordGroup) => (g.key == null ? NULL_GROUP_KEY : g.key);
   const groupList = showGroups ? (groups as RecordGroup[]) : [];
   // In "expand all" mode headers are interleaved WITH the rows (see the body
@@ -4295,7 +4312,17 @@ export function EntityRecords({
                     </tr>
                   )}
                   {showGroups && groupsBeforeExpanded.map(renderGroupRow)}
-                  {(!showGroups || expandedGroupIndex >= 0 || expandAll) && records.map((record: EntityRecord, rowIndex: number) => {
+                  {showGroups && !groupRowsReady && (expandedGroupIndex >= 0 || expandAll) && (
+                    <tr>
+                      <td
+                        colSpan={orderedColumns.length + (showStatusColumn ? 1 : 0) + (showActionsColumn ? 1 : 0)}
+                        className="text-center py-8 text-slate-400"
+                      >
+                        <Loader2 className="w-4 h-4 animate-spin inline-block" />
+                      </td>
+                    </tr>
+                  )}
+                  {(!showGroups || expandedGroupIndex >= 0 || expandAll) && groupRowsReady && records.map((record: EntityRecord, rowIndex: number) => {
                     const values = (record.valuesJson ?? {}) as Record<string, unknown>;
                     const pageValues = pageValuesByRecord.get(record.id) ?? {};
                     const allValues = { ...values, ...pageValues };
@@ -4762,7 +4789,7 @@ export function EntityRecords({
         </CardContent>
       </Card>
 
-      {total > 0 && (!showGroups || expandedGroupIndex >= 0 || expandAll) && (
+      {total > 0 && groupRowsReady && (!showGroups || expandedGroupIndex >= 0 || expandAll) && (
         <div className="flex items-center justify-between text-sm text-slate-500">
           <span>
             {t("records.shown", "Показано")} {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} {t("records.of", "из")} {total}
