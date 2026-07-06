@@ -2229,6 +2229,11 @@ export function EntityRecords({
       onSuccess: () => queryClient.invalidateQueries({ queryKey: getListPagesQueryKey() }),
     },
   });
+  const savePageGroupDefaultMutation = useUpdatePage({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: getListPagesQueryKey() }),
+    },
+  });
   // Normalize the exclusion drafts: drop empty value lists so they don't persist.
   const cleanExcludeFieldDraft = useMemo(() => {
     const out: Record<string, string[]> = {};
@@ -2286,6 +2291,23 @@ export function EntityRecords({
       { onSuccess: () => toast({ title: t("records.pageDefaultFilterCleared", "Фильтр по умолчанию очищен") }) },
     );
   }, [pageId, savePageDefaultFilterMutation, toast, t]);
+  const saveGroupDefaultExpanded = useCallback(
+    (expanded: boolean) => {
+      if (pageId == null) return;
+      savePageGroupDefaultMutation.mutate(
+        { id: pageId, data: { groupDefaultExpanded: expanded } },
+        {
+          onSuccess: () =>
+            toast({
+              title: expanded
+                ? t("records.groupDefaultExpandedSaved", "По умолчанию: все группы развёрнуты")
+                : t("records.groupDefaultCollapsedSaved", "По умолчанию: все группы свёрнуты"),
+            }),
+        },
+      );
+    },
+    [pageId, savePageGroupDefaultMutation, toast, t],
+  );
 
   const hasStoredDefaultQuickFilter = Boolean(
     (defaultQuickFilter?.fieldFilters && Object.keys(defaultQuickFilter.fieldFilters).length > 0) ||
@@ -3715,6 +3737,37 @@ export function EntityRecords({
               </div>
               </>
               )}
+            </div>
+          )}
+          {pageId != null && canAdmin("pages") && Boolean(groupByFieldKey) && (
+            <div className="rounded-md border border-slate-200 bg-white px-3 py-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                <ChevronsUpDown className="w-4 h-4 text-slate-400 shrink-0" />
+                <span>{t("records.groupDefaultStateTitle", "Состояние групп по умолчанию")}</span>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {t(
+                  "records.groupDefaultStateHint",
+                  "Как группы будут показаны при открытии этой страницы. Пользователь сможет переключить вручную.",
+                )}
+              </p>
+              <Select
+                value={groupDefaultExpanded ? "expanded" : "collapsed"}
+                onValueChange={(v) => saveGroupDefaultExpanded(v === "expanded")}
+                disabled={savePageGroupDefaultMutation.isPending}
+              >
+                <SelectTrigger className="h-9 w-full sm:w-72 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="collapsed">
+                    {t("records.groupCollapseAll", "Свернуть все группы")}
+                  </SelectItem>
+                  <SelectItem value="expanded">
+                    {t("records.groupExpandAll", "Развернуть все группы")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           )}
           <div className="flex flex-wrap items-center gap-2">
