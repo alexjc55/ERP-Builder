@@ -3118,7 +3118,7 @@ export function EntityRecords({
     return (
       <tr
         key={`grp-${gk}`}
-        className={`cursor-pointer select-none border-b border-t-2 border-t-slate-300 transition-colors hover:brightness-95 ${
+        className={`cursor-pointer select-none border-b border-t-2 border-t-slate-400 transition-colors hover:brightness-95 ${
           expanded ? "border-b-indigo-300 shadow-[inset_3px_0_0_0_#6366f1]" : "border-b-slate-200"
         }`}
         style={{ backgroundColor: groupBg }}
