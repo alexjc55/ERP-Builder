@@ -3144,7 +3144,7 @@ export function EntityRecords({
                 className="px-3 py-2.5 align-middle"
                 style={{ ...pinStyle(col.pinKey, groupBg), ...colWidthStyle(col.pinKey) }}
               >
-                <span className="inline-flex items-center gap-1.5 font-medium text-slate-800">
+                <span className={`inline-flex items-center gap-1.5 ${expanded ? "font-bold text-slate-900" : "font-normal text-slate-800"}`}>
                   {expanded ? (
                     <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />
                   ) : (
@@ -3155,7 +3155,7 @@ export function EntityRecords({
                   </span>
                   <span className="text-xs font-normal text-slate-400">({g.count})</span>
                   {sum !== undefined && (
-                    <span className="ml-2 font-semibold text-emerald-700 whitespace-nowrap">
+                    <span className={`ml-2 text-emerald-700 whitespace-nowrap ${expanded ? "font-bold" : "font-semibold"}`}>
                       {formatTotalValue(col.field, sum)}
                     </span>
                   )}
@@ -3240,11 +3240,11 @@ export function EntityRecords({
               }}
             >
               {sum !== undefined ? (
-                <span className="font-semibold text-emerald-700 whitespace-nowrap">
+                <span className={`text-emerald-700 whitespace-nowrap ${expanded ? "font-bold" : "font-semibold"}`}>
                   {formatTotalValue(col.field, sum)}
                 </span>
               ) : hasCommon ? (
-                <span className="text-slate-500 block max-w-[240px] truncate">{commonContent}</span>
+                <span className={`block max-w-[240px] truncate ${expanded ? "font-bold text-slate-900" : "text-slate-500"}`}>{commonContent}</span>
               ) : null}
             </td>
           );
@@ -3265,7 +3265,7 @@ export function EntityRecords({
             >
               {commonStatus ? (
                 <span
-                  className="inline-flex items-center font-medium whitespace-nowrap"
+                  className={`inline-flex items-center whitespace-nowrap ${expanded ? "font-bold" : "font-medium"}`}
                   style={{ color: readableStatusTextColor(commonStatus.color) }}
                 >
                   {ml(commonStatus.nameJson)}
