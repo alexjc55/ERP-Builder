@@ -1075,29 +1075,47 @@ export function EntityRecords({
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListPagesQueryKey() });
-        toast({ title: t("records.mirrorLabelSaved", "Заголовок обновлён") });
+        toast({ title: t("records.mirrorColSaved", "Настройки колонки обновлены") });
       },
       onError: () =>
         toast({
-          title: t("records.mirrorLabelSaveError", "Не удалось сохранить заголовок"),
+          title: t("records.mirrorLabelSaveError", "Не удалось сохранить настройки колонки"),
           variant: "destructive",
         }),
     },
   });
-  const saveMirrorLabel = (fieldKey: string, value: { ru?: string; en?: string; he?: string }) => {
+  // Save a mirror-page ENTITY column's per-page settings in ONE request: the
+  // display-only label override (page.mirrorFieldLabelsJson) AND the pin/sticky
+  // override (page.mirrorPinnedJson, token `e:<fieldKey>`). Each map drops the
+  // field's key when the chosen value equals the source-field base (empty label /
+  // base isPinned) so the column re-inherits from the shared source field.
+  const saveMirrorColumnSettings = (
+    field: Field,
+    value: { ru?: string; en?: string; he?: string },
+    pinned: boolean,
+  ) => {
     if (pageId == null) return;
+    const fieldKey = field.fieldKey;
     const ru = value.ru?.trim() || undefined;
     const en = value.en?.trim() || undefined;
     const he = value.he?.trim() || undefined;
-    const current: Record<string, { ru?: string; en?: string; he?: string }> = {
+    const labels: Record<string, { ru?: string; en?: string; he?: string }> = {
       ...(fieldLabelOverrides ?? {}),
     };
-    if (ru || en || he) current[fieldKey] = { ru, en, he };
-    else delete current[fieldKey];
-    const next = Object.keys(current).length > 0 ? current : null;
+    if (ru || en || he) labels[fieldKey] = { ru, en, he };
+    else delete labels[fieldKey];
+    const token = `e:${fieldKey}`;
+    const pins: Record<string, boolean> = { ...(mirrorPinned ?? {}) };
+    if (pinned === Boolean(field.isPinned)) delete pins[token];
+    else pins[token] = pinned;
     updateMirrorLabelsMutation.mutate({
       id: pageId,
-      data: { mirrorFieldLabelsJson: next as Record<string, Field["nameJson"]> | null },
+      data: {
+        mirrorFieldLabelsJson: (Object.keys(labels).length > 0 ? labels : null) as
+          | Record<string, Field["nameJson"]>
+          | null,
+        mirrorPinnedJson: Object.keys(pins).length > 0 ? pins : null,
+      },
     });
     setMirrorLabelField(null);
   };
@@ -1221,42 +1239,6 @@ export function EntityRecords({
   };
   const canAssignGroup = (col: UnifiedCol): boolean =>
     isMirror ? canAdmin("pages") : col.kind === "entity" ? canConfigureColumns : canAdmin("pages");
-
-  // Setup-mode PIN (sticky column) toggle for a MIRROR page's ENTITY column.
-  // On the entity's own page the pin lives on the field (FieldConfigDialog); on a
-  // mirror page the source field is never edited, so the pin is a per-page
-  // override in page.mirrorPinnedJson. Setting the override back to the field's
-  // base drops the token so the column re-inherits the base isPinned.
-  const updateMirrorPinMutation = useUpdatePage({
-    mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListPagesQueryKey() });
-        toast({ title: t("records.pinUpdated", "Закрепление колонки обновлено") });
-      },
-      onError: () =>
-        toast({ title: t("records.pinUpdateError", "Не удалось обновить закрепление"), variant: "destructive" }),
-    },
-  });
-  // Effective pin for a column: on a mirror page an ENTITY column honours the
-  // per-page override when present, otherwise the field's base isPinned. Page-
-  // local columns (and every column on a normal page) always use the field base.
-  const resolvePinned = (col: UnifiedCol): boolean => {
-    if (isMirror && col.kind === "entity") {
-      const ov = mirrorPinned?.[col.token];
-      if (ov !== undefined) return ov;
-    }
-    return Boolean(col.field.isPinned);
-  };
-  const setMirrorPin = (col: UnifiedCol, pinned: boolean) => {
-    if (pageId == null) return;
-    const next: Record<string, boolean> = { ...(mirrorPinned ?? {}) };
-    if (pinned === Boolean(col.field.isPinned)) delete next[col.token];
-    else next[col.token] = pinned;
-    updateMirrorPinMutation.mutate({
-      id: pageId,
-      data: { mirrorPinnedJson: Object.keys(next).length > 0 ? next : null },
-    });
-  };
 
   const { data: rawAllFields = [], isLoading: fieldsLoading } = useListEntityFields(entityId);
   // On a mirror page, apply display-only per-field label overrides at the source
@@ -4052,10 +4034,10 @@ export function EntityRecords({
                                 type="button"
                                 onClick={() => setMirrorLabelField(fld as Field)}
                                 className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-2 py-1 text-amber-700 hover:bg-amber-100 transition"
-                                title={t("records.mirrorLabelEdit", "Переименовать заголовок на этой странице")}
+                                title={t("records.mirrorLabelEdit", "Настроить колонку на этой странице")}
                               >
                                 {ml(fld.nameJson)}
-                                <Pencil className="w-3.5 h-3.5" />
+                                <Settings2 className="w-3.5 h-3.5" />
                               </button>
                             ) : (
                               <span>{ml(fld.nameJson)}</span>
@@ -4109,19 +4091,6 @@ export function EntityRecords({
                                 ))}
                               </SelectContent>
                             </Select>
-                          </div>
-                        )}
-                        {setupMode && isMirror && col.kind === "entity" && canAdmin("pages") && (
-                          <div className="mt-1.5 flex items-center justify-center gap-1.5">
-                            <Switch
-                              checked={resolvePinned(col)}
-                              onCheckedChange={(v) => setMirrorPin(col, v)}
-                              disabled={updateMirrorPinMutation.isPending}
-                              className="scale-90"
-                            />
-                            <span className="text-[11px] font-normal text-slate-500">
-                              {t("records.pinColumn", "Закрепить")}
-                            </span>
                           </div>
                         )}
                         <ResizeHandle colKey={pinKey} />
@@ -5041,10 +5010,15 @@ export function EntityRecords({
           current={
             (mirrorLabelField ? fieldLabelOverrides?.[mirrorLabelField.fieldKey] : undefined) ?? {}
           }
+          pinned={
+            mirrorLabelField
+              ? (mirrorPinned?.[`e:${mirrorLabelField.fieldKey}`] ?? Boolean(mirrorLabelField.isPinned))
+              : false
+          }
           saving={updateMirrorLabelsMutation.isPending}
           onClose={() => setMirrorLabelField(null)}
-          onSave={(value) => {
-            if (mirrorLabelField) saveMirrorLabel(mirrorLabelField.fieldKey, value);
+          onSave={(value, pinned) => {
+            if (mirrorLabelField) saveMirrorColumnSettings(mirrorLabelField, value, pinned);
           }}
         />
       )}
@@ -5056,6 +5030,7 @@ function MirrorFieldLabelDialog({
   field,
   sourceNameJson,
   current,
+  pinned,
   saving,
   onClose,
   onSave,
@@ -5063,16 +5038,19 @@ function MirrorFieldLabelDialog({
   field: Field | null;
   sourceNameJson: { ru?: string; en?: string; he?: string };
   current: { ru?: string; en?: string; he?: string };
+  pinned: boolean;
   saving: boolean;
   onClose: () => void;
-  onSave: (value: { ru?: string; en?: string; he?: string }) => void;
+  onSave: (value: { ru?: string; en?: string; he?: string }, pinned: boolean) => void;
 }) {
   const t = useT();
   const [value, setValue] = useState<{ ru?: string; en?: string; he?: string }>(current);
+  const [pinnedState, setPinnedState] = useState<boolean>(pinned);
   const [activeLang, setActiveLang] = useState<"ru" | "en" | "he" | null>(null);
   // Reload the inputs each time a different field's dialog opens.
   useEffect(() => {
     setValue(current);
+    setPinnedState(pinned);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [field]);
   const sourceForLang = activeLang ? sourceNameJson?.[activeLang]?.trim() : undefined;
@@ -5080,11 +5058,11 @@ function MirrorFieldLabelDialog({
     <Dialog open={!!field} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{t("records.mirrorLabelTitle", "Заголовок поля на этой странице")}</DialogTitle>
+          <DialogTitle>{t("records.mirrorLabelTitle", "Настройка колонки на этой странице")}</DialogTitle>
           <DialogDescription>
             {t(
               "records.mirrorLabelDesc",
-              "Переименование действует только на этой зеркальной странице. Исходное поле сущности не меняется.",
+              "Настройки действуют только на этой зеркальной странице. Исходное поле сущности не меняется.",
             )}
           </DialogDescription>
         </DialogHeader>
@@ -5100,13 +5078,24 @@ function MirrorFieldLabelDialog({
               {t("records.mirrorLabelSource", "В источнике")}: {sourceForLang}
             </p>
           )}
+          <div className="mt-4 flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+            <div className="flex flex-col pr-3">
+              <span className="text-sm font-medium text-slate-700">
+                {t("records.pinColumn", "Закрепить колонку")}
+              </span>
+              <span className="text-xs text-slate-400">
+                {t("records.pinColumnHint", "Колонка не будет прокручиваться по горизонтали")}
+              </span>
+            </div>
+            <Switch checked={pinnedState} onCheckedChange={setPinnedState} disabled={saving} />
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>
             {t("records.cancel", "Отмена")}
           </Button>
           <Button
-            onClick={() => onSave(value)}
+            onClick={() => onSave(value, pinnedState)}
             disabled={saving}
             className="bg-amber-500 hover:bg-amber-600"
           >

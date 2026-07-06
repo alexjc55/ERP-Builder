@@ -179,3 +179,14 @@ field base; present = override.** Invariants that MUST stay consistent for each:
 - Add to the page UPDATE allowlist (`if ("xJson" in body)`); CREATE flows via Zod.
   OpenAPI has THREE page blocks (response/input/update) — add the prop to all three,
   then run codegen. Thread the prop in `dynamic.tsx` ONLY for mirror pages.
+- **RESTART api-server after codegen adds a new page `*Json` field.** api-zod is
+  consumed as TS SOURCE (`exports: "./src/index.ts"`), but the api-server dev process
+  bundles it at startup (esbuild) and does NOT watch lib changes. Until you restart,
+  the running `UpdatePageBody` is stale → the new field is silently stripped from the
+  parsed body → `updateData` is `{}` → Drizzle `.set({})` throws "No values to set"
+  (500). The symptom looks like a server bug but is just a stale in-memory schema.
+- **All of a mirror ENTITY-column's per-page overrides are edited/saved TOGETHER as
+  one atomic `useUpdatePage` call** (one dialog, not one control per setting). Today
+  that dialog carries the label (`mirrorFieldLabelsJson`) + pin (`mirrorPinnedJson`);
+  any new per-column override belongs in the same dialog + same save, each token
+  dropped on re-inherit. Don't re-introduce a standalone per-setting header control.
