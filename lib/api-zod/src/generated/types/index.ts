@@ -29,6 +29,7 @@ export * from './automationInputConditionConjunction';
 export * from './automationMapping';
 export * from './automationMappingSourceFieldSource';
 export * from './automationMappingSourceType';
+export * from './automationMappingTargetFieldSource';
 export * from './automationRun';
 export * from './automationRunDetailJson';
 export * from './automationsReorderInput';

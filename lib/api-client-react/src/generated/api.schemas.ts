@@ -2708,6 +2708,17 @@ export const AutomationMappingSourceFieldSource = {
   page: 'page',
 } as const;
 
+/**
+ * Where the value is written. Only honored by update_records_where. "entity" (default when absent) writes a field of each matched target record. "page" writes a page-local field on a MIRROR page (`targetPageId`) of the action's targetEntityId, AS SYSTEM, at (targetPageId, matchedRecordId).
+ */
+export type AutomationMappingTargetFieldSource = typeof AutomationMappingTargetFieldSource[keyof typeof AutomationMappingTargetFieldSource];
+
+
+export const AutomationMappingTargetFieldSource = {
+  entity: 'entity',
+  page: 'page',
+} as const;
+
 export interface AutomationMapping {
   targetFieldKey: string;
   sourceType: AutomationMappingSourceType;
@@ -2717,6 +2728,10 @@ export interface AutomationMapping {
   sourceFieldSource?: AutomationMappingSourceFieldSource;
   /** The mirror page to read from when sourceFieldSource is "page". */
   sourcePageId?: number;
+  /** Where the value is written. Only honored by update_records_where. "entity" (default when absent) writes a field of each matched target record. "page" writes a page-local field on a MIRROR page (`targetPageId`) of the action's targetEntityId, AS SYSTEM, at (targetPageId, matchedRecordId). */
+  targetFieldSource?: AutomationMappingTargetFieldSource;
+  /** The mirror page to write to when targetFieldSource is "page". */
+  targetPageId?: number;
 }
 
 export type AutomationActionType = typeof AutomationActionType[keyof typeof AutomationActionType];

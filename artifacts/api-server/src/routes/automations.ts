@@ -110,6 +110,36 @@ async function validateSpec(
     return null;
   };
 
+  // A page-target mapping in `update_records_where` writes a page-local field on
+  // a mirror page of the ACTION's target entity (which may differ from this
+  // automation's entity), so its mirror-page set must be resolved per target
+  // entity — not the automation's own `mirrorPageIds`.
+  const targetMirrorCache = new Map<number, Set<number>>();
+  const targetMirrorPageIds = async (eid: number): Promise<Set<number>> => {
+    const cached = targetMirrorCache.get(eid);
+    if (cached) return cached;
+    const rows = await db
+      .select({ id: pagesTable.id })
+      .from(pagesTable)
+      .where(eq(pagesTable.mirrorEntityId, eid));
+    const s = new Set(rows.map((r) => r.id));
+    targetMirrorCache.set(eid, s);
+    return s;
+  };
+  const checkTargetPageRef = async (
+    targetEntityId: number,
+    pageId: number,
+    fieldKey: string,
+  ): Promise<string | null> => {
+    if (!(await targetMirrorPageIds(targetEntityId)).has(pageId))
+      return "mapping target page is not a mirror page of the target entity";
+    const pf = await pageFieldsOf(pageId);
+    const type = pf.get(fieldKey);
+    if (type == null) return `Unknown mapping target page field: ${fieldKey}`;
+    if (NON_STORABLE_PAGE_TYPES.has(type)) return `mapping target page field is not a writable value: ${fieldKey}`;
+    return null;
+  };
+
   // Trigger field/status references.
   if (trigger.type === "field_changed" && !keys.has(trigger.fieldKey)) return `Unknown trigger field: ${trigger.fieldKey}`;
   if (trigger.type === "date_reached" && !keys.has(trigger.fieldKey)) return `Unknown trigger field: ${trigger.fieldKey}`;
@@ -186,7 +216,19 @@ async function validateSpec(
       const tk = await targetKeysFor(a.targetEntityId);
       if (!tk) return `Unknown target entity: ${a.targetEntityId}`;
       for (const m of a.mapping ?? []) {
-        if (!tk.has(m.targetFieldKey)) return `Unknown target field in mapping: ${m.targetFieldKey}`;
+        // A page-TARGET mapping writes a page-local field on a mirror page of the
+        // target entity, per matched record. Only meaningful for
+        // update_records_where (create_record has no existing records to attach
+        // page values to). When targeting a page, the target key is a page-field
+        // key (not an entity field), so skip the entity-field check.
+        if (m.targetFieldSource === "page") {
+          if (a.type !== "update_records_where") return "Page target is only valid for update_records_where";
+          if (m.targetPageId == null) return "Missing targetPageId for page-targeted mapping";
+          const err = await checkTargetPageRef(a.targetEntityId, m.targetPageId, m.targetFieldKey);
+          if (err) return err;
+        } else if (!tk.has(m.targetFieldKey)) {
+          return `Unknown target field in mapping: ${m.targetFieldKey}`;
+        }
         // A page-sourced mapping (only valid for sourceType "field") reads a
         // page-local field of the triggering record on a mirror page of this
         // entity; the value must be a readable scalar.

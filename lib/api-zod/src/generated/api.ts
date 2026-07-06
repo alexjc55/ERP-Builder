@@ -4137,7 +4137,9 @@ export const ListEntityAutomationsResponseItem = zod.object({
   "value": zod.unknown().optional(),
   "sourceFieldKey": zod.string().optional(),
   "sourceFieldSource": zod.enum(['entity', 'page']).optional().describe('When sourceType is \"field\", where `sourceFieldKey` is read from. \"entity\" (default when absent) reads the triggering entity record. \"page\" reads a page-local field of a MIRROR page (`sourcePageId`) of this entity at (sourcePageId, triggeringRecordId).'),
-  "sourcePageId": zod.number().optional().describe('The mirror page to read from when sourceFieldSource is \"page\".')
+  "sourcePageId": zod.number().optional().describe('The mirror page to read from when sourceFieldSource is \"page\".'),
+  "targetFieldSource": zod.enum(['entity', 'page']).optional().describe('Where the value is written. Only honored by update_records_where. \"entity\" (default when absent) writes a field of each matched target record. \"page\" writes a page-local field on a MIRROR page (`targetPageId`) of the action\'s targetEntityId, AS SYSTEM, at (targetPageId, matchedRecordId).'),
+  "targetPageId": zod.number().optional().describe('The mirror page to write to when targetFieldSource is \"page\".')
 })).optional(),
   "match": zod.array(zod.object({
   "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
@@ -4208,7 +4210,9 @@ export const CreateEntityAutomationBody = zod.object({
   "value": zod.unknown().optional(),
   "sourceFieldKey": zod.string().optional(),
   "sourceFieldSource": zod.enum(['entity', 'page']).optional().describe('When sourceType is \"field\", where `sourceFieldKey` is read from. \"entity\" (default when absent) reads the triggering entity record. \"page\" reads a page-local field of a MIRROR page (`sourcePageId`) of this entity at (sourcePageId, triggeringRecordId).'),
-  "sourcePageId": zod.number().optional().describe('The mirror page to read from when sourceFieldSource is \"page\".')
+  "sourcePageId": zod.number().optional().describe('The mirror page to read from when sourceFieldSource is \"page\".'),
+  "targetFieldSource": zod.enum(['entity', 'page']).optional().describe('Where the value is written. Only honored by update_records_where. \"entity\" (default when absent) writes a field of each matched target record. \"page\" writes a page-local field on a MIRROR page (`targetPageId`) of the action\'s targetEntityId, AS SYSTEM, at (targetPageId, matchedRecordId).'),
+  "targetPageId": zod.number().optional().describe('The mirror page to write to when targetFieldSource is \"page\".')
 })).optional(),
   "match": zod.array(zod.object({
   "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
@@ -4295,7 +4299,9 @@ export const GetAutomationResponse = zod.object({
   "value": zod.unknown().optional(),
   "sourceFieldKey": zod.string().optional(),
   "sourceFieldSource": zod.enum(['entity', 'page']).optional().describe('When sourceType is \"field\", where `sourceFieldKey` is read from. \"entity\" (default when absent) reads the triggering entity record. \"page\" reads a page-local field of a MIRROR page (`sourcePageId`) of this entity at (sourcePageId, triggeringRecordId).'),
-  "sourcePageId": zod.number().optional().describe('The mirror page to read from when sourceFieldSource is \"page\".')
+  "sourcePageId": zod.number().optional().describe('The mirror page to read from when sourceFieldSource is \"page\".'),
+  "targetFieldSource": zod.enum(['entity', 'page']).optional().describe('Where the value is written. Only honored by update_records_where. \"entity\" (default when absent) writes a field of each matched target record. \"page\" writes a page-local field on a MIRROR page (`targetPageId`) of the action\'s targetEntityId, AS SYSTEM, at (targetPageId, matchedRecordId).'),
+  "targetPageId": zod.number().optional().describe('The mirror page to write to when targetFieldSource is \"page\".')
 })).optional(),
   "match": zod.array(zod.object({
   "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
@@ -4361,7 +4367,9 @@ export const UpdateAutomationBody = zod.object({
   "value": zod.unknown().optional(),
   "sourceFieldKey": zod.string().optional(),
   "sourceFieldSource": zod.enum(['entity', 'page']).optional().describe('When sourceType is \"field\", where `sourceFieldKey` is read from. \"entity\" (default when absent) reads the triggering entity record. \"page\" reads a page-local field of a MIRROR page (`sourcePageId`) of this entity at (sourcePageId, triggeringRecordId).'),
-  "sourcePageId": zod.number().optional().describe('The mirror page to read from when sourceFieldSource is \"page\".')
+  "sourcePageId": zod.number().optional().describe('The mirror page to read from when sourceFieldSource is \"page\".'),
+  "targetFieldSource": zod.enum(['entity', 'page']).optional().describe('Where the value is written. Only honored by update_records_where. \"entity\" (default when absent) writes a field of each matched target record. \"page\" writes a page-local field on a MIRROR page (`targetPageId`) of the action\'s targetEntityId, AS SYSTEM, at (targetPageId, matchedRecordId).'),
+  "targetPageId": zod.number().optional().describe('The mirror page to write to when targetFieldSource is \"page\".')
 })).optional(),
   "match": zod.array(zod.object({
   "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),
@@ -4419,7 +4427,9 @@ export const UpdateAutomationResponse = zod.object({
   "value": zod.unknown().optional(),
   "sourceFieldKey": zod.string().optional(),
   "sourceFieldSource": zod.enum(['entity', 'page']).optional().describe('When sourceType is \"field\", where `sourceFieldKey` is read from. \"entity\" (default when absent) reads the triggering entity record. \"page\" reads a page-local field of a MIRROR page (`sourcePageId`) of this entity at (sourcePageId, triggeringRecordId).'),
-  "sourcePageId": zod.number().optional().describe('The mirror page to read from when sourceFieldSource is \"page\".')
+  "sourcePageId": zod.number().optional().describe('The mirror page to read from when sourceFieldSource is \"page\".'),
+  "targetFieldSource": zod.enum(['entity', 'page']).optional().describe('Where the value is written. Only honored by update_records_where. \"entity\" (default when absent) writes a field of each matched target record. \"page\" writes a page-local field on a MIRROR page (`targetPageId`) of the action\'s targetEntityId, AS SYSTEM, at (targetPageId, matchedRecordId).'),
+  "targetPageId": zod.number().optional().describe('The mirror page to write to when targetFieldSource is \"page\".')
 })).optional(),
   "match": zod.array(zod.object({
   "fieldKey": zod.string().describe('A real field key, or \"__status__\" to compare the record\'s statusId.'),

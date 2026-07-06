@@ -72,3 +72,36 @@ trust the stored `targetPageId`. Metadata drifts (page retyped, mirror re-pointe
 deleted) after the automation was saved; save-time validation in `validateSpec` is
 not enough. Same principle applies to any future system write that resolves a
 metadata ref captured earlier.
+
+## Page-TARGET mappings (update_records_where → sibling page-field propagation)
+
+A mapping can also WRITE to a page-local field (`targetFieldSource:"page"` +
+`targetPageId`), honored ONLY by `update_records_where` (create_record has no
+existing records to attach page values to → rejected). Use case: a
+`page_field_changed` trigger propagates the changed page value to sibling records of
+the same group (matched by e.g. an `order_number` relation) by writing the SAME page
+field on each matched record.
+
+**Target boundary differs from source boundary.** A page SOURCE
+(`sourceFieldSource:"page"`) mirrors the *automation's own* entity. A page TARGET
+must mirror the ACTION's `targetEntityId`, which may differ from the automation
+entity. So `validateSpec` resolves target mirror pages with a SEPARATE per-target-
+entity cache (`targetMirrorPageIds`/`checkTargetPageRef`) — never reuse the
+automation-entity `mirrorPageIds` set for target validation.
+
+**How the engine applies it:** mappings are bucketed — entity-field values →
+`systemUpdateRecord` (skipped when empty), page-target writes → `systemSetPageValue`
+per matched row, passing `action.targetEntityId` (which re-verifies the mirror
+boundary at run time). Convergence relies on `systemSetPageValue` only emitting its
+change event on an ACTUAL diff (a sibling already holding the value writes nothing →
+no re-trigger), plus the existing ALS depth/chain guards.
+
+**Mapping-loop gotcha:** when `targetFieldSource==="page"`, SKIP the entity-field
+`targetKeys.has(targetFieldKey)` check — the target key is a page-field key, not an
+entity field, so the entity check would wrongly reject it.
+
+**Frontend restriction:** the UI only offers the page-target toggle when
+`update_records_where && targetId === currentEntityId` (so the automation-entity
+`mirrorPages` list is exactly the target entity's mirror pages). Cross-entity page
+targets are valid server-side but not surfaced in the UI (would need loading the
+target entity's mirror pages).

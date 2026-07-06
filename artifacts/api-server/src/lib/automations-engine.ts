@@ -782,47 +782,93 @@ function interpolateTemplate(template: string, display: Record<string, string>):
   return template.replace(/\{([^{}]+)\}/g, (_m, key: string) => display[key.trim()] ?? "");
 }
 
+type MappingCtx = {
+  entityId: number;
+  values: Record<string, unknown>;
+  statusId: number | null;
+  /** Page contexts of the TRIGGERING record, for `sourceFieldSource: "page"`. */
+  pageContexts?: Map<number, PageContext>;
+};
+
+/**
+ * Resolve one mapping to the value it would write. `has: false` means "nothing to
+ * write" (a fail-closed source: a missing entity field, or an unstored/absent page
+ * field). `displayRef` lazily caches the display-value map for `combined` templates.
+ */
+async function resolveMappingValue(
+  m: AutomationMapping,
+  ctx: MappingCtx,
+  displayRef: { display: Record<string, string> | null },
+): Promise<{ has: boolean; value: unknown }> {
+  if (m.sourceType === "field") {
+    // A page-sourced mapping reads the value from a page-local field of the
+    // triggering record (sourcePageId + sourceFieldKey). Only meaningful for
+    // sourceType "field"; validated server-side. Relation/lookup/function page
+    // fields are unstored → nothing is mapped (fail closed).
+    if (m.sourceFieldSource === "page") {
+      const ctxPage = m.sourcePageId != null ? ctx.pageContexts?.get(m.sourcePageId) : undefined;
+      const pf = m.sourceFieldKey ? ctxPage?.fieldByKey.get(m.sourceFieldKey) : undefined;
+      const pType = pf?.fieldType ?? "text";
+      if (
+        m.sourceFieldKey &&
+        ctxPage &&
+        pType !== "relation" &&
+        pType !== "lookup" &&
+        pType !== "function" &&
+        m.sourceFieldKey in ctxPage.values
+      ) {
+        return { has: true, value: ctxPage.values[m.sourceFieldKey] };
+      }
+      return { has: false, value: undefined };
+    }
+    if (m.sourceFieldKey && m.sourceFieldKey in ctx.values) {
+      return { has: true, value: ctx.values[m.sourceFieldKey] };
+    }
+    return { has: false, value: undefined };
+  }
+  if (m.sourceType === "combined") {
+    if (!displayRef.display) displayRef.display = await buildDisplayValues(ctx);
+    return { has: true, value: interpolateTemplate(typeof m.value === "string" ? m.value : "", displayRef.display) };
+  }
+  return { has: true, value: m.value };
+}
+
+/**
+ * Build the `{entityFieldKey → value}` patch from mappings that target an ENTITY
+ * field (targetFieldSource !== "page"). Page-target mappings are ignored here
+ * (they are applied per matched record via {@link buildPageTargetWrites}).
+ */
 async function buildMappedValues(
   mapping: AutomationMapping[],
-  ctx: {
-    entityId: number;
-    values: Record<string, unknown>;
-    statusId: number | null;
-    /** Page contexts of the TRIGGERING record, for `sourceFieldSource: "page"`. */
-    pageContexts?: Map<number, PageContext>;
-  },
+  ctx: MappingCtx,
 ): Promise<Record<string, unknown>> {
   const out: Record<string, unknown> = {};
-  let display: Record<string, string> | null = null;
+  const displayRef: { display: Record<string, string> | null } = { display: null };
   for (const m of mapping) {
-    if (m.sourceType === "field") {
-      // A page-sourced mapping reads the value from a page-local field of the
-      // triggering record (sourcePageId + sourceFieldKey). Only meaningful for
-      // sourceType "field"; validated server-side. Relation/lookup/function page
-      // fields are unstored → nothing is mapped (fail closed).
-      if (m.sourceFieldSource === "page") {
-        const ctxPage = m.sourcePageId != null ? ctx.pageContexts?.get(m.sourcePageId) : undefined;
-        const pf = m.sourceFieldKey ? ctxPage?.fieldByKey.get(m.sourceFieldKey) : undefined;
-        const pType = pf?.fieldType ?? "text";
-        if (
-          m.sourceFieldKey &&
-          ctxPage &&
-          pType !== "relation" &&
-          pType !== "lookup" &&
-          pType !== "function" &&
-          m.sourceFieldKey in ctxPage.values
-        ) {
-          out[m.targetFieldKey] = ctxPage.values[m.sourceFieldKey];
-        }
-      } else if (m.sourceFieldKey && m.sourceFieldKey in ctx.values) {
-        out[m.targetFieldKey] = ctx.values[m.sourceFieldKey];
-      }
-    } else if (m.sourceType === "combined") {
-      if (!display) display = await buildDisplayValues(ctx);
-      out[m.targetFieldKey] = interpolateTemplate(typeof m.value === "string" ? m.value : "", display);
-    } else {
-      out[m.targetFieldKey] = m.value;
-    }
+    if (m.targetFieldSource === "page") continue;
+    const r = await resolveMappingValue(m, ctx, displayRef);
+    if (r.has) out[m.targetFieldKey] = r.value;
+  }
+  return out;
+}
+
+type PageTargetWrite = { targetPageId: number; targetFieldKey: string; value: unknown };
+
+/**
+ * Resolve mappings that target a PAGE field (targetFieldSource "page") into a list
+ * of page writes. Applied per matched record by `update_records_where` via
+ * `systemSetPageValue`, which re-verifies the page is a mirror of the target entity.
+ */
+async function buildPageTargetWrites(
+  mapping: AutomationMapping[],
+  ctx: MappingCtx,
+): Promise<PageTargetWrite[]> {
+  const out: PageTargetWrite[] = [];
+  const displayRef: { display: Record<string, string> | null } = { display: null };
+  for (const m of mapping) {
+    if (m.targetFieldSource !== "page" || m.targetPageId == null) continue;
+    const r = await resolveMappingValue(m, ctx, displayRef);
+    if (r.has) out.push({ targetPageId: m.targetPageId, targetFieldKey: m.targetFieldKey, value: r.value });
   }
   return out;
 }
@@ -950,7 +996,15 @@ async function runActions(
           .select()
           .from(entityRecordsTable)
           .where(and(eq(entityRecordsTable.entityId, action.targetEntityId), sql`${entityRecordsTable.archivedAt} is null`));
-        const mappedValues = await buildMappedValues(action.mapping ?? [], { entityId: ctx.entityId, values: ctx.values, statusId: ctx.statusId, pageContexts: ctx.pageContexts });
+        const mapCtx = { entityId: ctx.entityId, values: ctx.values, statusId: ctx.statusId, pageContexts: ctx.pageContexts };
+        const mappedValues = await buildMappedValues(action.mapping ?? [], mapCtx);
+        // Page-target mappings write a page-local field on a mirror page of the
+        // TARGET entity, per matched record, AS SYSTEM. systemSetPageValue
+        // re-verifies the page is a mirror of targetEntityId and only emits its
+        // change event when the value actually changed, so sibling propagation
+        // converges (no infinite cascade).
+        const pageWrites = await buildPageTargetWrites(action.mapping ?? [], mapCtx);
+        const hasEntityValues = Object.keys(mappedValues).length > 0;
         const relValues = await loadRelationValues(action.targetEntityId, rows.map((r) => r.id), targetFields);
         let allOk = true;
         for (const row of rows) {
@@ -959,8 +1013,14 @@ async function runActions(
           // page context — page operands are rejected there server-side and fail
           // closed here.
           if (!evalConditions(action.match ?? [], rv, row.statusId ?? null, fieldByKey, "and", ctx.values)) continue;
-          const updated = await systemUpdateRecord(row.id, mappedValues, undefined, ctx.actorUserId, log);
-          if (!updated) allOk = false;
+          if (hasEntityValues) {
+            const updated = await systemUpdateRecord(row.id, mappedValues, undefined, ctx.actorUserId, log);
+            if (!updated) allOk = false;
+          }
+          for (const pw of pageWrites) {
+            const ok2 = await systemSetPageValue(pw.targetPageId, row.id, pw.targetFieldKey, pw.value, action.targetEntityId, ctx.actorUserId, log);
+            if (!ok2) allOk = false;
+          }
         }
         ok = allOk;
         break;

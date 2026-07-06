@@ -132,6 +132,10 @@ type MappingDraft = {
   sourceFieldSource: "entity" | "page";
   /** The mirror page to read from when sourceFieldSource is "page". */
   sourcePageId: string;
+  /** Where the value is written (update_records_where only): "entity" field or "page" field. */
+  targetFieldSource: "entity" | "page";
+  /** The mirror page (of the target entity) to write to when targetFieldSource is "page". */
+  targetPageId: string;
 };
 type ActionDraft = {
   type: AutomationActionType;
@@ -492,6 +496,8 @@ export default function EntityAutomationsPage() {
       sourceFieldKey: m.sourceFieldKey ?? "",
       sourceFieldSource: m.sourceFieldSource === "page" ? "page" : "entity",
       sourcePageId: m.sourcePageId == null ? "" : String(m.sourcePageId),
+      targetFieldSource: m.targetFieldSource === "page" ? "page" : "entity",
+      targetPageId: m.targetPageId == null ? "" : String(m.targetPageId),
     })),
     match: (a.match ?? []).map(conditionToDraft),
     url: a.url ?? "",
@@ -595,16 +601,21 @@ export default function EntityAutomationsPage() {
         const tMap = new Map((targetFieldsCache[targetId] ?? []).map((f) => [f.fieldKey, f] as const));
         const mapping: AutomationMapping[] = a.mapping
           .filter((m) => m.targetFieldKey)
-          .map((m) =>
-            m.sourceType === "field"
-              ? m.sourceFieldSource === "page" && m.sourcePageId
-                ? // Read the source value from a page-local field of the triggering record.
-                  { targetFieldKey: m.targetFieldKey, sourceType: "field", sourceFieldKey: m.sourceFieldKey, sourceFieldSource: "page", sourcePageId: Number(m.sourcePageId) }
-                : { targetFieldKey: m.targetFieldKey, sourceType: "field", sourceFieldKey: m.sourceFieldKey }
-              : m.sourceType === "combined"
-                ? { targetFieldKey: m.targetFieldKey, sourceType: "combined", value: m.value }
-                : { targetFieldKey: m.targetFieldKey, sourceType: "literal", value: coerce(m.targetFieldKey, m.value, tMap, false) },
-          );
+          .map((m) => {
+            // A page-target mapping (update_records_where only) writes a page-local
+            // field, so its literal value is not coerced against target-entity fields.
+            const toPage = a.type === "update_records_where" && m.targetFieldSource === "page" && !!m.targetPageId;
+            const base: AutomationMapping =
+              m.sourceType === "field"
+                ? m.sourceFieldSource === "page" && m.sourcePageId
+                  ? // Read the source value from a page-local field of the triggering record.
+                    { targetFieldKey: m.targetFieldKey, sourceType: "field", sourceFieldKey: m.sourceFieldKey, sourceFieldSource: "page", sourcePageId: Number(m.sourcePageId) }
+                  : { targetFieldKey: m.targetFieldKey, sourceType: "field", sourceFieldKey: m.sourceFieldKey }
+                : m.sourceType === "combined"
+                  ? { targetFieldKey: m.targetFieldKey, sourceType: "combined", value: m.value }
+                  : { targetFieldKey: m.targetFieldKey, sourceType: "literal", value: toPage ? (m.value === "" ? null : m.value) : coerce(m.targetFieldKey, m.value, tMap, false) };
+            return toPage ? { ...base, targetFieldSource: "page", targetPageId: Number(m.targetPageId) } : base;
+          });
         if (a.type === "create_record") {
           const action: AutomationAction = { type: "create_record", targetEntityId: targetId, mapping };
           if (a.statusId) action.statusId = Number(a.statusId);
@@ -1265,7 +1276,7 @@ function ActionCard({
   }, [targetId, targetFieldsKey, onTargetFieldsLoaded]);
 
   const updMapping = (i: number, patch: Partial<MappingDraft>) => onChange({ mapping: draft.mapping.map((m, idx) => (idx === i ? { ...m, ...patch } : m)) });
-  const addMapping = () => onChange({ mapping: [...draft.mapping, { targetFieldKey: targetFields[0]?.fieldKey ?? "", sourceType: "literal", value: "", sourceFieldKey: currentFields[0]?.fieldKey ?? "", sourceFieldSource: "entity", sourcePageId: "" }] });
+  const addMapping = () => onChange({ mapping: [...draft.mapping, { targetFieldKey: targetFields[0]?.fieldKey ?? "", sourceType: "literal", value: "", sourceFieldKey: currentFields[0]?.fieldKey ?? "", sourceFieldSource: "entity", sourcePageId: "", targetFieldSource: "entity", targetPageId: "" }] });
   const rmMapping = (i: number) => onChange({ mapping: draft.mapping.filter((_, idx) => idx !== i) });
 
   return (
@@ -1373,13 +1384,41 @@ function ActionCard({
           {targetId > 0 && (
             <div className="space-y-1.5">
               <Label className="text-xs text-slate-500">{t("auto.fieldMapping", "Значения полей")}</Label>
-              {draft.mapping.map((m, i) => (
+              {draft.mapping.map((m, i) => {
+                // A page-target mapping writes a page-local field of a mirror page.
+                // Only offered when the action targets THIS automation's own entity,
+                // so `mirrorPages` (pages mirroring currentEntityId) are exactly the
+                // target entity's mirror pages. The server validates regardless.
+                const allowPageTarget = draft.type === "update_records_where" && targetId === currentEntityId && mirrorPages.length > 0;
+                const toPage = allowPageTarget && m.targetFieldSource === "page";
+                return (
                 <div key={i} className="flex flex-col gap-1.5">
                   <div className="flex items-center gap-1.5">
-                    <Select value={m.targetFieldKey} onValueChange={(v) => updMapping(i, { targetFieldKey: v })}>
-                      <SelectTrigger className="w-40"><SelectValue placeholder={t("auto.targetField", "Поле")} /></SelectTrigger>
-                      <SelectContent>{targetFields.map((f) => (<SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson) || f.fieldKey}</SelectItem>))}</SelectContent>
-                    </Select>
+                    {allowPageTarget && (
+                      <Select value={m.targetFieldSource ?? "entity"} onValueChange={(v) => updMapping(i, { targetFieldSource: v as "entity" | "page", targetFieldKey: "", targetPageId: "", value: "" })}>
+                        <SelectTrigger className="w-24 shrink-0"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="entity">{t("auto.sourceEntity", "Запись")}</SelectItem>
+                          <SelectItem value="page">{t("auto.sourcePage", "Страница")}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {toPage ? (
+                      <>
+                        <Select value={m.targetPageId ?? ""} onValueChange={(v) => updMapping(i, { targetPageId: v, targetFieldKey: "" })}>
+                          <SelectTrigger className="w-36 shrink-0"><SelectValue placeholder={t("auto.page", "Страница")} /></SelectTrigger>
+                          <SelectContent>{mirrorPages.map((p) => (<SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson) || `#${p.id}`}</SelectItem>))}</SelectContent>
+                        </Select>
+                        {m.targetPageId && (
+                          <PageFieldSelect pageId={Number(m.targetPageId)} value={m.targetFieldKey} onChange={(v) => updMapping(i, { targetFieldKey: v })} ml={ml} t={t} className="w-40" storableOnly placeholder={t("auto.targetField", "Поле")} />
+                        )}
+                      </>
+                    ) : (
+                      <Select value={m.targetFieldKey} onValueChange={(v) => updMapping(i, { targetFieldKey: v })}>
+                        <SelectTrigger className="w-40"><SelectValue placeholder={t("auto.targetField", "Поле")} /></SelectTrigger>
+                        <SelectContent>{targetFields.map((f) => (<SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson) || f.fieldKey}</SelectItem>))}</SelectContent>
+                      </Select>
+                    )}
                     <span className="text-slate-400">=</span>
                     <Select value={m.sourceType} onValueChange={(v) => updMapping(i, { sourceType: v as "literal" | "field" | "combined" })}>
                       <SelectTrigger className="w-28 shrink-0"><SelectValue /></SelectTrigger>
@@ -1447,7 +1486,8 @@ function ActionCard({
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
               <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={addMapping}><Plus className="w-3.5 h-3.5" />{t("auto.addMapping", "Добавить поле")}</Button>
             </div>
           )}

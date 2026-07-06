@@ -116,6 +116,15 @@ export const automationMappingSchema = z.object({
   sourceFieldSource: z.enum(["entity", "page"]).optional(),
   /** The mirror page to read from (required when `sourceFieldSource` is "page"). */
   sourcePageId: z.number().int().optional(),
+  /**
+   * Where the value is WRITTEN. Only honored by `update_records_where`.
+   * - "entity" (default when absent): a field of each matched target record.
+   * - "page": a page-local field on a MIRROR page (`targetPageId`) of the
+   *   action's `targetEntityId`, written AS SYSTEM at `(targetPageId, matchedRecordId)`.
+   */
+  targetFieldSource: z.enum(["entity", "page"]).optional(),
+  /** The mirror page to write to (required when `targetFieldSource` is "page"). */
+  targetPageId: z.number().int().optional(),
 });
 export type AutomationMapping = z.infer<typeof automationMappingSchema>;
 

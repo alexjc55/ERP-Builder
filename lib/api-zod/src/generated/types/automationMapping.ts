@@ -7,6 +7,7 @@
  */
 import type { AutomationMappingSourceFieldSource } from './automationMappingSourceFieldSource';
 import type { AutomationMappingSourceType } from './automationMappingSourceType';
+import type { AutomationMappingTargetFieldSource } from './automationMappingTargetFieldSource';
 
 export interface AutomationMapping {
   targetFieldKey: string;
@@ -17,4 +18,8 @@ export interface AutomationMapping {
   sourceFieldSource?: AutomationMappingSourceFieldSource;
   /** The mirror page to read from when sourceFieldSource is "page". */
   sourcePageId?: number;
+  /** Where the value is written. Only honored by update_records_where. "entity" (default when absent) writes a field of each matched target record. "page" writes a page-local field on a MIRROR page (`targetPageId`) of the action's targetEntityId, AS SYSTEM, at (targetPageId, matchedRecordId). */
+  targetFieldSource?: AutomationMappingTargetFieldSource;
+  /** The mirror page to write to when targetFieldSource is "page". */
+  targetPageId?: number;
 }

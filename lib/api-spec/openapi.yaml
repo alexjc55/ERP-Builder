@@ -6275,6 +6275,18 @@ components:
         sourcePageId:
           type: integer
           description: The mirror page to read from when sourceFieldSource is "page".
+        targetFieldSource:
+          type: string
+          enum: [entity, page]
+          description: >-
+            Where the value is written. Only honored by update_records_where.
+            "entity" (default when absent) writes a field of each matched target
+            record. "page" writes a page-local field on a MIRROR page
+            (`targetPageId`) of the action's targetEntityId, AS SYSTEM, at
+            (targetPageId, matchedRecordId).
+        targetPageId:
+          type: integer
+          description: The mirror page to write to when targetFieldSource is "page".
 
     AutomationAction:
       type: object
