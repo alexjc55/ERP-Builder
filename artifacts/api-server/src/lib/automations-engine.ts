@@ -915,7 +915,16 @@ async function systemSetPageValue(
       .select({ id: pageRecordValuesTable.id, valuesJson: pageRecordValuesTable.valuesJson })
       .from(pageRecordValuesTable)
       .where(and(eq(pageRecordValuesTable.pageId, pageId), eq(pageRecordValuesTable.recordId, recordId)));
-    const current = (existing?.valuesJson as Record<string, unknown> | undefined) ?? {};
+    // Restrict the stored map to CURRENTLY-active page fields before merging and
+    // re-validating. Metadata is mutable: a page field can be deleted or renamed
+    // after values were stored, leaving orphan keys behind. validatePageValues
+    // rejects unknown keys, so without this an AS-SYSTEM cascade write would fail
+    // closed on any sibling record that still carries a stale key it isn't even
+    // touching. Orphans self-heal — they are dropped on the next system write.
+    const activeKeys = new Set(pageFields.map((f) => f.fieldKey));
+    const stored = (existing?.valuesJson as Record<string, unknown> | undefined) ?? {};
+    const current: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(stored)) if (activeKeys.has(k)) current[k] = v;
     const merged = { ...current, [fieldKey]: value };
     const result = validatePageValues(pageFields, merged);
     if ("error" in result) {

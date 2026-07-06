@@ -105,3 +105,15 @@ entity field, so the entity check would wrongly reject it.
 `mirrorPages` list is exactly the target entity's mirror pages). Cross-entity page
 targets are valid server-side but not surfaced in the UI (would need loading the
 target entity's mirror pages).
+
+**Orphan-key fail-close (metadata drift):** `systemSetPageValue` merges the new
+value onto the stored page-values map and re-validates the WHOLE map with
+`validatePageValues`, which REJECTS any unknown key. A page field deleted/renamed
+after values were stored leaves orphan keys behind, so a sibling still carrying a
+stale key would fail the cascade write (`ok:false`) even though the automation isn't
+touching that key — symptom: automation fires but nothing propagates, run status
+`error`, log `systemSetPageValue: validation failed / Unknown page field: <key>`.
+Fix: strip the stored map to currently-active page-field keys before merge+validate;
+orphans then self-heal (dropped on the next system write). The manual HTTP PUT path
+hides this because it validates only the incoming payload, which never carries the
+orphan.
