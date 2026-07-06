@@ -81,6 +81,7 @@ export default function PagesPage() {
   const [mirrorEntityId, setMirrorEntityId] = useState<string>("none");
   const [mirrorFieldKeys, setMirrorFieldKeys] = useState<string[]>([]);
   const [groupByFieldKey, setGroupByFieldKey] = useState<string>("none");
+  const [groupDefaultExpanded, setGroupDefaultExpanded] = useState(false);
   const [pageType, setPageType] = useState<"normal" | "mirror" | "dashboard" | "pivot">("normal");
   const [pivotEntityId, setPivotEntityId] = useState<string>("none");
   const [pivotConfig, setPivotConfig] = useState<PivotPageConfigValue | null>(null);
@@ -148,6 +149,7 @@ export default function PagesPage() {
     setMirrorEntityId("none");
     setMirrorFieldKeys([]);
     setGroupByFieldKey("none");
+    setGroupDefaultExpanded(false);
     setPageType("normal");
     setPivotEntityId("none");
     setPivotConfig(null);
@@ -168,6 +170,7 @@ export default function PagesPage() {
     setMirrorEntityId(page.mirrorEntityId ? String(page.mirrorEntityId) : "none");
     setMirrorFieldKeys(page.mirrorFieldKeysJson ?? []);
     setGroupByFieldKey(page.groupByFieldKey || "none");
+    setGroupDefaultExpanded(page.groupDefaultExpanded ?? false);
     setPageType(
       page.isPivot ? "pivot" : page.isDashboard ? "dashboard" : page.mirrorEntityId ? "mirror" : "normal",
     );
@@ -224,6 +227,8 @@ export default function PagesPage() {
         pageType === "mirror" && mirrorEntityId !== "none" && mirrorFieldKeys.length > 0 ? mirrorFieldKeys : null,
       groupByFieldKey:
         pageType === "mirror" && mirrorEntityId !== "none" && groupByFieldKey !== "none" ? groupByFieldKey : null,
+      groupDefaultExpanded:
+        pageType === "mirror" && mirrorEntityId !== "none" && groupByFieldKey !== "none" ? groupDefaultExpanded : false,
       isDashboard: pageType === "dashboard",
       isPivot,
       pivotEntityId: isPivot && pivotEntityId !== "none" ? Number(pivotEntityId) : null,
@@ -489,6 +494,35 @@ export default function PagesPage() {
                         ml={ml}
                         t={t}
                       />
+                      {groupByFieldKey !== "none" && (
+                        <div className="space-y-1.5">
+                          <label className="text-sm font-medium text-slate-700">
+                            {t("pages.groupDefaultState", "Состояние групп по умолчанию")}
+                          </label>
+                          <Select
+                            value={groupDefaultExpanded ? "expanded" : "collapsed"}
+                            onValueChange={(v) => setGroupDefaultExpanded(v === "expanded")}
+                          >
+                            <SelectTrigger className="h-9 text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="collapsed">
+                                {t("pages.groupCollapseAll", "Свернуть все группы")}
+                              </SelectItem>
+                              <SelectItem value="expanded">
+                                {t("pages.groupExpandAll", "Развернуть все группы")}
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-slate-400">
+                            {t(
+                              "pages.groupDefaultHint",
+                              "Как группы будут показаны при открытии страницы. Пользователь может переключить вручную.",
+                            )}
+                          </p>
+                        </div>
+                      )}
                       <MirrorFieldPicker
                         entityId={Number(mirrorEntityId)}
                         selected={mirrorFieldKeys}

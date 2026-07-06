@@ -4285,6 +4285,9 @@ components:
         groupByFieldKey:
           type: ["string", "null"]
           description: Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display/aggregation-only, never a security boundary.
+        groupDefaultExpanded:
+          type: boolean
+          description: Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.
         sortOrder:
           type: integer
         isActive:
@@ -4365,6 +4368,10 @@ components:
         groupByFieldKey:
           type: ["string", "null"]
           description: Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.
+        groupDefaultExpanded:
+          type: boolean
+          default: false
+          description: Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.
         sortOrder:
           type: integer
         isActive:
@@ -4433,6 +4440,9 @@ components:
         groupByFieldKey:
           type: ["string", "null"]
           description: Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.
+        groupDefaultExpanded:
+          type: boolean
+          description: Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.
         sortOrder:
           type: integer
         isActive:

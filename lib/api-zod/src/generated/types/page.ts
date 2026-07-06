@@ -63,6 +63,8 @@ export interface Page {
      * @nullable
      */
   groupByFieldKey?: string | null;
+  /** Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only. */
+  groupDefaultExpanded?: boolean;
   sortOrder: number;
   isActive: boolean;
   children?: Page[];

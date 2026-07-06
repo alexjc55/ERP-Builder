@@ -401,6 +401,7 @@ router.put("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): P
   if ("widgetsCollapsedDefault" in body) updateData.widgetsCollapsedDefault = body.widgetsCollapsedDefault ?? false;
   if ("defaultQuickFilterJson" in body) updateData.defaultQuickFilterJson = body.defaultQuickFilterJson ?? null;
   if ("groupByFieldKey" in body) updateData.groupByFieldKey = body.groupByFieldKey || null;
+  if ("groupDefaultExpanded" in body) updateData.groupDefaultExpanded = body.groupDefaultExpanded ?? false;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
   if (body.isActive != null) updateData.isActive = body.isActive;
 
@@ -502,6 +503,11 @@ router.put("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): P
       }
     }
   }
+
+  // groupDefaultExpanded is meaningful only on a grouped mirror page; keep the
+  // stored value canonical (false) whenever the effective state has no grouping.
+  const effIsGrouped = effMirrorEntityId != null && effGroupBy != null;
+  if (!effIsGrouped && current) updateData.groupDefaultExpanded = false;
 
   const [page] = await db
     .update(pagesTable)

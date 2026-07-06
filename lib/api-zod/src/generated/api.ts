@@ -1231,6 +1231,7 @@ export const ListPagesResponseItem = zod.object({
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display\/aggregation-only, never a security boundary.'),
+  "groupDefaultExpanded": zod.boolean().optional().describe('Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "children": zod.array(zod.unknown()).optional(),
@@ -1246,6 +1247,7 @@ export const ListPagesResponse = zod.array(ListPagesResponseItem)
 export const createPageBodyIsPivotDefault = false;
 export const createPageBodyPivotConfigJsonOneFilterConjunctionDefault = `and`;
 export const createPageBodyWidgetsCollapsedDefaultDefault = false;
+export const createPageBodyGroupDefaultExpandedDefault = false;
 export const createPageBodyIsActiveDefault = true;
 
 export const CreatePageBody = zod.object({
@@ -1343,6 +1345,7 @@ export const CreatePageBody = zod.object({
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.'),
+  "groupDefaultExpanded": zod.boolean().default(createPageBodyGroupDefaultExpandedDefault).describe('Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.'),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createPageBodyIsActiveDefault)
 })
@@ -1453,6 +1456,7 @@ export const GetPageResponse = zod.object({
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display\/aggregation-only, never a security boundary.'),
+  "groupDefaultExpanded": zod.boolean().optional().describe('Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "children": zod.array(zod.unknown()).optional(),
@@ -1565,6 +1569,7 @@ export const UpdatePageBody = zod.object({
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.'),
+  "groupDefaultExpanded": zod.boolean().optional().describe('Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.'),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
@@ -1667,6 +1672,7 @@ export const UpdatePageResponse = zod.object({
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display\/aggregation-only, never a security boundary.'),
+  "groupDefaultExpanded": zod.boolean().optional().describe('Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "children": zod.array(zod.unknown()).optional(),

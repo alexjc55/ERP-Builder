@@ -88,6 +88,10 @@ export const pagesTable = pgTable("pages", {
   // server-side over the full filtered set — same raw-values invariant as
   // numericTotals. Display/aggregation-level only — never a security boundary.
   groupByFieldKey: text("group_by_field_key"),
+  // Default accordion state for a grouped mirror page: false = all groups
+  // collapsed on open (historical behaviour), true = start with every group
+  // expanded (expand-all). Display-only; each viewer can still toggle in the UI.
+  groupDefaultExpanded: boolean("group_default_expanded").notNull().default(false),
   // Default collapsed state of the analytics widgets block shown above a page's
   // records table. Admin-configurable; each viewer's own toggle is remembered
   // client-side (localStorage) and falls back to this default.

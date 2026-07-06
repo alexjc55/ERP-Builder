@@ -942,6 +942,7 @@ export function EntityRecords({
   mirrorPinned,
   defaultQuickFilter,
   groupByFieldKey,
+  groupDefaultExpanded,
 }: {
   entityId: number;
   /**
@@ -1035,6 +1036,12 @@ export function EntityRecords({
    * viewer).
    */
   groupByFieldKey?: string;
+  /**
+   * Default accordion state for a grouped page (from `page.groupDefaultExpanded`):
+   * true = start with all groups expanded, false = all collapsed. Seeds the
+   * `expandAll` state; the viewer can still toggle it manually.
+   */
+  groupDefaultExpanded?: boolean;
 }) {
   const ml = useML();
   const t = useT();
@@ -1789,7 +1796,7 @@ export function EntityRecords({
   // the single-group accordion (expandedGroupKey). rowGroupMap (record id →
   // group key) is returned by the server in this mode so the client can render
   // each record under its own group header.
-  const [expandAll, setExpandAll] = useState(false);
+  const [expandAll, setExpandAll] = useState(Boolean(groupDefaultExpanded));
   const [rowGroupMap, setRowGroupMap] = useState<Record<string, string | null>>({});
   // Which group selection the CURRENTLY-loaded `records` belong to. On a grouped
   // mirror page the row set is server-narrowed to the expanded group; while the
@@ -1825,10 +1832,12 @@ export function EntityRecords({
   }, [entityId]);
 
   // Collapse the accordion when the page's group field changes (or grouping is
-  // turned off) so a stale group key never filters the query.
+  // turned off) so a stale group key never filters the query, and re-apply the
+  // page's default expand/collapse-all state.
   useEffect(() => {
     setExpandedGroupKey(undefined);
-  }, [groupByFieldKey]);
+    setExpandAll(Boolean(groupDefaultExpanded));
+  }, [groupByFieldKey, groupDefaultExpanded]);
 
   // Auto-select the entity's default view once its views load (only on first arrival).
   useEffect(() => {
