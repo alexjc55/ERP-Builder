@@ -1388,12 +1388,21 @@ export function EntityRecords({
     return m;
   }, [pageRecordValues]);
 
+  // Bumped after any write to force the main records query (records + group
+  // buckets/totals) to re-run. Declared here (above the page-values mutation)
+  // so the page-local edit path can trigger a group-header refresh too.
+  const [refreshTick, setRefreshTick] = useState(0);
   const setPageValuesMutation = useSetPageRecordValues({
     mutation: {
       onSuccess: () => {
         if (pageId != null) {
           queryClient.invalidateQueries({ queryKey: [`/api/pages/${pageId}/record-values`] });
         }
+        // A page-local edit also changes what the grouped-mirror header shows
+        // for that column (its server-computed group-common value / totals), so
+        // re-run the main records query — otherwise the header stays stale until
+        // the group is collapsed. Mirrors the entity-field path's invalidate().
+        setRefreshTick((x) => x + 1);
       },
       onError: () =>
         toast({ title: t("records.saveError", "Не удалось сохранить значение"), variant: "destructive" }),
@@ -1784,7 +1793,6 @@ export function EntityRecords({
   const [total, setTotal] = useState(0);
   const [numericTotals, setNumericTotals] = useState<Record<string, number>>({});
   const [recordsLoading, setRecordsLoading] = useState(true);
-  const [refreshTick, setRefreshTick] = useState(0);
   // Mirror-page grouping: server-computed group buckets + which group is
   // expanded (accordion — at most one). NULL_GROUP_KEY is the client sentinel
   // for the "no value" bucket (server key = null). `null` = the server did NOT
