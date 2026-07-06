@@ -9460,5 +9460,113 @@
     "ru": "поле страницы",
     "en": "page field",
     "he": "שדה עמוד"
+  },
+  {
+    "key": "auto.specifyPage",
+    "ru": "Укажите страницу триггера",
+    "en": "Specify the trigger page",
+    "he": "ציין את עמוד הטריגר"
+  },
+  {
+    "key": "auto.specifyPageField",
+    "ru": "Укажите поле страницы",
+    "en": "Specify the page field",
+    "he": "ציין את שדה העמוד"
+  },
+  {
+    "key": "pages.groupDefaultState",
+    "ru": "Состояние групп по умолчанию",
+    "en": "Default group state",
+    "he": "מצב ברירת מחדל של קבוצות"
+  },
+  {
+    "key": "pages.groupDefaultHint",
+    "ru": "Как группы будут показаны при открытии страницы. Пользователь может переключить вручную.",
+    "en": "How groups appear when the page opens. Users can toggle it manually.",
+    "he": "כיצד הקבוצות יוצגו בפתיחת העמוד. המשתמש יכול לשנות זאת ידנית."
+  },
+  {
+    "key": "pages.groupCollapseAll",
+    "ru": "Свернуть все группы",
+    "en": "Collapse all groups",
+    "he": "כווץ את כל הקבוצות"
+  },
+  {
+    "key": "pages.groupExpandAll",
+    "ru": "Развернуть все группы",
+    "en": "Expand all groups",
+    "he": "הרחב את כל הקבוצות"
+  },
+  {
+    "key": "records.groupDefaultStateTitle",
+    "ru": "Состояние групп по умолчанию",
+    "en": "Default group state",
+    "he": "מצב ברירת מחדל של קבוצות"
+  },
+  {
+    "key": "records.groupDefaultStateHint",
+    "ru": "Как группы будут показаны при открытии этой страницы. Пользователь сможет переключить вручную.",
+    "en": "How groups appear when this page opens. Users can toggle it manually.",
+    "he": "כיצד הקבוצות יוצגו בפתיחת עמוד זה. המשתמש יכול לשנות זאת ידנית."
+  },
+  {
+    "key": "records.groupCollapseAll",
+    "ru": "Свернуть все группы",
+    "en": "Collapse all groups",
+    "he": "כווץ את כל הקבוצות"
+  },
+  {
+    "key": "records.groupExpandAll",
+    "ru": "Развернуть все группы",
+    "en": "Expand all groups",
+    "he": "הרחב את כל הקבוצות"
+  },
+  {
+    "key": "records.groupDefaultExpandedSaved",
+    "ru": "По умолчанию: все группы развёрнуты",
+    "en": "Default: all groups expanded",
+    "he": "ברירת מחדל: כל הקבוצות מורחבות"
+  },
+  {
+    "key": "records.groupDefaultCollapsedSaved",
+    "ru": "По умолчанию: все группы свёрнуты",
+    "en": "Default: all groups collapsed",
+    "he": "ברירת מחדל: כל הקבוצות מכווצות"
+  },
+  {
+    "key": "records.mirrorColSaved",
+    "ru": "Настройки колонки обновлены",
+    "en": "Column settings updated",
+    "he": "הגדרות העמודה עודכנו"
+  },
+  {
+    "key": "records.pageRequiredTitle",
+    "ru": "Заполните обязательные поля",
+    "en": "Fill in the required fields",
+    "he": "מלא את השדות הנדרשים"
+  },
+  {
+    "key": "records.pageRequiredDesc",
+    "ru": "Все обязательные поля должны быть заполнены. Заполните их и сохраните.",
+    "en": "All required fields must be filled in. Complete them and save.",
+    "he": "יש למלא את כל השדות הנדרשים. מלא אותם ושמור."
+  },
+  {
+    "key": "records.pageRequiredField",
+    "ru": "Обязательное поле",
+    "en": "Required field",
+    "he": "שדה חובה"
+  },
+  {
+    "key": "records.pinColumn",
+    "ru": "Закрепить колонку",
+    "en": "Pin column",
+    "he": "הצמד עמודה"
+  },
+  {
+    "key": "records.pinColumnHint",
+    "ru": "Колонка не будет прокручиваться по горизонтали",
+    "en": "The column will not scroll horizontally",
+    "he": "העמודה לא תיגלל אופקית"
   }
 ]
