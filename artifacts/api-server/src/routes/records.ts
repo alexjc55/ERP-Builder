@@ -911,20 +911,26 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         res.status(400).json({ error: `Custom filter "${pick.id}" is not a date filter` });
         return;
       }
-      // Keep only VISIBLE, filterable date fields (order preserved so the
-      // start/end pair used by "overlap" stays [first, last]).
-      const keys = def.fieldKeys.filter((k) => {
+      // ALL-OR-NOTHING eligibility: the filter is applied ONLY when EVERY
+      // referenced field is a VISIBLE (per-role), filterable date field. If any
+      // key is hidden / non-filterable / non-date / deleted for this viewer, the
+      // whole filter is silently skipped (never partially applied) so it can't
+      // observe a hidden field. Order is preserved so "overlap" keeps [first,last].
+      const allEligible = def.fieldKeys.every((k) => {
         const f = visibleByKey.get(k);
         return f != null && f.isFilterable && (f.fieldType === "date" || f.fieldType === "datetime");
       });
-      if (keys.length === 0) continue;
+      if (!allEligible) continue;
+      // Date custom filters need 2+ fields; "overlap" needs exactly 2 ordered fields.
+      if (def.fieldKeys.length < 2) continue;
+      if ((def.combine ?? "or") === "overlap" && def.fieldKeys.length !== 2) continue;
       const from = pick.range?.from;
       const to = pick.range?.to;
       if (!from || !to) {
         res.status(400).json({ error: `Custom filter "${pick.id}" requires a from/to range` });
         return;
       }
-      const r = buildCustomDateFilter(keys, from, to, def.combine ?? "or");
+      const r = buildCustomDateFilter(def.fieldKeys, from, to, def.combine ?? "or");
       if ("error" in r) {
         res.status(400).json({ error: r.error });
         return;

@@ -406,7 +406,11 @@ export function buildCustomDateFilter(
   to: string,
   combine: "or" | "and" | "overlap",
 ): { sql: SQL } | { error: string } {
-  if (fieldKeys.length === 0) return { error: "Custom filter references no fields" };
+  // Date custom filters combine 2+ fields; "overlap" needs exactly 2 ordered
+  // fields (start ≤ end-of-period AND end ≥ start-of-period).
+  if (fieldKeys.length < 2) return { error: "Custom date filter requires at least 2 fields" };
+  if (combine === "overlap" && fieldKeys.length !== 2)
+    return { error: "Custom date filter 'overlap' requires exactly 2 fields" };
   const between = (key: string): SQL => {
     const e = sql`((${entityRecordsTable.valuesJson} ->> ${key}))::timestamptz`;
     return sql`(${e} >= ${from}::timestamptz AND ${e} < ${to}::timestamptz)`;

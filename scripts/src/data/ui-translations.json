@@ -4446,6 +4446,30 @@
     "he": "המסננים המותאמים נשמרו"
   },
   {
+    "key": "records.customFilterInvalid",
+    "ru": "Проверьте фильтры",
+    "en": "Check your filters",
+    "he": "בדוק את המסננים"
+  },
+  {
+    "key": "records.customFilterNeedsTwo",
+    "ru": "Каждый фильтр должен содержать минимум два поля даты.",
+    "en": "Each filter must include at least two date fields.",
+    "he": "כל מסנן חייב לכלול לפחות שני שדות תאריך."
+  },
+  {
+    "key": "records.customFilterOverlapNeedsTwo",
+    "ru": "«Пересечение периода» требует ровно два поля даты (начало и конец).",
+    "en": "\"Period overlap\" requires exactly two date fields (start and end).",
+    "he": "«חפיפת תקופה» מחייבת בדיוק שני שדות תאריך (התחלה וסוף)."
+  },
+  {
+    "key": "records.customFilterEmptyEndHint",
+    "ru": "«И» и «Пересечение периода» исключают строки с пустой второй датой (незавершённые работы). «ИЛИ» всё равно найдёт их по другому полю.",
+    "en": "\"AND\" and \"Period overlap\" exclude rows with an empty second date (unfinished work). \"OR\" still matches them via the other field.",
+    "he": "«וגם» ו«חפיפת תקופה» מחריגים שורות עם תאריך שני ריק (עבודה לא גמורה). «או» עדיין ימצא אותן דרך השדה השני."
+  },
+  {
     "key": "records.pageDefaultFilterCleared",
     "ru": "Фильтр по умолчанию очищен",
     "en": "Default filter cleared",

@@ -1913,10 +1913,25 @@ export function EntityRecords({
   // the def id + the picked half-open range ([from, day AFTER to), matching the
   // date-filter convention above); the server resolves the authoritative def and
   // re-checks every field. Only picks whose def still exists on the page are sent.
-  const customFilterDefs = useMemo<CustomPageFilter[]>(
-    () => (Array.isArray(customFilters) ? customFilters : []),
-    [customFilters],
-  );
+  // Only OFFER a custom filter when EVERY participating field is visible +
+  // filterable (date) for THIS viewer, mirroring the server's all-or-nothing
+  // boundary — otherwise the chip is silently hidden (no hidden-field leak).
+  // Also enforce the date-filter shape (2+ fields; "overlap" exactly 2).
+  const customFilterDefs = useMemo<CustomPageFilter[]>(() => {
+    if (!Array.isArray(customFilters)) return [];
+    const dateFilterableKeys = new Set(
+      filterableFields
+        .filter((f: Field) => f.fieldType === "date" || f.fieldType === "datetime")
+        .map((f: Field) => f.fieldKey),
+    );
+    return customFilters.filter(
+      (d) =>
+        d.type === "date" &&
+        d.fieldKeys.length >= 2 &&
+        !(d.combine === "overlap" && d.fieldKeys.length !== 2) &&
+        d.fieldKeys.every((k) => dateFilterableKeys.has(k)),
+    );
+  }, [customFilters, filterableFields]);
   const customFilterPicks = useMemo<CustomFilterPick[]>(
     () => {
       const known = new Set(customFilterDefs.map((d) => d.id));
@@ -2441,11 +2456,28 @@ export function EntityRecords({
   );
   const saveCustomFilters = useCallback(() => {
     if (pageId == null) return;
-    // Persist only well-formed defs: at least one eligible field key. Drop keys
-    // that are no longer eligible so a stale key never reaches the server.
-    const clean = customFilterDraft
-      .map((d) => ({ ...d, fieldKeys: d.fieldKeys.filter((k) => customFilterEligibleKeys.has(k)) }))
-      .filter((d) => d.fieldKeys.length > 0);
+    // Normalize: drop field keys that are no longer eligible so a stale key never
+    // reaches the server.
+    const clean = customFilterDraft.map((d) => ({
+      ...d,
+      fieldKeys: d.fieldKeys.filter((k) => customFilterEligibleKeys.has(k)),
+    }));
+    // Validate the date-filter shape before saving: each filter needs 2+ date
+    // fields, and "overlap" needs exactly 2 ordered fields (start…end).
+    const invalid = clean.find(
+      (d) => d.fieldKeys.length < 2 || (d.combine === "overlap" && d.fieldKeys.length !== 2),
+    );
+    if (invalid) {
+      toast({
+        title: t("records.customFilterInvalid", "Проверьте фильтры"),
+        description:
+          invalid.combine === "overlap"
+            ? t("records.customFilterOverlapNeedsTwo", "«Пересечение периода» требует ровно два поля даты (начало и конец).")
+            : t("records.customFilterNeedsTwo", "Каждый фильтр должен содержать минимум два поля даты."),
+        variant: "destructive",
+      });
+      return;
+    }
     saveCustomFiltersMutation.mutate(
       { id: pageId, data: { customFiltersJson: clean.length > 0 ? clean : null } },
       { onSuccess: () => toast({ title: t("records.customFiltersSaved", "Пользовательские фильтры сохранены") }) },
@@ -3999,7 +4031,15 @@ export function EntityRecords({
                               <p className="text-[11px] text-slate-400 leading-relaxed">
                                 {t(
                                   "records.customFilterCombineOverlapHint",
-                                  "Первое выбранное поле — начало, последнее — конец интервала строки.",
+                                  "Первое выбранное поле — начало, последнее — конец интервала строки. Нужно ровно два поля даты.",
+                                )}
+                              </p>
+                            )}
+                            {(def.combine === "and" || def.combine === "overlap") && (
+                              <p className="text-[11px] text-amber-600 leading-relaxed">
+                                {t(
+                                  "records.customFilterEmptyEndHint",
+                                  "«И» и «Пересечение периода» исключают строки с пустой второй датой (незавершённые работы). «ИЛИ» всё равно найдёт их по другому полю.",
                                 )}
                               </p>
                             )}
