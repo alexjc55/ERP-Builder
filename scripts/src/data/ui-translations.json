@@ -9516,6 +9516,18 @@
     "he": "הורד דוח שגיאות"
   },
   {
+    "key": "import.file",
+    "ru": "Файл",
+    "en": "File",
+    "he": "קובץ"
+  },
+  {
+    "key": "import.target",
+    "ru": "Цель",
+    "en": "Target",
+    "he": "יעד"
+  },
+  {
     "key": "import.allOkPreview",
     "ru": "Ошибок не найдено — можно импортировать",
     "en": "No errors — ready to import",

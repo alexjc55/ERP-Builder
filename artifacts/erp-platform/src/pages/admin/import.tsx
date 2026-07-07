@@ -646,6 +646,7 @@ function FileResultView({ index, result }: { index: number; result: BatchImportF
 
 export default function ImportPage() {
   const t = useT();
+  const ml = useML();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -771,6 +772,49 @@ export default function ImportPage() {
     return map;
   }, [result, sentIds]);
 
+  const hasErrors = !!result && !result.ok;
+
+  function downloadErrors() {
+    if (!result) return;
+    const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const header = [
+      t("import.file", "Файл"),
+      t("import.target", "Цель"),
+      t("import.row", "Строка"),
+      t("import.message", "Сообщение"),
+    ];
+    const lines: string[] = [header.map(esc).join(",")];
+    for (const fr of result.files) {
+      const id = sentIds[fr.index];
+      const parsed = id ? files.find((f) => f.id === id) : undefined;
+      const bf = id ? built[id] : undefined;
+      const fileLabel = `#${fr.index + 1} ${parsed?.fileName ?? bf?.label ?? ""}`.trim();
+      let target = "";
+      if (bf?.kind === "entity") {
+        const e = entities.find((x) => x.id === bf.entityId);
+        target = e ? ml(e.nameJson) || e.entityKey : "";
+      } else if (bf?.kind === "page") {
+        const p = pages.find((x) => x.id === bf.pageId);
+        target = p ? ml(p.nameJson) || String(p.id) : "";
+      }
+      if (fr.error) {
+        lines.push([fileLabel, target, "", fr.error].map(esc).join(","));
+      }
+      for (const r of fr.rows) {
+        if (r.status === "error") {
+          lines.push([fileLabel, target, String(r.index), r.message ?? ""].map(esc).join(","));
+        }
+      }
+    }
+    const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "import_errors.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="space-y-6 p-6">
       <div>
@@ -832,6 +876,12 @@ export default function ImportPage() {
               {commitMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               {t("import.commit", "Импортировать")}
             </Button>
+            {hasErrors && (
+              <Button type="button" variant="outline" onClick={downloadErrors}>
+                <Download className="mr-2 h-4 w-4" />
+                {t("import.downloadErrors", "Скачать ошибки (CSV)")}
+              </Button>
+            )}
             {result && (
               <span className="flex items-center gap-2 text-sm">
                 {result.ok ? (

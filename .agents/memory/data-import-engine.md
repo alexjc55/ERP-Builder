@@ -66,6 +66,12 @@ per batch (not per file, not per row).
 
 ## Page-local value import ("page" file kind, Variant C inside B)
 
+**Acceptance requirement — keep the downloadable error-report CSV.** The batch
+result UI MUST offer a "download errors" CSV (combined across all files: file
+label/target, row index, message), shown when the batch has errors. This is an
+explicit Task #29 acceptance criterion — a review will reject the rework if the
+CSV export is dropped in favor of inline-only error tables.
+
 A file's `kind` is `entity` or `page`. A page file targets a mirror page
 (`mirrorEntityId != null`): it locates the host record on the MIRRORED entity by a
 chosen `hostKeyFieldKey` (mapped as a hostkey column), then coerces + `validatePageValues`
