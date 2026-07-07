@@ -7,6 +7,6 @@
  */
 
 /**
- * Map of relationId (as string) to target key values.
+ * Map of relationId (as string) to target key values (entity files only).
  */
 export type ImportRowRelations = {[key: string]: string[]};

@@ -745,31 +745,58 @@ export interface ImportRelationColumn {
 }
 
 /**
- * Map of fieldKey to raw cell value.
+ * Map of fieldKey to raw cell value. For a page file these are the page-local fieldKey values.
  */
 export type ImportRowValues = { [key: string]: unknown };
 
 /**
- * Map of relationId (as string) to target key values.
+ * Map of relationId (as string) to target key values (entity files only).
  */
 export type ImportRowRelations = {[key: string]: string[]};
 
 export interface ImportRow {
   /** Original spreadsheet row number, used in the result report. */
   index: number;
-  /** Map of fieldKey to raw cell value. */
+  /** Map of fieldKey to raw cell value. For a page file these are the page-local fieldKey values. */
   values: ImportRowValues;
-  /** Map of relationId (as string) to target key values. */
+  /** Map of relationId (as string) to target key values (entity files only). */
   relations?: ImportRowRelations;
-  /** Status key or localized status name; empty falls back to the entity default. */
+  /** Status key or localized status name; empty falls back to the entity default (entity files only). */
   statusName?: string | null;
+  /** For a page file, the value used to locate the host record via the file's hostKeyFieldKey on the mirrored entity. */
+  hostKeyValue?: string | null;
 }
 
-export interface ImportRequest {
-  /** Field used to match existing records for upsert; null inserts every row. */
+/**
+ * An entity file writes entity records; a page file writes page-local values on a mirror page.
+ */
+export type BatchImportFileKind = typeof BatchImportFileKind[keyof typeof BatchImportFileKind];
+
+
+export const BatchImportFileKind = {
+  entity: 'entity',
+  page: 'page',
+} as const;
+
+export interface BatchImportFile {
+  /** An entity file writes entity records; a page file writes page-local values on a mirror page. */
+  kind: BatchImportFileKind;
+  /** Uploaded file name, echoed back in the result for reporting. */
+  label?: string | null;
+  /** Target entity (entity files). */
+  entityId?: number | null;
+  /** Field used to match existing records for upsert; null inserts every row (entity files). */
   keyFieldKey?: string | null;
   relationColumns?: ImportRelationColumn[];
+  /** Target mirror page (page files). */
+  pageId?: number | null;
+  /** Field key on the mirrored entity used to locate each row's host record (page files). */
+  hostKeyFieldKey?: string | null;
   rows: ImportRow[];
+}
+
+export interface BatchImportRequest {
+  files: BatchImportFile[];
 }
 
 export type ImportRowResultStatus = typeof ImportRowResultStatus[keyof typeof ImportRowResultStatus];
@@ -788,13 +815,35 @@ export interface ImportRowResult {
   message?: string | null;
 }
 
-export interface ImportResult {
+export type BatchImportFileResultKind = typeof BatchImportFileResultKind[keyof typeof BatchImportFileResultKind];
+
+
+export const BatchImportFileResultKind = {
+  entity: 'entity',
+  page: 'page',
+} as const;
+
+export interface BatchImportFileResult {
+  /** Position of this file in the request batch. */
+  index: number;
+  kind: BatchImportFileResultKind;
+  label?: string | null;
+  /** Resolved entity/page display name for the result header. */
+  targetName?: string | null;
+  /** File-level error (e.g. bad target); when set, rows are not processed. */
+  error?: string | null;
   total: number;
   created: number;
   updated: number;
   skipped: number;
   errors: number;
   rows: ImportRowResult[];
+}
+
+export interface BatchImportResult {
+  /** True when the batch has no errors (preview = safe to commit; commit = written). */
+  ok: boolean;
+  files: BatchImportFileResult[];
 }
 
 export interface Role {

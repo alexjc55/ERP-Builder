@@ -5486,27 +5486,38 @@ export const CreateEntityRelationBody = zod.object({
 
 
 /**
- * @summary Dry-run validate rows for import (no writes)
+ * @summary Dry-run validate a whole batch of files (rehearses in a rolled-back transaction, incl. cross-file relations)
  */
-export const PreviewEntityImportParams = zod.object({
-  "entityId": zod.coerce.number()
-})
-
-export const PreviewEntityImportBody = zod.object({
-  "keyFieldKey": zod.string().nullish().describe('Field used to match existing records for upsert; null inserts every row.'),
+export const PreviewImportBody = zod.object({
+  "files": zod.array(zod.object({
+  "kind": zod.enum(['entity', 'page']).describe('An entity file writes entity records; a page file writes page-local values on a mirror page.'),
+  "label": zod.string().nullish().describe('Uploaded file name, echoed back in the result for reporting.'),
+  "entityId": zod.number().nullish().describe('Target entity (entity files).'),
+  "keyFieldKey": zod.string().nullish().describe('Field used to match existing records for upsert; null inserts every row (entity files).'),
   "relationColumns": zod.array(zod.object({
   "relationId": zod.number(),
   "targetKeyFieldKey": zod.string().describe('Field key on the target entity used to resolve a link by value.')
 })).optional(),
+  "pageId": zod.number().nullish().describe('Target mirror page (page files).'),
+  "hostKeyFieldKey": zod.string().nullish().describe('Field key on the mirrored entity used to locate each row\'s host record (page files).'),
   "rows": zod.array(zod.object({
   "index": zod.number().describe('Original spreadsheet row number, used in the result report.'),
-  "values": zod.record(zod.string(), zod.unknown()).describe('Map of fieldKey to raw cell value.'),
-  "relations": zod.record(zod.string(), zod.array(zod.string())).optional().describe('Map of relationId (as string) to target key values.'),
-  "statusName": zod.string().nullish().describe('Status key or localized status name; empty falls back to the entity default.')
+  "values": zod.record(zod.string(), zod.unknown()).describe('Map of fieldKey to raw cell value. For a page file these are the page-local fieldKey values.'),
+  "relations": zod.record(zod.string(), zod.array(zod.string())).optional().describe('Map of relationId (as string) to target key values (entity files only).'),
+  "statusName": zod.string().nullish().describe('Status key or localized status name; empty falls back to the entity default (entity files only).'),
+  "hostKeyValue": zod.string().nullish().describe('For a page file, the value used to locate the host record via the file\'s hostKeyFieldKey on the mirrored entity.')
+}))
 }))
 })
 
-export const PreviewEntityImportResponse = zod.object({
+export const PreviewImportResponse = zod.object({
+  "ok": zod.boolean().describe('True when the batch has no errors (preview = safe to commit; commit = written).'),
+  "files": zod.array(zod.object({
+  "index": zod.number().describe('Position of this file in the request batch.'),
+  "kind": zod.enum(['entity', 'page']),
+  "label": zod.string().nullish(),
+  "targetName": zod.string().nullish().describe('Resolved entity\/page display name for the result header.'),
+  "error": zod.string().nullish().describe('File-level error (e.g. bad target); when set, rows are not processed.'),
   "total": zod.number(),
   "created": zod.number(),
   "updated": zod.number(),
@@ -5516,32 +5527,44 @@ export const PreviewEntityImportResponse = zod.object({
   "index": zod.number(),
   "status": zod.enum(['created', 'updated', 'skipped', 'error']),
   "message": zod.string().nullish()
+}))
 }))
 })
 
 
 /**
- * @summary Import rows into an entity (insert/upsert)
+ * @summary Import a whole batch of files in one transaction (all-or-nothing)
  */
-export const CommitEntityImportParams = zod.object({
-  "entityId": zod.coerce.number()
-})
-
-export const CommitEntityImportBody = zod.object({
-  "keyFieldKey": zod.string().nullish().describe('Field used to match existing records for upsert; null inserts every row.'),
+export const CommitImportBody = zod.object({
+  "files": zod.array(zod.object({
+  "kind": zod.enum(['entity', 'page']).describe('An entity file writes entity records; a page file writes page-local values on a mirror page.'),
+  "label": zod.string().nullish().describe('Uploaded file name, echoed back in the result for reporting.'),
+  "entityId": zod.number().nullish().describe('Target entity (entity files).'),
+  "keyFieldKey": zod.string().nullish().describe('Field used to match existing records for upsert; null inserts every row (entity files).'),
   "relationColumns": zod.array(zod.object({
   "relationId": zod.number(),
   "targetKeyFieldKey": zod.string().describe('Field key on the target entity used to resolve a link by value.')
 })).optional(),
+  "pageId": zod.number().nullish().describe('Target mirror page (page files).'),
+  "hostKeyFieldKey": zod.string().nullish().describe('Field key on the mirrored entity used to locate each row\'s host record (page files).'),
   "rows": zod.array(zod.object({
   "index": zod.number().describe('Original spreadsheet row number, used in the result report.'),
-  "values": zod.record(zod.string(), zod.unknown()).describe('Map of fieldKey to raw cell value.'),
-  "relations": zod.record(zod.string(), zod.array(zod.string())).optional().describe('Map of relationId (as string) to target key values.'),
-  "statusName": zod.string().nullish().describe('Status key or localized status name; empty falls back to the entity default.')
+  "values": zod.record(zod.string(), zod.unknown()).describe('Map of fieldKey to raw cell value. For a page file these are the page-local fieldKey values.'),
+  "relations": zod.record(zod.string(), zod.array(zod.string())).optional().describe('Map of relationId (as string) to target key values (entity files only).'),
+  "statusName": zod.string().nullish().describe('Status key or localized status name; empty falls back to the entity default (entity files only).'),
+  "hostKeyValue": zod.string().nullish().describe('For a page file, the value used to locate the host record via the file\'s hostKeyFieldKey on the mirrored entity.')
+}))
 }))
 })
 
-export const CommitEntityImportResponse = zod.object({
+export const CommitImportResponse = zod.object({
+  "ok": zod.boolean().describe('True when the batch has no errors (preview = safe to commit; commit = written).'),
+  "files": zod.array(zod.object({
+  "index": zod.number().describe('Position of this file in the request batch.'),
+  "kind": zod.enum(['entity', 'page']),
+  "label": zod.string().nullish(),
+  "targetName": zod.string().nullish().describe('Resolved entity\/page display name for the result header.'),
+  "error": zod.string().nullish().describe('File-level error (e.g. bad target); when set, rows are not processed.'),
   "total": zod.number(),
   "created": zod.number(),
   "updated": zod.number(),
@@ -5551,6 +5574,7 @@ export const CommitEntityImportResponse = zod.object({
   "index": zod.number(),
   "status": zod.enum(['created', 'updated', 'skipped', 'error']),
   "message": zod.string().nullish()
+}))
 }))
 })
 

@@ -7,8 +7,11 @@ import {
   usersTable,
   relationsTable,
   recordLinksTable,
+  pagesTable,
+  pageFieldsTable,
+  pageRecordValuesTable,
 } from "@workspace/db";
-import type { EntityField, EntityStatus } from "@workspace/db";
+import type { EntityField, EntityStatus, PageField } from "@workspace/db";
 import { eq, and, sql, asc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
@@ -24,31 +27,37 @@ import {
   checkImmutableFields,
   isEmpty,
   UNIQUE_KEY_LOCK_NS,
+  type DbExecutor,
 } from "./records";
-import {
-  PreviewEntityImportParams,
-  PreviewEntityImportBody,
-  CommitEntityImportParams,
-  CommitEntityImportBody,
-} from "@workspace/api-zod";
+import { validatePageValues, effectiveEntityForPage } from "./page-fields";
+import { PreviewImportBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
 /**
- * Dynamic file import (XLSX/CSV → entity records).
+ * Multi-file batch import (XLSX/CSV → entity records + page-local values).
  *
- * The client (erp-platform) parses the uploaded spreadsheet, maps columns to
- * fields/relations/status, and posts JSON rows here. The server is the hard
- * boundary: every row is coerced per field type and then pushed through the SAME
- * validation the normal records create/update path uses (validateValues →
- * validateUserRefs → checkDependentValues → checkValidationRules → unique-key),
- * so import can never inject data that violates the entity's integrity rules.
+ * The client (erp-platform) parses one or more uploaded spreadsheets, maps each
+ * file's columns to fields/relations/status (entity file) or to page-local
+ * fields plus a host-record lookup key (page file), and posts the whole batch
+ * here. The server is the hard boundary: every entity row is coerced per field
+ * type and pushed through the SAME validation the normal records create/update
+ * path uses (validateValues → validateUserRefs → checkDependentValues →
+ * checkValidationRules → unique-key); every page row is type-validated the same
+ * way the inline page-value write is.
+ *
+ * The whole batch runs in ONE transaction so cross-file relations resolve
+ * against same-batch inserts (entity files are ordered so relation targets are
+ * written before their sources; page files run after all entity files so their
+ * host records exist). Preview and commit take the IDENTICAL write path — the
+ * only difference is preview ALWAYS rolls back (a true rehearsal) and commit
+ * rolls back only if any row/file failed (all-or-nothing: nothing is written
+ * unless the entire batch is clean).
  *
  * Import is ADMIN-authoritative (gated by the `dataImport` cap): it writes every
  * mapped field regardless of per-field edit perms — but it cannot bypass the
- * type/required/relation/uniqueness rules above. Entity fields only; page-local
- * fields, file fields, and computed (function/relation/lookup) fields are not
- * importable.
+ * type/required/relation/uniqueness rules above. Entity fields only; file fields
+ * and computed (function/relation/lookup) fields are not importable.
  */
 
 type RelationRow = typeof relationsTable.$inferSelect;
@@ -67,10 +76,13 @@ const norm = (s: string) => s.trim().toLowerCase();
 
 const NON_IMPORTABLE = new Set(["file", "function", "relation", "lookup"]);
 
+/** Minimal field shape coerceValue needs — satisfied by both entity and page fields. */
+type CoercibleField = { fieldKey: string; fieldType: string; nameJson: unknown; optionsJson: unknown };
+
 type Coerced = { value: unknown } | { error: string };
 
-/** Coerce a raw spreadsheet cell into the shape `validateValues` expects. */
-async function coerceValue(field: EntityField, raw: unknown): Promise<Coerced> {
+/** Coerce a raw spreadsheet cell into the shape validateValues/validatePageValues expects. */
+async function coerceValue(field: CoercibleField, raw: unknown): Promise<Coerced> {
   if (raw === null || raw === undefined || (typeof raw === "string" && raw.trim() === "")) {
     return { value: undefined };
   }
@@ -87,6 +99,14 @@ async function coerceValue(field: EntityField, raw: unknown): Promise<Coerced> {
         return Number.isFinite(raw) ? { value: raw } : { error: `Поле «${name}»: некорректное число` };
       }
       const cleaned = String(raw).trim().replace(/\s/g, "").replace(",", ".");
+      const n = Number(cleaned);
+      return Number.isFinite(n) ? { value: n } : { error: `Поле «${name}»: «${String(raw)}» не является числом` };
+    }
+    case "percent": {
+      if (typeof raw === "number") {
+        return Number.isFinite(raw) ? { value: raw } : { error: `Поле «${name}»: некорректное число` };
+      }
+      const cleaned = String(raw).trim().replace(/\s/g, "").replace("%", "").replace(",", ".");
       const n = Number(cleaned);
       return Number.isFinite(n) ? { value: n } : { error: `Поле «${name}»: «${String(raw)}» не является числом` };
     }
@@ -155,9 +175,6 @@ function resolveStatusId(
     const def = statuses.find((s) => s.isDefault);
     return { id: def ? def.id : null };
   }
-  // Accept the status key or ANY localized name (ru/en/he), so a template
-  // dropdown generated in any UI language resolves — mirroring how matchOption
-  // resolves select values by value or any label.
   const s = statusName.trim();
   const ns = norm(s);
   const hit =
@@ -170,13 +187,14 @@ function resolveStatusId(
   return { id: hit.id };
 }
 
-/** Resolve a relation target record id by matching a key field value. */
+/** Resolve a relation target record id by matching a key field value (batch-visible via tx). */
 async function resolveTarget(
+  exec: DbExecutor,
   targetEntityId: number,
   targetKeyFieldKey: string,
   value: string,
 ): Promise<{ id: number } | { error: string }> {
-  const matches = await db
+  const matches = await exec
     .select({ id: entityRecordsTable.id })
     .from(entityRecordsTable)
     .where(
@@ -194,8 +212,21 @@ async function resolveTarget(
 
 type RelAssignment = { relationId: number; relationType: string; targetIds: number[] };
 
-interface RowContext {
+type RowInput = {
+  index: number;
+  values: Record<string, unknown>;
+  relations?: Record<string, string[]>;
+  statusName?: string | null;
+  hostKeyValue?: string | null;
+};
+
+type RowStatus = "created" | "updated" | "skipped" | "error";
+type RowOutcome = { status: RowStatus; message?: string };
+
+interface EntityCtx {
+  kind: "entity";
   entityId: number;
+  entityName: string;
   fields: EntityField[];
   fieldByKey: Map<string, EntityField>;
   statuses: EntityStatus[];
@@ -204,21 +235,52 @@ interface RowContext {
   keyFields: EntityField[];
   relCols: { relationId: number; targetKeyFieldKey: string }[];
   relById: Map<number, RelationRow>;
-  dryRun: boolean;
 }
 
-type RowOutcome = { status: "created" | "updated" | "skipped" | "error"; message?: string };
+interface PageCtx {
+  kind: "page";
+  pageId: number;
+  pageName: string;
+  mirrorEntityId: number;
+  hostKeyField: EntityField;
+  pageFields: PageField[];
+}
+
+type Prepared =
+  | { kind: "entity"; originalIndex: number; label: string | null; ctx: EntityCtx; rows: RowInput[] }
+  | { kind: "page"; originalIndex: number; label: string | null; ctx: PageCtx; rows: RowInput[] }
+  | {
+      kind: "error";
+      originalIndex: number;
+      label: string | null;
+      fileKind: "entity" | "page";
+      targetName: string | null;
+      error: string;
+      total: number;
+    };
+
+interface FileResult {
+  index: number;
+  kind: "entity" | "page";
+  label: string | null;
+  targetName: string | null;
+  error: string | null;
+  total: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: number;
+  rows: { index: number; status: RowStatus; message: string | null }[];
+}
 
 async function applyRelations(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  tx: DbExecutor,
   sourceRecordId: number,
   assignments: RelAssignment[],
 ): Promise<void> {
   for (const a of assignments) {
     // Replace semantics: a re-import of the same source row resets its links for
-    // this relation, then re-creates them — keeping re-runs idempotent. A cross-
-    // source target-unique conflict (one_to_one / one_to_many) throws and surfaces
-    // as a row error (the whole row rolls back).
+    // this relation, then re-creates them — keeping re-runs idempotent.
     await tx
       .delete(recordLinksTable)
       .where(and(eq(recordLinksTable.relationId, a.relationId), eq(recordLinksTable.sourceRecordId, sourceRecordId)));
@@ -233,10 +295,7 @@ async function applyRelations(
   }
 }
 
-async function processRow(
-  row: { index: number; values: Record<string, unknown>; relations?: Record<string, string[]>; statusName?: string | null },
-  ctx: RowContext,
-): Promise<RowOutcome> {
+async function processEntityRow(tx: DbExecutor, row: RowInput, ctx: EntityCtx): Promise<RowOutcome> {
   // 1. Coerce mapped cells into the per-type shape validateValues expects.
   const incoming: Record<string, unknown> = {};
   for (const [k, raw] of Object.entries(row.values)) {
@@ -247,17 +306,16 @@ async function processRow(
     if (c.value !== undefined) incoming[k] = c.value;
   }
 
-  // 2. Upsert match — locate an existing record by the chosen key BEFORE validation,
-  // so the integrity boundary below runs on the FINAL (merged) state, exactly like
-  // PUT /records/:id does. Matching on the coerced incoming value mirrors how the
-  // value is stored/compared.
+  // 2. Upsert match (via tx so same-batch inserts are visible) — locate an
+  // existing record by the chosen key BEFORE validation so the boundary runs on
+  // the FINAL merged state, exactly like PUT /records/:id.
   let existingId: number | null = null;
   let existingValues: Record<string, unknown> = {};
   if (ctx.keyField) {
     const kv = incoming[ctx.keyField.fieldKey];
     if (!isEmpty(kv)) {
       const kvStr = typeof kv === "string" ? kv : String(kv);
-      const [hit] = await db
+      const [hit] = await tx
         .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
         .from(entityRecordsTable)
         .where(
@@ -276,16 +334,8 @@ async function processRow(
   }
 
   // 3. The exact integrity boundary the normal record-write path enforces, run on
-  // the FINAL state: for an update that is existing ⊕ incoming (merge-on-write,
-  // like PUT's candidate), for an insert just the incoming values. prevValues lets
-  // validateValues apply the same change-aware rules, and immutability/cross-field
-  // rules run on the merged result so import can never bypass what a direct edit
-  // would reject.
-  // Build the validation target exactly like the matching record-write path:
-  //  - UPDATE: compose from ACTIVE fields only (incoming override, else the stored
-  //    value), mirroring PUT's candidate so legacy/stale keys lingering in a
-  //    record's valuesJson never reach validateValues and trip "Unknown field".
-  //  - INSERT: validate the incoming values directly, mirroring POST create.
+  // the FINAL state (UPDATE: existing ⊕ incoming composed from ACTIVE fields;
+  // INSERT: the incoming values directly).
   let candidate: Record<string, unknown>;
   if (existingId != null) {
     candidate = {};
@@ -301,7 +351,7 @@ async function processRow(
   const values = result.values;
   const userErr = await validateUserRefs(ctx.fields, values);
   if (userErr) return { status: "error", message: userErr };
-  const depErr = await checkDependentValues(ctx.entityId, ctx.fields, values, existingId ?? undefined);
+  const depErr = await checkDependentValues(ctx.entityId, ctx.fields, values, existingId ?? undefined, tx);
   if (depErr) return { status: "error", message: depErr };
   const ruleErr = checkValidationRules(ctx.fields, values);
   if (ruleErr) return { status: "error", message: ruleErr };
@@ -315,7 +365,7 @@ async function processRow(
   if ("error" in st) return { status: "error", message: st.error };
   const statusId = st.id;
 
-  // 5. Resolve relation targets by their lookup key (cardinality-aware).
+  // 5. Resolve relation targets by their lookup key (cardinality-aware, tx-visible).
   const relAssignments: RelAssignment[] = [];
   for (const rc of ctx.relCols) {
     const rel = ctx.relById.get(rc.relationId)!;
@@ -328,152 +378,366 @@ async function processRow(
     }
     const targetIds: number[] = [];
     for (const v of vals) {
-      const t = await resolveTarget(rel.targetEntityId, rc.targetKeyFieldKey, v);
+      const t = await resolveTarget(tx, rel.targetEntityId, rc.targetKeyFieldKey, v);
       if ("error" in t) return { status: "error", message: `Связь «${relName}»: ${t.error}` };
       targetIds.push(t.id);
     }
     relAssignments.push({ relationId: rel.id, relationType: rel.relationType, targetIds });
   }
 
-  // 6. Dry-run: verify isKey uniqueness without persisting (the helper needs a
-  // transaction-typed executor; a short read-only tx satisfies that). The commit
-  // paths below re-check the SAME way the normal write path does — inside the write
-  // transaction under a per-entity advisory lock — so concurrent writes can't race.
-  if (ctx.dryRun) {
-    if (ctx.keyFields.length > 0) {
-      const dup = await db.transaction((tx) =>
-        checkUniqueKeys(tx, ctx.entityId, ctx.keyFields, values, existingId ?? undefined),
-      );
-      if (dup) return { status: "error", message: dup };
-    }
-    return { status: existingId != null ? "updated" : "created" };
-  }
-
-  // 7. Commit one row in its own transaction (partial success across the batch).
-  // `values` is the full merged+validated map, so it replaces valuesJson wholesale
-  // (matching PUT, which sets update.valuesJson = result.values).
-  if (existingId != null) {
-    await db.transaction(async (tx) => {
+  // 6. Write the row inside a SAVEPOINT so a row-level DB error rolls back only
+  // this row (letting the batch collect every error) while the advisory lock held
+  // on the outer transaction still serializes unique-key checks. `values` is the
+  // full merged+validated map, so it replaces valuesJson wholesale (matching PUT).
+  try {
+    await tx.transaction(async (sp) => {
       if (ctx.keyFields.length > 0) {
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(${UNIQUE_KEY_LOCK_NS}, ${ctx.entityId})`);
-        const dup = await checkUniqueKeys(tx, ctx.entityId, ctx.keyFields, values, existingId!);
+        const dup = await checkUniqueKeys(sp, ctx.entityId, ctx.keyFields, values, existingId ?? undefined);
         if (dup) throw new Error(dup);
       }
-      const setData: { valuesJson: Record<string, unknown>; statusId?: number | null; statusChangedAt?: Date } = {
-        valuesJson: values,
-      };
-      if (row.statusName != null && row.statusName.trim() !== "") {
-        setData.statusId = statusId;
-        setData.statusChangedAt = new Date();
+      if (existingId != null) {
+        const setData: { valuesJson: Record<string, unknown>; statusId?: number | null; statusChangedAt?: Date } = {
+          valuesJson: values,
+        };
+        if (row.statusName != null && row.statusName.trim() !== "") {
+          setData.statusId = statusId;
+          setData.statusChangedAt = new Date();
+        }
+        await sp.update(entityRecordsTable).set(setData).where(eq(entityRecordsTable.id, existingId!));
+        await applyRelations(sp, existingId!, relAssignments);
+      } else {
+        const [rec] = await sp
+          .insert(entityRecordsTable)
+          .values({ entityId: ctx.entityId, valuesJson: values, statusId, statusChangedAt: new Date() })
+          .returning({ id: entityRecordsTable.id });
+        if (!rec) throw new Error("Не удалось создать запись");
+        await applyRelations(sp, rec.id, relAssignments);
       }
-      await tx.update(entityRecordsTable).set(setData).where(eq(entityRecordsTable.id, existingId!));
-      await applyRelations(tx, existingId!, relAssignments);
     });
-    return { status: "updated" };
+  } catch (err) {
+    return { status: "error", message: err instanceof Error ? err.message : "Ошибка импорта строки" };
   }
-
-  await db.transaction(async (tx) => {
-    if (ctx.keyFields.length > 0) {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(${UNIQUE_KEY_LOCK_NS}, ${ctx.entityId})`);
-      const dup = await checkUniqueKeys(tx, ctx.entityId, ctx.keyFields, values);
-      if (dup) throw new Error(dup);
-    }
-    const [rec] = await tx
-      .insert(entityRecordsTable)
-      .values({ entityId: ctx.entityId, valuesJson: values, statusId, statusChangedAt: new Date() })
-      .returning({ id: entityRecordsTable.id });
-    if (!rec) throw new Error("Не удалось создать запись");
-    await applyRelations(tx, rec.id, relAssignments);
-  });
-  return { status: "created" };
+  return { status: existingId != null ? "updated" : "created" };
 }
 
-async function runImport(req: Request, res: Response, dryRun: boolean): Promise<void> {
-  const ParamsSchema = dryRun ? PreviewEntityImportParams : CommitEntityImportParams;
-  const BodySchema = dryRun ? PreviewEntityImportBody : CommitEntityImportBody;
+async function processPageRow(tx: DbExecutor, row: RowInput, ctx: PageCtx): Promise<RowOutcome> {
+  // Locate the host record on the mirrored entity by the file's host key field.
+  const hkv = row.hostKeyValue;
+  const hkName = mlName(ctx.hostKeyField.nameJson, ctx.hostKeyField.fieldKey);
+  if (isEmpty(hkv)) return { status: "error", message: `Не указано значение поля «${hkName}» для поиска записи` };
+  const hkStr = typeof hkv === "string" ? hkv.trim() : String(hkv);
+  const hosts = await tx
+    .select({ id: entityRecordsTable.id })
+    .from(entityRecordsTable)
+    .where(
+      and(
+        eq(entityRecordsTable.entityId, ctx.mirrorEntityId),
+        sql`lower(trim(${entityRecordsTable.valuesJson} ->> ${ctx.hostKeyField.fieldKey})) = ${norm(hkStr)}`,
+        sql`${entityRecordsTable.archivedAt} is null`,
+      ),
+    )
+    .limit(2);
+  if (hosts.length === 0) return { status: "error", message: `Запись «${hkStr}» не найдена` };
+  if (hosts.length > 1) return { status: "error", message: `«${hkStr}» соответствует нескольким записям` };
+  const recordId = hosts[0]!.id;
 
-  const params = ParamsSchema.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
+  // Coerce + type-validate the page-local values exactly like the inline write.
+  const pfByKey = new Map(ctx.pageFields.map((pf) => [pf.fieldKey, pf]));
+  const incoming: Record<string, unknown> = {};
+  for (const [k, raw] of Object.entries(row.values)) {
+    const pf = pfByKey.get(k);
+    if (!pf || NON_IMPORTABLE.has(pf.fieldType)) continue;
+    const c = await coerceValue(pf, raw);
+    if ("error" in c) return { status: "error", message: c.error };
+    if (c.value !== undefined) incoming[k] = c.value;
   }
-  const body = BodySchema.safeParse(req.body);
-  if (!body.success) {
-    res.status(400).json({ error: body.error.message });
-    return;
-  }
-  const entityId = params.data.entityId;
+  const validated = validatePageValues(ctx.pageFields, incoming);
+  if ("error" in validated) return { status: "error", message: validated.error };
+  const cleaned = validated.values;
+  if (Object.keys(cleaned).length === 0) return { status: "skipped" };
 
+  // MERGE existing ⊕ cleaned into page_record_values (unique pageId,recordId),
+  // inside a savepoint for per-row error isolation.
+  try {
+    let created = false;
+    await tx.transaction(async (sp) => {
+      const [existing] = await sp
+        .select({ id: pageRecordValuesTable.id, valuesJson: pageRecordValuesTable.valuesJson })
+        .from(pageRecordValuesTable)
+        .where(and(eq(pageRecordValuesTable.pageId, ctx.pageId), eq(pageRecordValuesTable.recordId, recordId)))
+        .limit(1);
+      if (existing) {
+        const merged = { ...((existing.valuesJson as Record<string, unknown>) ?? {}), ...cleaned };
+        await sp.update(pageRecordValuesTable).set({ valuesJson: merged }).where(eq(pageRecordValuesTable.id, existing.id));
+      } else {
+        await sp.insert(pageRecordValuesTable).values({ pageId: ctx.pageId, recordId, valuesJson: cleaned });
+        created = true;
+      }
+    });
+    return { status: created ? "created" : "updated" };
+  } catch (err) {
+    return { status: "error", message: err instanceof Error ? err.message : "Ошибка сохранения значений страницы" };
+  }
+}
+
+function errFile(
+  originalIndex: number,
+  label: string | null,
+  fileKind: "entity" | "page",
+  targetName: string | null,
+  error: string,
+  total: number,
+): Prepared {
+  return { kind: "error", originalIndex, label, fileKind, targetName, error, total };
+}
+
+async function prepareEntityFile(
+  originalIndex: number,
+  f: { label?: string | null; entityId?: number | null; keyFieldKey?: string | null; relationColumns?: { relationId: number; targetKeyFieldKey: string }[]; rows: RowInput[] },
+  gdrive: boolean,
+): Promise<Prepared> {
+  const label = f.label ?? null;
+  const total = f.rows.length;
+  const entityId = f.entityId ?? null;
+  if (entityId == null) return errFile(originalIndex, label, "entity", null, "Не указана сущность", total);
   const [entity] = await db
-    .select({ id: entitiesTable.id })
+    .select({ id: entitiesTable.id, nameJson: entitiesTable.nameJson })
     .from(entitiesTable)
     .where(eq(entitiesTable.id, entityId))
     .limit(1);
-  if (!entity) {
-    res.status(404).json({ error: "Entity not found" });
-    return;
-  }
+  if (!entity) return errFile(originalIndex, label, "entity", null, "Сущность не найдена", total);
+  const entityName = mlName(entity.nameJson, String(entityId));
 
   const fields = await loadActiveFields(entityId);
-  const fieldByKey = new Map(fields.map((f) => [f.fieldKey, f]));
+  const fieldByKey = new Map(fields.map((fl) => [fl.fieldKey, fl]));
   const statuses = await db
     .select()
     .from(entityStatusesTable)
     .where(and(eq(entityStatusesTable.entityId, entityId), eq(entityStatusesTable.isActive, true)))
     .orderBy(asc(entityStatusesTable.sortOrder));
-  const gdrive = await isGoogleDriveModuleEnabled();
 
-  const keyFieldKey = body.data.keyFieldKey ?? null;
+  const keyFieldKey = f.keyFieldKey ?? null;
   const keyField = keyFieldKey ? fieldByKey.get(keyFieldKey) : undefined;
   if (keyFieldKey && !keyField) {
-    res.status(400).json({ error: `Unknown key field: ${keyFieldKey}` });
-    return;
+    return errFile(originalIndex, label, "entity", entityName, `Неизвестное ключевое поле: ${keyFieldKey}`, total);
   }
-  const keyFields = fields.filter((f) => f.isKey);
+  const keyFields = fields.filter((fl) => fl.isKey);
 
   const relations = await db.select().from(relationsTable).where(eq(relationsTable.sourceEntityId, entityId));
   const relById = new Map(relations.map((r) => [r.id, r]));
-  const relCols = body.data.relationColumns ?? [];
+  const relCols = f.relationColumns ?? [];
   for (const rc of relCols) {
     if (!relById.has(rc.relationId)) {
-      res.status(400).json({ error: `Unknown relation: ${rc.relationId}` });
+      return errFile(originalIndex, label, "entity", entityName, `Неизвестная связь: ${rc.relationId}`, total);
+    }
+  }
+
+  const ctx: EntityCtx = {
+    kind: "entity",
+    entityId,
+    entityName,
+    fields,
+    fieldByKey,
+    statuses,
+    gdrive,
+    keyField,
+    keyFields,
+    relCols,
+    relById,
+  };
+  return { kind: "entity", originalIndex, label, ctx, rows: f.rows };
+}
+
+async function preparePageFile(
+  originalIndex: number,
+  f: { label?: string | null; pageId?: number | null; hostKeyFieldKey?: string | null; rows: RowInput[] },
+): Promise<Prepared> {
+  const label = f.label ?? null;
+  const total = f.rows.length;
+  const pageId = f.pageId ?? null;
+  if (pageId == null) return errFile(originalIndex, label, "page", null, "Не указана страница", total);
+  const [page] = await db
+    .select({ id: pagesTable.id, nameJson: pagesTable.nameJson })
+    .from(pagesTable)
+    .where(eq(pagesTable.id, pageId))
+    .limit(1);
+  if (!page) return errFile(originalIndex, label, "page", null, "Страница не найдена", total);
+  const pageName = mlName(page.nameJson, String(pageId));
+
+  const eff = await effectiveEntityForPage(pageId);
+  if (!eff.found || !eff.isMirror || eff.entityId == null) {
+    return errFile(originalIndex, label, "page", pageName, "Импорт значений доступен только для зеркальных страниц", total);
+  }
+  const mirrorEntityId = eff.entityId;
+
+  const hostKeyFieldKey = f.hostKeyFieldKey ?? null;
+  if (!hostKeyFieldKey) return errFile(originalIndex, label, "page", pageName, "Не указано поле для поиска записи", total);
+  const entityFields = await loadActiveFields(mirrorEntityId);
+  const hostKeyField = entityFields.find((x) => x.fieldKey === hostKeyFieldKey);
+  if (!hostKeyField) {
+    return errFile(originalIndex, label, "page", pageName, `Неизвестное поле поиска: ${hostKeyFieldKey}`, total);
+  }
+
+  const pageFields = await db
+    .select()
+    .from(pageFieldsTable)
+    .where(and(eq(pageFieldsTable.pageId, pageId), eq(pageFieldsTable.isActive, true)))
+    .orderBy(asc(pageFieldsTable.sortOrder));
+
+  const ctx: PageCtx = { kind: "page", pageId, pageName, mirrorEntityId, hostKeyField, pageFields };
+  return { kind: "page", originalIndex, label, ctx, rows: f.rows };
+}
+
+/**
+ * Order entity files so relation targets are written before their sources
+ * (Kahn's algorithm; cycles fall back to original order — unresolved targets
+ * then surface as row errors). Page files run after ALL entity files so their
+ * host records already exist. Error files keep their original position.
+ */
+function orderPrepared(prepared: Prepared[]): Prepared[] {
+  const entityFiles = prepared.filter((p): p is Extract<Prepared, { kind: "entity" }> => p.kind === "entity");
+  const others = prepared.filter((p) => p.kind !== "entity");
+
+  const indeg = new Map<number, number>();
+  const outEdges = new Map<number, number[]>(); // target file idx -> [source file idx]
+  for (const a of entityFiles) indeg.set(a.originalIndex, 0);
+  for (const a of entityFiles) {
+    const targetEntityIds = new Set<number>();
+    for (const rc of a.ctx.relCols) {
+      const rel = a.ctx.relById.get(rc.relationId);
+      if (rel) targetEntityIds.add(rel.targetEntityId);
+    }
+    for (const b of entityFiles) {
+      if (b.originalIndex === a.originalIndex) continue;
+      if (targetEntityIds.has(b.ctx.entityId)) {
+        // b (target) must come before a (source): edge b -> a
+        outEdges.set(b.originalIndex, [...(outEdges.get(b.originalIndex) ?? []), a.originalIndex]);
+        indeg.set(a.originalIndex, (indeg.get(a.originalIndex) ?? 0) + 1);
+      }
+    }
+  }
+
+  const byIndex = new Map(entityFiles.map((p) => [p.originalIndex, p]));
+  const queue = entityFiles.filter((p) => (indeg.get(p.originalIndex) ?? 0) === 0).map((p) => p.originalIndex);
+  const sorted: Extract<Prepared, { kind: "entity" }>[] = [];
+  const seen = new Set<number>();
+  while (queue.length > 0) {
+    const idx = queue.shift()!;
+    if (seen.has(idx)) continue;
+    seen.add(idx);
+    sorted.push(byIndex.get(idx)!);
+    for (const next of outEdges.get(idx) ?? []) {
+      indeg.set(next, (indeg.get(next) ?? 0) - 1);
+      if ((indeg.get(next) ?? 0) === 0) queue.push(next);
+    }
+  }
+  // Cycle fallback: append any entity files not emitted, in original order.
+  for (const p of entityFiles) if (!seen.has(p.originalIndex)) sorted.push(p);
+
+  return [...sorted, ...others];
+}
+
+async function runBatch(req: Request, res: Response, dryRun: boolean): Promise<void> {
+  const body = PreviewImportBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  const gdrive = await isGoogleDriveModuleEnabled();
+
+  const prepared: Prepared[] = [];
+  for (let i = 0; i < body.data.files.length; i++) {
+    const f = body.data.files[i]!;
+    prepared.push(f.kind === "entity" ? await prepareEntityFile(i, f, gdrive) : await preparePageFile(i, f));
+  }
+
+  const fileResults: FileResult[] = new Array(prepared.length);
+  let anyError = false;
+
+  // Seed file-level errors (bad target etc.). These make the batch not-ok, so a
+  // commit rolls everything back (all-or-nothing).
+  for (const p of prepared) {
+    if (p.kind === "error") {
+      fileResults[p.originalIndex] = {
+        index: p.originalIndex,
+        kind: p.fileKind,
+        label: p.label,
+        targetName: p.targetName,
+        error: p.error,
+        total: p.total,
+        created: 0,
+        updated: 0,
+        skipped: 0,
+        errors: 0,
+        rows: [],
+      };
+      anyError = true;
+    }
+  }
+
+  const ordered = orderPrepared(prepared);
+  const lockIds = [
+    ...new Set(
+      ordered.filter((p): p is Extract<Prepared, { kind: "entity" }> => p.kind === "entity").map((p) => p.ctx.entityId),
+    ),
+  ].sort((a, b) => a - b);
+
+  class Rollback extends Error {}
+  try {
+    await db.transaction(async (tx) => {
+      // Acquire per-entity advisory locks up front (sorted → deadlock-free) so
+      // unique-key checks are serialized for the whole batch's lifetime.
+      for (const id of lockIds) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${UNIQUE_KEY_LOCK_NS}, ${id})`);
+      }
+      for (const p of ordered) {
+        if (p.kind === "error") continue;
+        const fr: FileResult = {
+          index: p.originalIndex,
+          kind: p.kind,
+          label: p.label,
+          targetName: p.kind === "entity" ? p.ctx.entityName : p.ctx.pageName,
+          error: null,
+          total: p.rows.length,
+          created: 0,
+          updated: 0,
+          skipped: 0,
+          errors: 0,
+          rows: [],
+        };
+        for (const row of p.rows) {
+          const outcome =
+            p.kind === "entity" ? await processEntityRow(tx, row, p.ctx) : await processPageRow(tx, row, p.ctx);
+          fr.rows.push({ index: row.index, status: outcome.status, message: outcome.message ?? null });
+          if (outcome.status === "created") fr.created++;
+          else if (outcome.status === "updated") fr.updated++;
+          else if (outcome.status === "skipped") fr.skipped++;
+          else fr.errors++;
+        }
+        if (fr.errors > 0) anyError = true;
+        fileResults[p.originalIndex] = fr;
+      }
+      // Preview: always roll back (rehearsal). Commit: roll back if anything failed.
+      if (dryRun || anyError) throw new Rollback();
+    });
+  } catch (e) {
+    if (!(e instanceof Rollback)) {
+      req.log?.error({ err: e }, "batch import failed");
+      res.status(500).json({ error: e instanceof Error ? e.message : "Ошибка импорта" });
       return;
     }
   }
 
-  const ctx: RowContext = { entityId, fields, fieldByKey, statuses, gdrive, keyField, keyFields, relCols, relById, dryRun };
-
-  const results: { index: number; status: RowOutcome["status"]; message: string | null }[] = [];
-  let created = 0;
-  let updated = 0;
-  let skipped = 0;
-  let errors = 0;
-
-  for (const row of body.data.rows) {
-    try {
-      const outcome = await processRow(row, ctx);
-      results.push({ index: row.index, status: outcome.status, message: outcome.message ?? null });
-      if (outcome.status === "created") created++;
-      else if (outcome.status === "updated") updated++;
-      else if (outcome.status === "skipped") skipped++;
-      else errors++;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Ошибка импорта строки";
-      req.log?.error({ err }, "import row failed");
-      results.push({ index: row.index, status: "error", message });
-      errors++;
-    }
-  }
-
-  res.json({ total: body.data.rows.length, created, updated, skipped, errors, rows: results });
+  res.json({ ok: !anyError, files: fileResults });
 }
 
-router.post("/entities/:entityId/import/preview", requireAuth, requireAdmin("dataImport"), async (req, res): Promise<void> => {
-  await runImport(req, res, true);
+router.post("/import/preview", requireAuth, requireAdmin("dataImport"), async (req, res): Promise<void> => {
+  await runBatch(req, res, true);
 });
 
-router.post("/entities/:entityId/import/commit", requireAuth, requireAdmin("dataImport"), async (req, res): Promise<void> => {
-  await runImport(req, res, false);
+router.post("/import/commit", requireAuth, requireAdmin("dataImport"), async (req, res): Promise<void> => {
+  await runBatch(req, res, false);
 });
 
 export default router;

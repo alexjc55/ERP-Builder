@@ -113,7 +113,7 @@ async function pageExists(pageId: number): Promise<boolean> {
  * page shows no records (neither mirror nor bound), so page-record values and
  * relation columns do not apply.
  */
-async function effectiveEntityForPage(
+export async function effectiveEntityForPage(
   pageId: number,
 ): Promise<{ found: boolean; entityId: number | null; isMirror: boolean }> {
   const [p] = await db

@@ -11,10 +11,12 @@ import type { ImportRowValues } from './importRowValues';
 export interface ImportRow {
   /** Original spreadsheet row number, used in the result report. */
   index: number;
-  /** Map of fieldKey to raw cell value. */
+  /** Map of fieldKey to raw cell value. For a page file these are the page-local fieldKey values. */
   values: ImportRowValues;
-  /** Map of relationId (as string) to target key values. */
+  /** Map of relationId (as string) to target key values (entity files only). */
   relations?: ImportRowRelations;
-  /** Status key or localized status name; empty falls back to the entity default. */
+  /** Status key or localized status name; empty falls back to the entity default (entity files only). */
   statusName?: string | null;
+  /** For a page file, the value used to locate the host record via the file's hostKeyFieldKey on the mirrored entity. */
+  hostKeyValue?: string | null;
 }

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
 import {
@@ -6,17 +6,24 @@ import {
   useListEntityFields,
   useListEntityStatuses,
   useListEntityRelations,
-  usePreviewEntityImport,
-  useCommitEntityImport,
+  useListPages,
+  useListPageFields,
+  usePreviewImport,
+  useCommitImport,
   getListEntityFieldsQueryKey,
   getListEntityStatusesQueryKey,
   getListEntityRelationsQueryKey,
+  getListPageFieldsQueryKey,
   type Entity,
   type Field,
   type Status,
   type Relation,
-  type ImportRequest,
-  type ImportResult,
+  type Page,
+  type PageField,
+  type BatchImportFile,
+  type BatchImportResult,
+  type BatchImportFileResult,
+  type ImportRow,
 } from "@workspace/api-client-react";
 import { useML, useT } from "@/lib/i18n";
 import { normalizeSelectOptions } from "@/lib/selectOptions";
@@ -24,7 +31,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -41,25 +47,41 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Download, FileSpreadsheet, Loader2, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
+import {
+  Upload,
+  Download,
+  FileSpreadsheet,
+  Loader2,
+  CheckCircle2,
+  XCircle,
+  Trash2,
+  AlertTriangle,
+} from "lucide-react";
 
 // Field types that cannot be filled from a spreadsheet cell.
 const NON_IMPORTABLE = new Set(["file", "function", "relation", "lookup"]);
 
 const STATUS_HEADER = "Статус / Status";
 
+// A file is either an ENTITY file (writes entity records) or a PAGE file (writes
+// page-local values on a mirror page, located per row by a host-record key).
+type FileKind = "entity" | "page";
+
 type ColMap =
   | { kind: "ignore" }
-  | { kind: "field"; fieldKey: string }
-  | { kind: "relation"; relationId: number }
-  | { kind: "status" };
+  | { kind: "field"; fieldKey: string } // entity field OR page-local field (per file kind)
+  | { kind: "relation"; relationId: number } // entity files only
+  | { kind: "status" } // entity files only
+  | { kind: "hostkey" }; // page files only — the value locating the host record
 
 const MAP_IGNORE = "ignore";
 const MAP_STATUS = "status";
+const MAP_HOSTKEY = "hostkey";
 const encodeMap = (m: ColMap): string =>
   m.kind === "field" ? `field:${m.fieldKey}` : m.kind === "relation" ? `rel:${m.relationId}` : m.kind;
 function decodeMap(v: string): ColMap {
   if (v === MAP_STATUS) return { kind: "status" };
+  if (v === MAP_HOSTKEY) return { kind: "hostkey" };
   if (v.startsWith("field:")) return { kind: "field", fieldKey: v.slice(6) };
   if (v.startsWith("rel:")) return { kind: "relation", relationId: Number(v.slice(4)) };
   return { kind: "ignore" };
@@ -68,6 +90,26 @@ function decodeMap(v: string): ColMap {
 const norm = (s: string) => s.trim().toLowerCase();
 const splitMulti = (raw: unknown): string[] =>
   raw == null ? [] : String(raw).split(/[;\n]+/).map((s) => s.trim()).filter((s) => s !== "");
+
+let fileSeq = 0;
+
+type ParsedFile = {
+  id: string;
+  fileName: string;
+  headers: string[];
+  rows: unknown[][];
+};
+
+function colLetter(n: number): string {
+  let s = "";
+  let x = n;
+  while (x > 0) {
+    const m = (x - 1) % 26;
+    s = String.fromCharCode(65 + m) + s;
+    x = Math.floor((x - 1) / 26);
+  }
+  return s;
+}
 
 /** Picks which field on a relation's target entity is used to resolve links by value. */
 function RelationTargetKeyPicker({
@@ -85,7 +127,7 @@ function RelationTargetKeyPicker({
   const fields = (data ?? []).filter((f) => f.isActive && !NON_IMPORTABLE.has(f.fieldType));
   return (
     <Select value={value || undefined} onValueChange={onChange}>
-      <SelectTrigger className="h-8 w-[220px]">
+      <SelectTrigger className="h-8 w-[200px]">
         <SelectValue placeholder={t("import.pickTargetKey", "Поле для поиска…")} />
       </SelectTrigger>
       <SelectContent>
@@ -100,24 +142,57 @@ function RelationTargetKeyPicker({
   );
 }
 
-export default function ImportPage() {
+// ── Per-file configuration card ──────────────────────────────────────────────
+
+function FileCard({
+  parsed,
+  index,
+  entities,
+  pages,
+  result,
+  onBuilt,
+  onRemove,
+}: {
+  parsed: ParsedFile;
+  index: number;
+  entities: Entity[];
+  pages: Page[];
+  result: BatchImportFileResult | undefined;
+  onBuilt: (id: string, file: BatchImportFile | null) => void;
+  onRemove: (id: string) => void;
+}) {
   const ml = useML();
   const t = useT();
   const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { data: entitiesData, isLoading: entitiesLoading } = useListEntities();
-  const entities: Entity[] = (entitiesData ?? []).filter((e) => e.isActive);
-
+  const [kind, setKind] = useState<FileKind>("entity");
   const [entityId, setEntityId] = useState<number | null>(null);
+  const [pageId, setPageId] = useState<number | null>(null);
+  const [mapping, setMapping] = useState<ColMap[]>([]);
+  const [relTargetKeys, setRelTargetKeys] = useState<Record<number, string>>({});
+  const [keyFieldKey, setKeyFieldKey] = useState<string>("");
+  const [hostKeyFieldKey, setHostKeyFieldKey] = useState<string>("");
+
+  // Entity-file metadata.
   const { data: fieldsData } = useListEntityFields(entityId ?? 0, {
-    query: { enabled: entityId != null, queryKey: getListEntityFieldsQueryKey(entityId ?? 0) },
+    query: { enabled: kind === "entity" && entityId != null, queryKey: getListEntityFieldsQueryKey(entityId ?? 0) },
   });
   const { data: statusesData } = useListEntityStatuses(entityId ?? 0, {
-    query: { enabled: entityId != null, queryKey: getListEntityStatusesQueryKey(entityId ?? 0) },
+    query: { enabled: kind === "entity" && entityId != null, queryKey: getListEntityStatusesQueryKey(entityId ?? 0) },
   });
   const { data: relationsData } = useListEntityRelations(entityId ?? 0, {
-    query: { enabled: entityId != null, queryKey: getListEntityRelationsQueryKey(entityId ?? 0) },
+    query: { enabled: kind === "entity" && entityId != null, queryKey: getListEntityRelationsQueryKey(entityId ?? 0) },
+  });
+
+  // Page-file metadata: the page's page-local fields + the mirrored entity's
+  // fields (used to pick the host-record lookup field).
+  const selectedPage = pages.find((p) => p.id === pageId) ?? null;
+  const mirrorEntityId = selectedPage?.mirrorEntityId ?? null;
+  const { data: pageFieldsData } = useListPageFields(pageId ?? 0, {
+    query: { enabled: kind === "page" && pageId != null, queryKey: getListPageFieldsQueryKey(pageId ?? 0) },
+  });
+  const { data: mirrorFieldsData } = useListEntityFields(mirrorEntityId ?? 0, {
+    query: { enabled: kind === "page" && mirrorEntityId != null, queryKey: getListEntityFieldsQueryKey(mirrorEntityId ?? 0) },
   });
 
   const fields: Field[] = useMemo(
@@ -126,96 +201,164 @@ export default function ImportPage() {
   );
   const statuses: Status[] = useMemo(() => statusesData ?? [], [statusesData]);
   const relations: Relation[] = useMemo(() => relationsData ?? [], [relationsData]);
+  const pageFields: PageField[] = useMemo(
+    () => (pageFieldsData ?? []).filter((f) => !NON_IMPORTABLE.has(f.fieldType)),
+    [pageFieldsData],
+  );
+  const mirrorFields: Field[] = useMemo(() => (mirrorFieldsData ?? []).filter((f) => f.isActive), [mirrorFieldsData]);
 
-  const [headers, setHeaders] = useState<string[]>([]);
-  const [rows, setRows] = useState<unknown[][]>([]);
-  const [fileName, setFileName] = useState<string>("");
-  const [mapping, setMapping] = useState<ColMap[]>([]);
-  const [relTargetKeys, setRelTargetKeys] = useState<Record<number, string>>({});
-  const [keyFieldKey, setKeyFieldKey] = useState<string>("");
+  const mirrorPages = useMemo(() => pages.filter((p) => p.mirrorEntityId != null), [pages]);
 
-  const [preview, setPreview] = useState<ImportResult | null>(null);
-  const [committed, setCommitted] = useState<ImportResult | null>(null);
+  // ── Auto-map columns once the target + its metadata are known ───────────────
+  const autoMap = useMemo(
+    () =>
+      (hdrs: string[]): ColMap[] => {
+        if (kind === "entity") {
+          return hdrs.map((h): ColMap => {
+            const n = norm(h);
+            if (!n) return { kind: "ignore" };
+            if (n === norm(STATUS_HEADER) || n === "статус" || n === "status") return { kind: "status" };
+            const f = fields.find((x) => norm(ml(x.nameJson)) === n || norm(x.fieldKey) === n);
+            if (f) return { kind: "field", fieldKey: f.fieldKey };
+            const r = relations.find((x) => norm(ml(x.nameJson)) === n || norm(x.relationKey) === n);
+            if (r) return { kind: "relation", relationId: r.id };
+            return { kind: "ignore" };
+          });
+        }
+        return hdrs.map((h): ColMap => {
+          const n = norm(h);
+          if (!n) return { kind: "ignore" };
+          const f = pageFields.find((x) => norm(ml(x.nameJson)) === n || norm(x.fieldKey) === n);
+          if (f) return { kind: "field", fieldKey: f.fieldKey };
+          return { kind: "ignore" };
+        });
+      },
+    [kind, fields, relations, pageFields, ml],
+  );
 
-  const previewMut = usePreviewEntityImport();
-  const commitMut = useCommitEntityImport();
-
-  function resetData() {
-    setHeaders([]);
-    setRows([]);
-    setFileName("");
-    setMapping([]);
+  const sig = `${kind}:${entityId ?? ""}:${pageId ?? ""}`;
+  const autoRef = useRef<string>("");
+  const metaReady =
+    kind === "entity" ? entityId != null && !!fieldsData : pageId != null && !!pageFieldsData;
+  useEffect(() => {
+    if (!metaReady) return;
+    if (autoRef.current === sig) return;
+    autoRef.current = sig;
+    setMapping(autoMap(parsed.headers));
     setRelTargetKeys({});
     setKeyFieldKey("");
-    setPreview(null);
-    setCommitted(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  }
+    setHostKeyFieldKey("");
+  }, [sig, metaReady, autoMap, parsed.headers]);
 
-  function onPickEntity(id: number) {
-    setEntityId(id);
-    resetData();
-  }
-
-  // ── Template download ──────────────────────────────────────────────────────
-  // Built with exceljs so select fields and the status column get real Excel
-  // dropdown lists (data validation). Allowed values live on a hidden "Списки"
-  // sheet and each column references its range, so users pick valid values while
-  // filling instead of only discovering mistakes at the preview step. The labels
-  // written here are exactly what the server's matchOption / resolveStatusId
-  // accept (option display label ru→en→he→value; status name ru→en→he→key).
-  const TEMPLATE_ROWS = 1000;
-
-  function colLetter(n: number): string {
-    let s = "";
-    let x = n;
-    while (x > 0) {
-      const m = (x - 1) % 26;
-      s = String.fromCharCode(65 + m) + s;
-      x = Math.floor((x - 1) / 26);
+  // ── Build the BatchImportFile (null = not ready) + a human warning ──────────
+  const { file, warning } = useMemo((): { file: BatchImportFile | null; warning: string | null } => {
+    if (kind === "entity") {
+      if (entityId == null) return { file: null, warning: t("import.needEntity", "Выберите сущность") };
+      const usedRelationIds = new Set<number>();
+      mapping.forEach((m) => m.kind === "relation" && usedRelationIds.add(m.relationId));
+      for (const relId of usedRelationIds) {
+        if (!relTargetKeys[relId]) {
+          const rel = relations.find((r) => r.id === relId);
+          return {
+            file: null,
+            warning: `${t("import.missingTargetKey", "Выберите поле поиска для связи")}: ${rel ? ml(rel.nameJson) : relId}`,
+          };
+        }
+      }
+      const rows: ImportRow[] = parsed.rows.map((cells, i) => {
+        const values: Record<string, unknown> = {};
+        const rels: Record<string, string[]> = {};
+        let statusName: string | null = null;
+        mapping.forEach((m, c) => {
+          const raw = cells[c];
+          if (m.kind === "field") values[m.fieldKey] = raw;
+          else if (m.kind === "relation") rels[String(m.relationId)] = splitMulti(raw);
+          else if (m.kind === "status") statusName = raw == null || String(raw).trim() === "" ? null : String(raw);
+        });
+        return {
+          index: i + 2,
+          values,
+          relations: Object.keys(rels).length > 0 ? rels : undefined,
+          statusName,
+        };
+      });
+      const relationColumns = [...usedRelationIds].map((relId) => ({
+        relationId: relId,
+        targetKeyFieldKey: relTargetKeys[relId]!,
+      }));
+      return {
+        file: { kind: "entity", label: parsed.fileName, entityId, keyFieldKey: keyFieldKey || null, relationColumns, rows },
+        warning: null,
+      };
     }
-    return s;
-  }
 
+    // Page file.
+    if (pageId == null) return { file: null, warning: t("import.needPage", "Выберите страницу") };
+    const hostCol = mapping.findIndex((m) => m.kind === "hostkey");
+    if (hostCol < 0) return { file: null, warning: t("import.needHostCol", "Укажите колонку с ключом записи") };
+    if (!hostKeyFieldKey) return { file: null, warning: t("import.needHostField", "Выберите поле поиска записи") };
+    const rows: ImportRow[] = parsed.rows.map((cells, i) => {
+      const values: Record<string, unknown> = {};
+      mapping.forEach((m, c) => {
+        if (m.kind === "field") values[m.fieldKey] = cells[c];
+      });
+      const hraw = cells[hostCol];
+      return {
+        index: i + 2,
+        values,
+        hostKeyValue: hraw == null || String(hraw).trim() === "" ? null : String(hraw),
+      };
+    });
+    return { file: { kind: "page", label: parsed.fileName, pageId, hostKeyFieldKey, rows }, warning: null };
+  }, [kind, entityId, pageId, mapping, relTargetKeys, keyFieldKey, hostKeyFieldKey, relations, parsed, ml, t]);
+
+  useEffect(() => {
+    onBuilt(parsed.id, file);
+  }, [file, parsed.id, onBuilt]);
+
+  // ── Template download (dropdowns for select fields + status) ────────────────
   async function downloadTemplate() {
-    if (entityId == null) return;
     try {
-      const entity = entities.find((e) => e.id === entityId);
-      const header: string[] = [
-        ...fields.map((f) => ml(f.nameJson) || f.fieldKey),
-        ...relations.map((r) => ml(r.nameJson) || r.relationKey),
-        STATUS_HEADER,
-      ];
+      const header: string[] = [];
+      const dropdowns: { col: number; values: string[] }[] = [];
+      let base = "import";
+      if (kind === "entity") {
+        const entity = entities.find((e) => e.id === entityId);
+        base = entity ? ml(entity.nameJson) || entity.entityKey : "import";
+        fields.forEach((f, i) => {
+          header.push(ml(f.nameJson) || f.fieldKey);
+          if (f.fieldType === "select") {
+            const values = normalizeSelectOptions(f.optionsJson).map((o) => ml(o.labelJson) || o.value).filter((v) => v.trim() !== "");
+            if (values.length > 0) dropdowns.push({ col: i, values });
+          }
+        });
+        relations.forEach((r) => header.push(ml(r.nameJson) || r.relationKey));
+        header.push(STATUS_HEADER);
+        const statusValues = statuses.map((s) => ml(s.nameJson) || s.statusKey).filter((v) => v.trim() !== "");
+        if (statusValues.length > 0) dropdowns.push({ col: fields.length + relations.length, values: statusValues });
+      } else {
+        base = selectedPage ? ml(selectedPage.nameJson) || String(selectedPage.id) : "import";
+        const hostField = mirrorFields.find((f) => f.fieldKey === hostKeyFieldKey);
+        header.push(hostField ? `${ml(hostField.nameJson) || hostField.fieldKey} (ключ)` : "Ключ записи");
+        pageFields.forEach((f, i) => {
+          header.push(ml(f.nameJson) || f.fieldKey);
+          if (f.fieldType === "select") {
+            const values = normalizeSelectOptions(f.optionsJson).map((o) => ml(o.labelJson) || o.value).filter((v) => v.trim() !== "");
+            if (values.length > 0) dropdowns.push({ col: i + 1, values });
+          }
+        });
+      }
 
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet("Import");
       const lists = wb.addWorksheet("Списки");
       lists.state = "hidden";
-
       ws.addRow(header);
       ws.getRow(1).font = { bold: true };
       ws.columns.forEach((col) => {
         col.width = 22;
       });
-
-      // Collect dropdown specs: (0-based import column) → allowed values.
-      const dropdowns: { col: number; values: string[] }[] = [];
-      fields.forEach((f, i) => {
-        if (f.fieldType !== "select") return;
-        const values = normalizeSelectOptions(f.optionsJson)
-          .map((o) => ml(o.labelJson) || o.value)
-          .filter((v) => v.trim() !== "");
-        if (values.length > 0) dropdowns.push({ col: i, values });
-      });
-      const statusValues = statuses
-        .map((s) => ml(s.nameJson) || s.statusKey)
-        .filter((v) => v.trim() !== "");
-      if (statusValues.length > 0) {
-        dropdowns.push({ col: fields.length + relations.length, values: statusValues });
-      }
-
-      // Write each list to its own column on the hidden sheet, then point the
-      // matching import column's rows at that range via list data-validation.
+      const TEMPLATE_ROWS = 1000;
       dropdowns.forEach((d, li) => {
         const listCol = li + 1;
         d.values.forEach((v, r) => {
@@ -238,14 +381,11 @@ export default function ImportPage() {
       });
 
       const buf = await wb.xlsx.writeBuffer();
-      const blob = new Blob([buf], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const base = (entity ? ml(entity.nameJson) || entity.entityKey : "import").replace(/[^\w\-]+/g, "_");
+      const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${base}_template.xlsx`;
+      a.download = `${base.replace(/[^\w\-]+/g, "_")}_template.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
@@ -253,155 +393,41 @@ export default function ImportPage() {
     }
   }
 
-  // ── File parse + auto-map ──────────────────────────────────────────────────
-  function autoMap(hdrs: string[]): ColMap[] {
-    return hdrs.map((h): ColMap => {
-      const n = norm(h);
-      if (!n) return { kind: "ignore" };
-      if (n === norm(STATUS_HEADER) || n === "статус" || n === "status") return { kind: "status" };
-      const f = fields.find((x) => norm(ml(x.nameJson)) === n || norm(x.fieldKey) === n);
-      if (f) return { kind: "field", fieldKey: f.fieldKey };
-      const r = relations.find((x) => norm(ml(x.nameJson)) === n || norm(x.relationKey) === n);
-      if (r) return { kind: "relation", relationId: r.id };
-      return { kind: "ignore" };
-    });
-  }
-
-  async function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type: "array" });
-      const firstSheet = wb.SheetNames[0];
-      if (!firstSheet) throw new Error("empty");
-      const ws = wb.Sheets[firstSheet]!;
-      const aoa = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: true, defval: null, blankrows: false });
-      if (aoa.length === 0) throw new Error("empty");
-      const hdrs = (aoa[0] as unknown[]).map((c) => (c == null ? "" : String(c)));
-      const dataRows = aoa.slice(1).filter((r) => (r as unknown[]).some((c) => c != null && String(c).trim() !== ""));
-      setFileName(file.name);
-      setHeaders(hdrs);
-      setRows(dataRows);
-      setMapping(autoMap(hdrs));
-      setPreview(null);
-      setCommitted(null);
-    } catch {
-      toast({ title: t("import.parseError", "Не удалось прочитать файл"), variant: "destructive" });
-    }
-  }
-
-  // ── Build request ──────────────────────────────────────────────────────────
-  function buildRequest(): ImportRequest | null {
-    const usedRelationIds = new Set<number>();
-    mapping.forEach((m) => {
-      if (m.kind === "relation") usedRelationIds.add(m.relationId);
-    });
-    for (const relId of usedRelationIds) {
-      if (!relTargetKeys[relId]) {
-        const rel = relations.find((r) => r.id === relId);
-        toast({
-          title: t("import.missingTargetKey", "Выберите поле поиска для связи") + `: ${rel ? ml(rel.nameJson) : relId}`,
-          variant: "destructive",
-        });
-        return null;
-      }
-    }
-    const importRows = rows.map((cells, i) => {
-      const values: Record<string, unknown> = {};
-      const rels: Record<string, string[]> = {};
-      let statusName: string | null = null;
-      mapping.forEach((m, c) => {
-        const raw = cells[c];
-        if (m.kind === "field") values[m.fieldKey] = raw;
-        else if (m.kind === "relation") rels[String(m.relationId)] = splitMulti(raw);
-        else if (m.kind === "status") statusName = raw == null || String(raw).trim() === "" ? null : String(raw);
-      });
-      return {
-        index: i + 2,
-        values,
-        relations: Object.keys(rels).length > 0 ? rels : undefined,
-        statusName,
-      };
-    });
-    const relationColumns = [...usedRelationIds].map((relId) => ({
-      relationId: relId,
-      targetKeyFieldKey: relTargetKeys[relId]!,
-    }));
-    return {
-      keyFieldKey: keyFieldKey || null,
-      relationColumns,
-      rows: importRows,
-    };
-  }
-
-  async function runPreview() {
-    if (entityId == null) return;
-    const req = buildRequest();
-    if (!req) return;
-    try {
-      const res = await previewMut.mutateAsync({ entityId, data: req });
-      setPreview(res);
-      setCommitted(null);
-    } catch {
-      toast({ title: t("import.previewError", "Ошибка проверки"), variant: "destructive" });
-    }
-  }
-
-  async function runCommit() {
-    if (entityId == null) return;
-    const req = buildRequest();
-    if (!req) return;
-    try {
-      const res = await commitMut.mutateAsync({ entityId, data: req });
-      setCommitted(res);
-      toast({
-        title: t("import.done", "Импорт завершён"),
-        description: `${t("import.created", "Создано")}: ${res.created} · ${t("import.updated", "Обновлено")}: ${res.updated} · ${t("import.errors", "Ошибок")}: ${res.errors}`,
-      });
-    } catch {
-      toast({ title: t("import.commitError", "Ошибка импорта"), variant: "destructive" });
-    }
-  }
-
-  function downloadErrorReport(result: ImportResult) {
-    const failed = result.rows.filter((r) => r.status === "error");
-    const lines = [
-      `${t("import.row", "Строка")},${t("import.message", "Сообщение")}`,
-      ...failed.map((r) => `${r.index},"${(r.message ?? "").replace(/"/g, '""')}"`),
-    ];
-    const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "import_errors.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  const busy = previewMut.isPending || commitMut.isPending;
-  const result = committed ?? preview;
+  const fieldOptions = kind === "entity" ? fields : pageFields;
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">{t("import.title", "Импорт данных")}</h1>
-          <p className="text-sm text-slate-500">
-            {t("import.subtitle", "Загрузка записей из файла XLSX/CSV с проверкой по правилам сущности")}
-          </p>
+    <Card>
+      <CardContent className="space-y-4 pt-6">
+        {/* Header: file name + kind + target */}
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+            {parsed.fileName}
+          </span>
+          <Badge variant="secondary">
+            {parsed.rows.length} {t("import.rowsCount", "строк")}
+          </Badge>
+          <div className="ml-auto flex items-center gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={() => onRemove(parsed.id)}>
+              <Trash2 className="h-4 w-4 text-red-500" />
+            </Button>
+          </div>
         </div>
-      </div>
 
-      {/* Step 1: entity */}
-      <Card>
-        <CardContent className="space-y-3 pt-6">
-          <Label className="text-sm font-semibold text-slate-700">{t("import.step1", "1. Выберите сущность")}</Label>
-          {entitiesLoading ? (
-            <Skeleton className="h-9 w-72" />
-          ) : (
-            <Select value={entityId != null ? String(entityId) : undefined} onValueChange={(v) => onPickEntity(Number(v))}>
-              <SelectTrigger className="w-72">
+        <div className="flex flex-wrap items-center gap-3">
+          <Select value={kind} onValueChange={(v) => setKind(v as FileKind)}>
+            <SelectTrigger className="w-56">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="entity">{t("import.kindEntity", "Записи сущности")}</SelectItem>
+              <SelectItem value="page">{t("import.kindPage", "Значения страницы")}</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {kind === "entity" ? (
+            <Select value={entityId != null ? String(entityId) : undefined} onValueChange={(v) => setEntityId(Number(v))}>
+              <SelectTrigger className="w-64">
                 <SelectValue placeholder={t("import.pickEntity", "Сущность…")} />
               </SelectTrigger>
               <SelectContent>
@@ -412,223 +438,424 @@ export default function ImportPage() {
                 ))}
               </SelectContent>
             </Select>
+          ) : (
+            <Select value={pageId != null ? String(pageId) : undefined} onValueChange={(v) => setPageId(Number(v))}>
+              <SelectTrigger className="w-64">
+                <SelectValue placeholder={t("import.pickPage", "Зеркальная страница…")} />
+              </SelectTrigger>
+              <SelectContent>
+                {mirrorPages.map((p) => (
+                  <SelectItem key={p.id} value={String(p.id)}>
+                    {ml(p.nameJson) || String(p.id)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {kind === "page" && pageId != null && (
+            <Select value={hostKeyFieldKey || undefined} onValueChange={setHostKeyFieldKey}>
+              <SelectTrigger className="w-64">
+                <SelectValue placeholder={t("import.pickHostField", "Поле поиска записи…")} />
+              </SelectTrigger>
+              <SelectContent>
+                {mirrorFields.map((f) => (
+                  <SelectItem key={f.fieldKey} value={f.fieldKey}>
+                    {ml(f.nameJson) || f.fieldKey}
+                    {f.isKey ? " ★" : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          <Button type="button" variant="outline" size="sm" onClick={downloadTemplate} disabled={metaReady === false}>
+            <Download className="mr-2 h-4 w-4" />
+            {t("import.downloadTemplate", "Шаблон")}
+          </Button>
+        </div>
+
+        {/* Column mapping */}
+        {metaReady && (
+          <div className="overflow-x-auto rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("import.column", "Колонка файла")}</TableHead>
+                  <TableHead>{t("import.sample", "Пример")}</TableHead>
+                  <TableHead>{t("import.mapTo", "Назначение")}</TableHead>
+                  {kind === "entity" && <TableHead>{t("import.targetKey", "Поиск по полю")}</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {parsed.headers.map((h, c) => {
+                  const m = mapping[c] ?? { kind: "ignore" };
+                  const sample = parsed.rows.find((r) => r[c] != null && String(r[c]).trim() !== "")?.[c];
+                  return (
+                    <TableRow key={c}>
+                      <TableCell className="font-medium">{h || `#${c + 1}`}</TableCell>
+                      <TableCell className="max-w-[180px] truncate text-slate-500">
+                        {sample == null ? "—" : String(sample)}
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={encodeMap(m)}
+                          onValueChange={(v) => {
+                            const next = [...mapping];
+                            next[c] = decodeMap(v);
+                            setMapping(next);
+                          }}
+                        >
+                          <SelectTrigger className="h-8 w-[240px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={MAP_IGNORE}>{t("import.ignore", "— Пропустить —")}</SelectItem>
+                            {kind === "entity" && <SelectItem value={MAP_STATUS}>{t("import.status", "Статус")}</SelectItem>}
+                            {kind === "page" && (
+                              <SelectItem value={MAP_HOSTKEY}>{t("import.hostkey", "🔑 Ключ записи")}</SelectItem>
+                            )}
+                            {fieldOptions.map((f) => (
+                              <SelectItem key={`field:${f.fieldKey}`} value={`field:${f.fieldKey}`}>
+                                {ml(f.nameJson) || f.fieldKey}
+                              </SelectItem>
+                            ))}
+                            {kind === "entity" &&
+                              relations.map((r) => (
+                                <SelectItem key={`rel:${r.id}`} value={`rel:${r.id}`}>
+                                  🔗 {ml(r.nameJson) || r.relationKey}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      {kind === "entity" && (
+                        <TableCell>
+                          {m.kind === "relation" ? (
+                            <RelationTargetKeyPicker
+                              relation={relations.find((r) => r.id === m.relationId)!}
+                              value={relTargetKeys[m.relationId] ?? ""}
+                              onChange={(fk) => setRelTargetKeys((prev) => ({ ...prev, [m.relationId]: fk }))}
+                            />
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+
+        {/* Entity upsert key */}
+        {metaReady && kind === "entity" && (
+          <div className="flex flex-wrap items-center gap-3 border-t pt-4">
+            <Label className="text-sm text-slate-600">{t("import.upsertKey", "Ключ для обновления (upsert)")}</Label>
+            <Select value={keyFieldKey || "__none__"} onValueChange={(v) => setKeyFieldKey(v === "__none__" ? "" : v)}>
+              <SelectTrigger className="w-72">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">{t("import.insertOnly", "Без обновления (только добавление)")}</SelectItem>
+                {fields.map((f) => (
+                  <SelectItem key={f.fieldKey} value={f.fieldKey}>
+                    {ml(f.nameJson) || f.fieldKey}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {/* Not-ready warning */}
+        {warning && (
+          <p className="flex items-center gap-2 text-sm text-amber-600">
+            <AlertTriangle className="h-4 w-4" />
+            {warning}
+          </p>
+        )}
+
+        {/* Per-file result */}
+        {result && <FileResultView index={index} result={result} />}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Per-file result summary + error rows ─────────────────────────────────────
+
+function FileResultView({ index, result }: { index: number; result: BatchImportFileResult }) {
+  const t = useT();
+  return (
+    <div className="space-y-2 border-t pt-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="outline">#{index + 1}</Badge>
+        {result.error ? (
+          <span className="flex items-center gap-1 text-sm text-red-600">
+            <XCircle className="h-4 w-4" /> {result.error}
+          </span>
+        ) : (
+          <>
+            <Badge className="bg-emerald-100 text-emerald-700">
+              {t("import.created", "Создано")}: {result.created}
+            </Badge>
+            <Badge className="bg-blue-100 text-blue-700">
+              {t("import.updated", "Обновлено")}: {result.updated}
+            </Badge>
+            {result.skipped > 0 && (
+              <Badge className="bg-slate-100 text-slate-600">
+                {t("import.skipped", "Пропущено")}: {result.skipped}
+              </Badge>
+            )}
+            <Badge className={result.errors > 0 ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-500"}>
+              {t("import.errors", "Ошибок")}: {result.errors}
+            </Badge>
+          </>
+        )}
+      </div>
+      {result.rows.some((r) => r.status === "error") && (
+        <div className="max-h-64 overflow-y-auto rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-20">{t("import.row", "Строка")}</TableHead>
+                <TableHead>{t("import.message", "Сообщение")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {result.rows
+                .filter((r) => r.status === "error")
+                .map((r) => (
+                  <TableRow key={r.index}>
+                    <TableCell>{r.index}</TableCell>
+                    <TableCell className="text-slate-700">{r.message}</TableCell>
+                  </TableRow>
+                ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
+
+export default function ImportPage() {
+  const t = useT();
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: entitiesData } = useListEntities();
+  const entities: Entity[] = useMemo(() => (entitiesData ?? []).filter((e) => e.isActive), [entitiesData]);
+  const { data: pagesData } = useListPages();
+  const pages: Page[] = useMemo(() => pagesData ?? [], [pagesData]);
+
+  const [files, setFiles] = useState<ParsedFile[]>([]);
+  const [built, setBuilt] = useState<Record<string, BatchImportFile | null>>({});
+  const [result, setResult] = useState<BatchImportResult | null>(null);
+  const [committed, setCommitted] = useState(false);
+  const [sentIds, setSentIds] = useState<string[]>([]);
+
+  const previewMut = usePreviewImport();
+  const commitMut = useCommitImport();
+  const busy = previewMut.isPending || commitMut.isPending;
+
+  const onBuilt = useMemo(
+    () => (id: string, file: BatchImportFile | null) => {
+      setBuilt((prev) => (prev[id] === file ? prev : { ...prev, [id]: file }));
+    },
+    [],
+  );
+
+  function removeFile(id: string) {
+    setFiles((prev) => prev.filter((f) => f.id !== id));
+    setBuilt((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setResult(null);
+    setCommitted(false);
+  }
+
+  async function onFilesChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const list = e.target.files;
+    if (!list || list.length === 0) return;
+    const parsedNew: ParsedFile[] = [];
+    for (const file of Array.from(list)) {
+      try {
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array" });
+        const firstSheet = wb.SheetNames[0];
+        if (!firstSheet) continue;
+        const ws = wb.Sheets[firstSheet]!;
+        const aoa = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: true, defval: null, blankrows: false });
+        if (aoa.length === 0) continue;
+        const hdrs = (aoa[0] as unknown[]).map((c) => (c == null ? "" : String(c)));
+        const dataRows = aoa.slice(1).filter((r) => (r as unknown[]).some((c) => c != null && String(c).trim() !== ""));
+        parsedNew.push({ id: `f${++fileSeq}`, fileName: file.name, headers: hdrs, rows: dataRows });
+      } catch {
+        toast({ title: `${t("import.parseError", "Не удалось прочитать файл")}: ${file.name}`, variant: "destructive" });
+      }
+    }
+    if (parsedNew.length > 0) {
+      setFiles((prev) => [...prev, ...parsedNew]);
+      setResult(null);
+      setCommitted(false);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  const allReady = files.length > 0 && files.every((f) => built[f.id] != null);
+
+  function buildBatch(): { files: BatchImportFile[]; ids: string[] } {
+    const ids: string[] = [];
+    const batch: BatchImportFile[] = [];
+    for (const f of files) {
+      const b = built[f.id];
+      if (b != null) {
+        ids.push(f.id);
+        batch.push(b);
+      }
+    }
+    return { files: batch, ids };
+  }
+
+  async function runPreview() {
+    const { files: batch, ids } = buildBatch();
+    if (batch.length === 0) return;
+    try {
+      const res = await previewMut.mutateAsync({ data: { files: batch } });
+      setResult(res);
+      setSentIds(ids);
+      setCommitted(false);
+    } catch {
+      toast({ title: t("import.previewError", "Ошибка проверки"), variant: "destructive" });
+    }
+  }
+
+  async function runCommit() {
+    const { files: batch, ids } = buildBatch();
+    if (batch.length === 0) return;
+    try {
+      const res = await commitMut.mutateAsync({ data: { files: batch } });
+      setResult(res);
+      setSentIds(ids);
+      setCommitted(true);
+      const totals = res.files.reduce(
+        (acc, f) => ({ created: acc.created + f.created, updated: acc.updated + f.updated, errors: acc.errors + f.errors }),
+        { created: 0, updated: 0, errors: 0 },
+      );
+      toast({
+        title: res.ok ? t("import.done", "Импорт завершён") : t("import.commitRolledBack", "Импорт отменён (есть ошибки)"),
+        description: `${t("import.created", "Создано")}: ${totals.created} · ${t("import.updated", "Обновлено")}: ${totals.updated} · ${t("import.errors", "Ошибок")}: ${totals.errors}`,
+        variant: res.ok ? undefined : "destructive",
+      });
+    } catch {
+      toast({ title: t("import.commitError", "Ошибка импорта"), variant: "destructive" });
+    }
+  }
+
+  const resultByFileId = useMemo(() => {
+    const map: Record<string, BatchImportFileResult> = {};
+    if (result) {
+      for (const fr of result.files) {
+        const id = sentIds[fr.index];
+        if (id) map[id] = fr;
+      }
+    }
+    return map;
+  }, [result, sentIds]);
+
+  return (
+    <div className="space-y-6 p-6">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-800">{t("import.title", "Импорт данных")}</h1>
+        <p className="text-sm text-slate-500">
+          {t(
+            "import.subtitleBatch",
+            "Загрузите один или несколько файлов сразу — система расставит их по связям и импортирует одной проверенной операцией (всё или ничего в рамках пакета)",
+          )}
+        </p>
+      </div>
+
+      {/* Upload */}
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-3 pt-6">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            multiple
+            className="hidden"
+            onChange={onFilesChange}
+          />
+          <Button type="button" onClick={() => fileInputRef.current?.click()}>
+            <Upload className="mr-2 h-4 w-4" />
+            {t("import.uploadFiles", "Загрузить файлы")}
+          </Button>
+          {files.length > 0 && (
+            <Badge variant="secondary">
+              {files.length} {t("import.filesCount", "файлов")}
+            </Badge>
           )}
         </CardContent>
       </Card>
 
-      {entityId != null && (
-        <>
-          {/* Step 2: template + upload */}
-          <Card>
-            <CardContent className="space-y-4 pt-6">
-              <Label className="text-sm font-semibold text-slate-700">{t("import.step2", "2. Шаблон и файл")}</Label>
-              <div className="flex flex-wrap items-center gap-3">
-                <Button type="button" variant="outline" onClick={downloadTemplate}>
-                  <Download className="mr-2 h-4 w-4" />
-                  {t("import.downloadTemplate", "Скачать шаблон")}
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".xlsx,.xls,.csv"
-                  className="hidden"
-                  onChange={onFileChange}
-                />
-                <Button type="button" onClick={() => fileInputRef.current?.click()}>
-                  <Upload className="mr-2 h-4 w-4" />
-                  {t("import.uploadFile", "Загрузить файл")}
-                </Button>
-                {fileName && (
-                  <span className="flex items-center gap-2 text-sm text-slate-600">
-                    <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-                    {fileName}
-                    <Badge variant="secondary">
-                      {rows.length} {t("import.rowsCount", "строк")}
-                    </Badge>
-                    <Button type="button" variant="ghost" size="sm" onClick={resetData}>
-                      <RefreshCw className="h-3.5 w-3.5" />
-                    </Button>
-                  </span>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+      {/* Per-file cards */}
+      {files.map((f, i) => (
+        <FileCard
+          key={f.id}
+          parsed={f}
+          index={i}
+          entities={entities}
+          pages={pages}
+          result={resultByFileId[f.id]}
+          onBuilt={onBuilt}
+          onRemove={removeFile}
+        />
+      ))}
 
-          {/* Step 3: mapping */}
-          {headers.length > 0 && (
-            <Card>
-              <CardContent className="space-y-4 pt-6">
-                <Label className="text-sm font-semibold text-slate-700">{t("import.step3", "3. Сопоставление колонок")}</Label>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t("import.column", "Колонка файла")}</TableHead>
-                        <TableHead>{t("import.sample", "Пример")}</TableHead>
-                        <TableHead>{t("import.mapTo", "Поле / связь / статус")}</TableHead>
-                        <TableHead>{t("import.targetKey", "Поиск по полю")}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {headers.map((h, c) => {
-                        const m = mapping[c] ?? { kind: "ignore" };
-                        const sample = rows.find((r) => r[c] != null && String(r[c]).trim() !== "")?.[c];
-                        return (
-                          <TableRow key={c}>
-                            <TableCell className="font-medium">{h || `#${c + 1}`}</TableCell>
-                            <TableCell className="max-w-[200px] truncate text-slate-500">
-                              {sample == null ? "—" : String(sample)}
-                            </TableCell>
-                            <TableCell>
-                              <Select
-                                value={encodeMap(m)}
-                                onValueChange={(v) => {
-                                  const next = [...mapping];
-                                  next[c] = decodeMap(v);
-                                  setMapping(next);
-                                }}
-                              >
-                                <SelectTrigger className="h-8 w-[260px]">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value={MAP_IGNORE}>{t("import.ignore", "— Пропустить —")}</SelectItem>
-                                  <SelectItem value={MAP_STATUS}>{t("import.status", "Статус")}</SelectItem>
-                                  {fields.map((f) => (
-                                    <SelectItem key={`field:${f.fieldKey}`} value={`field:${f.fieldKey}`}>
-                                      {ml(f.nameJson) || f.fieldKey}
-                                    </SelectItem>
-                                  ))}
-                                  {relations.map((r) => (
-                                    <SelectItem key={`rel:${r.id}`} value={`rel:${r.id}`}>
-                                      🔗 {ml(r.nameJson) || r.relationKey}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </TableCell>
-                            <TableCell>
-                              {m.kind === "relation" ? (
-                                <RelationTargetKeyPicker
-                                  relation={relations.find((r) => r.id === m.relationId)!}
-                                  value={relTargetKeys[m.relationId] ?? ""}
-                                  onChange={(fk) => setRelTargetKeys((prev) => ({ ...prev, [m.relationId]: fk }))}
-                                />
-                              ) : (
-                                <span className="text-slate-400">—</span>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3 border-t pt-4">
-                  <Label className="text-sm text-slate-600">{t("import.upsertKey", "Ключ для обновления (upsert)")}</Label>
-                  <Select value={keyFieldKey || "__none__"} onValueChange={(v) => setKeyFieldKey(v === "__none__" ? "" : v)}>
-                    <SelectTrigger className="w-72">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">{t("import.insertOnly", "Без обновления (только добавление)")}</SelectItem>
-                      {fields.map((f) => (
-                        <SelectItem key={f.fieldKey} value={f.fieldKey}>
-                          {ml(f.nameJson) || f.fieldKey}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <span className="text-xs text-slate-400">
-                    {t("import.upsertHint", "Совпадающие записи будут обновлены, остальные — добавлены")}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <Button type="button" variant="outline" onClick={runPreview} disabled={busy || rows.length === 0}>
-                    {previewMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    {t("import.preview", "Проверить (без записи)")}
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={runCommit}
-                    disabled={busy || rows.length === 0 || !preview || preview.errors === preview.total}
-                  >
-                    {commitMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    {t("import.commit", "Импортировать")}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Step 4: result */}
-          {result && (
-            <Card>
-              <CardContent className="space-y-4 pt-6">
-                <div className="flex flex-wrap items-center gap-3">
-                  <Label className="text-sm font-semibold text-slate-700">
-                    {committed ? t("import.resultCommit", "Результат импорта") : t("import.resultPreview", "Результат проверки")}
-                  </Label>
-                  <Badge variant="secondary">{t("import.total", "Всего")}: {result.total}</Badge>
-                  <Badge className="bg-emerald-100 text-emerald-700">{t("import.created", "Создано")}: {result.created}</Badge>
-                  <Badge className="bg-blue-100 text-blue-700">{t("import.updated", "Обновлено")}: {result.updated}</Badge>
-                  {result.skipped > 0 && (
-                    <Badge className="bg-slate-100 text-slate-600">{t("import.skipped", "Пропущено")}: {result.skipped}</Badge>
-                  )}
-                  <Badge className={result.errors > 0 ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-500"}>
-                    {t("import.errors", "Ошибок")}: {result.errors}
-                  </Badge>
-                  {result.errors > 0 && (
-                    <Button type="button" variant="outline" size="sm" onClick={() => downloadErrorReport(result)}>
-                      <Download className="mr-2 h-4 w-4" />
-                      {t("import.downloadErrors", "Скачать отчёт об ошибках")}
-                    </Button>
-                  )}
-                </div>
-
-                {result.errors > 0 && (
-                  <div className="max-h-80 overflow-y-auto rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-20">{t("import.row", "Строка")}</TableHead>
-                          <TableHead className="w-28">{t("import.statusCol", "Статус")}</TableHead>
-                          <TableHead>{t("import.message", "Сообщение")}</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {result.rows
-                          .filter((r) => r.status === "error")
-                          .map((r) => (
-                            <TableRow key={r.index}>
-                              <TableCell>{r.index}</TableCell>
-                              <TableCell>
-                                <span className="flex items-center gap-1 text-red-600">
-                                  <XCircle className="h-4 w-4" /> {t("import.error", "Ошибка")}
-                                </span>
-                              </TableCell>
-                              <TableCell className="text-slate-700">{r.message}</TableCell>
-                            </TableRow>
-                          ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-
-                {result.errors === 0 && (
-                  <p className="flex items-center gap-2 text-sm text-emerald-700">
+      {/* Actions */}
+      {files.length > 0 && (
+        <Card>
+          <CardContent className="flex flex-wrap items-center gap-3 pt-6">
+            <Button type="button" variant="outline" onClick={runPreview} disabled={busy || !allReady}>
+              {previewMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {t("import.preview", "Проверить (без записи)")}
+            </Button>
+            <Button type="button" onClick={runCommit} disabled={busy || !allReady || !result || !result.ok || committed}>
+              {commitMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {t("import.commit", "Импортировать")}
+            </Button>
+            {result && (
+              <span className="flex items-center gap-2 text-sm">
+                {result.ok ? (
+                  <span className="flex items-center gap-1 text-emerald-700">
                     <CheckCircle2 className="h-4 w-4" />
                     {committed
                       ? t("import.allOkCommit", "Все строки импортированы без ошибок")
                       : t("import.allOkPreview", "Ошибок не найдено — можно импортировать")}
-                  </p>
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-red-600">
+                    <XCircle className="h-4 w-4" />
+                    {committed
+                      ? t("import.commitRolledBack", "Импорт отменён (есть ошибки)")
+                      : t("import.hasErrors", "Найдены ошибки — исправьте перед импортом")}
+                  </span>
                 )}
-              </CardContent>
-            </Card>
-          )}
-        </>
+              </span>
+            )}
+            {!allReady && files.length > 0 && (
+              <span className="text-xs text-slate-400">{t("import.configureAll", "Настройте все файлы, чтобы продолжить")}</span>
+            )}
+          </CardContent>
+        </Card>
       )}
     </div>
   );

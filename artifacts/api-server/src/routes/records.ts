@@ -555,6 +555,7 @@ export async function checkDependentValues(
   fields: EntityField[],
   values: Record<string, unknown>,
   excludeRecordId?: number,
+  exec: DbExecutor = db as unknown as DbExecutor,
 ): Promise<string | null> {
   const norm = (s: string) => s.trim().toLowerCase();
   for (const f of fields) {
@@ -576,7 +577,7 @@ export async function checkDependentValues(
     if (excludeRecordId != null) clauses.push(sql`${entityRecordsTable.id} <> ${excludeRecordId}`);
     const valueExpr = sql<string | null>`(${entityRecordsTable.valuesJson} ->> ${f.fieldKey})`;
     clauses.push(sql`${valueExpr} IS NOT NULL AND ${valueExpr} <> ''`);
-    const rows = await db
+    const rows = await exec
       .selectDistinct({ v: valueExpr })
       .from(entityRecordsTable)
       .where(and(...clauses)!);
@@ -596,7 +597,7 @@ export const UNIQUE_KEY_LOCK_NS = 415943;
 export class UniqueKeyError extends Error {}
 
 /** A db handle that works for both the pool and a transaction. */
-type DbExecutor = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type DbExecutor = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
  * Uniqueness guard for `isKey` fields. MUST run inside the write transaction

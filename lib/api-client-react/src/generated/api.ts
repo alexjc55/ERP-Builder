@@ -29,6 +29,8 @@ import type {
   AutomationRun,
   AutomationUpdate,
   AutomationsReorderInput,
+  BatchImportRequest,
+  BatchImportResult,
   ChangePasswordInput,
   ColumnGroup,
   ColumnGroupInput,
@@ -67,8 +69,6 @@ import type {
   GuestRedeemInput,
   HealthStatus,
   ImpersonateInput,
-  ImportRequest,
-  ImportResult,
   LinkInput,
   LinkedRecord,
   ListEventsParams,
@@ -8811,38 +8811,37 @@ export const useCreateEntityRelation = <TError = ErrorType<unknown>,
       return useMutation(getCreateEntityRelationMutationOptions(options));
     }
 
-export const getPreviewEntityImportUrl = (entityId: number,) => {
+export const getPreviewImportUrl = () => {
 
 
 
 
-  return `/api/entities/${entityId}/import/preview`
+  return `/api/import/preview`
 }
 
 /**
- * @summary Dry-run validate rows for import (no writes)
+ * @summary Dry-run validate a whole batch of files (rehearses in a rolled-back transaction, incl. cross-file relations)
  */
-export const previewEntityImport = async (entityId: number,
-    importRequest: ImportRequest, options?: RequestInit): Promise<ImportResult> => {
+export const previewImport = async (batchImportRequest: BatchImportRequest, options?: RequestInit): Promise<BatchImportResult> => {
 
-  return customFetch<ImportResult>(getPreviewEntityImportUrl(entityId),
+  return customFetch<BatchImportResult>(getPreviewImportUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
-      importRequest,)
+      batchImportRequest,)
   }
 );}
 
 
 
 
-export const getPreviewEntityImportMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewEntityImport>>, TError,{entityId: number;data: BodyType<ImportRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof previewEntityImport>>, TError,{entityId: number;data: BodyType<ImportRequest>}, TContext> => {
+export const getPreviewImportMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewImport>>, TError,{data: BodyType<BatchImportRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof previewImport>>, TError,{data: BodyType<BatchImportRequest>}, TContext> => {
 
-const mutationKey = ['previewEntityImport'];
+const mutationKey = ['previewImport'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -8852,10 +8851,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewEntityImport>>, {entityId: number;data: BodyType<ImportRequest>}> = (props) => {
-          const {entityId,data} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewImport>>, {data: BodyType<BatchImportRequest>}> = (props) => {
+          const {data} = props ?? {};
 
-          return  previewEntityImport(entityId,data,requestOptions)
+          return  previewImport(data,requestOptions)
         }
 
 
@@ -8865,56 +8864,55 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type PreviewEntityImportMutationResult = NonNullable<Awaited<ReturnType<typeof previewEntityImport>>>
-    export type PreviewEntityImportMutationBody = BodyType<ImportRequest>
-    export type PreviewEntityImportMutationError = ErrorType<unknown>
+    export type PreviewImportMutationResult = NonNullable<Awaited<ReturnType<typeof previewImport>>>
+    export type PreviewImportMutationBody = BodyType<BatchImportRequest>
+    export type PreviewImportMutationError = ErrorType<unknown>
 
     /**
- * @summary Dry-run validate rows for import (no writes)
+ * @summary Dry-run validate a whole batch of files (rehearses in a rolled-back transaction, incl. cross-file relations)
  */
-export const usePreviewEntityImport = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewEntityImport>>, TError,{entityId: number;data: BodyType<ImportRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const usePreviewImport = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewImport>>, TError,{data: BodyType<BatchImportRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof previewEntityImport>>,
+        Awaited<ReturnType<typeof previewImport>>,
         TError,
-        {entityId: number;data: BodyType<ImportRequest>},
+        {data: BodyType<BatchImportRequest>},
         TContext
       > => {
-      return useMutation(getPreviewEntityImportMutationOptions(options));
+      return useMutation(getPreviewImportMutationOptions(options));
     }
 
-export const getCommitEntityImportUrl = (entityId: number,) => {
+export const getCommitImportUrl = () => {
 
 
 
 
-  return `/api/entities/${entityId}/import/commit`
+  return `/api/import/commit`
 }
 
 /**
- * @summary Import rows into an entity (insert/upsert)
+ * @summary Import a whole batch of files in one transaction (all-or-nothing)
  */
-export const commitEntityImport = async (entityId: number,
-    importRequest: ImportRequest, options?: RequestInit): Promise<ImportResult> => {
+export const commitImport = async (batchImportRequest: BatchImportRequest, options?: RequestInit): Promise<BatchImportResult> => {
 
-  return customFetch<ImportResult>(getCommitEntityImportUrl(entityId),
+  return customFetch<BatchImportResult>(getCommitImportUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
-      importRequest,)
+      batchImportRequest,)
   }
 );}
 
 
 
 
-export const getCommitEntityImportMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof commitEntityImport>>, TError,{entityId: number;data: BodyType<ImportRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof commitEntityImport>>, TError,{entityId: number;data: BodyType<ImportRequest>}, TContext> => {
+export const getCommitImportMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof commitImport>>, TError,{data: BodyType<BatchImportRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof commitImport>>, TError,{data: BodyType<BatchImportRequest>}, TContext> => {
 
-const mutationKey = ['commitEntityImport'];
+const mutationKey = ['commitImport'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -8924,10 +8922,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof commitEntityImport>>, {entityId: number;data: BodyType<ImportRequest>}> = (props) => {
-          const {entityId,data} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof commitImport>>, {data: BodyType<BatchImportRequest>}> = (props) => {
+          const {data} = props ?? {};
 
-          return  commitEntityImport(entityId,data,requestOptions)
+          return  commitImport(data,requestOptions)
         }
 
 
@@ -8937,22 +8935,22 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type CommitEntityImportMutationResult = NonNullable<Awaited<ReturnType<typeof commitEntityImport>>>
-    export type CommitEntityImportMutationBody = BodyType<ImportRequest>
-    export type CommitEntityImportMutationError = ErrorType<unknown>
+    export type CommitImportMutationResult = NonNullable<Awaited<ReturnType<typeof commitImport>>>
+    export type CommitImportMutationBody = BodyType<BatchImportRequest>
+    export type CommitImportMutationError = ErrorType<unknown>
 
     /**
- * @summary Import rows into an entity (insert/upsert)
+ * @summary Import a whole batch of files in one transaction (all-or-nothing)
  */
-export const useCommitEntityImport = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof commitEntityImport>>, TError,{entityId: number;data: BodyType<ImportRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useCommitImport = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof commitImport>>, TError,{data: BodyType<BatchImportRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof commitEntityImport>>,
+        Awaited<ReturnType<typeof commitImport>>,
         TError,
-        {entityId: number;data: BodyType<ImportRequest>},
+        {data: BodyType<BatchImportRequest>},
         TContext
       > => {
-      return useMutation(getCommitEntityImportMutationOptions(options));
+      return useMutation(getCommitImportMutationOptions(options));
     }
 
 export const getGetRelationUrl = (id: number,) => {

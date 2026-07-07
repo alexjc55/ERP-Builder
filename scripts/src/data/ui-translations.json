@@ -9528,6 +9528,96 @@
     "he": "כל השורות יובאו ללא שגיאות"
   },
   {
+    "key": "import.subtitleBatch",
+    "ru": "Загрузите один или несколько файлов сразу — система расставит их по связям и импортирует одной проверенной операцией (всё или ничего в рамках пакета)",
+    "en": "Upload one or more files at once — the system orders them by relations and imports them in one validated pass (all-or-nothing per batch)",
+    "he": "העלו קובץ אחד או יותר בבת אחת — המערכת מסדרת אותם לפי קשרים ומייבאת בפעולה מאומתת אחת (הכול או כלום עבור האצווה)"
+  },
+  {
+    "key": "import.uploadFiles",
+    "ru": "Загрузить файлы",
+    "en": "Upload files",
+    "he": "העלה קבצים"
+  },
+  {
+    "key": "import.filesCount",
+    "ru": "файлов",
+    "en": "files",
+    "he": "קבצים"
+  },
+  {
+    "key": "import.kindEntity",
+    "ru": "Записи сущности",
+    "en": "Entity records",
+    "he": "רשומות ישות"
+  },
+  {
+    "key": "import.kindPage",
+    "ru": "Значения страницы",
+    "en": "Page values",
+    "he": "ערכי עמוד"
+  },
+  {
+    "key": "import.pickPage",
+    "ru": "Зеркальная страница…",
+    "en": "Mirror page…",
+    "he": "עמוד מראה…"
+  },
+  {
+    "key": "import.pickHostField",
+    "ru": "Поле поиска записи…",
+    "en": "Record lookup field…",
+    "he": "שדה איתור רשומה…"
+  },
+  {
+    "key": "import.hostkey",
+    "ru": "🔑 Ключ записи",
+    "en": "🔑 Record key",
+    "he": "🔑 מפתח רשומה"
+  },
+  {
+    "key": "import.needEntity",
+    "ru": "Выберите сущность",
+    "en": "Choose an entity",
+    "he": "בחר ישות"
+  },
+  {
+    "key": "import.needPage",
+    "ru": "Выберите страницу",
+    "en": "Choose a page",
+    "he": "בחר עמוד"
+  },
+  {
+    "key": "import.needHostCol",
+    "ru": "Укажите колонку с ключом записи",
+    "en": "Map the record-key column",
+    "he": "מפה את עמודת מפתח הרשומה"
+  },
+  {
+    "key": "import.needHostField",
+    "ru": "Выберите поле поиска записи",
+    "en": "Choose the record lookup field",
+    "he": "בחר את שדה איתור הרשומה"
+  },
+  {
+    "key": "import.commitRolledBack",
+    "ru": "Импорт отменён (есть ошибки)",
+    "en": "Import cancelled (errors found)",
+    "he": "הייבוא בוטל (נמצאו שגיאות)"
+  },
+  {
+    "key": "import.hasErrors",
+    "ru": "Найдены ошибки — исправьте перед импортом",
+    "en": "Errors found — fix before importing",
+    "he": "נמצאו שגיאות — תקנו לפני הייבוא"
+  },
+  {
+    "key": "import.configureAll",
+    "ru": "Настройте все файлы, чтобы продолжить",
+    "en": "Configure all files to continue",
+    "he": "הגדירו את כל הקבצים כדי להמשיך"
+  },
+  {
     "key": "dash.tablePageColumns",
     "ru": "Поля страницы",
     "en": "Page fields",

@@ -7,6 +7,6 @@
  */
 
 /**
- * Map of fieldKey to raw cell value.
+ * Map of fieldKey to raw cell value. For a page file these are the page-local fieldKey values.
  */
 export type ImportRowValues = { [key: string]: unknown };

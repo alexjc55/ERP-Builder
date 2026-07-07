@@ -43,9 +43,45 @@ check ran outside the write txn (race). That is a silent integrity hole.
   `existingId` — same concurrency guard as PUT/POST. Set `valuesJson = values`
   wholesale (the merged validated map), do not re-merge inside the txn.
 
+## Batch engine: multi-file, topo-ordered, all-or-nothing (Variant B)
+
+Import takes MANY files at once and runs them as ONE batch inside a single outer
+transaction. `POST /import/preview` always rolls the outer tx back (dry run);
+`POST /import/commit` rolls back if ANY row across ANY file errored — all-or-nothing
+per batch (not per file, not per row).
+
+- **Ordering:** entity files are Kahn topologically sorted by their relation edges
+  (`target -> source`), so a file whose rows link to another same-batch file is
+  written after its dependency; page files run last (they look up already-written
+  host records). This makes same-batch relation targets and page hosts resolvable.
+- **Per-row isolation:** each row writes inside a nested `tx.transaction` (SAVEPOINT)
+  so a single row's DB error is caught and collected without aborting the outer tx;
+  the batch keeps validating every row to report all errors, then commit/preview
+  decides the final rollback. Do not confuse per-row SAVEPOINT rollback (error
+  collection) with the batch-level rollback (all-or-nothing gate).
+- **Deadlock avoidance:** advisory locks (`pg_advisory_xact_lock`) are taken up-front
+  for the DISTINCT entity ids across all entity files, acquired in sorted id order
+  before any row write, so concurrent batch imports serialize their unique-key checks
+  in a consistent lock order.
+
+## Page-local value import ("page" file kind, Variant C inside B)
+
+A file's `kind` is `entity` or `page`. A page file targets a mirror page
+(`mirrorEntityId != null`): it locates the host record on the MIRRORED entity by a
+chosen `hostKeyFieldKey` (mapped as a hostkey column), then coerces + `validatePageValues`
+(from `page-fields.ts`) and MERGEs existing ⊕ cleaned into `page_record_values`
+(unique `pageId,recordId`). Missing/ambiguous host → row error. Page values are
+admin-authoritative like the rest of import (see intentional-boundary note below);
+they reuse the page-field TYPE validation, not the interactive own-scope path.
+
 ## Documented intentional boundary (not a gap)
 
-Workflow status-transition enforcement is **intentionally not applied** on import.
-Import is admin-authoritative for status, consistent with how superAdmin bypasses
-the transition graph in PUT. Bulk imports legitimately set arbitrary statuses.
-This is a deliberate decision, not an oversight.
+Workflow status-transition enforcement is **intentionally not applied** on import,
+and neither is per-row `own`-scope / `assertRecord` gating (for entity OR page files).
+Import is admin-authoritative bulk seeding gated by the privileged `dataImport` cap —
+consistent with how superAdmin bypasses the transition graph in PUT and how
+dashboards/pivots are admin-authoritative. Bulk imports legitimately set arbitrary
+statuses and seed rows regardless of row ownership. A code review will flag this as
+"broken access control" if it evaluates against generic full-write-boundary reuse;
+it is a deliberate decision. What import DOES reuse is the full **validation** boundary
+(the parity rule above). Both the pre-batch and batch engines behaved this way.
