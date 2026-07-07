@@ -9670,5 +9670,371 @@
     "ru": "Колонка не будет прокручиваться по горизонтали",
     "en": "The column will not scroll horizontally",
     "he": "העמודה לא תיגלל אופקית"
+  },
+  {
+    "key": "cf.activeLabel",
+    "ru": "Активен",
+    "en": "Active",
+    "he": "פעיל"
+  },
+  {
+    "key": "cf.addCondition",
+    "ru": "Добавить условие",
+    "en": "Add condition",
+    "he": "הוסף תנאי"
+  },
+  {
+    "key": "cf.addGroup",
+    "ru": "Добавить группу (ИЛИ)",
+    "en": "Add group (OR)",
+    "he": "הוסף קבוצה (או)"
+  },
+  {
+    "key": "cf.addInput",
+    "ru": "Добавить ввод",
+    "en": "Add input",
+    "he": "הוסף קלט"
+  },
+  {
+    "key": "cf.add",
+    "ru": "Добавить фильтр",
+    "en": "Add filter",
+    "he": "הוסף מסנן"
+  },
+  {
+    "key": "cf.back",
+    "ru": "К сущностям",
+    "en": "Back to entities",
+    "he": "חזרה לישויות"
+  },
+  {
+    "key": "cf.colActive",
+    "ru": "Активен",
+    "en": "Active",
+    "he": "פעיל"
+  },
+  {
+    "key": "cf.colConditions",
+    "ru": "Условия",
+    "en": "Conditions",
+    "he": "תנאים"
+  },
+  {
+    "key": "cf.colInputs",
+    "ru": "Ввод",
+    "en": "Inputs",
+    "he": "קלטים"
+  },
+  {
+    "key": "cf.colName",
+    "ru": "Название",
+    "en": "Name",
+    "he": "שם"
+  },
+  {
+    "key": "cf.condAll",
+    "ru": "все условия (И)",
+    "en": "all conditions (AND)",
+    "he": "כל התנאים (וגם)"
+  },
+  {
+    "key": "cf.condAny",
+    "ru": "любое условие (ИЛИ)",
+    "en": "any condition (OR)",
+    "he": "תנאי כלשהו (או)"
+  },
+  {
+    "key": "cf.condCount",
+    "ru": "условий: {n}",
+    "en": "conditions: {n}",
+    "he": "תנאים: {n}"
+  },
+  {
+    "key": "cf.created",
+    "ru": "Фильтр создан",
+    "en": "Filter created",
+    "he": "המסנן נוצר"
+  },
+  {
+    "key": "cf.createError",
+    "ru": "Ошибка создания",
+    "en": "Failed to create",
+    "he": "שגיאה ביצירה"
+  },
+  {
+    "key": "cf.deleteDesc",
+    "ru": "Действие необратимо.",
+    "en": "This action cannot be undone.",
+    "he": "לא ניתן לבטל פעולה זו."
+  },
+  {
+    "key": "cf.deleted",
+    "ru": "Фильтр удалён",
+    "en": "Filter deleted",
+    "he": "המסנן נמחק"
+  },
+  {
+    "key": "cf.deleteError",
+    "ru": "Ошибка удаления",
+    "en": "Failed to delete",
+    "he": "שגיאה במחיקה"
+  },
+  {
+    "key": "cf.deleteTitle",
+    "ru": "Удалить фильтр?",
+    "en": "Delete filter?",
+    "he": "למחוק מסנן?"
+  },
+  {
+    "key": "cf.dialogDesc",
+    "ru": "Соберите условие из групп. Группы объединяются логикой верхнего уровня, условия внутри группы — логикой группы: (A И B) ИЛИ (C И D).",
+    "en": "Build the condition from groups. Groups combine by the top-level logic; conditions within a group by the group's logic: (A AND B) OR (C AND D).",
+    "he": "בנה את התנאי מקבוצות. הקבוצות משתלבות לפי הלוגיקה העליונה, והתנאים בתוך קבוצה לפי לוגיקת הקבוצה: (A וגם B) או (C וגם D)."
+  },
+  {
+    "key": "cf.edit",
+    "ru": "Редактировать фильтр",
+    "en": "Edit filter",
+    "he": "ערוך מסנן"
+  },
+  {
+    "key": "cf.empty",
+    "ru": "Фильтров пока нет.",
+    "en": "No filters yet.",
+    "he": "אין מסננים עדיין."
+  },
+  {
+    "key": "cf.fieldMissing",
+    "ru": "Выберите поле",
+    "en": "Select a field",
+    "he": "בחר שדה"
+  },
+  {
+    "key": "cf.field",
+    "ru": "Поле",
+    "en": "Field",
+    "he": "שדה"
+  },
+  {
+    "key": "cf.fromInput",
+    "ru": "Ввод пользователя",
+    "en": "User input",
+    "he": "קלט משתמש"
+  },
+  {
+    "key": "cf.from",
+    "ru": "от",
+    "en": "from",
+    "he": "מ־"
+  },
+  {
+    "key": "cf.group",
+    "ru": "Группа",
+    "en": "Group",
+    "he": "קבוצה"
+  },
+  {
+    "key": "cf.inputLabel",
+    "ru": "Подпись (напр. «Период»)",
+    "en": "Label (e.g. \"Period\")",
+    "he": "תווית (לדוגמה \"תקופה\")"
+  },
+  {
+    "key": "cf.inputMissing",
+    "ru": "Выберите пользовательский ввод для условия",
+    "en": "Select a user input for the condition",
+    "he": "בחר קלט משתמש לתנאי"
+  },
+  {
+    "key": "cf.inputsHint",
+    "ru": "Значения, которые пользователь вводит при применении фильтра. Один ввод можно использовать в нескольких условиях (например, один период на две даты).",
+    "en": "Values the user enters when applying the filter. One input can be used in several conditions (e.g. one period for two dates).",
+    "he": "ערכים שהמשתמש מזין בעת החלת המסנן. ניתן להשתמש בקלט אחד בכמה תנאים (למשל תקופה אחת לשני תאריכים)."
+  },
+  {
+    "key": "cf.inputs",
+    "ru": "Пользовательский ввод",
+    "en": "User inputs",
+    "he": "קלט משתמש"
+  },
+  {
+    "key": "cf.matchAll",
+    "ru": "все группы (И)",
+    "en": "all groups (AND)",
+    "he": "כל הקבוצות (וגם)"
+  },
+  {
+    "key": "cf.matchAny",
+    "ru": "любая группа (ИЛИ)",
+    "en": "any group (OR)",
+    "he": "קבוצה כלשהי (או)"
+  },
+  {
+    "key": "cf.nameLabel",
+    "ru": "Название",
+    "en": "Name",
+    "he": "שם"
+  },
+  {
+    "key": "cf.nameRequired",
+    "ru": "Введите название",
+    "en": "Enter a name",
+    "he": "הזן שם"
+  },
+  {
+    "key": "cf.new",
+    "ru": "Новый фильтр",
+    "en": "New filter",
+    "he": "מסנן חדש"
+  },
+  {
+    "key": "cf.noConditions",
+    "ru": "Добавьте хотя бы одно условие",
+    "en": "Add at least one condition",
+    "he": "הוסף לפחות תנאי אחד"
+  },
+  {
+    "key": "cf.noInputsShort",
+    "ru": "Сначала добавьте ввод",
+    "en": "Add an input first",
+    "he": "הוסף קלט תחילה"
+  },
+  {
+    "key": "cf.noInputs",
+    "ru": "Вводов нет — все условия сравнивают с фиксированными значениями.",
+    "en": "No inputs — all conditions compare against fixed values.",
+    "he": "אין קלטים — כל התנאים משווים לערכים קבועים."
+  },
+  {
+    "key": "cf.no",
+    "ru": "Нет",
+    "en": "No",
+    "he": "לא"
+  },
+  {
+    "key": "cf.pageFieldMissing",
+    "ru": "Выберите страницу и поле",
+    "en": "Select a page and field",
+    "he": "בחר עמוד ושדה"
+  },
+  {
+    "key": "cf.pageField",
+    "ru": "Поле страницы",
+    "en": "Page field",
+    "he": "שדה עמוד"
+  },
+  {
+    "key": "cf.page",
+    "ru": "Страница",
+    "en": "Page",
+    "he": "עמוד"
+  },
+  {
+    "key": "cf.pickInput",
+    "ru": "Выберите ввод",
+    "en": "Select input",
+    "he": "בחר קלט"
+  },
+  {
+    "key": "cf.removeGroup",
+    "ru": "Удалить группу",
+    "en": "Remove group",
+    "he": "הסר קבוצה"
+  },
+  {
+    "key": "cf.reorderError",
+    "ru": "Ошибка изменения порядка",
+    "en": "Failed to reorder",
+    "he": "שגיאה בשינוי סדר"
+  },
+  {
+    "key": "cf.srcEntity",
+    "ru": "Поле",
+    "en": "Field",
+    "he": "שדה"
+  },
+  {
+    "key": "cf.srcPage",
+    "ru": "Страница",
+    "en": "Page",
+    "he": "עמוד"
+  },
+  {
+    "key": "cf.static",
+    "ru": "Значение",
+    "en": "Value",
+    "he": "ערך"
+  },
+  {
+    "key": "cf.subtitle",
+    "ru": "Гибкие фильтры по любым полям сущности. Каждый фильтр — одна кнопка на панели фильтров в таблице, сводной и календаре.",
+    "en": "Flexible filters over any entity field. Each filter is a single button on the filter bar in the table, pivot and calendar.",
+    "he": "מסננים גמישים על כל שדה של הישות. כל מסנן הוא כפתור אחד בסרגל המסננים בטבלה, בטבלת הציר וביומן."
+  },
+  {
+    "key": "cf.title",
+    "ru": "Кастомные фильтры",
+    "en": "Custom filters",
+    "he": "מסננים מותאמים"
+  },
+  {
+    "key": "cf.topMatch",
+    "ru": "Группы объединяются:",
+    "en": "Combine groups:",
+    "he": "שילוב קבוצות:"
+  },
+  {
+    "key": "cf.to",
+    "ru": "до",
+    "en": "to",
+    "he": "עד"
+  },
+  {
+    "key": "cf.updated",
+    "ru": "Фильтр обновлён",
+    "en": "Filter updated",
+    "he": "המסנן עודכן"
+  },
+  {
+    "key": "cf.updateError",
+    "ru": "Ошибка обновления",
+    "en": "Failed to update",
+    "he": "שגיאה בעדכון"
+  },
+  {
+    "key": "cf.valuePlaceholder",
+    "ru": "значение",
+    "en": "value",
+    "he": "ערך"
+  },
+  {
+    "key": "cf.yes",
+    "ru": "Да",
+    "en": "Yes",
+    "he": "כן"
+  },
+  {
+    "key": "cf.untitled",
+    "ru": "Фильтр",
+    "en": "Filter",
+    "he": "מסנן"
+  },
+  {
+    "key": "cf.clear",
+    "ru": "Очистить",
+    "en": "Clear",
+    "he": "נקה"
+  },
+  {
+    "key": "records.manageCustomFilters",
+    "ru": "Кастомные фильтры",
+    "en": "Custom filters",
+    "he": "מסננים מותאמים"
+  },
+  {
+    "key": "entities.customFilters",
+    "ru": "Кастомные фильтры",
+    "en": "Custom filters",
+    "he": "מסננים מותאמים"
   }
 ]

@@ -42,12 +42,12 @@ import {
   PivotEntityRecordsParams,
   PivotEntityRecordsBody,
 } from "@workspace/api-zod";
-import type { EntityField, InsertAuditLog, FileSource, FileFieldConfig, FieldValidationRule, CustomPageFilter } from "@workspace/db";
+import type { EntityField, InsertAuditLog, FileSource, FileFieldConfig, FieldValidationRule } from "@workspace/db";
 import { optionValues, optionNumbers } from "../lib/selectOptions";
+import { resolveCustomFilterClauses, type CustomFilterPick } from "./custom-filter-apply";
 import {
   buildRecordQuery,
   buildPageLocalCondition,
-  buildCustomDateFilter,
   relationLinkFilter,
   relationLinkedIdScalar,
   relationValueScalar,
@@ -877,66 +877,26 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     }
   }
 
-  // Multi-field CUSTOM filters (pages.customFiltersJson): each picked filter
-  // references an AUTHORITATIVE page def by id + a picked date period. The def
-  // (fieldKeys + combine mode) is resolved from the page row — the client never
-  // sends the field keys — and every referenced field is re-checked to be a
-  // VISIBLE (per-role), filterable date field before it is applied, so a custom
-  // filter can never observe a hidden field (a hidden/non-date/deleted key is
-  // silently dropped). AND-combined with the rest of the query. Requires pageId.
-  const customFilterPicks = (body.data.customFilters ?? []) as {
-    id: string;
-    range: { from: string; to: string };
-  }[];
-  if (customFilterPicks.length > 0) {
-    const cfPageId = body.data.pageId;
-    if (cfPageId == null) {
-      res.status(400).json({ error: "customFilters require pageId" });
+  // Per-entity CUSTOM filters (custom_filters): each picked filter references an
+  // AUTHORITATIVE def by id + any runtime input values. The def (a two-level
+  // И/ИЛИ condition tree over ANY field, incl. formula) is resolved server-side
+  // and ADMIN-AUTHORITATIVE (it may reference fields hidden for this viewer) —
+  // the returned rows still obey the viewer's row/field boundary via the other
+  // clauses. Formula conditions are evaluated post-compute into a matching
+  // record-id set. AND-combined with the rest of the query.
+  {
+    const cf = await resolveCustomFilterClauses({
+      entityId,
+      allFields: fields,
+      relationMeta,
+      picks: (body.data.customFilters ?? []) as CustomFilterPick[],
+      pageId: body.data.pageId,
+    });
+    if ("error" in cf) {
+      res.status(400).json({ error: cf.error });
       return;
     }
-    const [cfPage] = await db
-      .select({ customFiltersJson: pagesTable.customFiltersJson })
-      .from(pagesTable)
-      .where(eq(pagesTable.id, cfPageId));
-    const defs = (cfPage?.customFiltersJson ?? []) as CustomPageFilter[];
-    const defById = new Map(defs.map((d) => [d.id, d] as const));
-    const visibleByKey = new Map(visibleFields.map((f) => [f.fieldKey, f] as const));
-    for (const pick of customFilterPicks) {
-      const def = defById.get(pick.id);
-      if (!def) {
-        res.status(400).json({ error: `Unknown custom filter "${pick.id}"` });
-        return;
-      }
-      if (def.type !== "date") {
-        res.status(400).json({ error: `Custom filter "${pick.id}" is not a date filter` });
-        return;
-      }
-      // ALL-OR-NOTHING eligibility: the filter is applied ONLY when EVERY
-      // referenced field is a VISIBLE (per-role), filterable date field. If any
-      // key is hidden / non-filterable / non-date / deleted for this viewer, the
-      // whole filter is silently skipped (never partially applied) so it can't
-      // observe a hidden field. Order is preserved so "overlap" keeps [first,last].
-      const allEligible = def.fieldKeys.every((k) => {
-        const f = visibleByKey.get(k);
-        return f != null && f.isFilterable && (f.fieldType === "date" || f.fieldType === "datetime");
-      });
-      if (!allEligible) continue;
-      // Date custom filters need 2+ fields; "overlap" needs exactly 2 ordered fields.
-      if (def.fieldKeys.length < 2) continue;
-      if ((def.combine ?? "or") === "overlap" && def.fieldKeys.length !== 2) continue;
-      const from = pick.range?.from;
-      const to = pick.range?.to;
-      if (!from || !to) {
-        res.status(400).json({ error: `Custom filter "${pick.id}" requires a from/to range` });
-        return;
-      }
-      const r = buildCustomDateFilter(def.fieldKeys, from, to, def.combine ?? "or");
-      if ("error" in r) {
-        res.status(400).json({ error: r.error });
-        return;
-      }
-      clauses.push(r.sql);
-    }
+    for (const c of cf.clauses) clauses.push(c);
   }
 
   // ---- Mirror-page grouping (pages.groupByFieldKey) -------------------------
@@ -1835,6 +1795,21 @@ router.post(
         }
         clauses.push(r.sql);
       }
+    }
+
+    {
+      const cf = await resolveCustomFilterClauses({
+        entityId,
+        allFields: fields,
+        relationMeta,
+        picks: (body.data.customFilters ?? []) as CustomFilterPick[],
+        pageId: pageId ?? undefined,
+      });
+      if ("error" in cf) {
+        res.status(400).json({ error: cf.error });
+        return;
+      }
+      for (const c of cf.clauses) clauses.push(c);
     }
 
     const where = and(...clauses)!;

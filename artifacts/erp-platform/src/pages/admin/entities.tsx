@@ -50,7 +50,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Database, Loader2, Columns3, CircleDot, Share2, LayoutList, Workflow, Settings2, ChevronDown, Zap } from "lucide-react";
+import { Plus, Pencil, Trash2, Database, Loader2, Columns3, CircleDot, Share2, LayoutList, Workflow, Settings2, ChevronDown, Zap, Filter } from "lucide-react";
 import { useLocation, useSearch } from "wouter";
 import { useML, useT } from "@/lib/i18n";
 import { slugifyKey, uniqueKey } from "@/lib/keys";
@@ -267,6 +267,10 @@ export default function EntitiesPage() {
                             <DropdownMenuItem onClick={() => navigate(`/admin/entities/${entity.id}/automations`)}>
                               <Zap className="w-3.5 h-3.5 mr-2" />
                               {t("entities.automations", "Автоматизации")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => navigate(`/admin/entities/${entity.id}/custom-filters`)}>
+                              <Filter className="w-3.5 h-3.5 mr-2" />
+                              {t("entities.customFilters", "Кастомные фильтры")}
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => navigate(`/admin/entities/${entity.id}/records`)}>
                               <Database className="w-3.5 h-3.5 mr-2" />

@@ -34,6 +34,10 @@ import type {
   ColumnGroupInput,
   ColumnGroupUpdate,
   CreateDriveFolderBody,
+  CustomFilter,
+  CustomFilterCreate,
+  CustomFilterUpdate,
+  CustomFiltersReorderInput,
   DashboardStats,
   DashboardWidget,
   DashboardWidgetData,
@@ -6376,6 +6380,445 @@ export const useDeleteAutomation = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteAutomationMutationOptions(options));
+    }
+
+export const getReorderCustomFiltersUrl = () => {
+
+
+
+
+  return `/api/custom-filters/reorder`
+}
+
+/**
+ * @summary Reorder custom filters within an entity
+ */
+export const reorderCustomFilters = async (customFiltersReorderInput: CustomFiltersReorderInput, options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getReorderCustomFiltersUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      customFiltersReorderInput,)
+  }
+);}
+
+
+
+
+export const getReorderCustomFiltersMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderCustomFilters>>, TError,{data: BodyType<CustomFiltersReorderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reorderCustomFilters>>, TError,{data: BodyType<CustomFiltersReorderInput>}, TContext> => {
+
+const mutationKey = ['reorderCustomFilters'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reorderCustomFilters>>, {data: BodyType<CustomFiltersReorderInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  reorderCustomFilters(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReorderCustomFiltersMutationResult = NonNullable<Awaited<ReturnType<typeof reorderCustomFilters>>>
+    export type ReorderCustomFiltersMutationBody = BodyType<CustomFiltersReorderInput>
+    export type ReorderCustomFiltersMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Reorder custom filters within an entity
+ */
+export const useReorderCustomFilters = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderCustomFilters>>, TError,{data: BodyType<CustomFiltersReorderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reorderCustomFilters>>,
+        TError,
+        {data: BodyType<CustomFiltersReorderInput>},
+        TContext
+      > => {
+      return useMutation(getReorderCustomFiltersMutationOptions(options));
+    }
+
+export const getListEntityCustomFiltersUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/custom-filters`
+}
+
+/**
+ * @summary List custom filters for an entity
+ */
+export const listEntityCustomFilters = async (entityId: number, options?: RequestInit): Promise<CustomFilter[]> => {
+
+  return customFetch<CustomFilter[]>(getListEntityCustomFiltersUrl(entityId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListEntityCustomFiltersQueryKey = (entityId: number,) => {
+    return [
+    `/api/entities/${entityId}/custom-filters`
+    ] as const;
+    }
+
+
+export const getListEntityCustomFiltersQueryOptions = <TData = Awaited<ReturnType<typeof listEntityCustomFilters>>, TError = ErrorType<unknown>>(entityId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEntityCustomFilters>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListEntityCustomFiltersQueryKey(entityId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listEntityCustomFilters>>> = ({ signal }) => listEntityCustomFilters(entityId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(entityId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listEntityCustomFilters>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListEntityCustomFiltersQueryResult = NonNullable<Awaited<ReturnType<typeof listEntityCustomFilters>>>
+export type ListEntityCustomFiltersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List custom filters for an entity
+ */
+
+export function useListEntityCustomFilters<TData = Awaited<ReturnType<typeof listEntityCustomFilters>>, TError = ErrorType<unknown>>(
+ entityId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEntityCustomFilters>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListEntityCustomFiltersQueryOptions(entityId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateEntityCustomFilterUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/custom-filters`
+}
+
+/**
+ * @summary Create a custom filter on an entity
+ */
+export const createEntityCustomFilter = async (entityId: number,
+    customFilterCreate: CustomFilterCreate, options?: RequestInit): Promise<CustomFilter> => {
+
+  return customFetch<CustomFilter>(getCreateEntityCustomFilterUrl(entityId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      customFilterCreate,)
+  }
+);}
+
+
+
+
+export const getCreateEntityCustomFilterMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEntityCustomFilter>>, TError,{entityId: number;data: BodyType<CustomFilterCreate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createEntityCustomFilter>>, TError,{entityId: number;data: BodyType<CustomFilterCreate>}, TContext> => {
+
+const mutationKey = ['createEntityCustomFilter'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createEntityCustomFilter>>, {entityId: number;data: BodyType<CustomFilterCreate>}> = (props) => {
+          const {entityId,data} = props ?? {};
+
+          return  createEntityCustomFilter(entityId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateEntityCustomFilterMutationResult = NonNullable<Awaited<ReturnType<typeof createEntityCustomFilter>>>
+    export type CreateEntityCustomFilterMutationBody = BodyType<CustomFilterCreate>
+    export type CreateEntityCustomFilterMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a custom filter on an entity
+ */
+export const useCreateEntityCustomFilter = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEntityCustomFilter>>, TError,{entityId: number;data: BodyType<CustomFilterCreate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createEntityCustomFilter>>,
+        TError,
+        {entityId: number;data: BodyType<CustomFilterCreate>},
+        TContext
+      > => {
+      return useMutation(getCreateEntityCustomFilterMutationOptions(options));
+    }
+
+export const getGetCustomFilterUrl = (id: number,) => {
+
+
+
+
+  return `/api/custom-filters/${id}`
+}
+
+/**
+ * @summary Get custom filter by ID
+ */
+export const getCustomFilter = async (id: number, options?: RequestInit): Promise<CustomFilter> => {
+
+  return customFetch<CustomFilter>(getGetCustomFilterUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCustomFilterQueryKey = (id: number,) => {
+    return [
+    `/api/custom-filters/${id}`
+    ] as const;
+    }
+
+
+export const getGetCustomFilterQueryOptions = <TData = Awaited<ReturnType<typeof getCustomFilter>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCustomFilter>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCustomFilterQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCustomFilter>>> = ({ signal }) => getCustomFilter(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCustomFilter>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCustomFilterQueryResult = NonNullable<Awaited<ReturnType<typeof getCustomFilter>>>
+export type GetCustomFilterQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get custom filter by ID
+ */
+
+export function useGetCustomFilter<TData = Awaited<ReturnType<typeof getCustomFilter>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCustomFilter>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCustomFilterQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateCustomFilterUrl = (id: number,) => {
+
+
+
+
+  return `/api/custom-filters/${id}`
+}
+
+/**
+ * @summary Update custom filter
+ */
+export const updateCustomFilter = async (id: number,
+    customFilterUpdate: CustomFilterUpdate, options?: RequestInit): Promise<CustomFilter> => {
+
+  return customFetch<CustomFilter>(getUpdateCustomFilterUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      customFilterUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateCustomFilterMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCustomFilter>>, TError,{id: number;data: BodyType<CustomFilterUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCustomFilter>>, TError,{id: number;data: BodyType<CustomFilterUpdate>}, TContext> => {
+
+const mutationKey = ['updateCustomFilter'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCustomFilter>>, {id: number;data: BodyType<CustomFilterUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateCustomFilter(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCustomFilterMutationResult = NonNullable<Awaited<ReturnType<typeof updateCustomFilter>>>
+    export type UpdateCustomFilterMutationBody = BodyType<CustomFilterUpdate>
+    export type UpdateCustomFilterMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update custom filter
+ */
+export const useUpdateCustomFilter = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCustomFilter>>, TError,{id: number;data: BodyType<CustomFilterUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateCustomFilter>>,
+        TError,
+        {id: number;data: BodyType<CustomFilterUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateCustomFilterMutationOptions(options));
+    }
+
+export const getDeleteCustomFilterUrl = (id: number,) => {
+
+
+
+
+  return `/api/custom-filters/${id}`
+}
+
+/**
+ * @summary Delete custom filter
+ */
+export const deleteCustomFilter = async (id: number, options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getDeleteCustomFilterUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteCustomFilterMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCustomFilter>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteCustomFilter>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteCustomFilter'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCustomFilter>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteCustomFilter(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteCustomFilterMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCustomFilter>>>
+
+    export type DeleteCustomFilterMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete custom filter
+ */
+export const useDeleteCustomFilter = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCustomFilter>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteCustomFilter>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteCustomFilterMutationOptions(options));
     }
 
 export const getListEntityRecordsUrl = (entityId: number,) => {

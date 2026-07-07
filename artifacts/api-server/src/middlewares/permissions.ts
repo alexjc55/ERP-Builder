@@ -96,7 +96,7 @@ export function mergePermissions(list: RolePermissions[]): RolePermissions {
   const admin: RoleAdminCaps = {
     pages: false, entities: false, roles: false, users: false, translations: false,
     events: false, modules: false, googleDrive: false, settings: false, automations: false,
-    columnGroups: false, dataImport: false,
+    customFilters: false, columnGroups: false, dataImport: false,
   };
   const merged: RolePermissions = { superAdmin: false, admin, pageIds: [], records: {} };
   const pageIdSet = new Set<number>();

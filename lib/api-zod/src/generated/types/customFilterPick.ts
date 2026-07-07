@@ -5,13 +5,12 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
-import type { CustomFilterPickRange } from './customFilterPickRange';
+import type { CustomFilterInputValue } from './customFilterInputValue';
 
 /**
- * A picked custom filter in a records query: references a page's customFiltersJson entry by id, with the selected date period. Requires pageId. The server resolves the definition from the authoritative page row and re-validates every referenced field is a visible, filterable date field for the viewer before applying it.
+ * A picked custom filter in a records/pivot query: references a custom_filters row by id and supplies any runtime input values. The server resolves the authoritative definition from the entity's rows; the predicate may reference fields hidden for the viewer, but returned rows still obey the viewer's row/field boundary.
  */
 export interface CustomFilterPick {
-  id: string;
-  /** Selected period as a half-open interval [from, to): `to` is the day AFTER the last selected day, matching the date-filter convention. */
-  range: CustomFilterPickRange;
+  id: number;
+  inputs?: CustomFilterInputValue[];
 }

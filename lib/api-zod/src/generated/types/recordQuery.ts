@@ -17,7 +17,7 @@ export interface RecordQuery {
   filters?: FilterCondition[];
   /** Filter conditions on PAGE-LOCAL fields (values stored in page_record_values), keyed by page-field fieldKey. Requires pageId. Each condition is AND-combined with the rest of the query. Only visible (per-role) filterable page-local fields are accepted. */
   pageLocalFilters?: FilterCondition[];
-  /** Picked multi-field CUSTOM filters (see CustomFilterPick). Each references a page customFiltersJson entry by id + a date period and is AND-combined with the rest of the query. Requires pageId; the server resolves the definition and re-checks every referenced field is a visible, filterable date field for the viewer. */
+  /** Picked per-entity CUSTOM filters (see CustomFilterPick). Each is resolved server-side to an admin-authored two-level И/ИЛИ predicate over ANY field (incl. formula) and AND-combined with the rest of the query. The predicate may reference fields hidden for the viewer, but returned rows still obey the viewer's row/field boundary. */
   customFilters?: CustomFilterPick[];
   filterConjunction?: RecordQueryFilterConjunction;
   statusIds?: number[];

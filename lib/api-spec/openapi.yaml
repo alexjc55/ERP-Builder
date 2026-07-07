@@ -1919,6 +1919,129 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  # CUSTOM FILTERS
+  /custom-filters/reorder:
+    post:
+      operationId: reorderCustomFilters
+      tags: [customFilters]
+      summary: Reorder custom filters within an entity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomFiltersReorderInput"
+      responses:
+        "200":
+          description: Reordered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /entities/{entityId}/custom-filters:
+    get:
+      operationId: listEntityCustomFilters
+      tags: [customFilters]
+      summary: List custom filters for an entity
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of custom filters
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CustomFilter"
+    post:
+      operationId: createEntityCustomFilter
+      tags: [customFilters]
+      summary: Create a custom filter on an entity
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomFilterCreate"
+      responses:
+        "201":
+          description: Custom filter created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomFilter"
+
+  /custom-filters/{id}:
+    get:
+      operationId: getCustomFilter
+      tags: [customFilters]
+      summary: Get custom filter by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Custom filter found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomFilter"
+    put:
+      operationId: updateCustomFilter
+      tags: [customFilters]
+      summary: Update custom filter
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomFilterUpdate"
+      responses:
+        "200":
+          description: Custom filter updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomFilter"
+    delete:
+      operationId: deleteCustomFilter
+      tags: [customFilters]
+      summary: Delete custom filter
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
   # RECORDS
   /entities/{entityId}/records:
     get:
@@ -4051,7 +4174,7 @@ components:
 
     RoleAdminCaps:
       type: object
-      required: [pages, entities, roles, users, translations, events, modules, automations, columnGroups, googleDrive, settings, dataImport]
+      required: [pages, entities, roles, users, translations, events, modules, automations, customFilters, columnGroups, googleDrive, settings, dataImport]
       properties:
         pages:
           type: boolean
@@ -4068,6 +4191,8 @@ components:
         modules:
           type: boolean
         automations:
+          type: boolean
+        customFilters:
           type: boolean
         columnGroups:
           type: boolean
@@ -4282,11 +4407,6 @@ components:
             - $ref: "#/components/schemas/PageQuickFilter"
             - type: "null"
           description: Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter).
-        customFiltersJson:
-          type: ["array", "null"]
-          items:
-            $ref: "#/components/schemas/CustomPageFilter"
-          description: Per-page reusable multi-field custom filters (v1 = date type). Each combines several entity fields under one filter-bar chip.
         groupByFieldKey:
           type: ["string", "null"]
           description: Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display/aggregation-only, never a security boundary.
@@ -4370,11 +4490,6 @@ components:
             - $ref: "#/components/schemas/PageQuickFilter"
             - type: "null"
           description: Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter).
-        customFiltersJson:
-          type: ["array", "null"]
-          items:
-            $ref: "#/components/schemas/CustomPageFilter"
-          description: Per-page reusable multi-field custom filters (v1 = date type). Each combines several entity fields under one filter-bar chip.
         groupByFieldKey:
           type: ["string", "null"]
           description: Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.
@@ -4447,11 +4562,6 @@ components:
             - $ref: "#/components/schemas/PageQuickFilter"
             - type: "null"
           description: Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter).
-        customFiltersJson:
-          type: ["array", "null"]
-          items:
-            $ref: "#/components/schemas/CustomPageFilter"
-          description: Per-page reusable multi-field custom filters (v1 = date type). Each combines several entity fields under one filter-bar chip.
         groupByFieldKey:
           type: ["string", "null"]
           description: Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.
@@ -6466,6 +6576,23 @@ components:
               sortOrder:
                 type: integer
 
+    CustomFiltersReorderInput:
+      type: object
+      required: [entityId, items]
+      properties:
+        entityId:
+          type: integer
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, sortOrder]
+            properties:
+              id:
+                type: integer
+              sortOrder:
+                type: integer
+
     AutomationRun:
       type: object
       required: [id, automationId, entityId, recordId, status, triggerName, detailJson, createdAt]
@@ -6592,54 +6719,175 @@ components:
           $ref: "#/components/schemas/FilterOperator"
         value: {}
 
-    CustomPageFilter:
+    CustomFilterOperator:
+      type: string
+      enum: [eq, neq, contains, notContains, gt, lt, gte, lte, between, empty, notEmpty]
+
+    CustomFilterInputType:
+      type: string
+      enum: [text, number, date, datetime, dateRange, numberRange, select, boolean]
+
+    CustomFilterInput:
       type: object
-      required: [id, labelJson, type, fieldKeys, combine]
-      description: >-
-        A reusable per-page CUSTOM FILTER combining several entity fields under
-        one filter-bar chip. v1: date type only. `combine`: or = ANY field in the
-        picked period (default), and = EVERY field in the picked period, overlap =
-        the [firstField, lastField] interval overlaps the picked period.
+      required: [id, type]
+      description: A runtime user-supplied input a filter declares, referenced by a condition's inputId.
       properties:
         id:
           type: string
+        type:
+          $ref: "#/components/schemas/CustomFilterInputType"
         labelJson:
           $ref: "#/components/schemas/MultilingualText"
-        type:
+
+    CustomFilterCondition:
+      type: object
+      required: [fieldKey, operator]
+      description: >-
+        One condition of a custom filter: a field (entity or a mirror page's
+        page-local field) compared by an operator against a fixed value or a
+        user-supplied input. ANY field type is allowed, including formula fields
+        (the computed result is compared), regardless of isFilterable.
+      properties:
+        fieldSource:
           type: string
-          enum: [date]
-        fieldKeys:
+          enum: [entity, page]
+          default: entity
+        pageId:
+          type: integer
+          description: The mirror page whose page-field to read (when fieldSource=page).
+        fieldKey:
+          type: string
+        operator:
+          $ref: "#/components/schemas/CustomFilterOperator"
+        valueSource:
+          type: string
+          enum: [static, input]
+          default: static
+        value: {}
+        inputId:
+          type: string
+
+    CustomFilterGroup:
+      type: object
+      required: [conjunction, conditions]
+      description: A group of conditions combined by one conjunction (level 2 of the tree).
+      properties:
+        conjunction:
+          type: string
+          enum: [and, or]
+          default: and
+        conditions:
           type: array
           items:
-            type: string
-        combine:
+            $ref: "#/components/schemas/CustomFilterCondition"
+
+    CustomFilter:
+      type: object
+      required: [id, entityId, nameJson, isActive, conjunction, groupsJson, inputsJson, sortOrder]
+      description: >-
+        A per-entity CUSTOM FILTER (structured like an Automation). A two-level
+        И/ИЛИ condition tree over ANY field of the entity (or a mirror page's
+        page-local field), including formula fields. Renders as ONE chip on the
+        records filter bar and narrows the TABLE, PIVOT and CALENDAR views.
+      properties:
+        id:
+          type: integer
+        entityId:
+          type: integer
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        isActive:
+          type: boolean
+        conjunction:
           type: string
-          enum: [or, and, overlap]
-          default: or
+          enum: [and, or]
+        groupsJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/CustomFilterGroup"
+        inputsJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/CustomFilterInput"
+        sortOrder:
+          type: integer
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    CustomFilterCreate:
+      type: object
+      required: [entityId, nameJson, conjunction, groupsJson]
+      properties:
+        entityId:
+          type: integer
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        isActive:
+          type: boolean
+          default: true
+        conjunction:
+          type: string
+          enum: [and, or]
+          default: and
+        groupsJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/CustomFilterGroup"
+        inputsJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/CustomFilterInput"
+        sortOrder:
+          type: integer
+
+    CustomFilterUpdate:
+      type: object
+      properties:
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        isActive:
+          type: boolean
+        conjunction:
+          type: string
+          enum: [and, or]
+        groupsJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/CustomFilterGroup"
+        inputsJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/CustomFilterInput"
+        sortOrder:
+          type: integer
+
+    CustomFilterInputValue:
+      type: object
+      required: [inputId, value]
+      description: A runtime value supplied for one of a filter's declared inputs.
+      properties:
+        inputId:
+          type: string
+        value: {}
 
     CustomFilterPick:
       type: object
-      required: [id, range]
+      required: [id]
       description: >-
-        A picked custom filter in a records query: references a page's
-        customFiltersJson entry by id, with the selected date period. Requires
-        pageId. The server resolves the definition from the authoritative page row
-        and re-validates every referenced field is a visible, filterable date
-        field for the viewer before applying it.
+        A picked custom filter in a records/pivot query: references a
+        custom_filters row by id and supplies any runtime input values. The
+        server resolves the authoritative definition from the entity's rows; the
+        predicate may reference fields hidden for the viewer, but returned rows
+        still obey the viewer's row/field boundary.
       properties:
         id:
-          type: string
-        range:
-          type: object
-          required: [from, to]
-          description: >-
-            Selected period as a half-open interval [from, to): `to` is the day
-            AFTER the last selected day, matching the date-filter convention.
-          properties:
-            from:
-              type: string
-            to:
-              type: string
+          type: integer
+        inputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/CustomFilterInputValue"
 
     ExcludeFilter:
       type: object
@@ -6888,6 +7136,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FilterCondition"
+        customFilters:
+          type: array
+          description: >-
+            Picked per-entity CUSTOM filters (see CustomFilterPick). Each is
+            resolved to an admin-authored predicate and AND-combined before the
+            pivot is computed.
+          items:
+            $ref: "#/components/schemas/CustomFilterPick"
         filterConjunction:
           type: string
           enum: [and, or]
@@ -7087,11 +7343,11 @@ components:
         customFilters:
           type: array
           description: >-
-            Picked multi-field CUSTOM filters (see CustomFilterPick). Each
-            references a page customFiltersJson entry by id + a date period and is
-            AND-combined with the rest of the query. Requires pageId; the server
-            resolves the definition and re-checks every referenced field is a
-            visible, filterable date field for the viewer.
+            Picked per-entity CUSTOM filters (see CustomFilterPick). Each is
+            resolved server-side to an admin-authored two-level И/ИЛИ predicate
+            over ANY field (incl. formula) and AND-combined with the rest of the
+            query. The predicate may reference fields hidden for the viewer, but
+            returned rows still obey the viewer's row/field boundary.
           items:
             $ref: "#/components/schemas/CustomFilterPick"
         filterConjunction:

@@ -10,6 +10,7 @@
 - [Record views & query](record-views-query.md) — why the records query endpoint is POST, how the frontend consumes it, the per-entity bootstrap-reset rule.
 - [List reorder pattern](list-reorder-pattern.md) — sortOrder arrow reordering must be a single transactional */reorder endpoint, not paired client swaps; records columns reorder via field sortOrder.
 - [Dependent record filters](dependent-filters.md) — isFilterable opt-in + status quick-filter + dependent option lists; SELECT DISTINCT must order by ordinal (reused sql frag re-binds params).
+- [Custom filters (per-entity)](custom-page-filters.md) — automations-style per-entity filter tree (ANY field incl. formula, ignores isFilterable) + runtime inputs; predicate AND-ed into viewer boundary (never widens); formula → JS path incl. page-local; bad input deactivates filter (no SQL cast 500); OLD pages.customFiltersJson retired.
 - [Editable records table](editable-records-table.md) — inline cell/add-row/setup-mode constraints; inline status edits must mirror the per-row server workflow boundary, not a heuristic.
 - [Page-local & computed fields](page-local-and-computed-fields.md) — mirror-page page-local fields (separate value storage, RBAC = entity records boundary), per-field conditional formatting, read-only function/formula fields.
 - [Event system](event-system.md) — internal best-effort event bus design, the 5 core events, foundation for automations/modules.

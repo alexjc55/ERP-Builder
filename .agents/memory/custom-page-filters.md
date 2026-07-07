@@ -1,43 +1,55 @@
 ---
-name: Custom page filters (multi-field date)
-description: Reusable per-page named filters combining several entity date fields under one filter-bar chip; the invariants that must stay consistent.
+name: Custom filters (per-entity, automations-style)
+description: Per-entity admin-authored custom filters (two-level И/ИЛИ tree over ANY field incl. formula, with runtime inputs); the apply-engine invariants that must stay consistent.
 ---
 
-# Custom page filters (multi-field date)
+# Custom filters (per-entity, automations-style)
 
-Admins define reusable, named per-page "custom filters" that combine several
-entity **date/datetime** fields under ONE filter-bar chip. Stored as
-`customFiltersJson` (jsonb) on the `pages` row, shape `customPageFilterSchema`
-(`{ id, labelJson, type:"date", fieldKeys[], combine:"or"|"and"|"overlap" }`).
-Motivating case: "Работы за период" over two date fields → rows where EITHER
-date falls in the picked period (OR). v1 = date type + entity fields only
-(no page-local, no pivot; pivot/calendar queries intentionally do NOT carry
-`customFilters`). Gated by the existing `pages` cap.
+Кастомные фильтры are per-ENTITY, structured EXACTLY like entity Automations: a
+row per filter in the `custom_filters` table, edited at
+`/admin/entities/:entityId/custom-filters`, gated by the RBAC cap
+`customFilters`. Each filter renders as ONE chip on the records filter bar and
+narrows the entity's TABLE, PIVOT (сводная) and CALENDAR views.
 
-## Server invariants
-- The def list is **authoritative from the DB** (`pages.customFiltersJson`),
-  never from the client. The request only sends `customFilters` = picks
-  (`{ id, range }`); the server matches by `id`.
-- Per-def, re-apply the records field boundary: keep only **visible +
-  isFilterable + date/datetime** fieldKeys. Field order is preserved because
-  `overlap` uses first key = start, last key = end.
-- `buildCustomDateFilter` uses **half-open `[from, to)`** (`>= from AND < to`).
-  For `and`/`overlap` a NULL bound excludes the row (SQL 3VL — condition never
-  becomes TRUE). Requires `pageId` (400 otherwise).
+A filter is a two-level boolean tree: GROUPS combined by a top-level
+conjunction (И/ИЛИ), each group combining its own CONDITIONS — enough for
+`(A И B) ИЛИ (C И D)`. A condition targets ANY field (entity OR page-local via
+`pageId`), ANY type INCLUDING formula, **ignoring `isFilterable`**. Operators:
+eq/neq/contains/notContains/gt/lt/gte/lte/between/empty/notEmpty. A condition's
+value is fixed (`value`) or user-supplied at apply time (`valueSource:"input"` +
+`inputId`); the filter declares its inputs in `inputsJson`, and several
+conditions can share one input (flagship «Работы за период»: one period feeds
+two date fields).
 
-## Client invariant (the bug that bit us)
-**Why:** the records query dep-key must derive from the ACTUAL picks
-(`JSON.stringify(customFilterPicks)`), NOT from raw `customDateFilters` state.
-Picks are gated by the current page's defs; if the key came from raw state,
-changing the page's `customFiltersJson` (setup-mode save + invalidate) without
-touching the picked dates would leave the query cached with stale/removed ids
-→ 400 "Unknown custom filter" or new defs not applying.
-**How to apply:** any per-page filter channel whose payload is gated by
-server-authoritative defs must key the query on the gated payload, not the raw
-picker state.
+## The retirement that must not regress
+The OLD design (`pages.customFiltersJson` — per-page multi-date chip) is GONE.
+Do not re-add a `customFilters` prop on pages or reference `pages.customFiltersJson`.
+The client channel is now `CustomFilterPick[]` (`{ id, inputs?: [{inputId,value}] }`)
+carried on the records/query, pivot and calendar-base POST bodies.
 
-## Cross-page safety
-Def ids are UUIDs (unique per def), and client picks are filtered to the
-current page's known def ids, so switching between two pages of the same entity
-cannot leak a stale pick into the query even though EntityRecords is not keyed
-by pageId (state reset only fires on entityId change).
+## Apply-engine invariants (`custom-filter-apply.ts`)
+- **Admin-authoritative but never widening.** The compiled predicate is only
+  ever AND-ed into the caller's existing WHERE (viewer row-scope / hidden fields
+  / status / archive). It can reference fields hidden for the viewer, but the
+  returned rows still obey the viewer boundary — a custom filter only NARROWS.
+- **Defs come from the DB by id**, never the client. The client sends picks; the
+  server loads `custom_filters` rows and matches by id (unknown id → 400).
+- **Two evaluation strategies.** SQL path (default) compiles the whole tree to
+  ONE nested predicate. JS path is used **only when any condition (entity OR
+  page-local) references a formula field** — a formula value is never stored, so
+  the tree is evaluated in JS over every entity record → `id IN (...)`. Empty
+  set must become `sql\`false\`` so an empty match excludes everything (not
+  "no-op").
+- **Page-local formula must be computed in the JS path.** For `fieldSource:"page"`
+  do NOT blindly read the stored value + treat as text: look up the page field
+  meta, and if it is a `function` field, build a page-local `buildFormulaScope`
+  from the page values and compute it; otherwise pick the comparison kind
+  (numeric/date/text) from the page field's type. (The first cut hard-coded
+  page → text and silently never matched page-local formulas.)
+- **Runtime input usability is a deterministic gate, not a SQL cast.** Before
+  building anything, an input value that is unfilled / partial (one side of a
+  range) / malformed for its declared `inputsJson` type deactivates the WHOLE
+  filter (`inputMissing` → skip), so a bad date/number never reaches a
+  `::timestamptz`/numeric cast and 500s.
+- Requires `pageId` in context whenever a condition targets a page-local field
+  (400 otherwise).

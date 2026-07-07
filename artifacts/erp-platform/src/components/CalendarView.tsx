@@ -6,6 +6,7 @@ import {
   type Field,
   type Status,
   type FilterCondition,
+  type CustomFilterPick,
   type RecordQueryFilterConjunction,
   type ArchiveFilter,
   type CalendarConfig,
@@ -38,6 +39,8 @@ export type CalendarBaseQuery = {
   search?: string;
   archived: ArchiveFilter;
   pageId?: number;
+  /** Picked per-entity CUSTOM filters (applied server-side via records/query). */
+  customFilters?: CustomFilterPick[];
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -256,6 +259,7 @@ export function CalendarView({
             search: baseQuery.search,
             archived: baseQuery.archived,
             pageId: baseQuery.pageId,
+            customFilters: baseQuery.customFilters,
             sorts: [{ field: dateFieldKey, direction: "asc" }],
             page,
             pageSize: PAGE_SIZE,

@@ -308,6 +308,7 @@ export interface RoleAdminCaps {
   events: boolean;
   modules: boolean;
   automations: boolean;
+  customFilters: boolean;
   columnGroups: boolean;
   googleDrive: boolean;
   settings: boolean;
@@ -1028,33 +1029,6 @@ export interface PageQuickFilter {
   excludeStatusIds?: number[];
 }
 
-export type CustomPageFilterType = typeof CustomPageFilterType[keyof typeof CustomPageFilterType];
-
-
-export const CustomPageFilterType = {
-  date: 'date',
-} as const;
-
-export type CustomPageFilterCombine = typeof CustomPageFilterCombine[keyof typeof CustomPageFilterCombine];
-
-
-export const CustomPageFilterCombine = {
-  or: 'or',
-  and: 'and',
-  overlap: 'overlap',
-} as const;
-
-/**
- * A reusable per-page CUSTOM FILTER combining several entity fields under one filter-bar chip. v1: date type only. `combine`: or = ANY field in the picked period (default), and = EVERY field in the picked period, overlap = the [firstField, lastField] interval overlaps the picked period.
- */
-export interface CustomPageFilter {
-  id: string;
-  labelJson: MultilingualText;
-  type: CustomPageFilterType;
-  fieldKeys: string[];
-  combine: CustomPageFilterCombine;
-}
-
 export interface Page {
   id: number;
   nameJson: MultilingualText;
@@ -1101,11 +1075,6 @@ export interface Page {
   widgetsCollapsedDefault?: boolean;
   /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
   defaultQuickFilterJson?: PageQuickFilter | null;
-  /**
-     * Per-page reusable multi-field custom filters (v1 = date type). Each combines several entity fields under one filter-bar chip.
-     * @nullable
-     */
-  customFiltersJson?: CustomPageFilter[] | null;
   /**
      * Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display/aggregation-only, never a security boundary.
      * @nullable
@@ -1184,11 +1153,6 @@ export interface PageInput {
   /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
   defaultQuickFilterJson?: PageQuickFilter | null;
   /**
-     * Per-page reusable multi-field custom filters (v1 = date type). Each combines several entity fields under one filter-bar chip.
-     * @nullable
-     */
-  customFiltersJson?: CustomPageFilter[] | null;
-  /**
      * Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.
      * @nullable
      */
@@ -1262,11 +1226,6 @@ export interface PageUpdate {
   widgetsCollapsedDefault?: boolean;
   /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
   defaultQuickFilterJson?: PageQuickFilter | null;
-  /**
-     * Per-page reusable multi-field custom filters (v1 = date type). Each combines several entity fields under one filter-bar chip.
-     * @nullable
-     */
-  customFiltersJson?: CustomPageFilter[] | null;
   /**
      * Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.
      * @nullable
@@ -2922,6 +2881,16 @@ export interface AutomationsReorderInput {
   items: AutomationsReorderInputItemsItem[];
 }
 
+export type CustomFiltersReorderInputItemsItem = {
+  id: number;
+  sortOrder: number;
+};
+
+export interface CustomFiltersReorderInput {
+  entityId: number;
+  items: CustomFiltersReorderInputItemsItem[];
+}
+
 export type AutomationRunDetailJson = { [key: string]: unknown };
 
 export interface AutomationRun {
@@ -2989,21 +2958,165 @@ export interface RecordUpdate {
   pageId?: number;
 }
 
-/**
- * Selected period as a half-open interval [from, to): `to` is the day AFTER the last selected day, matching the date-filter convention.
- */
-export type CustomFilterPickRange = {
-  from: string;
-  to: string;
-};
+export type CustomFilterOperator = typeof CustomFilterOperator[keyof typeof CustomFilterOperator];
+
+
+export const CustomFilterOperator = {
+  eq: 'eq',
+  neq: 'neq',
+  contains: 'contains',
+  notContains: 'notContains',
+  gt: 'gt',
+  lt: 'lt',
+  gte: 'gte',
+  lte: 'lte',
+  between: 'between',
+  empty: 'empty',
+  notEmpty: 'notEmpty',
+} as const;
+
+export type CustomFilterInputType = typeof CustomFilterInputType[keyof typeof CustomFilterInputType];
+
+
+export const CustomFilterInputType = {
+  text: 'text',
+  number: 'number',
+  date: 'date',
+  datetime: 'datetime',
+  dateRange: 'dateRange',
+  numberRange: 'numberRange',
+  select: 'select',
+  boolean: 'boolean',
+} as const;
 
 /**
- * A picked custom filter in a records query: references a page's customFiltersJson entry by id, with the selected date period. Requires pageId. The server resolves the definition from the authoritative page row and re-validates every referenced field is a visible, filterable date field for the viewer before applying it.
+ * A runtime user-supplied input a filter declares, referenced by a condition's inputId.
+ */
+export interface CustomFilterInput {
+  id: string;
+  type: CustomFilterInputType;
+  labelJson?: MultilingualText;
+}
+
+export type CustomFilterConditionFieldSource = typeof CustomFilterConditionFieldSource[keyof typeof CustomFilterConditionFieldSource];
+
+
+export const CustomFilterConditionFieldSource = {
+  entity: 'entity',
+  page: 'page',
+} as const;
+
+export type CustomFilterConditionValueSource = typeof CustomFilterConditionValueSource[keyof typeof CustomFilterConditionValueSource];
+
+
+export const CustomFilterConditionValueSource = {
+  static: 'static',
+  input: 'input',
+} as const;
+
+/**
+ * One condition of a custom filter: a field (entity or a mirror page's page-local field) compared by an operator against a fixed value or a user-supplied input. ANY field type is allowed, including formula fields (the computed result is compared), regardless of isFilterable.
+ */
+export interface CustomFilterCondition {
+  fieldSource?: CustomFilterConditionFieldSource;
+  /** The mirror page whose page-field to read (when fieldSource=page). */
+  pageId?: number;
+  fieldKey: string;
+  operator: CustomFilterOperator;
+  valueSource?: CustomFilterConditionValueSource;
+  value?: unknown;
+  inputId?: string;
+}
+
+export type CustomFilterGroupConjunction = typeof CustomFilterGroupConjunction[keyof typeof CustomFilterGroupConjunction];
+
+
+export const CustomFilterGroupConjunction = {
+  and: 'and',
+  or: 'or',
+} as const;
+
+/**
+ * A group of conditions combined by one conjunction (level 2 of the tree).
+ */
+export interface CustomFilterGroup {
+  conjunction: CustomFilterGroupConjunction;
+  conditions: CustomFilterCondition[];
+}
+
+export type CustomFilterConjunction = typeof CustomFilterConjunction[keyof typeof CustomFilterConjunction];
+
+
+export const CustomFilterConjunction = {
+  and: 'and',
+  or: 'or',
+} as const;
+
+/**
+ * A per-entity CUSTOM FILTER (structured like an Automation). A two-level И/ИЛИ condition tree over ANY field of the entity (or a mirror page's page-local field), including formula fields. Renders as ONE chip on the records filter bar and narrows the TABLE, PIVOT and CALENDAR views.
+ */
+export interface CustomFilter {
+  id: number;
+  entityId: number;
+  nameJson: MultilingualText;
+  isActive: boolean;
+  conjunction: CustomFilterConjunction;
+  groupsJson: CustomFilterGroup[];
+  inputsJson: CustomFilterInput[];
+  sortOrder: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type CustomFilterCreateConjunction = typeof CustomFilterCreateConjunction[keyof typeof CustomFilterCreateConjunction];
+
+
+export const CustomFilterCreateConjunction = {
+  and: 'and',
+  or: 'or',
+} as const;
+
+export interface CustomFilterCreate {
+  entityId: number;
+  nameJson: MultilingualText;
+  isActive?: boolean;
+  conjunction: CustomFilterCreateConjunction;
+  groupsJson: CustomFilterGroup[];
+  inputsJson?: CustomFilterInput[];
+  sortOrder?: number;
+}
+
+export type CustomFilterUpdateConjunction = typeof CustomFilterUpdateConjunction[keyof typeof CustomFilterUpdateConjunction];
+
+
+export const CustomFilterUpdateConjunction = {
+  and: 'and',
+  or: 'or',
+} as const;
+
+export interface CustomFilterUpdate {
+  nameJson?: MultilingualText;
+  isActive?: boolean;
+  conjunction?: CustomFilterUpdateConjunction;
+  groupsJson?: CustomFilterGroup[];
+  inputsJson?: CustomFilterInput[];
+  sortOrder?: number;
+}
+
+/**
+ * A runtime value supplied for one of a filter's declared inputs.
+ */
+export interface CustomFilterInputValue {
+  inputId: string;
+  value: unknown;
+}
+
+/**
+ * A picked custom filter in a records/pivot query: references a custom_filters row by id and supplies any runtime input values. The server resolves the authoritative definition from the entity's rows; the predicate may reference fields hidden for the viewer, but returned rows still obey the viewer's row/field boundary.
  */
 export interface CustomFilterPick {
-  id: string;
-  /** Selected period as a half-open interval [from, to): `to` is the day AFTER the last selected day, matching the date-filter convention. */
-  range: CustomFilterPickRange;
+  id: number;
+  inputs?: CustomFilterInputValue[];
 }
 
 /**
@@ -3114,6 +3227,8 @@ export const PivotQueryFilterConjunction = {
 export interface PivotQuery {
   filters?: FilterCondition[];
   pageLocalFilters?: FilterCondition[];
+  /** Picked per-entity CUSTOM filters (see CustomFilterPick). Each is resolved to an admin-authored predicate and AND-combined before the pivot is computed. */
+  customFilters?: CustomFilterPick[];
   filterConjunction?: PivotQueryFilterConjunction;
   statusIds?: number[];
   search?: string;
@@ -3194,7 +3309,7 @@ export interface RecordQuery {
   filters?: FilterCondition[];
   /** Filter conditions on PAGE-LOCAL fields (values stored in page_record_values), keyed by page-field fieldKey. Requires pageId. Each condition is AND-combined with the rest of the query. Only visible (per-role) filterable page-local fields are accepted. */
   pageLocalFilters?: FilterCondition[];
-  /** Picked multi-field CUSTOM filters (see CustomFilterPick). Each references a page customFiltersJson entry by id + a date period and is AND-combined with the rest of the query. Requires pageId; the server resolves the definition and re-checks every referenced field is a visible, filterable date field for the viewer. */
+  /** Picked per-entity CUSTOM filters (see CustomFilterPick). Each is resolved server-side to an admin-authored two-level И/ИЛИ predicate over ANY field (incl. formula) and AND-combined with the rest of the query. The predicate may reference fields hidden for the viewer, but returned rows still obey the viewer's row/field boundary. */
   customFilters?: CustomFilterPick[];
   filterConjunction?: RecordQueryFilterConjunction;
   statusIds?: number[];

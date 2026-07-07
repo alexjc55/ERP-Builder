@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ArchiveFilter } from './archiveFilter';
+import type { CustomFilterPick } from './customFilterPick';
 import type { FilterCondition } from './filterCondition';
 import type { PivotConfig } from './pivotConfig';
 import type { PivotQueryFilterConjunction } from './pivotQueryFilterConjunction';
@@ -13,6 +14,8 @@ import type { PivotQueryFilterConjunction } from './pivotQueryFilterConjunction'
 export interface PivotQuery {
   filters?: FilterCondition[];
   pageLocalFilters?: FilterCondition[];
+  /** Picked per-entity CUSTOM filters (see CustomFilterPick). Each is resolved to an admin-authored predicate and AND-combined before the pivot is computed. */
+  customFilters?: CustomFilterPick[];
   filterConjunction?: PivotQueryFilterConjunction;
   statusIds?: number[];
   search?: string;

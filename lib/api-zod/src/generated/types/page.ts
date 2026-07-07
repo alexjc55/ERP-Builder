@@ -5,7 +5,6 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
-import type { CustomPageFilter } from './customPageFilter';
 import type { MultilingualText } from './multilingualText';
 import type { PageColumnGroupsJson } from './pageColumnGroupsJson';
 import type { PageMirrorFieldLabelsJson } from './pageMirrorFieldLabelsJson';
@@ -59,11 +58,6 @@ export interface Page {
   widgetsCollapsedDefault?: boolean;
   /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
   defaultQuickFilterJson?: PageQuickFilter | null;
-  /**
-     * Per-page reusable multi-field custom filters (v1 = date type). Each combines several entity fields under one filter-bar chip.
-     * @nullable
-     */
-  customFiltersJson?: CustomPageFilter[] | null;
   /**
      * Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display/aggregation-only, never a security boundary.
      * @nullable

@@ -172,7 +172,7 @@ export function ownRelationExists(meta: RelationFilterMeta, userId: number): SQL
  * supports for text, but always wrapped so it matches by the LINKED value, not a
  * (non-existent) `values_json` entry. `is_empty` = no link with a non-empty value.
  */
-function buildRelationCondition(cond: FilterCondition, meta: RelationFilterMeta): { sql: SQL } | { error: string } {
+export function buildRelationCondition(cond: FilterCondition, meta: RelationFilterMeta): { sql: SQL } | { error: string } {
   const op = cond.operator;
   const nonEmpty = (v: SQL): SQL => sql`${v} IS NOT NULL AND ${v} <> ''`;
 
@@ -234,7 +234,7 @@ function buildRelationCondition(cond: FilterCondition, meta: RelationFilterMeta)
   return { error: `Unsupported operator "${op}" for relation field "${cond.field}"` };
 }
 
-function buildCondition(
+export function buildCondition(
   cond: FilterCondition,
   fieldType: string,
   exprOverride?: SQL,
@@ -384,47 +384,6 @@ export function buildPageLocalCondition(
   pageId: number,
 ): { sql: SQL } | { error: string } {
   return buildCondition(cond, fieldType, pageLocalValueExpr(pageId, cond.field));
-}
-
-/**
- * Build the SQL for a multi-field CUSTOM DATE filter (see pages.customFiltersJson):
- * given several entity date field keys and one picked half-open period [from, to)
- * (`to` = the day AFTER the last selected day), combine the fields per `combine`:
- *  - "or"      — ANY field's value falls in [from, to).
- *  - "and"     — EVERY field's value falls in [from, to) (a NULL field excludes the row).
- *  - "overlap" — the [firstField, lastField] interval overlaps the period, i.e.
- *                firstField < to AND lastField >= from. Uses ONLY the first and
- *                last keys (a start/end pair); a NULL bound excludes the row.
- * Both bounds are bound params cast to timestamptz in the session tz, matching the
- * per-field `between` semantics used elsewhere so day-level comparison is
- * consistent for date and datetime fields. Field keys are the caller's
- * responsibility to have validated (visible + filterable + date) before calling.
- */
-export function buildCustomDateFilter(
-  fieldKeys: string[],
-  from: string,
-  to: string,
-  combine: "or" | "and" | "overlap",
-): { sql: SQL } | { error: string } {
-  // Date custom filters combine 2+ fields; "overlap" needs exactly 2 ordered
-  // fields (start ≤ end-of-period AND end ≥ start-of-period).
-  if (fieldKeys.length < 2) return { error: "Custom date filter requires at least 2 fields" };
-  if (combine === "overlap" && fieldKeys.length !== 2)
-    return { error: "Custom date filter 'overlap' requires exactly 2 fields" };
-  const between = (key: string): SQL => {
-    const e = sql`((${entityRecordsTable.valuesJson} ->> ${key}))::timestamptz`;
-    return sql`(${e} >= ${from}::timestamptz AND ${e} < ${to}::timestamptz)`;
-  };
-  if (combine === "overlap") {
-    const startKey = fieldKeys[0]!;
-    const endKey = fieldKeys[fieldKeys.length - 1]!;
-    const startE = sql`((${entityRecordsTable.valuesJson} ->> ${startKey}))::timestamptz`;
-    const endE = sql`((${entityRecordsTable.valuesJson} ->> ${endKey}))::timestamptz`;
-    return { sql: sql`(${startE} < ${to}::timestamptz AND ${endE} >= ${from}::timestamptz)` };
-  }
-  const parts = fieldKeys.map(between);
-  const combined = combine === "and" ? and(...parts) : or(...parts);
-  return { sql: combined ?? sql`false` };
 }
 
 /**
