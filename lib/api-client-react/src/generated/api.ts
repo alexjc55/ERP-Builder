@@ -36,6 +36,7 @@ import type {
   ColumnGroupInput,
   ColumnGroupUpdate,
   CreateDriveFolderBody,
+  CreateLocalFolderInput,
   CustomFilter,
   CustomFilterCreate,
   CustomFilterUpdate,
@@ -73,6 +74,7 @@ import type {
   LinkedRecord,
   ListEventsParams,
   ListUsersParams,
+  LocalFolder,
   LoginHistoryEntry,
   LoginInput,
   Module,
@@ -11076,6 +11078,224 @@ export const useDeleteGoogleDriveFolder = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getDeleteGoogleDriveFolderMutationOptions(options));
+    }
+
+export const getListLocalFoldersUrl = () => {
+
+
+
+
+  return `/api/local-folders`
+}
+
+/**
+ * @summary List managed local upload folders (admin)
+ */
+export const listLocalFolders = async ( options?: RequestInit): Promise<LocalFolder[]> => {
+
+  return customFetch<LocalFolder[]>(getListLocalFoldersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListLocalFoldersQueryKey = () => {
+    return [
+    `/api/local-folders`
+    ] as const;
+    }
+
+
+export const getListLocalFoldersQueryOptions = <TData = Awaited<ReturnType<typeof listLocalFolders>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLocalFolders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListLocalFoldersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLocalFolders>>> = ({ signal }) => listLocalFolders({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listLocalFolders>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListLocalFoldersQueryResult = NonNullable<Awaited<ReturnType<typeof listLocalFolders>>>
+export type ListLocalFoldersQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary List managed local upload folders (admin)
+ */
+
+export function useListLocalFolders<TData = Awaited<ReturnType<typeof listLocalFolders>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLocalFolders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListLocalFoldersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateLocalFolderUrl = () => {
+
+
+
+
+  return `/api/local-folders`
+}
+
+/**
+ * @summary Create a new managed local folder (admin)
+ */
+export const createLocalFolder = async (createLocalFolderInput: CreateLocalFolderInput, options?: RequestInit): Promise<LocalFolder> => {
+
+  return customFetch<LocalFolder>(getCreateLocalFolderUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createLocalFolderInput,)
+  }
+);}
+
+
+
+
+export const getCreateLocalFolderMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLocalFolder>>, TError,{data: BodyType<CreateLocalFolderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createLocalFolder>>, TError,{data: BodyType<CreateLocalFolderInput>}, TContext> => {
+
+const mutationKey = ['createLocalFolder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createLocalFolder>>, {data: BodyType<CreateLocalFolderInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createLocalFolder(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateLocalFolderMutationResult = NonNullable<Awaited<ReturnType<typeof createLocalFolder>>>
+    export type CreateLocalFolderMutationBody = BodyType<CreateLocalFolderInput>
+    export type CreateLocalFolderMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Create a new managed local folder (admin)
+ */
+export const useCreateLocalFolder = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLocalFolder>>, TError,{data: BodyType<CreateLocalFolderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createLocalFolder>>,
+        TError,
+        {data: BodyType<CreateLocalFolderInput>},
+        TContext
+      > => {
+      return useMutation(getCreateLocalFolderMutationOptions(options));
+    }
+
+export const getDeleteLocalFolderUrl = (id: number,) => {
+
+
+
+
+  return `/api/local-folders/${id}`
+}
+
+/**
+ * @summary Remove a managed local folder from the list (admin)
+ */
+export const deleteLocalFolder = async (id: number, options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getDeleteLocalFolderUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteLocalFolderMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLocalFolder>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteLocalFolder>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteLocalFolder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteLocalFolder>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteLocalFolder(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteLocalFolderMutationResult = NonNullable<Awaited<ReturnType<typeof deleteLocalFolder>>>
+
+    export type DeleteLocalFolderMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Remove a managed local folder from the list (admin)
+ */
+export const useDeleteLocalFolder = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLocalFolder>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteLocalFolder>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteLocalFolderMutationOptions(options));
     }
 
 export const getListDeletedFilesUrl = () => {

@@ -1,5 +1,3 @@
-import { requestUploadUrl } from "@workspace/api-client-react";
-
 /** A source a `file`-type field value may come from. */
 export type FileSource = "server" | "gdrive" | "link";
 
@@ -76,25 +74,56 @@ export function fileAllowedSources(
 }
 
 /**
- * Upload a file via the presigned-URL flow:
- * 1. ask the API for a presigned URL (auth attached by the generated client),
- * 2. PUT the bytes directly to that URL.
- * Returns the normalized object path to store in a record.
+ * Upload a file to LOCAL disk storage via our server. The bytes are sent as the
+ * raw request body; the optional `localFolderId` binds the upload to a managed
+ * folder (falls back to the default folder server-side when unset/unknown).
+ * Returns the stored path + metadata to store as a `server` file value.
  */
 export async function uploadFile(
   file: File,
-): Promise<{ path: string; contentType: string; size: number }> {
-  const contentType = file.type || "application/octet-stream";
-  const res = await requestUploadUrl({ name: file.name, size: file.size, contentType });
-  const put = await fetch(res.uploadURL, {
-    method: "PUT",
+  localFolderId?: number | null,
+): Promise<{ path: string; name: string; contentType: string; size: number }> {
+  const token = localStorage.getItem("erp_token");
+  const headers: Record<string, string> = {
+    "Content-Type": file.type || "application/octet-stream",
+    "X-File-Name": encodeURIComponent(file.name),
+  };
+  if (localFolderId != null) headers["X-Local-Folder-Id"] = String(localFolderId);
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const resp = await fetch("/api/storage/local/upload", {
+    method: "POST",
+    headers,
     body: file,
-    headers: { "Content-Type": contentType },
   });
-  if (!put.ok) {
-    throw new Error(`Upload failed (${put.status})`);
+  if (!resp.ok) {
+    throw new Error(`Upload failed (${resp.status})`);
   }
-  return { path: res.objectPath, contentType, size: file.size };
+  return (await resp.json()) as { path: string; name: string; contentType: string; size: number };
+}
+
+/**
+ * Upload a branding logo to LOCAL disk storage (admin-gated server-side). Returns
+ * the stored path to persist via the settings update. Sent as the raw request
+ * body, mirroring `uploadFile`.
+ */
+export async function uploadBrandingLogo(
+  file: File,
+): Promise<{ path: string; name: string; contentType: string; size: number }> {
+  const token = localStorage.getItem("erp_token");
+  const headers: Record<string, string> = {
+    "Content-Type": file.type || "application/octet-stream",
+    "X-File-Name": encodeURIComponent(file.name),
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const resp = await fetch("/api/settings/logo", {
+    method: "POST",
+    headers,
+    body: file,
+  });
+  if (!resp.ok) {
+    throw new Error(`Logo upload failed (${resp.status})`);
+  }
+  return (await resp.json()) as { path: string; name: string; contentType: string; size: number };
 }
 
 /** Result of uploading a file into the managed Google Drive folder. */

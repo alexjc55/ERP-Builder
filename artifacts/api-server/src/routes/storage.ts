@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
+import express from "express";
 import { Readable } from "stream";
 import { and, eq, sql } from "drizzle-orm";
 import {
@@ -13,6 +14,12 @@ import {
   RequestUploadUrlResponse,
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
+import {
+  isLocalPath,
+  saveLocalFile,
+  streamLocalFile,
+} from "../lib/localStorage";
+import { resolveTargetStorageDir } from "../lib/localFolders";
 import { requireAuth } from "../middlewares/auth";
 import {
   getPermissions,
@@ -117,6 +124,71 @@ router.post("/storage/uploads/request-url", requireAuth, async (req: Request, re
 });
 
 /**
+ * POST /storage/local/upload
+ *
+ * Upload a file-field file to LOCAL disk storage. The bytes are sent as the raw
+ * request body (Content-Type = file type, X-File-Name carries the URL-encoded
+ * name) to avoid a multipart parser, mirroring the Google Drive upload route.
+ * The optional X-Local-Folder-Id header binds the upload to a managed folder;
+ * an unknown/absent id falls back to the default folder. Any authenticated user
+ * may upload — the record-write boundary is enforced when the value is saved.
+ */
+router.post(
+  "/storage/local/upload",
+  requireAuth,
+  express.raw({ type: () => true, limit: "50mb" }),
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const body = req.body;
+      if (!Buffer.isBuffer(body) || body.length === 0) {
+        res.status(400).json({ error: "Empty upload body" });
+        return;
+      }
+      const rawName = req.header("x-file-name");
+      const name = rawName ? decodeURIComponent(rawName) : "upload";
+      const contentType = req.header("content-type") || "application/octet-stream";
+      const requestedFolderId = Number(req.header("x-local-folder-id"));
+      const storageDir = await resolveTargetStorageDir(
+        Number.isInteger(requestedFolderId) ? requestedFolderId : null,
+      );
+      const saved = await saveLocalFile(`files/${storageDir}`, name, contentType, body);
+      res.json(saved);
+    } catch (error) {
+      req.log.error({ err: error }, "Local file upload failed");
+      res.status(500).json({ error: "Failed to upload file" });
+    }
+  },
+);
+
+/**
+ * GET /storage/local/*
+ *
+ * Serve a locally-stored file, re-applying the records permission boundary so it
+ * never leaks bytes a user could not have seen via the record itself (same guard
+ * as object serving below).
+ */
+router.get("/storage/local/*path", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const raw = req.params.path;
+    const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
+    const storedPath = `/local/${wildcardPath}`;
+
+    if (!(await canReadObjectPath(req, storedPath))) {
+      res.status(404).json({ error: "Object not found" });
+      return;
+    }
+
+    const ok = await streamLocalFile(res, storedPath);
+    if (!ok) {
+      res.status(404).json({ error: "Object not found" });
+    }
+  } catch (error) {
+    req.log.error({ err: error }, "Error serving local file");
+    res.status(500).json({ error: "Failed to serve file" });
+  }
+});
+
+/**
  * GET /storage/public-objects/*
  *
  * Serve public assets from PUBLIC_OBJECT_SEARCH_PATHS.
@@ -168,6 +240,17 @@ router.get("/storage/branding-logo", async (req: Request, res: Response) => {
     const objectPath = row?.logoObjectPath;
     if (!objectPath) {
       res.status(404).json({ error: "No logo configured" });
+      return;
+    }
+
+    // New logos are stored on local disk (`/local/branding/...`); legacy logos
+    // point at object storage. The path comes from the DB (admin-set), not user
+    // input, so serving it publicly carries no IDOR risk.
+    if (isLocalPath(objectPath)) {
+      const ok = await streamLocalFile(res, objectPath, { cacheControl: "public, max-age=300" });
+      if (!ok) {
+        res.status(404).json({ error: "Logo not found" });
+      }
       return;
     }
 

@@ -58,3 +58,8 @@ attached_assets/
 
 # Deploy database backups created by deploy.sh
 .db-backups/
+
+# Local file storage. The branding logo (uploads/branding/) is committed so it
+# ships with the app; file-field record data + trash (uploads/files/) is user
+# data and must NOT be committed.
+/uploads/files/

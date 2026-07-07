@@ -14,4 +14,6 @@ export interface FileFieldConfig {
   allowedSources?: FileSource[];
   /** Google Drive folder id this field's uploads land in (one of the admin-managed folders). Unset means the default upload folder. */
   driveFolderId?: string;
+  /** Managed LOCAL folder id (local_folders.id) this field's `server` uploads land in. Unset means the default local folder. */
+  localFolderId?: number;
 }

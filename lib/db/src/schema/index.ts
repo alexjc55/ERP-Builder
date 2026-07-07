@@ -24,3 +24,4 @@ export * from "./custom-filters";
 export * from "./google_drive";
 export * from "./app_settings";
 export * from "./deleted_files";
+export * from "./local_folders";

@@ -2630,7 +2630,8 @@ export const ListEntityFieldsResponseItem = zod.object({
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "fileConfigJson": zod.object({
   "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional(),
-  "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.')
+  "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.'),
+  "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.')
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "userConfigJson": zod.object({
   "allowedRoleIds": zod.array(zod.number()).optional(),
@@ -2740,7 +2741,8 @@ export const CreateEntityFieldBody = zod.object({
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "fileConfigJson": zod.object({
   "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional(),
-  "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.')
+  "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.'),
+  "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.')
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "userConfigJson": zod.object({
   "allowedRoleIds": zod.array(zod.number()).optional(),
@@ -2839,7 +2841,8 @@ export const GetFieldResponse = zod.object({
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "fileConfigJson": zod.object({
   "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional(),
-  "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.')
+  "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.'),
+  "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.')
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "userConfigJson": zod.object({
   "allowedRoleIds": zod.array(zod.number()).optional(),
@@ -2938,7 +2941,8 @@ export const UpdateFieldBody = zod.object({
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "fileConfigJson": zod.object({
   "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional(),
-  "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.')
+  "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.'),
+  "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.')
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "userConfigJson": zod.object({
   "allowedRoleIds": zod.array(zod.number()).optional(),
@@ -3029,7 +3033,8 @@ export const UpdateFieldResponse = zod.object({
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "fileConfigJson": zod.object({
   "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional(),
-  "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.')
+  "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.'),
+  "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.')
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "userConfigJson": zod.object({
   "allowedRoleIds": zod.array(zod.number()).optional(),
@@ -6864,6 +6869,51 @@ export const DeleteGoogleDriveFolderParams = zod.object({
 })
 
 export const DeleteGoogleDriveFolderResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
+ * @summary List managed local upload folders (admin)
+ */
+export const ListLocalFoldersResponseItem = zod.object({
+  "id": zod.number().describe('Internal row id (stored on a field\'s fileConfigJson.localFolderId).'),
+  "name": zod.string(),
+  "isDefault": zod.boolean().describe('The auto-created default upload folder; cannot be removed.'),
+  "parentId": zod.number().nullish().describe('Internal id of the parent folder for nested subfolders; null for top-level folders.')
+})
+export const ListLocalFoldersResponse = zod.array(ListLocalFoldersResponseItem)
+
+
+/**
+ * @summary Create a new managed local folder (admin)
+ */
+export const createLocalFolderBodyNameMax = 100;
+
+
+
+export const CreateLocalFolderBody = zod.object({
+  "name": zod.string().min(1).max(createLocalFolderBodyNameMax),
+  "parentId": zod.number().nullish().describe('Optional parent folder (internal id) to create this folder as a subfolder.')
+})
+
+export const CreateLocalFolderResponse = zod.object({
+  "id": zod.number().describe('Internal row id (stored on a field\'s fileConfigJson.localFolderId).'),
+  "name": zod.string(),
+  "isDefault": zod.boolean().describe('The auto-created default upload folder; cannot be removed.'),
+  "parentId": zod.number().nullish().describe('Internal id of the parent folder for nested subfolders; null for top-level folders.')
+})
+
+
+/**
+ * @summary Remove a managed local folder from the list (admin)
+ */
+export const DeleteLocalFolderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteLocalFolderResponse = zod.object({
   "success": zod.boolean(),
   "message": zod.string().optional()
 })

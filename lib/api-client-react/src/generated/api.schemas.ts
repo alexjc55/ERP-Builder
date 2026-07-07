@@ -130,6 +130,26 @@ export interface CreateDriveFolderBody {
   parentId?: number | null;
 }
 
+export interface LocalFolder {
+  /** Internal row id (stored on a field's fileConfigJson.localFolderId). */
+  id: number;
+  name: string;
+  /** The auto-created default upload folder; cannot be removed. */
+  isDefault: boolean;
+  /** Internal id of the parent folder for nested subfolders; null for top-level folders. */
+  parentId?: number | null;
+}
+
+export interface CreateLocalFolderInput {
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  name: string;
+  /** Optional parent folder (internal id) to create this folder as a subfolder. */
+  parentId?: number | null;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -2184,6 +2204,8 @@ export interface FileFieldConfig {
   allowedSources?: FileSource[];
   /** Google Drive folder id this field's uploads land in (one of the admin-managed folders). Unset means the default upload folder. */
   driveFolderId?: string;
+  /** Managed LOCAL folder id (local_folders.id) this field's `server` uploads land in. Unset means the default local folder. */
+  localFolderId?: number;
 }
 
 /**

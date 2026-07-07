@@ -26,7 +26,7 @@
 - [Field config JSONB persistence](field-config-json-persistence.md) — new per-field config JSONB cols must be added to BOTH create insert and the PUT updateData allowlist, or edits silently no-op.
 - [Multi-source file field](multi-source-file-field.md) — file values are polymorphic (server/gdrive/link); legacy kind-less+path = server; Drive proxy must mirror records read boundary.
 - [App secret fail-fast](app-secret-fail-fast.md) — SESSION_SECRET has no default; import APP_SECRET from lib/secret for all JWT signing + at-rest encryption, never a fallback.
-- [Object/file fields](object-file-fields.md) — "file" field stores {path,name,...} JSONB; object serving must re-apply the records field/row/entity boundary (reference lookup), not auth-only or uploader ACL.
+- [Object/file fields](object-file-fields.md) — "file" field stores {path,name,...} JSONB; object serving must re-apply the records field/row/entity boundary (reference lookup); server uploads now go to LOCAL disk (/local/... scheme, path-traversal guard, managed folders in /settings), legacy /objects/ stays valid.
 - [User field role filter](user-field-role-filter.md) — a `user` field's allowedRoleIds must match a user's FULL role set (primary + additional via user_roles), not just primary roleId.
 - [Page related fields](page-relation-fields.md) — relation page-fields/metrics surface one linked record's field; metrics aggregate PER LINK not per unique linked record; related-values must not leak linkedRecordId of restricted rows.
 - [Conditional formatting text color](conditional-formatting-text-color.md) — per-rule textColor must be applied inline on content spans (and into renderCellValue), not the <td>; Tailwind text-* classes beat inherited color.

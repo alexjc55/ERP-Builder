@@ -6,6 +6,7 @@ import {
   useListRoles,
   useListEntityFields,
   useListGoogleDriveFolders,
+  useListLocalFolders,
   useListUserOptions,
   useGetEntityRelationOptions,
   getGetEntityRelationOptionsQueryKey,
@@ -148,6 +149,7 @@ export function FieldConfigDialog({
   const { data: roles = [] } = useListRoles();
   const { data: existingFields = [] } = useListEntityFields(entityId);
   const { data: driveFolders = [] } = useListGoogleDriveFolders();
+  const { data: localFolders = [] } = useListLocalFolders();
   const { data: userOptions = [] } = useListUserOptions();
   const [relationId, setRelationId] = useState<number | null>(null);
   const [relatedFieldKey, setRelatedFieldKey] = useState("");
@@ -184,6 +186,7 @@ export function FieldConfigDialog({
   const [permissions, setPermissions] = useState<FieldPermissions>({});
   const [allowedSources, setAllowedSources] = useState<FileSource[]>(["server"]);
   const [driveFolderId, setDriveFolderId] = useState<string>("");
+  const [localFolderId, setLocalFolderId] = useState<number | null>(null);
   const [allowedRoleIds, setAllowedRoleIds] = useState<number[]>([]);
   const [allowCreateUser, setAllowCreateUser] = useState(false);
   const [formatRules, setFormatRules] = useState<FieldFormatRule[]>([]);
@@ -240,6 +243,7 @@ export function FieldConfigDialog({
         const src = field.fileConfigJson?.allowedSources;
         setAllowedSources(Array.isArray(src) && src.length > 0 ? src : ["server"]);
         setDriveFolderId(field.fileConfigJson?.driveFolderId ?? "");
+        setLocalFolderId(field.fileConfigJson?.localFolderId ?? null);
       }
       setAllowedRoleIds(
         Array.isArray(field.userConfigJson?.allowedRoleIds) ? field.userConfigJson!.allowedRoleIds : [],
@@ -462,6 +466,7 @@ export function FieldConfigDialog({
           ? {
               allowedSources: allowedSources.length > 0 ? allowedSources : (["server"] as FileSource[]),
               ...(allowedSources.includes("gdrive") && driveFolderId ? { driveFolderId } : {}),
+              ...(allowedSources.includes("server") && localFolderId != null ? { localFolderId } : {}),
             }
           : {},
       userConfigJson: fieldType === "user" ? { allowedRoleIds, allowCreate: allowCreateUser } : {},
@@ -795,6 +800,36 @@ export function FieldConfigDialog({
                   t={t}
                   idPrefix="fcd-src"
                 />
+                {allowedSources.includes("server") && (
+                  <div className="space-y-1.5 pt-2">
+                    <Label>{t("fields.localFolder", "Папка на сервере")}</Label>
+                    <p className="text-xs text-slate-400">
+                      {t(
+                        "fields.localFolderHint",
+                        "Куда сохранять загруженные файлы этого поля. По умолчанию — папка «Общая».",
+                      )}
+                    </p>
+                    <Select
+                      value={localFolderId != null ? String(localFolderId) : "__default__"}
+                      onValueChange={(v) => setLocalFolderId(v === "__default__" ? null : Number(v))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__default__">
+                          {t("fields.localFolderDefault", "По умолчанию (Общая)")}
+                        </SelectItem>
+                        {flattenDriveFolders(localFolders).map(({ folder, depth }) => (
+                          <SelectItem key={folder.id} value={String(folder.id)}>
+                            {depth > 0 ? "\u00A0".repeat(depth * 3) + "└ " : ""}
+                            {folder.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 {allowedSources.includes("gdrive") && (
                   <div className="space-y-1.5 pt-2">
                     <Label>{t("fields.driveFolder", "Папка Google Drive")}</Label>

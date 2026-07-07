@@ -7431,6 +7431,7 @@ function InlineCellEditor({
         initial={initial}
         allowedSources={fileAllowedSources(field.fileConfigJson)}
         driveFolderId={field.fileConfigJson?.driveFolderId}
+        localFolderId={field.fileConfigJson?.localFolderId}
         onCommit={commitOnce}
         onCancel={onCancel}
       />
@@ -7678,6 +7679,7 @@ function FieldInput({
           disabled={disabled}
           allowedSources={fileAllowedSources(field.fileConfigJson)}
           driveFolderId={field.fileConfigJson?.driveFolderId}
+          localFolderId={field.fileConfigJson?.localFolderId}
         />
       );
     case "textarea":
@@ -7773,6 +7775,7 @@ function FileFieldInput({
   compact = false,
   allowedSources = ["server"],
   driveFolderId,
+  localFolderId,
 }: {
   value: unknown;
   onChange: (v: FileValue | "") => void;
@@ -7780,6 +7783,7 @@ function FileFieldInput({
   compact?: boolean;
   allowedSources?: FileSource[];
   driveFolderId?: string;
+  localFolderId?: number | null;
 }) {
   const t = useT();
   const { toast } = useToast();
@@ -7807,7 +7811,7 @@ function FileFieldInput({
     if (!file) return;
     setUploading(true);
     try {
-      const res = await uploadFile(file);
+      const res = await uploadFile(file, localFolderId);
       onChange({
         kind: "server",
         path: res.path,
@@ -8011,12 +8015,14 @@ function InlineFileEditor({
   initial,
   allowedSources = ["server"],
   driveFolderId,
+  localFolderId,
   onCommit,
   onCancel,
 }: {
   initial: CellValue;
   allowedSources?: FileSource[];
   driveFolderId?: string;
+  localFolderId?: number | null;
   onCommit: (v: CellValue) => void;
   onCancel: () => void;
 }) {
@@ -8024,7 +8030,7 @@ function InlineFileEditor({
   const [draft, setDraft] = useState<FileValue | "">(isFileValue(initial) ? initial : "");
   return (
     <div className="min-w-[220px] space-y-2 rounded-md border border-blue-200 bg-white p-2 shadow-sm">
-      <FileFieldInput value={draft} onChange={setDraft} allowedSources={allowedSources} driveFolderId={driveFolderId} compact />
+      <FileFieldInput value={draft} onChange={setDraft} allowedSources={allowedSources} driveFolderId={driveFolderId} localFolderId={localFolderId} compact />
       <div className="flex items-center gap-1">
         <Button size="sm" className="h-7 bg-blue-600 hover:bg-blue-700" onClick={() => onCommit(draft)}>
           {t("records.save", "Сохранить")}

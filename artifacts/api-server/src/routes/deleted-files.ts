@@ -5,17 +5,33 @@ import { db, deletedFilesTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
 import { requireSuperAdmin } from "../middlewares/permissions";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
+import { isLocalPath, streamLocalFile, deleteLocalFile } from "../lib/localStorage";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
 
 /**
- * File trash (recycle bin) for LOCAL object-storage files removed from records.
- * Rows are created on the records delete/update path; the physical objects live
- * on until purged here. SuperAdmin-only — listing exposes file metadata across
- * all entities, bypassing the per-record boundary, so it must not be broader.
- * Google Drive files are never tracked or deleted.
+ * File trash (recycle bin) for files removed from records. Rows are created on
+ * the records delete/update path; the physical objects live on until purged
+ * here. SuperAdmin-only — listing exposes file metadata across all entities,
+ * bypassing the per-record boundary, so it must not be broader. Files may be
+ * stored locally on disk (`/local/...`) or in legacy object storage
+ * (`/objects/...`); each op below branches on the path. Google Drive and pasted
+ * links are never tracked or deleted.
  */
+
+/**
+ * Delete a trashed file's physical object, branching on where it lives. Local
+ * deletes are best-effort (a missing file is a no-op); object-storage deletes
+ * bubble up so the caller can leave the trash row recoverable on failure.
+ */
+async function deletePhysical(filePath: string): Promise<void> {
+  if (isLocalPath(filePath)) {
+    await deleteLocalFile(filePath);
+    return;
+  }
+  await objectStorageService.deleteObjectEntity(filePath);
+}
 
 /** Map a DB row to the API shape (name snapshots are exposed under shorter keys). */
 function toApi(row: typeof deletedFilesTable.$inferSelect) {
@@ -64,6 +80,13 @@ router.get(
       return;
     }
     try {
+      if (isLocalPath(row.filePath)) {
+        const ok = await streamLocalFile(res, row.filePath, { contentType: row.contentType });
+        if (!ok) {
+          res.status(404).json({ error: "File no longer exists in storage" });
+        }
+        return;
+      }
       const objectFile = await objectStorageService.getObjectEntityFile(row.filePath);
       const response = await objectStorageService.downloadObject(objectFile);
       res.status(response.status);
@@ -96,7 +119,7 @@ router.post(
     const purgedIds: number[] = [];
     for (const row of rows) {
       try {
-        await objectStorageService.deleteObjectEntity(row.filePath);
+        await deletePhysical(row.filePath);
         purgedIds.push(row.id);
       } catch (error) {
         req.log.error({ err: error, filePath: row.filePath }, "Failed to delete object during purge");
@@ -127,7 +150,7 @@ router.delete(
     // Remove the physical object first; only drop the trash row on success so a
     // storage failure stays recoverable instead of orphaning the blob.
     try {
-      await objectStorageService.deleteObjectEntity(row.filePath);
+      await deletePhysical(row.filePath);
     } catch (error) {
       req.log.error({ err: error, filePath: row.filePath }, "Failed to delete object from storage");
       res.status(500).json({ error: "Failed to delete file from storage" });

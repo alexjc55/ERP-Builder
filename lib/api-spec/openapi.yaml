@@ -3261,6 +3261,93 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /local-folders:
+    get:
+      operationId: listLocalFolders
+      tags: [localFolders]
+      summary: List managed local upload folders (admin)
+      responses:
+        "200":
+          description: Managed folders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LocalFolder"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createLocalFolder
+      tags: [localFolders]
+      summary: Create a new managed local folder (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLocalFolderInput"
+      responses:
+        "200":
+          description: Created folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocalFolder"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /local-folders/{id}:
+    delete:
+      operationId: deleteLocalFolder
+      tags: [localFolders]
+      summary: Remove a managed local folder from the list (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Cannot remove the default folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Folder not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /deleted-files:
     get:
       operationId: listDeletedFiles
@@ -3456,6 +3543,36 @@ components:
           description: Internal id of the parent folder for nested subfolders; null for top-level folders.
 
     CreateDriveFolderBody:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        parentId:
+          type: integer
+          nullable: true
+          description: Optional parent folder (internal id) to create this folder as a subfolder.
+
+    LocalFolder:
+      type: object
+      required: [id, name, isDefault]
+      properties:
+        id:
+          type: integer
+          description: Internal row id (stored on a field's fileConfigJson.localFolderId).
+        name:
+          type: string
+        isDefault:
+          type: boolean
+          description: The auto-created default upload folder; cannot be removed.
+        parentId:
+          type: integer
+          nullable: true
+          description: Internal id of the parent folder for nested subfolders; null for top-level folders.
+
+    CreateLocalFolderInput:
       type: object
       required: [name]
       properties:
@@ -5428,6 +5545,11 @@ components:
           description: >-
             Google Drive folder id this field's uploads land in (one of the
             admin-managed folders). Unset means the default upload folder.
+        localFolderId:
+          type: integer
+          description: >-
+            Managed LOCAL folder id (local_folders.id) this field's `server`
+            uploads land in. Unset means the default local folder.
 
     UserFieldConfig:
       type: object

@@ -25,6 +25,7 @@ import storageRouter from "./storage";
 import googleDriveRouter from "./google-drive";
 import settingsRouter from "./settings";
 import deletedFilesRouter from "./deleted-files";
+import localFoldersRouter from "./local-folders";
 import importRouter from "./import";
 
 const router: IRouter = Router();
@@ -55,6 +56,7 @@ router.use(storageRouter);
 router.use(googleDriveRouter);
 router.use(settingsRouter);
 router.use(deletedFilesRouter);
+router.use(localFoldersRouter);
 router.use(importRouter);
 
 export default router;

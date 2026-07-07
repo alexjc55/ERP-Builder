@@ -151,7 +151,9 @@ function validateFileValue(field: EntityField, raw: unknown, gdriveModuleEnabled
   if (kind === "server") {
     const path = obj.path;
     const name = obj.name;
-    if (typeof path !== "string" || !path.startsWith("/objects/")) {
+    // New server uploads land on local disk (`/local/...`); legacy values point
+    // at object storage (`/objects/...`) and stay readable/valid.
+    if (typeof path !== "string" || !(path.startsWith("/local/") || path.startsWith("/objects/"))) {
       return `Field "${field.fieldKey}" has an invalid file path`;
     }
     if (typeof name !== "string" || name.trim() === "") {
@@ -2452,10 +2454,10 @@ router.get("/records/:id", requireAuth, async (req, res): Promise<void> => {
 type TrashReason = "record_deleted" | "field_cleared" | "field_replaced";
 
 /**
- * Recognize a LOCAL (object-storage) file value. Server files are the only kind
- * we ever physically delete; Google Drive (`fileId`) and link (`url`) values are
- * deliberately ignored. Legacy values without a `kind` but with an `/objects/`
- * path are treated as server files.
+ * Recognize a server-stored file value (local disk `/local/...` or legacy object
+ * storage `/objects/...`). These are the only kinds we ever physically delete;
+ * Google Drive (`fileId`) and link (`url`) values are deliberately ignored.
+ * Legacy values without a `kind` but with such a path are treated as server files.
  */
 function asServerFile(
   v: unknown,
@@ -2465,7 +2467,7 @@ function asServerFile(
   const isServer = o.kind === "server" || (o.kind == null && o.url == null && o.fileId == null);
   if (!isServer) return null;
   const path = o.path;
-  if (typeof path !== "string" || !path.startsWith("/objects/")) return null;
+  if (typeof path !== "string" || !(path.startsWith("/local/") || path.startsWith("/objects/"))) return null;
   const name =
     typeof o.name === "string" && o.name.trim() ? o.name.trim() : path.split("/").pop() || "file";
   return {

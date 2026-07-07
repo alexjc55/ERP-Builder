@@ -5,13 +5,18 @@ import {
   useChangePassword,
   useGetSettings,
   useUpdateSettings,
+  useListLocalFolders,
+  useCreateLocalFolder,
+  useDeleteLocalFolder,
   getGetMeQueryKey,
   getGetSettingsQueryKey,
+  getListLocalFoldersQueryKey,
   type MultilingualText,
+  type LocalFolder,
 } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { useT, LANGS, type Lang } from "@/lib/i18n";
-import { uploadFile } from "@/lib/storage";
+import { uploadBrandingLogo } from "@/lib/storage";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +32,7 @@ import {
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { ColorPickerControl } from "@/components/ColorPickerControl";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, User, Lock, Image as ImageIcon, Loader2, Upload, Trash2 } from "lucide-react";
+import { Building2, User, Lock, Image as ImageIcon, Loader2, Upload, Trash2, FolderTree } from "lucide-react";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
@@ -139,7 +144,7 @@ export default function SettingsPage() {
     }
     setUploadingLogo(true);
     try {
-      const { path } = await uploadFile(file);
+      const { path } = await uploadBrandingLogo(file);
       setLogoObjectPath(path);
       setLogoPreview(URL.createObjectURL(file));
       toast({ title: t("settings.logoUploaded", "Логотип загружен. Не забудьте сохранить.") });
@@ -382,6 +387,163 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       )}
+
+      {canBranding && <LocalFoldersManager />}
     </div>
+  );
+}
+
+/**
+ * Build a flat, indented list of managed local folders (parents before their
+ * children) so a nested folder tree renders as a simple ordered list.
+ */
+function flattenLocalFolders(folders: LocalFolder[]): { folder: LocalFolder; depth: number }[] {
+  const byParent = new Map<number | null, LocalFolder[]>();
+  for (const f of folders) {
+    const key = f.parentId ?? null;
+    if (!byParent.has(key)) byParent.set(key, []);
+    byParent.get(key)!.push(f);
+  }
+  const out: { folder: LocalFolder; depth: number }[] = [];
+  const walk = (parent: number | null, depth: number) => {
+    for (const f of byParent.get(parent) ?? []) {
+      out.push({ folder: f, depth });
+      walk(f.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return out;
+}
+
+/**
+ * Admin screen (inside Настройки сайта) to manage the folders that local file
+ * uploads are organized into. The default folder is always present and cannot be
+ * removed. Gated by the same "settings" cap that controls the branding card.
+ */
+function LocalFoldersManager() {
+  const t = useT();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: folders = [] } = useListLocalFolders();
+  const createFolder = useCreateLocalFolder();
+  const deleteFolder = useDeleteLocalFolder();
+  const [newName, setNewName] = useState("");
+  const [parentId, setParentId] = useState<number | null>(null);
+
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: getListLocalFoldersQueryKey() });
+
+  const addFolder = async () => {
+    const name = newName.trim();
+    if (!name) return;
+    try {
+      await createFolder.mutateAsync({ data: { name, parentId } });
+      setNewName("");
+      setParentId(null);
+      await invalidate();
+      toast({ title: t("localFolders.created", "Папка создана") });
+    } catch {
+      toast({ title: t("localFolders.createError", "Не удалось создать папку"), variant: "destructive" });
+    }
+  };
+
+  const removeFolder = async (id: number) => {
+    try {
+      await deleteFolder.mutateAsync({ id });
+      await invalidate();
+      toast({ title: t("localFolders.deleted", "Папка удалена") });
+    } catch {
+      toast({ title: t("localFolders.deleteError", "Не удалось удалить папку"), variant: "destructive" });
+    }
+  };
+
+  const flat = flattenLocalFolders(folders);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <FolderTree className="w-4 h-4 text-blue-600" />
+          {t("localFolders.title", "Папки для файлов")}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-xs text-slate-400">
+          {t(
+            "localFolders.hint",
+            "Папки, по которым раскладываются загруженные на сервер файлы. Для каждого файлового поля можно выбрать папку.",
+          )}
+        </p>
+
+        <div className="space-y-1">
+          {flat.map(({ folder, depth }) => (
+            <div
+              key={folder.id}
+              className="flex items-center justify-between rounded-md border border-slate-100 bg-slate-50/50 px-3 py-2"
+            >
+              <span className="text-sm text-slate-700">
+                {depth > 0 ? "\u00A0".repeat(depth * 3) + "└ " : ""}
+                {folder.name}
+                {folder.isDefault && (
+                  <span className="ml-2 text-xs text-slate-400">
+                    {t("localFolders.default", "(по умолчанию)")}
+                  </span>
+                )}
+              </span>
+              {!folder.isDefault && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 text-slate-400 hover:text-red-600"
+                  onClick={() => removeFolder(folder.id)}
+                  disabled={deleteFolder.isPending}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap items-end gap-2 border-t border-slate-100 pt-3">
+          <div className="flex-1 min-w-[160px] space-y-1.5">
+            <Label className="text-sm font-medium text-slate-700">
+              {t("localFolders.newName", "Название папки")}
+            </Label>
+            <Input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder={t("localFolders.newNamePlaceholder", "Например, Договоры")}
+            />
+          </div>
+          <div className="min-w-[160px] space-y-1.5">
+            <Label className="text-sm font-medium text-slate-700">
+              {t("localFolders.parent", "Родительская папка")}
+            </Label>
+            <Select
+              value={parentId != null ? String(parentId) : "__root__"}
+              onValueChange={(v) => setParentId(v === "__root__" ? null : Number(v))}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__root__">{t("localFolders.parentRoot", "Верхний уровень")}</SelectItem>
+                {flat.map(({ folder, depth }) => (
+                  <SelectItem key={folder.id} value={String(folder.id)}>
+                    {depth > 0 ? "\u00A0".repeat(depth * 3) + "└ " : ""}
+                    {folder.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button onClick={addFolder} disabled={createFolder.isPending || !newName.trim()}>
+            {createFolder.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            {t("localFolders.add", "Добавить")}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

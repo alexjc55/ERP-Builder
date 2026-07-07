@@ -6,9 +6,16 @@ description: How the "file" field type supports server upload / Google Drive / p
 # Multi-source file field
 
 The `file` field type is polymorphic at fill time: a value is one of three kinds —
-`server` (object-storage upload), `gdrive` (managed Google Drive upload), or
+`server` (disk/object-storage upload), `gdrive` (managed Google Drive upload), or
 `link` (pasted external URL). Admins opt into which sources a given field allows
 via `fileConfigJson.allowedSources` on the field; the default is server-only.
+
+**`server`-kind now means LOCAL disk by default** (path scheme `/local/...`), not
+Replit Object Storage — legacy `/objects/...` values stay valid. A `server`-kind
+file field also binds to a managed LOCAL folder via `fileConfigJson.localFolderId`
+(picker in `FieldConfigDialog`, folders managed from `/settings`). Full detail and
+invariants live in `object-file-fields.md`; the local-folder picker reuses the same
+depth-flattened tree helper as the Drive-folder dropdown.
 
 ## Invariants (must stay consistent)
 

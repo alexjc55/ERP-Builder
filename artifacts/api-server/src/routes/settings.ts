@@ -1,9 +1,11 @@
 import { Router, type IRouter } from "express";
+import express from "express";
 import { db, appSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { UpdateSettingsBody } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
+import { saveLocalFile } from "../lib/localStorage";
 
 const router: IRouter = Router();
 
@@ -61,6 +63,36 @@ function normalizeHexColor(value: string | null | undefined): string | null {
   }
   return value.toLowerCase();
 }
+
+/**
+ * POST /settings/logo — upload a branding logo to LOCAL disk storage and return
+ * its stored path. The bytes are the raw request body (Content-Type = file type,
+ * X-File-Name carries the URL-encoded name). Gated by the "settings" admin cap.
+ * The caller is expected to persist the returned path via PUT /settings.
+ */
+router.post(
+  "/settings/logo",
+  requireAuth,
+  requireAdmin("settings"),
+  express.raw({ type: () => true, limit: "10mb" }),
+  async (req, res): Promise<void> => {
+    try {
+      const body = req.body;
+      if (!Buffer.isBuffer(body) || body.length === 0) {
+        res.status(400).json({ error: "Empty upload body" });
+        return;
+      }
+      const rawName = req.header("x-file-name");
+      const name = rawName ? decodeURIComponent(rawName) : "logo";
+      const contentType = req.header("content-type") || "application/octet-stream";
+      const saved = await saveLocalFile("branding", name, contentType, body);
+      res.json(saved);
+    } catch (error) {
+      req.log.error({ err: error }, "Branding logo upload failed");
+      res.status(500).json({ error: "Failed to upload logo" });
+    }
+  },
+);
 
 /**
  * PUT /settings — update platform branding. Gated by the "settings" admin
