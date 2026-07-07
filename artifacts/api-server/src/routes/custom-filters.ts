@@ -13,7 +13,7 @@ import {
 } from "@workspace/db";
 import { eq, and, asc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
-import { requireAdmin } from "../middlewares/permissions";
+import { requireAdmin, requireRecordParam } from "../middlewares/permissions";
 import {
   ListEntityCustomFiltersParams,
   CreateEntityCustomFilterParams,
@@ -102,16 +102,18 @@ async function validateSpec(
   return null;
 }
 
-// Auth-only (NOT customFilters-gated): the records filter bar renders one chip
-// per custom filter for EVERY viewer of the entity, so any authenticated user
-// must be able to list the definitions (mirrors the column-groups read-endpoint
-// precedent). The predicate is admin-authored and applied server-side; returned
-// rows still obey the viewer's row/field boundary, so exposing the chip metadata
-// (and its condition structure, like a saved view's filters) is not a leak.
-// Only CREATE/UPDATE/DELETE/REORDER stay behind the `customFilters` cap.
+// NOT customFilters-gated, but gated by ENTITY-LEVEL record `view` (superAdmin
+// bypasses): the records filter bar renders one chip per custom filter for every
+// viewer OF THE ENTITY, so listing is available exactly to callers who can view
+// the entity's records — never to an authenticated user with no access to this
+// entity. The predicate is admin-authored and applied server-side; returned rows
+// still obey the viewer's row/field boundary, so exposing the chip metadata (and
+// its condition structure, like a saved view's filters) to an authorized viewer
+// is not a leak. Only CREATE/UPDATE/DELETE/REORDER stay behind the `customFilters` cap.
 router.get(
   "/entities/:entityId/custom-filters",
   requireAuth,
+  requireRecordParam("view", { entityOnly: true }),
   async (req, res): Promise<void> => {
     const params = ListEntityCustomFiltersParams.safeParse(req.params);
     if (!params.success) {

@@ -2137,9 +2137,10 @@ export function EntityRecords({
   );
   const dateKey = JSON.stringify(dateFilters);
 
-  // Per-ENTITY custom filters: auth-only read so the chip bar renders for EVERY
-  // viewer (the predicate is admin-authored + applied server-side; returned rows
-  // still obey the viewer's row/field boundary). Only ACTIVE filters become chips.
+  // Per-ENTITY custom filters: read is gated by entity-level record `view`, so the
+  // chip bar renders for every viewer WHO CAN VIEW THIS ENTITY (the predicate is
+  // admin-authored + applied server-side; returned rows still obey the viewer's
+  // row/field boundary). Only ACTIVE filters become chips.
   const { data: customFilterList } = useListEntityCustomFilters(entityId);
   const customFilterDefs = useMemo<CustomFilter[]>(
     () => (Array.isArray(customFilterList) ? customFilterList.filter((d) => d.isActive) : []),

@@ -53,3 +53,11 @@ carried on the records/query, pivot and calendar-base POST bodies.
   `::timestamptz`/numeric cast and 500s.
 - Requires `pageId` in context whenever a condition targets a page-local field
   (400 otherwise).
+- **LIST read is gated by ENTITY-LEVEL record `view`, NOT auth-only.** The chip
+  bar must render for everyone who can view the entity's records, but never for an
+  authenticated user with no access to that entity — use
+  `requireRecordParam("view", { entityOnly: true })` (superAdmin bypasses), not a
+  bare `requireAuth`. A bare auth gate lets any logged-in user enumerate filter
+  defs (condition trees + static values, incl. hidden-field references) for
+  arbitrary entity ids. Only CREATE/UPDATE/DELETE/REORDER stay behind the
+  `customFilters` cap; the single-filter GET stays cap-gated (admin editor only).
