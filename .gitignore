@@ -47,3 +47,14 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Attached assets (dev screenshots / notes sent to the agent — not for the repo)
+attached_assets/
+
+# Environment files (never commit real secrets — use .env.example as the template)
+.env
+.env.local
+.env.*.local
+
+# Deploy database backups created by deploy.sh
+.db-backups/
