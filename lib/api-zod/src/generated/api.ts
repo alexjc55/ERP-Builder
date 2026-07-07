@@ -1134,6 +1134,7 @@ export const DeleteRoleResponse = zod.object({
  * @summary List all pages (menu structure)
  */
 export const listPagesResponsePivotConfigJsonOneFilterConjunctionDefault = `and`;
+export const listPagesResponseCustomFiltersJsonItemCombineDefault = `or`;
 
 export const ListPagesResponseItem = zod.object({
   "id": zod.number(),
@@ -1230,6 +1231,17 @@ export const ListPagesResponseItem = zod.object({
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
+  "customFiltersJson": zod.array(zod.object({
+  "id": zod.string(),
+  "labelJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "type": zod.enum(['date']),
+  "fieldKeys": zod.array(zod.string()),
+  "combine": zod.enum(['or', 'and', 'overlap']).default(listPagesResponseCustomFiltersJsonItemCombineDefault)
+}).describe('A reusable per-page CUSTOM FILTER combining several entity fields under one filter-bar chip. v1: date type only. `combine`: or = ANY field in the picked period (default), and = EVERY field in the picked period, overlap = the [firstField, lastField] interval overlaps the picked period.')).nullish().describe('Per-page reusable multi-field custom filters (v1 = date type). Each combines several entity fields under one filter-bar chip.'),
   "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display\/aggregation-only, never a security boundary.'),
   "groupDefaultExpanded": zod.boolean().optional().describe('Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.'),
   "sortOrder": zod.number(),
@@ -1247,6 +1259,7 @@ export const ListPagesResponse = zod.array(ListPagesResponseItem)
 export const createPageBodyIsPivotDefault = false;
 export const createPageBodyPivotConfigJsonOneFilterConjunctionDefault = `and`;
 export const createPageBodyWidgetsCollapsedDefaultDefault = false;
+export const createPageBodyCustomFiltersJsonItemCombineDefault = `or`;
 export const createPageBodyGroupDefaultExpandedDefault = false;
 export const createPageBodyIsActiveDefault = true;
 
@@ -1344,6 +1357,17 @@ export const CreatePageBody = zod.object({
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
+  "customFiltersJson": zod.array(zod.object({
+  "id": zod.string(),
+  "labelJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "type": zod.enum(['date']),
+  "fieldKeys": zod.array(zod.string()),
+  "combine": zod.enum(['or', 'and', 'overlap']).default(createPageBodyCustomFiltersJsonItemCombineDefault)
+}).describe('A reusable per-page CUSTOM FILTER combining several entity fields under one filter-bar chip. v1: date type only. `combine`: or = ANY field in the picked period (default), and = EVERY field in the picked period, overlap = the [firstField, lastField] interval overlaps the picked period.')).nullish().describe('Per-page reusable multi-field custom filters (v1 = date type). Each combines several entity fields under one filter-bar chip.'),
   "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.'),
   "groupDefaultExpanded": zod.boolean().default(createPageBodyGroupDefaultExpandedDefault).describe('Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.'),
   "sortOrder": zod.number().optional(),
@@ -1359,6 +1383,7 @@ export const GetPageParams = zod.object({
 })
 
 export const getPageResponsePivotConfigJsonOneFilterConjunctionDefault = `and`;
+export const getPageResponseCustomFiltersJsonItemCombineDefault = `or`;
 
 export const GetPageResponse = zod.object({
   "id": zod.number(),
@@ -1455,6 +1480,17 @@ export const GetPageResponse = zod.object({
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
+  "customFiltersJson": zod.array(zod.object({
+  "id": zod.string(),
+  "labelJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "type": zod.enum(['date']),
+  "fieldKeys": zod.array(zod.string()),
+  "combine": zod.enum(['or', 'and', 'overlap']).default(getPageResponseCustomFiltersJsonItemCombineDefault)
+}).describe('A reusable per-page CUSTOM FILTER combining several entity fields under one filter-bar chip. v1: date type only. `combine`: or = ANY field in the picked period (default), and = EVERY field in the picked period, overlap = the [firstField, lastField] interval overlaps the picked period.')).nullish().describe('Per-page reusable multi-field custom filters (v1 = date type). Each combines several entity fields under one filter-bar chip.'),
   "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display\/aggregation-only, never a security boundary.'),
   "groupDefaultExpanded": zod.boolean().optional().describe('Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.'),
   "sortOrder": zod.number(),
@@ -1473,6 +1509,7 @@ export const UpdatePageParams = zod.object({
 })
 
 export const updatePageBodyPivotConfigJsonOneFilterConjunctionDefault = `and`;
+export const updatePageBodyCustomFiltersJsonItemCombineDefault = `or`;
 
 export const UpdatePageBody = zod.object({
   "nameJson": zod.object({
@@ -1568,6 +1605,17 @@ export const UpdatePageBody = zod.object({
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
+  "customFiltersJson": zod.array(zod.object({
+  "id": zod.string(),
+  "labelJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "type": zod.enum(['date']),
+  "fieldKeys": zod.array(zod.string()),
+  "combine": zod.enum(['or', 'and', 'overlap']).default(updatePageBodyCustomFiltersJsonItemCombineDefault)
+}).describe('A reusable per-page CUSTOM FILTER combining several entity fields under one filter-bar chip. v1: date type only. `combine`: or = ANY field in the picked period (default), and = EVERY field in the picked period, overlap = the [firstField, lastField] interval overlaps the picked period.')).nullish().describe('Per-page reusable multi-field custom filters (v1 = date type). Each combines several entity fields under one filter-bar chip.'),
   "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.'),
   "groupDefaultExpanded": zod.boolean().optional().describe('Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.'),
   "sortOrder": zod.number().optional(),
@@ -1575,6 +1623,7 @@ export const UpdatePageBody = zod.object({
 })
 
 export const updatePageResponsePivotConfigJsonOneFilterConjunctionDefault = `and`;
+export const updatePageResponseCustomFiltersJsonItemCombineDefault = `or`;
 
 export const UpdatePageResponse = zod.object({
   "id": zod.number(),
@@ -1671,6 +1720,17 @@ export const UpdatePageResponse = zod.object({
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
+  "customFiltersJson": zod.array(zod.object({
+  "id": zod.string(),
+  "labelJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "type": zod.enum(['date']),
+  "fieldKeys": zod.array(zod.string()),
+  "combine": zod.enum(['or', 'and', 'overlap']).default(updatePageResponseCustomFiltersJsonItemCombineDefault)
+}).describe('A reusable per-page CUSTOM FILTER combining several entity fields under one filter-bar chip. v1: date type only. `combine`: or = ANY field in the picked period (default), and = EVERY field in the picked period, overlap = the [firstField, lastField] interval overlaps the picked period.')).nullish().describe('Per-page reusable multi-field custom filters (v1 = date type). Each combines several entity fields under one filter-bar chip.'),
   "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display\/aggregation-only, never a security boundary.'),
   "groupDefaultExpanded": zod.boolean().optional().describe('Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.'),
   "sortOrder": zod.number(),
@@ -4893,6 +4953,13 @@ export const QueryEntityRecordsBody = zod.object({
   "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
   "value": zod.unknown().optional()
 })).optional().describe('Filter conditions on PAGE-LOCAL fields (values stored in page_record_values), keyed by page-field fieldKey. Requires pageId. Each condition is AND-combined with the rest of the query. Only visible (per-role) filterable page-local fields are accepted.'),
+  "customFilters": zod.array(zod.object({
+  "id": zod.string(),
+  "range": zod.object({
+  "from": zod.string(),
+  "to": zod.string()
+}).describe('Selected period as a half-open interval [from, to): `to` is the day AFTER the last selected day, matching the date-filter convention.')
+}).describe('A picked custom filter in a records query: references a page\'s customFiltersJson entry by id, with the selected date period. Requires pageId. The server resolves the definition from the authoritative page row and re-validates every referenced field is a visible, filterable date field for the viewer before applying it.')).optional().describe('Picked multi-field CUSTOM filters (see CustomFilterPick). Each references a page customFiltersJson entry by id + a date period and is AND-combined with the rest of the query. Requires pageId; the server resolves the definition and re-checks every referenced field is a visible, filterable date field for the viewer.'),
   "filterConjunction": zod.enum(['and', 'or']).default(queryEntityRecordsBodyFilterConjunctionDefault),
   "statusIds": zod.array(zod.number()).optional(),
   "excludeFilters": zod.array(zod.object({

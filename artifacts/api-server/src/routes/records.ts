@@ -42,11 +42,12 @@ import {
   PivotEntityRecordsParams,
   PivotEntityRecordsBody,
 } from "@workspace/api-zod";
-import type { EntityField, InsertAuditLog, FileSource, FileFieldConfig, FieldValidationRule } from "@workspace/db";
+import type { EntityField, InsertAuditLog, FileSource, FileFieldConfig, FieldValidationRule, CustomPageFilter } from "@workspace/db";
 import { optionValues, optionNumbers } from "../lib/selectOptions";
 import {
   buildRecordQuery,
   buildPageLocalCondition,
+  buildCustomDateFilter,
   relationLinkFilter,
   relationLinkedIdScalar,
   relationValueScalar,
@@ -868,6 +869,62 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         return;
       }
       const r = buildPageLocalCondition(cond, pf.fieldType, plPageId);
+      if ("error" in r) {
+        res.status(400).json({ error: r.error });
+        return;
+      }
+      clauses.push(r.sql);
+    }
+  }
+
+  // Multi-field CUSTOM filters (pages.customFiltersJson): each picked filter
+  // references an AUTHORITATIVE page def by id + a picked date period. The def
+  // (fieldKeys + combine mode) is resolved from the page row — the client never
+  // sends the field keys — and every referenced field is re-checked to be a
+  // VISIBLE (per-role), filterable date field before it is applied, so a custom
+  // filter can never observe a hidden field (a hidden/non-date/deleted key is
+  // silently dropped). AND-combined with the rest of the query. Requires pageId.
+  const customFilterPicks = (body.data.customFilters ?? []) as {
+    id: string;
+    range: { from: string; to: string };
+  }[];
+  if (customFilterPicks.length > 0) {
+    const cfPageId = body.data.pageId;
+    if (cfPageId == null) {
+      res.status(400).json({ error: "customFilters require pageId" });
+      return;
+    }
+    const [cfPage] = await db
+      .select({ customFiltersJson: pagesTable.customFiltersJson })
+      .from(pagesTable)
+      .where(eq(pagesTable.id, cfPageId));
+    const defs = (cfPage?.customFiltersJson ?? []) as CustomPageFilter[];
+    const defById = new Map(defs.map((d) => [d.id, d] as const));
+    const visibleByKey = new Map(visibleFields.map((f) => [f.fieldKey, f] as const));
+    for (const pick of customFilterPicks) {
+      const def = defById.get(pick.id);
+      if (!def) {
+        res.status(400).json({ error: `Unknown custom filter "${pick.id}"` });
+        return;
+      }
+      if (def.type !== "date") {
+        res.status(400).json({ error: `Custom filter "${pick.id}" is not a date filter` });
+        return;
+      }
+      // Keep only VISIBLE, filterable date fields (order preserved so the
+      // start/end pair used by "overlap" stays [first, last]).
+      const keys = def.fieldKeys.filter((k) => {
+        const f = visibleByKey.get(k);
+        return f != null && f.isFilterable && (f.fieldType === "date" || f.fieldType === "datetime");
+      });
+      if (keys.length === 0) continue;
+      const from = pick.range?.from;
+      const to = pick.range?.to;
+      if (!from || !to) {
+        res.status(400).json({ error: `Custom filter "${pick.id}" requires a from/to range` });
+        return;
+      }
+      const r = buildCustomDateFilter(keys, from, to, def.combine ?? "or");
       if ("error" in r) {
         res.status(400).json({ error: r.error });
         return;

@@ -147,7 +147,7 @@ import { CreateUserDialog } from "@/components/CreateUserDialog";
 import { PageFieldConfigDialog } from "@/components/PageFieldConfigDialog";
 import { formatFormulaResult, evaluateFormula, buildFormulaScope, type FormulaFieldDef } from "@workspace/formula";
 import { computeRowFormatting, ruleMatches, type FormatField } from "@/lib/formatRules";
-import type { FieldFormatRule } from "@workspace/api-client-react";
+import type { FieldFormatRule, CustomPageFilter, CustomFilterPick } from "@workspace/api-client-react";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus, Zap, ChevronsUpDown, ChevronsDownUp } from "lucide-react";
@@ -941,6 +941,7 @@ export function EntityRecords({
   columnGroups,
   mirrorPinned,
   defaultQuickFilter,
+  customFilters,
   groupByFieldKey,
   groupDefaultExpanded,
 }: {
@@ -1024,6 +1025,17 @@ export function EntityRecords({
     excludeFieldFilters?: Record<string, string[]>;
     excludeStatusIds?: number[];
   } | null;
+  /**
+   * Per-page reusable multi-field CUSTOM filters (from `page.customFiltersJson`).
+   * Each def combines several entity fields under ONE filter-bar chip; v1 only
+   * supports `type: "date"` over date fields, combined by `or` (row matches if
+   * ANY field falls in the period), `and` (ALL must), or `overlap` (a [start,end]
+   * pair spanning the period). The client sends only the picked def id + range;
+   * the server re-resolves the authoritative def and re-checks every field is a
+   * visible, filterable date field before applying it. Authored in setup mode
+   * (gated by the "pages" admin cap). Never a security boundary on its own.
+   */
+  customFilters?: CustomPageFilter[] | null;
   /**
    * Mirror-page grouping (from `page.groupByFieldKey`): when set, records are
    * shown as collapsed group rows (one per distinct value of this source-entity
@@ -1774,6 +1786,14 @@ export function EntityRecords({
   const [statusFilter, setStatusFilter] = useState<number[]>([]);
   const [fieldFilters, setFieldFilters] = useState<Record<string, string[]>>({});
   const [dateFilters, setDateFilters] = useState<Record<string, DateRangeFilter>>({});
+  // Picked multi-field custom filters, keyed by the page def id. Each holds the
+  // selected date range; sent on the dedicated `customFilters` query channel.
+  const [customDateFilters, setCustomDateFilters] = useState<Record<string, DateRangeFilter>>({});
+  // Setup-mode draft for the page's reusable multi-field custom filters (admins
+  // only). Seeded from the page's stored customFiltersJson; the whole list is
+  // saved back at once via useUpdatePage.
+  const [customFilterDraft, setCustomFilterDraft] = useState<CustomPageFilter[]>([]);
+  const [customFilterEditorOpen, setCustomFilterEditorOpen] = useState(false);
   // SOFT exclusion default ("показывать всё, КРОМЕ …"): when the page carries an
   // exclusion default, rows matching it are hidden until the viewer flips this on.
   // Reset on entity/page switch so each page's default governs from a clean slate.
@@ -1832,6 +1852,7 @@ export function EntityRecords({
     setStatusFilter([]);
     setFieldFilters({});
     setDateFilters({});
+    setCustomDateFilters({});
     setPageFieldFilters({});
     setPageDateFilters({});
     setPage(1);
@@ -1887,6 +1908,32 @@ export function EntityRecords({
     [dateFilters],
   );
   const dateKey = JSON.stringify(dateFilters);
+
+  // Picked multi-field custom filters → CustomFilterPick[]. The client sends only
+  // the def id + the picked half-open range ([from, day AFTER to), matching the
+  // date-filter convention above); the server resolves the authoritative def and
+  // re-checks every field. Only picks whose def still exists on the page are sent.
+  const customFilterDefs = useMemo<CustomPageFilter[]>(
+    () => (Array.isArray(customFilters) ? customFilters : []),
+    [customFilters],
+  );
+  const customFilterPicks = useMemo<CustomFilterPick[]>(
+    () => {
+      const known = new Set(customFilterDefs.map((d) => d.id));
+      return Object.entries(customDateFilters)
+        .filter(([id]) => known.has(id))
+        .map(([id, range]) => ({
+          id,
+          range: { from: range.from, to: formatDate(addDays(parseISO(range.to), 1), DAY_FMT) },
+        }));
+    },
+    [customDateFilters, customFilterDefs],
+  );
+  // Derive the query dep-key from the ACTUAL picks (not raw customDateFilters):
+  // picks are gated by the current defs, so when the page's customFilters change
+  // (e.g. after a setup-mode save + invalidate) the key changes and recordQuery
+  // recomputes — otherwise stale/removed filter ids could be sent (→ 400).
+  const customFilterKey = JSON.stringify(customFilterPicks);
 
   // Page-local filters mirror the entity ad-hoc/date filters but are sent on the
   // separate pageLocalFilters channel (validated against page_record_values
@@ -1967,6 +2014,7 @@ export function EntityRecords({
       filters: [...baseFilters, ...adHocFilters, ...dateFilterConditions],
       filterConjunction: selectedConfig.filterConjunction ?? "and",
       pageLocalFilters: [...pageAdHocFilters, ...pageDateFilterConditions],
+      customFilters: customFilterPicks.length > 0 ? customFilterPicks : undefined,
       statusIds: statusFilter.length > 0 ? statusFilter : undefined,
       excludeFilters: activeExcludeFilters,
       excludeStatusIds: activeExcludeStatusIds,
@@ -1993,7 +2041,7 @@ export function EntityRecords({
         : {}),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [baseFiltersKey, selectedConfig.filterConjunction, sortsKey, adHocKey, dateKey, pageAdHocKey, pageDateKey, statusKey, excludeKey, search, archived, page, groupingActive, expandedGroupKey, expandAll],
+    [baseFiltersKey, selectedConfig.filterConjunction, sortsKey, adHocKey, dateKey, customFilterKey, pageAdHocKey, pageDateKey, statusKey, excludeKey, search, archived, page, groupingActive, expandedGroupKey, expandAll],
   );
 
   // Pivot (Сводная таблица): a view whose configJson.viewType is "pivot" carries a
@@ -2151,6 +2199,16 @@ export function EntityRecords({
     setPage(1);
   }, []);
 
+  const setCustomDateFilter = useCallback((filterId: string, range: DateRangeFilter | undefined) => {
+    setCustomDateFilters((prev) => {
+      const next = { ...prev };
+      if (!range) delete next[filterId];
+      else next[filterId] = range;
+      return next;
+    });
+    setPage(1);
+  }, []);
+
   // Page-local filter options reflect the values actually present in the table:
   // boolean is a fixed yes/no pair; everything else asks the server for the
   // distinct EXISTING values (so a select option no record uses is never offered).
@@ -2181,11 +2239,13 @@ export function EntityRecords({
     adHocFilters.length > 0 ||
     statusFilter.length > 0 ||
     Object.keys(dateFilters).length > 0 ||
+    Object.keys(customDateFilters).length > 0 ||
     Object.keys(pageFieldFilters).length > 0 ||
     Object.keys(pageDateFilters).length > 0;
   const resetFilters = useCallback(() => {
     setFieldFilters({});
     setDateFilters({});
+    setCustomDateFilters({});
     setPageFieldFilters({});
     setPageDateFilters({});
     setStatusFilter([]);
@@ -2228,8 +2288,16 @@ export function EntityRecords({
     // admin opening setup mode sees (and can amend) the current exclusion.
     setExcludeFieldDraft(dq?.excludeFieldFilters ? { ...dq.excludeFieldFilters } : {});
     setExcludeStatusDraft(dq?.excludeStatusIds ? [...dq.excludeStatusIds] : []);
+    // Seed the custom-filters editor draft from the page's stored defs (deep copy
+    // so edits don't mutate the prop). Re-seeds per (entity, page) switch.
+    setCustomFilterDraft(
+      Array.isArray(customFilters)
+        ? customFilters.map((d) => ({ ...d, labelJson: { ...d.labelJson }, fieldKeys: [...d.fieldKeys] }))
+        : [],
+    );
     setPage(1);
     setQuickFilterSeeded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quickFilterSeeded, defaultQuickFilter]);
 
   const savePageDefaultFilterMutation = useUpdatePage({
@@ -2316,6 +2384,73 @@ export function EntityRecords({
     },
     [pageId, savePageGroupDefaultMutation, toast, t],
   );
+
+  // ── Per-page reusable multi-field CUSTOM filters (setup-mode authoring) ─────
+  // Eligible source fields for a custom (v1: date) filter: active, filterable
+  // date/datetime entity fields the admin can see. The server re-checks the same
+  // (visible + filterable + date) constraint per field at query time.
+  const customFilterEligibleFields = useMemo(
+    () =>
+      allFields.filter(
+        (f: Field) =>
+          f.isActive && f.isFilterable && (f.fieldType === "date" || f.fieldType === "datetime"),
+      ),
+    [allFields],
+  );
+  const customFilterEligibleKeys = useMemo(
+    () => new Set(customFilterEligibleFields.map((f: Field) => f.fieldKey)),
+    [customFilterEligibleFields],
+  );
+  const saveCustomFiltersMutation = useUpdatePage({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: getListPagesQueryKey() }),
+    },
+  });
+  const addCustomFilter = useCallback(() => {
+    const id =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `cf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    setCustomFilterDraft((prev) => [
+      ...prev,
+      { id, labelJson: {}, type: "date", fieldKeys: [], combine: "or" },
+    ]);
+  }, []);
+  const updateCustomFilterDraft = useCallback(
+    (id: string, patch: Partial<CustomPageFilter>) =>
+      setCustomFilterDraft((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d))),
+    [],
+  );
+  const removeCustomFilterDraft = useCallback(
+    (id: string) => setCustomFilterDraft((prev) => prev.filter((d) => d.id !== id)),
+    [],
+  );
+  const toggleCustomFilterField = useCallback(
+    (id: string, fieldKey: string) =>
+      setCustomFilterDraft((prev) =>
+        prev.map((d) => {
+          if (d.id !== id) return d;
+          const has = d.fieldKeys.includes(fieldKey);
+          return {
+            ...d,
+            fieldKeys: has ? d.fieldKeys.filter((k) => k !== fieldKey) : [...d.fieldKeys, fieldKey],
+          };
+        }),
+      ),
+    [],
+  );
+  const saveCustomFilters = useCallback(() => {
+    if (pageId == null) return;
+    // Persist only well-formed defs: at least one eligible field key. Drop keys
+    // that are no longer eligible so a stale key never reaches the server.
+    const clean = customFilterDraft
+      .map((d) => ({ ...d, fieldKeys: d.fieldKeys.filter((k) => customFilterEligibleKeys.has(k)) }))
+      .filter((d) => d.fieldKeys.length > 0);
+    saveCustomFiltersMutation.mutate(
+      { id: pageId, data: { customFiltersJson: clean.length > 0 ? clean : null } },
+      { onSuccess: () => toast({ title: t("records.customFiltersSaved", "Пользовательские фильтры сохранены") }) },
+    );
+  }, [pageId, customFilterDraft, customFilterEligibleKeys, saveCustomFiltersMutation, toast, t]);
 
   const hasStoredDefaultQuickFilter = Boolean(
     (defaultQuickFilter?.fieldFilters && Object.keys(defaultQuickFilter.fieldFilters).length > 0) ||
@@ -3458,7 +3593,7 @@ export function EntityRecords({
         </div>
       </div>
 
-      {!setupMode && (statuses.length > 0 || filterableFields.length > 0 || filterablePageFields.length > 0 || hasExclusion) && (
+      {!setupMode && (statuses.length > 0 || filterableFields.length > 0 || filterablePageFields.length > 0 || customFilterDefs.length > 0 || hasExclusion) && (
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
           <Filter className="hidden sm:block w-4 h-4 text-slate-400 shrink-0" />
           {filterableStatuses.length > 0 && (
@@ -3543,6 +3678,17 @@ export function EntityRecords({
               />
             );
           })}
+          {customFilterDefs.map((def) => (
+            <DateFilterPopover
+              key={`cf-${def.id}`}
+              field={{ id: 0, fieldKey: def.id, nameJson: def.labelJson, fieldType: "date", permissionsJson: {}, entityId: 0 } as unknown as Field}
+              value={customDateFilters[def.id]}
+              onChange={(range) => setCustomDateFilter(def.id, range)}
+              ml={ml}
+              t={t}
+              triggerClassName="w-full justify-start sm:w-auto sm:justify-center"
+            />
+          ))}
           {filterablePageFields.map((pf: PageField) =>
             pf.fieldType === "date" || pf.fieldType === "datetime" ? (
               <DateFilterPopover
@@ -3744,6 +3890,143 @@ export function EntityRecords({
                 </Button>
               </div>
               </>
+              )}
+            </div>
+          )}
+          {pageId != null && canAdmin("pages") && (
+            <div className="rounded-md border border-slate-200 bg-white px-3 py-3 space-y-2">
+              <button
+                type="button"
+                onClick={() => setCustomFilterEditorOpen((v) => !v)}
+                className="flex w-full items-center gap-2 text-sm font-medium text-slate-700"
+                aria-expanded={customFilterEditorOpen}
+              >
+                <Filter className="w-4 h-4 text-slate-400 shrink-0" />
+                <span className="text-left">{t("records.customFiltersTitle", "Пользовательские фильтры (несколько полей)")}</span>
+                {customFilterDraft.length > 0 && (
+                  <Badge variant="secondary" className="ml-0.5 px-1.5">{customFilterDraft.length}</Badge>
+                )}
+                <ChevronDown
+                  className={`w-4 h-4 text-slate-400 shrink-0 ml-auto transition-transform ${customFilterEditorOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+              {customFilterEditorOpen && (
+                <>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    {t(
+                      "records.customFiltersHint",
+                      "Объедините несколько полей даты в один фильтр на панели. Например «Работы за период» по двум датам вернёт строки, где в выбранный период попадает любая из дат.",
+                    )}
+                  </p>
+                  {customFilterEligibleFields.length === 0 ? (
+                    <div className="text-xs text-slate-400">
+                      {t(
+                        "records.customFiltersNoFields",
+                        "Нет подходящих полей. Нужны поля даты, отмеченные как «участвует в фильтре».",
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {customFilterDraft.map((def) => (
+                        <div key={def.id} className="rounded-md border border-slate-100 bg-slate-50/60 px-3 py-2.5 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <MultilingualInput
+                                label={t("records.customFilterLabel", "Название фильтра")}
+                                value={def.labelJson}
+                                onChange={(v) => updateCustomFilterDraft(def.id, { labelJson: v as MultilingualText })}
+                              />
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-slate-400 hover:text-rose-600 shrink-0"
+                              onClick={() => removeCustomFilterDraft(def.id)}
+                              aria-label={t("common.delete", "Удалить")}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="text-xs font-medium text-slate-400">
+                              {t("records.customFilterFields", "Поля даты")}
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {customFilterEligibleFields.map((f: Field) => {
+                                const on = def.fieldKeys.includes(f.fieldKey);
+                                return (
+                                  <button
+                                    key={f.fieldKey}
+                                    type="button"
+                                    onClick={() => toggleCustomFilterField(def.id, f.fieldKey)}
+                                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                                      on
+                                        ? "border-blue-300 bg-blue-50 text-blue-700"
+                                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                                    }`}
+                                  >
+                                    <span className="truncate max-w-[10rem]">{ml(f.nameJson)}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="text-xs font-medium text-slate-400">
+                              {t("records.customFilterCombine", "Как объединять поля")}
+                            </div>
+                            <Select
+                              value={def.combine}
+                              onValueChange={(v) => updateCustomFilterDraft(def.id, { combine: v as CustomPageFilter["combine"] })}
+                            >
+                              <SelectTrigger className="h-9 w-full sm:w-72 text-sm">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="or">
+                                  {t("records.customFilterCombineOr", "Любое поле в периоде (ИЛИ)")}
+                                </SelectItem>
+                                <SelectItem value="and">
+                                  {t("records.customFilterCombineAnd", "Все поля в периоде (И)")}
+                                </SelectItem>
+                                <SelectItem value="overlap">
+                                  {t("records.customFilterCombineOverlap", "Период (начало…конец) пересекается")}
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {def.combine === "overlap" && (
+                              <p className="text-[11px] text-slate-400 leading-relaxed">
+                                {t(
+                                  "records.customFilterCombineOverlapHint",
+                                  "Первое выбранное поле — начало, последнее — конец интервала строки.",
+                                )}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2 pt-0.5">
+                    {customFilterEligibleFields.length > 0 && (
+                      <Button type="button" size="sm" variant="outline" onClick={addCustomFilter} className="gap-1.5">
+                        <Plus className="w-3.5 h-3.5" />
+                        {t("records.customFilterAdd", "Добавить фильтр")}
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={saveCustomFilters}
+                      disabled={saveCustomFiltersMutation.isPending}
+                      className="gap-1.5"
+                    >
+                      {t("records.customFiltersSave", "Сохранить фильтры")}
+                    </Button>
+                  </div>
+                </>
               )}
             </div>
           )}

@@ -2,6 +2,42 @@ import { pgTable, serial, jsonb, text, integer, boolean, timestamp } from "drizz
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
+/**
+ * A reusable, named per-page CUSTOM FILTER that combines SEVERAL entity fields
+ * under ONE filter-bar chip. v1 supports the `date` type only: it groups two or
+ * more date fields and, given a single picked period, matches a row when the
+ * fields jointly satisfy `combine`:
+ *  - "or"      — ANY of the fields falls in the picked period (default). This is
+ *                the motivating case ("Работы за период" over Дата начала/окончания
+ *                работ) that stacking two individual date filters can't express,
+ *                because separate filters AND-combine.
+ *  - "and"     — EVERY field falls in the picked period.
+ *  - "overlap" — the [firstField, lastField] interval overlaps the picked period
+ *                (firstField <= to AND lastField >= from). Meant for a start/end
+ *                pair where fieldKeys = [startKey, endKey].
+ * The definition lives on the authoritative `pages` row; the client only sends a
+ * filter `id` + a picked `range`, and the server resolves the def and re-checks
+ * that every referenced field is a visible, filterable date field for the viewer
+ * (so a hidden field can never be observed through a custom filter).
+ */
+export const customPageFilterSchema = z.object({
+  /** Stable client-generated id, referenced by the records query's customFilters. */
+  id: z.string().min(1),
+  /** Multilingual chip label shown in the filter bar. */
+  labelJson: z.object({
+    ru: z.string().optional(),
+    en: z.string().optional(),
+    he: z.string().optional(),
+  }),
+  /** Only `date` in v1. */
+  type: z.literal("date"),
+  /** The entity date field keys this filter spans (>= 1; >= 2 to be meaningful). */
+  fieldKeys: z.array(z.string().min(1)),
+  /** How the fields jointly match the picked period. */
+  combine: z.enum(["or", "and", "overlap"]).default("or"),
+});
+export type CustomPageFilter = z.infer<typeof customPageFilterSchema>;
+
 export const pagesTable = pgTable("pages", {
   id: serial("id").primaryKey(),
   nameJson: jsonb("name_json").notNull().default({}),
@@ -109,6 +145,13 @@ export const pagesTable = pgTable("pages", {
     fieldFilters?: Record<string, string[]>;
     statusIds?: number[];
   }>(),
+  // Per-page reusable CUSTOM FILTERS (multi-field): each entry combines several
+  // entity fields under one filter-bar chip (see customPageFilterSchema). v1 =
+  // date type only. Authored from the records page setup mode (gated by the
+  // "pages" admin cap). Null/empty = no custom filters. The definition is the
+  // authoritative source; the records query only sends {id, range} and the
+  // server re-validates every referenced field is visible+filterable+date.
+  customFiltersJson: jsonb("custom_filters_json").$type<CustomPageFilter[]>(),
   sortOrder: integer("sort_order").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

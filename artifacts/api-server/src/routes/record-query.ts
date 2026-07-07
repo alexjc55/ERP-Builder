@@ -387,6 +387,43 @@ export function buildPageLocalCondition(
 }
 
 /**
+ * Build the SQL for a multi-field CUSTOM DATE filter (see pages.customFiltersJson):
+ * given several entity date field keys and one picked half-open period [from, to)
+ * (`to` = the day AFTER the last selected day), combine the fields per `combine`:
+ *  - "or"      — ANY field's value falls in [from, to).
+ *  - "and"     — EVERY field's value falls in [from, to) (a NULL field excludes the row).
+ *  - "overlap" — the [firstField, lastField] interval overlaps the period, i.e.
+ *                firstField < to AND lastField >= from. Uses ONLY the first and
+ *                last keys (a start/end pair); a NULL bound excludes the row.
+ * Both bounds are bound params cast to timestamptz in the session tz, matching the
+ * per-field `between` semantics used elsewhere so day-level comparison is
+ * consistent for date and datetime fields. Field keys are the caller's
+ * responsibility to have validated (visible + filterable + date) before calling.
+ */
+export function buildCustomDateFilter(
+  fieldKeys: string[],
+  from: string,
+  to: string,
+  combine: "or" | "and" | "overlap",
+): { sql: SQL } | { error: string } {
+  if (fieldKeys.length === 0) return { error: "Custom filter references no fields" };
+  const between = (key: string): SQL => {
+    const e = sql`((${entityRecordsTable.valuesJson} ->> ${key}))::timestamptz`;
+    return sql`(${e} >= ${from}::timestamptz AND ${e} < ${to}::timestamptz)`;
+  };
+  if (combine === "overlap") {
+    const startKey = fieldKeys[0]!;
+    const endKey = fieldKeys[fieldKeys.length - 1]!;
+    const startE = sql`((${entityRecordsTable.valuesJson} ->> ${startKey}))::timestamptz`;
+    const endE = sql`((${entityRecordsTable.valuesJson} ->> ${endKey}))::timestamptz`;
+    return { sql: sql`(${startE} < ${to}::timestamptz AND ${endE} >= ${from}::timestamptz)` };
+  }
+  const parts = fieldKeys.map(between);
+  const combined = combine === "and" ? and(...parts) : or(...parts);
+  return { sql: combined ?? sql`false` };
+}
+
+/**
  * Build the WHERE and ORDER BY for a record query, validating every referenced
  * field key against the entity's active fields (whitelist). Field keys are only
  * ever passed to SQL as bound params, never interpolated as raw SQL text.

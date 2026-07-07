@@ -1028,6 +1028,33 @@ export interface PageQuickFilter {
   excludeStatusIds?: number[];
 }
 
+export type CustomPageFilterType = typeof CustomPageFilterType[keyof typeof CustomPageFilterType];
+
+
+export const CustomPageFilterType = {
+  date: 'date',
+} as const;
+
+export type CustomPageFilterCombine = typeof CustomPageFilterCombine[keyof typeof CustomPageFilterCombine];
+
+
+export const CustomPageFilterCombine = {
+  or: 'or',
+  and: 'and',
+  overlap: 'overlap',
+} as const;
+
+/**
+ * A reusable per-page CUSTOM FILTER combining several entity fields under one filter-bar chip. v1: date type only. `combine`: or = ANY field in the picked period (default), and = EVERY field in the picked period, overlap = the [firstField, lastField] interval overlaps the picked period.
+ */
+export interface CustomPageFilter {
+  id: string;
+  labelJson: MultilingualText;
+  type: CustomPageFilterType;
+  fieldKeys: string[];
+  combine: CustomPageFilterCombine;
+}
+
 export interface Page {
   id: number;
   nameJson: MultilingualText;
@@ -1074,6 +1101,11 @@ export interface Page {
   widgetsCollapsedDefault?: boolean;
   /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
   defaultQuickFilterJson?: PageQuickFilter | null;
+  /**
+     * Per-page reusable multi-field custom filters (v1 = date type). Each combines several entity fields under one filter-bar chip.
+     * @nullable
+     */
+  customFiltersJson?: CustomPageFilter[] | null;
   /**
      * Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display/aggregation-only, never a security boundary.
      * @nullable
@@ -1152,6 +1184,11 @@ export interface PageInput {
   /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
   defaultQuickFilterJson?: PageQuickFilter | null;
   /**
+     * Per-page reusable multi-field custom filters (v1 = date type). Each combines several entity fields under one filter-bar chip.
+     * @nullable
+     */
+  customFiltersJson?: CustomPageFilter[] | null;
+  /**
      * Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.
      * @nullable
      */
@@ -1225,6 +1262,11 @@ export interface PageUpdate {
   widgetsCollapsedDefault?: boolean;
   /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
   defaultQuickFilterJson?: PageQuickFilter | null;
+  /**
+     * Per-page reusable multi-field custom filters (v1 = date type). Each combines several entity fields under one filter-bar chip.
+     * @nullable
+     */
+  customFiltersJson?: CustomPageFilter[] | null;
   /**
      * Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.
      * @nullable
@@ -2948,6 +2990,23 @@ export interface RecordUpdate {
 }
 
 /**
+ * Selected period as a half-open interval [from, to): `to` is the day AFTER the last selected day, matching the date-filter convention.
+ */
+export type CustomFilterPickRange = {
+  from: string;
+  to: string;
+};
+
+/**
+ * A picked custom filter in a records query: references a page's customFiltersJson entry by id, with the selected date period. Requires pageId. The server resolves the definition from the authoritative page row and re-validates every referenced field is a visible, filterable date field for the viewer before applying it.
+ */
+export interface CustomFilterPick {
+  id: string;
+  /** Selected period as a half-open interval [from, to): `to` is the day AFTER the last selected day, matching the date-filter convention. */
+  range: CustomFilterPickRange;
+}
+
+/**
  * A SOFT exclusion: hide rows whose `field` value is one of `values`. Always AND-combined with the rest of the query independently of the view's filterConjunction, and NULL-safe (rows with an empty value are kept). Only narrows the result — it can never reveal rows the view's hard filter hides. Driven by a page's default filter and toggled off by the viewer via "show hidden".
  */
 export interface ExcludeFilter {
@@ -3135,6 +3194,8 @@ export interface RecordQuery {
   filters?: FilterCondition[];
   /** Filter conditions on PAGE-LOCAL fields (values stored in page_record_values), keyed by page-field fieldKey. Requires pageId. Each condition is AND-combined with the rest of the query. Only visible (per-role) filterable page-local fields are accepted. */
   pageLocalFilters?: FilterCondition[];
+  /** Picked multi-field CUSTOM filters (see CustomFilterPick). Each references a page customFiltersJson entry by id + a date period and is AND-combined with the rest of the query. Requires pageId; the server resolves the definition and re-checks every referenced field is a visible, filterable date field for the viewer. */
+  customFilters?: CustomFilterPick[];
   filterConjunction?: RecordQueryFilterConjunction;
   statusIds?: number[];
   /** SOFT per-field exclusions (from the page default filter, when the viewer has NOT toggled "show hidden"). Hides rows whose field value is one of the listed values. Always AND-combined and NULL-safe. */

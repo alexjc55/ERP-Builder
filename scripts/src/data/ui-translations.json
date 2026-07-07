@@ -4368,6 +4368,84 @@
     "he": "מסנן ברירת המחדל נשמר"
   },
   {
+    "key": "records.customFiltersTitle",
+    "ru": "Пользовательские фильтры (несколько полей)",
+    "en": "Custom filters (multiple fields)",
+    "he": "מסננים מותאמים אישית (מספר שדות)"
+  },
+  {
+    "key": "records.customFiltersHint",
+    "ru": "Объедините несколько полей даты в один фильтр на панели. Например «Работы за период» по двум датам вернёт строки, где в выбранный период попадает любая из дат.",
+    "en": "Combine several date fields into one filter-bar chip. For example, \"Work in period\" over two dates returns rows where either date falls in the picked period.",
+    "he": "שלב כמה שדות תאריך למסנן אחד בסרגל. לדוגמה, «עבודות בתקופה» על שני תאריכים יחזיר שורות שבהן אחד התאריכים נופל בתקופה שנבחרה."
+  },
+  {
+    "key": "records.customFiltersNoFields",
+    "ru": "Нет подходящих полей. Нужны поля даты, отмеченные как «участвует в фильтре».",
+    "en": "No eligible fields. You need date fields marked as filterable.",
+    "he": "אין שדות מתאימים. נדרשים שדות תאריך המסומנים כניתנים לסינון."
+  },
+  {
+    "key": "records.customFilterLabel",
+    "ru": "Название фильтра",
+    "en": "Filter name",
+    "he": "שם המסנן"
+  },
+  {
+    "key": "records.customFilterFields",
+    "ru": "Поля даты",
+    "en": "Date fields",
+    "he": "שדות תאריך"
+  },
+  {
+    "key": "records.customFilterCombine",
+    "ru": "Как объединять поля",
+    "en": "How to combine fields",
+    "he": "כיצד לשלב שדות"
+  },
+  {
+    "key": "records.customFilterCombineOr",
+    "ru": "Любое поле в периоде (ИЛИ)",
+    "en": "Any field in period (OR)",
+    "he": "כל שדה בתקופה (או)"
+  },
+  {
+    "key": "records.customFilterCombineAnd",
+    "ru": "Все поля в периоде (И)",
+    "en": "All fields in period (AND)",
+    "he": "כל השדות בתקופה (וגם)"
+  },
+  {
+    "key": "records.customFilterCombineOverlap",
+    "ru": "Период (начало…конец) пересекается",
+    "en": "Period (start…end) overlaps",
+    "he": "התקופה (התחלה…סוף) חופפת"
+  },
+  {
+    "key": "records.customFilterCombineOverlapHint",
+    "ru": "Первое выбранное поле — начало, последнее — конец интервала строки.",
+    "en": "The first selected field is the start, the last is the end of the row's interval.",
+    "he": "השדה הראשון שנבחר הוא ההתחלה, האחרון הוא הסוף של מרווח השורה."
+  },
+  {
+    "key": "records.customFilterAdd",
+    "ru": "Добавить фильтр",
+    "en": "Add filter",
+    "he": "הוסף מסנן"
+  },
+  {
+    "key": "records.customFiltersSave",
+    "ru": "Сохранить фильтры",
+    "en": "Save filters",
+    "he": "שמור מסננים"
+  },
+  {
+    "key": "records.customFiltersSaved",
+    "ru": "Пользовательские фильтры сохранены",
+    "en": "Custom filters saved",
+    "he": "המסננים המותאמים נשמרו"
+  },
+  {
     "key": "records.pageDefaultFilterCleared",
     "ru": "Фильтр по умолчанию очищен",
     "en": "Default filter cleared",

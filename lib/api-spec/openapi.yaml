@@ -4282,6 +4282,11 @@ components:
             - $ref: "#/components/schemas/PageQuickFilter"
             - type: "null"
           description: Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter).
+        customFiltersJson:
+          type: ["array", "null"]
+          items:
+            $ref: "#/components/schemas/CustomPageFilter"
+          description: Per-page reusable multi-field custom filters (v1 = date type). Each combines several entity fields under one filter-bar chip.
         groupByFieldKey:
           type: ["string", "null"]
           description: Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display/aggregation-only, never a security boundary.
@@ -4365,6 +4370,11 @@ components:
             - $ref: "#/components/schemas/PageQuickFilter"
             - type: "null"
           description: Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter).
+        customFiltersJson:
+          type: ["array", "null"]
+          items:
+            $ref: "#/components/schemas/CustomPageFilter"
+          description: Per-page reusable multi-field custom filters (v1 = date type). Each combines several entity fields under one filter-bar chip.
         groupByFieldKey:
           type: ["string", "null"]
           description: Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.
@@ -4437,6 +4447,11 @@ components:
             - $ref: "#/components/schemas/PageQuickFilter"
             - type: "null"
           description: Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter).
+        customFiltersJson:
+          type: ["array", "null"]
+          items:
+            $ref: "#/components/schemas/CustomPageFilter"
+          description: Per-page reusable multi-field custom filters (v1 = date type). Each combines several entity fields under one filter-bar chip.
         groupByFieldKey:
           type: ["string", "null"]
           description: Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.
@@ -6577,6 +6592,55 @@ components:
           $ref: "#/components/schemas/FilterOperator"
         value: {}
 
+    CustomPageFilter:
+      type: object
+      required: [id, labelJson, type, fieldKeys, combine]
+      description: >-
+        A reusable per-page CUSTOM FILTER combining several entity fields under
+        one filter-bar chip. v1: date type only. `combine`: or = ANY field in the
+        picked period (default), and = EVERY field in the picked period, overlap =
+        the [firstField, lastField] interval overlaps the picked period.
+      properties:
+        id:
+          type: string
+        labelJson:
+          $ref: "#/components/schemas/MultilingualText"
+        type:
+          type: string
+          enum: [date]
+        fieldKeys:
+          type: array
+          items:
+            type: string
+        combine:
+          type: string
+          enum: [or, and, overlap]
+          default: or
+
+    CustomFilterPick:
+      type: object
+      required: [id, range]
+      description: >-
+        A picked custom filter in a records query: references a page's
+        customFiltersJson entry by id, with the selected date period. Requires
+        pageId. The server resolves the definition from the authoritative page row
+        and re-validates every referenced field is a visible, filterable date
+        field for the viewer before applying it.
+      properties:
+        id:
+          type: string
+        range:
+          type: object
+          required: [from, to]
+          description: >-
+            Selected period as a half-open interval [from, to): `to` is the day
+            AFTER the last selected day, matching the date-filter convention.
+          properties:
+            from:
+              type: string
+            to:
+              type: string
+
     ExcludeFilter:
       type: object
       required: [field, values]
@@ -7020,6 +7084,16 @@ components:
             visible (per-role) filterable page-local fields are accepted.
           items:
             $ref: "#/components/schemas/FilterCondition"
+        customFilters:
+          type: array
+          description: >-
+            Picked multi-field CUSTOM filters (see CustomFilterPick). Each
+            references a page customFiltersJson entry by id + a date period and is
+            AND-combined with the rest of the query. Requires pageId; the server
+            resolves the definition and re-checks every referenced field is a
+            visible, filterable date field for the viewer.
+          items:
+            $ref: "#/components/schemas/CustomFilterPick"
         filterConjunction:
           type: string
           enum: [and, or]
