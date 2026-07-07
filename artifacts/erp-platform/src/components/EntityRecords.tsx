@@ -780,6 +780,93 @@ function normalizeCustomFilterInputValue(
 }
 
 /**
+ * Range calendar + quick presets for a custom-filter runtime `dateRange` input.
+ * Mirrors {@link DateFilterPopover}'s calendar UX (Сегодня / 7 дней / … / Этот
+ * год / Максимум), but is embedded INLINE inside the chip's popover (the chip is
+ * already a popover) and is field-agnostic: it just reads/writes a raw
+ * `{ from, to }` in `yyyy-MM-dd`. The server-side +1-day half-open conversion is
+ * applied later by {@link normalizeCustomFilterInputValue}.
+ */
+function CustomFilterDateRangeInput({
+  label,
+  value,
+  onChange,
+  t,
+}: {
+  label: string;
+  value: DateRangeFilter | undefined;
+  onChange: (value: DateRangeFilter | undefined) => void;
+  t: (key: string, def: string) => string;
+}) {
+  const [draft, setDraft] = useState<DateRange | undefined>(
+    value?.from && value?.to ? { from: parseISO(value.from), to: parseISO(value.to) } : undefined,
+  );
+
+  const commit = (from: Date, to: Date) => {
+    setDraft({ from, to });
+    onChange({ from: formatDate(from, DAY_FMT), to: formatDate(to, DAY_FMT) });
+  };
+  const clear = () => {
+    setDraft(undefined);
+    onChange(undefined);
+  };
+  const onSelect = (range: DateRange | undefined) => {
+    setDraft(range);
+    if (range?.from && range?.to) {
+      onChange({ from: formatDate(range.from, DAY_FMT), to: formatDate(range.to, DAY_FMT) });
+    }
+  };
+
+  const presets: { label: string; run: () => void }[] = (() => {
+    const today = new Date();
+    return [
+      { label: t("records.dateFilterToday", "Сегодня"), run: () => commit(today, today) },
+      { label: t("records.dateFilter7days", "7 дней"), run: () => commit(subDays(today, 6), today) },
+      { label: t("records.dateFilter30days", "30 дней"), run: () => commit(subDays(today, 29), today) },
+      { label: t("records.dateFilterThisMonth", "Этот месяц"), run: () => commit(startOfMonth(today), endOfMonth(today)) },
+      {
+        label: t("records.dateFilterLastMonth", "Прошлый месяц"),
+        run: () => {
+          const prev = subMonths(today, 1);
+          commit(startOfMonth(prev), endOfMonth(prev));
+        },
+      },
+      { label: t("records.dateFilterThisYear", "Этот год"), run: () => commit(startOfYear(today), endOfYear(today)) },
+      { label: t("records.dateFilterMax", "Максимум"), run: clear },
+    ];
+  })();
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs text-slate-500">{label}</Label>
+      <div className="flex flex-col sm:flex-row rounded-md border border-slate-200">
+        <div className="flex flex-col gap-1 border-b border-slate-100 p-2 sm:border-b-0 sm:border-r">
+          {presets.map((p) => (
+            <Button
+              key={p.label}
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 justify-start text-sm font-normal"
+              onClick={p.run}
+            >
+              {p.label}
+            </Button>
+          ))}
+        </div>
+        <Calendar
+          mode="range"
+          numberOfMonths={1}
+          defaultMonth={draft?.from}
+          selected={draft}
+          onSelect={onSelect}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
  * ONE filter-bar chip for a per-entity CUSTOM filter. A filter WITHOUT declared
  * inputs is a plain on/off toggle button; a filter WITH inputs opens a popover
  * that prompts for each runtime value (the flagship «Работы за период» picks a
@@ -840,26 +927,16 @@ function CustomFilterChip({
     const label = ml(inp.labelJson as MultilingualText) || name;
     switch (inp.type) {
       case "dateRange": {
-        const r = (raw as Partial<DateRangeFilter> | undefined) ?? {};
+        const r = raw as Partial<DateRangeFilter> | undefined;
+        const current = r?.from && r?.to ? { from: r.from, to: r.to } : undefined;
         return (
-          <div key={inp.id} className="space-y-1.5">
-            <Label className="text-xs text-slate-500">{label}</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                type="date"
-                value={r.from ?? ""}
-                onChange={(e) => onSetInput(inp.id, { ...r, from: e.target.value })}
-                className="h-8"
-              />
-              <span className="text-slate-400 text-sm">—</span>
-              <Input
-                type="date"
-                value={r.to ?? ""}
-                onChange={(e) => onSetInput(inp.id, { ...r, to: e.target.value })}
-                className="h-8"
-              />
-            </div>
-          </div>
+          <CustomFilterDateRangeInput
+            key={inp.id}
+            label={label}
+            value={current}
+            onChange={(v) => onSetInput(inp.id, v)}
+            t={t}
+          />
         );
       }
       case "numberRange": {
@@ -953,7 +1030,7 @@ function CustomFilterChip({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 space-y-3">
+      <PopoverContent align="start" className="w-auto min-w-72 max-w-[95vw] space-y-3">
         {declared.map(renderInput)}
         <div className="flex justify-end">
           <Button type="button" variant="ghost" size="sm" onClick={onClear} disabled={!isFilled}>
