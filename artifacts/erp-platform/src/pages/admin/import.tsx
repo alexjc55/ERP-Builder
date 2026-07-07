@@ -56,6 +56,7 @@ import {
   XCircle,
   Trash2,
   AlertTriangle,
+  Plus,
 } from "lucide-react";
 
 // Field types that cannot be filled from a spreadsheet cell.
@@ -93,12 +94,31 @@ const splitMulti = (raw: unknown): string[] =>
 
 let fileSeq = 0;
 
-type ParsedFile = {
-  id: string;
+type ParsedData = {
   fileName: string;
   headers: string[];
   rows: unknown[][];
 };
+
+// A card is the unit of the wizard: pick a target first, download its template,
+// then attach the filled file. `data` is null until a file has been attached.
+type CardState = {
+  id: string;
+  data: ParsedData | null;
+};
+
+async function parseSpreadsheet(file: File): Promise<ParsedData | null> {
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: "array" });
+  const firstSheet = wb.SheetNames[0];
+  if (!firstSheet) return null;
+  const ws = wb.Sheets[firstSheet]!;
+  const aoa = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: true, defval: null, blankrows: false });
+  if (aoa.length === 0) return null;
+  const hdrs = (aoa[0] as unknown[]).map((c) => (c == null ? "" : String(c)));
+  const dataRows = aoa.slice(1).filter((r) => (r as unknown[]).some((c) => c != null && String(c).trim() !== ""));
+  return { fileName: file.name, headers: hdrs, rows: dataRows };
+}
 
 function colLetter(n: number): string {
   let s = "";
@@ -145,25 +165,33 @@ function RelationTargetKeyPicker({
 // ── Per-file configuration card ──────────────────────────────────────────────
 
 function FileCard({
-  parsed,
+  card,
   index,
   entities,
   pages,
   result,
   onBuilt,
   onRemove,
+  onFileParsed,
 }: {
-  parsed: ParsedFile;
+  card: CardState;
   index: number;
   entities: Entity[];
   pages: Page[];
   result: BatchImportFileResult | undefined;
   onBuilt: (id: string, file: BatchImportFile | null) => void;
   onRemove: (id: string) => void;
+  onFileParsed: (id: string, data: ParsedData | null) => void;
 }) {
   const ml = useML();
   const t = useT();
   const { toast } = useToast();
+  const cardFileInputRef = useRef<HTMLInputElement>(null);
+
+  const data = card.data;
+  const headers = data?.headers ?? [];
+  const rows = data?.rows ?? [];
+  const fileName = data?.fileName ?? "";
 
   const [kind, setKind] = useState<FileKind>("entity");
   const [entityId, setEntityId] = useState<number | null>(null);
@@ -236,7 +264,7 @@ function FileCard({
     [kind, fields, relations, pageFields, ml],
   );
 
-  const sig = `${kind}:${entityId ?? ""}:${pageId ?? ""}`;
+  const sig = `${kind}:${entityId ?? ""}:${pageId ?? ""}:${headers.join("|")}`;
   const autoRef = useRef<string>("");
   const metaReady =
     kind === "entity" ? entityId != null && !!fieldsData : pageId != null && !!pageFieldsData;
@@ -244,14 +272,15 @@ function FileCard({
     if (!metaReady) return;
     if (autoRef.current === sig) return;
     autoRef.current = sig;
-    setMapping(autoMap(parsed.headers));
+    setMapping(autoMap(headers));
     setRelTargetKeys({});
     setKeyFieldKey("");
     setHostKeyFieldKey("");
-  }, [sig, metaReady, autoMap, parsed.headers]);
+  }, [sig, metaReady, autoMap, headers]);
 
   // ── Build the BatchImportFile (null = not ready) + a human warning ──────────
   const { file, warning } = useMemo((): { file: BatchImportFile | null; warning: string | null } => {
+    if (!data) return { file: null, warning: t("import.needFile", "Загрузите заполненный файл") };
     if (kind === "entity") {
       if (entityId == null) return { file: null, warning: t("import.needEntity", "Выберите сущность") };
       const usedRelationIds = new Set<number>();
@@ -265,7 +294,7 @@ function FileCard({
           };
         }
       }
-      const rows: ImportRow[] = parsed.rows.map((cells, i) => {
+      const rows: ImportRow[] = data.rows.map((cells, i) => {
         const values: Record<string, unknown> = {};
         const rels: Record<string, string[]> = {};
         let statusName: string | null = null;
@@ -287,7 +316,7 @@ function FileCard({
         targetKeyFieldKey: relTargetKeys[relId]!,
       }));
       return {
-        file: { kind: "entity", label: parsed.fileName, entityId, keyFieldKey: keyFieldKey || null, relationColumns, rows },
+        file: { kind: "entity", label: data.fileName, entityId, keyFieldKey: keyFieldKey || null, relationColumns, rows },
         warning: null,
       };
     }
@@ -297,7 +326,7 @@ function FileCard({
     const hostCol = mapping.findIndex((m) => m.kind === "hostkey");
     if (hostCol < 0) return { file: null, warning: t("import.needHostCol", "Укажите колонку с ключом записи") };
     if (!hostKeyFieldKey) return { file: null, warning: t("import.needHostField", "Выберите поле поиска записи") };
-    const rows: ImportRow[] = parsed.rows.map((cells, i) => {
+    const rows: ImportRow[] = data.rows.map((cells, i) => {
       const values: Record<string, unknown> = {};
       mapping.forEach((m, c) => {
         if (m.kind === "field") values[m.fieldKey] = cells[c];
@@ -309,12 +338,28 @@ function FileCard({
         hostKeyValue: hraw == null || String(hraw).trim() === "" ? null : String(hraw),
       };
     });
-    return { file: { kind: "page", label: parsed.fileName, pageId, hostKeyFieldKey, rows }, warning: null };
-  }, [kind, entityId, pageId, mapping, relTargetKeys, keyFieldKey, hostKeyFieldKey, relations, parsed, ml, t]);
+    return { file: { kind: "page", label: data.fileName, pageId, hostKeyFieldKey, rows }, warning: null };
+  }, [kind, entityId, pageId, mapping, relTargetKeys, keyFieldKey, hostKeyFieldKey, relations, data, ml, t]);
 
   useEffect(() => {
-    onBuilt(parsed.id, file);
-  }, [file, parsed.id, onBuilt]);
+    onBuilt(card.id, file);
+  }, [file, card.id, onBuilt]);
+
+  async function handleCardFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try {
+      const parsedData = await parseSpreadsheet(f);
+      if (!parsedData) {
+        toast({ title: `${t("import.parseError", "Не удалось прочитать файл")}: ${f.name}`, variant: "destructive" });
+      } else {
+        onFileParsed(card.id, parsedData);
+      }
+    } catch {
+      toast({ title: `${t("import.parseError", "Не удалось прочитать файл")}: ${f.name}`, variant: "destructive" });
+    }
+    if (cardFileInputRef.current) cardFileInputRef.current.value = "";
+  }
 
   // ── Template download (dropdowns for select fields + status) ────────────────
   async function downloadTemplate() {
@@ -400,15 +445,18 @@ function FileCard({
       <CardContent className="space-y-4 pt-6">
         {/* Header: file name + kind + target */}
         <div className="flex flex-wrap items-center gap-3">
+          <Badge variant="outline">#{index + 1}</Badge>
           <span className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-            <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-            {parsed.fileName}
+            <FileSpreadsheet className={`h-4 w-4 ${data ? "text-emerald-600" : "text-slate-300"}`} />
+            {data ? fileName : t("import.noFileYet", "Файл не загружен")}
           </span>
-          <Badge variant="secondary">
-            {parsed.rows.length} {t("import.rowsCount", "строк")}
-          </Badge>
+          {data && (
+            <Badge variant="secondary">
+              {rows.length} {t("import.rowsCount", "строк")}
+            </Badge>
+          )}
           <div className="ml-auto flex items-center gap-2">
-            <Button type="button" variant="ghost" size="sm" onClick={() => onRemove(parsed.id)}>
+            <Button type="button" variant="ghost" size="sm" onClick={() => onRemove(card.id)}>
               <Trash2 className="h-4 w-4 text-red-500" />
             </Button>
           </div>
@@ -473,10 +521,34 @@ function FileCard({
             <Download className="mr-2 h-4 w-4" />
             {t("import.downloadTemplate", "Шаблон")}
           </Button>
+
+          <input
+            ref={cardFileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            className="hidden"
+            onChange={handleCardFile}
+          />
+          <Button
+            type="button"
+            variant={data ? "outline" : "default"}
+            size="sm"
+            onClick={() => cardFileInputRef.current?.click()}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            {data ? t("import.replaceFile", "Заменить файл") : t("import.attachFile", "Загрузить заполненный файл")}
+          </Button>
         </div>
 
+        {metaReady && !data && (
+          <p className="flex items-center gap-2 text-sm text-slate-500">
+            <Download className="h-4 w-4" />
+            {t("import.templateHint", "Скачайте шаблон, заполните его и загрузите заполненный файл")}
+          </p>
+        )}
+
         {/* Column mapping */}
-        {metaReady && (
+        {metaReady && data && (
           <div className="overflow-x-auto rounded-md border">
             <Table>
               <TableHeader>
@@ -488,9 +560,9 @@ function FileCard({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {parsed.headers.map((h, c) => {
+                {headers.map((h, c) => {
                   const m = mapping[c] ?? { kind: "ignore" };
-                  const sample = parsed.rows.find((r) => r[c] != null && String(r[c]).trim() !== "")?.[c];
+                  const sample = rows.find((r) => r[c] != null && String(r[c]).trim() !== "")?.[c];
                   return (
                     <TableRow key={c}>
                       <TableCell className="font-medium">{h || `#${c + 1}`}</TableCell>
@@ -551,7 +623,7 @@ function FileCard({
         )}
 
         {/* Entity upsert key */}
-        {metaReady && kind === "entity" && (
+        {metaReady && data && kind === "entity" && (
           <div className="flex flex-wrap items-center gap-3 border-t pt-4">
             <Label className="text-sm text-slate-600">{t("import.upsertKey", "Ключ для обновления (upsert)")}</Label>
             <Select value={keyFieldKey || "__none__"} onValueChange={(v) => setKeyFieldKey(v === "__none__" ? "" : v)}>
@@ -655,7 +727,7 @@ export default function ImportPage() {
   const { data: pagesData } = useListPages();
   const pages: Page[] = useMemo(() => pagesData ?? [], [pagesData]);
 
-  const [files, setFiles] = useState<ParsedFile[]>([]);
+  const [cards, setCards] = useState<CardState[]>([]);
   const [built, setBuilt] = useState<Record<string, BatchImportFile | null>>({});
   const [result, setResult] = useState<BatchImportResult | null>(null);
   const [committed, setCommitted] = useState(false);
@@ -672,8 +744,23 @@ export default function ImportPage() {
     [],
   );
 
+  const onFileParsed = useMemo(
+    () => (id: string, data: ParsedData | null) => {
+      setCards((prev) => prev.map((c) => (c.id === id ? { ...c, data } : c)));
+      setResult(null);
+      setCommitted(false);
+    },
+    [],
+  );
+
+  function addCard() {
+    setCards((prev) => [...prev, { id: `f${++fileSeq}`, data: null }]);
+    setResult(null);
+    setCommitted(false);
+  }
+
   function removeFile(id: string) {
-    setFiles((prev) => prev.filter((f) => f.id !== id));
+    setCards((prev) => prev.filter((c) => c.id !== id));
     setBuilt((prev) => {
       const next = { ...prev };
       delete next[id];
@@ -686,40 +773,33 @@ export default function ImportPage() {
   async function onFilesChange(e: React.ChangeEvent<HTMLInputElement>) {
     const list = e.target.files;
     if (!list || list.length === 0) return;
-    const parsedNew: ParsedFile[] = [];
+    const newCards: CardState[] = [];
     for (const file of Array.from(list)) {
       try {
-        const buf = await file.arrayBuffer();
-        const wb = XLSX.read(buf, { type: "array" });
-        const firstSheet = wb.SheetNames[0];
-        if (!firstSheet) continue;
-        const ws = wb.Sheets[firstSheet]!;
-        const aoa = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: true, defval: null, blankrows: false });
-        if (aoa.length === 0) continue;
-        const hdrs = (aoa[0] as unknown[]).map((c) => (c == null ? "" : String(c)));
-        const dataRows = aoa.slice(1).filter((r) => (r as unknown[]).some((c) => c != null && String(c).trim() !== ""));
-        parsedNew.push({ id: `f${++fileSeq}`, fileName: file.name, headers: hdrs, rows: dataRows });
+        const data = await parseSpreadsheet(file);
+        if (data) newCards.push({ id: `f${++fileSeq}`, data });
+        else toast({ title: `${t("import.parseError", "Не удалось прочитать файл")}: ${file.name}`, variant: "destructive" });
       } catch {
         toast({ title: `${t("import.parseError", "Не удалось прочитать файл")}: ${file.name}`, variant: "destructive" });
       }
     }
-    if (parsedNew.length > 0) {
-      setFiles((prev) => [...prev, ...parsedNew]);
+    if (newCards.length > 0) {
+      setCards((prev) => [...prev, ...newCards]);
       setResult(null);
       setCommitted(false);
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  const allReady = files.length > 0 && files.every((f) => built[f.id] != null);
+  const allReady = cards.length > 0 && cards.every((c) => built[c.id] != null);
 
   function buildBatch(): { files: BatchImportFile[]; ids: string[] } {
     const ids: string[] = [];
     const batch: BatchImportFile[] = [];
-    for (const f of files) {
-      const b = built[f.id];
+    for (const c of cards) {
+      const b = built[c.id];
       if (b != null) {
-        ids.push(f.id);
+        ids.push(c.id);
         batch.push(b);
       }
     }
@@ -786,9 +866,9 @@ export default function ImportPage() {
     const lines: string[] = [header.map(esc).join(",")];
     for (const fr of result.files) {
       const id = sentIds[fr.index];
-      const parsed = id ? files.find((f) => f.id === id) : undefined;
+      const card = id ? cards.find((c) => c.id === id) : undefined;
       const bf = id ? built[id] : undefined;
-      const fileLabel = `#${fr.index + 1} ${parsed?.fileName ?? bf?.label ?? ""}`.trim();
+      const fileLabel = `#${fr.index + 1} ${card?.data?.fileName ?? bf?.label ?? ""}`.trim();
       let target = "";
       if (bf?.kind === "entity") {
         const e = entities.find((x) => x.id === bf.entityId);
@@ -822,14 +902,18 @@ export default function ImportPage() {
         <p className="text-sm text-slate-500">
           {t(
             "import.subtitleBatch",
-            "Загрузите один или несколько файлов сразу — система расставит их по связям и импортирует одной проверенной операцией (всё или ничего в рамках пакета)",
+            "Добавьте файлы: для каждого выберите цель, скачайте шаблон, заполните его и загрузите. Всё импортируется одной проверенной операцией (всё или ничего в рамках пакета)",
           )}
         </p>
       </div>
 
-      {/* Upload */}
+      {/* Add cards */}
       <Card>
         <CardContent className="flex flex-wrap items-center gap-3 pt-6">
+          <Button type="button" onClick={addCard}>
+            <Plus className="mr-2 h-4 w-4" />
+            {t("import.addCard", "Добавить файл")}
+          </Button>
           <input
             ref={fileInputRef}
             type="file"
@@ -838,34 +922,35 @@ export default function ImportPage() {
             className="hidden"
             onChange={onFilesChange}
           />
-          <Button type="button" onClick={() => fileInputRef.current?.click()}>
+          <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
             <Upload className="mr-2 h-4 w-4" />
-            {t("import.uploadFiles", "Загрузить файлы")}
+            {t("import.uploadFiles", "Загрузить готовые файлы")}
           </Button>
-          {files.length > 0 && (
+          {cards.length > 0 && (
             <Badge variant="secondary">
-              {files.length} {t("import.filesCount", "файлов")}
+              {cards.length} {t("import.filesCount", "файлов")}
             </Badge>
           )}
         </CardContent>
       </Card>
 
       {/* Per-file cards */}
-      {files.map((f, i) => (
+      {cards.map((c, i) => (
         <FileCard
-          key={f.id}
-          parsed={f}
+          key={c.id}
+          card={c}
           index={i}
           entities={entities}
           pages={pages}
-          result={resultByFileId[f.id]}
+          result={resultByFileId[c.id]}
           onBuilt={onBuilt}
           onRemove={removeFile}
+          onFileParsed={onFileParsed}
         />
       ))}
 
       {/* Actions */}
-      {files.length > 0 && (
+      {cards.length > 0 && (
         <Card>
           <CardContent className="flex flex-wrap items-center gap-3 pt-6">
             <Button type="button" variant="outline" onClick={runPreview} disabled={busy || !allReady}>
@@ -901,7 +986,7 @@ export default function ImportPage() {
                 )}
               </span>
             )}
-            {!allReady && files.length > 0 && (
+            {!allReady && cards.length > 0 && (
               <span className="text-xs text-slate-400">{t("import.configureAll", "Настройте все файлы, чтобы продолжить")}</span>
             )}
           </CardContent>

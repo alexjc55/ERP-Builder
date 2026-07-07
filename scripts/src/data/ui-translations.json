@@ -9547,9 +9547,45 @@
   },
   {
     "key": "import.uploadFiles",
-    "ru": "Загрузить файлы",
-    "en": "Upload files",
-    "he": "העלה קבצים"
+    "ru": "Загрузить готовые файлы",
+    "en": "Upload ready files",
+    "he": "העלה קבצים מוכנים"
+  },
+  {
+    "key": "import.addCard",
+    "ru": "Добавить файл",
+    "en": "Add file",
+    "he": "הוסף קובץ"
+  },
+  {
+    "key": "import.noFileYet",
+    "ru": "Файл не загружен",
+    "en": "No file attached",
+    "he": "לא צורף קובץ"
+  },
+  {
+    "key": "import.attachFile",
+    "ru": "Загрузить заполненный файл",
+    "en": "Upload filled file",
+    "he": "העלה קובץ ממולא"
+  },
+  {
+    "key": "import.replaceFile",
+    "ru": "Заменить файл",
+    "en": "Replace file",
+    "he": "החלף קובץ"
+  },
+  {
+    "key": "import.needFile",
+    "ru": "Загрузите заполненный файл",
+    "en": "Upload the filled file",
+    "he": "העלו את הקובץ הממולא"
+  },
+  {
+    "key": "import.templateHint",
+    "ru": "Скачайте шаблон, заполните его и загрузите заполненный файл",
+    "en": "Download the template, fill it in, then upload the filled file",
+    "he": "הורידו את התבנית, מלאו אותה והעלו את הקובץ הממולא"
   },
   {
     "key": "import.filesCount",

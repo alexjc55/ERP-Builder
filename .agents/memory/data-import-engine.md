@@ -68,9 +68,15 @@ per batch (not per file, not per row).
 
 **Acceptance requirement — keep the downloadable error-report CSV.** The batch
 result UI MUST offer a "download errors" CSV (combined across all files: file
-label/target, row index, message), shown when the batch has errors. This is an
-explicit Task #29 acceptance criterion — a review will reject the rework if the
-CSV export is dropped in favor of inline-only error tables.
+label/target, row index, message), shown when the batch has errors. Do NOT drop
+this in favor of inline-only error tables — a review will reject the rework.
+
+**UX — the card is the unit, not the file.** The wizard entry is "add a card",
+then per card: pick the target (entity / mirror page) → download its template →
+attach the filled file. Templates are target-derived, so they MUST be reachable
+before any file exists (the old "upload first, template appears inside the card"
+flow confused users). Bulk "upload ready files" stays as a secondary shortcut
+that creates pre-filled cards.
 
 A file's `kind` is `entity` or `page`. A page file targets a mirror page
 (`mirrorEntityId != null`): it locates the host record on the MIRRORED entity by a
