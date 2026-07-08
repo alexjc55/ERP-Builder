@@ -6,3 +6,15 @@ id = "HcHGOzqn_NRd-KEQF4ufk"
 uri = "file://docs/PLATFORM_TECHNICAL_GUIDE.md"
 type = "text"
 title = "Production ERP Builder — техническое описание и инструкция"
+
+[[outputs]]
+id = "I5n35O0VIpU87RPszMCWA"
+uri = "file://import-crm-projects.sql.txt"
+type = "text"
+title = "SQL-скрипт импорта (копия для скачивания)"
+
+[[outputs]]
+id = "Dtq8Kc1fRiG08BMkyv08W"
+uri = "file://crm-guests-list.txt"
+type = "text"
+title = "Список гостей: компания → email"
