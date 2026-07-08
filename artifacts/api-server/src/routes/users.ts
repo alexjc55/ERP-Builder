@@ -110,7 +110,17 @@ router.get("/users", requireAuth, requireAdmin("users"), async (req, res): Promi
       sql`(${usersTable.email} ILIKE ${"%" + search + "%"} OR ${usersTable.firstName} ILIKE ${"%" + search + "%"} OR ${usersTable.lastName} ILIKE ${"%" + search + "%"})`
     );
   }
-  if (roleId != null) conditions.push(eq(usersTable.roleId, roleId));
+  // Match the FULL role set (primary roleId + additional roles in user_roles),
+  // not just the primary role — roles are additive (see multi-role users).
+  if (roleId != null) {
+    conditions.push(
+      sql`(${usersTable.roleId} = ${roleId} OR EXISTS (
+        SELECT 1 FROM ${userRolesTable}
+        WHERE ${userRolesTable.userId} = ${usersTable.id}
+          AND ${userRolesTable.roleId} = ${roleId}
+      ))`
+    );
+  }
   if (isActive != null) conditions.push(eq(usersTable.isActive, isActive));
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;

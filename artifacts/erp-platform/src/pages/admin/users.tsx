@@ -123,8 +123,13 @@ export default function UsersPage() {
     ? usersResult
     : (usersResult as { data?: User[] } | undefined)?.data ?? [];
 
+  // Filter by the FULL role set (primary + additional roles), not just the primary.
   const filteredUsers: User[] =
-    roleFilter === "all" ? users : users.filter((u) => String(u.roleId) === roleFilter);
+    roleFilter === "all"
+      ? users
+      : users.filter((u) =>
+          [...new Set([u.roleId, ...(u.roleIds ?? [])])].some((id) => String(id) === roleFilter)
+        );
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["/api/users"] });
 
