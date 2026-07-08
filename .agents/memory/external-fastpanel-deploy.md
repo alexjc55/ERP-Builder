@@ -1,0 +1,28 @@
+---
+name: External FastPanel/Beget deploy
+description: How the ERP is deployed to the external Debian/FastPanel server (erp.davidov-k.co.il) and the quirks that will bite again.
+---
+
+# External deploy: erp.davidov-k.co.il (Beget shared server, FastPanel)
+
+Production runs OUTSIDE Replit on a Debian server with FastPanel (user `ordis_co_il_usr`, home `/var/www/ordis_co_il_usr/data`, project at `~/www/erp.davidov-k.co.il`, IP 178.236.17.141).
+
+## Topology
+- Node 24 + pnpm 11 (corepack). API under PM2 as `erp-davidov` on port 10000: `set -a; source .env; set +a; pm2 start artifacts/api-server/dist/index.mjs --name erp-davidov --node-args="--enable-source-maps"; pm2 save`. api-server serves ONLY /api; env is captured by PM2 at start (no dotenv).
+- Frontend is a static build: `PORT=10000 BASE_PATH=/ pnpm --filter @workspace/erp-platform run build` → `artifacts/erp-platform/dist/public`, served by nginx.
+- DB: local Postgres, db `erp_davidov`, user `erp_davidov_usr` (in `.env`).
+
+## Nginx (the recurring problem)
+- Config file: `/etc/nginx/fastpanel2-available/ordis_co_il_usr/erp.davidov-k.co.il.conf`.
+- **FastPanel REGENERATES this file** on any site-settings change in the panel, reverting it to proxy-everything. Fix = restore from backup `~/erp-nginx-backup.conf` (`/var/www/ordis_co_il_usr/data/erp-nginx-backup.conf`), then `sudo nginx -t && sudo systemctl reload nginx`.
+- Required edits vs the panel default:
+  1. `set $root_path .../erp.davidov-k.co.il/artifacts/erp-platform/dist/public;`
+  2. `location ^~ /api { proxy_pass http://erp.davidov-k.co.il; include /etc/nginx/proxy_params; }` — `^~` is critical or the static-extensions regex block intercepts `/api/storage/*.png`.
+  3. `location / { try_files $uri /index.html; }` (SPA fallback).
+  4. Extensions block → `try_files $uri =404;`, delete `@fallback`.
+
+## Build/install quirks on that server
+- npmjs registry is blocked → registry permanently set to npmmirror.com; fetch-timeout 600000, network-concurrency 3, child-concurrency 1. Lockfile tarball URLs pinned to npmjs may need sed-patching on the server (happened with npm-run-path@6.0.0).
+- esbuild build script must be allowed (`allowBuilds` in pnpm-workspace.yaml) + `pnpm -r rebuild esbuild`; the esbuild "bin check" ELF SyntaxError is cosmetic.
+- Root `pnpm build` fails on mockup-sandbox — build api-server and erp-platform with `--filter` instead.
+- Low RAM: a 2G swapfile was added (fstab) after OOM kills during install/build.
