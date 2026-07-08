@@ -11,7 +11,7 @@ import {
   PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import { getIconComponent } from "@/lib/icons";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -138,6 +138,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const brandLogoUrl = settings?.logoObjectPath
     ? `/api/storage/branding-logo?v=${encodeURIComponent(settings.updatedAt)}`
     : null;
+
+  // Use the uploaded branding logo as the favicon; restore the default when
+  // no logo is configured. Settings load post-auth, so pre-login pages keep
+  // the static default favicon.
+  useEffect(() => {
+    if (!settings) return;
+    const link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
+    if (!link) return;
+    if (brandLogoUrl) {
+      link.removeAttribute("type");
+      link.href = brandLogoUrl;
+    } else {
+      link.type = "image/svg+xml";
+      link.href = "/favicon.svg";
+    }
+  }, [settings, brandLogoUrl]);
 
   // A page is visible if: superAdmin (all), the home page ("/"), an admin builder
   // page whose capability is granted, or a content page whose id is granted.

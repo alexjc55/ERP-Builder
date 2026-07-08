@@ -21,6 +21,17 @@ Production runs OUTSIDE Replit on a Debian server with FastPanel (user `ordis_co
   3. `location / { try_files $uri /index.html; }` (SPA fallback).
   4. Extensions block → `try_files $uri =404;`, delete `@fallback`.
 
+## Standard update procedure (given to the user)
+```bash
+cd ~/www/erp.davidov-k.co.il
+git pull origin main
+pnpm install
+pnpm --filter @workspace/api-server run build
+PORT=10000 BASE_PATH=/ pnpm --filter @workspace/erp-platform run build
+pm2 restart erp-davidov --update-env
+```
+If `.env` changed or DB schema changed, source env first: `set -a; source .env; set +a;` then `pm2 restart erp-davidov --update-env` / `pnpm --filter @workspace/db run push`.
+
 ## Build/install quirks on that server
 - npmjs registry is blocked → registry permanently set to npmmirror.com; fetch-timeout 600000, network-concurrency 3, child-concurrency 1. Lockfile tarball URLs pinned to npmjs may need sed-patching on the server (happened with npm-run-path@6.0.0).
 - esbuild build script must be allowed (`allowBuilds` in pnpm-workspace.yaml) + `pnpm -r rebuild esbuild`; the esbuild "bin check" ELF SyntaxError is cosmetic.
