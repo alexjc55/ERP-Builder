@@ -186,8 +186,18 @@ export default function UsersPage() {
     setDialogOpen(true);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (editingUser) {
+      // Optional password change from the edit card: only validate/apply when
+      // the admin actually typed a new password.
+      if (form.password && form.password.length < 6) {
+        toast({
+          title: t("users.error", "Ошибка"),
+          description: t("users.passwordTooShort", "Пароль должен содержать минимум 6 символов"),
+          variant: "destructive",
+        });
+        return;
+      }
       const update: UserUpdate = {
         email: form.email,
         firstName: form.firstName,
@@ -197,7 +207,27 @@ export default function UsersPage() {
         language: form.language as unknown as import("@workspace/api-client-react").UserUpdateLanguage,
         direction: form.direction as unknown as import("@workspace/api-client-react").UserUpdateDirection,
       };
-      updateMutation.mutate({ id: editingUser.id, data: update });
+      // Sequential: save the profile first; only change the password if the
+      // profile update succeeded (errors are surfaced by each mutation's
+      // onError; a failed update must not still reset the password).
+      try {
+        await updateMutation.mutateAsync({ id: editingUser.id, data: update });
+      } catch {
+        return; // toast shown by updateMutation.onError
+      }
+      if (form.password) {
+        try {
+          await resetPwMutation.mutateAsync({ id: editingUser.id, data: { newPassword: form.password } });
+        } catch (e) {
+          toast({
+            title: t("users.error", "Ошибка"),
+            description:
+              (e as { message?: string })?.message ||
+              t("users.passwordChangeFailed", "Данные сохранены, но пароль сменить не удалось"),
+            variant: "destructive",
+          });
+        }
+      }
     } else {
       // A guest user is passwordless; a regular user needs a password of at
       // least 6 characters. Validate here so the user sees a friendly localized
@@ -234,7 +264,7 @@ export default function UsersPage() {
     }
   };
 
-  const isPending = createMutation.isPending || updateMutation.isPending;
+  const isPending = createMutation.isPending || updateMutation.isPending || resetPwMutation.isPending;
 
   return (
     <div className="p-6 space-y-6">
@@ -443,6 +473,16 @@ export default function UsersPage() {
               <div className="space-y-1.5">
                 <Label>{t("users.password", "Пароль")} *</Label>
                 <PasswordInput value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+              </div>
+            )}
+            {editingUser && (
+              <div className="space-y-1.5">
+                <Label>{t("users.newPassword", "Новый пароль")}</Label>
+                <PasswordInput
+                  placeholder={t("users.newPasswordKeepHint", "Оставьте пустым, чтобы не менять")}
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                />
               </div>
             )}
             <div className="space-y-1.5">
