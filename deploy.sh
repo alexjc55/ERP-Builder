@@ -55,7 +55,11 @@ echo "==> [4/6] Applying database migrations"
 pnpm --filter @workspace/db run migrate
 
 echo "==> [5/6] Building"
-pnpm run build
+# Build only what the server needs (the root build includes dev-only packages
+# such as mockup-sandbox that are not meant for production servers).
+pnpm --filter @workspace/api-server run build
+PORT="${FRONTEND_PORT:-10000}" BASE_PATH="${FRONTEND_BASE_PATH:-/}" \
+  pnpm --filter @workspace/erp-platform run build
 
 echo "==> [6/6] Restarting the service"
 if [[ -n "$RESTART_CMD" ]]; then

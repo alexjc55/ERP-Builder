@@ -1,7 +1,7 @@
 # Шпаргалка по командам
 
-Короткий справочник: как собрать релиз, обновить сервер и что важно знать про
-файлы и переменные окружения.
+Короткий справочник: как разрабатывать на Replit, собрать релиз и обновить
+рабочий сервер (erp.davidov-k.co.il).
 
 ---
 
@@ -47,48 +47,87 @@ git push
 
 ---
 
-## 3. Обновление удалённого сервера (по SSH)
+## 3. Обновление рабочего сервера (по SSH)
+
+Сервер: `erp.davidov-k.co.il`, проект в `~/www/erp.davidov-k.co.il`,
+бэкенд крутится в PM2 под именем `erp-davidov` (порт 10000), статику отдаёт nginx.
+
+Стандартное обновление:
 
 ```bash
-ssh user@your-server
-cd /path/to/app
-./deploy.sh
+cd ~/www/erp.davidov-k.co.il
+git pull origin main
+pnpm install
+pnpm --filter @workspace/api-server run build
+PORT=10000 BASE_PATH=/ pnpm --filter @workspace/erp-platform run build
+pm2 restart erp-davidov --update-env
 ```
 
-`deploy.sh` по шагам: бэкап БД → `git pull` → установка зависимостей →
-`migrate` (применит только новые миграции) → сборка → рестарт сервиса.
+Важно:
+- Собираем **два пакета по отдельности** (`--filter`). Общий `pnpm run build`
+  на сервере не подойдёт — он падает на ненужном там пакете mockup-sandbox.
+- Для фронтенда переменные `PORT=10000 BASE_PATH=/` перед командой обязательны.
+- Фронтенд — это статические файлы (`artifacts/erp-platform/dist/public`),
+  nginx подхватывает их сразу после сборки; PM2 перезапускаем только ради бэкенда.
 
-Настройки скрипта (в шапке `deploy.sh` или через переменные окружения):
-- `RESTART_CMD` — команда рестарта, напр. `pm2 restart api-server`
-  или `sudo systemctl restart erp-api`
-- `BRANCH` — ветка для деплоя (по умолчанию `main`)
-- `BACKUP_DIR` — куда складывать бэкапы БД (по умолчанию `.db-backups/`)
-
-Откат БД из бэкапа, если что-то пошло не так:
+Если менялся `.env` (новые переменные):
 
 ```bash
+set -a; source .env; set +a
+pm2 restart erp-davidov --update-env
+```
+
+Если в релизе менялась **схема БД** — перед перезапуском примените миграции
+(сначала желательно сделать бэкап, см. ниже):
+
+```bash
+set -a; source .env; set +a
+pnpm --filter @workspace/db run migrate
+```
+
+Бэкап БД перед миграцией и откат:
+
+```bash
+mkdir -p .db-backups
+pg_dump "$DATABASE_URL" | gzip > .db-backups/pre_deploy_$(date +%Y%m%d_%H%M%S).sql.gz
+
+# откат, если что-то пошло не так:
 gunzip -c .db-backups/pre_deploy_ГГГГММДД_ЧЧММСС.sql.gz | psql "$DATABASE_URL"
 ```
 
-### Первый запуск на сервере (разово)
-
-```bash
-# на Replit — выгрузить ТОЛЬКО данные (схему создаст migrate):
-pg_dump --data-only --disable-triggers "$DATABASE_URL" | gzip > seed.sql.gz
-
-# на сервере (пустая БД):
-git clone <repo> && cd <repo>
-cp .env.example .env         # заполнить значения
-pnpm install --frozen-lockfile
-pnpm --filter @workspace/db run migrate     # создаст схему + запишет версию
-gunzip -c seed.sql.gz | psql "$DATABASE_URL" # зальёт данные
-pnpm run build
-# запустить сервис (pm2 / systemd)
-```
+Есть и скрипт `./deploy.sh`, который делает всё это по шагам
+(бэкап → pull → install → migrate → build → restart). Перед использованием
+задайте команду рестарта: `RESTART_CMD="pm2 restart erp-davidov --update-env"`.
 
 ---
 
-## 4. Переменные окружения
+## 4. Nginx и FastPanel (⚠️ важно)
+
+Конфиг сайта: `/etc/nginx/fastpanel2-available/ordis_co_il_usr/erp.davidov-k.co.il.conf`
+
+**FastPanel перезаписывает этот файл** при любом изменении настроек сайта в
+панели — и сайт «ломается» (всё снова проксируется на бэкенд). Лечение:
+восстановить конфиг из бэкапа и перезагрузить nginx:
+
+```bash
+sudo cp ~/erp-nginx-backup.conf /etc/nginx/fastpanel2-available/ordis_co_il_usr/erp.davidov-k.co.il.conf
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Бэкап рабочего конфига лежит в `~/erp-nginx-backup.conf`
+(`/var/www/ordis_co_il_usr/data/erp-nginx-backup.conf`). Если правите конфиг —
+обновляйте и бэкап.
+
+Ключевые отличия рабочего конфига от того, что генерирует панель:
+1. `root` указывает на `.../erp.davidov-k.co.il/artifacts/erp-platform/dist/public`
+2. `location ^~ /api { proxy_pass ...; }` — на бэкенд уходит только API
+   (`^~` обязателен, иначе блок расширений перехватывает картинки из `/api/storage/...`)
+3. `location / { try_files $uri /index.html; }` — SPA-фолбэк для фронтенда
+4. Блок расширений файлов — `try_files $uri =404;` (без `@fallback`)
+
+---
+
+## 5. Переменные окружения
 
 Шаблон — `.env.example`. Скопируйте и заполните:
 
@@ -97,36 +136,46 @@ cp .env.example .env
 ```
 
 Обязательные: `DATABASE_URL`, `PORT`, `SESSION_SECRET`, `NODE_ENV=production`.
+Полезные: `UPLOADS_DIR` — папка для загружаемых файлов (по умолчанию `./uploads`).
+
 Реальный `.env` в git не попадает (см. `.gitignore`).
 
+> PM2 запоминает переменные окружения **на момент старта**. После правки `.env`
+> обязательно: `set -a; source .env; set +a; pm2 restart erp-davidov --update-env`.
+
 ---
 
-## 5. Файлы и хранилище (важно для своего сервера)
+## 6. Файлы и хранилище
 
 Загружаемые файлы (лого в настройках, файловые поля с загрузкой «на сервер»)
-**не сохраняются в папку проекта** и в GitHub не попадают — они уходят в
-**Replit Object Storage** (облачный бакет) через внутренний сервис Replit.
+хранятся **на локальном диске** в папке `uploads/` в корне проекта
+(путь можно поменять через `UPLOADS_DIR`):
 
-⚠️ Это работает **только внутри Replit**. На своём сервере этот механизм
-недоступен, поэтому загрузку файлов «на сервер» нужно будет перевести на другой
-бэкенд хранилища (например, S3-совместимое хранилище или локальный диск).
-Google Drive и вставленные ссылки на файлы от этого не зависят и продолжат
-работать. Если планируете активно пользоваться загрузкой файлов на своём
-сервере — это отдельная доработка, скажите, и настроим.
+- `uploads/branding/` — лого платформы; **коммитится в git**, приезжает на сервер сама
+- `uploads/files/` — файлы из записей и корзина; **в git НЕ попадает** —
+  на сервере живёт своей жизнью, включайте эту папку в бэкапы сервера
+
+Google Drive и вставленные ссылки на файлы от локального диска не зависят —
+в БД хранится только ссылка.
 
 ---
 
-## 6. Что НЕ уходит в GitHub
+## 7. Что НЕ уходит в GitHub
 
 Игнорируется через `.gitignore`:
 - `attached_assets/` — рабочие скриншоты/заметки из процесса разработки
 - `.env`, `.env.local` — секреты
-- `.db-backups/` — бэкапы БД от `deploy.sh`
+- `uploads/files/` — загруженные файлы записей (данные пользователей)
+- `.db-backups/` — бэкапы БД
 - `node_modules/`, `dist/`, `*.tsbuildinfo` — сборка и зависимости
 
-> Папка `attached_assets/` уже была добавлена в git ранее. Чтобы убрать её из
-> репозитория (файлы на диске останутся), выполните один раз:
-> ```bash
-> git rm -r --cached attached_assets
-> git commit -m "Stop tracking attached_assets"
-> ```
+---
+
+## 8. Особенности именно этого сервера (Beget + FastPanel)
+
+- Реестр npm заблокирован — pnpm на сервере настроен на зеркало
+  `npmmirror.com` (уже сделано, трогать не нужно).
+- Оперативной памяти мало — добавлен swap-файл 2 ГБ (уже в fstab).
+- Node 24 и pnpm 11 установлены через corepack.
+- Первичная настройка (клонирование, БД, PM2, nginx) уже выполнена —
+  повторять её не нужно, для обновлений достаточно раздела 3.
