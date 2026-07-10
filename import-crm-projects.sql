@@ -1,944 +1,7014 @@
--- Импорт компаний (гости) и проектов из CRM
--- Сгенерировано автоматически из 01-hevrot-and-projects.csv
--- Скрипт идемпотентен: повторный запуск не создаёт дублей.
+-- ============================================================
+-- CRM import: guest clients + projects + orders
+-- Source: 001-result (hevrot-and-projects)
+-- Idempotent: safe to run multiple times.
+-- Guests: 57 | Projects: 107 | Orders: 595
+-- ============================================================
 
 BEGIN;
 
--- 1. Поле "Id сделки" в сущности Проекты (если ещё нет)
-INSERT INTO entity_fields (entity_id, field_key, name_json, field_type, show_in_table, is_filterable, sort_order)
-SELECT e.id, 'crm_deal_id',
-       '{"ru":"Id сделки","en":"CRM Deal ID","he":"מזהה עסקה"}'::jsonb,
-       'text', false, false,
-       COALESCE((SELECT MAX(f.sort_order)+1 FROM entity_fields f WHERE f.entity_id=e.id), 1)
-FROM entities e
-WHERE e.entity_key='projects'
+-- 1) Hidden "CRM deal id" field on the orders entity ---------
+INSERT INTO entity_fields (entity_id, field_key, name_json, field_type, sort_order, show_in_table, is_active)
+SELECT (SELECT id FROM entities WHERE entity_key='orders'), 'crm_deal_id', '{"ru":"Id сделки CRM","en":"CRM deal id","he":"מזהה עסקה CRM"}'::jsonb, 'text', 9000, false, true
 ON CONFLICT (entity_id, field_key) DO NOTHING;
 
--- 2. Гости-компании (пароль отсутствует, язык иврит, RTL)
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'aviv@ben-shalom.co.il', NULL, 'בן שלום יהושע לדיור בניין והשקעות בע''''מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'oren@asayag.co.il', NULL, 'אסיאג יזמות ובנייה בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'alexander@ecocity.co.i', NULL, 'אקו סיטי', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'yehuda-h@ozy.co.il', NULL, 'עוז יזמות נדל''''ן בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'ram@argad-projects.co.il', NULL, 'ארגד ניהול פרויקטים בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'may@levda.com', NULL, 'לב ד.ע. 2003 פרוייקטים מיוחדים בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'yeuda@atias.org.il', NULL, 'אטיאס יעקוב ובניו חברה לבניה בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'didi@netanel.co.il', NULL, 'נתנאל גרופ בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'meir@mm-e.co.il', NULL, 'מוריה מור הנדסה בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'liorr@citypeople.co.il', NULL, 'אנשי העיר מקבוצת רוטשטיין בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'orisrael@boh.co.il', NULL, 'בונים בעיר (בני אפרים 236 ת~א) בוני התיכון בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'eng@egol.co.il', NULL, 'אליהו גול בנין בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'rtevakol@gmail.com', NULL, 'ט.ר.הנדסה אזרחית בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'h38alon@gmail.com', NULL, 'הורייזן 38 בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'bar@phi-eng.co.il', NULL, 'פי הנדסה ובניה בע''''מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'yafit@henco.co.il', NULL, 'הנקו בניה בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'alonbe@romgc.co.il', NULL, 'רום גבס חיפוי וקירוי (1997) בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'boaz.d@emad.co.il', NULL, 'א.מ מגד לבניין בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'ilanh@shenhavpro.co.il', NULL, 'אילן הורוביץ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'or@decotech.co.il', NULL, 'דקוטק בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'shelli@i-almi.co.il', NULL, 'קבוצת אלמי - יזמות נדל"ן פרימיום', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'norkh2011@gmail.com', NULL, 'א.מ. מג''ד לבניין בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'accounting@michalovich.co.il', NULL, 'מיכאלוביץ ניהול ביצוע ויזמות בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'guy.supervision@gmail.com', NULL, 'בר כחול לבן פיתוח וטיטאן בניה בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'jamel@arkan.co.il', NULL, 'ארקאן- הנדסה ובינוי בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'dima@vinci.co.il', NULL, 'וינצ''י הנדסה א.ר 2014 בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'yoram@titan-il.com', NULL, 'טיטאן בניה בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'yuvalf@kedar-mivnim.com', NULL, 'קידר מבנים בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'yuval@dor-eng.co.il', NULL, 'חיים מיכאלוביץ ניהול ביצוע ויזמות בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'afona200690@gmail.com', NULL, 'רמט טרום בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'uriel@shalom-nathan.co.il', NULL, 'שלום את נתן', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'dor@yoch-eng.co.il', NULL, 'יוחננוף הנדסה בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'nati@eshkol.co.il', NULL, 'אשכול  פרוייקטים(ש.ר.ד) בע"ם', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'avi@avrahamlevi.co.il', NULL, 'אברהם לוי חברה לבנייה', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'tecturas@zahav.net.il', NULL, 'טקטורה פרו בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'bar@ferrum.co.il', NULL, 'פרום בונים יוקרה בע''''מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'bonimpo@hotmail.com', NULL, 'בניה והתחדשות עירונית ג.ס בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'lior@gotlib.co.il', NULL, 'גוטליב אחריות בבניה בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'yair@ofek-holdings.com', NULL, 'אופק  ק ד בניה הנדסב בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'dramaty@gmail.com', NULL, 'ד.רמתי חברה קבלנית לבניין בע״מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'amita@etzgroup.com', NULL, 'עץ השקד הנדסה בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'daniele@danya-cebus.co.il', NULL, 'דניה סיבוס בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'aslam.a.m.tavor@gmail.com', NULL, 'א.מ תבור לבנייה ופיתוח בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'dorefirozen@gmail.com', NULL, 'אפי רוזן בניה ויזמות בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'liad@gnproject.co.il', NULL, 'ג.נ. איכות פרוייקטים בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'shalom@brosh.co.il', NULL, 'ברוש ניר עבודות הנדסה ובניין בע''''מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'adiel@ecocity.co.il', NULL, 'אקוסיטי אס.אל. בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'guest-a04e1c13@noemail.local', NULL, 'רם אדרת הנדסה אזרחית בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
-INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction)
-SELECT 'guest-04220a1a@noemail.local', NULL, 'זוארץ יזמות ופיתוח  בע"מ', '', r.id, 'he', 'rtl'
-FROM roles r WHERE r.name_json->>'ru'='Гость'
-ON CONFLICT (email) DO NOTHING;
+-- 2) Guest client accounts (passwordless, role Гость) -------
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'guest-0168aa75@noemail.local', NULL, 'א.מ מגד לבניין בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='guest-0168aa75@noemail.local');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'aslam.a.m.tavor@gmail.com', NULL, 'א.מ תבור לבנייה ופיתוח בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='aslam.a.m.tavor@gmail.com');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'or@city-view.co.il', NULL, 'א.ע.ש נוף העיר הנדסה בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='or@city-view.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'guest-eb43e235@noemail.local', NULL, 'א.ש.י. פרשקובסקי חברה לבנין בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='guest-eb43e235@noemail.local');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'daniel.aronovich77@gmail.com', NULL, 'אהרונוביץ דניאל', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='daniel.aronovich77@gmail.com');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'barak@nofzameret.co', NULL, 'אור עמי בניה והשקעות בע''''מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='barak@nofzameret.co');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'yeuda@atias.org.il', NULL, 'אטיאס יעקוב ובניו חברה לבניה בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='yeuda@atias.org.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'engineer1@ibp-israel.co.il', NULL, 'איי.בי.פי. יזמות והשקעות', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='engineer1@ibp-israel.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'guest-a3aa9913@noemail.local', NULL, 'איי.בי.פי. יזמות והשקעות 2012 בעיימ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='guest-a3aa9913@noemail.local');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'guest-dccb94a0@noemail.local', NULL, 'אליהו גול בנין בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='guest-dccb94a0@noemail.local');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'ronfamili@gmail.com', NULL, 'אלנבי על הים', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='ronfamili@gmail.com');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'yoavar@electra.co.il', NULL, 'אלקטרה דנקו בע''''מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='yoavar@electra.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'dorefirozen@gmail.com', NULL, 'אפי רוזן בניה ויזמות בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='dorefirozen@gmail.com');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'ori@ecocity.co.il', NULL, 'אקו סיטי', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='ori@ecocity.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'emil@ecocity.co.il', NULL, 'אקוסיטי אס.אל. בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='emil@ecocity.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'ahmad@arkan.co.il', NULL, 'ארקאן- הנדסה ובינוי בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='ahmad@arkan.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'lev-binom@outlook.co.il', NULL, 'בונים הנדסה ופיתוח בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='lev-binom@outlook.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'nassinisim@gmail.com', NULL, 'בית וגג', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='nassinisim@gmail.com');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'issa@mushlin.co.il', NULL, 'בית רח אלנבי  74 א בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='issa@mushlin.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'udiohanina@gmail.com', NULL, 'בן שלום יהושע לדיור בניין והשקעות בע''''מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='udiohanina@gmail.com');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'omri@brosh.co.il', NULL, 'ברוש ניר עבודות הנדסה ובניין בע''''מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='omri@brosh.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'matan@gnproject.co.il', NULL, 'ג.נ. איכות פרוייקטים בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='matan@gnproject.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'liad@gnproject.co.il', NULL, 'ג.נ. איכות פרויקטים בע״מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='liad@gnproject.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'eliran@grofit.co.il', NULL, 'גרופית ממשק חברה לייזום ופתוח נדלן בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='eliran@grofit.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'dramaty@gmail.com', NULL, 'ד.רמתי חברה קבלנית לבניין בע״מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='dramaty@gmail.com');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'migdaley@gmail.com', NULL, 'הורייזן התחדשות עירונית בע״מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='migdaley@gmail.com');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'amirr@auto-chen.co.il', NULL, 'הירקון 70', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='amirr@auto-chen.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'nitzan@henco.co.il', NULL, 'הנקו בניה בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='nitzan@henco.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'guest-e1c1d4be@noemail.local', NULL, 'זוארץ דניאל ז''בוטינסקי 91 בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='guest-e1c1d4be@noemail.local');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'guest-04220a1a@noemail.local', NULL, 'זוארץ יזמות ופיתוח  בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='guest-04220a1a@noemail.local');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'kobi@michalovich.co.il', NULL, 'חיים מיכאלוביץ ניהול ביצוע ויזמות בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='kobi@michalovich.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'acc@i-almi.co.il', NULL, 'יגאל אלמי ושות בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='acc@i-almi.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'nadav.d@sr-ventures.co.il', NULL, 'יוסף צליח בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='nadav.d@sr-ventures.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'tzvika@yanush.co.il', NULL, 'ינושבסקי א. הנדסה בעיימ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='tzvika@yanush.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'ilan@yanush.co.il', NULL, 'ינושבסקי א.הנדסה ובנין בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='ilan@yanush.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'roei@phi-eng.co.il', NULL, 'יצחק עפר הנדסה ובניה ופיתוח בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='roei@phi-eng.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'guest-d00d3fca@noemail.local', NULL, 'למבז גרופ נדל"ן בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='guest-d00d3fca@noemail.local');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'ym302817@gmail.com', NULL, 'מגדלי ש. הנדסה וייזום בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='ym302817@gmail.com');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'hamudi@mo-lu.co.il', NULL, 'מודרן לקצורי בעם', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='hamudi@mo-lu.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'guy.raz@michalovich.co.il.co.il', NULL, 'מיכאלוביץ ניהול ביצוע ויזמות בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='guy.raz@michalovich.co.il.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'guest-c02b4a95@noemail.local', NULL, 'ניר בן סימון ואחרים', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='guest-c02b4a95@noemail.local');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'kostianaaman@gmail.com', NULL, 'נעמן -איתן חברה להנדסה ובנין בע''''ם', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='kostianaaman@gmail.com');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'guest-11ad6458@noemail.local', NULL, 'ס.עבודות אלומיניום', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='guest-11ad6458@noemail.local');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'ilan@etzgroup.com', NULL, 'עץ השקד הנדסה בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='ilan@etzgroup.com');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'dina@phi-eng.co.il', NULL, 'פי הנדסה ובניה בע''''מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='dina@phi-eng.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'bar@ferrum.co.il', NULL, 'פרום בונים יוקרה בע''''מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='bar@ferrum.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'shayc@zhg.co.il', NULL, 'צ.מ.ח המרמן בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='shayc@zhg.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'guest-f6592788@noemail.local', NULL, 'צמח המרמן בע''''מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='guest-f6592788@noemail.local');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'shelli@i-almi.co.il', NULL, 'קבוצת אלמי - יזמות נדל"ן פרימיום', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='shelli@i-almi.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'guest-9df4434a@noemail.local', NULL, 'קידר מבנים בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='guest-9df4434a@noemail.local');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'motid@romgc.co.il', NULL, 'רום גבס חיפוי וקירוי (1997) בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='motid@romgc.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'dor@rotem-eng.co.il', NULL, 'רותם הנדסה וניהול פרויקטים בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='dor@rotem-eng.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'afona200690@gmail.com', NULL, 'רמט טרום בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='afona200690@gmail.com');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'dlolega@gmail.com', NULL, 'שם רונן', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='dlolega@gmail.com');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'dl.olega@gmail.com', NULL, 'שמ. רונן עבודות מתכת בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='dl.olega@gmail.com');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'adi@sharbiv.co.il', NULL, 'שרביב בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='adi@sharbiv.co.il');
+INSERT INTO users (email, password_hash, first_name, last_name, role_id, language, direction, is_active)
+SELECT 'hananel.b@tidhar.co.il', NULL, 'תדהר בניה בע"מ', '', (SELECT id FROM roles WHERE name_json->>'ru'='Гость'), 'he', 'rtl', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='hananel.b@tidhar.co.il');
 
--- 2а. Строки в user_roles для созданных гостей
+-- 3) Attach the Гость role in user_roles -------------------
 INSERT INTO user_roles (user_id, role_id)
-SELECT u.id, u.role_id FROM users u
-WHERE u.email IN (
-  'aviv@ben-shalom.co.il',
-  'oren@asayag.co.il',
-  'alexander@ecocity.co.i',
-  'yehuda-h@ozy.co.il',
-  'ram@argad-projects.co.il',
-  'may@levda.com',
-  'yeuda@atias.org.il',
-  'didi@netanel.co.il',
-  'meir@mm-e.co.il',
-  'liorr@citypeople.co.il',
-  'orisrael@boh.co.il',
-  'eng@egol.co.il',
-  'rtevakol@gmail.com',
-  'h38alon@gmail.com',
-  'bar@phi-eng.co.il',
-  'yafit@henco.co.il',
-  'alonbe@romgc.co.il',
-  'boaz.d@emad.co.il',
-  'ilanh@shenhavpro.co.il',
-  'or@decotech.co.il',
-  'shelli@i-almi.co.il',
-  'norkh2011@gmail.com',
-  'accounting@michalovich.co.il',
-  'guy.supervision@gmail.com',
-  'jamel@arkan.co.il',
-  'dima@vinci.co.il',
-  'yoram@titan-il.com',
-  'yuvalf@kedar-mivnim.com',
-  'yuval@dor-eng.co.il',
-  'afona200690@gmail.com',
-  'uriel@shalom-nathan.co.il',
-  'dor@yoch-eng.co.il',
-  'nati@eshkol.co.il',
-  'avi@avrahamlevi.co.il',
-  'tecturas@zahav.net.il',
-  'bar@ferrum.co.il',
-  'bonimpo@hotmail.com',
-  'lior@gotlib.co.il',
-  'yair@ofek-holdings.com',
-  'dramaty@gmail.com',
-  'amita@etzgroup.com',
-  'daniele@danya-cebus.co.il',
-  'aslam.a.m.tavor@gmail.com',
-  'dorefirozen@gmail.com',
-  'liad@gnproject.co.il',
-  'shalom@brosh.co.il',
-  'adiel@ecocity.co.il',
-  'guest-a04e1c13@noemail.local',
-  'guest-04220a1a@noemail.local'
-)
+SELECT (SELECT id FROM users WHERE email='guest-0168aa75@noemail.local'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='guest-0168aa75@noemail.local') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='aslam.a.m.tavor@gmail.com'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='aslam.a.m.tavor@gmail.com') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='or@city-view.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='or@city-view.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='guest-eb43e235@noemail.local'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='guest-eb43e235@noemail.local') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='daniel.aronovich77@gmail.com'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='daniel.aronovich77@gmail.com') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='barak@nofzameret.co'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='barak@nofzameret.co') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='yeuda@atias.org.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='yeuda@atias.org.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='engineer1@ibp-israel.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='engineer1@ibp-israel.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='guest-a3aa9913@noemail.local'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='guest-a3aa9913@noemail.local') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='guest-dccb94a0@noemail.local'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='guest-dccb94a0@noemail.local') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='ronfamili@gmail.com'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='ronfamili@gmail.com') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='yoavar@electra.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='yoavar@electra.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='dorefirozen@gmail.com'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='dorefirozen@gmail.com') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='ori@ecocity.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='ori@ecocity.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='emil@ecocity.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='emil@ecocity.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='ahmad@arkan.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='ahmad@arkan.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='lev-binom@outlook.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='lev-binom@outlook.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='nassinisim@gmail.com'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='nassinisim@gmail.com') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='issa@mushlin.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='issa@mushlin.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='udiohanina@gmail.com'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='udiohanina@gmail.com') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='omri@brosh.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='omri@brosh.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='matan@gnproject.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='matan@gnproject.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='liad@gnproject.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='liad@gnproject.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='eliran@grofit.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='eliran@grofit.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='dramaty@gmail.com'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='dramaty@gmail.com') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='migdaley@gmail.com'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='migdaley@gmail.com') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='amirr@auto-chen.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='amirr@auto-chen.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='nitzan@henco.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='nitzan@henco.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='guest-e1c1d4be@noemail.local'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='guest-e1c1d4be@noemail.local') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='guest-04220a1a@noemail.local'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='guest-04220a1a@noemail.local') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='kobi@michalovich.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='kobi@michalovich.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='acc@i-almi.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='acc@i-almi.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='nadav.d@sr-ventures.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='nadav.d@sr-ventures.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='tzvika@yanush.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='tzvika@yanush.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='ilan@yanush.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='ilan@yanush.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='roei@phi-eng.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='roei@phi-eng.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='guest-d00d3fca@noemail.local'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='guest-d00d3fca@noemail.local') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='ym302817@gmail.com'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='ym302817@gmail.com') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='hamudi@mo-lu.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='hamudi@mo-lu.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='guy.raz@michalovich.co.il.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='guy.raz@michalovich.co.il.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='guest-c02b4a95@noemail.local'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='guest-c02b4a95@noemail.local') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='kostianaaman@gmail.com'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='kostianaaman@gmail.com') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='guest-11ad6458@noemail.local'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='guest-11ad6458@noemail.local') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='ilan@etzgroup.com'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='ilan@etzgroup.com') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='dina@phi-eng.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='dina@phi-eng.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='bar@ferrum.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='bar@ferrum.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='shayc@zhg.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='shayc@zhg.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='guest-f6592788@noemail.local'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='guest-f6592788@noemail.local') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='shelli@i-almi.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='shelli@i-almi.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='guest-9df4434a@noemail.local'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='guest-9df4434a@noemail.local') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='motid@romgc.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='motid@romgc.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='dor@rotem-eng.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='dor@rotem-eng.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='afona200690@gmail.com'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='afona200690@gmail.com') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='dlolega@gmail.com'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='dlolega@gmail.com') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='dl.olega@gmail.com'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='dl.olega@gmail.com') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='adi@sharbiv.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='adi@sharbiv.co.il') IS NOT NULL
+ON CONFLICT (user_id, role_id) DO NOTHING;
+INSERT INTO user_roles (user_id, role_id)
+SELECT (SELECT id FROM users WHERE email='hananel.b@tidhar.co.il'), (SELECT id FROM roles WHERE name_json->>'ru'='Гость')
+WHERE (SELECT id FROM users WHERE email='hananel.b@tidhar.co.il') IS NOT NULL
 ON CONFLICT (user_id, role_id) DO NOTHING;
 
--- 3. Проекты (пропускаются, если Id сделки уже загружен)
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'שפר 13-15 ת"א'::text, 'client', u.id, 'crm_deal_id', '43248113'::text)
-FROM entities e
-JOIN users u ON u.email = 'aviv@ben-shalom.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '43248113'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'שלום עליכם 29, ת"א'::text, 'client', u.id, 'crm_deal_id', '42976131'::text)
-FROM entities e
-JOIN users u ON u.email = 'oren@asayag.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '42976131'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'מודיליאני 15'::text, 'client', u.id, 'crm_deal_id', '42951483'::text)
-FROM entities e
-JOIN users u ON u.email = 'alexander@ecocity.co.i'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '42951483'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'עוזיאל 151 ר"ג'::text, 'client', u.id, 'crm_deal_id', '42942941'::text)
-FROM entities e
-JOIN users u ON u.email = 'yehuda-h@ozy.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '42942941'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'גורדון 32 ת"א'::text, 'client', u.id, 'crm_deal_id', '42491397'::text)
-FROM entities e
-JOIN users u ON u.email = 'ram@argad-projects.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '42491397'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'רשות העתיקות'::text, 'client', u.id, 'crm_deal_id', '42490143'::text)
-FROM entities e
-JOIN users u ON u.email = 'may@levda.com'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '42490143'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'רמז 27'::text, 'client', u.id, 'crm_deal_id', '42400727'::text)
-FROM entities e
-JOIN users u ON u.email = 'yeuda@atias.org.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '42400727'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'ויצמן 49 תל אביב'::text, 'client', u.id, 'crm_deal_id', '42279749'::text)
-FROM entities e
-JOIN users u ON u.email = 'didi@netanel.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '42279749'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'אנטוקולוסקי 10 ת"א'::text, 'client', u.id, 'crm_deal_id', '41634457'::text)
-FROM entities e
-JOIN users u ON u.email = 'meir@mm-e.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '41634457'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'עמוס 12-10 ת"א'::text, 'client', u.id, 'crm_deal_id', '41600403'::text)
-FROM entities e
-JOIN users u ON u.email = 'liorr@citypeople.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '41600403'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'רמברנדט 28, ת"א'::text, 'client', u.id, 'crm_deal_id', '41195784'::text)
-FROM entities e
-JOIN users u ON u.email = 'orisrael@boh.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '41195784'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'נחלת בנימין 83 תל אביב'::text, 'client', u.id, 'crm_deal_id', '41195516'::text)
-FROM entities e
-JOIN users u ON u.email = 'eng@egol.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '41195516'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'מרים חשמונאית 26 ת"א'::text, 'client', u.id, 'crm_deal_id', '41191408'::text)
-FROM entities e
-JOIN users u ON u.email = 'rtevakol@gmail.com'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '41191408'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'חילו 18'::text, 'client', u.id, 'crm_deal_id', '40911554'::text)
-FROM entities e
-JOIN users u ON u.email = 'h38alon@gmail.com'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '40911554'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'חדרה 11 ת"א'::text, 'client', u.id, 'crm_deal_id', '40908134'::text)
-FROM entities e
-JOIN users u ON u.email = 'bar@phi-eng.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '40908134'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'צפת 6 ת"א'::text, 'client', u.id, 'crm_deal_id', '40903528'::text)
-FROM entities e
-JOIN users u ON u.email = 'aviv@ben-shalom.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '40903528'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'ברדינג 22 ת"א'::text, 'client', u.id, 'crm_deal_id', '40848148'::text)
-FROM entities e
-JOIN users u ON u.email = 'guest-a04e1c13@noemail.local'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '40848148'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'פייבל 11 תל אביב'::text, 'client', u.id, 'crm_deal_id', '40845868'::text)
-FROM entities e
-JOIN users u ON u.email = 'yafit@henco.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '40845868'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'דיזנגוף 249 ת"א'::text, 'client', u.id, 'crm_deal_id', '40701792'::text)
-FROM entities e
-JOIN users u ON u.email = 'alonbe@romgc.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '40701792'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'פינלס 10 ת"א'::text, 'client', u.id, 'crm_deal_id', '40700732'::text)
-FROM entities e
-JOIN users u ON u.email = 'boaz.d@emad.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '40700732'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'בית פרט גדרה'::text, 'client', u.id, 'crm_deal_id', '40679114'::text)
-FROM entities e
-JOIN users u ON u.email = 'ilanh@shenhavpro.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '40679114'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'סוקולוב 23 ת"א'::text, 'client', u.id, 'crm_deal_id', '40575320'::text)
-FROM entities e
-JOIN users u ON u.email = 'or@decotech.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '40575320'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'בן שפרוט 13-15'::text, 'client', u.id, 'crm_deal_id', '40438915'::text)
-FROM entities e
-JOIN users u ON u.email = 'shelli@i-almi.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '40438915'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'עין גדי גבעתיים 14'::text, 'client', u.id, 'crm_deal_id', '40438651'::text)
-FROM entities e
-JOIN users u ON u.email = 'norkh2011@gmail.com'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '40438651'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'רח'' ליפסקי 10,ת"א'::text, 'client', u.id, 'crm_deal_id', '40250307'::text)
-FROM entities e
-JOIN users u ON u.email = 'accounting@michalovich.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '40250307'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'הנביאים 15'::text, 'client', u.id, 'crm_deal_id', '40240975'::text)
-FROM entities e
-JOIN users u ON u.email = 'guy.supervision@gmail.com'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '40240975'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'פומבדיתא 20-22,תא'::text, 'client', u.id, 'crm_deal_id', '40043685'::text)
-FROM entities e
-JOIN users u ON u.email = 'accounting@michalovich.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '40043685'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'בלוך 30 ת"א'::text, 'client', u.id, 'crm_deal_id', '39643118'::text)
-FROM entities e
-JOIN users u ON u.email = 'jamel@arkan.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '39643118'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'ביל"ו 4 תל אביב'::text, 'client', u.id, 'crm_deal_id', '39284461'::text)
-FROM entities e
-JOIN users u ON u.email = 'dima@vinci.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '39284461'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'אדם הכהן 14'::text, 'client', u.id, 'crm_deal_id', '38772080'::text)
-FROM entities e
-JOIN users u ON u.email = 'yoram@titan-il.com'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '38772080'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'הרצל 33 בת ים'::text, 'client', u.id, 'crm_deal_id', '38771984'::text)
-FROM entities e
-JOIN users u ON u.email = 'yoram@titan-il.com'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '38771984'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'בילטמור 11 ת"א'::text, 'client', u.id, 'crm_deal_id', '38720766'::text)
-FROM entities e
-JOIN users u ON u.email = 'yuvalf@kedar-mivnim.com'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '38720766'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'איינשטיין 43-45'::text, 'client', u.id, 'crm_deal_id', '38674662'::text)
-FROM entities e
-JOIN users u ON u.email = 'yafit@henco.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '38674662'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'ברגסון 13 ת"א'::text, 'client', u.id, 'crm_deal_id', '38575544'::text)
-FROM entities e
-JOIN users u ON u.email = 'yuval@dor-eng.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '38575544'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'בית ספר נרקיסים ראשון לציון'::text, 'client', u.id, 'crm_deal_id', '38508942'::text)
-FROM entities e
-JOIN users u ON u.email = 'afona200690@gmail.com'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '38508942'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'מינץ 14 ת"א'::text, 'client', u.id, 'crm_deal_id', '38402038'::text)
-FROM entities e
-JOIN users u ON u.email = 'uriel@shalom-nathan.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '38402038'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'בני אפרים 236-240 ת"א'::text, 'client', u.id, 'crm_deal_id', '38402004'::text)
-FROM entities e
-JOIN users u ON u.email = 'orisrael@boh.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '38402004'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'מנחם בגין 25 ת"א'::text, 'client', u.id, 'crm_deal_id', '38401990'::text)
-FROM entities e
-JOIN users u ON u.email = 'dor@yoch-eng.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '38401990'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'בילטמור 3 ת"א'::text, 'client', u.id, 'crm_deal_id', '38232498'::text)
-FROM entities e
-JOIN users u ON u.email = 'nati@eshkol.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '38232498'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'שמעון התרסי 1-7,ת"א'::text, 'client', u.id, 'crm_deal_id', '38150264'::text)
-FROM entities e
-JOIN users u ON u.email = 'yuval@dor-eng.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '38150264'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'אדם הכהן 12'::text, 'client', u.id, 'crm_deal_id', '38112920'::text)
-FROM entities e
-JOIN users u ON u.email = 'jamel@arkan.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '38112920'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'ויצמן 51'::text, 'client', u.id, 'crm_deal_id', '38103886'::text)
-FROM entities e
-JOIN users u ON u.email = 'avi@avrahamlevi.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '38103886'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'יהודה המכבי 46-50 מרפסות‎'::text, 'client', u.id, 'crm_deal_id', '37565808'::text)
-FROM entities e
-JOIN users u ON u.email = 'tecturas@zahav.net.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '37565808'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'החשמונאים 3 רמת גן'::text, 'client', u.id, 'crm_deal_id', '37563442'::text)
-FROM entities e
-JOIN users u ON u.email = 'bar@ferrum.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '37563442'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'דובנוב 3'::text, 'client', u.id, 'crm_deal_id', '36994871'::text)
-FROM entities e
-JOIN users u ON u.email = 'yafit@henco.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '36994871'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'עזרא הסופר ,14 תל אביב'::text, 'client', u.id, 'crm_deal_id', '36750325'::text)
-FROM entities e
-JOIN users u ON u.email = 'bonimpo@hotmail.com'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '36750325'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'פישמן מימון 12'::text, 'client', u.id, 'crm_deal_id', '36745891'::text)
-FROM entities e
-JOIN users u ON u.email = 'lior@gotlib.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '36745891'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'ז''בוטינסקי  107'::text, 'client', u.id, 'crm_deal_id', '36721921'::text)
-FROM entities e
-JOIN users u ON u.email = 'yair@ofek-holdings.com'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '36721921'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'פראג 3 ת"א'::text, 'client', u.id, 'crm_deal_id', '36669051'::text)
-FROM entities e
-JOIN users u ON u.email = 'dramaty@gmail.com'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '36669051'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'ז''בוטינסקי 105'::text, 'client', u.id, 'crm_deal_id', '36627739'::text)
-FROM entities e
-JOIN users u ON u.email = 'yeuda@atias.org.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '36627739'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'אינשטיין 57-61,ת"א‎'::text, 'client', u.id, 'crm_deal_id', '36591207'::text)
-FROM entities e
-JOIN users u ON u.email = 'yuval@dor-eng.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '36591207'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'רמברנדט 28, ת"א'::text, 'client', u.id, 'crm_deal_id', '36420475'::text)
-FROM entities e
-JOIN users u ON u.email = 'orisrael@boh.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '36420475'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'פנקס 19-23'::text, 'client', u.id, 'crm_deal_id', '36293723'::text)
-FROM entities e
-JOIN users u ON u.email = 'amita@etzgroup.com'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '36293723'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'בורלא 15-19 תל אביב‎'::text, 'client', u.id, 'crm_deal_id', '35828133'::text)
-FROM entities e
-JOIN users u ON u.email = 'amita@etzgroup.com'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '35828133'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'ז''בוטינסקי 135-137'::text, 'client', u.id, 'crm_deal_id', '35806559'::text)
-FROM entities e
-JOIN users u ON u.email = 'daniele@danya-cebus.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '35806559'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'זכרון יעקוב 16 ת"א'::text, 'client', u.id, 'crm_deal_id', '35629599'::text)
-FROM entities e
-JOIN users u ON u.email = 'aslam.a.m.tavor@gmail.com'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '35629599'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'מוסינזון 14-16 ת"א'::text, 'client', u.id, 'crm_deal_id', '35586469'::text)
-FROM entities e
-JOIN users u ON u.email = 'alexander@ecocity.co.i'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '35586469'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'ז''בוטינסקי 133'::text, 'client', u.id, 'crm_deal_id', '35541923'::text)
-FROM entities e
-JOIN users u ON u.email = 'daniele@danya-cebus.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '35541923'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'בלוך 20 ת"א'::text, 'client', u.id, 'crm_deal_id', '35331525'::text)
-FROM entities e
-JOIN users u ON u.email = 'norkh2011@gmail.com'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '35331525'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'שלומציון 11 רמת גן'::text, 'client', u.id, 'crm_deal_id', '35205189'::text)
-FROM entities e
-JOIN users u ON u.email = 'guest-04220a1a@noemail.local'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '35205189'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'מטמון כהן 8-10'::text, 'client', u.id, 'crm_deal_id', '35072553'::text)
-FROM entities e
-JOIN users u ON u.email = 'bar@phi-eng.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '35072553'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'בן יהודה 213 תל אביב ‎'::text, 'client', u.id, 'crm_deal_id', '35055669'::text)
-FROM entities e
-JOIN users u ON u.email = 'guest-04220a1a@noemail.local'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '35055669'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'מקור חיים 64 ת"א'::text, 'client', u.id, 'crm_deal_id', '34718763'::text)
-FROM entities e
-JOIN users u ON u.email = 'bar@phi-eng.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '34718763'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'ארלוזורוב 5-7 בת ים'::text, 'client', u.id, 'crm_deal_id', '34718689'::text)
-FROM entities e
-JOIN users u ON u.email = 'bar@phi-eng.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '34718689'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'בני דן 48'::text, 'client', u.id, 'crm_deal_id', '34325343'::text)
-FROM entities e
-JOIN users u ON u.email = 'shelli@i-almi.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '34325343'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'הצעת מחיר לפרויקט אסף 17'::text, 'client', u.id, 'crm_deal_id', '33410389'::text)
-FROM entities e
-JOIN users u ON u.email = 'dorefirozen@gmail.com'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '33410389'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'אלכסנדר ינאי 15-17 ת''''א‎'::text, 'client', u.id, 'crm_deal_id', '33003905'::text)
-FROM entities e
-JOIN users u ON u.email = 'liad@gnproject.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '33003905'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'אוסישקין 74'::text, 'client', u.id, 'crm_deal_id', '32375853'::text)
-FROM entities e
-JOIN users u ON u.email = 'shalom@brosh.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '32375853'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'ביאליק 34-36 רמת השרון'::text, 'client', u.id, 'crm_deal_id', '32375265'::text)
-FROM entities e
-JOIN users u ON u.email = 'shalom@brosh.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '32375265'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'דיזינגוף 259'::text, 'client', u.id, 'crm_deal_id', '32248743'::text)
-FROM entities e
-JOIN users u ON u.email = 'eng@egol.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '32248743'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'כוכבי יצחק 11 תל אביב‎'::text, 'client', u.id, 'crm_deal_id', '30246623'::text)
-FROM entities e
-JOIN users u ON u.email = 'aviv@ben-shalom.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '30246623'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'אלכסנדר ינאי 15-17 ת''''א‎'::text, 'client', u.id, 'crm_deal_id', '29037951'::text)
-FROM entities e
-JOIN users u ON u.email = 'liad@gnproject.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '29037951'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'הזהר 7'::text, 'client', u.id, 'crm_deal_id', '29033637'::text)
-FROM entities e
-JOIN users u ON u.email = 'amita@etzgroup.com'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '29033637'
-  );
-INSERT INTO entity_records (entity_id, values_json)
-SELECT e.id, jsonb_build_object('name', 'בצלאל 3-5'::text, 'client', u.id, 'crm_deal_id', '27743989'::text)
-FROM entities e
-JOIN users u ON u.email = 'adiel@ecocity.co.il'
-WHERE e.entity_key='projects'
-  AND NOT EXISTS (
-    SELECT 1 FROM entity_records r
-    WHERE r.entity_id = e.id AND r.values_json->>'crm_deal_id' = '27743989'
-  );
+-- 4) Projects (client = guest by email) --------------------
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'בצלאל 29-31 תל אביב', 'client', (SELECT id FROM users WHERE email='dina@phi-eng.co.il'))
+WHERE (SELECT id FROM users WHERE email='dina@phi-eng.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='בצלאל 29-31 תל אביב'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'ליפסקי 18, ת״א', 'client', (SELECT id FROM users WHERE email='matan@gnproject.co.il'))
+WHERE (SELECT id FROM users WHERE email='matan@gnproject.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='ליפסקי 18, ת״א'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', '9 7 5 3 משה שרת', 'client', (SELECT id FROM users WHERE email='hananel.b@tidhar.co.il'))
+WHERE (SELECT id FROM users WHERE email='hananel.b@tidhar.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='9 7 5 3 משה שרת'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'פנקס 25 דה האז 30 תל אביב - יפו', 'client', (SELECT id FROM users WHERE email='kobi@michalovich.co.il'))
+WHERE (SELECT id FROM users WHERE email='kobi@michalovich.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='פנקס 25 דה האז 30 תל אביב - יפו'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kobi@michalovich.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'בית ספר נרקיסים ראשון לציון', 'client', (SELECT id FROM users WHERE email='afona200690@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='afona200690@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='בית ספר נרקיסים ראשון לציון'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='afona200690@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'תל חי 9', 'client', (SELECT id FROM users WHERE email='guest-04220a1a@noemail.local'))
+WHERE (SELECT id FROM users WHERE email='guest-04220a1a@noemail.local') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='תל חי 9'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-04220a1a@noemail.local')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'בצלאל 29-31', 'client', (SELECT id FROM users WHERE email='dina@phi-eng.co.il'))
+WHERE (SELECT id FROM users WHERE email='dina@phi-eng.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='בצלאל 29-31'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'לואי מרשל 2-4', 'client', (SELECT id FROM users WHERE email='omri@brosh.co.il'))
+WHERE (SELECT id FROM users WHERE email='omri@brosh.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='לואי מרשל 2-4'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'בצלאל 3', 'client', (SELECT id FROM users WHERE email='ori@ecocity.co.il'))
+WHERE (SELECT id FROM users WHERE email='ori@ecocity.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='בצלאל 3'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ori@ecocity.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'בצלאל 3', 'client', (SELECT id FROM users WHERE email='emil@ecocity.co.il'))
+WHERE (SELECT id FROM users WHERE email='emil@ecocity.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='בצלאל 3'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='emil@ecocity.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'דוד ילין 9‎', 'client', (SELECT id FROM users WHERE email='matan@gnproject.co.il'))
+WHERE (SELECT id FROM users WHERE email='matan@gnproject.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='דוד ילין 9‎'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'מינץ 16', 'client', (SELECT id FROM users WHERE email='emil@ecocity.co.il'))
+WHERE (SELECT id FROM users WHERE email='emil@ecocity.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='מינץ 16'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='emil@ecocity.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'בורוכוב 34, גבעתיים', 'client', (SELECT id FROM users WHERE email='dlolega@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='dlolega@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='בורוכוב 34, גבעתיים'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'מרים החשמונאית 28-30', 'client', (SELECT id FROM users WHERE email='acc@i-almi.co.il'))
+WHERE (SELECT id FROM users WHERE email='acc@i-almi.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='מרים החשמונאית 28-30'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'אנדרומדה', 'client', (SELECT id FROM users WHERE email='shayc@zhg.co.il'))
+WHERE (SELECT id FROM users WHERE email='shayc@zhg.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='אנדרומדה'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shayc@zhg.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'שטרוק 11 ת"א', 'client', (SELECT id FROM users WHERE email='dina@phi-eng.co.il'))
+WHERE (SELECT id FROM users WHERE email='dina@phi-eng.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='שטרוק 11 ת"א'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'מלון נחום גולדמן', 'client', (SELECT id FROM users WHERE email='yoavar@electra.co.il'))
+WHERE (SELECT id FROM users WHERE email='yoavar@electra.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='מלון נחום גולדמן'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='yoavar@electra.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'אוסישקין 74', 'client', (SELECT id FROM users WHERE email='omri@brosh.co.il'))
+WHERE (SELECT id FROM users WHERE email='omri@brosh.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='אוסישקין 74'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'ז''בוטינסקי 105', 'client', (SELECT id FROM users WHERE email='yeuda@atias.org.il'))
+WHERE (SELECT id FROM users WHERE email='yeuda@atias.org.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='ז''בוטינסקי 105'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='yeuda@atias.org.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'סמטת המעלות 3 רמת השרון', 'client', (SELECT id FROM users WHERE email='matan@gnproject.co.il'))
+WHERE (SELECT id FROM users WHERE email='matan@gnproject.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='סמטת המעלות 3 רמת השרון'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'אסף 17 רמת גן', 'client', (SELECT id FROM users WHERE email='dorefirozen@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='dorefirozen@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='אסף 17 רמת גן'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dorefirozen@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'בני דן 68', 'client', (SELECT id FROM users WHERE email='guest-eb43e235@noemail.local'))
+WHERE (SELECT id FROM users WHERE email='guest-eb43e235@noemail.local') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='בני דן 68'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-eb43e235@noemail.local')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'פינלס 10 ת"א', 'client', (SELECT id FROM users WHERE email='guest-0168aa75@noemail.local'))
+WHERE (SELECT id FROM users WHERE email='guest-0168aa75@noemail.local') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='פינלס 10 ת"א'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-0168aa75@noemail.local')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'חדרה 11 ת"א', 'client', (SELECT id FROM users WHERE email='dina@phi-eng.co.il'))
+WHERE (SELECT id FROM users WHERE email='dina@phi-eng.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='חדרה 11 ת"א'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'בלוך 14', 'client', (SELECT id FROM users WHERE email='kostianaaman@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='kostianaaman@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='בלוך 14'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kostianaaman@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), '{"name":"פישמן מיימון 16"}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='פישמן מיימון 16'
+    AND (er.values_json->>'client') IS NULL);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'רמז 18', 'client', (SELECT id FROM users WHERE email='guy.raz@michalovich.co.il.co.il'))
+WHERE (SELECT id FROM users WHERE email='guy.raz@michalovich.co.il.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='רמז 18'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guy.raz@michalovich.co.il.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'חדרה 10', 'client', (SELECT id FROM users WHERE email='dlolega@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='dlolega@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='חדרה 10'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), '{"name":"בלוך 20 ת\"א"}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='בלוך 20 ת"א'
+    AND (er.values_json->>'client') IS NULL);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'ארלוזורוב 5-7 בת ים', 'client', (SELECT id FROM users WHERE email='roei@phi-eng.co.il'))
+WHERE (SELECT id FROM users WHERE email='roei@phi-eng.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='ארלוזורוב 5-7 בת ים'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='roei@phi-eng.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'דיזנגוף 254', 'client', (SELECT id FROM users WHERE email='guest-dccb94a0@noemail.local'))
+WHERE (SELECT id FROM users WHERE email='guest-dccb94a0@noemail.local') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='דיזנגוף 254'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-dccb94a0@noemail.local')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'שם רונן', 'client', (SELECT id FROM users WHERE email='dl.olega@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='dl.olega@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='שם רונן'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dl.olega@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'בני דן 52 ת''''א', 'client', (SELECT id FROM users WHERE email='roei@phi-eng.co.il'))
+WHERE (SELECT id FROM users WHERE email='roei@phi-eng.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='בני דן 52 ת''''א'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='roei@phi-eng.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'הרעם זועק 9 הרצליה', 'client', (SELECT id FROM users WHERE email='dlolega@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='dlolega@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='הרעם זועק 9 הרצליה'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'חדרה 10', 'client', (SELECT id FROM users WHERE email='dina@phi-eng.co.il'))
+WHERE (SELECT id FROM users WHERE email='dina@phi-eng.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='חדרה 10'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'דוד ילין  14', 'client', (SELECT id FROM users WHERE email='matan@gnproject.co.il'))
+WHERE (SELECT id FROM users WHERE email='matan@gnproject.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='דוד ילין  14'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'בלוך 34', 'client', (SELECT id FROM users WHERE email='omri@brosh.co.il'))
+WHERE (SELECT id FROM users WHERE email='omri@brosh.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='בלוך 34'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'כוכבי יצחק 11 תל אביב‎', 'client', (SELECT id FROM users WHERE email='udiohanina@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='udiohanina@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='כוכבי יצחק 11 תל אביב‎'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='udiohanina@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'מינץ 10', 'client', (SELECT id FROM users WHERE email='udiohanina@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='udiohanina@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='מינץ 10'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='udiohanina@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'אלכסנדר ינאי 15-17 ת''''א‎', 'client', (SELECT id FROM users WHERE email='liad@gnproject.co.il'))
+WHERE (SELECT id FROM users WHERE email='liad@gnproject.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='אלכסנדר ינאי 15-17 ת''''א‎'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='liad@gnproject.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'מול ים יפו', 'client', (SELECT id FROM users WHERE email='ilan@etzgroup.com'))
+WHERE (SELECT id FROM users WHERE email='ilan@etzgroup.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='מול ים יפו'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'ויצמן 21 רמת השרון', 'client', (SELECT id FROM users WHERE email='barak@nofzameret.co'))
+WHERE (SELECT id FROM users WHERE email='barak@nofzameret.co') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='ויצמן 21 רמת השרון'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='barak@nofzameret.co')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'הירקון 70', 'client', (SELECT id FROM users WHERE email='amirr@auto-chen.co.il'))
+WHERE (SELECT id FROM users WHERE email='amirr@auto-chen.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='הירקון 70'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='amirr@auto-chen.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'החשמונאים 3 רמת גן', 'client', (SELECT id FROM users WHERE email='bar@ferrum.co.il'))
+WHERE (SELECT id FROM users WHERE email='bar@ferrum.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='החשמונאים 3 רמת גן'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='bar@ferrum.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'טרומפלדור 33 ת"א', 'client', (SELECT id FROM users WHERE email='hamudi@mo-lu.co.il'))
+WHERE (SELECT id FROM users WHERE email='hamudi@mo-lu.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='טרומפלדור 33 ת"א'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hamudi@mo-lu.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'רמברנדט 36', 'client', (SELECT id FROM users WHERE email='aslam.a.m.tavor@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='aslam.a.m.tavor@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='רמברנדט 36'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='aslam.a.m.tavor@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'רמז 36', 'client', (SELECT id FROM users WHERE email='ilan@yanush.co.il'))
+WHERE (SELECT id FROM users WHERE email='ilan@yanush.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='רמז 36'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@yanush.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'פישמן מיימון 16', 'client', (SELECT id FROM users WHERE email='omri@brosh.co.il'))
+WHERE (SELECT id FROM users WHERE email='omri@brosh.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='פישמן מיימון 16'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'מוסינזון 18', 'client', (SELECT id FROM users WHERE email='shelli@i-almi.co.il'))
+WHERE (SELECT id FROM users WHERE email='shelli@i-almi.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='מוסינזון 18'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), '{"name":"הלסינקי 15"}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='הלסינקי 15'
+    AND (er.values_json->>'client') IS NULL);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'אחד העם 108', 'client', (SELECT id FROM users WHERE email='adi@sharbiv.co.il'))
+WHERE (SELECT id FROM users WHERE email='adi@sharbiv.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='אחד העם 108'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='adi@sharbiv.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'נורדאו 65 ת"א', 'client', (SELECT id FROM users WHERE email='dor@rotem-eng.co.il'))
+WHERE (SELECT id FROM users WHERE email='dor@rotem-eng.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='נורדאו 65 ת"א'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dor@rotem-eng.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'דובנוב 19 תא', 'client', (SELECT id FROM users WHERE email='motid@romgc.co.il'))
+WHERE (SELECT id FROM users WHERE email='motid@romgc.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='דובנוב 19 תא'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='motid@romgc.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'בני דן 48', 'client', (SELECT id FROM users WHERE email='shelli@i-almi.co.il'))
+WHERE (SELECT id FROM users WHERE email='shelli@i-almi.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='בני דן 48'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'הזוהר 7', 'client', (SELECT id FROM users WHERE email='ilan@etzgroup.com'))
+WHERE (SELECT id FROM users WHERE email='ilan@etzgroup.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='הזוהר 7'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'פתחיה 23 ת"א', 'client', (SELECT id FROM users WHERE email='daniel.aronovich77@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='daniel.aronovich77@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='פתחיה 23 ת"א'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='daniel.aronovich77@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'סמטת לאן 3א ת''''א', 'client', (SELECT id FROM users WHERE email='matan@gnproject.co.il'))
+WHERE (SELECT id FROM users WHERE email='matan@gnproject.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='סמטת לאן 3א ת''''א'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'בודנהיימר 43', 'client', (SELECT id FROM users WHERE email='ym302817@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='ym302817@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='בודנהיימר 43'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ym302817@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'מודליאני 4', 'client', (SELECT id FROM users WHERE email='dlolega@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='dlolega@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='מודליאני 4'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'רות 1 רמת גן', 'client', (SELECT id FROM users WHERE email='nadav.d@sr-ventures.co.il'))
+WHERE (SELECT id FROM users WHERE email='nadav.d@sr-ventures.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='רות 1 רמת גן'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='nadav.d@sr-ventures.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'הלסינקי 8', 'client', (SELECT id FROM users WHERE email='shelli@i-almi.co.il'))
+WHERE (SELECT id FROM users WHERE email='shelli@i-almi.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='הלסינקי 8'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'אדם הכהן 12', 'client', (SELECT id FROM users WHERE email='ahmad@arkan.co.il'))
+WHERE (SELECT id FROM users WHERE email='ahmad@arkan.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='אדם הכהן 12'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ahmad@arkan.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'בילטמור 11 ת"א', 'client', (SELECT id FROM users WHERE email='guest-9df4434a@noemail.local'))
+WHERE (SELECT id FROM users WHERE email='guest-9df4434a@noemail.local') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='בילטמור 11 ת"א'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-9df4434a@noemail.local')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'מינץ 16', 'client', (SELECT id FROM users WHERE email='ori@ecocity.co.il'))
+WHERE (SELECT id FROM users WHERE email='ori@ecocity.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='מינץ 16'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ori@ecocity.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'דיזינגוף 259', 'client', (SELECT id FROM users WHERE email='guest-dccb94a0@noemail.local'))
+WHERE (SELECT id FROM users WHERE email='guest-dccb94a0@noemail.local') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='דיזינגוף 259'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-dccb94a0@noemail.local')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'נווה שאנן 11 תל אביב', 'client', (SELECT id FROM users WHERE email='engineer1@ibp-israel.co.il'))
+WHERE (SELECT id FROM users WHERE email='engineer1@ibp-israel.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='נווה שאנן 11 תל אביב'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='engineer1@ibp-israel.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'האגדה 15 רמת גן', 'client', (SELECT id FROM users WHERE email='ronfamili@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='ronfamili@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='האגדה 15 רמת גן'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ronfamili@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'הלהב 17 חולון', 'client', (SELECT id FROM users WHERE email='guest-11ad6458@noemail.local'))
+WHERE (SELECT id FROM users WHERE email='guest-11ad6458@noemail.local') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='הלהב 17 חולון'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-11ad6458@noemail.local')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'דיזינגוף 254', 'client', (SELECT id FROM users WHERE email='guest-dccb94a0@noemail.local'))
+WHERE (SELECT id FROM users WHERE email='guest-dccb94a0@noemail.local') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='דיזינגוף 254'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-dccb94a0@noemail.local')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'מרים החשמונאית- מסגרות שלד', 'client', (SELECT id FROM users WHERE email='shelli@i-almi.co.il'))
+WHERE (SELECT id FROM users WHERE email='shelli@i-almi.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='מרים החשמונאית- מסגרות שלד'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'בילו 12', 'client', (SELECT id FROM users WHERE email='kobi@michalovich.co.il'))
+WHERE (SELECT id FROM users WHERE email='kobi@michalovich.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='בילו 12'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kobi@michalovich.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'פרופסור שור 9-11 תל אביב', 'client', (SELECT id FROM users WHERE email='ilan@etzgroup.com'))
+WHERE (SELECT id FROM users WHERE email='ilan@etzgroup.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='פרופסור שור 9-11 תל אביב'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'רוקח 50-48', 'client', (SELECT id FROM users WHERE email='nitzan@henco.co.il'))
+WHERE (SELECT id FROM users WHERE email='nitzan@henco.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='רוקח 50-48'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='nitzan@henco.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), '{"name":"בלוך 23-25"}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='בלוך 23-25'
+    AND (er.values_json->>'client') IS NULL);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'ליפסקי 5', 'client', (SELECT id FROM users WHERE email='tzvika@yanush.co.il'))
+WHERE (SELECT id FROM users WHERE email='tzvika@yanush.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='ליפסקי 5'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='tzvika@yanush.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'ליפסק'' 5', 'client', (SELECT id FROM users WHERE email='tzvika@yanush.co.il'))
+WHERE (SELECT id FROM users WHERE email='tzvika@yanush.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='ליפסק'' 5'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='tzvika@yanush.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'אלנבי 74', 'client', (SELECT id FROM users WHERE email='issa@mushlin.co.il'))
+WHERE (SELECT id FROM users WHERE email='issa@mushlin.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='אלנבי 74'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='issa@mushlin.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'מרים החשמונאית 22-24', 'client', (SELECT id FROM users WHERE email='aslam.a.m.tavor@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='aslam.a.m.tavor@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='מרים החשמונאית 22-24'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='aslam.a.m.tavor@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'פראג 3 ת"א', 'client', (SELECT id FROM users WHERE email='dramaty@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='dramaty@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='פראג 3 ת"א'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dramaty@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'רמברנדט 12', 'client', (SELECT id FROM users WHERE email='nadav.d@sr-ventures.co.il'))
+WHERE (SELECT id FROM users WHERE email='nadav.d@sr-ventures.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='רמברנדט 12'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='nadav.d@sr-ventures.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'פייבל 11 תל אביב', 'client', (SELECT id FROM users WHERE email='nitzan@henco.co.il'))
+WHERE (SELECT id FROM users WHERE email='nitzan@henco.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='פייבל 11 תל אביב'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='nitzan@henco.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'מזכרת בתיה', 'client', (SELECT id FROM users WHERE email='matan@gnproject.co.il'))
+WHERE (SELECT id FROM users WHERE email='matan@gnproject.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='מזכרת בתיה'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'סוטין 15 ת"א', 'client', (SELECT id FROM users WHERE email='migdaley@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='migdaley@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='סוטין 15 ת"א'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='migdaley@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'מינץ 12', 'client', (SELECT id FROM users WHERE email='udiohanina@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='udiohanina@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='מינץ 12'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='udiohanina@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'הירדן 12', 'client', (SELECT id FROM users WHERE email='guest-d00d3fca@noemail.local'))
+WHERE (SELECT id FROM users WHERE email='guest-d00d3fca@noemail.local') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='הירדן 12'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-d00d3fca@noemail.local')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'דוד ילין 20 ת"א', 'client', (SELECT id FROM users WHERE email='shelli@i-almi.co.il'))
+WHERE (SELECT id FROM users WHERE email='shelli@i-almi.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='דוד ילין 20 ת"א'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'בצלאל 3-5', 'client', (SELECT id FROM users WHERE email='emil@ecocity.co.il'))
+WHERE (SELECT id FROM users WHERE email='emil@ecocity.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='בצלאל 3-5'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='emil@ecocity.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'הלסינקי 15', 'client', (SELECT id FROM users WHERE email='dlolega@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='dlolega@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='הלסינקי 15'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'אחוזת מונטיפיורי', 'client', (SELECT id FROM users WHERE email='ilan@etzgroup.com'))
+WHERE (SELECT id FROM users WHERE email='ilan@etzgroup.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='אחוזת מונטיפיורי'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'ליליאן 6 תל אביב', 'client', (SELECT id FROM users WHERE email='kobi@michalovich.co.il'))
+WHERE (SELECT id FROM users WHERE email='kobi@michalovich.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='ליליאן 6 תל אביב'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kobi@michalovich.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'יונה הנביא 15 , ת"א', 'client', (SELECT id FROM users WHERE email='lev-binom@outlook.co.il'))
+WHERE (SELECT id FROM users WHERE email='lev-binom@outlook.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='יונה הנביא 15 , ת"א'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='lev-binom@outlook.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'בצלאל 9', 'client', (SELECT id FROM users WHERE email='nassinisim@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='nassinisim@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='בצלאל 9'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='nassinisim@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'בת ים', 'client', (SELECT id FROM users WHERE email='dlolega@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='dlolega@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='בת ים'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'הלסינקי 15', 'client', (SELECT id FROM users WHERE email='dl.olega@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='dl.olega@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='הלסינקי 15'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dl.olega@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'איי.בי.פי. יזמות והשקעות 2012 בעיימ', 'client', (SELECT id FROM users WHERE email='guest-a3aa9913@noemail.local'))
+WHERE (SELECT id FROM users WHERE email='guest-a3aa9913@noemail.local') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='איי.בי.פי. יזמות והשקעות 2012 בעיימ'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-a3aa9913@noemail.local')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'בלוך 23-25', 'client', (SELECT id FROM users WHERE email='eliran@grofit.co.il'))
+WHERE (SELECT id FROM users WHERE email='eliran@grofit.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='בלוך 23-25'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='eliran@grofit.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'מתחם המסילה הרצליה', 'client', (SELECT id FROM users WHERE email='nitzan@henco.co.il'))
+WHERE (SELECT id FROM users WHERE email='nitzan@henco.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='מתחם המסילה הרצליה'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='nitzan@henco.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'קריניצי החדשה רמת גן', 'client', (SELECT id FROM users WHERE email='guest-f6592788@noemail.local'))
+WHERE (SELECT id FROM users WHERE email='guest-f6592788@noemail.local') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='קריניצי החדשה רמת גן'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-f6592788@noemail.local')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'זלמן שניאור 9 רמת השרון', 'client', (SELECT id FROM users WHERE email='guest-c02b4a95@noemail.local'))
+WHERE (SELECT id FROM users WHERE email='guest-c02b4a95@noemail.local') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='זלמן שניאור 9 רמת השרון'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-c02b4a95@noemail.local')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'תל חי 9', 'client', (SELECT id FROM users WHERE email='guest-e1c1d4be@noemail.local'))
+WHERE (SELECT id FROM users WHERE email='guest-e1c1d4be@noemail.local') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='תל חי 9'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-e1c1d4be@noemail.local')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'מוזיר 6', 'client', (SELECT id FROM users WHERE email='tzvika@yanush.co.il'))
+WHERE (SELECT id FROM users WHERE email='tzvika@yanush.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='מוזיר 6'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='tzvika@yanush.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'חנקין 3 ת''''א', 'client', (SELECT id FROM users WHERE email='dlolega@gmail.com'))
+WHERE (SELECT id FROM users WHERE email='dlolega@gmail.com') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='חנקין 3 ת''''א'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), '{"name":"הירקון 70"}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='הירקון 70'
+    AND (er.values_json->>'client') IS NULL);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'אחד העם13 ת.א', 'client', (SELECT id FROM users WHERE email='nitzan@henco.co.il'))
+WHERE (SELECT id FROM users WHERE email='nitzan@henco.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='אחד העם13 ת.א'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='nitzan@henco.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'דניאל 12 בת ים', 'client', (SELECT id FROM users WHERE email='or@city-view.co.il'))
+WHERE (SELECT id FROM users WHERE email='or@city-view.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='דניאל 12 בת ים'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='or@city-view.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'שטרוק 8', 'client', (SELECT id FROM users WHERE email='ori@ecocity.co.il'))
+WHERE (SELECT id FROM users WHERE email='ori@ecocity.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='שטרוק 8'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ori@ecocity.co.il')::text);
+INSERT INTO entity_records (entity_id, values_json)
+SELECT (SELECT id FROM entities WHERE entity_key='projects'), jsonb_build_object('name', 'מרים החשמונאית 28-30', 'client', (SELECT id FROM users WHERE email='shelli@i-almi.co.il'))
+WHERE (SELECT id FROM users WHERE email='shelli@i-almi.co.il') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects')
+    AND er.values_json->>'name'='מרים החשמונאית 28-30'
+    AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text);
+
+-- 5) Orders (linked to their project via record_links) -----
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 29-31 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"43255477","order_number":"4073","ral_color":"מגולוון","production_date":"2026-07-07","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/14IDClipZelkAWbMtRuSwc9ISu1gA8ercNUaP0bNTT60","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1ABx4KIgTTd7LjX9cgh-1s-TA9_crZYs4","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/19tH5HdENWInhMiMYeB6S7Wrp7OWOriJcqDI_JqkrNZ4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='43255477')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליפסקי 18, ת״א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"43243163","order_number":"4067","ral_color":"7037 גילוון+יסוד+עליון","production_date":"2026-07-07","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1qkf2s9gIEcuKa6wONLOt9F9fqAiX_6CIwQFQSz6PXGQ","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1vOwim63bjU2cgi6rtnWt7ZvBCn7yr9FE","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1gx0oFfGyalVb1_MDxHYTpdOE0L9bBfMJbKhNHWxJhJw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='43243163')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"43196153","order_number":"4065","ral_color":"9003 גילוון+יסוד+עליון","production_date":"2026-07-07","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/17UEgYRdnM_Rxrx50WdPb655-9Umm6ZJ4Y5vDX-rom8U","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1s7XQp93A6o4pNNV8HUnxFF7SczJC9oIX","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1NwpKM7vVddlJbyXFHHD8sv9KlXhlcYL4gqUKIkeHz9Q","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='43196153')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פנקס 25 דה האז 30 תל אביב - יפו' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kobi@michalovich.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"43071611","order_number":"4066","production_date":"2026-07-07","order_file":{"url":"https://docs.google.com/document/d/1AsxNR2AaaZex2S4oD4yNNki6iF1PrE54hLzw205fBMM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='43071611')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בית ספר נרקיסים ראשון לציון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='afona200690@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"43067099","order_number":"4058","ral_color":"9010","production_date":"2026-07-03","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1TrMM4yfpMLEjioArxiMwuRahjd2Hh2JzgjqSjXDudKM","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1g7YNHmFyIHb5fLQ_XFkK9SHsg2XayTGY","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1kCh2s9MR9mW8OzjaRyTLlHYdVOnFIFue","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/11LtKeuO7oznvo_64ngnASOzxNNwoSzQgZEnzB2tMfVU","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1Snap9_RSeudklQQPwEWKoYYfmzwSzIuzWHYzia5v1D4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='43067099')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='תל חי 9' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-04220a1a@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"43066559","order_number":"4057","ral_color":"7022 גילוון+עליון+יסוד","production_date":"2026-07-02","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1hmvlaELyb6zZHmWdIehRwgx1Yyi92CPuHBASAriedRg","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1a1HeDUkY8WsxIZEIL2P2mJXWEdP9nAoz","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/19BjSncqA-gvMhGR3BeDLRTbIlIstnPk0X1hJidtQaHo","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='43066559')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 29-31' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"43022797","order_number":"4061","ral_color":"7035","production_date":"2026-07-07","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1bribduLmlQhmBkrl1mfiqa9FpgTpL9Bkgvdg0nRLc6o","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1RRq1tcG1vj_fqmvTa0Nac2NBjR-E8j0V","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1q9tBPKBl1kFPWBaqOOTrN54SOUmp_3F8","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1rHclSI2wJPCrGEFE5BDtfpE2KjK2BIk51iM48VW_zzs","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1TDqDNCefjRSC29lXhzE5g4ukIUC5FGfGqFjfbJ1_vyQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='43022797')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 29-31' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"43019793","order_number":"4060","ral_color":"7035","production_date":"2026-07-07","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/11GPkMDUnLsy9g3bK6ROm1n09yFYvpkYcyo64ip1fixk","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1F-rcneuS1s9v6eYvIp0YJIA8LbAW68tP","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1v9NIMwAz22kWmZXCDHbImCMQqEQh0EVG","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1d-U9QtiR0lFYtMkLufhjrnNhdvucxPCBc6MRirgI1ZU","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1p0myyQFBg4TKJUf2zfYBVeD2ypnaHS78LSFEPIjATGw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='43019793')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42992007","order_number":"4053","ral_color":"ללא","production_date":"2026-07-02","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/1D13m4TCVbebDpjAtdXUA9vPfYMvZI--FhCTYjKMNTzw","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1RvRgJaVO3ly0R9fPqQELUz531IGTyeKy","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Ai2r-nzqANmJt5fp6VXap4YqFskFPR3L3YL8_O8dBag","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42992007')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 3' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ori@ecocity.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42951043","order_number":"4047","ral_color":"9004","production_date":"2026-06-30","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1c_4AVajV9KbshpnddX0nQ1c_FI_MmTdmGtheEAN_-Io","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1gG5if5zjNu29eQ5JESGLkXYjEvU0caT7","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/15BtvZxcK4_Unybg4C7itTcckyZa8Yie4","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Pb0p1F8DhCJuEuhNgmxXP_G5KSjvqCu-QBTNCY0AC7I","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1RpfxaFHFEfmzn37-TNlq3gFXILAJdR8kc158-b11Drc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42951043')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 3' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='emil@ecocity.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42950685","order_number":"4052","ral_color":"9004","production_date":"2026-06-30","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1kUhQd4qfhAcNm1CkhKZ6NIXt00whsoGC5AUH1KP0WRM","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1KAxlH4MHKOdkXMDAgHFH93-UvLjBiO4j","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1qi1m163cO750uQUQUS_s9DsmxHBn7vsp","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1DcLagZMfQyUq2_n4JSKBQdION4_vdBI0d9wFaz44OVM","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1G989BsJA-EcBxPAxQZS2oj1MyqGmAhGEgwyAAbT_Hlw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42950685')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פנקס 25 דה האז 30 תל אביב - יפו' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kobi@michalovich.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42924597","order_number":"4050","ral_color":"9016","production_date":"2026-07-02","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1wjAsBUDUS4pxhuuf2uA4rUk6TdSv4mTmJcFdXBGDfUs","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1qCs65-vLeYenwJGbfL9KZ8WlGbj7EC_i","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Hkqm5Tf_tnKcef1AXt6cVRyepLs6H_4f9LvAHLCWWOk","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42924597')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42924115","order_number":"4063","ral_color":"9016 גילוון+יסוד+עליון","production_date":"2026-07-05","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1gQrkUL1ylMDEeXPBBNeL9cAjYGWvp2OJxYmwMC9xa9M","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/19HrSrwIUPmFG4p3G-JQeCg0zwhzcOl3p","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/15lUeMXnf58tWU7GiX2O0KwlBIoWx6Cy1Bg3mj7aYbAo","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42924115')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מינץ 16' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='emil@ecocity.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42921989","order_number":"4043","ral_color":"ללא","production_date":"2026-06-29","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/1CbRLm7fmhxMU5GanICw4mFSNtufCXz9MtOSJCZB-P1c","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1841fS9_Q9STEVvI99-O7cqghAJzNGqB3","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1-lQj7-a3GofH_6TGvAVqzFjLUF5ssk4qofW9x8fi8JM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42921989')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42921807","order_number":"4059","ral_color":"9011 גילוון+יסוד+עליון","production_date":"2026-07-05","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1EsINbwQw_BG723g6A9X7y1WBPeNNY9plluHR-be6__I","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/19FVrV8KCNCItS8NUZ5xNvhB3FePhw2Hk","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1KXSpqTB8_uui5PqH6Cjl9ItJDpXCifIoFTMyndU9fZg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42921807')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בורוכוב 34, גבעתיים' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42921501","order_number":"4044","ral_color":"7022","production_date":"2026-06-29","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1GyCveFLnY4TvUB97cLzFBaw_4bjDbUXMTJJpOxnfh7I","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1iN9MPA_T63LUdpa5gbmtXC5GWZLQMTzy","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1RRbGLcbcis6qBBP8k902f7c02GUdf9E66gRHBbH2TmI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42921501')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42811563","order_number":"4054","ral_color":"9006 גילוון+יסוד+עליון","production_date":"2026-07-02","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1gsjUJ_bjJV1r2dei4tgaktTvEknoAbL4o0YHmmBR6Jc","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1J9TfovI8Q8SSqoiEt7rdxmF0TIeZhZ58","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1HkeDbmn8ABM99c-qUZAE4tGef6t2n7s8","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1c3S0aLDsTGXax86n1FwoUyMBCGOBCQj_e7cGi9f_aG8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42811563')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42811485","order_number":"4072","ral_color":"9003 גילוון+יסוד+עליון","production_date":"2026-07-07","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1SQNj3lF0lQmfwOapttupWdcKD73A2MUUW7qkAFcQIQg","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/185kTqS5tMGQVdnEPMybpwxosKW0MWG1W","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1E4SzPqmytSF0HcfvuMUrU8XLRjj86GnM0rpBz9ydyWc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42811485')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בית ספר נרקיסים ראשון לציון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='afona200690@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42811045","order_number":"4037","ral_color":"0","production_date":"2026-06-25","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1TkzNTF5Hd5NNze9G_BFZ09hPgWSYfEaPbcxTNMxhxg0","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1-_LzekYXGrUvq-RfJCXRn8AwF2eLEaUf84fOKZ--gLc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42811045')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 29-31 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42779913","order_number":"4034","ral_color":"7035","production_date":"2026-06-25","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1DhfPKv6mu5whAafzGHwTR2eadvl9ddnnSP9ZyvO0hv8","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1xQ_19aPMH-Z8IHHuduUW2k0j2y5SLlB8","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1OVX5nQBr-q1CQ6g6QLk6Futk-ZkRFlYickQwDwofYgU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42779913')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 29-31 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42779163","order_number":"4033","ral_color":"7035","production_date":"2026-06-25","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/15D9H_0SLPr1xXSs001r6iF5-Vyqq1qLeSC97zi54qiQ","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1WXgIfmFkl_j1awTCiuLrGlhkPt_sGVDn","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/175Mvak_Oy2xXN5nFFPBSqoMYW9KgT2wXFcWKct45DIw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42779163')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אנדרומדה' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shayc@zhg.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42762311","order_number":"4030","ral_color":"7021","production_date":"2026-07-07","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1uXrJfk8jH5wihPG81Cf-7d4642E5PBVhvY13W_220QE","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1GU-h1khmcJGwOEIiX-IJnnP-IWXijXHq","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1psYyaFfupCP7Y2CTxunQsH4Ecpx1g627","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1TZgs81CPJOFv2szOUGR3t9RN-lOAOpO9ANc_NHICIK4","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1y812SvDi5WRrIF-ysR4eteTxhn053R-67p3OKcOEaAM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42762311')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='תל חי 9' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-04220a1a@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42761695","order_number":"4029","ral_color":"7022 גילוון+יסוד+עליון","production_date":"2026-06-24","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/15YYsZEDWC_tGiIc2DZUtapayVRIM7RMNDIGsgx0Z7ak","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1GFCFe_qqqqeoKK07f3PIOlSuBEBNn6Pb","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1z4h7sHcjUSC1FU5LMPNxYgqB_KK0WlMlTcORcxSG-j8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42761695')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42749351","order_number":"4038","ral_color":"7035","production_date":"2026-06-29","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1UKw6axHOt5v1n1qsJljth_NgKVfH6G53zOf6bkWqAQY","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1sd9oPA_rlI4kKOOTOnvVaOCFJFBf0c4U","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1tmR8jJ7qU3SvRnk07-fAwQGGVmfevIO8pXmzuPjoJUk","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1XDQO77aID5EFhc5C3315vWXGy5LL_Xihypu-h7iEpOs","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42749351')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42749149","order_number":"4039","ral_color":"7035","production_date":"2026-06-29","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1rrzjX0w5lMckPsh8ExLuYG_bXED1CdBthO0cjRc3DVc","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1gVOr_PD_2Af94pp_X230Iwvkro9kFb_N","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1M_Flhy1DuybLfWB8EcT5l5gofrokE31Beinv1kLrcCs","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1DhnmBZqVBy4agTARhwbQ_b-MmnCKxBQABdOkfje6RP4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42749149')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='תל חי 9' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-04220a1a@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42729447","order_number":"4027","ral_color":"לבן","production_date":"2026-06-23","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1TcCCG1GfmJQWqyzgVZmVoMU0kVZtmrdXX4IGGvF6oOI","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1NZxF7m_bpFZVnuxCciQxnCl3QvfYVKMa1heEPo_174Q","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42729447')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מלון נחום גולדמן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='yoavar@electra.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42728613","order_number":"4062","ral_color":"ללא","production_date":"2026-07-05","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/14h5zr0JtEEXVzuJ5eb4_lLPtig4GdFfJw03utv9Sr5M","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1Hvvoy-j29nNU01xOvIET9PS_O2Mi7sNw","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1cQSzugx6K3cWo1SxunKsIuUBzwRFG6e3J5xyu7UTtfI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42728613')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אוסישקין 74' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42727515","order_number":"4025","ral_color":"7035 גילוון+יסוד+עליון","production_date":"2026-06-23","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1_aDI0vznZqQyOWQtjxegX0XYtqtxYQe6tiP0HeRyYoY","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1iruPSeT3dr9l07GVs4MSFsjx73bOztE0","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/19KdDGGklgfShq1DsEhAjauXmGfITyPhfKtQMgD0b00s","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42727515')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מינץ 16' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='emil@ecocity.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42711763","order_number":"4031","ral_color":"9005 מט","production_date":"2026-06-24","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1XDcfQRJM30YZlAFw5_6dFV8WPBm1H1FrJ9e9OMEbdBY","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1IOOQOoDm46BYS8vlNn_5LjaRJzIHsImj","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1bHO3xwGDj4Jjfs80bKBP1irC3lR6u3s7tzF_K-ieK8M","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42711763')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='תל חי 9' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-04220a1a@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42694875","order_number":"4017","ral_color":"7022 גילוון+יסוד+עליון","production_date":"2026-06-22","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1g4OqeGC5pDscDGJZThQ_Ujtw0c6WiGXQ1rHKULovjqs","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/16_omLcizFPW_4mO336uPPTO3ye2oe7d0","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/130M8YlZKx5wSiTSlFg5NKY99iHQO14NBWFCDx5CJqBc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42694875')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42693899","order_number":"4016","ral_color":"7047","production_date":"2026-06-22","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1DGBnrS7ckPhEnfCz2Z37IR-5TpudbUcjr-aXBuID97A","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/18kQZiDUI6br5CaRDQz8CgysEoTle3npt","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1IlPBIeD-meq5Un5YvsdaaB2QNIQ-5bXH3ra_IGMyIBc","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1MdXVCtcLV_282jcWuHoIGBY5m5dm0N-j-_3vjZW54YY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42693899')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ז''בוטינסקי 105' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='yeuda@atias.org.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42655235","order_number":"4032","ral_color":"9006 גילוון+יסוד+עליון","production_date":"2026-06-25","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1lGXI8J6APeXGzXRDyTOr25M4wsUdHGHcwMo3f3E6Qp0","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1_CGxfRuCCnqJBcYZmcqJ4Vbi0jJSMafQ","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1xGNhPyjwnPLidOXG_nTgB2O2COFIxBrMge1L-HoUJ04","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42655235')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42653755","order_number":"4011","ral_color":"9016","production_date":"2026-06-21","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/17UlnUfZzHRFIMgLLm29bc1d_MH8d_ABWyWb_2iSDnGA","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/15A5i6MFY4skN0r300ZX_GTHCUCYa7fCs","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/11DwloXqCJw0bjJu0a27VKo9KItC_YlLtFJoMzmY0yUA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42653755')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליפסקי 18, ת״א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42562837","order_number":"4019","ral_color":"7037 גילוון+יסוד+עליון","production_date":"2026-06-22","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1emN7VcO0xXWNLD6qtrp0HsQh1SqyIaSvgvkodATR-cE","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1ECAli57BnwDyr1niHvvFAtbxLy--uv-g","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/10pTaoLwEWhcHHpgPTXOU5FJkXcGp5SBCEyKex_ErJB8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42562837')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מלון נחום גולדמן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='yoavar@electra.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42541101","order_number":"4002","ral_color":"8019","production_date":"2026-06-18","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1BxAzICq1_7YnTcuX3Ew9vlT25PdLgpb7zp8Zgv-u-ug","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1EBwiFys4zkuyopgJXFP3slUw54ynlPYX","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1DUAhEjW86kwGakKiV33BhAdwrS7Zrb9AKp7Stb0Gq60","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1_vL1rPdv_F5A2Lstbxk4cv5hA3elo80Hk3fPOk5XCTU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42541101')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מלון נחום גולדמן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='yoavar@electra.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42540269","order_number":"4001","ral_color":"8019","production_date":"2026-06-18","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1XclxIc-18Uzl3AkXUODWfQo8jWxfQz8E8Lfss6-h7lE","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1Ikb95clZoSMT5HPmSUzbQdHNSur92rHu","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/19JiZV5ARzX9RTaH9N-Hf915DI4kVxOp-XjedWCTgDFc","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1PqD9x7mOEdp1r0xNF530x81tFU5ukFZw0qgyR83gNb0","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42540269')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סמטת המעלות 3 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42532821","order_number":"4042","ral_color":"9007 מגולוון+יסוד+עליון","production_date":"2026-06-29","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1dnc6lkSGzJ3Au2ShEq_1ua3NuwV9S7mGh9xmVroGF78","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1tw7a4iCtZHSHMcQUKys1yWgZUGWg-iLR","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/13dBCLmcMZ9Xvn4X50sXGME5jlNnAH9XDfozYWOKyShw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42532821')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אוסישקין 74' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42532471","order_number":"4012","production_date":"2026-06-21","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/1X0cmwSIIbe3ct3FMY-ZY7opn5vPUy-F6m9ehlYn-0g0","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1JESCY9rLJ-C2huUtrPO6mUQyEl1dqPmE","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1U0GDaCRi_BR183c1o6DtyRkyAgzRJCXoYgtOOKeli-Y","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42532471')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אסף 17 רמת גן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dorefirozen@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42528907","order_number":"4004","ral_color":"7033 גילוון+יסוד+עליון","production_date":"2026-06-18","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1rVyFgmdo3rj_4zKwYMirdWQj26BJ3a6WiXV4KR1VNtE","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1prYU6GlCjd_LflqG79vIeiXMgnoM4Djf","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/145_0AJKpbzW0RVnxtSe3Pedn56f4TKpL__14uEUJzYs","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42528907')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 68' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-eb43e235@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42502219","order_number":"4000","ral_color":"גלוון+יסוד+7022","production_date":"2026-06-17","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1w_xgG4LyHjcuyiKcNrW4w-vqdYeGgkNwS5aBn5x4ItE","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1othcuREqRnGG6tdlLUQjbLy3P50_DZZn","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1sTMOMpyo1lTccOITFLijL7F7NQRzZwTdGDgurpAG8D8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42502219')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בית ספר נרקיסים ראשון לציון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='afona200690@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42477317","order_number":"3998","ral_color":"9007 גילוון+יסוד+עליון","production_date":"2026-06-17","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1E5lPrZKp_g2jwY3tuElq5vG-h_Y3DfAKLkUp1LvNO_s","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1v8jP3LWHp4joUdLx1ZfpptHOaYxknOfa","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1UjRdK3YCb0cdgjcgL98UElWB9aMsDwdFSm_og4JETVs","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42477317')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פינלס 10 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-0168aa75@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42409741","order_number":"3993","ral_color":"ללא","production_date":"2026-06-15","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/1xYUdPcK63L3fB1yFt7jSgnmjesQm2-Vr_2zxqXHT-Go","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1Ba8PLyoWJjokMG2x-orS3Yxwnp35js2k","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1_hatt32dN365FhgHN9CTR3RjuIhlPCnC7_d4hkPUTcQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42409741')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='חדרה 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42408653","order_number":"4069","ral_color":"מגולוון","production_date":"2026-07-07","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1aJs_7-PPemwmjGdlZ8n1dh0Azw5EMQOFq7VE_jG6i7I","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1GHZt7fomd-YZkqycvqUCJB1gEC1kR2eC","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1dZ81mpvYBiuAXe4ysOKSYtV5JupAR7E_p813SmqWG4A","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42408653')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kostianaaman@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42400807","order_number":"4026","ral_color":"9006 מגולוןן+יסוד+עליון","production_date":"2026-06-23","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1dky4pkoDO2Y8mX41Uyvj1h1BTBIZlDAmy6HTh3QjwhM","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1hFNeJ-Wo_zb5KYiBGFqfOObMyxavbUx6","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1xaF8SrSdYKXRHbEUuHIN60zNbrd-7qw-5btQFYdDhK8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42400807')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליפסקי 18, ת״א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42310341","order_number":"3994","ral_color":"מגולוון","production_date":"2026-06-15","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1qFWsMZbsiKXtjbGMayjhuzsE2LCwTP5KoF4G6f1kUvE","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1wfSytRSZ_zFao9EvKU59sKSYJ7nrP4tj","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1tpHhBsonopmiQm9xAzMLW8GKAW-_BF3yORodCnG48HA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42310341')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42309011","order_number":"3986","ral_color":"7022 מגולוון+יסוד+עליון","production_date":"2026-06-11","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1fRF2zuzXJ-UEP3ZEyXi5VFlXn5OaMcC5iUe92DW4FYM","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1qp9semNjcIn-YlxPMqc1wypgQ-TtOXge","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1tv1LJHKCtvagh3IZWzzmlL3CV-IAPtertg5i-q0oJuI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42309011')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פישמן מיימון 16' AND (er.values_json->>'client') IS NULL LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42307959","order_number":"3985","ral_color":"9016 גילוון+יסןד+עליון","production_date":"2026-06-11","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1igFcSeOUn5JxYlG15h5cvf7qdpf8gP2p4jw3hhOMss4","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1EcTYhk5IuaH_IcUO57btXLG7Mikhf6pg","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1WP6MIG0PdA7N46xSlxftdoRZFpgWjDv5SJFpKw7ESpg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42307959')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42307305","order_number":"3984","ral_color":"9006 מגולוון+יסוד+עליון","production_date":"2026-06-11","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1pWmwHcuQjV5meh7Z9zpNOHjaq1t8Wax5i9mTFG03JzI","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1d6mMgAN3sRADdr-x0tGkjugSo20CTEve","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1f8lzACqzeqYEIKxGcVmY7DskZlLx_AoRSNF2BPiv9a4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42307305')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42276317","order_number":"3980","ral_color":"מגולוון","production_date":"2026-06-10","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/1f-PMFAUL3LCEV5UXElNDWcO4ek9VLBca3tXPYy7IdH8","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1VeLsGAvhid5Ml67OOsUvq65TyZNO9kxX","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1FMXZHWjPloFBRw2jToXToD685rjM7HYa5KD8kQt-3KU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42276317')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42269487","order_number":"3978","ral_color":"מגולוון","production_date":"2026-06-10","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/1QgWQW_NDvMwjoCqQu4cVR0ePdhqIg8V5pAiTOv5CpA8","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1VBHfzbyBAmUygmUbLYVmKbPvef3A2L2g","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1DNLJ5myjy-HfTA1IgsxeKSf5L5l9iN47h61z5M4XPlA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42269487')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רמז 18' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guy.raz@michalovich.co.il.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42267197","order_number":"3977","ral_color":"7004","production_date":"2026-06-10","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1c2Oq9UJCZqajFLSXFmBRUsd4lPjspSr04JRAmkCkAKw","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1CxiGVEKy2nq2XqJmkRtdRQse6uxQCGj4","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1HF9kj9sy1__RxiaOYbpwPAvRxPvyaWOBWNvMajMKico","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42267197')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='חדרה 10' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42262375","order_number":"3976","ral_color":"7039 גילוון+יסוד+עליון","production_date":"2026-06-11","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1DHNh8cLWOxw5wJh9oLVMoF3_iDB4UixPavier-VVYXs","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1eV97UxWZF5S2C-2LcSLk5H6s5ylEM3Qq","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1LfQcJn5ovH8klbsy-rmM1fvz0hhvU5Lf2C1y3yk14tw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42262375')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 20 ת"א' AND (er.values_json->>'client') IS NULL LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42261525","order_number":"3992","ral_color":"נירוסטה","production_date":"2026-06-14","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1GIdKPx-3zYx0vhx5MksxPNHvwPrZkDjFCOEd1SqT6W4","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1G1WPnOdIT6O73RGKTVQ41IgzeCkSubmh","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1E6bDHGN4alZNF8OGcu8u09DsbWoRy1-UQ4DHbUwp1uM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42261525')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ארלוזורוב 5-7 בת ים' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='roei@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42209353","order_number":"3972","ral_color":"נירוסטה","production_date":"2026-06-09","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1SZJIp3vmkRgUbRlfq5uVjdEQWflvhVBGFfTB19l9pIw","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1i6Uv5SYwMvGLIHR6TNM_5xXyzqPDRwwr","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1-1FMjxL2ShFtmogndILTPxpGmcRU54UMwEZSWuIs2oE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42209353')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kostianaaman@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42155773","order_number":"3979","ral_color":"9006 יסוד+עליון+גילוון","production_date":"2026-06-10","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/17r9VMIw0jG8i3eMUV-ud0UCSCuk5QD8NkR_FIR_NYy4","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/100Z2L7LGrQFs_9EUWtDpiIDhfLhnYHtB","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1omebEKPppCzQr6JpK8e1c_NCmCzOTY9fSyM9qhX2t68","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42155773')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דיזנגוף 254' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-dccb94a0@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42085781","order_number":"3965","ral_color":"7037","production_date":"2026-06-10","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1Dv1TEQC_aTAPMbpReEynqG_85ptdebfiu-kFwJOsG3E","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1lLlDITXWqBp-0PedZTBTkqd_tmfxnGQy","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1T6PsoBu38KsZUwMUTilaSdJpQuVMFhpe","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1OMoufqcgGF_uItGeq8jWwHEfwml8ZpK1xJpx3whXVtk","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1LGIHGQS6pcc9hmCiSaWzcxlVPaEboS63W7HypbRfu6o","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42085781')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ז''בוטינסקי 105' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='yeuda@atias.org.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42032907","order_number":"3999","ral_color":"מגולוון","production_date":"2026-06-17","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1bMFP7OVps5F_CzUW5oTq000qxHXUMWtg_c4BX6DiABk","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/17rHxMfs00seOA6Q0__ak70jsNQvU_8ll","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1n890StD2LLPTbW5SiKFjSrnL31gxV_HsliDRbkVrcKs","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42032907')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שם רונן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dl.olega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42005621","order_number":"3961","ral_color":"9005 יסוד+עליון","production_date":"2026-06-07","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1rAg1LxPynkwoI7oCsPDnUr35VLpEZWe8jiFDVgif1N4","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/16LVQio5Flci3Rtv0otsJsZYil6kdb6pN","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1EhMmoo_-M2Mo4AbqfTrB3iSfqlotEvz0","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1poi5TwuDd_7V15wDL6YM-GBNQBLecbQbJxVLt6IZ33I","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42005621')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"42004557","order_number":"3982","ral_color":"ללא","production_date":"2026-06-10","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/15X6hlMzV_ds7a9oIfiUIspmdJepySKzSqNFbL07ucbk","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1T4JBK-R4IrdQDRAaxhDn7cI-7oGRQL_E","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1AvVOx7D73UEaSv8M-zNIRvGyl_hyq1gVEmTZZscl3OY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='42004557')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 52 ת''''א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='roei@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41997027","order_number":"3958","production_date":"2026-06-04","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1w6VbhL_C8X_7Si1IvYJghWFideAbVMVblZdHriqG7nE","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1OwCIEeJB-qDvtK2GVxpO2KlLbk1gtoXx","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1oWPxc1lsP125NPQ32GO7h4kzcw4WxSFcaJSpCJzZVhU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41997027')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הרעם זועק 9 הרצליה' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41928473","order_number":"3989","ral_color":"7022","production_date":"2026-06-14","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1DSXp7m56e3vAZFCIljbcRfG1nrZX018XixSEnGfBFMw","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1Coe4-AUPHPGZI5DOK0oI-xPLeGRURYFq","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1R_Kk5TObsaRazcfVvEmykpLD40kIloSnC7_M-MlD8X8","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1km0OaLB39l-FLDxLZwA4XM4qe1gi9dpY5enj_W-9FSE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41928473')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אסף 17 רמת גן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dorefirozen@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41924103","order_number":"4041","ral_color":"7037","production_date":"2026-06-29","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1hFXWSkAAAqD2Ghd8VpVmKOX3JR98O9HrZnPQhVLDdAY","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/15h4bHikcqgbadk70gbhL_I2FZzYav7ez","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1jxSCeUnGTW7MFoD9JG8WJBR61tCkwHD2","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1ZQ4v1ZizA_o6CUWRGSdb6caeVh_N_zFwyDAooNAIhlI","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1KpT00F8AzhlFzFx4MyJW5dAOlBXO0wFbsyYfDH2Fja4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41924103')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41908063","order_number":"3948","ral_color":"9005גילוון+יסוד+עליון","production_date":"2026-06-03","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1hr5BmEzh9bNLM_-NbKo3OU_wW5wPimWpu3_I8WVQ8JM","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1OklB_wzReQPpDt9moCogE4cjIeeslOKr","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1IBvNJu8nx7SBqBBKiZDDxxwN1gfEeabZN9NJ5vEsz2o","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41908063')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41907803","order_number":"4020","ral_color":"9016 גילוון+יסוד+עליון","production_date":"2026-06-23","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/14g9-2ynYcsDqEekLl32_EWWCyQYIv69BZcPFIH_lkFU","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/10vnAwob5DeTUeiQY_hJP2PTLDAO2Ai4m","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1qinh3naK0GUsWsQa-vYuxtAWAX62dWIPmmT5JMU3CfU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41907803')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41907509","order_number":"4021","ral_color":"9016 גילוון+יסוד+עליון","production_date":"2026-06-23","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/12Ff6IDwzFnrKOJoFxhJdHWaQKhujlfpDlI555bXYhBM","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1s_2xAOvgC-_cUh_InGC2-NBN-_vlamRS","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Is3PqJ4xu7qmehQmwIktKbQt2RWbbJ-B8qyAt4Nj8Gc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41907509')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41906885","order_number":"4022","ral_color":"9016 גילוון+יסוד+עליון","production_date":"2026-06-23","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/12fRzSZfRSTsGfOYx8u4PaMTCBrm0g31-_EMp2IfxF3I","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/19ahhlr8tTT8-lGUwnooS9YDnX9bA8DV8","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1JV12aLbca9Sw1nZKUcaZwzgVH4gnZEgY0YKXRNpGBLY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41906885')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41906021","order_number":"4024","ral_color":"9016 גילוון+יסוד+עליון","production_date":"2026-06-23","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1Bk3MXbdRn2pZc2hztv5EO3NSj6rwgNhkluAJWm4kzRA","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1c4epqwxfBXj_q5WseVMcbpXB9WAMi_Wr","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1wLJ6FJmZWj0JWH8ywFPbyC-ZbKcNUGoWjLMjNwO_nlI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41906021')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סמטת המעלות 3 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41890389","order_number":"3947","ral_color":"9007 גילוון+יסוד+עליון","production_date":"2026-06-02","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1d8Wi8oJRLYUxsyldagfibDL54n8pFRLURAXSXHIloLg","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/13No82LNQPbCX_s1zfchNyJNkv49ega2i","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1OG8d5h8vfvW0MnURydVxrX4XHiyYg4wkReAX96LeTJk","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41890389')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='חדרה 10' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41871577","order_number":"3956","ral_color":"מגולוון","production_date":"2026-06-04","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1-BzsBpG7Pw2VCrDAvl5WTgJTCnwgKcA1aiQyalfIoag","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1m5wrlWrL5bvd17ltQovAsVNT8psj9rWd","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/17ycD3Gg7PQT6pvut0c8kCv9UlhxaC3ju","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1tU1DzMOVvhPRSFTpGw7ek-pd-BRjKrdaSw7V6Ni6oMI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41871577')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41854805","order_number":"3942","ral_color":"9016 גילוון+יסוד+עליון","production_date":"2026-06-01","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1UBWeBBTVfcapT24rk512u6pivgA_rWQm0QhZYwA9R1o","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/10hgny0ba-bQC5ikSEPOGpmeQ1lBp5VhvMwfIC8VxcFA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41854805')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41854187","order_number":"3941","ral_color":"9016 גילוון+יסוד+עליון","production_date":"2026-06-01","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1WlzFr2SACGRUBZjVj1TVvkK20GmrjMZZc9uuGS04pv4","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1rq8uFWKvW5krxxGs9Ozt8JkDkn6aJJ5P","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1EXwLZH9x6YNepwXvmA1jV9S_qAvW-WMkT02JJbckOJY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41854187')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אנדרומדה' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shayc@zhg.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41853445","order_number":"3940","production_date":"2026-06-01","order_file":{"url":"https://docs.google.com/document/d/18VR_zHUTZOwr4lZnUE8AdxMA1I-PLmc87C9uPe9kFFY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41853445')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליפסקי 18, ת״א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41839441","order_number":"3938","ral_color":"7021","production_date":"2026-06-02","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1IS86pFoJYOrLBv98dOyz3Gx1O-B92HZsYfGoK4xsfXY","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/11Iu_dcCIaZDS8KnBJxGo0DqgOc5G0itp","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1_Ygkz3zynDpTPfqv2l97qEai7WeN5t8g72Sriro2g9g","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1GV8_2MJHI7biFBFA3P4Sgj6BqipQIHkHcPKPvy_xi4g","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41839441')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אנדרומדה' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shayc@zhg.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41838569","order_number":"3937","production_date":"2026-06-01","order_file":{"url":"https://docs.google.com/document/d/1CxNLs_ucFOQe1Hyro85_vgkRdDJwdYxzglJeF28nAjk","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41838569')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין  14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41826269","order_number":"4010","ral_color":"7021 גילוון+יסוד+עליון","production_date":"2026-06-21","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1JyDLfizzKrP_KxKvR9NYf60O2RPTbHolEVoYf1CYIqM","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1hlFKM2gWPDkQJnGjBnMUvdqgZKXFc5ze","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1R5yZlQXAVtgFkBtVX4OlojvR-VFKRl6UG0noq6hP534","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41826269')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41826061","order_number":"3959","ral_color":"אדום","production_date":"2026-06-05","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1x3ciuv4OA7sKfvrSPW6KNbBgzcihk4H9W4se0NPSQ6M","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1PIPylARlILXAHlFzKvT60ZQ8G1zlUmV-","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Sd9JXrQ7d8aHgPTj7xagSgACyB-lmniUvCZVl6N5VEY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41826061')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41825763","order_number":"3995","ral_color":"9016 גילוון+יסוד+עליון","production_date":"2026-06-16","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1vyNiyD62AhsesNvvs9gISeK9aiibsheCIVgetU98vG0","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1HUBLKiReZiAZDk49J6D7KmWaSRNERdEF","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/13IrDyApVxALzPZgO_vGgTuisZJCJaSo0W4pJdKlTqqQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41825763')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41825623","order_number":"3988","ral_color":"9016 גילוון+יסוד+עליון","production_date":"2026-06-12","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1vRrk2tdBYz2_QkvKrd8p9ax85wexEikuk7wRrj6nt8k","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1RsEE5gHR32tY8Bnq7vlMj5sAoXDIpu7I","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/15obPV54deRy_CVl7zanW_H-TPLkBfb4O","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Wquca3cUbcOQlBvkpTdZQAaDIK5OtafWpylYKELQTVc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41825623')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41825357","order_number":"4003","ral_color":"9016 גילוון+יסוד+עליון","production_date":"2026-06-18","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/172ylTkKBBtw9BnI1b7UXGpCVq9_Df7YOTSG6JXSUqcA","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1lHjHjAV4aCKJZ5hkakf6QdqGbXBBfr_0","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1t4cu_PcXiuolqAwvhBIXGBa7ipw4Z5vF6lTtb_ypbvs","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41825357')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 29-31' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41825037","order_number":"3939","ral_color":"7035","production_date":"2026-06-01","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1m3eXXLfZc5DNifun4U-isw9M1p8Jv9FCrufOtcrgZrQ","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1Y6ByE0uYzE_YJ0JfuOPXHyaxKf0oyRRh","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1xdoo5zAJAb2L7XBlvvG-DJ807iZJkg0XEvxghF5kAfk","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/122xiCGOTYWLd2vv7sGPzsQW2S_BM3kcW7ZTPWZzHqUY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41825037')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41802559","order_number":"3933","ral_color":"9005 גילוון+יסוד+עליון","production_date":"2026-05-31","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1EUkz-4Z9EZhgqMTnAaPGbj22V0nfoIVSrB-_THDIgaY","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1auxsyBVoBHiAwkJFrmtgk5X_XDcUfJZo","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1ivzR_2IY88-Q7GoyHnjCOMXZzJ5YTVmrYW2MGysUF_U","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41802559')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 34' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41631987","order_number":"3934","production_date":"2026-06-01","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1_iuralAKm58Xg4HqbMc5n-KuQfdJUncpiAu-EoBApqY","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1vQ7Te2K92obxLVnxvVVi0qsQWWAjT5iz","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1NC8Kvb0wlfaPpi3kqcQqahKhazuWIjHr9aBYzgQItlQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41631987')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41624483","order_number":"3944","ral_color":"7035","production_date":"2026-06-02","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1blfW1nedy8BAgwzAtVdri-SiKGYgmCEi4ThEs6nm1QE","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1pAEoqqlz8tc0_W4GYXLHA-JAYHzPU7wF","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1ifAdhAGR4-rMiblrtEwWVocXUCFN2INZNpmdKZV7qIc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41624483')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41624395","order_number":"3930","ral_color":"מגולוון","production_date":"2026-05-26","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1U3HhqtSHAaytE4hRqqHqQ1Xt4bS64UyFCzavWjCPH2Q","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1H0TP4oKsVOS2dVWQwIr_FYatXM8rj7c4","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1HaoOuDZ6kUqaiXOt8nalYvlGMRUyP6mKFxu5OQyKOMw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41624395')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41624327","order_number":"3960","ral_color":"7035","production_date":"2026-06-05","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1csGTggJvQJRI1f1mIhxDq-NlgHIWb8Lgpqj0eEvkbDg","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1FypPg68hGLQytiUyj4vmPn3Kp_eu8RNd","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1OUyRTKEvT1a6D3Cfq2A2io3mqS5XjJVXdJH13zRixaQ","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1sda3maPRTsBEVUiJu5TekohLRGcq6tZHMKyDqqKLYQk","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41624327')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41624261","order_number":"4008","ral_color":"7035 גילוון+יסוד+עליון","production_date":"2026-06-25","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1-8k7qPurfvq1FTvv-f_rAsB_ifEa3Gipwo7z-c9UBiI","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1JrP1q5dDAbNmEyyOxwRWRd3iPHRs1so0","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1cKLSiugl-FdId6x3_WDEXbkiYfmCVR9dzUHbynAzHyk","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41624261')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41624113","order_number":"3929","ral_color":"7035 גילוון+יסוד +עליון","production_date":"2026-05-31","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1aRTtcoDXnFsMKkjcK_oijZwMq8g_M6cAtKSHtDrpoNQ","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1kTBBHIWK4wq5879cNIKxMJ3wqV9cZ57w","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Vg22vy59nYmmGSqlZjHdB8ClCddO98UkaH7BjDgCuW0","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41624113')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41618961","order_number":"3945","ral_color":"7047","production_date":"2026-06-02","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1L_l3HmKbn0XYw6FmrakpsTK3lmIpU8KInyqabymvyP8","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1I6WJJ7DpQnWpstiVKwpV2muVlZ1e1A5k","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1hKXXskplaGOPDlk-wXgN40tBWzspqZpwEESNJCkcQT0","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41618961')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41618481","order_number":"3928","ral_color":"7035","production_date":"2026-05-26","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1osc9sTuBSfDVZbl0nr9o91m_7Q-vgMx73ihFYoJADtU","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/15aueSp4tAZaW0xqMZ-CxdHztEF6B1PUF","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1ZATAAhE22f6WWgkMNJCV_JMQ4Rjd55AVvnd8xEUIYJk","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41618481')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41618231","order_number":"4049","ral_color":"מגולוון","production_date":"2026-06-30","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1LTGwz2NH0rmw2B-M50eR5OT2qsywrDVkXq5CD4DXAGo","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/11HmuL_DqhLd1cxeNQ-vmERilZGWYvkU0","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1diKfRbzQcp1gaHO5S6gL_5Ps83QtnoWP","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1KePjAtiR1OfZ-WF7eMIuKxf3gxedz57ScrXKfFoZuUo","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41618231')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='כוכבי יצחק 11 תל אביב‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='udiohanina@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41573005","order_number":"3932","ral_color":"9007","production_date":"2026-06-03","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1_4OI9LFiQW5RowjLMnsSUkKuF3eIsM28C_BQr42Mzv0","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/154zC9yYASWBXozZ9Po3ghaim2qEix9fmE6wsqsIS68c","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41573005')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='תל חי 9' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-04220a1a@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41566901","order_number":"3963","ral_color":"7022 מגולוון+יסוד+עליון","production_date":"2026-06-08","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1-fsVrYyNFohM4FxzPoQgHBEaGi7ZHgZhRPGg9W7AL8M","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1b5b3wFcD9jm5kQ6bKt0in-lIm7m6_JYi","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1bJup9i_AgzsVogGSbDDjxTc2ArK0EmPHmpUhRUyV5G8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41566901')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בית ספר נרקיסים ראשון לציון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='afona200690@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41564973","order_number":"3924","ral_color":"9010","production_date":"2026-05-26","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1B72qJp64vagy5-bZEDsIWsgR6RZNUkfeF08-npg4irA","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1YnBONM1fTDDLcIXxq1dsWb17Fz00JZjx","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1suUvoevlfT7IwqPHUaT0SRyxgRXBjRIc","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1I03VwLfzSZRhHJ1pbQUavzEq0mR2jvOKEoftomcPUc4","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/157f_xaRBpK6jUnCDOUraIHlSk2iDGc2VLMYh7ZbVmIk","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41564973')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41552069","order_number":"3923","production_date":"2026-05-26","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1a47Z7-xRBaY9BVYH2DApF_spEmqJbEgil9k42Ge7l7g","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1qkkmFxjgZugVS7GepP_vcFIpVj_k2cy5","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1o0VxpXBBhhkj1OEl5zLQVNw5COsG566lporPFLCcE7A","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41552069')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מינץ 10' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='udiohanina@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41541667","order_number":"3955","ral_color":"9006","production_date":"2026-06-04","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1kcqFjCNHNvzLhxlTPszVlNH_bfVlfQiawEUMtcGr7pk","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/147z-i1dCfLXeUiDzpQDcIWO1qW8lF6Gb","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1yHqDUjQmG1HsBO0dzUWOYaIzU39-GoP5Ib89xN4g5mg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41541667')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אלכסנדר ינאי 15-17 ת''''א‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='liad@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41506040","order_number":"3918","ral_color":"9002 גילוון+יסוד+עליון","production_date":"2026-05-24","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/10LuNPdAJwIuICIKekDf-vPVmD3l_-05BEnHpgAjjYJ0","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1OHrKqppFNMSznDiBxpS0vK5DnnrKI-kw","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1uAe5Nw4BiEw0G7_c3bpLVeC1-6QCPs0R","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1nUklAq2BbNvmwYQus_yH7TjPUfLsa65V1TiFvSJ37r4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41506040')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מול ים יפו' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41504954","order_number":"3968","ral_color":"1015","production_date":"2026-06-11","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1osj_RGDGK6_Msn223UFf1fZ2-UnpAzyismliMsVhNuc","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1Lp7a2JxPWn-uBw-xv9vSu4jhqlSrbTHN","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1p_y4bCfrhgEJZs3rm0Nu8FZHH_wwyaYHjfalWfrt3xg","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/16A6fJbIMRmqzX8LypA95f0XHuJVE7nyrCq3QKNkcyaY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41504954')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליפסקי 18, ת״א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41501682","order_number":"3921","ral_color":"אדום","production_date":"2026-05-26","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1Uw4N3XLraHzo1Bnc267k7CPTSsytpq6q945y7aIkI1o","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/15ZJPg_EuErjkUxhLM2ufsuyc5AAO5ATn","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1dfIn7tvf38Uyu2QodwsxcI73HWzcfQaKTLvggGUpy8o","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41501682')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ויצמן 21 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='barak@nofzameret.co')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41368544","order_number":"3926","ral_color":"אדום","production_date":"2026-05-26","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1Vo4G1HQR50J4smm9WbSM02cUuOoHaeM-xW73lj6diis","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1N8eVtjPTcnhoA4ZvYe60EEvg45hrAffj","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/19yfiUgck4GWcaLrpEzk_zJHbAL4xG9L5CC08S6YKnyU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41368544')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ארלוזורוב 5-7 בת ים' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='roei@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41360390","order_number":"3973","ral_color":"7030","production_date":"2026-06-09","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1YTEb5awck4tfrOgEE0lGjkpxVHixtrXMXseL1HHc2Ws","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1bsoLGp9sUIR6PH7o-8fX5VKrhuqsfeRN","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1LP8_MYyW7vL0Hv7nka0O6eH2xO3IINOMFrigy_zGzX8","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1StPtuD96NGI14IGRrlb_7JlTjK7m4SLnxyxFn8AU3bw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41360390')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ארלוזורוב 5-7 בת ים' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='roei@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41354502","order_number":"3946","ral_color":"7030","production_date":"2026-06-02","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1WlqOpxzHFcj5ud2094DrUOuLmOp0fGHAHX8PZC5pYzU","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1uDCjgwke9t_osLBBDRAty97a4aVfQ5M9","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/10YlXIUCzLsdm0OSmK7wohmOJeN_hVpLPWcQ1F1wXAPM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41354502')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סמטת המעלות 3 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41352422","order_number":"3917","ral_color":"אדום","production_date":"2026-05-24","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/16i5oEXTTDWmMPbWLi-v2Ot847-db4EDxo9F7H74yiIo","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1ootF-aPmNb1QlFx4roocOQYylNjX_yC0","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/13TKdE0wV0tWuYSbhSnTppeu018vEMfz_koeHi2OhnWg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41352422')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הירקון 70' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='amirr@auto-chen.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41334528","order_number":"3990","ral_color":"1015","production_date":"2026-06-14","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1dEfnmpi-KgYQ-d7x2A3sptao0xKku9qdWIt6-gpuZxM","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1oaPNLhi0n8HabShTJKA3deIxO_JNAGTt","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1PW6G6xlDgdEwyYFH-hHYgmmFmIbFpMN9SyPOwwc4uUs","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1KjsrmXzHt-FZY2lRoPPOgCPgscG2oBPBF_tZFJyJGws","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41334528')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='החשמונאים 3 רמת גן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='bar@ferrum.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41305736","order_number":"3920","ral_color":"9002 גילוון+יסוד+עליון","production_date":"2026-05-26","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1BEtkpHRgTbgsKV_VxbgV46LUguXQgqFe4-LG5GZigDk","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1cxai9jKWnZs3DDhTFPrZC5IgoZme5_6A","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1lDhNeAvFNKgkKC-NDLP4PnqrEPmsRwfbkmWEYqBmkqc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41305736')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליפסקי 18, ת״א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41305442","order_number":"3991","ral_color":"9005 גילוון+יסוד+עליון","production_date":"2026-06-14","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1yYzw2s6NwNNuciJSmYeEUV77nsoNbm0xQpMtysJacpw","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1lJIDFiUtVIWDyy_rgA9NSrKQ7XC8mpQf","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Ejrfj-4Hl6PAWFm4uZ84cZxWpiLNf1NE0OA9UuuHL8I","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41305442')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kostianaaman@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41300682","order_number":"3908","ral_color":"9006 גילוון+יסוד+עליון","production_date":"2026-05-19","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1YowInWvk1p3loKXJSk8gkqSGIvBztE-mQlEXhwZXt9w","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1M0IYAB8HgVChGCZunEac_P2LWiZsSaPL","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1HPZ7Q21daAuGGjljk2URabnSEiuVP7vfPr01IN7YlYY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41300682')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='טרומפלדור 33 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hamudi@mo-lu.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41288570","order_number":"3910","ral_color":"7022 גילוון+יסוד+עליון","production_date":"2026-06-01","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1NuXnAQAxttq-Hysd7S7xHbm-XeuNoptzbYM9Mbp1V5o","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1qVBM6hY46AZqsAQHBqO_BRyN6jLB5I7K","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1XH8XjliO96aHmguQaNT1eszYhFyvU2RdUckZp_l2ivc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41288570')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בית ספר נרקיסים ראשון לציון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='afona200690@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41280176","order_number":"3905","ral_color":"9010","production_date":"2026-05-19","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/15a4LwUP10Cl8c2K04oc9FYVmY7q1dIze_TmZEbsWWIQ","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1XnZrXyrjvCcIGc216eEhHWF47Jxm3YwC","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1qdJIgCHP7f5jyljMM7MNEaNG-qdOmLt2tEt4JpGHbWI","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1ha78qz9SeOSTu05V3glRkQUWrY3MmHlFIIWbild9UOY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41280176')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רמברנדט 36' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='aslam.a.m.tavor@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41254924","order_number":"3974","ral_color":"7022","production_date":"2026-06-10","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1P6CRJSbWySfqHcrf8IwEqr0WcipKkK9OxU5eNzppvCk","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1EwZgHI8Q8xyDl7956KJMQLWOCsrB3vFj","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1GMYGcm_pffo1fladMpobEXAVar6HFkvf","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1ipzwJxyeE8kvPmWol75yRW3iaI9pMbkh05L45uPdCwc","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/17-LRiqeV7URrV6byd26fr6jD-b9IUje3NyzQd9IX-dI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41254924')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רמברנדט 36' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='aslam.a.m.tavor@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41253960","order_number":"3953","ral_color":"7022","production_date":"2026-06-10","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1JyW5239KV6KRfg30M-ajQU4KVEaNPuwWBf_OL6MD5aI","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1fNsn_qLRAStgD_oNEPYcQqNb179kJ6zx","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1k7Tmqw9P8yfbWwDS2NyYVAZBfp3KKDej","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1fixYZxQ6Wj2yy1Ymf59i4FI2qEtWTlpMyicqlTiM28s","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1GOVwJ_sW_QWvMJ5itGjIqBEm3Zet87kuylPs4Dcxr7w","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41253960')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מינץ 16' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='emil@ecocity.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41205350","order_number":"3909","ral_color":"9005","production_date":"2026-05-20","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1RPHzTkRyRUrIH1fR4bdg8G10ju6cIHnjBTIE9nJEYD4","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1YfCeCCFWUF0gsFZ68BFf8l49KS1im4qt","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1GfeqvgWSFMZ7erhLF2iVtleLCp3_HlIOtz5Ec5ULcjE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41205350')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41204320","order_number":"3900","ral_color":"9010 גילוון+יסוד+עליון","production_date":"2026-05-18","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/16qtwfOfHNR5kPwhAzHxRix_qQGMs9VEXy0zMTtdDXG0","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1zgTtu2vL1svkYZZMYvlBMrPUH0dQ7JUC","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1FkdLT3BwVxzMVfyZ4sx4ASba1d-iPu36vivLNTvnAjg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41204320')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41203908","order_number":"3899","ral_color":"9016 גילוון+יסוד+עליון","production_date":"2026-05-25","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1prdIi2O165jadoyWtLvYHqhs-3v351hDdH91z4SjnUI","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1gZGg3yFA3jousFYBVTZ0LTDxR0sDW_6i","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1cRKe942xBOfKtbsBEQOUI1icOixIMIK2xw6jjY7f0bc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41203908')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41203630","order_number":"3898","ral_color":"9016 גילוון+יסוד+עליון","production_date":"2026-05-18","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1nEYKZAcOgvlikmYrtfIVl9ivIMk-XkEEGHLMlIKSIxc","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1pf3Lgg7NXuLYiLDjLHEqrwMseRO-Kyno","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/16UoNTnGHAhgRUrDmwIbbAaLpy5fZ7l3ccAb-NoR55z0","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41203630')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין  14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41202936","order_number":"3896","ral_color":"מגולוון","production_date":"2026-05-18","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1NcHQq0Oy1LhVveSEfPYAgH6kPoqFLMgUonn_9uNGDt4","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1lL3Q3vI55XzsghY7TC1y9Ux9Mr7wrQ8j","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1r_uWeagZ_9cybIZ0-ukTBwfwHyydvBpzP5Stmo1FReg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41202936')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רמז 36' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@yanush.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41201250","order_number":"3897","ral_color":"9010","production_date":"2026-05-25","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1ElPu6jokYRiGGo7sElCvKLfWdDuCmcSQQE8oZSViwok","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/19YWL5OaPZ79DsFpA7C8WFfPv0AVzVA0N","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1ozFsRKp2u13VmqayFuSTD-eLSEF7WGeuM09KbipagyU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41201250')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רמז 36' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@yanush.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41200602","order_number":"3895","ral_color":"מגולוון","production_date":"2026-05-18","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1oEgtwqWCl-jY8DT5LVKBWYitn_9i-lbBNYjXXtyiO24","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1_ERI9NWUU9TohIltbYWnIKNDM6eEWDQt","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1M-SlAY0pphSOEnXq_fpfO4CzQ3AbhGHIzAwJxVM9Fog","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41200602')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אסף 17 רמת גן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dorefirozen@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41194274","order_number":"3892","ral_color":"7033","production_date":"2026-05-17","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1msf_b8lVOXG_2XwhMtHKa9NiNRTu8xdviyKK_URWuGw","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1TDszvxpGB3KBaqgdlUfHPHzCWsTw4sRl","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1rcLFsaD3CLnWMwgKdd7FqPgef3omRot3U6V0y6iZRR8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41194274')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בית ספר נרקיסים ראשון לציון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='afona200690@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41186540","order_number":"3919","ral_color":"7047","production_date":"2026-05-26","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1nkRhoJ0HR_EZj8QuKGnHTqeGuE0EUmDyu3fX7ALLDdo","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1qKFD3MzCAuTfLRN0l-liIu1t9s0hLo6W","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1nCS5Qp8hbHQS3rM2CNGZRcD4UP8qQzRS","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1hjBeKiJx6y0rO-WHpyPexuhKv_NG0M8pm98Yax0Tl6U","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1ldYLA5IIVp_WnygPaO7fMoNblpkvWSOEwpaQvg9WNIw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41186540')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41141586","order_number":"3891","ral_color":"מגולוון","production_date":"2026-05-17","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1ll3DDF0jZkPlr-Eww8dV0uMprr8NiqREUMP_hpufp3E","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1e_fn6mEooMWkTLqT0FSv_pGujaUQ5dUc","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1b-Cn8IX4s2-g_T3tsRPAr44twIZvOoYjMKbDlbVBJ2Y","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41141586')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 3' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='emil@ecocity.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41096950","order_number":"4035","ral_color":"7022","production_date":"2026-06-25","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1QgqEjQBrCzwKTavM_CqrKhLmWGFflyQ57zNtmSG9S6A","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1hDbZAbdSV70BQviNcD0xk7024aYip040","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1IIoczgQoIrL1KNtb8k4jhwmDSNVyRtRKHFN9hEEtrDY","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1MAaZGf5e36LuKmYzCmOhYdtQLqQjtW63S-BITsCKk-I","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41096950')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 3' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='emil@ecocity.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41096818","order_number":"4036","ral_color":"7022","production_date":"2026-06-25","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1Mm3yFEjkqZYll46jrO_CEu6aaCJ4SlQSo-M4UQu36C8","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1RxX0jHC8TqRh_mNZJlahcBuRVL0KPWcU","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1xYdThl042XK5kxh50qOh7x_iaPJ3agbhWifElebFi6s","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1sagibvFt_Se5__N1PFNCv_I1Ax1OjW_LKVzMjVsUzt4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41096818')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אוסישקין 74' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41096584","order_number":"3913","ral_color":"7035","production_date":"2026-05-24","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1ekebmXyzB2T_EM5N4ORaFgS_dMl0nOetcsclPuLTzes","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1u5iF-WKe8rUIZhIqOyJ5LBblNzobgjBj","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1bYoeldx5EScKc6i9YHCyPWJBoeTxNaUM","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1kENnVbkP5UAGtx3Y3nfLZeiyXjCKAWPpyj1dqj5zlrM","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1pvW8Wc-kGo3oR6weYQQ82J0jI-6IOITwLBdAcmbtXbY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41096584')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בית ספר נרקיסים ראשון לציון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='afona200690@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41078518","order_number":"3903","ral_color":"9010 גילוון+יסוד+עליון","production_date":"2026-05-19","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1NPID1CdlInWA5sF9x6JwnrJhOi9mcGMf4DPXV6rYFtM","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1sHneo_LBcI5RCctCN7d6_ggrQNcu1gvi","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/18grEnXctXDX9eN8t7iNB3ptoazhE2I7q3R6HCTc5zIo","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/17WO6SKvXt8qDJ5RrOG0yVmz_1NqsGtzd4nan6klGX6U","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41078518')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ארלוזורוב 5-7 בת ים' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='roei@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41069184","order_number":"3884","ral_color":"9005","production_date":"2026-05-14","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/14o7bAYLXsghy-fpJKoe9BNanu-XzIC34B4PxWze6A3w","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1p_d3slyrWUC978Dsk1XergubgD1RVLob","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1hIdv2bZzYJcdytK_JdlXlWkqTvVXPGZwLQDA-KEVXNA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41069184')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41064732","order_number":"3883","ral_color":"9016","production_date":"2026-05-14","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/1b3XvzELJDaa_6oyARk10u4r-4wU3ofNHlFkZ00EhltM","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1ITn_wCEVb6XfNxtWjkVQ0W3amVtepAf6","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Q_o_idY3FtE9BOzv7LRUwM_VYZJKCvzakjFdprxS2Sk","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41064732')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פישמן מיימון 16' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41057580","order_number":"3881","ral_color":"נירוסטה","production_date":"2026-05-14","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1CxJDKk4jcThOGRMFijrGY10jp6gAL2zp0jHbLmpNPcM","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1RLnZZD9SAm9Oq4KKGlmK72FzFBiYXKpx","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1KOaG8OUgVnPmodQF2MGbqK0FxYS8YVCteJ2zI1uZvkw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41057580')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מוסינזון 18' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41057024","order_number":"3907","ral_color":"9006 גילוון+יסוד+עליון","production_date":"2026-05-24","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1yahEyUifyRevK6lphKV0cql_77b8Ov0m0XRzRJE8lJY","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1F2O-Ydj0Jspj5iwfrGNyEch3au2kDpQ6","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1VOPgLkqWt_mzK6wyGMQBqDXeoYDXu3_oDjIELpbQrUQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41057024')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הלסינקי 15' AND (er.values_json->>'client') IS NULL LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41054630","order_number":"3889","production_date":"2026-05-17","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/1jHoCyB-dvgXeNDzDeuKH9_dxdLkCuJp1oz2uCP0UV_E","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/159LH7DyLBkswwphJXtgn8mnNOlBihZ9r","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/15nPCHChR6XyOs1L1ApseqBezTkD3oIbe","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/10ATq1OIBWPRmrRSpSvgMOyVWUNqg0TWBzcuwzSlVdVI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41054630')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הלסינקי 15' AND (er.values_json->>'client') IS NULL LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"41027222","order_number":"3890","production_date":"2026-05-17","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/1XGOWQSLUHnXBFoJpOOrjN7lCx4k2vw6FmGsbwoJh8Ms","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1-_bqIU44EQCbBKUDnKA4HwqElJzkBVvG","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1Ebab9IhN10yeSVQaSoURC4EGEzbl6vcR","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1b0NEzLVwUhyvKsXLPC5yIAQ1Od-04tjBqIbFImMi1zE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='41027222')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ז''בוטינסקי 105' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='yeuda@atias.org.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40905324","order_number":"3894","ral_color":"מגולוון","production_date":"2026-05-17","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1XtvFRhRbPKEzq6TTUIAy_EvJlVXcyYZ0dDjBLuNcrR0","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1KITJ7nCIKMDe0DrQ8l7HDVFeg7o8xvCf","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1vJY0dbZ0LnKEH6FVYyKQ6gCyYjU1rok_NxMJy3rR20Q","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40905324')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40874838","order_number":"3914","ral_color":"9006 גילוון+יסוד+עליון","production_date":"2026-05-24","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1yUO5GT5mxOT6d6joH8-ogofqhUrJj13AbzBgGWQU90w","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1YbposGVBHrW_EYrxMnEF3KzNWgGD2CTx","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1y9K1DQNt3liwx9jsiFqQddDlpVGIp-9JMupMptanaEI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40874838')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='תל חי 9' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-04220a1a@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40867920","order_number":"3981","ral_color":"9016 לבן מט מגולוון+יסוד+עליון","production_date":"2026-06-10","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1NIiMdNXvsK4w026ZZ5n-ilgJMfLp545WNmvLHaiVTp8","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1wNd5b3D8K_lpw5QYg0Kfaxlmr7dsz_sS","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1tMOd0wFSU7veBAwhLmZAWZDQHjug1kJsnWEeQgFpXRU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40867920')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 29-31' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40849802","order_number":"3882","ral_color":"7035 גילוון+יסוד+עליון","production_date":"2026-05-14","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1Mb1HkVdanoIW-nfVB1vhOl9yTaFI3YyvhnG3PnKsmDQ","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1MdRR8sZ6jFo0C_q1DAiQlz0cZNuzL4ea","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1to3dziu1Q4x51QpsUbQrouaHhLj31v5YHBcOjbA3agA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40849802')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40844290","order_number":"3997","ral_color":"9006 מגולוון+יסוד+עליון","production_date":"2026-06-16","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1aJiFxmauh_OUC1FkzT3qnqgef6sWAvay32XL7RnjGtc","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1JBV6y3rTecWcLkdYOoA6_S0pYVqUErTn","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/144vUegOnQazqNxg9E09t7-VNwfDQMq3cM1Hix2BqA8I","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40844290')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40844200","order_number":"3964","ral_color":"9006 מגולוון+יסוד+עליון","production_date":"2026-06-08","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1krUHvDTe1o1ZMEWyWO9tmp2QaoxpQR8pRlgPSCogYvU","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1gZdzuTqGvFjhZtwDrg7JGciROdTpOPlf","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/11QWzSQUMSVw8MgXzQuJPDFIZquOkiOFVWVFlDCKSZAU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40844200')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40843920","order_number":"3951","ral_color":"9006 גילוון+יסוד+עליון","production_date":"2026-06-03","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1MhWrf35GNZLRx3q_RQQFzwHDrFPgzxk3LYyGNL1icDM","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/15aurwPWHv8H0vZcmLhk_D0NS9QdEV2MZ","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1dxaq9qE3AyjOIIZrF-XN1J2EpyGOXuWgpy0G5MD6FQg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40843920')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הלסינקי 15' AND (er.values_json->>'client') IS NULL LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40820688","order_number":"4013","ral_color":"7021","production_date":"2026-06-21","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1ss7l9AA7JYJiSTcfqH-YtDxoQq_PR2ND-dEUksfy99Q","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1BouWTBPf0Ma9KmrLwilDlSKbZDOtc4Os","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1ktukyc80NxgdyFUXRwCU2yO8N-ccpcK8","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1GNk_faFabFIwLuWO1fRYd3OQ-xHvL0OajLRjPnqPsQU","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/13m88rfxGBmqap67Qa_gHf9ZpzHkpsA4Mdg_Ixc4sOf0","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40820688')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אחד העם 108' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='adi@sharbiv.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40820036","order_number":"4009","ral_color":"9006","production_date":"2026-06-21","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1aX4HBrMuFrnNIa1t2WU5B_jVfza7FcPtOSghI1TUWnY","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1nhtoSK17ER4ponqWsuT4LEButbbrfKB7","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1FKXK8i-D5hIEETKZ2EyWweZxNk61cTdJHdtkBVvcJCY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40820036')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='חדרה 10' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40819586","order_number":"3885","ral_color":"7039","production_date":"2026-05-18","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1GfOlQNbWLk4xF-6TVI1n14kDwDsytmzpR_RTWQyqiWw","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1EiZwJD_l4ca95YyGpJLDbF_wJDGJCK04","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1pioU8qyant4w8pk8vwC4cTeGEPklzr6_mW7Fdjy2miI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40819586')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40818480","order_number":"3871","ral_color":"9006 גילוון+יסוד+עליון","production_date":"2026-05-10","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1A_ohQ0wIr9G6GgCDeM727zR-yB3QQmeBTVkRF3Sl4Vs","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1iSFr0-d4-fQYGp6d1z87xhpULCJ0UOtq","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/125nOTRqb0FbkmlbCpYpxLVTt18gLYpW2bIn0XloBSAY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40818480')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רמז 18' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guy.raz@michalovich.co.il.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40731656","order_number":"3868","ral_color":"7004 MAT","production_date":"2026-05-07","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/11BPddpeZ_Mlbrec1sHhLB9E9XyK-PiYxmyumEG-mWOc","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1VohxKY-tJGNi9IADdErM3YWoLJ6_fYqR","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1l6KAQVc0b-_sIDy5iYY_075NX2Md38RhLksDKD6N2xU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40731656')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40715516","order_number":"3862","ral_color":"נירוסטה","production_date":"2026-05-07","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/1rUc_8_zNXJ0TqVXIOebUKLemlQXkBu7Aqn7J0KY7WX8","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1e_MJoK5oVtOVTsMJNBFSEml5u-DoXmmJ","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/17dLpFUMUmsnVEBPD-Kdh4fLEYskulJ2by3PaJAf5LGA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40715516')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='נורדאו 65 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dor@rotem-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40699892","order_number":"3876","ral_color":"7022 גילוון+יסוד+עליון","production_date":"2026-05-11","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1m333qQ_zGplzRHrx8LKjsCdT61006ORtj6ILnmV1D9w","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1kqp30wbHcnEZ3jdf5mc9XwurX4ls4Uye","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1h0T-jSvngjUoq1VQyhnn5bWe0WT_v6QNl7LFptzM6TI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40699892')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='טרומפלדור 33 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hamudi@mo-lu.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40678446","order_number":"3915","ral_color":"7022","production_date":"2026-05-24","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1fCgbHFQTX43287WxMfPMY_DO_RTRl9bQJMJVJ6ehRnw","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1qW96mtyZcmnU95RrA9LkGSCelGThmn5z","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1sk6Lnr3UVAdFN6CgDe98ObxAVDwNcahP","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1e0UJHwypp7TPijluEv7IpVCgm2KqyP9qXp-lVxtbLy0","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1AyqLREU1dIddAKwpZoo9nRF6Ekzr7FlUZhpi3TlIyCk","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40678446')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שם רונן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dl.olega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40660464","order_number":"3872","ral_color":"9005","production_date":"2026-05-11","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1w4N7XiXpqEaZn6ffathzyrPS0dHnAYWMFWY9psPmUs4","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1WuaPwMtZ9SiiKZvatMLnoNQPPA6OW0Ke","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1h-Zire22VIarJFjudqeQ5hYot0mgrIGRiN9vpfc-TfQ","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1wjyXeIUNuJ0KhFApCXfKNwYjx1aphV_jLGMLJEac7Ow","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40660464')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אוסישקין 74' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40644292","order_number":"3880","production_date":"2026-05-14","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1DT02Oj3Chj2RpQyr6Mag2umz5xHlmi7I7209RU_3qe0","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1eZCgdV1sYfTR2dMQ9M-tooeZ5r5g-FOV","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1QGtOOo6EcjtZEnMIWfVpSFXroN8wxASE_AB3p21bl1Q","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40644292')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דובנוב 19 תא' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='motid@romgc.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40643976","order_number":"3857","production_date":"2026-05-06","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/11iPHlP6DRT3d6Jt-8DorGOstw2ZWJX_AvDe6yASp7R8","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1ugtFm_L2ZP3Mo8T_J2-0by1vNItHxKRk","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1cZFyjmVtnCMoYargWiTzkxQUFez1hHfHH3EkZHovWmY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40643976')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מוסינזון 18' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40643466","order_number":"3853","production_date":"2026-05-05","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/1xQq0eETkXILPKAk54hWjjqKWdgm7WeQdBAtNBtjNxzM","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1hhtXIW0uWpQ3HsRLDmJfPwiUBzHn7K7f","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/10kI0T7DIQ8qV7eZQIu2K-4Gz0BJcLA7rpybdUDPwVN0","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40643466')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 48' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40643200","order_number":"3906","ral_color":"9007","production_date":"2026-05-19","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/10QVslaX-Ofx7RxrnqUAMFW05NZRKFffQ4_KJh_Gtz8Y","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1QIx3OvXwI40hNsnlcUfp-mj5wPfnYUMm","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1jTE50BSr6NdezqPoICKH8Vvsom15orsb","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1NdN9t8gDQBZ8r8YBNQuWc4IjatajBPKCNElVmUajctA","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1KWQm-xyjMCiDc3yOlHlx1nTipkumBxqtu7xpAXCKuwo","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40643200')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 48' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40643128","order_number":"3911","ral_color":"9007","production_date":"2026-05-20","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/12Rre7qKtELpyxftBMRwiYuuOdvffr7kZX1ifgepbqB0","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1BzFxn0ypiMVWmN_SlebHXDDBPvBMyiiC","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1eoOyu92QX9IAX-mwWVXx-gMym5f8OSAe","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1ElAIzxDymkGJ2xO75fohyFF1nxoigICywZOlKRxJK1Y","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1MAYXLOfTv3pSlK9_mks_Y4tZY3D0-TVA2T8JzkALqWM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40643128')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הזוהר 7' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40629792","order_number":"3875","ral_color":"מגולוון","production_date":"2026-05-11","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1C6IQQIW4g7QmuR58SzyVqmiDQlWrtZs-fnaD6ABrIAg","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1znq3ZmZ2oXzLoTuof3Epx0U_wZ1v85HE","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1_w_1Ek5SMcby_w8sQEqqS0lp6J0-PPiG8SY3RNhd4UE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40629792')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רמז 18' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guy.raz@michalovich.co.il.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40614832","order_number":"3856","production_date":"2026-05-05","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/1WNkkcq_3hCa-OzUkMsGlGOB-fuP98HLMWyWWzMY99QQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40614832')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 29-31' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40613868","order_number":"3874","ral_color":"7035","production_date":"2026-05-11","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1WMJM7h3Wf8NUo-2dy0udtOZNZYDfG2o2aZSrLKm1Rt8","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/16_sk4qBI7bYfKBe-u8jOPCH8oK-sTc67","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1i1k9e5O0n3FlpFLMdtCDAUKITVb5wpW1","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1mZMfAU_XY51LBwwHUWkjn7ROQonZe_6w_s2P8xgHFdY","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1X04IqgXpNxi-jqKytgRQYPAo9HSZNj8e6xNIBUj-iBI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40613868')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רמז 18' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guy.raz@michalovich.co.il.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40613022","order_number":"3873","ral_color":"7004 גילוון+יסוד +עליון","production_date":"2026-05-11","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1Li82vvsaap0E6dn5ZINNZ4N20mL-XYuaTxPbbUIvqDQ","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1n8rNpDBOySrQMyNONr0-N6ht9V5G6Yz4","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1yQZi9KI0IsAezzJpjU7bjp3wHD8alblNIEzfgoTOCxY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40613022')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 52 ת''''א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='roei@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40611480","order_number":"3971","ral_color":"9011MAT","production_date":"2026-06-09","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/14v4DiD43hxPLd3Rbt5GvI1HvcPLky3lXJEvTsi19AIY","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1nyOCUHj1bb_tSR-QNpUedqrvA-7e5nEJ","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1NdqLQf4GX8G6f4id3Fz-PxnEUYCaryc2idt02TimfLQ","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1m-AySAIBjtn-3jQ374Z2SKlIK6bUFNGYo6LECLbO5BU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40611480')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פתחיה 23 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='daniel.aronovich77@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40582068","order_number":"3848","ral_color":"מגולוון","production_date":"2026-05-04","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/1UBU3IX03mHsMW-zNUVjaa8_siH93B3rvKFV2jT8bihE","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1lqh8rxkdtJ4gAugMzMrb3NjEH_Abe3W1","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1t39BETNhdHfb9Fd0HLgH7_Ahjww-Wkm2WlBOvy9LpvA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40582068')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אסף 17 רמת גן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dorefirozen@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40573068","order_number":"4005","ral_color":"7037","production_date":"2026-06-21","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1ZmKAMTnOzEo3gnPWftMpqABBfGSBPr-LcEnY_sTUl2M","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1m1J-vR_Z9cJuyKezk_jj7gq-8a5OJqSB","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1Lw4XF9zjAEBaRi1wYtrUKSgcSUSL5yPc","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1VZMQWiMc2j3Z4jC2bReVghyZMEmrrzu8pbK0kImmRNw","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1XMbZZfRQXojeS5jNHAbOhSmCwCHC0f6KmfLmM9cLrC0","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40573068')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אסף 17 רמת גן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dorefirozen@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40573020","order_number":"4006","ral_color":"7037","production_date":"2026-06-21","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1xpi3f6wCmLr7NpRE8nwEXopz382UWI4XwMt5C0AuV9Y","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1kd9vyeHGcmiXjihp02PSP8s7aINA527u","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1p-BfuXt1DEzPoSwkblf0BSHC1AgOWxoL","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/19h_jCuRjzYVaePnxe0Q9dbzcpdT0_Ni-V3ZigZg5WL8","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1vA-NM_0HhocNSHNFWsjeYWLJLGJ9OrcnjFNvPfnFg9c","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40573020')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בית ספר נרקיסים ראשון לציון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='afona200690@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40572398","order_number":"3865","ral_color":"7047 יסוד+עליון+גילוון","production_date":"2026-05-08","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1BJQroVc4q8IJB-MMw8JzWIPYim3QzpTIqt8GmTrsNrg","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1j9zX6h06rQIZ7MkvRWcYzGjXgEwBwqp-","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1FkAXDlygH9qG-aPHTTAkwbDpGi7g9a6PSwWIr0XCk4w","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40572398')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סמטת לאן 3א ת''''א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40572150","order_number":"3845","ral_color":"9007 יסוד+עליון+מגולוון","production_date":"2026-05-03","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1b4eNomps3DkVgOnXo3HTpUMxk_fClVsYlbpL2d9ee3c","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1IjqfSsNxq4lyBx4n0wLuNTNyGWAd6qZr","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1SoFaDFobIUIWBiiNQJJzKq5T3yHnZPJe86CDJxRcA7k","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40572150')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בודנהיימר 43' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ym302817@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40483350","order_number":"3859","ral_color":"9001 מגולוון+יסוד+עליון","production_date":"2026-05-07","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/18NuRb_1ci_wN2G-N8x0pRSiWtOJKmOTV2IkJ5ouCDU8","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1oxXcLvTei4t_l-wbjt2meWClPQZe9D8M","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Xv77aOs1eVqpL8f1F2cKMBS4mQv2uPLS_MiEsQOV4ko","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40483350')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בית ספר נרקיסים ראשון לציון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='afona200690@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40482394","order_number":"3866","ral_color":"7047 יסוד+עליון+גילוון","production_date":"2026-05-08","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1tg5FAmead9VxmOnZRtCi4u90tcb4_FjJhnyBq_sxPR0","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1QGeB2Zn-GjXItQiOqqcP7Z-4HSKuIRdG","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1mwLJMS41z1KPOSywCn72FKYbOy2xAt6v1zqM4qYCLE8","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1455ke9j7sz_8R9N8R3J6LOl2Xxv7_756Vk-BG2pi7do","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40482394')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ז''בוטינסקי 105' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='yeuda@atias.org.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40463486","order_number":"3844","ral_color":"9006","production_date":"2026-05-19","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/14_qmERO1amGMXVOI-b5HSY5PbHmDbz25JeEqn6C3CtE%D7%94","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1YlvpGeF4CrmFodIlZ5kX86DKLqBq0WUN","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1ea1ZT7A5TfE8sUwv4Nm2r1P7eokILnSn3_Npg0j9sdA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40463486')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40459344","order_number":"3851","ral_color":"9005גילוון+יסוד+עליון","production_date":"2026-05-05","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1xuFoPzzfsaOU8TgOAhYAZnFFynHOioSnrljahYFmBWU","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1ZQisT1j-8YKTcjsUXDisb_Gj9msTvW0c","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1SB9vLu8B20N5AncHJuM4oO6-F_goyjV9","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/172ytSja0BfcUQfLFSQe3fSGdkI0pOYRlr4R2Ri95Ez4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40459344')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40459138","order_number":"3852","ral_color":"9005 גילוון+יסוד+עליון","production_date":"2026-05-05","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1Tis-ueTZqBj1MsXWmb__5pt4m-2XTKCmZS3-4o1FeXw","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1NKcfTbbRSVPC3qV1ZS1lPZyJxMDjk8UP","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1_HFb2thmbP9Ab-xa8mU6E1PP-Pqc7G8r","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1d5AfV7MBvJvnAsB0JHWOYZ2SS8q4HCzib9sIpFISxyM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40459138')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מודליאני 4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40443125","order_number":"3849","ral_color":"7015","production_date":"2026-05-04","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1H1h1m9GLhSh2bT3ii-H9556bU5JU2FJOctMLZ3Ulouo","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1QcZ8ARSsltbIqxQZhjCyFccMZS-e-rti","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1I7tGidOc7SCFOROD1tjFOHxFD5hd5MCd3LkNdigVrvI","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1c3eNpC0g3sXXBe-iqywZAYIKvJJkNXZ5dFIFJp1pB48","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40443125')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רות 1 רמת גן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='nadav.d@sr-ventures.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40428247","order_number":"3838","ral_color":"9010 מגולוון+יסוד+עליון","production_date":"2026-04-29","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1APxcLPsGH5hXm7YrXlG3R0jnB3P2bg1zE1rC4zaTf60","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/16WpnPiFzlbKjCL72kPR1jiznpOZhYz5t","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1WmNoqFD26azJLcLNR2kZf-jxyn4p4auH0sCcA6JfE38","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/195OxC9B-FKsoKSYqkticeidigq1H9AsfHfRXxZINJL4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40428247')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הלסינקי 8' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40421703","order_number":"3837","ral_color":"7016 גילוון+יסוד+עליון","production_date":"2026-04-29","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1QDleOWA8qABkJ_JmVFCE5Ft9fluX1sc928Z8K-gj5wI","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/14hPqmNw_1k3TZgWr7Ge5rYcu4fgy-P4Y","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1X6-VjCIgHPMiwnpZMww-79VVpRXn_eKEZCR9rRjXMJ4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40421703')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בורוכוב 34, גבעתיים' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40364459","order_number":"3854","ral_color":"7022","production_date":"2026-05-05","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1S9cmgGw5_p3jP_eukpHk3b17U1H4tmmJXb5wKzXWXwY","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1BOZFrosH6d8v0mTJSAToa-Aqxj72zmc8","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1SEYEYIoIpMPp0R4BdVvmRivOf2wiQup7P_CDCxmMYVg","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1e8WVeetoi_NhTw8rsHaZ7GQIUSHWZuL8jt107-ArZsI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40364459')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מינץ 16' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='emil@ecocity.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40362549","order_number":"3902","ral_color":"9005 מט","production_date":"2026-05-18","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/18Fhx5hEoh2darGIbh2apGnR0NV0onMY7","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1J4kUTWf4fToiPUxo0sGUP9X6Iwcp3_FAc-AqDFqDjGU","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1MAd0mfTL31B23WylUy3ReWvmgOdq7r_rybm1wWma-G4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40362549')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סמטת המעלות 3 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40326077","order_number":"3839","production_date":"2026-04-30","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/1nPgCO5yqiFpmRes7FdFY9dkrai539eT8Y6QoK1ZBnLY","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1sKcRbaQftXjTm4T9lpPALla32AArb2vI","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/13XbIQ4-LUbjrd1rtH2uUu6CsZLtFhBrmOYFZNZey-lE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40326077')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סמטת המעלות 3 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40325813","order_number":"3860","ral_color":"7032 מגולוון+יסוד+עליון","production_date":"2026-05-07","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/12IoJ0DV8YyVSaXv5c6q0i9bfpVjyE1ylmYzYwOmJ00I","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1plyAyJSKQ_GP7uEyQ-9wlpayV7Vuf-Wj","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1R67Jf-yusQDfTGLqqHWbtILM7VqLJgCDc8LCBEYejNU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40325813')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40325161","order_number":"4028","ral_color":"9006 גילוון+יסוד+עליון","production_date":"2026-06-24","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/130SGxOgitFW7vBT198F1CwA35KDOoaY-eOEnH4k6bq4","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1dyxLSTTEnfYmF7gsbRKgoeozG5wCjVyV","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1ol8hhei-20ETG-JnQdewSBMS-JWc6M0qf0P09v04aF0","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40325161')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אדם הכהן 12' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ahmad@arkan.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40316227","order_number":"3843","ral_color":"מגולוון","production_date":"2026-04-30","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1NNLe6h5gQmidJ16ACRitX_Hj73snGGbuGeK2Z3TfTuo","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/12cTE_weDfT6SnLjK2aTbr_Z90YnqJGyT","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1vGhTl416OmxyH9RVsPSwaT6p_qrQT2ncnroSAMPu_MQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40316227')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בילטמור 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-9df4434a@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40253701","order_number":"3850","ral_color":"מגולוון","production_date":"2026-05-05","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/1MylLgD5UfGhRDxskfblst6yHC6sgjM4L5Wjbui2M2V4","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1NN-6y79ag_Rb7Z9jBbi-wLATeLamr_WL","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1jIBHWk_Qn971c0WxrBTbMMBCrakGWh_0feD020VS1KE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40253701')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 48' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40239801","order_number":"3832","ral_color":"9004 מגולוון+יסוד+עליון","production_date":"2026-04-28","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1WaDRJN2pwpHTLkKuTiBXfS9Eo3LRg5pNXO0rxA9-x7Q","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1wMJ18XLSLwm43OKeIDcvjZmYMqgK0Iju","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1bC3TJu3B-izPnEQbYun5pwNckrKh8rNS0qqSlMV6oBc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40239801')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אסף 17 רמת גן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dorefirozen@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40236685","order_number":"3828","ral_color":"9006 מגולוון+יסוד+עליון","production_date":"2026-04-27","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1rXlx8C3ptLmlaM5BiFdv6LUrKkrffgc3_02FE-ZQGys","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1L52lbgJLCHsaF6zSCd53zdyNc6FZ-bY4","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/18eyeUrNS_T6AcOQWHitgmQhttwUNDGWW","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/13sJd75dvIJHEHrIJ5TsU5ZgCLNxdWkQCLdZNlxPPHCs","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40236685')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40230719","order_number":"3826","ral_color":"9006","production_date":"2026-04-27","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1867wYqz8Z2CdTJv06Hyf3drBHsSrvj_M5crkaICmoqc","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1uOTdYhvxavfC8vLm7_mkv2At0PJoN8mp","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1gxnHbZFY6-IREN1o95Fz4aB5UwBHDRAR","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1NV-_6mYGvgAo4rlC3nQLAS2or7k7-_71L76cyZM7_A4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40230719')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40158627","order_number":"3901","ral_color":"7047 גילוון+יסוד+עליון","production_date":"2026-05-18","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1_EsbojUCeY0aOFjQLIGE8-9hVQE44uGslUOEv3Oe4IA","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/18qx4pZYtyaJ5PHW-SQXk2MhqkrkRWZUO","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1R0lJx6rhjE67Y5OQZElUycaoDUKXSZ0EopIt-hATlxY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40158627')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שם רונן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dl.olega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40068247","order_number":"3821","ral_color":"ללא","production_date":"2026-04-27","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/1Qf9l9HQrq2ZhJApWce-UDJ1nJ3gbEVidPGIo-caQfZs","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1xsb_hQTDPvCGCTHZaqXr-uEI2K78VMDP","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1YToLIEijmeLGCYhfpWrWaOKcGGbl5RN5M9cvDM9LXP8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40068247')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='תל חי 9' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-04220a1a@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40042879","order_number":"3879","ral_color":"7022 גילוון+יסוד+עליון","production_date":"2026-05-12","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1XdgHYunfFTobPAVUd3Sdz-HwtLIpd8hx-prNJ4WOWVk","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1x9vOpfAUBO55_mbPUYgE07pmEmc3KNyk","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1uEVUWvaq4dZ1jCIgVPGyNoI9LxvYumj8","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Q5JJuknQMn5xz-fgN21kHcMKm6qn4SiGFQdZm9d-P6o","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40042879')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='תל חי 9' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-04220a1a@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40042579","order_number":"3967","ral_color":"7022 מגולוון+יסוד+עליון","production_date":"2026-06-08","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1bru1Xs2dGsH61tizGl-o4W1rszi0hjq7SPg1INKY_K8","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1YL9Z5owz2AM4_SAaSDTCg42Lmf44bV8j","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Xc7-tKQldsfOPlwxja2eoP8fY2ltp5RmdLkzEVUhBF0","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40042579')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"40034331","order_number":"3815","ral_color":"7016 גילוון+יסוד+עליון","production_date":"2026-04-23","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1bepDg3sNCQedBK8pLwcc1BLc6OMZVShki8Ukn5bRDp4","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1DXtqW8kKcJBVTqDEVvL05egI_3jg8HVt","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1OIhnRy3j8kl7jGEZtZVcwlUKqiEK94EmHBXU5a_AP3w","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='40034331')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39952109","order_number":"3814","ral_color":"7047","production_date":"2026-04-23","order_file":{"url":"https://docs.google.com/document/d/18JRkRhDkNMC6fdJ5JcAvTARU8ZYTyOTrRwVv_Cnec58","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39952109')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39913241","order_number":"3846","production_date":"2026-05-03","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1QA5cP2AXmh221p6R5dItV4MXMOfZB03C5Y6yV9nNGv8","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1-bMUy2czkpvW0-RnZM504uEcOQYso3y6","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1L43gJ3Q2QRmGXmqyKaO1rIzs_LssL14WbajinzSrH4M","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39913241')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39913019","order_number":"3810","ral_color":"מגולוון","production_date":"2026-04-20","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/16J06ZPFwqRhnprpGwu12xQQX11C6JaHEKEsuB4YZCRw","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1u5E9IzDlhA9Jw85SuksRWlIShXUWLakF","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1bXnVBRVVG89g1Gq29nsqRVfBknSXjyrMxSBThQSFJm8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39913019')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39912579","order_number":"3811","ral_color":"מגולוון","production_date":"2026-04-20","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/1x6lHRtCixBV1gQixcgYwtjoPdhuUY67OtR0swyVXHoM","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1nxvey-1ZcOLfkV9KuAkwrxXoy-ewfEXF","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1v_Qm-VzI9PiFGswnQq7jiR5hu4OiQ0iVYklmdyZ3tVI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39912579')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אסף 17 רמת גן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dorefirozen@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39906937","order_number":"3825","ral_color":"7033 גילוון+יסוד+עליון","order_file":{"url":"https://docs.google.com/document/d/1szaYKfxYsgz1zS-9jXi_sMWgiivfTpqY-iC4-q0QeHg","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1u2onuRqJD6gfa94mGOR2YXWaQJJmIIID","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39906937')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 29-31' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39757176","order_number":"3809","ral_color":"מגולוון","production_date":"2026-04-20","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/1_P7JUThffuD44F2Zl3SD7eLjYXh2jptPy9XEoF0cZKM","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1770N8sw1n2Noyf3bF3kNgjV6mDkE0pWy","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/15kmRHkAOXtWgDJJNktAkzwLxQJlsuqw4osFd0k7mfNE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39757176')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מינץ 16' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ori@ecocity.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39736628","order_number":"3836","ral_color":"9005","production_date":"2026-04-30","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/14M2TYVWlYBqff-Peje2zIfpYFjiC8kdyRQHQe0uyWbQ","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1PZfMfJsJsMd8KdeXV0kAJh3Qkj-w-Or1","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1ht_izI8N-QmETABJDakAiAm2QVlq4V61cLrRS2Hj5pA","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1xiyMlSJpqW98EZXIGR5wHj1ibaOmbw3w4ixJBJVFqP8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39736628')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דיזינגוף 259' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-dccb94a0@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39722804","order_number":"3806","ral_color":"9016 גילוון+יסוד+עליון","production_date":"2026-04-19","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/17IQ6Z26QbCnsUTkoWRYtvpnjmrFKmrV2","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1_F0dy3L99RTmjIxPQ6RqngFJlV1xQfpWDQDSU11EfcA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39722804')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='טרומפלדור 33 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hamudi@mo-lu.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39679472","order_number":"3794","ral_color":"נירוסטה","production_date":"2026-04-14","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/13YRasrY-I7UDMkTKR3CiYt6Yeg--Sfzf","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1nksisaYgQKFk0AdWd73Igkuei5Mt8Bo0YCkKP-Hp9cQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39679472')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סמטת המעלות 3 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39678368","order_number":"3792","ral_color":"9007 גילוון+יסוד+עליון","production_date":"2026-04-14","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1Uokitpqt1BMB5jDBRgzgFdOihL-5NC6JBOhzIJ4BWdA","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1ZP_8_qHtgVj0jiNq5a2nZj3-ukb8pO2M","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1XF9G53i03yH1JcjHIdJtRcJpsgGFmmjsr1kSYfBk5lU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39678368')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='נווה שאנן 11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='engineer1@ibp-israel.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39664946","order_number":"3789","ral_color":"9005","production_date":"2026-04-14","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1dE55on_kYkx5fFoUW3-rTQ3RomNyFq64SXVsLNJPij4","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1MmDCnCLjG9O5DUsTz-e1uJlW1qFyvO7-","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1VBQU7EMBEUDin8lc1er646KfqA0iFeX14WiMFIKGKb8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39664946')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אוסישקין 74' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39646778","order_number":"3791","ral_color":"7035 יסוד+עליון+גילוון","production_date":"2026-04-14","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1WI82EUXaxnGSBbLnFkhnQrCOSrZjcaYLfPx-2OUT98c","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1cWuC4yWNnqfRx0IDQ9MOc0FH5n3nfUpm","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1eNQbhFsOiORQBQqqp9WNOBr1p1XOegah0ZEGj4JARb8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39646778')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פתחיה 23 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='daniel.aronovich77@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39640886","order_number":"3790","ral_color":"7016 גילוון+יסוד+עליון","production_date":"2026-04-14","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1uMJ3FAWGlQ5rKr8ovIFq2rTwJm59aEeIeOAEMfM4YdQ","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1793D506mrfAXrlcL3N7hkruQQo43K6-N","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/14t19DMrPtb0cP137xew22cHuDnZ8KUegqfnsedBSfdo","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39640886')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39639314","order_number":"3787","ral_color":"7047","production_date":"2026-04-13","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/126GvFGOImWJWyI4T71TYh8qtvHOTPGHn5sh1XQ6R_2E","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1CN2khDSumbfyGviD0es8YusKb2M7_u-j","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/16U2oI3GK77_ggzehgtHCqTj6mtHs4Gj6C4tR194HKX4","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1cVYRZoo6nX3RyMEpzVCn56VNSPKkdAkuG1J3q9jct0s","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39639314')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='האגדה 15 רמת גן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ronfamili@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39539274","order_number":"3798","ral_color":"7021","production_date":"2026-04-15","order_file":{"url":"https://docs.google.com/document/d/18TiqTni1oK2yn_HX3SK5q7lS1CCPScRPY-Ru8swzcSA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39539274')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 3' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='emil@ecocity.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39539088","order_number":"4045","ral_color":"9004","production_date":"2026-06-30","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1b8u1ar3UK6yYFb4YyWy-9DvycViZOiOHqVRDTATZuWo","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1RQrNO0Et_uBRmYCOaOQYY_NP1EXE6eG1","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1YNw6k2a6YtYceFzXisGLlQ04AK-DbtB9","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/10vdDMHpf7qdz-LrMzBV3EgoHwmlpcJ8MPGK5Y-YfcNs","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1-PeX0CMvOIBVa0tFyBbD2J5rE2vAxZBlm2IcEz_w1xI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39539088')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הלהב 17 חולון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-11ad6458@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39533632","order_number":"3781","production_date":"2026-04-12","painter":"ללא צבע","drawing":{"url":"https://drive.google.com/file/d/1kUuldS7Q-jR2s2c9XjmxHjWF1G28HamI","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1jPJ4kspim0ZqryhqTwNmhRXVvGgQBI6LlKaYgw3OTlY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39533632')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מול ים יפו' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39525761","order_number":"3893","ral_color":"8019","production_date":"2026-06-02","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1iphFmf34KgdF4NAfkmwMKat2dx91Nd9oHTJVeNRdOO4","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/13d1AlZQ29epNaRtkmj4ceFF2FzuzoS4L","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1rWKqvd2UKEclaDwBzUJuoye0Us64nUJwKFQlHrklhb8","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1FvXXJdmLVJjT6s8-LYeqHEj-U3axax8hLRqpBGoV_u4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39525761')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אנדרומדה' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shayc@zhg.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39433837","order_number":"3877","ral_color":"7021","production_date":"2026-05-11","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/17LTjtQcGXmSOREIO7nqxPVdQ-K2SQ0v0LiRKTy0nJbY","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1lUG4lfqayzHF96Uarm7Nb8Gb3spWvm5W","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1O6Hcitc33ZqdWpHIVtcejIYbi-6AT1jz","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1kyXxE3KaRrX4YdeNQxApaLdNvG_86-fK3Qh84SvA6Qw","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1AzyF4_8Jww6Hp_3j8IjTYQigS6TjYEgdcJoJ7ZXvNhk","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39433837')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='האגדה 15 רמת גן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ronfamili@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39428979","order_number":"3779","production_date":"2026-04-12"}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39428979')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דיזינגוף 254' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-dccb94a0@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39280515","order_number":"3842","ral_color":"7037","production_date":"2026-04-30","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1JGwq5uAidKc9LbOrZD7AyKgRF87TBMa3ZDJgH6_yWtg","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1awDUyBtrby92aHUMIsfMDmUjLv3Yu_-p","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1ojw3pUa50fQ140nmvdhMcYZKrTaSakVO","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/13YeP0q5vu2gjkuFiV4t1NvOwy9sjDSv56kF_bWf-OVY","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1MoB4IXpUSw4BIdjRQQpskiHdbMMRzrynmqFcgmTRj0E","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39280515')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רמז 36' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@yanush.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39217369","order_number":"3818","ral_color":"9010 גילוון+יסוד+עליון","production_date":"2026-04-26","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1Md-3Lk1cSvts-AoRGrrSECyf3XOeV919cCkL8S7CR8E","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1k2DmN5qJ0V5MwQA6kVA8pLy7pBdzw6fn","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1zPoLigpdFi9FO-J7iY-mlQNwqwzymTcR","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1R1aiLeOo7zxSaOCdQwMJrukX9W15IRCswinqmAWx0Jk","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39217369')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רמז 36' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@yanush.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39214257","order_number":"3793","ral_color":"9010","production_date":"2026-04-14","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1tmQpsIM7ifU0tYXRndcVf125Ip2GCuQogrTvvWyDQWU","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/12Wn6mi0_Bz6p0m4IVUZ_68SYz180a9w-","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1y_4uBf5J8EKjNuV7rJoM-ixxRVMUwlounZ1btF_HFmU","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1X12v1Mk1bGmuTZUd8Zicg0yzkKZRn5pA6gkPwlroD-0","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39214257')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אנדרומדה' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shayc@zhg.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39211637","order_number":"3767","production_date":"2026-04-06","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/16seFRJEUpe9xwoIbw5PEjToDzr4qAbpUNlFBOz3fYeU","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1hKrfKkuooToK8L_jT1u-VSbcmKsGRvtAWPQnKySwd3o","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39211637')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אנדרומדה' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shayc@zhg.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39006251","order_number":"3761","production_date":"2026-04-05"}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39006251')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אנדרומדה' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shayc@zhg.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39005937","order_number":"3878","ral_color":"7021","production_date":"2026-05-11","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1qjlwkln4u3MeD9V43NlOOQBgwMoIf3G-Ahh8QGymXKQ","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1Egl-KxR6g9pjiamynxnxKVM8Rqz4DGNw","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/18QnlgEpDf770HOIo3S3wwgHxp99UOEGd","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1b-HI1uQOPVF88aoReEihaDs5QB2SeaGlLDUQr1mt_ws","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1XVX_CpwWavk2_K5tT4X5p_1a7Enub0b-GggWxcDwe5g","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39005937')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39002975","order_number":"3861","ral_color":"מגולוון","production_date":"2026-05-08","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1LfNqW22SzPe2O_NVM-aUFK4pFx2iy0UTivjn1ugzpIU","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1-kHEVkQnZCExi4DWzIkyygRmNkYyXwB9","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1GcvPXiJgNem_fANGVquJs_y6sOLVPA8DQ9YQSQ6ElDw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39002975')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39002241","order_number":"3783","ral_color":"9016 יסוד +יסוד +עליון","production_date":"2026-04-13","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1ipameM_DbJStJqSCVTpiXk5yeFmnoNL8afX5kNMyuBA","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1CeFnmoKo6KVPokt9sObbZtEysjv76PSc","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1oTi-mASJWoAvyvr5kZwiSzAnnzEms88I","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1jOXvyV_zZy7axYLrgriyHgTfpB7dm5e2819VdDPeokY","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/14dHts-ScYH4SOFSZ3rEEsGO-DIKKNvP_RBzVBwk5AeA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39002241')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39001907","order_number":"3820","ral_color":"7035","production_date":"2026-04-27","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1sxrYHeqnnDfD3cgdPAhWs-WLuW9R7aq8Xrm7841M8ZY","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1xExIVMdeO3eVc5bURlaOdBFmVNP8VNdX","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1iIEnaUI_2lBgrA33J_GicwdD2qjpVMf3if6APCzSslU","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/17ZsrYoYR_NDOPsi-5ejpFv9bFQIVE_FP1IPwY80K0X4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39001907')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39001563","order_number":"3765","ral_color":"7035","production_date":"2026-04-06","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1dXmbGaTLpC3rR3LdZ5F6hzoSoc_6_oUJF9tiPBmxxZw","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/16DP8nTBCpMp7ZfMvTmPXl3jnbaOM-n1B","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1pyldjEbdp1ElEZD3eFnOeB1otgNQ4eiGbaume3GaYTc","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1vHdBQj2OOsR4dLByTSIjm7DhmKJE8HANIPl1BYXzXKw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39001563')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"39001199","order_number":"3829","ral_color":"7047","production_date":"2026-04-28","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1NDHVhUkM2uyobjyARXLIG_6wj4FJYp86AoKTh6rRd4M","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1fYVJU3tBg8lRIJJkSiQt4zkRTq6rkWed","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1-NympfbYovrzY93WXYQ5NgVuFsDx06fxghAM-zYPUa0","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1-bdeGD88ADtxQgoNfvrelg2L-yRweEpLRetn1C4edWs","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='39001199')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 68' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-eb43e235@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38995543","order_number":"3750","ral_color":"גלוון+יסוד+7022","production_date":"2026-04-05","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1xq4dNK39Hf6co51tXl44BZXC1XbiT8Ie","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1i5uRXU_xmzvQMWWFpVXTUibQpH8oVZTd7LC6WDmuouQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38995543')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 34' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38995519","order_number":"3749","ral_color":"9016 גילוון+יסוד+עליון","production_date":"2026-03-31","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1QbYIvy0cn1UO-9OBSXp2hftnkTuGF6wP","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1BDlglEWv5dX5q55504Zww0V1qAlWJ-xMU1jjwTQGQVc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38995519')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 29-31' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38964843","order_number":"3808","ral_color":"7035","production_date":"2026-04-20","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1-aKymS4KukhD3MMABlUvio606TyVpnhxljf9Py199Jg","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1UZl-qWuHWCqbEqrjgaisZA4Uc15ti-On","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1DDz6E-Ge1Q8pNU6oDhWcTgbTjcdzkBJG","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1N21sATETY6x1jWjMggZu4KU0uoB8lVeuB3ihw7oLzkQ","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1_-oUPmuXmjlSRLh1tKLAHNGwkpjysiNWrXlVwP6sqVs","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38964843')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שם רונן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dl.olega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38964531","order_number":"3760","production_date":"2026-04-03","painter":"ללא צבע","drawing":{"url":"https://drive.google.com/file/d/1gqKCuEAQsrgw0qpQjw4Mq5SBKkl-5Dng","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1eEQNGC_82lmjt-V_ym_2KnhfITG4Y_fTquHaIqukzeg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38964531')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליפסקי 18, ת״א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38964419","order_number":"3770","production_date":"2026-04-07","painter":"ללא צבע","drawing":{"url":"https://drive.google.com/file/d/19OTf18owsnqX_Ot9PzUDC17zcEC6LJem","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38964419')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='החשמונאים 3 רמת גן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='bar@ferrum.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38964199","order_number":"3762","ral_color":"9001 גילוון6+יסוד+עליון","production_date":"2026-04-05","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1SpavzFOjncW8gk-GfmyfsaSxiIUuEEfk","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1m6b_CzHNdEC2cy40NU2gBPU31CgU7Wt7xzpxN-3L1f4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38964199')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38943947","order_number":"3745","ral_color":"9011","production_date":"2026-03-30","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1oYB85Q-D8bHEPsW57B6RIk4Qftmt_PKw","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/15GoUIYgR2m68AZVKkAWRsjze3FLKWrzYLYEYFzQnaig","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38943947')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית- מסגרות שלד' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38926257","order_number":"3840","ral_color":"9006 מגולוון+יסוד+עליון","production_date":"2026-04-29","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1MA6qKEJvXH8MmLEwLIESy1E7yu-SnOZbWJaL6QvEf3o","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1kGzF6W6fZC1ySsHwZUnRW8OTxRa7lxUn","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Ty0mnKubhCDs7SCAJwVM_K99O_yU7GXWLVlVAOAu6DM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38926257')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אלכסנדר ינאי 15-17 ת''''א‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='liad@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38925593","order_number":"3744","ral_color":"7022 גילוון+יסוד+עליון","production_date":"2026-03-30","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1KiB1EkDaXFyQJ5Ymlqatd2qRXQOEkR2RuxhxhBSQEKo","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1LkdxwxeCD2VG4XI01epeVNGRpKBHin4c","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1xWAf0vlGw3vKoeSz-Zh-XfhjxGcT4x3K0gVp0AqqESU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38925593')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אסף 17 רמת גן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dorefirozen@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38907539","order_number":"3748","ral_color":"9006 מגולוון+יסוד+עליון","production_date":"2026-03-31","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1da2nmvFaV5iaX3HLt_JkXkc9Ebh13WQZ","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1lFNpzdt_EJoWbQE5aeee8UPeJNx3T5UPLlNZkNy0-Zs","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38907539')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פתחיה 23 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='daniel.aronovich77@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38796642","order_number":"3733","ral_color":"7016 גילוון+יסוד+עליון","production_date":"2026-03-26","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1etWlb9j2NuBAIUaUj0p3DO3ZsB4XebyalnK-qAXdVFw","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1DRGbRNs3T7rspZZJsBEJF8pQjI4NyGZk","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1-wKRZiZ46ZU29aL1PKAEBKwarZVfjm4zn2wPjsQCxtw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38796642')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מלון נחום גולדמן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='yoavar@electra.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38783080","order_number":"3738","ral_color":"8019","production_date":"2026-03-29","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/10alm4TbbPv8lSiy-L0iKhz_aReHzYdhCtI76jIFPKrA","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1bTQVbh3QbnwsIFUyBYckFRD1DR8UFrOF","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1nZjLUrjgIw89hMWziSWB1tuGp2YJtOaN","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/19ZYjHABtHPiijj1b8PA2TRKuviu8iVCMvZoDSSmDNyk","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1vCp-23xR1aWBeW60B8gSGf_HhdRNrb79g230ExROdQE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38783080')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פתחיה 23 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='daniel.aronovich77@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38758424","order_number":"3732","ral_color":"7016 יסוד+עליון+גילוון","production_date":"2026-03-25","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1sMmV1XCveaCdhCRJrQ2JfxtCK4qOi495","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1I-5mk8gvVma5qic4eMyWGpazySy4iQxps1OSvKZHnYY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38758424')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מוסינזון 18' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38758056","order_number":"3776","ral_color":"9006 גילוון+יסוד6+עליון","production_date":"2026-04-12","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1KAIBsGl4VDBJwd0SjXAPABlTSQbuMVeM5EDDaywuisE","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1TdSaX5L9vaZ2m3PRMN_HuX7juJoevdWJ","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Z1cQkdvy2f88AiO1RKvnT-NUtohVFBLRKMk-K-tz_SE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38758056')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בילו 12' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kobi@michalovich.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38741652","order_number":"3737","ral_color":"9016 גילוון+יסוד+עליון","production_date":"2026-03-26","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/13f0XTvRIpI59QL4mfc4PwSGbKNIxW8g1","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1WMxht0f1c82gBuF5azEMg7zPRu7iOKrDVVJpO0Slp9g","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/14q0kpOA0025ZURJIwoJCTYEkHBNC2Cc4XKLQHqiFDVw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38741652')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סמטת המעלות 3 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38736882","order_number":"3722","ral_color":"8016 גילוון+יסוד+עליון","production_date":"2026-03-24","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1aW_hJPL4zi_prc5VmNc_1RWRD92b5Fg0lRH8CWmm6bc","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1J3i3RH7cgNDZcJq1-QFYWmLoIKnAnko1","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1mKm8M6D6FAnIy47uRnezwyJ-4OdFcCQlbc2zE9lD_iQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38736882')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38707978","order_number":"3718","ral_color":"9006","production_date":"2026-03-24","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1-s_mEK48z9wWKUlis4mw5ETnRis9J0rA","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1mzwrJSIKESb9bkKQ-JFeLcVj7t2JSm-78KdB4SUOOXU","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1pUcDghanhpbxGogxCjcHpoD0GodQiB_Ks9nKQ-PnmW0","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38707978')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שם רונן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dl.olega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38701680","order_number":"3740","ral_color":"9005","production_date":"2026-03-29","painter":"ללא צבע","drawing":{"url":"https://drive.google.com/file/d/103lFmHmsr1qoboq0KPP6V2A3vNIn4BDl","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/17Nfb94-2nhBpEvdRCc-GiSKk36HpsaxCY4FQqUlhA_4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38701680')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38673962","order_number":"3931","ral_color":"9006 גילוון+יסוד+עליון","production_date":"2026-05-31","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1vxxpoBEIZFro3BnMEvYovwR7mLWMgzo1YhyMSODyKVk","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/117A_SsRViqjNY1tBe8Zeobeli-3AR-CU","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1z76w1dqA5_y-CG6Vrfgnmc4oX9u1J_4vC2fkTwgy2a4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38673962')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סמטת המעלות 3 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38673908","order_number":"4018","ral_color":"1019 יסוד+עליון+גילוון","production_date":"2026-06-22","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1LeLZNgsu7JLpdiZN9nLu-j8WhNYOfPDiewPu-AZu5yA","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1Pyv71d8mgrMAhjp8xN3zRSac2TX3g_PS","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1HK2_Ma-sWm0hHWM1eioiVWi8s6bEe85ZADaxt0g1pvI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38673908')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בית ספר נרקיסים ראשון לציון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='afona200690@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38673828","order_number":"3888","ral_color":"9010 גילוון+יסוד+עליון","production_date":"2026-05-17","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1IU-RjL_IM0fr_3RDu7yv2Rp55NfxzuAThGgJVRxlupw","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1kwPUtdMazNQAEPRcngZdpxnu6ROfyVdQ","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1uQLgMwk8ouK8hYlssrubFuA_xisdog6UCRCuUhIuHjQ","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1fBLX6YtG-umKHSqUruyVO-A8qXSVPehiJQUJrRAvTO4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38673828')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 29-31' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38645134","order_number":"3943","ral_color":"נירוסטה","production_date":"2026-06-02","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1X2AOYxLpLIfRJ4CIv5plaDbO_YF-tjndx9zyr-pS1Ik","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1G32NGY3NkgjhJ5atxZ1DwXn0n_MMvUC8","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1rKpXCy6qJQ4A5VYY7l8WrnowZ3lW563CW6SW6TGm_4k","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38645134')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38644948","order_number":"3751","ral_color":"9011","production_date":"2026-03-31","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1Wayijz9-y7T1gXjL6WJimhwiY145CWSGzxe1rRtJ4Sw","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1qvFDZug7MV3pv8kzkaa9Pd6FI9oQCp3d","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1O3ZrsJogeZaAdirGoWOcSSCrsaEHMADmsJ7yP7SKsKY","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1gNL4H_XYwvAUQJ3YZjUbP2bw43NxSNIf684n20r78TA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38644948')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38644802","order_number":"3741","ral_color":"9011","production_date":"2026-03-30","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1CgvvfGRqX-c4eqrgkA4ST_NS_Twiq53tVC793ujP5og","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1Ve2gNSs12qSDXqxxNfi5c_izRvq-67Fo","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Bs3m3jkHsjKryx5xzIE28KV1eZJi8QPWxWn_30nJurA","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1MX1IGPHqKQ8bQFDSDd1xkEtG8brRNfe1B0wZpRMf2vg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38644802')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38644390","order_number":"3742","ral_color":"9011","production_date":"2026-03-30","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1rn4Zk93Jk2KLW-HXcAI8r1jQ5gId7PLDjHXbnnPrfJo","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1x4bmj6Bi8Hd9Dm8RtwxP8129ddFnEhHl","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Q4WxJExhnhrQOg5ah9Cpw6XWNgr11BNLuhhzqUm5wrc","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/10gEfbqjRpqNB6vGySEUuLrVUs8WLNnnpEAMgmALeJVM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38644390')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מוסינזון 18' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38576158","order_number":"3812","ral_color":"9006 גילוון+יסוד+עליון","production_date":"2026-04-21","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1KhCO8DExmFQIH9eBZzqFf-y6jXxUKeFs9SLOXkdSSx8","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1AteEwTB9leM3v20H6geNWRbENgFu23dU","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/13wsXcf9Tcko9ilpLRuQrfOCrbWKpOhQO4dKN2Z_Vg1Y","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38576158')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דיזינגוף 254' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-dccb94a0@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38575828","order_number":"3797","ral_color":"7037 גילוון+יסוד+עליון","production_date":"2026-04-15","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1WeFH-I01TYdLAniHWS_vKAv9y3aABuv5","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1tShCUFAycdVACNxrsIhySIdjdPRfnsmTBHRIZIyVlvI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38575828')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38575618","order_number":"3714","ral_color":"7074","production_date":"2026-03-20","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1XKcu9H87r5ffX4gA3Ul247Jo78BbUMYq","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1za2rb7Bw-euAInM3JGHR41sbONeScX6UQYy5uctGLYQ","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/14kRhAERFKm5068sNQNhJ1J3y0d3j9WGiPA1WBhW-lnc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38575618')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בית ספר נרקיסים ראשון לציון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='afona200690@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38575388","order_number":"3950","ral_color":"9010 יסוד+עליון+גילוון","production_date":"2026-06-03","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1DQySyDK6QJr6nHcIilQuYO0Crmesro6JvKdSsGt08Sw","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1Hkz-7PEts0InH-ufE-jM9E-hLYwoVNpU","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1_NHnQvjLmz4yD6iBsacSBK7ki7uEJ7fRvfRGcK-ZPM4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38575388')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פרופסור שור 9-11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38519240","order_number":"3835","ral_color":"9011","production_date":"2026-04-28","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1ZM1VIAoXje4vzXa-eVwUbjCDZATzx1Y9yAlRy4kb-6A","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1c4gIBuXGA5X2dT10WJ60nL8TqRFtfI7E","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1HzVEbph1_MHLMUEPFbUuvsbsgDnuT2nnx4TPTtpO7Cs","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1zzXcO8VUTm7yi2o85RJUY31hGCYoXCKoIU7MQa8i8R0","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38519240')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38518470","order_number":"3827","ral_color":"נירוסטה","production_date":"2026-04-28","painter":"ללא צבע","order_file":{"url":"https://docs.google.com/document/d/1d4iIbKVw3OFaZKiawVOtLk8-s-u9J96XNozIrZfR-Yw","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1HhMJkBxafd3wVK3sQhXNYEzeyNZiFhtC","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Uli39BWk7rYCAcxKoN7E7w6VVvTtDyGgAcuEX4YNaog","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38518470')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38518184","order_number":"3834","ral_color":"נירוסטה","production_date":"2026-04-28","painter":"ללא צבע","order_file":{"url":"https://drive.google.com/file/d/1nDG7LDtpE56bqqGBxPSMyq-epBMFqqaO","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1AJQyjIVBaNqVWy3DGv5lFwhZNimO0XJO","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1l0O0gFnkDPbUcpDYrVQS3bBSvnsghZcZvokwATykjDU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38518184')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38517894","order_number":"3739","ral_color":"מגולוון","production_date":"2026-03-29","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1W6wCaNY9JQ54qL7maPDGvkYBoZST-5U_w9MyU-oGcPA","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/14xJLW1QZbiSB3I78oyAGIHA4vTvgfk0X","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1_gNqS01GnEZ8wnnhFn2MYvWeNIWsiXOTh81H8um3ik8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38517894')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38517346","order_number":"3830","ral_color":"9003","production_date":"2026-04-27","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1ZPdUZqJ6vP6hpRyM6gwsic3TwU67ZflENW5YxemFd3Q","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1HPsVcz_zKRRWgXepIwNK0Z9YZD5DcM_S","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1NY1C7OBbkGI59uQRArSyoEUgJoHItDJyhkoFuLEsrZE","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1l3z4jLL_6AG2szzY3qEaKiUSJS9L5_UCD5zDcATQ6Xg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38517346')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38516706","order_number":"3831","ral_color":"9003","production_date":"2026-04-27","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1TYY88AP41kS4EVwjKXYHjvCGEHKCN8nqXEejZfAWGy4","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1y8IWpG5J8d4Pt89nsBJmWxpnjFvLcU1j","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1ZoTr0H9HHJkLJWs5gSr4vA_hyhwGUwCwy_1pb54JkU0","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1i7Zr52-qZ9h8jcPe_dhT4glXm2eQNbsv4A9Gytzis2c","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38516706')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין  14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38516342","order_number":"3780","ral_color":"7021","production_date":"2026-04-12","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1gJLGPjBKRujngkuas4Z0M3_rL4j-arQzBbwS4YkBJUs","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/15wDmcvrBDRZvVzLcCqAkgagyHd18L-vR","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1hEQa3IKaZBhbN0DT_m99_Scv8qy_euWR","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Kkl2eGSgwsgWO0R-Dc2EM9PveM93TMv4X0VPVc3RL_I","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1l-YVNYwyjpDCmB1da6pne4_iziG1Sz52jtj1h-MP16A","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38516342')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38478202","order_number":"3729","ral_color":"7022","production_date":"2026-03-26","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1yGWMb1P_3utkflrctWVGvjFEQ0oAIuqJaG-0kX8AhpI","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1fMgWROGJZnBvHmiYAak-bRuThgRXCtcJ","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1mFWVtHAVsD6l6yX1bHVTG8oK3NsF4_b0jWWUUE-S9RU","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/13cfz8ei5CNjCwBoJAibAz2JiPwV0aSLOgISDHt3-ww4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38478202')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רוקח 50-48' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='nitzan@henco.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38477972","order_number":"3715","ral_color":"אדום","production_date":"2026-03-20","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1zw-qhhRhdGbmHg5yF98u0UZcmn_FOs9YRPEnUEiS0ww","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1-xlKWDBbacmd-YcZr6HTIFvkIg0s_pR1","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1wgvxG5K-OpbC7ugGaoQXapkGwunMF45V_Q_hzSq8Vrc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38477972')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בורוכוב 34, גבעתיים' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38477384","order_number":"3716","ral_color":"7022","production_date":"2026-03-24","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1pPZ-rvVSMj1Fh6IN7vnlJz6aXPsFB8_q","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1tFmGfh-1GektpHODKdqg0XjjO1bppx37cqAY31cFaFc","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1irugdU9__RvCHgZS9dM0eCqnpxcGWAGzaH3aemIH5dg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38477384')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 23-25' AND (er.values_json->>'client') IS NULL LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38476828","order_number":"3726","ral_color":"7022","production_date":"2026-03-25","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1Vg4SGy6Lt-NecnS0WHD_YnKr1md-CxG0sYR-pZc2MZ8","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1gVVo2EwQNYf5cTPHRScC52SvQhK_n9Rt","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1v2tyVOQBa2859DHjMKLfG-dFEUcO3m5J","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Js-a8jDL5Zj1THOUygt9RroiLC6ShKCO8tdo-c4KPiE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38476828')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליפסקי 5' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='tzvika@yanush.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38475178","order_number":"3711","ral_color":"9016","production_date":"2026-03-20","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/18lpr-9a2BM44vpJnMP2BSJV-xgq9tlPH","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1mSiXGPJz6ubNg3fRbm0zzw0uVtFzTbKewpvPJWQrurw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38475178')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליפסק'' 5' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='tzvika@yanush.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38473098","order_number":"3710","ral_color":"7046","production_date":"2026-03-18","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1iKwV68d1RTVMEqoz24k1nOEokJx5dAEc","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1W7Ke_A_PbS3U73Br0qNfJg2WUj-V7zrWy4-uf_nGRvo","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38473098')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליפסקי 5' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='tzvika@yanush.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38472200","order_number":"3707","ral_color":"נירוסטה","production_date":"2026-03-18","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1b2ONFQZW9PiuuodUInyRtfGEclLZhVSR","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1tpehs6UqcX1hnNl4YbIekETs_BEyOIqbZoBIJ1ktrSY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38472200')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליפסק'' 5' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='tzvika@yanush.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38466856","order_number":"3705","ral_color":"מגולוון","production_date":"2026-03-22","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1UiL5C478JLEBwUd27S3joBO-ZdLweJuG","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/18WLFWpW2hErI4g_PAq4gghZ4XH-Ac8x-wE4v4FJ820k","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38466856')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליפסק'' 5' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='tzvika@yanush.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38463344","order_number":"3704","ral_color":"מגולוון","production_date":"2026-03-19","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1zqVbRvUxh_qLIewyFKDdRbPgPuA701Uf","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1A8GjneFJd4TzKU30RnWFUjHLjUV7oR4cUJPKoipj0dA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38463344')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליפסקי 5' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='tzvika@yanush.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38455110","order_number":"3706","ral_color":"מגולוון","production_date":"2026-03-18","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1fCdkzjqs3XB8iUVsyciAEdSxQjVy4-H1","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/11_rfwiPZliO-PNIEy7Db2BFz-6AQQHdrS9NeBylCs8c","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38455110')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פתחיה 23 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='daniel.aronovich77@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38441746","order_number":"3785","ral_color":"7016 גילוון+יסוד +עליון","production_date":"2026-04-13","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1taX2oELzXNmEuvk9GzE2IDbAF5PJgUt2L734vb3pmgU","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1BsdWdyk8Z6FDY80Pk1366cpLwOaVgtja","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1_qW1jlLofKOQxg1vkdyEOLCRjdO0R757","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1oW0-ji2UOSn1xmiVM0r0jsJU5Ax3FwWJJWX4pbkc9i4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38441746')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='החשמונאים 3 רמת גן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='bar@ferrum.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38441632","order_number":"3764","ral_color":"9001 גילוון+יסוד+עליון","production_date":"2026-04-06","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1yWWmq8pRCVHcAUvpa0hAwFUnW4CWnzKKNSO9eJueVww","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1ZeJ3ANvjV6Y_DU3Rg-z_5jOvLA28RREX","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Bvrfq_D5oeG_ctCLNnKoli5Js_ciZNtqTublE8fxpYs","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38441632')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ויצמן 21 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='barak@nofzameret.co')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38441560","order_number":"3702","ral_color":"מגולוון","production_date":"2026-03-17","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1NphVK4m2PBGiuzDuO6qKxUz5kPZJslWp","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1k0sFkQyS7y5_u2KyksBY4bRjYx7VLI2Q9sYkUE3lhmI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38441560')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פתחיה 23 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='daniel.aronovich77@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38402602","order_number":"3757","ral_color":"7016 מגולוון+יסוד+עליון","production_date":"2026-04-01","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/11W3YadzIxvaYZOmyjTKrq4YVbrid2T-N","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/13gARnB7ard03bQt1APovieXx0gHLgwYQPKFaBJ9DNbM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38402602')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פתחיה 23 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='daniel.aronovich77@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38402586","order_number":"3731","ral_color":"7016 יסוד+עליון+גילוון","production_date":"2026-03-25","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1Wyahfs7ZzxkPV-emhKQrFmDvPuZgWHrr","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1GRizZnnYfbtTqMneisGj16h18FeqXF9S9m18giTZjUg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38402586')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פתחיה 23 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='daniel.aronovich77@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38402550","order_number":"3774","ral_color":"7016 גילוון+יסוד +עליון","production_date":"2026-04-09","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1AcYdq-522OmOHE8mcCpSKlLJwY2SO3IuxRrLslsSB4Q","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1_ZPdL_HYiLMH8-PnYoj3iC3WrjNx8vLn","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1lJjOzoEX4BqZN3DGLvlZfeRtzNDgHVCs","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1k2g8eNYiJcMhB33yN25WZyVl3NOsdMvwTafnxZoOae4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38402550')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פתחיה 23 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='daniel.aronovich77@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38401742","order_number":"3819","ral_color":"7016\r\n גילוון+יסוד +עליון","production_date":"2026-04-26","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1vxGl2VOulfMvoGwYN2AxQBlMx5fjvI9fNKuPwaXCb2c","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1OT80DwhKMaP6pVYutlNyVvK7unOivwNv","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1OAk1PmxC4-qUSYHPxcqoX683oZAfHoDz","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1DoX9Nz9VQ4Ye-Gd72o-tPH10aCcKh5vrjOUpuiwhH1s","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38401742')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ויצמן 21 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='barak@nofzameret.co')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38308114","order_number":"3912","ral_color":"9006","production_date":"2026-05-24","order_file":{"url":"https://docs.google.com/document/d/1Qr3SiAH_DD2KqC0BkkCla65UholUWvPGJin4tizi3_s","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1HiMctg1e1vTlkH9JRYyNp3LbNUdpRQLt","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38308114')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אלנבי 74' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='issa@mushlin.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38307994","order_number":"3763","ral_color":"נירוסטה","production_date":"2026-04-06","painter":"ללא צבע","drawing":{"url":"https://drive.google.com/file/d/1-QLdfSS8nSUJFGVPWFOgfzhzKsrNrjD4","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1I0YgbTe1XQjAfPuc9C_2twDawTwMzWjr21SfL2jQPLY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38307994')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אלנבי 74' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='issa@mushlin.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38307880","order_number":"3730","ral_color":"נירוסטה","production_date":"2026-04-06","painter":"ללא צבע","drawing":{"url":"https://drive.google.com/file/d/189AD3kn0YJ-9hnztzEFqmLJaZp8CRmJD","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1uVDBrpQrF3KYgMKme560BX2yn0rbKmGwy5Dxpa9GZBc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38307880')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אלנבי 74' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='issa@mushlin.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38305068","order_number":"3728","ral_color":"9016 גילוון+יסוד+עליון","production_date":"2026-03-25","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1xnPI7bd7fVT-xvaqQrxcTTM5QjlrwgpH","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1pcqy6o-4Nygx7fblOUZ3xtAs1YNAuMhN7ZAd_MOyhFQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38305068')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אחד העם 108' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='adi@sharbiv.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38304200","order_number":"3807","ral_color":"9006","production_date":"2026-04-20","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1HJUWUB15D_Y7EgR1VBGPJXlvzUrZLaH3MblL1GYsnQ4","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1MN7fRMd469WxjEb-wuWBW5Mi-tBbiZPI","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1OmZ1NoLaCV73nq_4D-eEJ3TPm4vSIsMj0YqQJAo6Zig","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1_-oUPmuXmjlSRLh1tKLAHNGwkpjysiNWrXlVwP6sqVs","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38304200')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דובנוב 19 תא' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='motid@romgc.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38287098","order_number":"3927","ral_color":"7022 MAT גילוון+יסוד+עליו","production_date":"2026-05-26","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1U1ngqMfmL8JTdzhTj6TAgR1Mp9pna4yHbtrD3fHG2vI","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1D64PZRZeNgNcu3QrozHLw1pGEqFT4YAE","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/14H0_yvD8r_eyG833rycxs5BA38411XWd_7fDh9G_zJs","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38287098')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הלסינקי 8' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38270322","order_number":"3694","ral_color":"9011 MAT","production_date":"2026-03-15","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1jzZghIEbjjBRLTn6rG0C3IhdIr48h8-4","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1kWz1LfeMZQMuVzbSZmuXEcx2uFKApilY6WVvnoU-rt8","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1IK5lcxNd6UYBPFdso4o3ILGE-qzAxawuyEvkmpjBza4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38270322')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38270316","order_number":"3775","production_date":"2026-04-09","painter":"ללא צבע","drawing":{"url":"https://drive.google.com/file/d/1MZiuzkENWlAMNS8xRhr8rKC08AAD5daw","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1UGBBVm3hJAJk_CzdESuqQ9FObD7B6820v0DRCDtq2Ek","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38270316')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38150550","order_number":"3689","ral_color":"7047","production_date":"2026-03-11","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1CLnR7o1U3zGBqAJ8W5zc2B0D22LUR3gj","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1XRkWcNbzr1slSaqODcCpJNivYay-m7ALkJ9YPt9e3B8","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1qW71UlzWWZh8qqgAjIRI06wMO5WpBaX9EfVi7_vQEj0","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38150550')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 22-24' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='aslam.a.m.tavor@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38150022","order_number":"3804","ral_color":"9003","production_date":"2026-04-18","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1esQczKN5YN9pKTFpn_uEU9oWjuNKkD4nz7Kjmkac0Xw","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1A1XcMJd2aGxqXq2JB0cLBu8PhTgiRhyf","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1nuVYcHTboibha5vIMYaHpQHXttg9oR6i","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1oCmHS0MBDplKEQ2Sca1LYWNUNH_y5RLZa2rDMM9LbFM","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/11KgHz5kYZo-A8qtX0kN4FdH0ULy8ctU75EnoG2JZ_IY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38150022')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 22-24' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='aslam.a.m.tavor@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38149952","order_number":"3803","ral_color":"9003","production_date":"2026-04-18","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1UWUwNp-dsBIIWz7r_nLbbQVqh8SdJ8fUUoLR7UxQtZ4","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1BIdPm1bZm8XF30dUsiG8laVC6CqO2MsZ","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/17amyLDyH4OxfjzJHb8Vx54QNGC2Yk2_h","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1X-8rAU9EravkEVP3BbsOIwNfcndIAXxR4OiXqadQn4Q","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1z1KihI5iSXdxKtxYkpf8XzzxLQkurF8rb2nytr9ucp8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38149952')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kostianaaman@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38135062","order_number":"3773","ral_color":"9006 גילוון+יסוד+עליון","production_date":"2026-04-07","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1uZYNUQAHuKlIXFshAUTJRmBzp7mBRYwNqe9y_KdOHNk","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/168pQbIbs1sJwuRQN1nLMI5OxKXy65pBl","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1kJjSmTZBvnIpXJ7L68yblLTo6Sd1gLYe","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1thNC3EDino3RQpX-Iq1IdUI8cJs9BVUnpKQjOzTMBoA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38135062')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kostianaaman@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38135022","order_number":"3813","ral_color":"9006 מגולוון+יסוד+עליון","production_date":"2026-04-23","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1yMxk-8n5DgUI5KQ1VdiDBg00xGUqXztOwAPzQ9Cq4fc","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1Im9TEtXxYpX8NR2k8OjQ0NXDuPMVnk80","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1RbXwwtJ_qsN5fy662p5F-RdNweafr5aM","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1VAKzIOKbDqU1HCfHvz0rXupk1Ft50da57BSKjtUQ3Os","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38135022')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kostianaaman@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38134846","order_number":"3746","ral_color":"9006 גילוון+יסוד+עליון","production_date":"2026-03-30","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1l1QzgqC4m8wJJ8qxFodVDm7NRPIG5lwU","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1kw0a2SUcsMoPsVDh23L6qyEaqxO6TY_7jLxn47uEYls","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38134846')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kostianaaman@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38134458","order_number":"3957","ral_color":"9006 יסוד+עליון+גילוון","production_date":"2026-06-08","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/114DM2ojYMCF3wJCXgAu-L5W-8AmhrWY6V-vaxGzBj1Y","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1OTLOwrBk8huhIm1FIjg5hSuRLI69tMml","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1nQOuomlAdluA1C97chxoTERrMY7k7RqG","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1fpG0cwaUqDiaK2Ql8Eu2b_OE8jF-tUqfAgA2pxYlo7E","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38134458')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kostianaaman@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38134384","order_number":"3717","ral_color":"9006 יסוד+עליון+גילוון","production_date":"2026-03-23","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1M_1XV5pw1urNeLcDYyn6JJW3iX-JOsAq","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1yLA_gnwCGj6PmUq3PelOZq-CawngqLve3zqDYucLTUg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38134384')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kostianaaman@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38134264","order_number":"4014","ral_color":"9006 גילוון+יסוד+עליון","production_date":"2026-06-22","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1oRKzDs88npw5199xDP3JWBitqnK5C5yc8t_ibdJ-LE0","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1NLgG7IHaqVNNcjhK2_SrcjCKJ18UZBRg","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1CvmAs_oTy8VuyJ1L21QK7_czyO-te8CE","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1lrHBnXc_koWykAXFMzPmn9O_tDAvcKtKofV7HMgQpU4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38134264')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kostianaaman@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38134154","order_number":"4015","ral_color":"9006 גילוון+יסוד+עליון","production_date":"2026-06-23","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1qTaE5Tg5prRVmEH2kp9fOTdyixuS671HtT1gFiiEyaM","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1Yw-IYX7DH1XgZ2SrW8EV2x5Vb_RIE5n_","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1LfjZ2jYu6fF_qS4L-cf-EJEgDGQ8Bu0U","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Y9kyKiLImfPxAV-cbDKjrlyS6LPnYzvyrrIb6CcWk6I","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38134154')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38133894","order_number":"3758","ral_color":"9006 מגולוון+יסוד+עליון","production_date":"2026-04-01","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1udmGCF6x_dTxV3zc0Obm2jktqDIVYp-p","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1ZqpB2hc-pDcZHgTzI5jL8oQkHYg3eM1VJLRl_HsU7-s","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38133894')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פרופסור שור 9-11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38133424","order_number":"3683","ral_color":"ללא","production_date":"2026-03-09","painter":"ללא צבע","drawing":{"url":"https://drive.google.com/file/d/1YlQJtrgcSeSo9376NtqtNNhpZ2Hn9p3N","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1itgx7IDP6VFXXsaGhc4xjo4lrKcsc-WaeNyuRidYBmI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38133424')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38111480","order_number":"3805","ral_color":"מגולוון","production_date":"2026-04-18","painter":"ללא צבע","production_order":{"url":"https://docs.google.com/document/d/1rIrBn-AenFQd1QMiO8AzCPS2Rhgl2W95wOEAsSt2dW0","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38111480')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 22-24' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='aslam.a.m.tavor@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38111168","order_number":"3802","ral_color":"9003","production_date":"2026-04-29","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1IembtBg3Zcwgp_iRM2t45552_Lnh9n4VVnUwjQuSx74","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/13jnKfX2Q7C6zIM-iY5Sr7Jgye4mviE_8","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1lIeURNNOllI1rwOOKJ6CuviBDP3jD7Ifb-9XLH7VnMg","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1AdMAlvKJVmePK8TpJ2ub_Zf_RJcWHBDa1Fm-DpNWuLY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38111168')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='כוכבי יצחק 11 תל אביב‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='udiohanina@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38110688","order_number":"3769","ral_color":"9010+גלוון+יסוד","production_date":"2026-04-06","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1f4Ux69fakuMmK_2GiYFp6-zdxuCaADUfRu8J1jhutls","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1_LCyRLyoQv2uEJN0V5d2JeXjX2jV34jh","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1nzj9TLfBu9LeaRISJpqPFJXhTfXI9Uyha6nTb-fz9eo","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38110688')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ז''בוטינסקי 105' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='yeuda@atias.org.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38109940","order_number":"3684","ral_color":"9006+גלוון+יסוד","production_date":"2026-03-09","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/15SCz1RiyFUA-toi8Mxw7g6YB2IP_-nFL","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1216XP3N15gFyN135RsTvXP2qoAwzwnT1tjo81YU6huw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38109940')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מלון נחום גולדמן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='yoavar@electra.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38058700","order_number":"3723","ral_color":"8019","production_date":"2026-03-25","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1c-i5XZMPzmnjBbONHAbmCJxw16FNGkruVCzuZLvwsLQ","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1R5b5JWCKt9HZh1eLtp8fXkIeBaDFXC6S","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1qhSpDvIE7o5Nck14nOqNNDz98SL6x6CA","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/14gDNQN_wch-bOw-f5nklQYIwkW2Qq5U1U89Qhf0gkbs","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1gPG1fRybsTPuKTpSl0LLM-DzW8SFCPk5lx5dXXyMj3w","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38058700')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מלון נחום גולדמן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='yoavar@electra.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38058536","order_number":"3724","ral_color":"8019","production_date":"2026-03-25","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1mPpaJt5nKZm7dkjHVdsVy-j8oBRoCyE55WwHK07wnNY","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1rSKflx_EzsmoYhk2LuvfPNO0hD6ZJkmz","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1grUo56DgXHHbB0EerPg0oXu0xKqyIhVT","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1VIRyzhkppf1vVq8egQTUQstZeew4dT5L6CkRAT50AYw","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1Fo0t19aW_ImcSUFnLeZp5l5uijeKsNeJLSq_b76VyyM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38058536')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מלון נחום גולדמן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='yoavar@electra.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38058176","order_number":"3725","ral_color":"8019","production_date":"2026-03-25","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1pUnwMQF6A8MDetRTbL6FyuWr8A5c1DqE-SgzGq3GhtQ","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1ki2GEW5W8xiLniFRhKIETxTtA-DKWPx1","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1A65lN_HOlYMlZFJ-ZVeZBQGsE-n7o-Xg","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1F_Qods9owiklmpG0RGhsK-RKVzrLrBt087eODlOD42Q","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1bGAatYHRVolZ-HP2piuX-vCfyUXRwh_80Y5wbAW2x00","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38058176')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הלסינקי 8' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"38001230","order_number":"3685","ral_color":"מגולוון","production_date":"2026-03-11","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1F3Vgf20tKvkSdUY1aKZoShUuygcx5Lbk","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Mhb0PeSDOeU2NNgW89mGG9xwdK7Jx-xuUfEJsvuWr3o","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='38001230')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פראג 3 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dramaty@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37997626","order_number":"3721","ral_color":"7022","production_date":"2026-03-24","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1_aQAUtranixSefNmiIsiqF4AFMzdWuP1","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1FOgah8OnXJ0t4MK1-x526c8NmhyfvF5pvUrh8U7ME-E","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1HVHI4-qLthD3H1ncez2m1ZRFaoF-1mA6ymLm8bNsZkw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37997626')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37990094","order_number":"3676","production_date":"2026-03-08","painter":"ללא צבע"}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37990094')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37975982","order_number":"3674","ral_color":"מגולוןן","production_date":"2026-03-05","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1Ldg6iCt7zT2doIlH0DkBoqQPG12MHmup","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1RGqubWxVUQRCATndjxJjXtNhjIJ66SPplsU6YKbuRds","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37975982')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רמברנדט 12' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='nadav.d@sr-ventures.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37946018","order_number":"3784","ral_color":"7022 גילוון+יסוד","production_date":"2026-04-13","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1HxMfs-s3ktz_wIi58HebjZ9dxjsU3Ra_GFkvntRGEDk","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1DMOTTTHziQHmGv6gvR6TBFnGDc3vhZLf","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1A7mha7U6kTEIUFBPnqgD-96F0uEoFrA5CoEqN3hMx8Q","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37946018')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37934188","order_number":"3670","ral_color":"מגולוון","production_date":"2026-03-05","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1rksbOIucIWZNOh3guTEAGtJQ52Nz5pZo","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1B3IZSNkYmHHM0tikQFv59rP1W368pqLm4WM8Fud6kcE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37934188')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מינץ 16' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ori@ecocity.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37926836","order_number":"3699","production_date":"2026-03-17","drawing":{"url":"https://drive.google.com/file/d/1PG-pk9kBjt_du5idQgvjc7IDmhluUkbC","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1RULX2aI4Z6WbCrRS-WKB_lD2wAnlOL6LDHYcjAJ0y2U","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37926836')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סמטת המעלות 3 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37923484","order_number":"3678","ral_color":"1019","production_date":"2026-03-09","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1U8R9RG2yg3C9i5R4T5uiSKH8WwCYVybA","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1wwgqNlX2IAfyiCXC2TuCbtlvlW2U4TVYF6Y6rfMo81I","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1rhabCoWgiiqnneGpKCSOuW1ZUegJ-xC4QuRFeOnbjuY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37923484')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מוסינזון 18' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37918392","order_number":"3768","ral_color":"מגולוון","production_date":"2026-04-06","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1C8FD_KFFa1Q9bFdwxFyxlXdjmw0e-7zT04X_htu-MHg","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1Tweur1LQx-GTZ5Xd1PK9gbjIH9mK3ibw","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1uHbNHivBYKDpsquj2S534c9mqL39nNF-1UKToz7gTtY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37918392')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מוסינזון 18' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37918356","order_number":"3772","ral_color":"מגולוון","production_date":"2026-04-07","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1MIW8vDhW4Stxz_AxxhBU2fjFGFxByYGTBXC_KvvKSrI","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/17d_WYNyyhPNpdjeDwUQE_WB30y6FiRGE","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1MtWOPUzvfJxf5pMQNcjAdqFDw3msAT_ixjVEsiBO90A","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37918356')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סמטת המעלות 3 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37897574","order_number":"3663","ral_color":"נירוסטה","production_date":"2026-03-03","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/11SnpfEavRX99LVEufaob8B_NwQmYD-qA","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1axrdzQK4H-10lDZCe3CWU2jMi7rOXoHhUl1VFO-kQk8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37897574')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 52 ת''''א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='roei@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37896400","order_number":"3735","production_date":"2026-03-26","painter":"ללא צבע","drawing":{"url":"https://drive.google.com/file/d/1RrUwgxxJXaR88E_qVgGG9sA0ckiUEGLW","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Sp8TTwRwV-Mo3pc4LLVeY0G67QbIcpruFCuje8yTi1Y","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37896400')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שם רונן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dl.olega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37888382","order_number":"3680","ral_color":"9005","production_date":"2026-03-12","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1IGZKa0GL9hASonmM_p24f3f0DaSGF_8T","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1jxLoe-FWzcRzpRpWmQikJ-7f38yMvL3ybLJNUm1Iz_Q","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1Fk13XnMsyZxo69YfliQgP-96bSTeJx2rSFFJyZ2JtCo","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37888382')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שם רונן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dl.olega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37888136","order_number":"3679","ral_color":"9005","production_date":"2026-03-12","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1ch-VAHUO44SXiqZUiMi1cmtp6ypRiBH1","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1KiiNMrxG7uusjRyFQhB6EDE8zEBZ8hBl05eWb-uby1c","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1FL2T8yenhW9bUKfrtO-mVZSCJRTMUIwxEiyIa0bK9Gg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37888136')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אסף 17 רמת גן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dorefirozen@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37816846","order_number":"3824","ral_color":"7037","production_date":"2026-04-27","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1ZUNQllV-ybXkWGjei8pX0BcVutZK_SD_LBppwAPP4hs","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1Sy-u4dohYAApUYncQQwvA1rJSYJGTDT0","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1z0aXg9w8AP5s0OemUsSdUZzliYUYlVVmBEqeMdZCVVE","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1A7uwxa6jzihMeANKxFfuiW812BQb32lyGxDJ6XfOHi8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37816846')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פתחיה 23 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='daniel.aronovich77@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37811580","order_number":"3656","ral_color":"7016 גילוון +יסוד+עליון","production_date":"2026-03-03","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1SPkFUumAJEkh-HkEfPp5z5kHOyD0zDQ_","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1TrDvu860uRj_QgaaheotTAe-Q6ws6oNM1SF1oQQjBus","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37811580')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 48' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37799032","order_number":"3654","ral_color":"9004 גילוון+יסוד עליון","production_date":"2026-03-01","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1DUnQSoxqSpiX5p57jYMA7nnqxPdXpclG","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Y-bWE1CrBDGXGH1Q49cQgNu2BWToiXjLqoNOEKEIEpM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37799032')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אלכסנדר ינאי 15-17 ת''''א‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='liad@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37798834","order_number":"3692","ral_color":"7022 גילוון+יסוד+עליון","production_date":"2026-03-12","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/10aPMZY3lu1GxjYLh0tLNjVL486wsRwQ7","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1V4YqCvHcZ0sVazS6ohTEK65CLo2dJeZ8v4db7ibNOnY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37798834')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פייבל 11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='nitzan@henco.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37797026","order_number":"3664","ral_color":"9016 יסוד+עליון","production_date":"2026-03-04","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1QPvlKb0jWk-1fzNNtUDkh2a7bgp06jfq","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Av8wwPXvk3A0cYbenIfOodkPi7VHbsM4YsJ344vy8QQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37797026')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37616342","order_number":"3708","ral_color":"7016 גילוון+יסוד+עליון","production_date":"2026-03-18","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1xIfueuvMK4ICg4FBECoZgXCDYowCDv8ju0i5h1ulERs","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1cIv3E3E6pw82ZdeNh9VFV9FK3ieSBfvQ","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/17zYRBWxBzutlWXPI6_ZoXY_G76sJP1SA9e7xKMZDYos","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37616342')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37592730","order_number":"3650","production_date":"2026-02-28","painter":"ללא צבע"}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37592730')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פרופסור שור 9-11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37571108","order_number":"3649","ral_color":"9011","production_date":"2026-02-25","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1SETHrfOJeZ4qSbn5kBddAaRRMT450EDp","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/136oTZufnTIViHuUTwcKU07CTQ5ATE6f-XQVC4Gf5J98","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37571108')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פרופסור שור 9-11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37570890","order_number":"3691","ral_color":"9011","production_date":"2026-03-11","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1vH4iUnWH4ufKU_XBxK2z50MFOzmTm4BXn8hoDWyZdyw","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1-i3Ur5DTILUngn3FSmrsDAaxeSqK4zz6","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Dj0ibTHrJb-cRTQ4ZqKVTZxcmtSaVbJOBUSGRZWp0ys","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37570890')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='כוכבי יצחק 11 תל אביב‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='udiohanina@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37570576","order_number":"3696","ral_color":"7042","production_date":"2026-03-13","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/13RulF4rFyV_-P0ePAZZJjIMG_oBMnZKxpeEt0Ez5HYs","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1GATNh_m4qz45RXX8rc8vwdywY-Uxej6r","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Uw3ApaGrU-l6MKY6zbhR-y46y8t3l8BE-qOt7fGPJjQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37570576')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='כוכבי יצחק 11 תל אביב‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='udiohanina@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37567676","order_number":"3661","ral_color":"9010","production_date":"2026-04-13","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1vvN2s6jI_W_JCPyYoPl9QABNvjLcZsjCBh-agq4Kh7I%5C","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1WsBJxFUxRAtAErmErwr3skSM0WavN8Gx","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1lnqZQM7UGlfgFeMxQG11HoYvIXsdzdSdJwclWiGcfZc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37567676')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37562986","order_number":"3659","ral_color":"מגולוון","production_date":"2026-03-02","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1aSDpEZth1NSqr02xqqzCvWkNLaLFMAAt","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1K9HBmmpHO6dZT0rG-u6McunoenOiouMWxUpy2gDdiZw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37562986')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 34' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37560758","order_number":"3653","production_date":"2026-03-01","painter":"ללא צבע"}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37560758')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מודליאני 4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37533456","order_number":"3652","ral_color":"7015","production_date":"2026-02-28","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1O7aG6qZRN2LVfum9-v5nGVSA9cByOaPV","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1I8ssWIUZ_d5VgytnzS7I24s7amXO6-2QfQMo5Ctx1IE","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1SEXYPfyt_g-GqZwm1C19SH0Yl62wlbPr4hOzreqTjWw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37533456')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 3' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='emil@ecocity.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37522770","order_number":"3673","ral_color":"9016 גילוון +יסוד+עליון","production_date":"2026-03-05","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1ef6iOlgxoBxs4qDGFuoqAZwjrNDAXqTo","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1F7vPmV7hHqeu_Rh-7jZL6kBI9Txj_DnWpE2jSKVFLaU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37522770')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אוסישקין 74' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37522170","order_number":"3727","ral_color":"7032 מגולוון+יסוד+עליון","production_date":"2026-04-05","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1pD4Cvb0cW91jE3chl5hYGb-k_Ld2k_gG","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/14jrLyX3_H3uJbcufVIpKWSqDQViI_4Zs9q598EOrXvU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37522170')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37519964","order_number":"3759","ral_color":"9006 גילוון+יסוד+עליון","production_date":"2026-04-01","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1CQ3oQKqQs8b-9dsVA_eo9iC-tlfoEl4Y","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/18hREG6oDkS5IB2yPR7iQ74FiOX9njb1Z6q4-68leDgY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37519964')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מזכרת בתיה' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37471786","order_number":"3638","ral_color":"גלוון+יסוד+7024","production_date":"2026-02-24","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/17R6blnyN2emh621J7_VAny_vnnK9bFZN","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1VS6hiKru641rJPNesCp3qNnFLagG0IRlf8JSsRBFJSA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37471786')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סוטין 15 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='migdaley@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37435510","order_number":"3631","ral_color":"9002","production_date":"2026-02-22","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1mgjR9Xhrlc_fyWzFyBTfrr1wN7gAFeVy","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/15QT7_Nq_OUzOX8mLKiDrSwPo512WAVzdFpIoEl34oRA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37435510')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סוטין 15 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='migdaley@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37435110","order_number":"3630","ral_color":"9002","production_date":"2026-02-22","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/192ieGDslAzwMaryUAk8sm-FEnlQXApcC","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/19mQkzooG4vbuqdNlDPAb-6vWD8SPj-BtwDHw5TBSKYA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37435110')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הלסינקי 8' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37424614","order_number":"3646","ral_color":"מגולוון 9006","production_date":"2026-02-25","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/17eQclTOwK8c9Uvah0o-nHlAOz4bgZYdF","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1gTuKhTyaaBUoJgqzJ1FuKUtQWnDn6y9021sdsPqqAz4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37424614')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מינץ 12' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='udiohanina@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37058539","order_number":"3627","ral_color":"7022","production_date":"2026-02-19","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/16-V3RyW39dAoSy6bCyP_Bj1MrJjjqYr9","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1akA4G-Mf_Hv4YdS3xuyyjvTJxyF5Yxo0vDgEZFalCH0","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37058539')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 52 ת''''א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='roei@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37028349","order_number":"3651","ral_color":"9011 MAT","production_date":"2026-03-01","painter":"ללא צבע","drawing":{"url":"https://drive.google.com/file/d/1k4zZM9Izyd2bQz5NZ4VBfj-QRs03ibTO","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1oCSEAL_w0bKTxoOKIgV-13osljxi6Q9UCiR2tOH6BW4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37028349')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='נורדאו 65 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dor@rotem-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"37026793","order_number":"3623","ral_color":"7022","production_date":"2026-02-18","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1jMZzBTBXw9PN5Gnh3RokoK3DrgZx_PRF","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1kS4SdnH5NmnnBIoAIAf8ZfUzkjGX8w_Palck3xR6hb8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='37026793')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סמטת המעלות 3 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36973811","order_number":"3615","ral_color":"8016","production_date":"2026-02-17","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1Jl5-s8FAaqURPGWx5PmDhHfA3ygJiuo1","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1nwh35xlHCTvT04jY6snh_zDF8gDTT_1_UbA6X76_5yc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36973811')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 3' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ori@ecocity.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36931219","order_number":"3618","ral_color":"9003","production_date":"2026-02-18","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1B1IJmEnvHL85Wgn2cIYb-Bb0f7wt6ixK","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/15ywcy0AavxBhSsZdlWhZ4CatnrH1J5npoYbsULZC_KU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36931219')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליפסקי 18, ת״א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36930301","order_number":"3612","ral_color":"ללא","production_date":"2026-02-16","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1XYDbyS_fNw3S6mZGFckSWjTg_RRtfuPt","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1wU_CWWnG0ZxwiE1khO7I6YArbd7QqQ5gXTAyBFkkFUE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36930301')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='נורדאו 65 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dor@rotem-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36930073","order_number":"3786","ral_color":"7022 מגולוון+יסוד+עליון","production_date":"2026-04-13","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1QLhgL57Fu1HHVOS7GQFXnhcuAYGnSSUS","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1wTj-hQVDCz-8cEowgw_Yhry2bYw4olcEus7nKjtGkf8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36930073')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הירדן 12' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-d00d3fca@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36922171","order_number":"3611","ral_color":"9016(מפרט 10316)","production_date":"2026-02-24","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1N5q1u-b57fWg6iJsbfJscJ17w-ZTCtUEI_5kyI4gKVI","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1HB2LM0tYkc9WMxIj3pyBqiCbfcSYlZoB","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1JQ8D8ygpY1NYz_caPHmRKcFojvVWW0mD","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1X9_5-eAmCG9YUzePJK2kb1yvQkaiOBL1okgT69SZmZ0","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1hSLn9thCpasplaDpnihJyHiNdkX-Tw3AWc8sKlsYa1g","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36922171')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הירדן 12' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-d00d3fca@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36918373","order_number":"3610","ral_color":"9016 (מפרט 10316)","production_date":"2026-02-24","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1num142NDd7JGqO9p9Di0R3J5mMtpRdlcDStCV-UMf_Q","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1ydsmLcl0D7t4jil6aVGAIPuSxTtzfpCj","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1X5m7N3ni1x50gThPFotxOq4dG8Er_LX7","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1xVmoBXDrBCMybhQKciIlkwtGi14RWJY6iuNuSg45rag","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1izw6kxaPZXTc_ZuSvl-_A36ffCRWZTWSk6MNt053cXk","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36918373')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36916459","order_number":"3671","ral_color":"9011","production_date":"2026-03-05","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1c7SfmJyWcpY-aCmEtvk9KEwJE8k-75NCv44LOB-4N_I","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1mWQ-KqGKAsO81uLDUKGT9B62Ru46-kZY","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Ls79cOmZHOGWYk0RMUOy5RVIaH0Z8NpbhHUOl8ZYC9k","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1SMdpNdyKpVLXC91wZba0DewaaSB70g3Cci1Hex-Jqhs","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36916459')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='תל חי 9' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-04220a1a@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36915831","order_number":"3608","ral_color":"9005","production_date":"2026-02-16","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/14sgwsQ0vNGaC-OGnhrGiHAgCTHCvf9Vr","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1ok5eSQcFcAKrfd-vexcmKRGDWP13X4cLEWOjjqqwprM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36915831')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 52 ת''''א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='roei@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36900183","order_number":"3801","ral_color":"9011","production_date":"2026-04-16","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1voiaqunbgKhcWLTQlyioKj0FCPKfhyRzbbGLZLY1NGk","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1l4jRgB_9R6qF5zBZTUIj0XtIruu955cx","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1aPugErw33PbMTogerESAnUZPefAVdnLl","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1uWLl97wpwWcWeWkxsnqAJxkElzZkAQcuF6rfQu3dN0A","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/141GOiqhPx4wt3JLLnSibY1ZqMZ99vvPxWdA6j7L8zR4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36900183')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בילו 12' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kobi@michalovich.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36855301","order_number":"3625","ral_color":"0","production_date":"2026-02-18"}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36855301')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 20 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36853161","order_number":"3719","ral_color":"7011 גילוון+יסוד+עליון","production_date":"2026-03-23","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1qK95bytjWNeLJ33ri4QiDaFONUXMQq9j","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/15CtjZ4Ht-h_q-ZANgLci5Qe6cAsDn5koUJZS0PB2OZA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36853161')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 34' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36851833","order_number":"3609","ral_color":"7016+גילוון","production_date":"2026-02-16","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1gdTFltvOXNd3yBBdHGsZ_i0nTWpOgAUj","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1ABmPBBMMJWlc7uWEPk1j4sS1WatigzzCeqc9_4Ss67k","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36851833')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 52 ת''''א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='roei@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36847477","order_number":"3607","ral_color":"9011","production_date":"2026-02-12","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/17irCmx-0LsqgKL15pvJYh25SdzO7znpc","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1DpS4inwbaKsgVc0GIDbG0RzkKryfU0h2mKfvxgzdagQ","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1GDQ5lzhDCUsWNYPG1TVOPwy3qFIGqt08tdGHhhddBLQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36847477')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליפסקי 18, ת״א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36846287","order_number":"3647","ral_color":"מגולוון","production_date":"2026-02-25","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1jpLkfvLkGPLHCDB7nu8i6htF3bFK9Zf8","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Y1NMnqPl09Bfl2DBxBlLfQwUXNbm2mToQI3NWYreAP8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36846287')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין  14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36772121","order_number":"3639","ral_color":"מגולוון","production_date":"2026-02-24","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1zMkbN-2WTzGYGmdmVITACtT28-9nLqly","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1mzH5rMXqATfThMOGU5FfrbMaTUTeYUKGTyZNH4tug0Y","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36772121')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פרופסור שור 9-11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36771481","order_number":"3633","ral_color":"9011","production_date":"2026-02-24","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1vqIZXkbEXGKvVc-v2ssjmdjZGyrDaixZ","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1t5d0OAf1qBAGUfGVGirEPawp-wqHaJSXfIniiyOIWmk","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1tKPRBJLuaZWYL240D5lLUpdPLrkYcTmYM5tWhtAlQgc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36771481')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36768841","order_number":"3686","ral_color":"7022","production_date":"2026-03-11","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1msWeMqEkolo8yHnBDZ-aMG4WA3Urdwmb","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1GAZwRwgEXBYlujf7qnFsObjCYn6ptOWttlK6Rst_X-c","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1qMQyU9SaOnP1tS0qWKo5UkMRXXfs57hamkWvLp9R_HE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36768841')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין  14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36768467","order_number":"3665","ral_color":"7021","production_date":"2026-03-03","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1Gt4-4IvPawK0F4MFwvi0ejo8vP9iR96A","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1rYyg4c03m1bx3H_9aJBuLAypVstwlT0ALsia2DlRWe0","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1O0cUVaJjrnqpQtNmhSTnX27H_R_uVF4QFmqXQoG2k5k","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36768467')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין  14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36767843","order_number":"3662","ral_color":"7021","production_date":"2026-03-02","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1qk0320TbAEJWcr5alEkWOEPJRRlTqop9","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1wiUYJTKGdCimKM-8SzLFaHBcmSxiEeQDEs5DaH0EIl4","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/11fa6LzG6Uu4FF1diR6ldXCQ8nZPCEvr2hNHTtEVKkb4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36767843')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליפסקי 18, ת״א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36759093","order_number":"3700","production_date":"2026-03-15"}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36759093')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בודנהיימר 43' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ym302817@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36747901","order_number":"3624","ral_color":"9001 יסוד+עליון","production_date":"2026-02-18","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1i0aakpOc7vucxfvJ62QYliTU31cVe3df","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1s5qV9w2SU4pkKVMyIwr8gAJ7qpli999Wt5TMYVfDKac","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36747901')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליפסקי 18, ת״א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36747525","order_number":"3600","ral_color":"7021 גולוון+יסוד","production_date":"2026-02-12","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1CJ_m4ixvEKVsDIBQHPoJOzRk7IdKeoOE","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1rcY3ptgopwmA2_Y-NuoLjD_R0vTXEWybBI9XagCzxLg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36747525')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36701065","order_number":"3672","ral_color":"9011","production_date":"2026-03-05","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1RKLrN65NxjNNgqO9V3c6JVkzVCr_KPXyhJmRJMKYixk","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1WmmRZ9F_dXObcIUZbgLLxFYUvSnzk1q4","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1yyKL9Ihr7is7bw-xHI7e7KONikFlaIeb8KGH-B7AmhM","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/14q0kpOA0025ZURJIwoJCTYEkHBNC2Cc4XKLQHqiFDVw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36701065')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 3' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='emil@ecocity.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36690785","order_number":"3690","ral_color":"מגולוון","production_date":"2026-03-11","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1aDCbaXYtNxYTmy7nGtozFbnyemWJxh1z","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1SCvHMsKeOvB4uGIp5CPW-kPyAkZv5WTf6xc7ZdAdkLQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36690785')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kostianaaman@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36679421","order_number":"3598","production_date":"2026-02-11","painter":"ללא צבע","drawing":{"url":"https://drive.google.com/file/d/11lVE7_eb_7-ugtyg267dRqdKV3co1wsz","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1WQIuE7anTiRlFIdakFp1ETc12551EuLpcfTx-pKeh00","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36679421')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דיזנגוף 254' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-dccb94a0@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36636219","order_number":"3847","ral_color":"7037","production_date":"2026-05-03","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1cZ6ptTCC8c8maIOS8TpMzr0FYcwG4o_WRkTa1VdOsbY","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/123GqexriljjYGTV1xMZbajt59-dL49K9","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1rFC6cCQj-OL8echrB7SjmdgNpTPR71Ri","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1NlyYg3n0nDrTs-PL2ftoFuGF9Q-cpiSKOBb69dV9kJY","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1Did1sehoi80Kyf8Kj2KjwpL6-H4FISDGMBumoLt9tuI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36636219')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 3-5' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='emil@ecocity.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36635997","order_number":"3614","ral_color":"מגולוון","production_date":"2026-02-17","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1By-dxkz7VvItD7GWnSLwaHGZ2uejQc_v","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1OI54bGf-3MkoVW_yeugWj1yNxq_N7LQSHekCR3EDVzw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36635997')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מזכרת בתיה' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36628335","order_number":"3592","ral_color":"7024","production_date":"2026-02-10","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1uHTxtBaQtsWoNhoDIQgtzojv0XuiWkRb","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/10jMIVNWvrPmn2ZyPBGw3R8aUGWA8ivBN5BfTpcbq8mw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36628335')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='נווה שאנן 11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='engineer1@ibp-israel.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36614329","order_number":"3687","ral_color":"9005","production_date":"2026-03-11","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1OmVEgN9jZQD8ocSR6IO78bknZdJFDY-Y","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1hn_dTn0cseHMOAjsz7j3FoQTMoVJ0tFWUDtsrt5gFn8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36614329')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 68' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-eb43e235@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36614157","order_number":"3594","ral_color":"9003","production_date":"2026-02-11","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1F5eXYylWa0_WhRK9-NApQlViCG4YVyLF","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/10LtPIcOFgbMQTArYGjAeqAPnbDOoC8faf03irf5acGk","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36614157')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 68' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-eb43e235@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36613961","order_number":"3595","ral_color":"אדום","production_date":"2026-02-11","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1fJShB03fgVY2Mz3IqaHGIBZ9hqHFHeOp","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1qQCaky6-UawuCSRqiGmKmGPMC8zOTmRU863fU--5mS8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36613961')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='תל חי 9' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-04220a1a@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36592909","order_number":"3677","ral_color":"9005 גילוון+יסוד+עליון","production_date":"2026-03-09","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/12trc9UmWt21NjsYcVtGC2Ix_hsv_cC-X","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1JpEeppCfFIEHjQROC4eE2J0wrV4lM6sOG6FEOkUY3JI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36592909')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 52 ת''''א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='roei@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36582775","order_number":"3585","ral_color":"9011 MAT","production_date":"2026-02-09","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1z_3uZDSTllzXCcl7TlQrUNlD-3LRgBk2","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/13KAKK7LcurPSjNjSzsJhDfvp64XAGUbRdywCmzuMU1k","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1tS1Q40R_B7iFZSS6s4TIA0mUyvqyd_bLZcMNsE_TlwE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36582775')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 48' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36559789","order_number":"3604","ral_color":"9007+9004 גילוון+יסוד עליון","production_date":"2026-02-15","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1tftxW3hwasWXBrADVgiqU6YZUmkoaM4Y","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1ApXzxx-L74Bg3qdBcNmznGsi0wbiMQhBfFtSH5sj51k","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36559789')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הלסינקי 8' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36555787","order_number":"3605","ral_color":"9011 MAT","production_date":"2026-02-15","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/16UoQFlEJ88qBOMuOO0bSf2xZSFh1t3el","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1kXg0jISgVyo317-_lC36U5O2Jl1IVCxDSjg0OWhUJJg","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1l2lYILyuZaQmH__SOViLaS5OCv9Hpz3USpRXpM7Aekc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36555787')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הלסינקי 8' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36555651","order_number":"3606","ral_color":"9011 MAT","production_date":"2026-02-15","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/19Eth1drh-OMovsL4DrNoCVok0wWCnEu_","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1FdKhnrSIe2oTUS7AO4_vfXiHwlqBeHXbEAD2Kc9rR-M","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1z5LY83chP0yPq0GV2Mb6pM1_nl6fXhy_Y_mBkUKWnCo","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36555651')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הלסינקי 15' AND (er.values_json->>'client') IS NULL LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36501491","order_number":"3599","ral_color":"7021","production_date":"2026-02-11","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1lsnZXuVGnCe-8vqCiKs6xTQFXMAfhYLe","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/19Kc6VTqr9xrqSVfZR1CZ0PRvqHwWRlKc7n1IseEFDTY","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/11OOGIE8Kla3IQSJn7InVwnIQFaJV4S1q795uQFE6M-w","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36501491')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ויצמן 21 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='barak@nofzameret.co')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36496457","order_number":"3622","ral_color":"מגולוון","production_date":"2026-02-18","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1_uwm_7AnYh9MR9bpHH2WAO0jWr1OXLYC","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1MVr1oufjAVq7XEdHSa1nIub9tZV7ZJ6ykl9ikHMDGBE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36496457')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ויצמן 21 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='barak@nofzameret.co')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36488409","order_number":"3616","ral_color":"9016 +גלוון+יסוד","production_date":"2026-02-18","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1VhaeM3xQXDCQqpZzrJ_PUDezfe5gSccd","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1RCgOya5q6rtmIM_W0urLAH_NIOKgFGsx2Ep0n7pAlDs","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36488409')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רוקח 50-48' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='nitzan@henco.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36472063","order_number":"3583","ral_color":"גלוון+יסוד+7043","production_date":"2026-02-08","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1eV2K-NCghLgSAKTDrkk5YQ-CBL25WdRn","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/11xeQl0xY6qEfp-ZBi_MCiqlURaUXZcYiPEtAwsKO0iY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36472063')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רוקח 50-48' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='nitzan@henco.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36471989","order_number":"3621","ral_color":"גלוון+יסוד+7043","production_date":"2026-02-18","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1LcGr8BJ7kRxq8Eapyfki0WHjs4peSTwe","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1O1FJXrsEuT_gbRDDoIKBSE7YPkPu9t8LhqCcrR9BoRg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36471989')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 52 ת''''א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='roei@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36459319","order_number":"3666","ral_color":"9011 גילוון+יסוד+עליון","production_date":"2026-03-03","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/17K42Hmesxsi8ZAo95yHV4iGx2C4P1ezJ","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1vcu8XgYs-K5usxrCCSCSopLAKR_eNHNs1WQdNtQsVUs","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36459319')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 52 ת''''א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='roei@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36442969","order_number":"3578","ral_color":"מגולוון","production_date":"2026-02-05","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1lEc5I8viIUrPnWw-WFlc1zmN6EQfcXSg","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1eLL2Xb4cIjZtg8TcfMpOWZQK5OpdMVM40588900p-VA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36442969')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36432141","order_number":"3637","ral_color":"מגולוון","production_date":"2026-02-24","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1-rk7IYrNrjmeUOfIZShfXDdDEcikCMgU","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1j01IRWf3pxbJK2Ssxcz7QE68TXlbdSe7c-YRDHxlezs","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36432141')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מול ים יפו' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36431801","order_number":"3593","ral_color":"7021 משי","production_date":"2026-02-12","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1TXVSh4LYgRRT3AzBu4FVS_nnOhst8gV1","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1BTvKjjlwKriRMuyHRPHF39VpDtiJFfm86ywybx2VTYA","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1muUaTjQZyOEKdq_OmHrG4U3mrZOx48uRH-A4OxhFlCg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36431801')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בורוכוב 34, גבעתיים' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36426581","order_number":"3613","ral_color":"7022","production_date":"2026-02-17","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1Tol0X25hx2DrP3V2yGC0movpLjjbqihP","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1igkGxdRcDKmBAtQTy626pOVmPzdwffsn6Yn1eduTQ_o","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1ocXDMBUxNrewZaRG45wEWXEAei-soljeRy8cihteZAY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36426581')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אלכסנדר ינאי 15-17 ת''''א‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='liad@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36415235","order_number":"3573","ral_color":"7022 יסוד+עליון","production_date":"2026-02-04","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1CUuMBe9JKFs1np1XRdoKdEvL6TPYTCKk","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1PmKgA6_ktFSh9pBk7HEQG5mM5EDMjG6OxJGorZmEdyc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36415235')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36413131","order_number":"3577","ral_color":"מגולוון","production_date":"2026-02-05","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/12KroUYeVmT9WaZS-Sinrfcz9ZmrG92JW","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/18p5_WZ9jv2As2wtljdblFvEX_jHqZHrVsoov7ZFGWbk","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36413131')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kostianaaman@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36412601","order_number":"3698","ral_color":"9006 גילוון+יסוד+עליון","production_date":"2026-03-15","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1e2Y9K5vXf73bNiTpntF57oH_rhLmCg0f","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1kZ0i0DxPGEHPWFc0trNbjf325kdK2g1RMnqyrxq4obM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36412601')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='תל חי 9' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-04220a1a@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36379981","order_number":"3657","ral_color":"9005 יסוד+עליון","production_date":"2026-03-02","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/103qeGfvzTP7ZKc-ySZfzvYOTfZcsbgYu","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1aFkZzbUQaqlySB9GoZgbVEWmlK-cedYFtIXb6cudAqQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36379981')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='נווה שאנן 11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='engineer1@ibp-israel.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36294443","order_number":"3568","ral_color":"9005","production_date":"2026-02-03","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1b3bqLnOGe4FxUGg-34de1SR2jA-hMX1o","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1JcoEyQ27PK71vYhBDwU0lqYRxdW1RezVgg_EK-h767M","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36294443')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אחד העם 108' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='adi@sharbiv.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36293911","order_number":"3709","ral_color":"9006","production_date":"2026-03-18","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1wdPZuISA9N04hDgyi68Moj5MF2klNZmM9zvcwsAPZNs","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1vyz9lr1iJe2yxUnfQNkdRg4ZeVBeMydg","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Yt5aqmZpJC-Ri1mWftP3pO-oX5TWe9jxAmAW4Hv2Ims","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36293911')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='נווה שאנן 11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='engineer1@ibp-israel.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36293527","order_number":"3643","ral_color":"מגולוון","production_date":"2026-02-25","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1RL8odBLutbcw-KYKBmQTjYqxPcFOAiN1","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1qvdECCJQTY8lzJTeCX_RY3CirF3BLtpe0f0N_IqTKm4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36293527')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kostianaaman@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36293475","order_number":"3796","ral_color":"9006 יסוד+עליון+גילוון","production_date":"2026-04-15","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1D4TFHHnZa8c_CoLOVM4cpQVDSUkbn7yuL9zqBtW-PTc","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/17wx9VNZHv1IiPvcvMDpn96k6pwb3A5lh","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1S7xFPAwVUbKYQJG-XVyp-HNCkZmeBBq32wCHu2Kv1cc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36293475')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36293275","order_number":"3570","ral_color":"מגולוון","production_date":"2026-02-04","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1ZgTxJbotU99O3I5_m9UAcsrF4xdTeqL4","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/19c3RzzxFqpYalfVbqNAyhvur7lxOtcEnU9Q-YJxQ5-U","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36293275')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 52 ת''''א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='roei@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36293149","order_number":"3576","ral_color":"גילוון +יסוד + פעמיים עליון 9011","production_date":"2026-02-05","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1yvLvdwu1rKREG_2abSqojCQchh16ygvR","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1UCchNnaPf41Dq_nFbdGNRf2UpSlmUekIReTX3MvMsAI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36293149')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הלסינקי 15' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36286793","order_number":"3587","ral_color":"7021","production_date":"2026-02-10","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1p0gcijz4np9RUmdNj2QPBKFSHa9R0Z2I","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1lVGXzBpnkwtq1cuGRNLpuTHC5jB80mtUK4nD_CgNpeM","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1X8ohCMs6EDpQR_44wzNpsNvOAapjL1N9bbhkRObMJLc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36286793')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36277935","order_number":"3641","ral_color":"מגולוון","production_date":"2026-02-25","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1XL8VeoFCyXn1UlF3p-PdRM7nul88cBmP","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1HhCL9Y6MJ769VPyaBpBkrxOwH9v4EG7vMkTkz92RZ94","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36277935')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 34' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36215669","order_number":"3551","ral_color":"7016 יסוד+עליון","production_date":"2026-02-01","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1aW4eMqnQY6Gu-kdL-I78GbVIDGl4nv9a","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1zsgJO4DQMBaU_3hoV_6PIAMyO4yaB79MOq0InZ2WtgM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36215669')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סמטת המעלות 3 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36203779","order_number":"3559","ral_color":"7032 יסוד+עליון","production_date":"2026-02-01","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1t6R_M9vLe-L8Tzv19rEntDxKbwRy85iX","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1gmPpRPrWOQQl_mBa83k5ntwvOAkwwwvjE5sNxK14JGw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36203779')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36202431","order_number":"3582","ral_color":"7047","production_date":"2026-02-08","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1nJEtd3ppYdW_l4Mm9JdWqVlH3wdS4Vzd","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1a0Mt4xXyr731cazlbLo_Jug0FCAWk9Piw2e3ZRkN_Sc","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1SQuqkjuafNQMxINQiFFTBeaPYEmMU7X4OLfHDSEoCmA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36202431')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"36202329","order_number":"3566","ral_color":"7047","production_date":"2026-02-02","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1qb2Qzw9gzJh_vUSlPY0ucZ4an8RCqWDh","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/17WNpc1AyEvs1pVPOecJd3m2mQ1yUKoMpfWNjFsg6FQg","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1xvuNJsN2gqcGLhO4pJcEbpdgOmCpNkAR1xQVJCKzGe4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='36202329')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פרופסור שור 9-11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35944823","order_number":"3601","ral_color":"9011","production_date":"2026-02-12","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/15g7MsmdMhrxxAj8hHwsE025hrVmX8Szs","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1PhjKY-w0HdGk8PlxBJkVK4X798OVtv_CAYx5KC_QUTI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35944823')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הירקון 70' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='amirr@auto-chen.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35931317","order_number":"3545","ral_color":"check","production_date":"2026-02-01","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1yxYAhdIzRgAbyi5WHHRcaL9LZzaMxTZc","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1tb9OrmCvgcrYcJ65tBxVrFNpNvpqyIKkzp0v4dcgjCA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35931317')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פתחיה 23 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='daniel.aronovich77@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35921039","order_number":"3554","ral_color":"7016 גילוון+יסוד+עליון","production_date":"2026-02-01","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1Gl6txDVadRpBX-59mb8Jzk7HVuL6Cx6h","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1CdH63kzDMho0QzF2Yz2YjXyFgPV3VuW6bGXMFjsI7vU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35921039')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מזכרת בתיה' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35909303","order_number":"3558","ral_color":"מגולוון"}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35909303')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='כוכבי יצחק 11 תל אביב‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='udiohanina@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35908695","order_number":"3560","ral_color":"9010","production_date":"2026-02-02","painter":"צבוע אצל יצרן","production_order":{"url":"https://docs.google.com/document/d/1YG8HYg5tPZNh1-z6TDJyWWHJL5zULBf4LHDb2Jn9CPs","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35908695')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מזכרת בתיה' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35906987","order_number":"3556","ral_color":"9003","production_date":"2026-02-01","painter":"ללא צבע","drawing":{"url":"https://drive.google.com/file/d/13gSqRje7_owz8eHy0SvOxjTokwUL5H2V","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1AD3P4Y6OqnGZ4E4N1PC2-HyWN0hlVy3BgPiPZFVOoyo","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35906987')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פנקס 25 דה האז 30 תל אביב - יפו' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kobi@michalovich.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35894541","order_number":"3561","ral_color":"גלוון+יסוד+9011","production_date":"2026-02-02","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1CeJU1nuLW1cw8DzKLJaCHRxXyCsSQ6Ma","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1hMlKYWxEjPSTMHZCnmPZ95oNLlstsePAx5-RPKcH6ZI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35894541')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35890525","order_number":"3629","ral_color":"9006 גילוון+יסוד+עליון","production_date":"2026-02-24","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1LMNXe3GWJCVXmYLOlCDpobdxhWtgeW66","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/12YY-5Qa7W_h020d9i9MivGycOZT0TZSc7T9jj0SL6nw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35890525')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35890259","order_number":"3634","ral_color":"9006","production_date":"2026-02-24","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1FCFGCHDq9y4P36LUMVCz6lQYqCdZDB4nXsc-c_Dq08M","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1k-a1NLHVy6o9KhIZawLA0QMqpU3ibzyr","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1VI4ecr4PuxT2Eq3Ckj7QAl_0s7eiYEy8","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1WeFqYjgINoCz1NEBLdEqXg_dluuDSYXiTdTidZTuz9Y","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1n5tu1rIBWoEDhQDMYajiNDApVbAob1Cb7HhbikWYO2Q","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35890259')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אלכסנדר ינאי 15-17 ת''''א‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='liad@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35889815","order_number":"3858","ral_color":"9002 גילוון+יסוד+עליון","production_date":"2026-05-06","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/11Xi2USMwa9WylFdKhAmTz6kMxmu2eHDt32OKC8KrMU8","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1s423tS1fOwnSUb81xelJfve92p1g7RI5","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1l_gryKRqYJWo_Me4DhmVZG7Ss81WpOK1","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/18h9PdHy2Vw_O_Reh7QA4nKsW9gADOyrvT269sPFewBc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35889815')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אלכסנדר ינאי 15-17 ת''''א‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='liad@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35889687","order_number":"3869","ral_color":"9002 גילוון+יסוד+עליון","production_date":"2026-05-10","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1TRdbhZ8GEbnveNmkTyDrLfIRZ7BYuqm9E2jRbt1X_i8","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1VPOVAMVkznmSJjY8fWR4EVe8VKPPpdDL","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1v0NL1GPBiZU871GXmSEpM099blxp1PzK","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1FKbXft6M9aGrrsXp2Clank0dHdKuud7ZO9VCVTnWSuE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35889687')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אלכסנדר ינאי 15-17 ת''''א‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='liad@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35889571","order_number":"3870","ral_color":"9002 גילוון+יסוד+עליון","production_date":"2026-05-10","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1VcYpcFWZg1FCZ49hqUa3jiZlR5a9Tj8ZKWgvPVhShuk","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1y5tSvXI_v_WSnP74l0hi_fyexq6cn6rd","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1DhpIj3CDWMf3iqNFVkgwgvNJYX5sqz6O","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1x5XrT-DaII3j11UWeS23j9Q16RltnuruiAajPZk3wSg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35889571')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35830405","order_number":"3542","ral_color":"7022 גילוון+יסוד+עליון","production_date":"2026-01-27","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1W__Z3LIAMddSU8jFYrsgoWPScTlrExKn","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1XqKB8HZD1vCCku7lKiJ3GqHc9WjgJ0GAAcdIphx_NcQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35830405')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מלון נחום גולדמן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='yoavar@electra.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35814605","order_number":"3543","ral_color":"8019","production_date":"2026-01-28","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1gonv6Ctb14lNjH_na2cMYqbcLLn7PHoU","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1CxyzeGEFnUkPiAlhbZ49_KNdhqFNjfdQ2tHZHV2Ym-c","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1HWU4bHehDph6M0WnPbOv9FZBxc0b_d-bpvOWXQcN3zA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35814605')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kostianaaman@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35809431","order_number":"3603","ral_color":"9006","production_date":"2026-02-15","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1w5oaQvQ4qL5tMjDt22nMpAQhIBEgGJvj","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1VPXqatMMJYBvuGa9UrmU8eY8J0grgl4xAfOXedbxhoQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35809431')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kostianaaman@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35807923","order_number":"3648","ral_color":"9006 גילוון+יסוד+עליון","production_date":"2026-02-26","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1XSdjpFKClYo_CihhsKk6HESiYckwbI63","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1EL6ma-3_tu8FrQ704x6Cj-SFbomBgCR9rQUHn0Ds_Ew","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35807923')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35807621","order_number":"3541","ral_color":"9006","production_date":"2026-01-27","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1-dgqVbgpDA6jomz4eEhoTjS9bIBwECN7","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1IwEIp-7tFxgpKnEj1wJXTZvU6XWW58ra-Dw_IxKe1u4","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1R8FfZ7OJai-BQ6IzAphvElVZSgqaEVxmo89t6oZA7iw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35807621')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אחוזת מונטיפיורי' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35804829","order_number":"3632","ral_color":"9011","production_date":"2026-02-24","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1wdsCVJWUtQ1Ec1d7AeVDkd8aOHbhcnN3","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1HClEOPeZIKDDjjLMvaXNpX5z2e_4k1EJuP5wbhnwT2M","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35804829')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פתחיה 23 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='daniel.aronovich77@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35801129","order_number":"3552","ral_color":"7016","production_date":"2026-02-01","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/19f0ygKblkkLmkkt_qjBosZ3Q9S_73c7Z","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1vkZMEERWbOiXMq_RNFvmCmAk8fTyOsXDomxtAXHBCHE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35801129')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פתחיה 23 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='daniel.aronovich77@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35801101","order_number":"3688","ral_color":"7016","production_date":"2026-03-11","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/12Pni4KecQNr3AAa_lcK32lTP19pr-tHr3rZlCGS7bh0","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1ustLcWLUh7aE409QbDQI0hN3UwXTirmX","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Wg-i_KiljXWJppHKGhBdQfks894GXcaYfOaNKcg2RhI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35801101')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פתחיה 23 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='daniel.aronovich77@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35800773","order_number":"3553","ral_color":"7016","production_date":"2026-02-01","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1EKbIfgDUkCi8lFfduG02wS0Znd04BOtp","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1OooqlTtQ3H_pDUHvA_ik6NKtnHcyRfJLb7V062ab53E","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35800773')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35800259","order_number":"3534","ral_color":"מגולוון","production_date":"2026-01-26","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1Ba1D_EvOtqoomQ3oQIQg0fM3E9ERp6Dj","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1zgt_mO0jCi_z5Mbd01DyyYQLz7i3WCkRHbu0t_Cb8rw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35800259')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35799957","order_number":"3575","ral_color":"9006","production_date":"2026-02-05","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1o33ZB0ihN_ivNNCFdlpYM4hqAVq0jdbm","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1PG9lpLsXu2BzKb5ar2NbBWLNunZE1eL3Odf2JwOOBBY","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1Q0lgkdDaKGRBP2A1GbPEHnrueCFFT1cG3Gd6BmvZKxQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35799957')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35799659","order_number":"3533","ral_color":"מגולוון","production_date":"2026-01-26","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1YLsRMYQAW0akaGAMgN9RmAdRAi9rZuy6","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1ilMPU5Yc4awKKZsrDpu7qNOu-HHd5wIkTo9G3_rIQfw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35799659')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סמטת המעלות 3 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35778853","order_number":"3546","ral_color":"8016","production_date":"2026-02-01","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1AcHJ-cItarYR8WieXLVFV9U-7tz1xkS7","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1moK4MjtTN3h27Rxma7orWtqqbruILOvwOu-RUrxx8wY","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1-dMWmGxKHK7SkbHCNKQYK5Y7os-2hRbKp5gj17PMUnA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35778853')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליליאן 6 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kobi@michalovich.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35695525","order_number":"3538","ral_color":"7016+גלוון+יסוד","production_date":"2026-01-26","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/171JDrXvIiQhuctSZS_MeD-Br-NB5Nts5","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1T3clXS1twc2dbxIygALEKFbSZFwhIJ_nM5GNIIAlnI4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35695525')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35694071","order_number":"3530","ral_color":"9006","production_date":"2026-01-25","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1FaVd4NVcW37B4L2Y9xkTd6AQ93AsjFZr","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/18B2_4CjbM1Uq8F5-FuK-FhuZ1J1v7TLgLyuO55C2E9s","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1GbKTb8PNiH4GOrUyjZJgAdy1NM5ehOGtA1UpoGrkWI0","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35694071')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רמז 36' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@yanush.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35667719","order_number":"3539","ral_color":"9004+גלוון+יסוד","production_date":"2026-01-27","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/183p3a7RVKbTIudlJpc4kWKJfcQ3Cte83","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1MuNc85QacBkeD70UbRrgim90Mzh09ZHO5rkBTryr7L4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35667719')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kostianaaman@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35630317","order_number":"3518","ral_color":"9006 גילוון+יסוד+עליון","production_date":"2026-01-21","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1pFuaOJ1LHjeG-4HYRyhd2WLkfVQkzYmF","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1keDIk_4gUB74Dq9xCd9VhqYbsJ1208fznXNbM1ykP2c","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35630317')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סמטת המעלות 3 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35617267","order_number":"3517","ral_color":"8016 יסוד+עליון","production_date":"2026-01-21","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1eXBptdXarQR19uOT610bauajPJ6EC43f","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1SsMZ8gGYHuH-kkmmwy9rFzbWJolcpvyvkPUNyS2fHa4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35617267')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בילו 12' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kobi@michalovich.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35582995","order_number":"3513","ral_color":"7022 גילוון+יסוד+עליון","production_date":"2026-01-20","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1xGAiJM3RgGDJC2olid-D_AqHOQzQ1AKJ","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1nfDwPLdB640d1JImpHY49q41uUE03ip3En0l8ln63kM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35582995')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רמברנדט 36' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='aslam.a.m.tavor@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35577871","order_number":"3515","production_date":"2026-01-21","painter":"ללא צבע","drawing":{"url":"https://drive.google.com/file/d/1MqqFRY7_gCyNWU9HCIlGqRmMvz2Y6lJw","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1xItScxvDVPaaAQt5t6dl50qXJc0JcQ4kaUeaedJeRk0","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35577871')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מלון נחום גולדמן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='yoavar@electra.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35547051","order_number":"3523","ral_color":"8019","production_date":"2026-01-25","painter":"צביע באפוקול","production_order":{"url":"https://docs.google.com/document/d/1rBcW5MZAVw_8YOtDJO4_FJ3IB4gmLd4nQkGE6W0XDCI","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1X7czUlXdVxhDKutenxYcrrmimtUA_eqnbcM_UiPwr1Y","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35547051')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אלנבי 74' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='issa@mushlin.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35523305","order_number":"3642","ral_color":"9016+ גלוון+יסוד","production_date":"2026-02-25","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1ecBqNQoaIz8zK6fstQ3ur9SSdSPUIaom","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1ZAtEEtqwe7ApL053BHcuea5F6ieuVhJuBKIGeV1EHlM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35523305')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סוטין 15 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='migdaley@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35522595","order_number":"3502","ral_color":"9002","production_date":"2026-01-19","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1hYD-RYp_YC52zwGHQ8dnXc0GHJxAjjxt","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/174jEBbclVlH9Yxd5Q4RiZNKA96Doy4JJxcD0du67BCI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35522595')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סוטין 15 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='migdaley@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35516213","order_number":"3531","ral_color":"9002+גלוון","production_date":"2026-01-25","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1evlW85ntkdmCUf4pbs2nkmG6y3BybAtB","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1XnI4IojJm09moAJYPjQajgZo5DFZHV-SokPchh0wrLM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35516213')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 34' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35330815","order_number":"3497","ral_color":"אדום 3020","production_date":"2026-01-15","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1A6hmdu52sr8POBEQ81FubJeNBEZ4PBaW","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1VKu3aJ0Wci_PAc1QaV2aTtErM0oAWumFTIjL1vR1Zko","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35330815')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סמטת המעלות 3 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35330053","order_number":"3532","ral_color":"1019","production_date":"2026-01-26","painter":"צביע באפוקול","production_order":{"url":"https://docs.google.com/document/d/1nUtZHdyLczNzrpqDodhbSqCbY9r95Q1KhfAtkcS5WOo","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1nCG7alwvLltXhTpyNt1Kk0Yrhufq3VbWQPYKjWezwnU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35330053')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='יונה הנביא 15 , ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='lev-binom@outlook.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35255133","order_number":"3494","ral_color":"9016","production_date":"2026-01-14","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1A8z3HXmrD2RljOSYNq2YpXU7vuiCdH74","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1LOB6SEzsc5FRb_DFrhXQ7pyChAvbbcFUeXlYKdgM4VE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35255133')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35249293","order_number":"3547","ral_color":"7022","production_date":"2026-01-19","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1F0t6f7r69ynv5zyZoCW_ulKU0R_PfFck","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1zcI8AEZ5GEQADaIugal7ltC3ZbbEZoZ1GFmscXOyeXg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35249293')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דובנוב 19 תא' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='motid@romgc.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35247239","order_number":"3506","ral_color":"נירוסטה","production_date":"2026-01-19","drawing":{"url":"https://drive.google.com/file/d/1NukgjpBxezcUZD_wchZ_j4Rw-c2BIg98","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1YetwRsiQGnN0BFLJDRSJQloe2fp4uA8nDcdKaezY-X0","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35247239')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35245689","order_number":"3516","ral_color":"9016 גילוון+יסוד+עליון","production_date":"2026-01-21","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1Y6mPJoIwZt0mxfQdVHpxRGc58N6-xyhP","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/14UGroGtB-PEmLB6FgqPz0Yo99BxpU2-uHMbOj7VjXAI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35245689')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בודנהיימר 43' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ym302817@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35243305","order_number":"3492","ral_color":"9001 יסוד+עליון","production_date":"2026-01-14","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1PC-ZRlY26S63a1VB6T6aEK7pi9cjSkq_","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1HZYZog_DGOaM7q61pfyozanAtZdQUkX51g6w9311qSE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35243305')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בילו 12' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kobi@michalovich.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35231319","order_number":"3490","ral_color":"7021 יסוד+עליון","production_date":"2026-01-13","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1-CYfALaKR2qVni4XDqoCMgmjuUFxwZ9P","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1DF2qluARj1yvE6aY5xgcU0GhH-4D1eiNrx5U12-XiAs","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35231319')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35204647","order_number":"3486","ral_color":"7047","production_date":"2026-01-12","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1FThmsxBmZLKYTLFO1nm176i_2XzAE9hL","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1PldTR0tCslpq_McNPc82_NIZJsLl2j9-Uax_6e97G10","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35204647')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35202521","order_number":"3491","ral_color":"9006","production_date":"2026-01-13","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/16MEnBddv2lp0CLDBoBSUv0mQ9jQ52hB_","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1RGv6NPXo5XwaUtPnoo84EBejVxMhcouPPtcSO4zj7Mc","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1xFCAvOgmtJqVYFZMe0MAwjnd_NmNvlhgjYeuPb6o3HM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35202521')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליפסקי 18, ת״א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35202471","order_number":"3495","ral_color":"7037 גילוון+יסוד+עליון","production_date":"2026-01-14","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1eHHpT4LZBjRPlzgZx8UYKmzD8VOMvE85","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1ZfvHWRWqUv0ndrLrPo3pBcOByW6dIWOlxJhEwpPa5OU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35202471')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליפסקי 18, ת״א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35202407","order_number":"3537","ral_color":"מגולוון","production_date":"2026-01-26","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1YsMdGbLr5WIb-5i8Gda2E-D8ezqH5RWv","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1dNZ22wuquafw4x8gHV4aEXfN-sDlu1V0uRzuUGnm9EE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35202407')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליפסקי 18, ת״א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35202059","order_number":"3701","ral_color":"7037 גילוון+יסוד+עליון","production_date":"2026-03-15","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1U0skAzkL2iUfUGts6zsxQFLvnX7ONYIb","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1hBikexcITJ7007pdn4vVeeOQci-7rDgPlbXpuMl8daY","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35202059')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 9' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='nassinisim@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35200997","order_number":"3535","ral_color":"7032 יסוד+עליון+גילוון","production_date":"2026-01-26","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1kET3hxz66lUwZJitNzq5Ypf4i2wVmixs","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1RboI3sgFzNlAIn2EgC4RasSD1qY7-7JlPtFNIqibZng","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35200997')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 9' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='nassinisim@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35200917","order_number":"3564","ral_color":"7032 יסוד+עליון","production_date":"2026-02-02","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1mcmQxKcLRpIujbvCW93WkF9HCl2DlK0N","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1TngMhGlLcQiNECGvxr8eBqPz83NdDrrrAPFNYPHgxaQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35200917')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מול ים יפו' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35198073","order_number":"3498","ral_color":"7037","production_date":"2026-01-16","painter":"צביע באפוקול","production_order":{"url":"https://docs.google.com/document/d/12RiMRd9necl08iVKYVKb8h3sjk3vV4uKm_utUMqpDsM","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1szWRjfI_QCRLqe3s-junCdfC7D_kLriXGuSlZJtw94g","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35198073')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35169293","order_number":"3481","ral_color":"9006","production_date":"2026-01-14","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1x4GHU93mGcxtaGJoYmyD0cMSNIgxCLIf","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/133E8N0m48xZprWUwE46be7jE1KCN96FNirSlp_OOL1E","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1fW9j1Cl8O7jBI9Lu2uEOTWSKohulcVeDrUI6lOJlmn0","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35169293')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35087751","order_number":"3484","ral_color":"גלוון+יסוד+7047","production_date":"2026-01-12","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1TNvbPL_sgR-zS7CB1Ch2UYOW-eH5WIVJ","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1KNb9wXtRaz2MxpyYiY8uIfEvcjRVaWG28EzFICETZAo","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35087751')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פרופסור שור 9-11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35085675","order_number":"3479","ral_color":"9011+גלוון+יסוד","production_date":"2026-01-10","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/178auv8pULytzCF9QJHX7SQ9eJ1i34oHQ","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1nQO-B1Zxmg64W-yYMNFSAot4BldDC4KDuMeseXAdlTM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35085675')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רמז 36' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@yanush.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35085113","order_number":"3483","ral_color":"9004","production_date":"2026-01-11","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1wh1-GPauP5km_RJHo8W_LAmBjK0FSIWT","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1XzvRbkYz2LO77KxxrDknchYKyWWn_daKq6DFAlKZtw0","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1B-IG-3GEhKFMLibSYmyzRLZwxMh1P3vkYiRk1LYJEjE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35085113')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בת ים' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35064443","order_number":"3478","ral_color":"9005","production_date":"2026-01-10","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/149xEnPSYAW0v-zpEOzFkvgBgxgQRtcO9","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1gX8bMXxtIu98JpJzgi1jIN6PHpOp66Wb4GW43DxGpIU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35064443')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליפסקי 18, ת״א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35064273","order_number":"3476","ral_color":"7021","production_date":"2026-01-08","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1NiGuHHkEZ7fyTYqCAkeBP_vDGdKTL3XG","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/18fJxt_V-7YJltuY-hxiDwfg3p6jsTbWMsNxILxiGjjc","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1di-SfBZ6Jy3fHOcCgbJ4O8hnT6nCq9v6MVKEbWKsbfs","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35064273')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רמברנדט 36' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='aslam.a.m.tavor@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35064165","order_number":"3480","ral_color":"7022","production_date":"2026-01-11","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1jjfuc3EnnpspT6nbZq3p-81Ju3QJ2E-s","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1pCdvQpsEbh8ejgOs9ELO3g3T_NvU2683dxGyyixbtzs","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1W3NpMlvT4n-_IxsVI6EXTb4scvJVVKexdpWB0ai_3wc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35064165')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35064121","order_number":"3477","ral_color":"7047","production_date":"2026-01-08","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1uIRih5TLyXagITjl0upzb8Ow28HER1Wa","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/19vQxknhAQ1Tj9h-g6fgsx_LnhHJ6-ezkGfFxxmYSAdM","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/19MhZfdJ_FCq6F-4TM7zyxnnUak8OmRs-ao9pAveoCG4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35064121')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בצלאל 29-31 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35063923","order_number":"3471","ral_color":"ללא","production_date":"2026-01-08","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1OxvWrMNwloIQO5Ow-ShZqb1F-XqF3fdR","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1uM1JzZ796tWFETnzXpaAADAl31otQgOIidHYosmAPhM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35063923')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35063839","order_number":"3472","ral_color":"7047","production_date":"2026-01-08","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1wt7uP2bMSKQoVWUx75F5wWX1DkK2WnZN","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1O88yfnOdexCdzRgtrdrnX62ud3OfhU7PITm7Vl2gvew","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1jN5DbMBlhXGkYjS_zM3uXqBZjPn24KE458tbBY75wH4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35063839')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אחד העם 108' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='adi@sharbiv.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35062181","order_number":"3487","ral_color":"גלוון+יסוד+9006","production_date":"2026-01-12","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1yotQ_9jfrK9v98KP6c354Q4qDqrhGSlp","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1mZYL7ku9y5Ks9c70142QmLHptT03YXBKa7LFUyn5Wmw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35062181')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35061485","order_number":"3500","ral_color":"מגולוון","production_date":"2026-01-18","drawing":{"url":"https://drive.google.com/file/d/1EQ3_SHEmpVmLXwYjFjCeJPcZ2LQGiHka","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/14bCyC0gvtRHx3qXVh0gvTchpqcq5K5UKCfsluaLVAmo","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35061485')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הלסינקי 15' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dl.olega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35060585","order_number":"3468","production_date":"2026-01-12","painter":"ללא צבע","drawing":{"url":"https://drive.google.com/file/d/1NxDew70x4qC_M2xT8uzEof_b0OErCHlT","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/135nfjCzSJ6vlnmYR_nYyyRPlpuCu2WxSHeqj5ZzSnfA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35060585')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 52 ת''''א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='roei@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35055459","order_number":"3470","ral_color":"9011","production_date":"2026-01-10","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1397YhijUf1eeK_i6zPr4D--7-pXt_VHB","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1x3Rwzid7U7QDAHJ0wxKEzXWiZcaLrjH3EUqG_yEqaW8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35055459')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ויצמן 21 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='barak@nofzameret.co')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35054137","order_number":"3467","ral_color":"9016","production_date":"2026-01-08","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1FTwizLSijfLUbqQlxxOZf1aMv7GcvWF1","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/173yLL068gFfvpJaLvdC-UwzCKbroUj1sPYXAo6q2ZPo","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1gcughAivA9iwSwW9eyQkJxO7ZmHkLMetKwgbbxT6vn8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35054137')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אנדרומדה' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shayc@zhg.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35049533","order_number":"3462","ral_color":"7021","production_date":"2026-01-12","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1PFb83HW4EO2WcT7pes2RMOjTSUZpBjMu","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1RRbAN3Ia5FS6ZmpeQ18oLwGuxzpZY2SkP6zDFcwQWvY","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1XG0u0PFPaxu_GeWG6F0f9Mj5ch6F2HBQkWIwiATjLKg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35049533')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אנדרומדה' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shayc@zhg.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35048561","order_number":"3463","ral_color":"7021","production_date":"2026-01-12","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1kj8FhODkIj9dkQLkJGdv2UR-SgsXeWb3","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1PHum6WGwNZ9xAbEinlDykpnzKhMOV0WSkq3hn0bGWmI","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1nsgYwdr8eqX_I5aYhnlDKk5kSBCSCbHseaM_xBEPLDE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35048561')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אנדרומדה' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shayc@zhg.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35045271","order_number":"3464","ral_color":"7021","production_date":"2026-01-12","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1hleI0HJdUc32yOBDU0SPFHBYLLTuiG-J","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1HsoqFXPS5Ih7-bu-Zwwt3JRTPhOJOHcKOuZtDMaEor0","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1EpzdTH4FHKbSYLWQd59r6n26okFj3NQ8DPdWZ8722CU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35045271')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35039219","order_number":"3461","ral_color":"נירוסטה","production_date":"2026-01-07","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1oxt280Y1lb3disAGgAkdGq_0DcduDWw0","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1QFFypR78sw7aQ8ooKF6CJ2XqxHOaBGi8lNsLTKa7NEs","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35039219')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פרופסור שור 9-11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35028125","order_number":"3493","ral_color":"9011","production_date":"2026-01-14","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1iiXxEHw9OTYEJ0DyqYrT4_wanq16RXED","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1GrYGhdEVDyWCAxBcngVYvPKHm-dLLfiP64S_BHa1qzE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35028125')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אלכסנדר ינאי 15-17 ת''''א‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='liad@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35027617","order_number":"3496","ral_color":"7037 גילוון+יסוד+עליון","production_date":"2026-01-14","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1wchjxqPYpCrVQzFKNAarn0l5NkWI6Rrd","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1bnclsC9xl3XJUd9gfWMmt68EoqO8i3y2SdEkf1I4v3Y","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35027617')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='נורדאו 65 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dor@rotem-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35021191","order_number":"3452","ral_color":"7022","production_date":"2026-01-07","painter":"צביע באפוקול"}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35021191')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='נווה שאנן 11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='engineer1@ibp-israel.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35011579","order_number":"3788","ral_color":"9005","production_date":"2026-05-05","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1eywxJiAb7_f6hx5CLDQrDI0VpDod668QBHVeH7hdE98","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1hvGlTWV4ctd0Gg4w7SpzL0SeSroX6AHM","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/17nYXk291TeJpUqwAdny9KzkM0KPF5A3Dn6_kMbgezhg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35011579')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='נווה שאנן 11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='engineer1@ibp-israel.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35010975","order_number":"3682","ral_color":"9005","production_date":"2026-03-09","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/15lD_WV1Zy-4cTLEOSBwuQnwsLfITAh0q","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1u0Cmzt9jOlmMcafheqj2JvXMl_6pkpxzYv4u65s5IKk","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35010975')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='איי.בי.פי. יזמות והשקעות 2012 בעיימ' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-a3aa9913@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35008431","order_number":"3450","ral_color":"9005","production_date":"2026-01-06","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1agKkQA536PV0fKv-E_dlmcyfP_yq5kZQ","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/14N0qnmHGve47KpxFXYzxRvEQyXQpfFIsO8n58OH1dpA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35008431')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='נורדאו 65 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dor@rotem-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"35002951","order_number":"3474","ral_color":"7022","production_date":"2026-01-08","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/144mcA3bJG2aRhwyHVe4myXzLhnfglfDZ","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1ON_7eutCI4kB0BieTbWsBypyBogemq9oBb73egcciEo","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1cNoZ4LGqqPmfJgeXNEfC5fjuunF6vpMF34SfC327GOk","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='35002951')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='נורדאו 65 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dor@rotem-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34990405","order_number":"3451","ral_color":"ללא","production_date":"2026-01-06","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1y-Zv9gpOdSe4Kq4J4G73RveAdtsBc9Bl","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/10_cG8I0DsiOd6dHrVU8zcyqMrg3LWdiG6e9bjO7ApnI","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1EiiMWNfoQiPqyV3MPmLJ9uFLTFuGFjXyD3k5RtIEUTc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34990405')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 68' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-eb43e235@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34967281","order_number":"3448","ral_color":"מגולוון","production_date":"2026-01-06","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1xW-fPsdpgISkIo5QGrpIcb1JrWmgk9kM","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1y9FDStF-AhZaCvZbZbPW2mL6og0GuI48u1CQN8NF900","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34967281')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רמז 18' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guy.raz@michalovich.co.il.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34903395","order_number":"3446","ral_color":"7004 MAT","production_date":"2026-01-04","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1SjRvElWVJ1PsGToYTTLpw9MOxFDm8nhs","kind":"link"},"production_order":{"url":"https://drive.google.com/file/d/1JxXNp2ZeS2ZMP9ISIaossXAuLWvkaIqt","kind":"link"},"painting_order":{"url":"https://drive.google.com/file/d/15aUpf_7sQZly28RJuK9tNrO3jdUQqIi3","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34903395')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='חדרה 10' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34902761","order_number":"3514","ral_color":"7021","production_date":"2026-01-20","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1aWYumIW5mfXy5PXgzZimL-HWbZu_N8mG","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1TQZYVcy5FVUPdigcPlZkPsTSC19SzOer1bzIZ3qYA8U","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1qCR_WAywuqqG3RhCXQx7C1k_f4euVWWJIarS8pcyoDU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34902761')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34902525","order_number":"3457","ral_color":"9011","production_date":"2026-01-07","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1XCowxQWE4lersfaCFnB1SqXZFkt1DlsU","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1XP4QAIT56_CKpL4Rv0voHDFfuSNItDEK4Y-y-EmoTqA","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1ry_WRkeWLgNwmf5tRobNnzDnXLwZF90oKUVv7gHkh5Q","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34902525')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פרופסור שור 9-11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34894003","order_number":"3579","ral_color":"גלוון+יסוד+9011","production_date":"2026-02-06","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1YPlTV1kDOTOfVzQh93stFievFI1az-ib","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1NUDd8fsOz6irLMBsTAkYX_uS24_b_6ZL9UY2l0bXJ8I","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34894003')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הירקון 70' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='amirr@auto-chen.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34893701","order_number":"3440","ral_color":"1019","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1wFITRAbH9bDL9JIQHOWWWzae7apJASX3","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34893701')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34892929","order_number":"3455","ral_color":"9011","production_date":"2026-01-07","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1eqxtATEZMFzUtXTI1yel3RyUn-w-O0-5","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Sr17vyDfRmbxrWeRTHtYBMKAXk-0lfP_U6logSYEVTo","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/14nau13ja4jdfXbSfTvjCMjDgVZUHA7akd_HUfMVYSK0","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34892929')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='תל חי 9' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-04220a1a@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34888375","order_number":"3430","ral_color":"ללא","painter":"ללא צבע","drawing":{"url":"https://drive.google.com/file/d/1Ons4vqwp0Oce6HVu3T6Y52EWmwxxdMrM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34888375')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מינץ 12' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='udiohanina@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34888265","order_number":"3431","ral_color":"7022","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1X1n0ht7f9bcRafUg-Ml2g4eTfqfouqum","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34888265')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 22-24' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='aslam.a.m.tavor@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34850717","order_number":"3512","ral_color":"9003","production_date":"2026-01-20","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1PdcOgOE7W2jvowIiTs6mWGzoKG9AvxLE","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1OfJtwYN249OuyB3L7xln_PBhzo7BBIjEadhczjlZ3co","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1kOHiCHdOFZV7XaY9KkoIhQJPTr1u13_59KE32BvYn1A","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34850717')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 23-25' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='eliran@grofit.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34849931","order_number":"3437","ral_color":"7022","production_date":"2026-01-04","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1g5jU2wIlh0JGHhhBvftBfPyWkN25M3go","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1Iyxy4UTTBcOAJhK7N-RxsduIsvc9nFRUYznJUnO5LOw","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34849931')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ויצמן 21 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='barak@nofzameret.co')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34825723","order_number":"3425","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1OzszkMxVfhpuSwQvHJcsJSdGLlCC2IhL","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34825723')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34825187","order_number":"3447","ral_color":"7035","production_date":"2026-01-06","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1HGJUFKnwF5c0uO9dbLhGPVdxuJIy19i_","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1d-l184CJ79E3SeGUscRYuU1foqOK5ahlybwhuDUUBAg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34825187')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סוטין 15 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='migdaley@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34824359","order_number":"3418","ral_color":"9002","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1IoAPC5onY2PdZl8dfdCRg5mXx704VEdB","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34824359')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מתחם המסילה הרצליה' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='nitzan@henco.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34818769","order_number":"3422","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1vbMF7q5eEMBTx3fQzize54vnOzYibI28","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34818769')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הירדן 12' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-d00d3fca@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34718187","order_number":"3409","ral_color":"9016 מפרט 10316","painter":"צביע באפוקול","order_file":{"url":"https://docs.google.com/document/d/1nsTnqnNVY4zjn9-kD2PRd0z2QCAvCHM_8JlGjXcS5cY","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1EAPJbTlz4bXiPnHsa492zoUBbGkLmdz-","kind":"link"},"dwg_drawings":{"url":"https://drive.google.com/file/d/1bEF1rxXjnHdEv4enNBTh7tbDMdBePsE8","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/10xtsXrYxYO68mq_bsXDkt_K2bq_t3CbF9EBpGYpwJoc","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1UwCAn-Ngr6NhKRo8Go6-4OFmMFAjbKJXnUnbyS7F7QU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34718187')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שם רונן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dl.olega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34718039","order_number":"3415","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1GsraDA3JgGPLrBFsUEwg7yKI-0P4z_3K","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34718039')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 34' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34718005","order_number":"3410","ral_color":"7016","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1ASKMvnMxMpUnGxuXCDA9GQnakgKFHsZ-","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34718005')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פרופסור שור 9-11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34709639","order_number":"3459","ral_color":"גלוון+יסוד+9011","production_date":"2026-01-07","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1S8SnLKyVUdu2OYJnb9nUhj0TJEcVA7ea","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1EElZcqyavC3PbDKy1WYNbHV5f6trXdUxEpx1Tr05FvE","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34709639')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פרופסור שור 9-11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34709229","order_number":"3423","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1x7pJv96dHkDa3vUX2i4mDrfKFF5rQlc7","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34709229')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פרופסור שור 9-11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34708501","order_number":"3408","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1Q7M6PoJ-qXnAt1HFwxVUgKWLkdqO1dhb","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34708501')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פרופסור שור 9-11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34707681","order_number":"3407","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1eGnn0udLNCMOaSVHrSdjoroRreKFkTtI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34707681')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רמז 36' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@yanush.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34707409","order_number":"3420","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1TBxi4F6ukdNufM8POhhLrhjyKy0Qsk1G","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34707409')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='קריניצי החדשה רמת גן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-f6592788@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34705171","order_number":"3429","painter":"צבוע אצל יצרן","production_order":{"url":"https://drive.google.com/file/d/1PZi1VGa42ak6NPe8oit49J8G5hDo8C96","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34705171')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סמטת המעלות 3 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34692217","order_number":"3399","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1oP60XSyToU2cZTOktwb1Qlqs79AI48zC","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34692217')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='זלמן שניאור 9 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-c02b4a95@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34661937","order_number":"3396","painter":"צביע באפוקול"}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34661937')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='נורדאו 65 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dor@rotem-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34652753","order_number":"3395","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1FgNdPzwh94VCpSxCET0Zb9szelBaUBxM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34652753')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מול ים יפו' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34644577","order_number":"3413","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1qsaFj-4U-lMLB-Hz6MX2ey80DtpbPvZi","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34644577')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 23-25' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='eliran@grofit.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34623159","order_number":"3424","ral_color":"7022","production_date":"2026-01-04","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1GS7a4OthJQhM9dQne4XTZD3IGW-s2Jn7","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34623159')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='נורדאו 65 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dor@rotem-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34616149","order_number":"3391","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1Ghn8Bu54lqC6FtbOHg0h7PHo_CzEDZHF","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34616149')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='תל חי 9' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-e1c1d4be@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34607781","order_number":"3668","ral_color":"7022 גילוון+יסוד+עליון","production_date":"2026-03-04","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/18cS2HItllvSjQtDHGI_kSuZbG_T70InN","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1LyvlcAflCw4JN0OxhT-dbTOlcoUv_joi5TiMwr-7yRI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34607781')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34607571","order_number":"3469","ral_color":"9016 גילוון+יסוד+עליון","production_date":"2026-01-08","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1uyw1yd9ZQnHPnQMtwI1lDncw7e9ELGSl","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1X2dpH3R5YT78LHI55Rd-_uWDJzfQCDZPTumKU7YIzv0","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34607571')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34607471","order_number":"3389","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1NGa8bgI5UX219-i-fTBOYgo1e7Mybj8zוכניhttps://drive.google.com/file/d/1XR7hHgMbQTyPGyXiA5vVlBitK7rmZHLj","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34607471')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פרופסור שור 9-11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34607363","order_number":"3388","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1EFlIFO2Ole69YpfS6YcHOSAwxg2ap5hZ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34607363')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='נורדאו 65 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dor@rotem-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34607119","order_number":"3390","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1M1xIMk4UYzjX7gX00P87nNfh2XpXjjCO","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1jcjn2dJhvA7TMaaJBz8TGbQ-XH-IlIvOG5edKLlJmhc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34607119')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פרופסור שור 9-11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34606793","order_number":"3387","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1ZsPkOGWEopnPjhCIzLKgvGh7LMgdD0cZ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34606793')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ויצמן 21 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='barak@nofzameret.co')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34602917","order_number":"3401","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1c2XSnE7GovzbuEDB9kzXvNzuGnRIIEGd","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34602917')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מול ים יפו' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34600411","order_number":"3406","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1QPSJG0vd5wtTJXbpsCPYDE5h2S4S27wL","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34600411')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מול ים יפו' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34600359","order_number":"3453","ral_color":"7021+גלוון+יסוד","production_date":"2026-01-07","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1MXkg0GuISvs66m0V22W_XuAIcuCm78TT","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1nPW6Z9El2cP-QjPa1AXZeuuRwkSTjZqBUKOqoFbJug8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34600359')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בילו 12' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kobi@michalovich.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34483985","order_number":"3384","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1gl5pXPEcSDY5lquZvotr8O9izocWcIRZ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34483985')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 68' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-eb43e235@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34482077","order_number":"3404","painter":"ללא צבע","drawing":{"url":"https://drive.google.com/file/d/1HnvCwJa42lH_naZGxiDWrSJYvyVKGEru","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34482077')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 52 ת''''א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='roei@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34458375","order_number":"3375","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1SH4cidVP2j5szMVYjNCkrzDyAzMjkYPz","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34458375')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='תל חי 9' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-e1c1d4be@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34457157","order_number":"3376","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1ORBgiG4pSsKPbfNTtcsOCBq_vg__g21V","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34457157')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פרופסור שור 9-11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@etzgroup.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34450001","order_number":"3377","painter":"ללא צבע","drawing":{"url":"https://drive.google.com/file/d/19EtIX2sx9qCQpr4jq-cFzQU9Ct7vznxQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34450001')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הירקון 70' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='amirr@auto-chen.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34447865","order_number":"3443","ral_color":"1019","production_date":"2026-01-06","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/12mw7QcOLrm5biOACeDVNAw7Jo7pB40_g","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1rPOpkVOXlOEW3LoFVPAr2FWjVU1lVXwtJ1GAiOB-5yg","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1Z-cFFO7hPDNS9VT0z-JmgznXv1ADS6oybP26-I1gh_M","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34447865')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הירקון 70' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='amirr@auto-chen.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34446861","order_number":"3378","ral_color":"1019","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1sovaSmD6edpHRmsyOK1S8Z5CQXdNPu1-","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34446861')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34446199","order_number":"3405","ral_color":"כפל מקסה 540","painter":"ללא צבע","drawing":{"url":"https://drive.google.com/file/d/1v3yZVo6zBz8wkzPgZ_8V917t4Epilv8A","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34446199')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34445459","order_number":"3588","ral_color":"7022","production_date":"2026-02-11","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/14RV3s1UAs3yqZAPa5kfcgg74Hj4WJzDm","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1p061wa8AHp1myvpiIuvdaB7N-GCGq2Iqq_VHPkOAyQc","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1WJe7sqsXDtNyhthwOqtfpmiJFGcLveKylA1wnu6zkJ8","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34445459')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34445231","order_number":"3520","ral_color":"7035","production_date":"2026-01-22","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1vUhBUArhfBMD2PCCWgw0y-B1ugPhg1Sw","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1LhGD-c9AsutnIBCP8zCjwRxk6klgeDAWdGw5_uBOCX0","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1bCX5kh8ZFfImbM7it7FuBw3IU-aGQkCBaMl_ZXphFZc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34445231')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34444979","order_number":"3521","ral_color":"7035","production_date":"2026-01-22","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/11TgjZtmASXuYFBxZp50kvyKzCE_BZxw8","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1g2ZBiUJYShUovutSrpne5okae9UiLdNYDt8nsBXzMu4","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/17jt6Rs02VrYL70yzmm3Ye-u3lpEYoIIDOwTEcyRDphA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34444979')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34444649","order_number":"3392","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/11SdNwJIlEEwXt-coiYQMnGcUBVywTBrj","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34444649')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='חדרה 10' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34406955","order_number":"3398","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1cZE0yv4Wyai6HG1flpY_J5ASUgRzJ-S5","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34406955')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רמז 36' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@yanush.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34404417","order_number":"3373","ral_color":"9004","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1rHcQSxDJpmLzPIv5nMW8Nu_ORLlFrqbi","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34404417')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בת ים' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34322535","order_number":"3369","ral_color":"9005","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1Xw46tawzhis1ssmHyfcbeuAxwG_solA_","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34322535')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 11 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dina@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34258353","order_number":"3364","painter":"ללא צבע","drawing":{"url":"https://drive.google.com/file/d/1EZwqPdCHBhqXBtK0idzLbOdBfKT8qBHa","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34258353')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דובנוב 19 תא' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='motid@romgc.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34237813","order_number":"3352","ral_color":"7022","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1uZfRioms_K3kHI7zVAWUufXNmWhfu4yL","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34237813')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דובנוב 19 תא' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='motid@romgc.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34237681","order_number":"3353","ral_color":"7022","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1YIKC2-qK-bYG84L-_en7MXMHFWNglru6","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34237681')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דובנוב 19 תא' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='motid@romgc.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34230067","order_number":"3354","ral_color":"7022","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/12W5eUva4CW539Q5FUZioL429REwsr8xZ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34230067')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 34' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34229749","order_number":"3355","ral_color":"אדום","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1wF4HX_6b6LuZCWgsDucCfUj6_fv5J3rb","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34229749')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='נווה שאנן 11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='engineer1@ibp-israel.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34207147","order_number":"3349","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1NgZa9vzYQiQofYyeeD0pBfo7GTJlWi9I","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34207147')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רמז 36' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ilan@yanush.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34179325","order_number":"3379","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1Gj4oFVXVZiWiyDgFnvkb2Ba2y2O7ktsx","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34179325')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מוזיר 6' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='tzvika@yanush.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34177403","order_number":"3341","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/10Ns_6oSVXYQj3CAo6GaGLkg4rw6ZEw8P","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34177403')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34167487","order_number":"3342","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1GvIoTPRi4Lj51Cj4cFiwYNb_HJMHqITm","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34167487')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='חנקין 3 ת''''א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34121796","order_number":"3343","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/19qheCztZ-Jz7d2y3mieOldvhI0iXtnmg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34121796')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מלון נחום גולדמן' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='yoavar@electra.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34120278","order_number":"3511","ral_color":"8019","production_date":"2026-01-20","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1yuDKBApPG0lG-JKvy1af-Y0lhKDZofhB","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1VzJ1sVAZQ1btPeutg2FoW5d7Ai3sFmAGkNXhAsxveBI","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1e8r6X7fQ_mHklmooyaliFKFGhs9Jm4usHA9m_6cNYfA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34120278')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הירקון 70' AND (er.values_json->>'client') IS NULL LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34117940","order_number":"3344","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1ubNLsRe4F2Jn97OFfA0KxSXAFVOksQVj","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34117940')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בילו 12' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kobi@michalovich.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34099003","order_number":"3329","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1msLnyORotC9ZDjGCDlazn8xPPVIeYkmA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34099003')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34082511","order_number":"3350","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1dwF-D6vAVjxk8-f240Qoo-moQi9sZmBD","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34082511')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='תל חי 9' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-04220a1a@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34079317","order_number":"3334","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/12e465mCjVASmdyuzWygynLp7IgK8I1u1","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34079317')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='נורדאו 65 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dor@rotem-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34071337","order_number":"3397","ral_color":"כפל מקסה 540","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1ls63wzWFxNhSSPGjMdGwdh6tLBZ4XI3Z","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34071337')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ליפסקי 18, ת״א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34069563","order_number":"3667","ral_color":"7037 גילוון+יסוד+עליון","production_date":"2026-03-04","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1mwScY4OicvRqnLk3II7DAVMn_sBkKHrp","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/11FGR33FgobvJRt9XK6HuEEeBeL3A-CLDppj1c5ncCAA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34069563')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בת ים' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"34063769","order_number":"3347","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1dqNErJ-4z_Xujoz8zym6R34FbS5J3QrC","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='34063769')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סמטת המעלות 3 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33894357","order_number":"3320","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1cOJ_Ztivu_jy2ma-UuA1ZSGaZ3N33SED","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33894357')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='טרומפלדור 33 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hamudi@mo-lu.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33851189","order_number":"3321","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/160JZidDfioY1T2334Lxpvr_OYstkB51b","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33851189')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רוקח 50-48' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='nitzan@henco.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33739589","order_number":"3339","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1jgKhxxE5G04IQFwhXaw1NxfC3j5j81ch","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33739589')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רוקח 50-48' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='nitzan@henco.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33739573","order_number":"3338","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1scGwTAAzcOEFA2RtifEG7rCPmEWfSvVn","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33739573')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בילו 12' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kobi@michalovich.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33738501","order_number":"3315","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1Hem2R9wEBjGWBqbticL3f_Z9HjZGAUcpוכניhttps://drive.google.com/file/d/1gpEOPnjOY2JZ-qOAywhPnL1ZW3EkO0wp","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33738501')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33737537","order_number":"3368","ral_color":"7022","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1eSYdyzYRdjviEFvWMWOFxqHvoMUVzc5yוכניhttps://drive.google.com/file/d/1vKlekSHoqw9bbHbMykXosvugYesib1AM","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33737537')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='תל חי 9' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-04220a1a@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33736823","order_number":"3306","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1IOOwTEYtPPi0eAUlNvJU0RPYWYT_Fv1i","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33736823')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kostianaaman@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33733433","order_number":"3428","ral_color":"9006","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1lKw2cqjv_4XrFuQabZxN47J03nSw2KzS","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33733433')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33720803","order_number":"3304","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1C2zyhN9Z23rRnV32dV3IGTlM9bkikXHe","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33720803')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='הירקון 70' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='amirr@auto-chen.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33712617","order_number":"3316","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1xJLJ0XRiN5IgKW4rYkZcDkPaHyJ21JqA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33712617')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='תל חי 9' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-04220a1a@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33669717","order_number":"3300","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1utaFM-nkz6Ppj3MVjcPLzsLehmRHugau","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33669717')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 23-25' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='eliran@grofit.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33537377","order_number":"3307","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1vN8wnDerQ2HRCGbBwGGfIodR47vwmHvF","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33537377')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בני דן 52 ת''''א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='roei@phi-eng.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33468321","order_number":"3286","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1qk7xqMC4fThsv-WAHIzJ268Hr5qofszs","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33468321')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33437143","order_number":"3284","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1hmC-Du_5Iln0IiNVSjbMR-yd1Imm0pE4","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33437143')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='תל חי 9' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-04220a1a@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33403741","order_number":"3268","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1_bBHYoLa6GJc0NwUr4w_TX3-831nmPvk","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33403741')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='תל חי 9' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-04220a1a@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33403365","order_number":"3269","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1NaSVjQ5xYD6KZUK_AAGuncX_MnZXNUSh","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33403365')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='תל חי 9' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guest-04220a1a@noemail.local')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33301095","order_number":"3270","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1WxPHQEoEh9iivkN4TE4e3fND5-skyCXS","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33301095')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין 9‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33276777","order_number":"3348","painter":"ללא צבע","drawing":{"url":"https://drive.google.com/file/d/11l23zah2rlXClJ89nyYaZGkGbt49EEeX","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33276777')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='רמז 18' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='guy.raz@michalovich.co.il.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33268315","order_number":"3287","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1Doq5T59G1N8bFWmPCVMuBGeRN9SZh-gx","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33268315')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='נווה שאנן 11 תל אביב' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='engineer1@ibp-israel.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33214567","order_number":"3265","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1FZVWTEsS7LOfh_1CkcM04MkWAeqxhy1-","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33214567')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='כוכבי יצחק 11 תל אביב‎' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='udiohanina@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33178745","order_number":"3280","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1uIeWkvjgmXSxIDUSydHyJR0JWAaFN3Nd","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33178745')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='9 7 5 3 משה שרת' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='hananel.b@tidhar.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33175831","order_number":"3351","ral_color":"9011","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1_sYpvCPCUzCQ8DAq7flKrni9gLx0zoRT","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33175831')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אחד העם13 ת.א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='nitzan@henco.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"33141181","order_number":"3308","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1a2Mw3NXMf5JVcTKQbCQWtV1PNzsdUdnX","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='33141181')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מזכרת בתיה' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"32977027","order_number":"3358","ral_color":"9003","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1vEVX5ZMtyBJTHW_lRBv4qmHk9cyT8Roy","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='32977027')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מזכרת בתיה' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"32977011","order_number":"3360","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1cldDgHuP6wDTiGra5hk6KayyhJdQjuTb","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='32977011')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מזכרת בתיה' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"32976999","order_number":"3362","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1spcG84JqwePG2vhxEIRPJzx8iPoeB4uc","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='32976999')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מזכרת בתיה' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"32976987","order_number":"3363","ral_color":"9003","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/11ZzYaqPOtt5heHj_ALylB-sudA_3tVvZ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='32976987')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='סמטת המעלות 3 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"32882787","order_number":"3712","ral_color":"8016 גילוון+יסוד+עליון","production_date":"2026-03-19","painter":"צבוע אצל יצרן","order_file":{"url":"https://docs.google.com/document/d/1gLGWrZssQRazDOf-Qs2qAF3DhBZmS92sFz79H6dI17A","kind":"link"},"drawing":{"url":"https://drive.google.com/file/d/1x3BrCwkqE_XlGshHMFWUII1S6ey9soH2","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/16snuX8ddYNa4l-RWomjqviaiE4iq8aM-gg2KZydMnxU","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='32882787')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='פתחיה 23 ת"א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='daniel.aronovich77@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"32612111","order_number":"3235","painter":"צבוע אצל יצרן"}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='32612111')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דוד ילין  14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='matan@gnproject.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"32612021","order_number":"3311","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1KoLZ2v87rzFnm_CqqbBARv-WvALXHfrG","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='32612021')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בילו 12' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kobi@michalovich.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"32493459","order_number":"3236","painter":"צבוע אצל יצרן"}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='32493459')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 34' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"32399063","order_number":"3285","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1jPs3rfZKu4iRlFa1rAzCjQZwNesvRfZ6","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='32399063')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דניאל 12 בת ים' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='or@city-view.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"32292297","order_number":"3324","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1DXzIrne1poevlUmMbePTkPLsvxMSE8VB","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='32292297')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דניאל 12 בת ים' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='or@city-view.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"32198517","order_number":"3326","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1ovw8qhoFJylaJm-K56kG-4SPt9w5nDhI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='32198517')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='דניאל 12 בת ים' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='or@city-view.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"32198157","order_number":"3325","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/14d2CNLg_xNo-rmWvcHjoHVfiVHbpdYZj","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='32198157')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='חנקין 3 ת''''א' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='dlolega@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"32113097","order_number":"3458","ral_color":"גלוון+יסוד+9006","production_date":"2026-01-07","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1dC5yJY-Acywf3FqV7WnNTikpr6qObE1X","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Ebb9HOQJic-2UUogGrms7AVl83gY1N5wYS-O3gwzT4U","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='32113097')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='לואי מרשל 2-4' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='omri@brosh.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"31431529","order_number":"3597","ral_color":"7047","production_date":"2026-02-11","painter":"צביע באפוקול","production_order":{"url":"https://docs.google.com/document/d/1k2vV6Rmz0cRxbvruWh1QepoSJjbaC-JiMszYeDVyhgI","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1eVH-KTxfhIC7zuzjoZXfuvp0AZ448l51Garfm3i6RHg","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='31431529')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kostianaaman@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"30976971","order_number":"3136","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/14FMsfyEhv7kkhXIjV1V4czapYBOhp90d","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='30976971')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kostianaaman@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"30976791","order_number":"3137","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1stWl89dQ9gwBh_9FQ5fExv45tO8ZjIwQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='30976791')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='בלוך 14' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='kostianaaman@gmail.com')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"30976749","order_number":"3155","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1S9zpHXuezJM1vr_OkeiEz4V-eYVglES7","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='30976749')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='acc@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"30904745","order_number":"3508","ral_color":"9006","production_date":"2026-01-19","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1JIIgKaTVf4cwjJNfU1aUUVjmTEizFsim","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1Z2i0yKFsjlhJzMPmEYCFU49yIQf6HSwSVz8jRr_4PUA","kind":"link"},"painting_order":{"url":"https://docs.google.com/document/d/1_-Ulcm597050UfByfLYqt3YFwSEAibwL_VSAPSZuUeA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='30904745')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='אחד העם 108' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='adi@sharbiv.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"30570071","order_number":"3357","ral_color":"9006","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1l4aekOpoTsmN5hUu9Qpmqh8cSt6WAX2F","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='30570071')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מוסינזון 18' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"29999033","order_number":"3482","ral_color":"7022 גילוון+יסוד+עליון","production_date":"2026-01-11","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1KlXysKdbDwXdc2PQaqzrwrLEv4rdfWqI","kind":"link"},"production_order":{"url":"https://docs.google.com/document/d/1MP5C6vl7m2NGiveYMbanrrlvcn3aoK-0j5h_nDlw8GA","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='29999033')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ויצמן 21 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='barak@nofzameret.co')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"29916591","order_number":"3044","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1CqybvwsFnELwV7RpB9_HfzSsBRSeplc6","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='29916591')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ויצמן 21 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='barak@nofzameret.co')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"29587533","order_number":"3020","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1B0pW_5icR7u4smYNoO2e41KXvO4EzTkI","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='29587533')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ויצמן 21 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='barak@nofzameret.co')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"29587509","order_number":"3011","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1ZuWIKfwH1lVq_952vZQymPY4VT6OCQ5J","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='29587509')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='שטרוק 8' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='ori@ecocity.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"29255023","order_number":"3322","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1x0AHkp7Lq-tI-0RfCInzQZky7Is7NThQ","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='29255023')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='ויצמן 21 רמת השרון' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='barak@nofzameret.co')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"29202845","order_number":"2973","painter":"צביע באפוקול","drawing":{"url":"https://drive.google.com/file/d/1pyyF0ENNMadQrBUt3yHDK9VFPvNeCuru","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='29202845')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+WITH proj AS (SELECT er.id FROM entity_records er WHERE er.entity_id=(SELECT id FROM entities WHERE entity_key='projects') AND er.values_json->>'name'='מרים החשמונאית 28-30' AND er.values_json->>'client'=(SELECT id FROM users WHERE email='shelli@i-almi.co.il')::text LIMIT 1),
+ins AS (
+  INSERT INTO entity_records (entity_id, values_json)
+  SELECT (SELECT id FROM entities WHERE entity_key='orders'), '{"crm_deal_id":"27889545","order_number":"3385","painter":"צבוע אצל יצרן","drawing":{"url":"https://drive.google.com/file/d/1Y2-grhXYZwuscHrlS7x1h2b5Jj6lN44F","kind":"link"}}'::jsonb
+  WHERE NOT EXISTS (SELECT 1 FROM entity_records er2 WHERE er2.entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND er2.values_json->>'crm_deal_id'='27889545')
+  RETURNING id
+)
+INSERT INTO record_links (relation_id, relation_type, source_record_id, target_record_id)
+SELECT (SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')), 'many_to_one', ins.id, proj.id FROM ins, proj
+ON CONFLICT DO NOTHING;
+
+-- ---- verification ----------------------------------------
+-- SELECT count(*) AS guests FROM users WHERE role_id=(SELECT id FROM roles WHERE name_json->>'ru'='Гость') AND password_hash IS NULL;
+-- SELECT count(*) AS projects FROM entity_records WHERE entity_id=(SELECT id FROM entities WHERE entity_key='projects');
+-- SELECT count(*) AS orders FROM entity_records WHERE entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND values_json ? 'crm_deal_id';
 
 COMMIT;
-
--- Проверка результата:
-SELECT (SELECT COUNT(*) FROM users u JOIN roles r ON r.id=u.role_id AND r.name_json->>'ru'='Гость') AS guests,
-       (SELECT COUNT(*) FROM entity_records rec JOIN entities e ON e.id=rec.entity_id AND e.entity_key='projects'
-        WHERE rec.values_json ? 'crm_deal_id') AS crm_projects;
