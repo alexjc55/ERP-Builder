@@ -1,13 +1,4 @@
-CRM import summary
-==================
-Guests (clients): 57
-Projects: 107
-Orders: 595
-Rows skipped (no project name): 8
-Projects without a company (client empty): 5
-
 Company  ->  email
-------------------
 א.מ מגד לבניין בע"מ  ->  guest-0168aa75@noemail.local
 א.מ תבור לבנייה ופיתוח בע"מ  ->  aslam.a.m.tavor@gmail.com
 א.ע.ש נוף העיר הנדסה בע"מ  ->  or@city-view.co.il
