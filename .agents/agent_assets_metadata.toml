@@ -11,10 +11,16 @@ title = "Production ERP Builder — техническое описание и �
 id = "I5n35O0VIpU87RPszMCWA"
 uri = "file://import-crm-projects.sql.txt"
 type = "text"
-title = "SQL-скрипт: клиенты + проекты + заказы"
+title = "import-crm-projects.sql — SQL импорта (переделан)"
 
 [[outputs]]
 id = "Dtq8Kc1fRiG08BMkyv08W"
 uri = "file://crm-guests-list.txt"
 type = "text"
-title = "Список клиентов: компания → email"
+title = "crm-guests-list.txt — список клиентов (компания → email)"
+
+[[outputs]]
+id = "dOPt5iIm6ccH5XDI8o8JC"
+uri = "file://crm-issues.txt"
+type = "text"
+title = "crm-issues.txt — отчёт по проблемным данным"
