@@ -4260,12 +4260,12 @@ export function EntityRecords({
               {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
             </div>
           ) : (
-            <div className="overflow-x-auto pb-3">
+            <div className="overflow-auto pb-3 max-h-[calc(100vh-12rem)]">
               <table
                 className="w-full text-sm"
                 style={borderColor ? ({ "--erp-table-border": borderColor } as CSSProperties) : undefined}
               >
-                <thead>
+                <thead className="sticky top-0 z-20">
                   {Object.keys(numericTotals).length > 0 && (
                     <tr style={{ backgroundColor: "#F8FAFC" }}>
                       {orderedColumns.map((col, idx) => {
