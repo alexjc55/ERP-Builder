@@ -20,3 +20,12 @@ and relation plaque fields silently disappeared. The fix mirrored the table's pr
 
 **How to apply:** when building a records-rendering view, branch on `fieldType === "relation" || "lookup"` and pull
 the value from the related-values map (keyed recordId→fieldKey), never from `valuesJson`.
+
+## Per-field display options apply to relation/lookup cells too
+
+The relation/lookup table-cell branch is a SEPARATE render path from plain scalar cells, so per-field display
+options (e.g. `wrapText`) must be wired there explicitly — including the assignable-relation picker trigger
+(its label span needs a wrap/truncate toggle prop). **Why:** `wrapText` was honored only by the scalar cell
+branch; lookup columns kept a hardcoded `truncate` and never wrapped. **How to apply:** when adding a per-field
+table-display option, grep every `<td>` branch in the records table (scalar, function, relation/lookup, picker
+trigger) and thread the flag through each; page-local fields have no such column and stay out of scope.

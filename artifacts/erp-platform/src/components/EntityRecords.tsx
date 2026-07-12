@@ -4947,7 +4947,7 @@ export function EntityRecords({
                                 renderCellValue(relField, rel?.value, t, userNames, cellText, ml)
                               );
                             return (
-                              <td key={f.id} className="px-4 py-3 max-w-[240px] truncate" style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
+                              <td key={f.id} className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
                                 {relAssignable ? (
                                   <EntityRelationLinkPicker
                                     entityId={entityId}
@@ -4961,6 +4961,7 @@ export function EntityRecords({
                                     relatedFilterFieldKey={relDep?.relatedFilterFieldKey ?? null}
                                     pageId={pageId}
                                     pageSource={!!f.relationConfigJson?.relatedPageId}
+                                    wrap={!!f.wrapText}
                                   />
                                 ) : f.fieldType === "lookup" &&
                                   meta?.writeThrough &&
@@ -4974,7 +4975,7 @@ export function EntityRecords({
                                   // type makes the entire cell clickable, no icon.
                                   relField.fieldType === "file" || relField.fieldType === "url" ? (
                                     <div className="flex w-full items-center justify-between gap-1">
-                                      <span className="truncate">{display}</span>
+                                      <span className={f.wrapText ? "whitespace-normal break-words" : "truncate"}>{display}</span>
                                       <button
                                         type="button"
                                         onClick={() =>
@@ -5001,11 +5002,11 @@ export function EntityRecords({
                                       className="flex w-full items-center -mx-1 rounded px-1 text-left hover:bg-blue-50/60"
                                       title={t("records.openLinkedRecord", "Открыть связанную запись")}
                                     >
-                                      <span className="truncate">{display}</span>
+                                      <span className={f.wrapText ? "whitespace-normal break-words" : "truncate"}>{display}</span>
                                     </button>
                                   )
                                 ) : (
-                                  <div className="truncate">{display}</div>
+                                  <div className={f.wrapText ? "whitespace-normal break-words" : "truncate"}>{display}</div>
                                 )}
                               </td>
                             );
@@ -5892,6 +5893,7 @@ function EntityRelationLinkPicker({
   relatedFilterFieldKey = null,
   pageId,
   pageSource = false,
+  wrap = false,
 }: {
   entityId: number;
   fieldKey: string;
@@ -5914,6 +5916,8 @@ function EntityRelationLinkPicker({
    * suppress the "create record" affordance — a freshly created linked record has
    * no value on that page, so creating from here is meaningless. */
   pageSource?: boolean;
+  /** True when the field has wrapText enabled — the trigger label wraps instead of truncating. */
+  wrap?: boolean;
 }) {
   const t = useT();
   const { toast } = useToast();
@@ -6002,7 +6006,7 @@ function EntityRelationLinkPicker({
               : t("records.clickToAssign", "Нажмите, чтобы назначить связь")
           }
         >
-          <span className="truncate">{display}</span>
+          <span className={wrap ? "whitespace-normal break-words" : "truncate"}>{display}</span>
           <ChevronDown className="h-4 w-4 shrink-0 opacity-40" />
         </button>
       </PopoverTrigger>
