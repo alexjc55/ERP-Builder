@@ -30,3 +30,15 @@ id = "1n_p2qTJFoBq0YVJ5Ldyu"
 uri = "file://crm-new-users.txt"
 type = "text"
 title = "Новые пользователи — логины и пароли"
+
+[[outputs]]
+id = "TDyQVgWF96rdLYa4ISjCk"
+uri = "file://import-crm-items.sql.txt"
+type = "text"
+title = "SQL-импорт изделий (переименуйте в .sql при желании)"
+
+[[outputs]]
+id = "zMgGdbW1GM2vKynTCVqp3"
+uri = "file://crm-items-issues.txt"
+type = "text"
+title = "Отчёт по проблемным данным"
