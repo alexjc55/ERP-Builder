@@ -35,10 +35,10 @@ title = "Новые пользователи — логины и пароли"
 id = "TDyQVgWF96rdLYa4ISjCk"
 uri = "file://import-crm-items.sql.txt"
 type = "text"
-title = "SQL-импорт изделий (переименуйте в .sql при желании)"
+title = "SQL-импорт изделий (обновлён: берётся последнее вхождение)"
 
 [[outputs]]
 id = "zMgGdbW1GM2vKynTCVqp3"
 uri = "file://crm-items-issues.txt"
 type = "text"
-title = "Отчёт по проблемным данным"
+title = "Отчёт по проблемным данным (обновлён)"

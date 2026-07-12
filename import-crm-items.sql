@@ -2829,7 +2829,7 @@ WITH ord AS (
   WHERE rl.relation_id=(SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')) LIMIT 1
 ), new_item AS (
   INSERT INTO entity_records (entity_id, values_json)
-  SELECT (SELECT id FROM entities WHERE entity_key='items'), jsonb_strip_nulls(jsonb_build_object('item_name', 'פילר חשמל קיים', 'quantity', 1, 'unit_price', 4100, 'designer_cost', 400, 'mnf_cost_unit', 1280, 'project_manager', (SELECT id FROM users WHERE email='baruch.sd.davidov@gmail.com'), 'client', (SELECT p.values_json->'client' FROM entity_records p WHERE p.id=proj.id)))
+  SELECT (SELECT id FROM entities WHERE entity_key='items'), jsonb_strip_nulls(jsonb_build_object('item_name', 'פילר חשמל קיים', 'quantity', 1, 'unit_price', 6050, 'designer_cost', 400, 'mnf_cost_unit', 1280, 'project_manager', (SELECT id FROM users WHERE email='baruch.sd.davidov@gmail.com'), 'client', (SELECT p.values_json->'client' FROM entity_records p WHERE p.id=proj.id)))
   FROM ord LEFT JOIN proj ON true
   WHERE NOT EXISTS (
     SELECT 1 FROM entity_records it
@@ -3999,7 +3999,7 @@ WITH ord AS (
   WHERE rl.relation_id=(SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')) LIMIT 1
 ), new_item AS (
   INSERT INTO entity_records (entity_id, values_json)
-  SELECT (SELECT id FROM entities WHERE entity_key='items'), jsonb_strip_nulls(jsonb_build_object('item_name', 'מאחזי יד – בניין 2, דירה 1', 'project_manager', (SELECT id FROM users WHERE email='baruch.sd.davidov@gmail.com'), 'client', (SELECT p.values_json->'client' FROM entity_records p WHERE p.id=proj.id)))
+  SELECT (SELECT id FROM entities WHERE entity_key='items'), jsonb_strip_nulls(jsonb_build_object('item_name', 'מאחזי יד – בניין 2, דירה 1', 'quantity', 3.91, 'unit_price', 190, 'mnf_cost_unit', 80, 'project_manager', (SELECT id FROM users WHERE email='baruch.sd.davidov@gmail.com'), 'client', (SELECT p.values_json->'client' FROM entity_records p WHERE p.id=proj.id)))
   FROM ord LEFT JOIN proj ON true
   WHERE NOT EXISTS (
     SELECT 1 FROM entity_records it
@@ -4025,7 +4025,7 @@ WITH ord AS (
   WHERE rl.relation_id=(SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')) LIMIT 1
 ), new_item AS (
   INSERT INTO entity_records (entity_id, values_json)
-  SELECT (SELECT id FROM entities WHERE entity_key='items'), jsonb_strip_nulls(jsonb_build_object('item_name', 'מאחזי יד – בניין 4, דירה 1', 'project_manager', (SELECT id FROM users WHERE email='baruch.sd.davidov@gmail.com'), 'client', (SELECT p.values_json->'client' FROM entity_records p WHERE p.id=proj.id)))
+  SELECT (SELECT id FROM entities WHERE entity_key='items'), jsonb_strip_nulls(jsonb_build_object('item_name', 'מאחזי יד – בניין 4, דירה 1', 'quantity', 4.04, 'unit_price', 0, 'mnf_cost_unit', 80, 'project_manager', (SELECT id FROM users WHERE email='baruch.sd.davidov@gmail.com'), 'client', (SELECT p.values_json->'client' FROM entity_records p WHERE p.id=proj.id)))
   FROM ord LEFT JOIN proj ON true
   WHERE NOT EXISTS (
     SELECT 1 FROM entity_records it
@@ -5977,7 +5977,7 @@ WITH ord AS (
   WHERE rl.relation_id=(SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')) LIMIT 1
 ), new_item AS (
   INSERT INTO entity_records (entity_id, values_json)
-  SELECT (SELECT id FROM entities WHERE entity_key='items'), jsonb_strip_nulls(jsonb_build_object('item_name', 'מעקות מרפסות צד מזרח קומה 1-7', 'quantity', 95.544, 'unit_price', 830, 'designer_cost', 0, 'mnf_cost_unit', 190, 'project_manager', (SELECT id FROM users WHERE email='evgeni.sd.davidov@gmail.com'), 'client', (SELECT p.values_json->'client' FROM entity_records p WHERE p.id=proj.id)))
+  SELECT (SELECT id FROM entities WHERE entity_key='items'), jsonb_strip_nulls(jsonb_build_object('item_name', 'מעקות מרפסות צד מזרח קומה 1-7', 'quantity', 95.544, 'mnf_cost_unit', 190, 'project_manager', (SELECT id FROM users WHERE email='evgeni.sd.davidov@gmail.com'), 'client', (SELECT p.values_json->'client' FROM entity_records p WHERE p.id=proj.id)))
   FROM ord LEFT JOIN proj ON true
   WHERE NOT EXISTS (
     SELECT 1 FROM entity_records it
@@ -6003,7 +6003,7 @@ WITH ord AS (
   WHERE rl.relation_id=(SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')) LIMIT 1
 ), new_item AS (
   INSERT INTO entity_records (entity_id, values_json)
-  SELECT (SELECT id FROM entities WHERE entity_key='items'), jsonb_strip_nulls(jsonb_build_object('item_name', 'רוזטות', 'quantity', 107, 'unit_price', 0, 'designer_cost', 0, 'mnf_cost_unit', 5, 'project_manager', (SELECT id FROM users WHERE email='evgeni.sd.davidov@gmail.com'), 'client', (SELECT p.values_json->'client' FROM entity_records p WHERE p.id=proj.id)))
+  SELECT (SELECT id FROM entities WHERE entity_key='items'), jsonb_strip_nulls(jsonb_build_object('item_name', 'רוזטות', 'quantity', 105, 'project_manager', (SELECT id FROM users WHERE email='evgeni.sd.davidov@gmail.com'), 'client', (SELECT p.values_json->'client' FROM entity_records p WHERE p.id=proj.id)))
   FROM ord LEFT JOIN proj ON true
   WHERE NOT EXISTS (
     SELECT 1 FROM entity_records it
@@ -6237,7 +6237,7 @@ WITH ord AS (
   WHERE rl.relation_id=(SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')) LIMIT 1
 ), new_item AS (
   INSERT INTO entity_records (entity_id, values_json)
-  SELECT (SELECT id FROM entities WHERE entity_key='items'), jsonb_strip_nulls(jsonb_build_object('item_name', 'הגנה לצינורות ביוב', 'quantity', 1, 'unit_price', 495, 'mnf_cost_unit', 140, 'project_manager', (SELECT id FROM users WHERE email='evgeni.sd.davidov@gmail.com'), 'client', (SELECT p.values_json->'client' FROM entity_records p WHERE p.id=proj.id)))
+  SELECT (SELECT id FROM entities WHERE entity_key='items'), jsonb_strip_nulls(jsonb_build_object('item_name', 'הגנה לצינורות ביוב', 'quantity', 1, 'unit_price', 0, 'mnf_cost_unit', 140, 'project_manager', (SELECT id FROM users WHERE email='evgeni.sd.davidov@gmail.com'), 'client', (SELECT p.values_json->'client' FROM entity_records p WHERE p.id=proj.id)))
   FROM ord LEFT JOIN proj ON true
   WHERE NOT EXISTS (
     SELECT 1 FROM entity_records it
@@ -17591,7 +17591,7 @@ WITH ord AS (
   WHERE rl.relation_id=(SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')) LIMIT 1
 ), new_item AS (
   INSERT INTO entity_records (entity_id, values_json)
-  SELECT (SELECT id FROM entities WHERE entity_key='items'), jsonb_strip_nulls(jsonb_build_object('item_name', 'סבכה רכב', 'quantity', 2, 'unit_price', 1100, 'mnf_cost_unit', 350, 'project_manager', (SELECT id FROM users WHERE email='evgeni.sd.davidov@gmail.com'), 'client', (SELECT p.values_json->'client' FROM entity_records p WHERE p.id=proj.id)))
+  SELECT (SELECT id FROM entities WHERE entity_key='items'), jsonb_strip_nulls(jsonb_build_object('item_name', 'סבכה רכב', 'quantity', 2.78, 'unit_price', 1100, 'mnf_cost_unit', 350, 'project_manager', (SELECT id FROM users WHERE email='evgeni.sd.davidov@gmail.com'), 'client', (SELECT p.values_json->'client' FROM entity_records p WHERE p.id=proj.id)))
   FROM ord LEFT JOIN proj ON true
   WHERE NOT EXISTS (
     SELECT 1 FROM entity_records it
@@ -17617,7 +17617,7 @@ WITH ord AS (
   WHERE rl.relation_id=(SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')) LIMIT 1
 ), new_item AS (
   INSERT INTO entity_records (entity_id, values_json)
-  SELECT (SELECT id FROM entities WHERE entity_key='items'), jsonb_strip_nulls(jsonb_build_object('item_name', 'מסגרת לסבכה', 'quantity', 2, 'unit_price', 425, 'mnf_cost_unit', 140, 'project_manager', (SELECT id FROM users WHERE email='evgeni.sd.davidov@gmail.com'), 'client', (SELECT p.values_json->'client' FROM entity_records p WHERE p.id=proj.id)))
+  SELECT (SELECT id FROM entities WHERE entity_key='items'), jsonb_strip_nulls(jsonb_build_object('item_name', 'מסגרת לסבכה', 'quantity', 2.78, 'unit_price', 425, 'mnf_cost_unit', 140, 'project_manager', (SELECT id FROM users WHERE email='evgeni.sd.davidov@gmail.com'), 'client', (SELECT p.values_json->'client' FROM entity_records p WHERE p.id=proj.id)))
   FROM ord LEFT JOIN proj ON true
   WHERE NOT EXISTS (
     SELECT 1 FROM entity_records it
@@ -22535,7 +22535,7 @@ WITH ord AS (
   WHERE rl.relation_id=(SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')) LIMIT 1
 ), new_item AS (
   INSERT INTO entity_records (entity_id, values_json)
-  SELECT (SELECT id FROM entities WHERE entity_key='items'), jsonb_strip_nulls(jsonb_build_object('item_name', 'מאחזי יד לחדר מדרגות צד מערב', 'quantity', 42.115, 'unit_price', 265, 'mnf_cost_unit', 60, 'project_manager', (SELECT id FROM users WHERE email='evgeni.sd.davidov@gmail.com'), 'client', (SELECT p.values_json->'client' FROM entity_records p WHERE p.id=proj.id)))
+  SELECT (SELECT id FROM entities WHERE entity_key='items'), jsonb_strip_nulls(jsonb_build_object('item_name', 'מאחזי יד לחדר מדרגות צד מערב', 'quantity', 91.41, 'unit_price', 265, 'designer_cost', 0, 'mnf_cost_unit', 80, 'project_manager', (SELECT id FROM users WHERE email='evgeni.sd.davidov@gmail.com'), 'client', (SELECT p.values_json->'client' FROM entity_records p WHERE p.id=proj.id)))
   FROM ord LEFT JOIN proj ON true
   WHERE NOT EXISTS (
     SELECT 1 FROM entity_records it
@@ -22665,7 +22665,7 @@ WITH ord AS (
   WHERE rl.relation_id=(SELECT id FROM relations WHERE relation_key='proekty' AND source_entity_id=(SELECT id FROM entities WHERE entity_key='orders') AND target_entity_id=(SELECT id FROM entities WHERE entity_key='projects')) LIMIT 1
 ), new_item AS (
   INSERT INTO entity_records (entity_id, values_json)
-  SELECT (SELECT id FROM entities WHERE entity_key='items'), jsonb_strip_nulls(jsonb_build_object('item_name', 'רפפות בגג', 'quantity', 5.03, 'unit_price', 611, 'mnf_cost_unit', 240, 'project_manager', (SELECT id FROM users WHERE email='evgeni.sd.davidov@gmail.com'), 'client', (SELECT p.values_json->'client' FROM entity_records p WHERE p.id=proj.id)))
+  SELECT (SELECT id FROM entities WHERE entity_key='items'), jsonb_strip_nulls(jsonb_build_object('item_name', 'רפפות בגג', 'quantity', 3, 'unit_price', 611, 'mnf_cost_unit', 240, 'project_manager', (SELECT id FROM users WHERE email='evgeni.sd.davidov@gmail.com'), 'client', (SELECT p.values_json->'client' FROM entity_records p WHERE p.id=proj.id)))
   FROM ord LEFT JOIN proj ON true
   WHERE NOT EXISTS (
     SELECT 1 FROM entity_records it
