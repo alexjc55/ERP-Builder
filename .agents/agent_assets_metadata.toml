@@ -42,3 +42,9 @@ id = "zMgGdbW1GM2vKynTCVqp3"
 uri = "file://crm-items-issues.txt"
 type = "text"
 title = "Отчёт по проблемным данным (обновлён)"
+
+[[outputs]]
+id = "G1WFHQS_9HxBOfZrE-FEJ"
+uri = "file://fix-import-order.txt"
+type = "text"
+title = "Исправление порядка импортированных записей (скрипт SQL в .txt)"

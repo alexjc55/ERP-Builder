@@ -478,13 +478,17 @@ export function buildRecordQuery(
   const where = whereParts.length > 0 ? and(...whereParts) : undefined;
 
   const orderBy: SQL[] = [];
+  let hasIdTieBreak = false;
   for (const s of spec.sorts ?? []) {
     if (s.field === SYSTEM_SORT_CREATED_AT) {
       orderBy.push(s.direction === "desc" ? desc(entityRecordsTable.createdAt) : asc(entityRecordsTable.createdAt));
+      orderBy.push(s.direction === "desc" ? desc(entityRecordsTable.id) : asc(entityRecordsTable.id));
+      hasIdTieBreak = true;
       continue;
     }
     if (s.field === SYSTEM_SORT_RECORD_ID) {
       orderBy.push(s.direction === "desc" ? desc(entityRecordsTable.id) : asc(entityRecordsTable.id));
+      hasIdTieBreak = true;
       continue;
     }
     const field = fieldByKey.get(s.field);
@@ -496,6 +500,11 @@ export function buildRecordQuery(
   }
   if (orderBy.length === 0) {
     orderBy.push(desc(entityRecordsTable.createdAt));
+    orderBy.push(desc(entityRecordsTable.id));
+    hasIdTieBreak = true;
+  }
+  if (!hasIdTieBreak) {
+    orderBy.push(desc(entityRecordsTable.id));
   }
 
   return { where, orderBy };

@@ -29,3 +29,15 @@ as table columns (they are not entity fields).
   already exist on every record; this feature only exposes them for ordering.
   Typical use: a stable tie-breaker so rows sharing a business date keep their
   insertion order.
+
+## Deterministic id tie-break (always)
+
+`buildRecordQuery` ALWAYS appends an `id` tie-break to the ORDER BY: same
+direction as a `__created_at__` sort, `id DESC` for the empty-sorts default,
+and a trailing `id DESC` after custom field sorts.
+**Why:** a bulk SQL import runs in ONE transaction, so `now()` gives every
+inserted row an IDENTICAL `created_at`; sorting by date alone returns those
+rows in arbitrary, pagination-unstable order. **How to apply:** never emit an
+ORDER BY on records without an id tie-break; for already-imported batches on
+an external DB, a one-off SQL can spread duplicate `created_at` groups by
+milliseconds in `id` order (id order = insertion/file order).
