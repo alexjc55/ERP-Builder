@@ -318,6 +318,7 @@ export * from './validationOperator';
 export * from './view';
 export * from './viewConfig';
 export * from './viewConfigFilterConjunction';
+export * from './viewConfigPageSize';
 export * from './viewConfigViewType';
 export * from './viewInput';
 export * from './viewsReorderInput';

@@ -5755,6 +5755,7 @@ export const ListEntityViewsResponseItem = zod.object({
   "search": zod.string().optional(),
   "visibleFields": zod.array(zod.string()).optional(),
   "viewType": zod.enum(['table', 'pivot', 'calendar']).default(listEntityViewsResponseConfigJsonViewTypeDefault),
+  "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
   "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
@@ -5856,6 +5857,7 @@ export const CreateEntityViewBody = zod.object({
   "search": zod.string().optional(),
   "visibleFields": zod.array(zod.string()).optional(),
   "viewType": zod.enum(['table', 'pivot', 'calendar']).default(createEntityViewBodyConfigJsonViewTypeDefault),
+  "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
   "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
@@ -5954,6 +5956,7 @@ export const GetViewResponse = zod.object({
   "search": zod.string().optional(),
   "visibleFields": zod.array(zod.string()).optional(),
   "viewType": zod.enum(['table', 'pivot', 'calendar']).default(getViewResponseConfigJsonViewTypeDefault),
+  "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
   "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
@@ -6052,6 +6055,7 @@ export const UpdateViewBody = zod.object({
   "search": zod.string().optional(),
   "visibleFields": zod.array(zod.string()).optional(),
   "viewType": zod.enum(['table', 'pivot', 'calendar']).default(updateViewBodyConfigJsonViewTypeDefault),
+  "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
   "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
@@ -6142,6 +6146,7 @@ export const UpdateViewResponse = zod.object({
   "search": zod.string().optional(),
   "visibleFields": zod.array(zod.string()).optional(),
   "viewType": zod.enum(['table', 'pivot', 'calendar']).default(updateViewResponseConfigJsonViewTypeDefault),
+  "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
   "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
@@ -6318,6 +6323,7 @@ export const ListEntitiesResponseItem = zod.object({
 })).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot.'),
+  "defaultPageSize": zod.number().nullish().describe('Rows per page for the records table when no view is selected (50\/100\/200). Null = 50.'),
   "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
   "allowNoStatus": zod.boolean().optional().describe('When false, the \"Без статуса\" option is hidden from the record status pickers for this entity.'),
   "sortOrder": zod.number(),
@@ -6405,6 +6411,7 @@ export const CreateEntityBody = zod.object({
 })).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot config for the records page when no view is selected. Null = no default pivot.'),
+  "defaultPageSize": zod.number().nullish().describe('Rows per page for the records table when no view is selected (50\/100\/200). Null = 50.'),
   "pivotEnabled": zod.boolean().optional(),
   "allowNoStatus": zod.boolean().default(createEntityBodyAllowNoStatusDefault),
   "sortOrder": zod.number().optional(),
@@ -6492,6 +6499,7 @@ export const GetEntityResponse = zod.object({
 })).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot.'),
+  "defaultPageSize": zod.number().nullish().describe('Rows per page for the records table when no view is selected (50\/100\/200). Null = 50.'),
   "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
   "allowNoStatus": zod.boolean().optional().describe('When false, the \"Без статуса\" option is hidden from the record status pickers for this entity.'),
   "sortOrder": zod.number(),
@@ -6580,6 +6588,7 @@ export const UpdateEntityBody = zod.object({
 })).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot config for the records page when no view is selected. Null = no default pivot.'),
+  "defaultPageSize": zod.number().nullish().describe('Rows per page for the records table when no view is selected (50\/100\/200). Null = 50.'),
   "pivotEnabled": zod.boolean().optional(),
   "allowNoStatus": zod.boolean().optional(),
   "sortOrder": zod.number().optional(),
@@ -6659,6 +6668,7 @@ export const UpdateEntityResponse = zod.object({
 })).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),zod.null()]).optional().describe('Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot.'),
+  "defaultPageSize": zod.number().nullish().describe('Rows per page for the records table when no view is selected (50\/100\/200). Null = 50.'),
   "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
   "allowNoStatus": zod.boolean().optional().describe('When false, the \"Без статуса\" option is hidden from the record status pickers for this entity.'),
   "sortOrder": zod.number(),

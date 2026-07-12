@@ -100,6 +100,11 @@ router.post("/entities", requireAuth, requireAdmin("entities"), async (req, res)
     }
   }
 
+  if (parsed.data.defaultPageSize != null && ![50, 100, 200].includes(parsed.data.defaultPageSize)) {
+    res.status(400).json({ error: "defaultPageSize must be 50, 100 or 200" });
+    return;
+  }
+
   const [entity] = await db
     .insert(entitiesTable)
     .values({ ...parsed.data, entityKey: key })
@@ -179,6 +184,14 @@ router.put("/entities/:id", requireAuth, requireAdmin("entities"), async (req, r
   if (body.defaultSortJson != null) updateData.defaultSortJson = body.defaultSortJson;
   if (body.defaultFilterJson != null) updateData.defaultFilterJson = body.defaultFilterJson;
   if (body.defaultPivotJson !== undefined) updateData.defaultPivotJson = body.defaultPivotJson;
+  if (body.defaultPageSize !== undefined) {
+    const dps = body.defaultPageSize;
+    if (dps != null && ![50, 100, 200].includes(dps)) {
+      res.status(400).json({ error: "defaultPageSize must be 50, 100 or 200" });
+      return;
+    }
+    updateData.defaultPageSize = dps ?? null;
+  }
   if (body.pivotEnabled != null) updateData.pivotEnabled = body.pivotEnabled;
   if (body.allowNoStatus != null) updateData.allowNoStatus = body.allowNoStatus;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;

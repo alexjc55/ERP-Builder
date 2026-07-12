@@ -54,3 +54,9 @@ id = "TlfoQl4YC3RGhKS7LDmxG"
 uri = "file://page-size-translation.txt"
 type = "text"
 title = "SQL: перевод для выбора размера страницы"
+
+[[outputs]]
+id = "dDvaK1sf_pXk82BuCkydb"
+uri = "file://page-size-view-settings.txt"
+type = "text"
+title = "SQL для удалённой базы — размер страницы в настройках вида"

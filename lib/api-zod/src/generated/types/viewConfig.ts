@@ -10,6 +10,7 @@ import type { FilterCondition } from './filterCondition';
 import type { PivotConfig } from './pivotConfig';
 import type { SortSpec } from './sortSpec';
 import type { ViewConfigFilterConjunction } from './viewConfigFilterConjunction';
+import type { ViewConfigPageSize } from './viewConfigPageSize';
 import type { ViewConfigViewType } from './viewConfigViewType';
 
 export interface ViewConfig {
@@ -19,6 +20,8 @@ export interface ViewConfig {
   search?: string;
   visibleFields?: string[];
   viewType?: ViewConfigViewType;
+  /** Rows per page for this view's records table. Absent = the entity's default (defaultPageSize) or 50. */
+  pageSize?: ViewConfigPageSize;
   pivot?: PivotConfig;
   calendar?: CalendarConfig;
 }

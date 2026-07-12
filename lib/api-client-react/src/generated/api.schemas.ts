@@ -2010,6 +2010,11 @@ export interface Entity {
   defaultFilterJson?: FilterCondition[];
   /** Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot. */
   defaultPivotJson?: PivotConfig | null;
+  /**
+     * Rows per page for the records table when no view is selected (50/100/200). Null = 50.
+     * @nullable
+     */
+  defaultPageSize?: number | null;
   /** Enables the "Сводная таблица" (pivot) report mode for this entity's records page. */
   pivotEnabled?: boolean;
   /** When false, the "Без статуса" option is hidden from the record status pickers for this entity. */
@@ -2031,6 +2036,11 @@ export interface EntityInput {
   defaultFilterJson?: FilterCondition[];
   /** Default pivot config for the records page when no view is selected. Null = no default pivot. */
   defaultPivotJson?: PivotConfig | null;
+  /**
+     * Rows per page for the records table when no view is selected (50/100/200). Null = 50.
+     * @nullable
+     */
+  defaultPageSize?: number | null;
   pivotEnabled?: boolean;
   allowNoStatus?: boolean;
   sortOrder?: number;
@@ -2048,6 +2058,11 @@ export interface EntityUpdate {
   defaultFilterJson?: FilterCondition[];
   /** Default pivot config for the records page when no view is selected. Null = no default pivot. */
   defaultPivotJson?: PivotConfig | null;
+  /**
+     * Rows per page for the records table when no view is selected (50/100/200). Null = 50.
+     * @nullable
+     */
+  defaultPageSize?: number | null;
   pivotEnabled?: boolean;
   allowNoStatus?: boolean;
   sortOrder?: number;
@@ -3216,6 +3231,18 @@ export const ViewConfigViewType = {
 } as const;
 
 /**
+ * Rows per page for this view's records table. Absent = the entity's default (defaultPageSize) or 50.
+ */
+export type ViewConfigPageSize = typeof ViewConfigPageSize[keyof typeof ViewConfigPageSize];
+
+
+export const ViewConfigPageSize = {
+  NUMBER_50: 50,
+  NUMBER_100: 100,
+  NUMBER_200: 200,
+} as const;
+
+/**
  * Color chips by record status, by a field value, or not at all.
  * @nullable
  */
@@ -3283,6 +3310,8 @@ export interface ViewConfig {
   search?: string;
   visibleFields?: string[];
   viewType?: ViewConfigViewType;
+  /** Rows per page for this view's records table. Absent = the entity's default (defaultPageSize) or 50. */
+  pageSize?: ViewConfigPageSize;
   pivot?: PivotConfig;
   calendar?: CalendarConfig;
 }

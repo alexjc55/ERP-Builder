@@ -130,6 +130,8 @@ function extractError(err: unknown): string | undefined {
 // server sort builder (record-query.ts) and EntityRecords.tsx.
 const SYSTEM_SORT_CREATED_AT = "__created_at__";
 const SYSTEM_SORT_RECORD_ID = "__record_id__";
+// Allowed rows-per-page choices for the records table (0 is the "inherit" sentinel).
+const PAGE_SIZE_CHOICES: number[] = [50, 100, 200];
 
 
 export default function EntityViewsPage() {
@@ -290,6 +292,8 @@ export default function EntityViewsPage() {
   const [visibleFields, setVisibleFields] = useState<string[]>([]);
   // Collapsed by default so the (potentially long) column list doesn't take space.
   const [columnsExpanded, setColumnsExpanded] = useState(false);
+  // Rows per page for this view's records table. 0 = inherit (entity default / 50).
+  const [viewPageSize, setViewPageSize] = useState<number>(0);
 
   // Default sort: the row ordering applied when no view is selected (the implicit
   // "По умолчанию"). Stored on the entity itself, configured via its own dialog.
@@ -306,6 +310,8 @@ export default function EntityViewsPage() {
   // Roles allowed to use the DEFAULT pivot (the Таблица/Сводная toggle on the
   // records page when no view is selected). Empty = everyone with record access.
   const [defaultPivotRoleIds, setDefaultPivotRoleIds] = useState<number[]>([]);
+  // Rows per page for the default (no view selected) records table. 0 = 50.
+  const [defaultPageSize, setDefaultPageSize] = useState<number>(0);
   const entityDefaultSorts: SortSpec[] = Array.isArray(entity?.defaultSortJson)
     ? (entity.defaultSortJson as SortSpec[])
     : [];
@@ -404,6 +410,7 @@ export default function EntityViewsPage() {
     setVisibleRoleIds([]);
     setVisibleFields([]);
     setColumnsExpanded(false);
+    setViewPageSize(0);
     setDialogOpen(true);
   };
 
@@ -427,6 +434,7 @@ export default function EntityViewsPage() {
     setVisibleRoleIds(Array.isArray(view.visibleRoleIds) ? view.visibleRoleIds : []);
     setVisibleFields(Array.isArray(cfg.visibleFields) ? cfg.visibleFields : []);
     setColumnsExpanded(false);
+    setViewPageSize(PAGE_SIZE_CHOICES.includes(cfg.pageSize ?? 0) ? (cfg.pageSize as number) : 0);
     const isPivot = cfg.viewType === "pivot" && !!cfg.pivot;
     const isCalendar = cfg.viewType === "calendar";
     setViewType(isCalendar ? "calendar" : isPivot ? "pivot" : "table");
@@ -495,6 +503,8 @@ export default function EntityViewsPage() {
     setDefaultPivotCols(dp?.cols ? dimToDraft(dp.cols) : { source: "status", fieldKey: "", datePeriod: null });
     setDefaultPivotMeasures(dp ? measuresFromConfig(dp) : [newDraftMeasure(pivotSumFields[0]?.fieldKey ?? "")]);
     setDefaultPivotRoleIds(Array.isArray(dp?.visibleRoleIds) ? dp.visibleRoleIds : []);
+    const eps = entity?.defaultPageSize ?? 0;
+    setDefaultPageSize(PAGE_SIZE_CHOICES.includes(eps) ? eps : 0);
     setDefaultSortDialogOpen(true);
   };
   const addDefaultSort = () => {
@@ -553,7 +563,12 @@ export default function EntityViewsPage() {
     }
     updateEntityMutation.mutate({
       id: entityId,
-      data: { defaultSortJson: builtSorts, defaultFilterJson: builtFilters, defaultPivotJson },
+      data: {
+        defaultSortJson: builtSorts,
+        defaultFilterJson: builtFilters,
+        defaultPivotJson,
+        defaultPageSize: defaultPageSize !== 0 && PAGE_SIZE_CHOICES.includes(defaultPageSize) ? defaultPageSize : null,
+      },
     });
   };
 
@@ -577,6 +592,8 @@ export default function EntityViewsPage() {
       const activeKeys = new Set(fields.map((f: Field) => f.fieldKey));
       const cleaned = visibleFields.filter((k) => activeKeys.has(k));
       if (cleaned.length > 0) base.visibleFields = cleaned;
+      // 0 = inherit (entity default / 50) — not written to config.
+      if (PAGE_SIZE_CHOICES.includes(viewPageSize) && viewPageSize !== 0) base.pageSize = viewPageSize as 50 | 100 | 200;
     }
     if (viewType === "calendar") {
       const cal: CalendarConfig = {
@@ -1086,6 +1103,24 @@ export default function EntityViewsPage() {
             )}
 
             {viewType === "table" && (
+            <div className="flex items-center justify-between border-t border-slate-100 pt-4">
+              <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+                <LayoutList className="w-4 h-4 text-blue-600" />
+                {t("views.pageSize", "Записей на странице")}
+              </div>
+              <Select value={String(viewPageSize)} onValueChange={(v) => setViewPageSize(Number(v))}>
+                <SelectTrigger className="h-8 text-sm w-48"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">{t("views.pageSizeInherit", "Как по умолчанию")}</SelectItem>
+                  {PAGE_SIZE_CHOICES.map((n) => (
+                    <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            )}
+
+            {viewType === "table" && (
             <div className="space-y-2 border-t border-slate-100 pt-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
@@ -1199,6 +1234,21 @@ export default function EntityViewsPage() {
                 ))}
               </div>
             )}
+            <div className="flex items-center justify-between border-t border-slate-100 pt-4">
+              <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+                <LayoutList className="w-4 h-4 text-blue-600" />
+                {t("views.pageSize", "Записей на странице")}
+              </div>
+              <Select value={String(defaultPageSize)} onValueChange={(v) => setDefaultPageSize(Number(v))}>
+                <SelectTrigger className="h-8 text-sm w-48"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">{t("views.pageSizeStandard", "Стандартно (50)")}</SelectItem>
+                  {PAGE_SIZE_CHOICES.map((n) => (
+                    <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           {entity?.pivotEnabled && (
             <div className="space-y-3 border-t border-slate-100 pt-4">

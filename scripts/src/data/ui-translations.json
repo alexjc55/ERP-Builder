@@ -4806,12 +4806,6 @@
     "he": "מוצג"
   },
   {
-    "key": "records.perPage",
-    "ru": "на стр.",
-    "en": "per page",
-    "he": "בעמוד"
-  },
-  {
     "key": "records.status",
     "ru": "Статус",
     "en": "Status",
@@ -6940,6 +6934,24 @@
     "ru": "Показать все",
     "en": "Show all",
     "he": "הצג הכול"
+  },
+  {
+    "key": "views.pageSize",
+    "ru": "Записей на странице",
+    "en": "Records per page",
+    "he": "רשומות בעמוד"
+  },
+  {
+    "key": "views.pageSizeInherit",
+    "ru": "Как по умолчанию",
+    "en": "Same as default",
+    "he": "כברירת מחדל"
+  },
+  {
+    "key": "views.pageSizeStandard",
+    "ru": "Стандартно (50)",
+    "en": "Standard (50)",
+    "he": "רגיל (50)"
   },
   {
     "key": "views.columnsAll",

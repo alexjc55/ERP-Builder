@@ -21,6 +21,11 @@ export interface EntityInput {
   defaultFilterJson?: FilterCondition[];
   /** Default pivot config for the records page when no view is selected. Null = no default pivot. */
   defaultPivotJson?: PivotConfig | null;
+  /**
+     * Rows per page for the records table when no view is selected (50/100/200). Null = 50.
+     * @nullable
+     */
+  defaultPageSize?: number | null;
   pivotEnabled?: boolean;
   allowNoStatus?: boolean;
   sortOrder?: number;

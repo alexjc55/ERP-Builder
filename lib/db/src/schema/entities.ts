@@ -24,6 +24,10 @@ export const entitiesTable = pgTable("entities", {
   // selected. Same shape as a view's configJson.pivot (PivotConfig). Null = the
   // default view offers no pivot.
   defaultPivotJson: jsonb("default_pivot_json"),
+  // Rows-per-page for the records table when NO view is selected (the default
+  // view). Null = platform default (50). Named views carry their own
+  // configJson.pageSize.
+  defaultPageSize: integer("default_page_size"),
   sortOrder: integer("sort_order").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

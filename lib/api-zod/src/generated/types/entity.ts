@@ -23,6 +23,11 @@ export interface Entity {
   defaultFilterJson?: FilterCondition[];
   /** Default pivot (Сводная таблица) config for the records page when no view is selected. Null = no default pivot. */
   defaultPivotJson?: PivotConfig | null;
+  /**
+     * Rows per page for the records table when no view is selected (50/100/200). Null = 50.
+     * @nullable
+     */
+  defaultPageSize?: number | null;
   /** Enables the "Сводная таблица" (pivot) report mode for this entity's records page. */
   pivotEnabled?: boolean;
   /** When false, the "Без статуса" option is hidden from the record status pickers for this entity. */

@@ -60,3 +60,7 @@ field. Any new render path (cells, totals, conditional formatting, export) must
 read from the already-narrowed `displayFields`/`orderedColumns`, not re-derive
 columns from raw fields. Page-local (mirror) columns are NOT part of `visibleFields`
 (picker lists entity fields only) and are unaffected.
+
+## Rows per page (pageSize)
+- Rows-per-page (50/100/200) is a VIEW-level setting, not per-user: named views carry `configJson.pageSize` (table views only; absent = inherit), the default (no view) table uses `entities.default_page_size` (null = 50). Client precedence: view → entity default → 50, values validated against [50,100,200] on both sides.
+- A localStorage/footer per-user selector was built and then removed per user request — do NOT reintroduce per-user page size. When the effective pageSize changes, page resets to 1.

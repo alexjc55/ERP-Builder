@@ -5260,6 +5260,9 @@ components:
           anyOf:
             - $ref: "#/components/schemas/PivotConfig"
             - type: "null"
+        defaultPageSize:
+          type: ["integer", "null"]
+          description: Rows per page for the records table when no view is selected (50/100/200). Null = 50.
         pivotEnabled:
           type: boolean
           description: Enables the "Сводная таблица" (pivot) report mode for this entity's records page.
@@ -5304,6 +5307,9 @@ components:
           anyOf:
             - $ref: "#/components/schemas/PivotConfig"
             - type: "null"
+        defaultPageSize:
+          type: ["integer", "null"]
+          description: Rows per page for the records table when no view is selected (50/100/200). Null = 50.
         pivotEnabled:
           type: boolean
         allowNoStatus:
@@ -5341,6 +5347,9 @@ components:
           anyOf:
             - $ref: "#/components/schemas/PivotConfig"
             - type: "null"
+        defaultPageSize:
+          type: ["integer", "null"]
+          description: Rows per page for the records table when no view is selected (50/100/200). Null = 50.
         pivotEnabled:
           type: boolean
         allowNoStatus:
@@ -7115,6 +7124,10 @@ components:
           type: string
           enum: [table, pivot, calendar]
           default: table
+        pageSize:
+          type: integer
+          enum: [50, 100, 200]
+          description: Rows per page for this view's records table. Absent = the entity's default (defaultPageSize) or 50.
         pivot:
           $ref: "#/components/schemas/PivotConfig"
         calendar:
