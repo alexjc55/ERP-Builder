@@ -169,7 +169,18 @@ import {
 
 const NO_STATUS = "__none__";
 const NO_VIEW = "__all__";
-const PAGE_SIZE = 50;
+/** Selectable rows-per-page options; the server caps pageSize at 200. */
+const PAGE_SIZE_OPTIONS = [50, 100, 200];
+const DEFAULT_PAGE_SIZE = 50;
+const PAGE_SIZE_STORAGE_KEY = "recordsPageSize";
+function loadStoredPageSize(): number {
+  try {
+    const v = Number(localStorage.getItem(PAGE_SIZE_STORAGE_KEY));
+    return PAGE_SIZE_OPTIONS.includes(v) ? v : DEFAULT_PAGE_SIZE;
+  } catch {
+    return DEFAULT_PAGE_SIZE;
+  }
+}
 /**
  * Client sentinel for the "no value" group bucket of a grouped mirror page
  * (the server's group key is `null`, which can't be a React state string).
@@ -2113,6 +2124,16 @@ export function EntityRecords({
   const [pageFieldFilters, setPageFieldFilters] = useState<Record<string, string[]>>({});
   const [pageDateFilters, setPageDateFilters] = useState<Record<string, DateRangeFilter>>({});
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(loadStoredPageSize);
+  const changePageSize = (size: number) => {
+    setPageSize(size);
+    setPage(1);
+    try {
+      localStorage.setItem(PAGE_SIZE_STORAGE_KEY, String(size));
+    } catch {
+      // storage unavailable (private mode) — the in-memory value still applies
+    }
+  };
   const [records, setRecords] = useState<EntityRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [numericTotals, setNumericTotals] = useState<Record<string, number>>({});
@@ -2339,7 +2360,7 @@ export function EntityRecords({
       search: search.trim() || undefined,
       archived,
       page,
-      pageSize: PAGE_SIZE,
+      pageSize,
       // Grouped mirror page: always ask for the group buckets; when a group is
       // expanded, ALSO narrow the row page to that one group so the normal
       // inline-edit/pagination path serves the expanded rows unchanged.
@@ -2358,7 +2379,7 @@ export function EntityRecords({
         : {}),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [baseFiltersKey, selectedConfig.filterConjunction, sortsKey, adHocKey, dateKey, customFilterKey, pageAdHocKey, pageDateKey, statusKey, excludeKey, search, archived, page, groupingActive, expandedGroupKey, expandAll],
+    [baseFiltersKey, selectedConfig.filterConjunction, sortsKey, adHocKey, dateKey, customFilterKey, pageAdHocKey, pageDateKey, statusKey, excludeKey, search, archived, page, pageSize, groupingActive, expandedGroupKey, expandAll],
   );
 
   // Pivot (Сводная таблица): a view whose configJson.viewType is "pivot" carries a
@@ -3414,7 +3435,7 @@ export function EntityRecords({
     next.splice(target, 0, moved);
     saveMirrorColumnOrder(next.map((c) => c.token));
   };
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   // ── Pinned (frozen-left) columns ──────────────────────────────────────────
   // Fields/page-fields flagged isPinned stay stuck to the left while the rest of
@@ -5295,8 +5316,20 @@ export function EntityRecords({
 
       {total > 0 && groupRowsReady && (!showGroups || expandedGroupIndex >= 0 || expandAll) && (
         <div className="flex items-center justify-between text-sm text-slate-500">
-          <span>
-            {t("records.shown", "Показано")} {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} {t("records.of", "из")} {total}
+          <span className="flex items-center gap-2">
+            {t("records.shown", "Показано")} {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} {t("records.of", "из")} {total}
+            <Select value={String(pageSize)} onValueChange={(v) => changePageSize(Number(v))}>
+              <SelectTrigger className="h-7 w-[92px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PAGE_SIZE_OPTIONS.map((n) => (
+                  <SelectItem key={n} value={String(n)}>
+                    {n} {t("records.perPage", "на стр.")}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </span>
           {totalPages > 1 && (
             <div className="flex items-center gap-2">

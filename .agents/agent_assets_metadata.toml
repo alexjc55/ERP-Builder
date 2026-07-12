@@ -48,3 +48,9 @@ id = "G1WFHQS_9HxBOfZrE-FEJ"
 uri = "file://fix-import-order.txt"
 type = "text"
 title = "Исправление порядка импортированных записей (скрипт SQL в .txt)"
+
+[[outputs]]
+id = "TlfoQl4YC3RGhKS7LDmxG"
+uri = "file://page-size-translation.txt"
+type = "text"
+title = "SQL: перевод для выбора размера страницы"

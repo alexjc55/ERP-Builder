@@ -4806,6 +4806,12 @@
     "he": "מוצג"
   },
   {
+    "key": "records.perPage",
+    "ru": "на стр.",
+    "en": "per page",
+    "he": "בעמוד"
+  },
+  {
     "key": "records.status",
     "ru": "Статус",
     "en": "Status",
