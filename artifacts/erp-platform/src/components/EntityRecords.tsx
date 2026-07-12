@@ -4848,6 +4848,10 @@ export function EntityRecords({
                         if (entityRel) return entityRel.value;
                         return relatedByRecord.get(record.id)?.get(key)?.value;
                       }
+                      // user fields: formulaValues holds the display NAME (substituted
+                      // for formula evaluation), but format rules store the user ID —
+                      // compare against the raw stored value, not the name.
+                      if (def && def.fieldType === "user") return allValues[key];
                       return def ? fieldRawValue({ fieldKey: key, ...def }, formulaValues) : formulaValues[key];
                     });
                     // Resolve the row background once so pinned (sticky) cells and
