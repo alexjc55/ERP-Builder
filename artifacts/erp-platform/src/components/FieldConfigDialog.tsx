@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useCreateEntityField,
   useUpdateField,
@@ -190,6 +190,19 @@ export function FieldConfigDialog({
   const [allowedRoleIds, setAllowedRoleIds] = useState<number[]>([]);
   const [allowCreateUser, setAllowCreateUser] = useState(false);
   const [formatRules, setFormatRules] = useState<FieldFormatRule[]>([]);
+  // For a `user` field restricted to certain roles ("Доступные роли пользователей"),
+  // the format-rule value picker must offer the SAME narrowed user list — otherwise
+  // an admin can pick someone the field can never hold. Uses the LIVE allowedRoleIds
+  // state (not the saved field) so toggling roles narrows the picker immediately.
+  // Matches filterUserOptionsByRoles: a user qualifies via ANY of their roles.
+  const formatRuleUsers = useMemo(() => {
+    if (fieldType !== "user" || allowedRoleIds.length === 0) return userOptions;
+    const allowedSet = new Set(allowedRoleIds);
+    return userOptions.filter((u) => {
+      const userRoles = u.roleIds && u.roleIds.length > 0 ? u.roleIds : [u.roleId];
+      return userRoles.some((rid) => allowedSet.has(rid));
+    });
+  }, [fieldType, allowedRoleIds, userOptions]);
   const [validationRules, setValidationRules] = useState<FieldValidationRule[]>([]);
   const [formula, setFormula] = useState("");
   const [formulaDecimals, setFormulaDecimals] = useState("");
@@ -1051,7 +1064,7 @@ export function FieldConfigDialog({
               <FieldFormatRulesEditor
                 fieldType={fieldType}
                 options={options}
-                users={userOptions}
+                users={formatRuleUsers}
                 rules={formatRules}
                 onChange={setFormatRules}
               />

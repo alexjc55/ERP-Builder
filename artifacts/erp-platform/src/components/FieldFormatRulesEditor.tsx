@@ -11,10 +11,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { useT, useML } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import type { SelectOption } from "@/lib/selectOptions";
 import { addColorPreset, loadColorPresets, removeColorPreset } from "@/lib/colorPresets";
-import { Plus, Star, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, Plus, Star, Trash2, X } from "lucide-react";
 import { HexColorPicker } from "react-colorful";
 
 const OPERATORS: { value: FormatOperator; label: string; needsValue: boolean }[] = [
@@ -84,6 +93,63 @@ function operatorsForType(fieldType: FieldType): { value: FormatOperator; label:
 
 function needsValue(op: FormatOperator): boolean {
   return OPERATORS.find((o) => o.value === op)?.needsValue ?? true;
+}
+
+/**
+ * Searchable user picker for a rule's value. A plain <Select> becomes unusable
+ * with many users, so this mirrors the records-table UserCombobox: a popover
+ * with a search input filtering by name. The stored value stays String(id).
+ */
+function UserValueSelect({
+  users,
+  value,
+  onChange,
+}: {
+  users: { id: number; name: string }[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const selected = users.find((u) => String(u.id) === value) ?? null;
+  // A rule saved before the field's role restriction narrowed the list may
+  // reference a user no longer offered — still show who it points at.
+  const label = selected ? selected.name : value ? `#${value}` : "";
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" role="combobox" className="h-8 w-full justify-between font-normal px-3">
+          <span className={cn("truncate", !label && "text-slate-400")}>
+            {label || t("records.selectUser", "Выберите пользователя")}
+          </span>
+          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-56 p-0">
+        <Command>
+          <CommandInput placeholder={t("records.userSearch", "Поиск пользователя...")} />
+          <CommandList>
+            <CommandEmpty>{t("records.userNotFound", "Пользователи не найдены")}</CommandEmpty>
+            <CommandGroup>
+              {users.map((u) => (
+                <CommandItem
+                  key={u.id}
+                  value={`${u.name} #${u.id}`}
+                  onSelect={() => {
+                    onChange(String(u.id));
+                    setOpen(false);
+                  }}
+                >
+                  <Check className={cn("mr-2 h-4 w-4", value === String(u.id) ? "opacity-100" : "opacity-0")} />
+                  <span className="truncate">{u.name}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 /**
@@ -312,16 +378,11 @@ export function FieldFormatRulesEditor({
       // id (stringified). Picking from the user list keeps them aligned — a
       // free-typed name would never equal the id and silently never match.
       return (
-        <Select value={rule.value || ""} onValueChange={(v) => update(idx, { value: v })}>
-          <SelectTrigger className="h-8">
-            <SelectValue placeholder={t("records.selectUser", "Выберите пользователя")} />
-          </SelectTrigger>
-          <SelectContent>
-            {users.map((u) => (
-              <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <UserValueSelect
+          users={users}
+          value={rule.value ?? ""}
+          onChange={(v) => update(idx, { value: v })}
+        />
       );
     }
     // A formula field can hold text or numbers, so the input type follows the
