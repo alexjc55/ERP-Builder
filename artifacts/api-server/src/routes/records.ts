@@ -1034,8 +1034,12 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     const ids = data.map((r) => r.id);
     rowGroups = {};
     if (ids.length > 0) {
+      // NB: the raw fragment must be wrapped in sql`` — a SQL fragment passed
+      // directly as a selected field makes Drizzle render its table columns
+      // UNQUALIFIED ("id"), which inside the correlated subquery resolves to
+      // rl.id instead of entity_records.id and silently yields NULL keys.
       const keyed = await db
-        .select({ id: entityRecordsTable.id, k: rowGroupKeyExpr })
+        .select({ id: entityRecordsTable.id, k: sql<string | null>`${rowGroupKeyExpr}` })
         .from(entityRecordsTable)
         .where(inArray(entityRecordsTable.id, ids));
       for (const row of keyed) {
