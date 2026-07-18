@@ -32,6 +32,11 @@ pm2 restart erp-davidov --update-env
 ```
 If `.env` changed or DB schema changed, source env first: `set -a; source .env; set +a;` then `pm2 restart erp-davidov --update-env` / `pnpm --filter @workspace/db run push`.
 
+## Delivering DB changes as SQL files
+- Schema/translation changes for prod are delivered as an idempotent .sql file (plus a .txt copy — the chat asset viewer rejects .sql) that the USER runs on the remote Postgres; NEVER run them against the Replit DB.
+- File conventions: `ADD COLUMN IF NOT EXISTS`, translations via `INSERT ... ON CONFLICT (translation_key) DO UPDATE SET translations_json = EXCLUDED.translations_json, updated_at = now()`, Russian comments, "повторный запуск безопасен".
+- User runs it on the server: `psql -U erp_davidov_usr -d erp_davidov -f file.sql` (or paste into psql); credentials are in the project `.env` on the server.
+
 ## Build/install quirks on that server
 - npmjs registry is blocked → registry permanently set to npmmirror.com; fetch-timeout 600000, network-concurrency 3, child-concurrency 1. Lockfile tarball URLs pinned to npmjs may need sed-patching on the server (happened with npm-run-path@6.0.0).
 - esbuild build script must be allowed (`allowBuilds` in pnpm-workspace.yaml) + `pnpm -r rebuild esbuild`; the esbuild "bin check" ELF SyntaxError is cosmetic.
