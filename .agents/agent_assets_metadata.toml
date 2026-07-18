@@ -23,7 +23,7 @@ title = "Список гостей (клиентов)"
 id = "dOPt5iIm6ccH5XDI8o8JC"
 uri = "file://crm-issues.txt"
 type = "text"
-title = "Отчёт по проблемным данным (обновлён)"
+title = "Отчёт по проблемным данным (обновлён, раздел 5)"
 
 [[outputs]]
 id = "1n_p2qTJFoBq0YVJ5Ldyu"
@@ -72,3 +72,9 @@ id = "FXKqWwKm-VPzuIayrL_rA"
 uri = "file://import-item-statuses.txt"
 type = "text"
 title = "SQL: импорт статусов изделий (копия для скачивания)"
+
+[[outputs]]
+id = "kKt4N33spv5GU_wabl8oo"
+uri = "file://import-deliveries.txt"
+type = "text"
+title = "SQL: импорт доставок (копия для скачивания)"
