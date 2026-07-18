@@ -78,3 +78,9 @@ id = "kKt4N33spv5GU_wabl8oo"
 uri = "file://import-deliveries.txt"
 type = "text"
 title = "SQL: импорт доставок (копия для скачивания)"
+
+[[outputs]]
+id = "aOCF19ObZs4LgsrLlXE-j"
+uri = "file://fix-deliveries.txt"
+type = "text"
+title = "SQL: исправление дублей доставок (копия для скачивания)"
