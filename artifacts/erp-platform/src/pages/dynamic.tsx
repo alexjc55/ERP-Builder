@@ -96,6 +96,7 @@ export default function DynamicPage() {
             defaultQuickFilter={page.defaultQuickFilterJson ?? undefined}
             groupByFieldKey={mirrorEntity ? page.groupByFieldKey ?? undefined : undefined}
             groupDefaultExpanded={mirrorEntity ? page.groupDefaultExpanded ?? undefined : undefined}
+            filtersCollapsedDefault={page.filtersCollapsedDefault ?? undefined}
           />
         </>
       ) : (

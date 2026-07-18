@@ -4569,6 +4569,9 @@ components:
         widgetsCollapsedDefault:
           type: boolean
           description: Default collapsed state of the analytics widgets block above a page's records table
+        filtersCollapsedDefault:
+          type: boolean
+          description: Default collapsed state of the quick-filter bar above a page's records table
         defaultQuickFilterJson:
           oneOf:
             - $ref: "#/components/schemas/PageQuickFilter"
@@ -4652,6 +4655,10 @@ components:
           type: boolean
           default: false
           description: Default collapsed state of the analytics widgets block above a page's records table
+        filtersCollapsedDefault:
+          type: boolean
+          default: false
+          description: Default collapsed state of the quick-filter bar above a page's records table
         defaultQuickFilterJson:
           oneOf:
             - $ref: "#/components/schemas/PageQuickFilter"
@@ -4724,6 +4731,9 @@ components:
         widgetsCollapsedDefault:
           type: boolean
           description: Default collapsed state of the analytics widgets block above a page's records table
+        filtersCollapsedDefault:
+          type: boolean
+          description: Default collapsed state of the quick-filter bar above a page's records table
         defaultQuickFilterJson:
           oneOf:
             - $ref: "#/components/schemas/PageQuickFilter"

@@ -1261,6 +1261,7 @@ export function EntityRecords({
   defaultQuickFilter,
   groupByFieldKey,
   groupDefaultExpanded,
+  filtersCollapsedDefault,
 }: {
   entityId: number;
   /**
@@ -1360,6 +1361,12 @@ export function EntityRecords({
    * `expandAll` state; the viewer can still toggle it manually.
    */
   groupDefaultExpanded?: boolean;
+  /**
+   * Default collapsed state of the quick-filter bar (from
+   * `page.filtersCollapsedDefault`): true = start collapsed. The viewer's own
+   * toggle is remembered per page in localStorage and wins over this default.
+   */
+  filtersCollapsedDefault?: boolean;
 }) {
   const ml = useML();
   const t = useT();
@@ -2674,6 +2681,50 @@ export function EntityRecords({
       onSuccess: () => queryClient.invalidateQueries({ queryKey: getListPagesQueryKey() }),
     },
   });
+  // Collapse/expand for the quick-filter bar. null = no stored user preference
+  // yet → fall back to the page's admin default (filtersCollapsedDefault).
+  const filtersCollapseKey = `erp.filters.collapsed.${pageId ?? `e${entityId}`}`;
+  const [filtersCollapsed, setFiltersCollapsed] = useState<boolean | null>(() => {
+    if (typeof window === "undefined") return null;
+    const raw = window.localStorage.getItem(`erp.filters.collapsed.${pageId ?? `e${entityId}`}`);
+    return raw === "1" ? true : raw === "0" ? false : null;
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = window.localStorage.getItem(filtersCollapseKey);
+    setFiltersCollapsed(raw === "1" ? true : raw === "0" ? false : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtersCollapseKey]);
+  const filtersBarCollapsed = (filtersCollapsed ?? Boolean(filtersCollapsedDefault)) === true;
+  const toggleFiltersCollapsed = useCallback(() => {
+    setFiltersCollapsed((prev) => {
+      const base = prev ?? Boolean(filtersCollapsedDefault);
+      const next = !base;
+      try {
+        window.localStorage.setItem(filtersCollapseKey, next ? "1" : "0");
+      } catch {
+        /* localStorage unavailable */
+      }
+      return next;
+    });
+  }, [filtersCollapseKey, filtersCollapsedDefault]);
+  const saveFiltersCollapsedDefault = useCallback(
+    (collapsedByDefault: boolean) => {
+      if (pageId == null) return;
+      savePageGroupDefaultMutation.mutate(
+        { id: pageId, data: { filtersCollapsedDefault: collapsedByDefault } },
+        {
+          onSuccess: () =>
+            toast({
+              title: collapsedByDefault
+                ? t("records.filtersDefaultCollapsedSaved", "По умолчанию: фильтры свёрнуты")
+                : t("records.filtersDefaultExpandedSaved", "По умолчанию: фильтры развёрнуты"),
+            }),
+        },
+      );
+    },
+    [pageId, savePageGroupDefaultMutation, toast, t],
+  );
   // Normalize the exclusion drafts: drop empty value lists so they don't persist.
   const cleanExcludeFieldDraft = useMemo(() => {
     const out: Record<string, string[]> = {};
@@ -3891,9 +3942,37 @@ export function EntityRecords({
         </div>
       </div>
 
-      {!setupMode && (statuses.length > 0 || filterableFields.length > 0 || filterablePageFields.length > 0 || customFilterDefs.length > 0 || hasExclusion) && (
+      {!setupMode && (statuses.length > 0 || filterableFields.length > 0 || filterablePageFields.length > 0 || customFilterDefs.length > 0 || hasExclusion) && filtersBarCollapsed && (
+        <div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 text-xs text-slate-600"
+            onClick={toggleFiltersCollapsed}
+          >
+            <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            {t("records.filtersShow", "Показать фильтры")}
+            {(statusFilter.length > 0 || Object.keys(fieldFilters).length > 0) && (
+              <Badge variant="secondary" className="ml-0.5 px-1.5">
+                {statusFilter.length + Object.keys(fieldFilters).length}
+              </Badge>
+            )}
+            <ChevronDown className="w-3.5 h-3.5 opacity-60 shrink-0" />
+          </Button>
+        </div>
+      )}
+      {!setupMode && (statuses.length > 0 || filterableFields.length > 0 || filterablePageFields.length > 0 || customFilterDefs.length > 0 || hasExclusion) && !filtersBarCollapsed && (
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-          <Filter className="hidden sm:block w-4 h-4 text-slate-400 shrink-0" />
+          <button
+            type="button"
+            onClick={toggleFiltersCollapsed}
+            className="col-span-2 sm:col-span-1 flex items-center justify-start shrink-0 text-slate-400 hover:text-slate-600"
+            title={t("records.filtersHide", "Свернуть фильтры")}
+          >
+            <Filter className="w-4 h-4 shrink-0" />
+            <ChevronDown className="w-3.5 h-3.5 rotate-180" />
+          </button>
           {filterableStatuses.length > 0 && (
             <Popover>
               <PopoverTrigger asChild>
@@ -4191,6 +4270,37 @@ export function EntityRecords({
               </div>
               </>
               )}
+            </div>
+          )}
+          {pageId != null && canAdmin("pages") && (
+            <div className="rounded-md border border-slate-200 bg-white px-3 py-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                <Filter className="w-4 h-4 text-slate-400 shrink-0" />
+                <span>{t("records.filtersDefaultStateTitle", "Панель фильтров по умолчанию")}</span>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {t(
+                  "records.filtersDefaultStateHint",
+                  "Как панель фильтров будет показана при открытии этой страницы. Пользователь сможет свернуть или развернуть её вручную.",
+                )}
+              </p>
+              <Select
+                value={filtersCollapsedDefault ? "collapsed" : "expanded"}
+                onValueChange={(v) => saveFiltersCollapsedDefault(v === "collapsed")}
+                disabled={savePageGroupDefaultMutation.isPending}
+              >
+                <SelectTrigger className="h-9 w-full sm:w-72 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="expanded">
+                    {t("records.filtersDefaultExpanded", "Развёрнута (показывать фильтры)")}
+                  </SelectItem>
+                  <SelectItem value="collapsed">
+                    {t("records.filtersDefaultCollapsed", "Свёрнута (скрывать фильтры)")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           )}
           {pageId != null && canAdmin("pages") && Boolean(groupByFieldKey) && (

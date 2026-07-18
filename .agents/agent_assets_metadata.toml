@@ -60,3 +60,9 @@ id = "dDvaK1sf_pXk82BuCkydb"
 uri = "file://page-size-view-settings.txt"
 type = "text"
 title = "SQL для удалённой базы — размер страницы в настройках вида"
+
+[[outputs]]
+id = "j69PhgbAsx1sO-nYoMw1T"
+uri = "file://filter-bar-collapse.txt"
+type = "text"
+title = "SQL для удалённой базы — панель фильтров по умолчанию"

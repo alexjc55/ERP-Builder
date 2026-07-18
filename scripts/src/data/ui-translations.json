@@ -9768,6 +9768,54 @@
     "he": "כיצד הקבוצות יוצגו בפתיחת עמוד זה. המשתמש יכול לשנות זאת ידנית."
   },
   {
+    "key": "records.filtersShow",
+    "ru": "Показать фильтры",
+    "en": "Show filters",
+    "he": "הצג מסננים"
+  },
+  {
+    "key": "records.filtersHide",
+    "ru": "Свернуть фильтры",
+    "en": "Collapse filters",
+    "he": "כווץ מסננים"
+  },
+  {
+    "key": "records.filtersDefaultStateTitle",
+    "ru": "Панель фильтров по умолчанию",
+    "en": "Default filter bar state",
+    "he": "מצב ברירת מחדל של סרגל המסננים"
+  },
+  {
+    "key": "records.filtersDefaultStateHint",
+    "ru": "Как панель фильтров будет показана при открытии этой страницы. Пользователь сможет свернуть или развернуть её вручную.",
+    "en": "How the filter bar appears when this page opens. Users can collapse or expand it manually.",
+    "he": "כיצד סרגל המסננים יוצג בפתיחת עמוד זה. המשתמש יכול לכווץ או להרחיב ידנית."
+  },
+  {
+    "key": "records.filtersDefaultExpanded",
+    "ru": "Развёрнута (показывать фильтры)",
+    "en": "Expanded (show filters)",
+    "he": "מורחב (הצג מסננים)"
+  },
+  {
+    "key": "records.filtersDefaultCollapsed",
+    "ru": "Свёрнута (скрывать фильтры)",
+    "en": "Collapsed (hide filters)",
+    "he": "מכווץ (הסתר מסננים)"
+  },
+  {
+    "key": "records.filtersDefaultCollapsedSaved",
+    "ru": "По умолчанию: фильтры свёрнуты",
+    "en": "Default: filters collapsed",
+    "he": "ברירת מחדל: המסננים מכווצים"
+  },
+  {
+    "key": "records.filtersDefaultExpandedSaved",
+    "ru": "По умолчанию: фильтры развёрнуты",
+    "en": "Default: filters expanded",
+    "he": "ברירת מחדל: המסננים מורחבים"
+  },
+  {
     "key": "records.groupCollapseAll",
     "ru": "Свернуть все группы",
     "en": "Collapse all groups",

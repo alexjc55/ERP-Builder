@@ -203,3 +203,6 @@ for DISTINCT). The drizzle/HTML error wrapper only shows "Failed query …", not
 **Fix:** order by ordinal — `.orderBy(sql`1`)` — so it references the single selected column.
 **How to apply:** never re-interpolate the same `sql` fragment in both the SELECT-distinct column and
 its ORDER BY; order by ordinal or by the column alias.
+
+## Collapse default (2026-07-18)
+- The quick-filter bar can be collapsed/expanded by default per page (`pages.filters_collapsed_default`), mirroring the Analytics `widgetsCollapsedDefault` pattern: viewer localStorage override (`erp.filters.collapsed.<pageId|e<entityId>>`, "1"/"0", null → admin default), setup-mode Select saves via page PUT (pages cap). Display-only, never a data boundary.

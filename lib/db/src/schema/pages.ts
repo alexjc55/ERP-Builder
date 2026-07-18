@@ -96,6 +96,11 @@ export const pagesTable = pgTable("pages", {
   // records table. Admin-configurable; each viewer's own toggle is remembered
   // client-side (localStorage) and falls back to this default.
   widgetsCollapsedDefault: boolean("widgets_collapsed_default").notNull().default(false),
+  // Default collapsed state of the quick-filter bar (status/field dropdowns)
+  // shown above the page's records table. Admin-configurable in setup mode;
+  // each viewer's own toggle is remembered client-side (localStorage) and
+  // falls back to this default. Mirrors widgetsCollapsedDefault.
+  filtersCollapsedDefault: boolean("filters_collapsed_default").notNull().default(false),
   // Per-page SOFT default filter that pre-fills the records filter bar on open.
   // Unlike a view's/entity's hard defaultFilterJson (a security boundary that
   // rows can never escape), this only seeds the user-adjustable AD-HOC quick

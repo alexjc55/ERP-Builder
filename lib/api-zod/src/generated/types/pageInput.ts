@@ -55,6 +55,8 @@ export interface PageInput {
   pivotConfigJson?: PivotPageConfig | null;
   /** Default collapsed state of the analytics widgets block above a page's records table */
   widgetsCollapsedDefault?: boolean;
+  /** Default collapsed state of the quick-filter bar above a page's records table */
+  filtersCollapsedDefault?: boolean;
   /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
   defaultQuickFilterJson?: PageQuickFilter | null;
   /**
