@@ -36,6 +36,7 @@ If `.env` changed or DB schema changed, source env first: `set -a; source .env; 
 - Schema/translation changes for prod are delivered as an idempotent .sql file (plus a .txt copy — the chat asset viewer rejects .sql) that the USER runs on the remote Postgres; NEVER run them against the Replit DB.
 - File conventions: `ADD COLUMN IF NOT EXISTS`, translations via `INSERT ... ON CONFLICT (translation_key) DO UPDATE SET translations_json = EXCLUDED.translations_json, updated_at = now()`, Russian comments, "повторный запуск безопасен".
 - User runs it on the server: `psql -U erp_davidov_usr -d erp_davidov -f file.sql` (or paste into psql); credentials are in the project `.env` on the server.
+- The user often runs these files through a web SQL GUI, not psql — do NOT include psql metacommands (`\set ON_ERROR_STOP on` etc.), they throw a syntax error there. Plain SQL + BEGIN/COMMIT only.
 
 ## Build/install quirks on that server
 - npmjs registry is blocked → registry permanently set to npmmirror.com; fetch-timeout 600000, network-concurrency 3, child-concurrency 1. Lockfile tarball URLs pinned to npmjs may need sed-patching on the server (happened with npm-run-path@6.0.0).
