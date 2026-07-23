@@ -4,7 +4,7 @@
 -- Идемпотентно: повторный запуск безопасен.
 -- Строк изделий с данными: 1094; заказов с общим статусом: 643
 -- Пропущено (нет такой опции в списке):
---   Монтажная бригада: Павел+Саша (27), Геннадий (5), Слава-Иван (6), Генна + Евгений (20)
+--   Монтажная бригада: —
 --   Статус монтажа: удалить (3), покрасочная Бат-Ям (2)
 -- ============================================================
 BEGIN;
@@ -14,14 +14,6 @@ UPDATE page_fields SET options_json = options_json || jsonb_build_array(jsonb_bu
 WHERE field_key = 'tip_oplaty'
   AND page_id = (SELECT id FROM pages WHERE name_json->>'ru' = 'Монтаж' AND mirror_entity_id = (SELECT id FROM entities WHERE entity_key = 'items') LIMIT 1)
   AND NOT options_json @> '[{"value":"Емит 1800"}]'::jsonb;
-UPDATE page_fields SET options_json = options_json || jsonb_build_array(jsonb_build_object('value', 'Емит 1801', 'labelJson', jsonb_build_object('ru', 'Емит 1801'))), updated_at = now()
-WHERE field_key = 'tip_oplaty'
-  AND page_id = (SELECT id FROM pages WHERE name_json->>'ru' = 'Монтаж' AND mirror_entity_id = (SELECT id FROM entities WHERE entity_key = 'items') LIMIT 1)
-  AND NOT options_json @> '[{"value":"Емит 1801"}]'::jsonb;
-UPDATE page_fields SET options_json = options_json || jsonb_build_array(jsonb_build_object('value', 'Емит 1802', 'labelJson', jsonb_build_object('ru', 'Емит 1802'))), updated_at = now()
-WHERE field_key = 'tip_oplaty'
-  AND page_id = (SELECT id FROM pages WHERE name_json->>'ru' = 'Монтаж' AND mirror_entity_id = (SELECT id FROM entities WHERE entity_key = 'items') LIMIT 1)
-  AND NOT options_json @> '[{"value":"Емит 1802"}]'::jsonb;
 UPDATE page_fields SET options_json = options_json || jsonb_build_array(jsonb_build_object('value', 'Емит 750', 'labelJson', jsonb_build_object('ru', 'Емит 750'))), updated_at = now()
 WHERE field_key = 'tip_oplaty'
   AND page_id = (SELECT id FROM pages WHERE name_json->>'ru' = 'Монтаж' AND mirror_entity_id = (SELECT id FROM entities WHERE entity_key = 'items') LIMIT 1)
@@ -30,6 +22,20 @@ UPDATE page_fields SET options_json = options_json || jsonb_build_array(jsonb_bu
 WHERE field_key = 'tip_oplaty'
   AND page_id = (SELECT id FROM pages WHERE name_json->>'ru' = 'Монтаж' AND mirror_entity_id = (SELECT id FROM entities WHERE entity_key = 'items') LIMIT 1)
   AND NOT options_json @> '[{"value":"Емит 900"}]'::jsonb;
+
+-- 1b. Новые опции «Монтажная бригада» из файла
+UPDATE page_fields SET options_json = options_json || jsonb_build_array(jsonb_build_object('value', 'Генна + Евгений', 'labelJson', jsonb_build_object('ru', 'Генна + Евгений'))), updated_at = now()
+WHERE field_key = 'installation_team'
+  AND page_id = (SELECT id FROM pages WHERE name_json->>'ru' = 'Монтаж' AND mirror_entity_id = (SELECT id FROM entities WHERE entity_key = 'items') LIMIT 1)
+  AND NOT options_json @> '[{"value":"Генна + Евгений"}]'::jsonb;
+UPDATE page_fields SET options_json = options_json || jsonb_build_array(jsonb_build_object('value', 'Геннадий', 'labelJson', jsonb_build_object('ru', 'Геннадий'))), updated_at = now()
+WHERE field_key = 'installation_team'
+  AND page_id = (SELECT id FROM pages WHERE name_json->>'ru' = 'Монтаж' AND mirror_entity_id = (SELECT id FROM entities WHERE entity_key = 'items') LIMIT 1)
+  AND NOT options_json @> '[{"value":"Геннадий"}]'::jsonb;
+UPDATE page_fields SET options_json = options_json || jsonb_build_array(jsonb_build_object('value', 'Павел+Саша', 'labelJson', jsonb_build_object('ru', 'Павел+Саша'))), updated_at = now()
+WHERE field_key = 'installation_team'
+  AND page_id = (SELECT id FROM pages WHERE name_json->>'ru' = 'Монтаж' AND mirror_entity_id = (SELECT id FROM entities WHERE entity_key = 'items') LIMIT 1)
+  AND NOT options_json @> '[{"value":"Павел+Саша"}]'::jsonb;
 
 -- 2. Скрытое текстовое поле «Общий статус» в сущности Заказы
 INSERT INTO entity_fields (entity_id, field_key, name_json, field_type, show_in_table, is_filterable, sort_order)
@@ -698,22 +704,22 @@ WITH pg AS (
     AND target_entity_id = (SELECT id FROM entities WHERE entity_key = 'orders')
 ), src(ord, item, vals) AS (VALUES
   ('2973', 'מעקה מרפסת קומה 1.2 צד פנימי וצד חיצוני', '{"installation_team":"Леша+Купра","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"На  объекте"}'::jsonb),
-  ('2973', 'רוזתות נירוסטה סוג 2', '{"tip_oplaty":"Емит 1000","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('2973', 'רוזתות נירוסטה סוג 1', '{"tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('2973', 'רוזתות נירוסטה סוג 3', '{"tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3011', 'רוזתות נירוסטה סוג 1', '{"tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3011', 'רוזתות נירוסטה סוג 2', '{"tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3011', 'רוזתות נירוסטה סוג 3', '{"tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3011', 'מעקה רשת למרפסות קומה 3.4', '{"tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3020', 'רוזתות נירוסטה סוג 1', '{"tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3020', 'רוזתות נירוסטה סוג 2', '{"tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3020', 'רוזתות נירוסטה סוג 3', '{"tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3020', 'מעקה רשת למרפסות קומה 5.6', '{"tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3044', 'מעקה רשת למרפסות קומה 7', '{"tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3044', 'רוזתות נירוסטה סוג 3', '{"tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3044', 'רוזתות נירוסטה סוג 2', '{"tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3425', 'רוזטות נירוסטה', '{"tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3044', 'רוזתות נירוסטה סוג 1', '{"tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('2973', 'רוזתות נירוסטה סוג 2', '{"installation_team":"Павел+Саша","tip_oplaty":"Емит 1000","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('2973', 'רוזתות נירוסטה סוג 1', '{"installation_team":"Павел+Саша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('2973', 'רוזתות נירוסטה סוג 3', '{"installation_team":"Павел+Саша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3011', 'רוזתות נירוסטה סוג 1', '{"installation_team":"Павел+Саша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3011', 'רוזתות נירוסטה סוג 2', '{"installation_team":"Павел+Саша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3011', 'רוזתות נירוסטה סוג 3', '{"installation_team":"Павел+Саша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3011', 'מעקה רשת למרפסות קומה 3.4', '{"installation_team":"Павел+Саша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3020', 'רוזתות נירוסטה סוג 1', '{"installation_team":"Павел+Саша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3020', 'רוזתות נירוסטה סוג 2', '{"installation_team":"Павел+Саша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3020', 'רוזתות נירוסטה סוג 3', '{"installation_team":"Павел+Саша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3020', 'מעקה רשת למרפסות קומה 5.6', '{"installation_team":"Павел+Саша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3044', 'מעקה רשת למרפסות קומה 7', '{"installation_team":"Павел+Саша","tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3044', 'רוזתות נירוסטה סוג 3', '{"installation_team":"Павел+Саша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3044', 'רוזתות נירוסטה סוג 2', '{"installation_team":"Павел+Саша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3425', 'רוזטות נירוסטה', '{"installation_team":"Павел+Саша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3044', 'רוזתות נירוסטה סוג 1', '{"installation_team":"Павел+Саша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3179', 'מעקות חדר מדרגות', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3179', 'מאחזי יד', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3136', 'מעקות מרפסות צד מזרח קומה 1-7', '{"installation_team":"Миша+Володя","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
@@ -724,21 +730,21 @@ WITH pg AS (
   ('3235', 'חישוק לסולם מגולוון', '{"installation_team":"Миша+Володя","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3235', 'מכסה יציאה לגג מגולוון+צבע', '{"installation_team":"Миша+Володя","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3236', 'רפפה בפיתוח', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3265', 'מעקה מרפסת קומה 1.2.3.4.5.6', '{"tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3265', 'רוזתות נירוסטה', '{"tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3265', 'מעקה מרפסת קומה 1.2.3.4.5.6', '{"installation_team":"Павел+Саша","tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3265', 'רוזתות נירוסטה', '{"installation_team":"Павел+Саша","tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3268', 'מעקות מרפסות בגג', '{"installation_team":"Александр+Ваня","tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3268', 'רוזתות נירוסטה', '{"installation_team":"Александр+Ваня","tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3269', 'מעקות מרפסות קומה 8 צד מזרח+מערב', '{"installation_team":"Александр+Ваня","tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3269', 'רוזטות', '{"installation_team":"Александр+Ваня","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3270', 'רפפה בגג', '{"installation_team":"Миша+Володя","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3284', 'רוזטות נירוסטה', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3280', 'מעקה תוספת למרפסות קומה 1,2,3,4,5,6', '{"tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3280', 'רוזתות נירוסטה', '{"tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3280', 'מעקה תוספת למרפסות קומה 1,2,3,4,5,6', '{"installation_team":"Павел+Саша","tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3280', 'רוזתות נירוסטה', '{"installation_team":"Павел+Саша","tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3286', 'מעקות בקומת קרקע צד צפוני', '{"installation_team":"Саша Рыж+Паша","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3286', 'צביעה מעקות לפי מפרט T103 צבע סביבה ימית C5', '{"installation_team":"Саша Рыж+Паша","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3286', 'רוזטות נירוסטה', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3287', 'מעקה מרפסת לקומה 7', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3287', 'רוזתות נירוסטה', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3287', 'מעקה מרפסת לקומה 7', '{"installation_team":"Геннадий","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3287', 'רוזתות נירוסטה', '{"installation_team":"Геннадий","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3294', 'רפפות קומה -2', '{"installation_team":"Миша+Володя","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3294', 'רפפה קומה -2', '{"installation_team":"Миша+Володя","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3294', 'רפפה קומה -1', '{"vypolneniya":70,"status_montazha":"Выполненно"}'::jsonb),
@@ -766,9 +772,9 @@ WITH pg AS (
   ('3321', 'מעקות מרפסות קומה 5 מזרח', '{"installation_team":"Александр+Ваня","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3324', 'מעקה מרפסת בניין C', '{"vypolneniya":70,"status_montazha":"Выполненно"}'::jsonb),
   ('3324', 'רוזתות נירוסטה', '{"vypolneniya":70,"status_montazha":"Выполненно"}'::jsonb),
-  ('3325', 'מעקה מרפסת בניין א', '{"tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3325', 'רוזתות נירוסטה', '{"tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3326', 'רפפות לגג בניין A,B,C', '{"tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3325', 'מעקה מרפסת בניין א', '{"installation_team":"Павел+Саша","tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3325', 'רוזתות נירוסטה', '{"installation_team":"Павел+Саша","tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3326', 'רפפות לגג בניין A,B,C', '{"installation_team":"Павел+Саша","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3322', 'שני עמודים גובה 3 מטר לתיבת דואר פרופיל 50/50/4 עם פלטות עיגון,ייצור והתקנה כולל צבע', '{"installation_team":"Александр+Ваня","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3285', 'צינור הגנה חדר אשפה', '{"installation_team":"Александр+Ваня","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3285', 'פח מרוג', '{"installation_team":"Александр+Ваня","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
@@ -807,7 +813,7 @@ WITH pg AS (
   ('3354', 'מעקות מרפסות צפון מערב קומה 1-5', '{"installation_team":"Миша+Володя","tip_oplaty":"Кабланут","vypolneniya":70,"status_montazha":"Выполненно"}'::jsonb),
   ('3354', 'רוזטות', '{"installation_team":"Миша+Володя","tip_oplaty":"Кабланут","vypolneniya":70,"status_montazha":"Выполненно"}'::jsonb),
   ('3355', 'הגנות לצינורות ביוב', '{"installation_team":"Александр+Ваня","tip_oplaty":"Емит 900","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3356', 'מעקה הגבהת גובה', '{"tip_oplaty":"Договор","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3356', 'מעקה הגבהת גובה', '{"installation_team":"Павел+Саша","tip_oplaty":"Договор","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3357', 'שער כניסה להולכי רגל', '{"installation_team":"Леша+Купра","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3357', 'שער כניסה לדרך לפח אשפה', '{"installation_team":"Леша+Купра","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3358', 'הגנות לצינורות ביוב', '{"installation_team":"Леша+Купра","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
@@ -860,8 +866,8 @@ WITH pg AS (
   ('3395', 'גגון בגג לסגירת פתח אוורור', '{"installation_team":"Миша+Володя","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3395', 'צביעה סביבה ימית 3 שכבות לגגון בגג לסגירת פתח אוורור', '{"installation_team":"Миша+Володя","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3395', 'פח 1.5 ממ לסגירת מעקות בגג', '{"installation_team":"Миша+Володя","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3395', 'צביעה לפחים צבע סביבה ימית', '{"installation_team":"Миша+Володя","tip_oplaty":"Емит 1801","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3397', 'דלת חדר אשפה מ 106', '{"installation_team":"Миша+Володя","tip_oplaty":"Емит 1802","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3395', 'צביעה לפחים צבע סביבה ימית', '{"installation_team":"Миша+Володя","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3397', 'דלת חדר אשפה מ 106', '{"installation_team":"Миша+Володя","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3397', 'צביעה סביבה ימית לדלת חדר אשפה', '{"installation_team":"Миша+Володя","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3399', 'מעקה מרפסת בניין ב', '{"installation_team":"Александр+Ваня","tip_oplaty":"Емит 900","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3398', 'מעקה מרפסת חזית מזרחי קומה 2,3,4,7', '{"installation_team":"Леша+Купра","tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
@@ -873,7 +879,7 @@ WITH pg AS (
   ('3407', 'רפפות לפיתוח מ''''ר', '{"installation_team":"Леша+Купра","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3407', 'רפפות לפיתוח יח''', '{"installation_team":"Леша+Купра","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3406', 'בלי רוזטות מאחזי יד לבניין לשימור', '{"installation_team":"Леша+Купра","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3401', 'מעקה מרפסת קומה 1,2,3,4,5,6 השלמות', '{"tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3401', 'מעקה מרפסת קומה 1,2,3,4,5,6 השלמות', '{"installation_team":"Павел+Саша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3401', 'רוזטות נירוסטה סוג 1', '{"installation_team":"Миша+Володя","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3404', 'סולמות נירוסטה', '{"installation_team":"Саша Рыж+Паша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3404', 'דלת למאגר מים נירוסטה', '{"installation_team":"Саша Рыж+Паша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
@@ -905,7 +911,7 @@ WITH pg AS (
   ('3440', 'מאחז יד חדר מדרגות', '{"installation_team":"Саша Рыж+Паша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3440', 'רוזטות נירוסטה', '{"installation_team":"Леша+Купра","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3429', '220 HEBלמעלית,כולל וו ופלטה לפיתכנית', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3446', 'מעקות מרפסות (השלמות טעויות)', '{"tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3446', 'מעקות מרפסות (השלמות טעויות)', '{"installation_team":"Павел+Саша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3450', 'רפפות 9005, יח', '{"installation_team":"Миша+Володя","tip_oplaty":"Договор","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3450', 'רפפות 9005, מ''''ר', '{"installation_team":"Миша+Володя","tip_oplaty":"Договор","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3450', '9016 רפפות', '{"installation_team":"Миша+Володя","tip_oplaty":"Договор","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
@@ -917,7 +923,7 @@ WITH pg AS (
   ('3443', 'נישת פח אשפה', '{"installation_team":"Саша Рыж+Паша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3443', 'נישת גמל מים', '{"installation_team":"Саша Рыж+Паша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3443', 'צביעה לפי תקן סביבה ימית C 5 לכל המוצרים לפי מ"ר', '{"installation_team":"Саша Рыж+Паша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3447', 'רפפות לגג', '{"tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3447', 'רפפות לגג', '{"installation_team":"Иван+Слава","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3457', 'בניין 3 מעקות מרפסות חזית מזרחי קומה 1,2,3,4,5', '{"installation_team":"Леша+Купра","tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3457', 'רוזטות נירוסטה', '{"installation_team":"Саша Рыж+Паша","tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3455', 'בניין 5 מעקות מרפסות חזית מזרחי קומה 1,2,3,4,5', '{"installation_team":"Саша Рыж+Паша","tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
@@ -925,11 +931,11 @@ WITH pg AS (
   ('3459', 'מעקה גדר בפיתוח תוספת גובה 400ממ', '{"installation_team":"Саша Рыж+Паша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3459', 'רוזטות נירוסטה', '{"installation_team":"Саша Рыж+Паша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3459', 'מעקה גדר בפיתוח תוספת גובה 1110ממ', '{"installation_team":"Саша Рыж+Паша","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3461', 'סולמות נירוסטה', '{"tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3461', 'דלתות למאגר מים', '{"tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3461', 'סולם מגולוון', '{"tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3461', 'סולמות נירוסטה', '{"installation_team":"Иван+Слава","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3461', 'דלתות למאגר מים', '{"installation_team":"Иван+Слава","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3461', 'סולם מגולוון', '{"installation_team":"Иван+Слава","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3453', 'מאחז יד על הרגל', '{"installation_team":"Леша+Купра","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3458', 'דלתות רפפות (ייצור בלבד)', '{"tip_oplaty":"Емит 750","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3458', 'דלתות רפפות (ייצור בלבד)', '{"installation_team":"Геннадий","tip_oplaty":"Емит 750","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3458', 'הובלה', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3452', 'צביעה לפי תקן סביבה ימית רפפה בפיתוח עם פס ניתוק+רפפה בפיתוח שחרור עשן', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3471', 'מעקה חדר מדרגות דוגמה', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
@@ -944,7 +950,7 @@ WITH pg AS (
 קומה 2-7', '{"installation_team":"Костя+Наиль","tip_oplaty":"Емит 2000","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3477', 'מעקות מרפסות דרום( גדול
 קומה 2-7', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3467', 'מעקה מרפסת', '{"tip_oplaty":"Емит 2000","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3467', 'מעקה מרפסת', '{"installation_team":"Павел+Саша","tip_oplaty":"Емит 2000","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3474', 'נישת ליד ארון חשמל', '{"installation_team":"Миша+Володя","tip_oplaty":"Емит 1000","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3474', 'צביעה סביבה ימית 3 שכבות', '{"installation_team":"Миша+Володя","tip_oplaty":"Емит 2000","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3469', 'סולם פלדה', '{"installation_team":"Миша+Володя","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
@@ -1131,13 +1137,13 @@ WITH pg AS (
   ('3556', 'RAL 9003 רפפה', '{"installation_team":"Иван+Слава","tip_oplaty":"Емит 2000","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3556', 'RAL 9005 רפפות', '{"installation_team":"Иван+Слава","tip_oplaty":"Емит 2000","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3558', '1000х380 סבכה רכב', '{"installation_team":"Иван+Слава","tip_oplaty":"Емит 2000","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3561', 'יום עבודה של שני עובדים', '{"tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3561', 'פרטים לתיקון דלת לחדר פח אשפה', '{"tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3561', 'יום עבודה של שני עובדים', '{"installation_team":"Иван+Слава","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3561', 'פרטים לתיקון דלת לחדר פח אשפה', '{"installation_team":"Иван+Слава","tip_oplaty":"Емит 1800","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3560', 'מעקות לחדר מדרגות', '{"installation_team":"Махди","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3560', 'מאחזי יד לחדר מדרגות', '{"installation_team":"Махди","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3565', 'מעקות לחדר מדרגות', '{"installation_team":"Махди","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3565', 'מאחזי יד לחדר מדרגות', '{"installation_team":"Махди","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3564', 'שער הולכי רגל מ 21', '{"tip_oplaty":"Емит 2000","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3564', 'שער הולכי רגל מ 21', '{"installation_team":"Генна + Евгений","tip_oplaty":"Емит 2000","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3566', 'מעקות מרפסות דרום מערב קומה 2-7', '{"installation_team":"Костя+Наиль","tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3566', 'מאחזי יד מרפסות', '{"installation_team":"Костя+Наиль","tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"требуются финиши"}'::jsonb),
   ('3567', 'מעקות מרפסות מזרח קומה 1-8', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
@@ -1171,8 +1177,8 @@ WITH pg AS (
   ('3587', 'הובלה', '{"installation_team":"Каблан","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3592', '3 גדר לפיתוח', '{"installation_team":"Иван+Слава","tip_oplaty":"Емит 2000","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3592', 'עמודי גדר', '{"installation_team":"Иван+Слава","tip_oplaty":"Емит 2000","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3594', 'רפפות לגג', '{"tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3595', 'הגנות לצינורות ביוב', '{"tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3594', 'רפפות לגג', '{"installation_team":"Геннадий","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3595', 'הגנות לצינורות ביוב', '{"installation_team":"Геннадий","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3597', 'מעקות מרפסות קומה 8 דרום מערב', '{"installation_team":"Костя+Наиль","tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3597', 'מעקות מרפסות קומה 8 צפון מערב', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3588', 'C5 צביעה מעקות מרפסות לפי תקן סביבה ימית', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
@@ -1206,7 +1212,7 @@ WITH pg AS (
   ('3613', 'מעקה בפיתוח וקומה 7', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3613', 'הובלה', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3615', 'רפפות שחרור עשן בפיתוח', '{"installation_team":"Костя+Наиль","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3623', 'פח השלמה לגג ודלת חאשפה', '{"tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3623', 'פח השלמה לגג ודלת חאשפה', '{"installation_team":"Генна + Евгений","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3618', 'רפפות בגגכל הרפפות תריס רגיל (רפפות במידה של עד 1 מ''''ר כולל - יחושבו כיחידה אחת. רפפות במידה הגדולה מ-1 מ''''ר - יחושבו בהתאם למידה בפועל', '{"tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3625', 'יומית ל2 פועלים (תיקוני צבע מעקות מרפסות', '{"tip_oplaty":"Емит 2000","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3624', 'השלמות לחדר מדרגות', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
@@ -1252,7 +1258,7 @@ WITH pg AS (
   ('3649', 'רפפות לגג', '{"installation_team":"Саша Рыж+Паша","tip_oplaty":"Емит 2000","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3646', 'מחיצות הפרדה צד מערב קומות 1.2.3.5', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3647', 'משקוף לדלתות ארוני חשמל', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3648', 'דלת יציאה לגג מ504', '{"tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3648', 'דלת יציאה לגג מ504', '{"installation_team":"Генна + Евгений","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3650', 'התקנה מעקות מסתורי כביסה (יומית ל2 פועלים', '{"installation_team":"Костя+Наиль","tip_oplaty":"Емит 2000","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3652', 'מרפסת קומה 2,3,5
 (3 דירות)', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
@@ -1316,7 +1322,7 @@ WITH pg AS (
   ('3694', 'מעקה מרפסת לקומה 6', '{"installation_team":"Миша+Володя","tip_oplaty":"Кабланут","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3697', 'רוזטות אלומיניום 52/12', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3698', 'דלת גלגלון כיבוי אש', '{"installation_team":"Каблан","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3701', 'מ 302 דלת גז', '{"tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3701', 'מ 302 דלת גז', '{"installation_team":"Генна + Евгений","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3700', 'מחזירי שמן לדלת חדר אשפה+דלת חדר גז כולל התקנה', '{"vypolneniya":100,"status_montazha":"требуются финиши"}'::jsonb),
   ('3699', 'RHS 50x50', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3699', 'RHS 40x40', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
@@ -1331,10 +1337,10 @@ WITH pg AS (
   ('3707', 'דלת למאגר מים', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3707', 'שתי סולמות נירוסטה במאגר מים', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3706', 'מסגרות לסבכות רכב 3', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3712', 'סבכה חדר משאבות', '{"tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3712', 'מסגרת לסבכה חדר משאבות', '{"tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3712', 'סבכות אנגליות בניין א', '{"tip_oplaty":"Емит 2000","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3712', 'מסגרת לסבכות בניין א', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3712', 'סבכה חדר משאבות', '{"installation_team":"Генна + Евгений","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3712', 'מסגרת לסבכה חדר משאבות', '{"installation_team":"Генна + Евгений","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3712', 'סבכות אנגליות בניין א', '{"installation_team":"Генна + Евгений","tip_oplaty":"Емит 2000","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3712', 'מסגרת לסבכות בניין א', '{"installation_team":"Генна + Евгений","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3712', 'סבכות אנגליות בניין ב', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3712', 'מסגרת לסבכות אנגליות בניין ב', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3704', '280*1000 סבכות רכב לחניון', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
@@ -1343,12 +1349,12 @@ WITH pg AS (
   ('3711', 'רפפות ברמפה', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3705', 'А100 סבכות', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3705', 'А100 מסגרות לסבכות', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3717', 'נישת ארון חשמל', '{"tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3717', 'נישת ארון חשמל', '{"installation_team":"Генна + Евгений","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3719', 'גגון בגג', '{"installation_team":"Александр+Ваня","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3722', 'רפפה בפיתוח', '{"tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3722', 'רפפה בפיתוח', '{"installation_team":"Генна + Евгений","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3716', 'מעקה מרפסת תוספת', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3716', 'הובלה', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3721', 'מעקה מרפסת דוגמה', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3721', 'מעקה מרפסת דוגמה', '{"installation_team":"Генна + Евгений","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3718', 'מעקות מרפסות קומה 7 צפון מערב', '{"installation_team":"Миша+Володя","tip_oplaty":"Емит 2000","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3718', 'מעקות מרפסות קומה 7 דרום מערב', '{"installation_team":"Миша+Володя","tip_oplaty":"Емит 2000","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3718', 'רוזטות נירוסטה', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
@@ -1404,7 +1410,7 @@ WITH pg AS (
   ('3758', 'דלת חדר גז פנימי', '{"installation_team":"Миша+Володя","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3759', 'דלתות חדר אשפה דרום', '{"installation_team":"Миша+Володя","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3759', 'דלתות חדר אשפה צפון', '{"installation_team":"Миша+Володя","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3757', 'צינור הגנה חדר אשפה', '{"tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3757', 'צינור הגנה חדר אשפה', '{"installation_team":"Генна + Евгений","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3760', '5 מעקה מרפסת לבת ים', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3760', 'הובלה', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3750', '- השלמות צינור הגנה מסתורי כביסה חריג
@@ -1423,10 +1429,10 @@ WITH pg AS (
   ('3768', 'מדרגות חדר משאבות', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3730', 'צינור הגנה לשביל לחדר פח אשפה נירוסטה', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3763', 'נירוסטה מאחזי יד ללובי', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3764', 'מסכה פלדה', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3764', 'סולם נירוסטה', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3764', 'סולם פלדה', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3764', 'הגנה לצינור ביוב', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3764', 'מסכה פלדה', '{"installation_team":"Генна + Евгений","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3764', 'סולם נירוסטה', '{"installation_team":"Генна + Евгений","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3764', 'סולם פלדה', '{"installation_team":"Генна + Евгений","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3764', 'הגנה לצינור ביוב', '{"installation_team":"Генна + Евгений","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3765', 'מעקה מרפסת לדירות גן', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3769', 'סולם פלדה', '{"vypolneniya":70,"status_montazha":"Выполненно"}'::jsonb),
   ('3769', 'סולם נירוסטה', '{"vypolneniya":70,"status_montazha":"Выполненно"}'::jsonb),
@@ -1435,11 +1441,11 @@ WITH pg AS (
   ('3772', 'סבכה רכב', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3772', 'מסגרת לסבכה', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3773', 'הגנה שביל אשפה', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3770', 'תוספת פרופילים למשקוף ארון חשמל', '{"tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3770', 'תוספת פרופילים למשקוף ארון חשמל', '{"installation_team":"Генна + Евгений","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3774', 'דלת גז', '{"installation_team":"Миша+Володя","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3775', 'סבכה אנגלית בפיתוח', '{"installation_team":"Миша+Володя","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3775', 'מסגרת לסבכה', '{"installation_team":"Миша+Володя","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3775', 'זווית 100/100/8', '{"tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3775', 'זווית 100/100/8', '{"installation_team":"Генна + Евгений","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3780', 'מעקה מרפסת קומה 6 ו7', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3776', 'סולם פרקומט', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3776', 'סבכה רכב ליד פרקומט', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
@@ -1447,7 +1453,7 @@ WITH pg AS (
   ('3776', 'חיזוק RHS 60/40/3.25', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3779', 'ספריים 7021', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3781', 'גרם מדרגות מפח מרוג', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
-  ('3786', 'גגון לפיר מזגנים בגג', '{"tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
+  ('3786', 'גגון לפיר מזגנים בגג', '{"installation_team":"Генна + Евгений","tip_oplaty":"По часам","vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3784', 'דלתות חדר אשפה', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3784', 'דלתות לחדר גז', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
   ('3785', 'דלת בכניסה גמל מים', '{"vypolneniya":100,"status_montazha":"Выполненно"}'::jsonb),
