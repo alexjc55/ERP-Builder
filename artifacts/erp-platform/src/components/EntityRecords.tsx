@@ -3430,10 +3430,15 @@ export function EntityRecords({
     selectedConfig.visibleFields.length > 0
       ? selectedConfig.visibleFields
       : null;
+  // On a mirror page the admin explicitly picked which entity fields to show
+  // (mirrorFieldKeys). That explicit selection overrides the entity-level
+  // "Показывать в таблице" flag: a field hidden on the source entity's own
+  // pages can still be surfaced on a mirror page that opted it in. RBAC field
+  // perms still apply (tableFields is already permission-filtered above).
   const displayFields = setupMode
     ? tableFields
     : tableFields
-        .filter((f: Field) => f.showInTable !== false)
+        .filter((f: Field) => (mirrorKeySet ? mirrorKeySet.has(f.fieldKey) : f.showInTable !== false))
         .filter((f: Field) => !viewVisibleFieldKeys || viewVisibleFieldKeys.includes(f.fieldKey));
   // Page-local columns are appended after the entity columns. In setup mode the
   // admin sees them all; otherwise only those opted-in via "Показывать в таблице".
