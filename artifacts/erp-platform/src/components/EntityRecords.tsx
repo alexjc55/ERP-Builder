@@ -1980,8 +1980,28 @@ export function EntityRecords({
   // (viewport root covers both cases) and surface a fixed floating button that
   // jumps back up + starts a row.
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
-  const addRowLinkRef = useRef<HTMLTableRowElement | null>(null);
   const [addRowLinkVisible, setAddRowLinkVisible] = useState(true);
+  // Callback ref (NOT an effect — effects here would sit above the component's
+  // early returns anyway, and a ref callback needs no hook-order guarantees):
+  // observes the inline add-row link's visibility against the viewport, which
+  // covers BOTH scroll levels (the table's overflow container and the window).
+  const addRowObserverRef = useRef<IntersectionObserver | null>(null);
+  const observeAddRowLink = useCallback((el: HTMLTableRowElement | null) => {
+    addRowObserverRef.current?.disconnect();
+    addRowObserverRef.current = null;
+    if (!el) {
+      // Row unmounted (adding in progress / no permission) — hide the floating
+      // duplicate.
+      setAddRowLinkVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => setAddRowLinkVisible(entry.isIntersecting),
+      { root: null, threshold: 0 },
+    );
+    observer.observe(el);
+    addRowObserverRef.current = observer;
+  }, []);
   const [newRow, setNewRow] = useState<FormState>({});
   const [newPageRow, setNewPageRow] = useState<FormState>({});
   const [newRowStatus, setNewRowStatus] = useState<string>(NO_STATUS);
@@ -3665,23 +3685,9 @@ export function EntityRecords({
   // block, the rest render after it, so the visual order is stable.
   const showGroups = groupingActive && groups !== null;
 
-  // Watch the inline "add row" link's visibility (viewport root covers both the
-  // table's own overflow scroll AND window/page scroll); when it scrolls out of
-  // view a fixed floating duplicate appears.
+  // Whether the inline "add row" link row is rendered at all (plain derived
+  // flag — the visibility observation itself lives in observeAddRowLink above).
   const addRowLinkRendered = canCreate && !setupMode && !showGroups && !addingRow;
-  useEffect(() => {
-    const el = addRowLinkRef.current;
-    if (!addRowLinkRendered || !el) {
-      setAddRowLinkVisible(true);
-      return;
-    }
-    const observer = new IntersectionObserver(
-      ([entry]) => setAddRowLinkVisible(entry.isIntersecting),
-      { root: null, threshold: 0 },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [addRowLinkRendered, recordsLoading, hasLoadedRecords]);
   // The group selection the current render targets; `records` are only trusted
   // once the last completed fetch was for this same signature (else we'd flash
   // the previous group's / the full collapsed row set under the new header).
@@ -5009,7 +5015,7 @@ export function EntityRecords({
                     </tr>
                   )}
                   {canCreate && !setupMode && !showGroups && !addingRow && (
-                    <tr ref={addRowLinkRef} className="border-b border-slate-100">
+                    <tr ref={observeAddRowLink} className="border-b border-slate-100">
                       <td colSpan={orderedColumns.length + (showStatusColumn ? 1 : 0) + (showActionsColumn ? 1 : 0)} className="px-2 py-2">
                         <button
                           type="button"
