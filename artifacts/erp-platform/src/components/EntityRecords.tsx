@@ -2095,6 +2095,22 @@ export function EntityRecords({
   // View / filter / search / pagination state for the server-side query endpoint.
   const [selectedViewId, setSelectedViewId] = useState<string>(NO_VIEW);
   const [search, setSearch] = useState("");
+  // Debounced copy of `search` used by the server query: on a large database a
+  // per-keystroke query takes seconds, so firing one request per letter makes
+  // the search look frozen. The query fires once, 400ms after typing pauses.
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    if (search === debouncedSearch) return;
+    // Commit the search AND the page reset together (one React batch → one
+    // query): resetting the page on every keystroke would fire an immediate
+    // query with the OLD search text whenever the user was past page 1.
+    const id = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, debouncedSearch]);
   const [archived, setArchived] = useState<ArchiveFilter>("active");
   const [statusFilter, setStatusFilter] = useState<number[]>([]);
   const [fieldFilters, setFieldFilters] = useState<Record<string, string[]>>({});
@@ -2179,6 +2195,7 @@ export function EntityRecords({
   useEffect(() => {
     setSelectedViewId(NO_VIEW);
     setSearch("");
+    setDebouncedSearch("");
     setArchived("active");
     setStatusFilter([]);
     setFieldFilters({});
@@ -2206,7 +2223,9 @@ export function EntityRecords({
     const def = views.find((v: View) => v.isDefault);
     if (def) {
       setSelectedViewId(String(def.id));
-      setSearch(((def.configJson ?? {}) as ViewConfig).search ?? "");
+      const viewSearch = ((def.configJson ?? {}) as ViewConfig).search ?? "";
+      setSearch(viewSearch);
+      setDebouncedSearch(viewSearch);
     }
     setViewInitialized(true);
   }, [views, viewInitialized]);
@@ -2363,7 +2382,7 @@ export function EntityRecords({
       excludeFilters: activeExcludeFilters,
       excludeStatusIds: activeExcludeStatusIds,
       sorts: effectiveSorts,
-      search: search.trim() || undefined,
+      search: debouncedSearch.trim() || undefined,
       archived,
       page,
       pageSize,
@@ -2385,7 +2404,7 @@ export function EntityRecords({
         : {}),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [baseFiltersKey, selectedConfig.filterConjunction, sortsKey, adHocKey, dateKey, customFilterKey, pageAdHocKey, pageDateKey, statusKey, excludeKey, search, archived, page, pageSize, groupingActive, expandedGroupKey, expandAll],
+    [baseFiltersKey, selectedConfig.filterConjunction, sortsKey, adHocKey, dateKey, customFilterKey, pageAdHocKey, pageDateKey, statusKey, excludeKey, debouncedSearch, archived, page, pageSize, groupingActive, expandedGroupKey, expandAll],
   );
 
   // Pivot (Сводная таблица): a view whose configJson.viewType is "pivot" carries a
@@ -2421,7 +2440,7 @@ export function EntityRecords({
       filterConjunction: selectedConfig.filterConjunction ?? "and",
       pageLocalFilters: [...pageAdHocFilters, ...pageDateFilterConditions],
       statusIds: statusFilter.length > 0 ? statusFilter : undefined,
-      search: search.trim() || undefined,
+      search: debouncedSearch.trim() || undefined,
       archived,
       pageId: permPageId,
       viewId: selectedView?.id,
@@ -2429,7 +2448,7 @@ export function EntityRecords({
       pivot: (pivotConfig ?? { rows: { source: "status" }, measure: { agg: "count" } }) as PivotConfig,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [baseFiltersKey, selectedConfig.filterConjunction, adHocKey, dateKey, customFilterKey, pageAdHocKey, pageDateKey, statusKey, search, archived, selectedView?.id, JSON.stringify(pivotConfig)],
+    [baseFiltersKey, selectedConfig.filterConjunction, adHocKey, dateKey, customFilterKey, pageAdHocKey, pageDateKey, statusKey, debouncedSearch, archived, selectedView?.id, JSON.stringify(pivotConfig)],
   );
 
   // Calendar (Календарь): a view whose configJson.viewType is "calendar" carries a
@@ -2456,13 +2475,13 @@ export function EntityRecords({
       filterConjunction: selectedConfig.filterConjunction ?? "and",
       pageLocalFilters: [...pageAdHocFilters, ...pageDateFilterConditions],
       statusIds: statusFilter.length > 0 ? statusFilter : undefined,
-      search: search.trim() || undefined,
+      search: debouncedSearch.trim() || undefined,
       archived,
       pageId: permPageId,
       customFilters: customFilterPicks.length > 0 ? customFilterPicks : undefined,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [baseFiltersKey, selectedConfig.filterConjunction, adHocKey, dateKey, customFilterKey, pageAdHocKey, pageDateKey, statusKey, search, archived, permPageId],
+    [baseFiltersKey, selectedConfig.filterConjunction, adHocKey, dateKey, customFilterKey, pageAdHocKey, pageDateKey, statusKey, debouncedSearch, archived, permPageId],
   );
 
   // Dependent filters: when fetching the option list for a field, we run a query against the
@@ -2495,14 +2514,14 @@ export function EntityRecords({
           // selectable value). Omitted while "show hidden" is on / setup mode.
           excludeFilters: activeExcludeFilters,
           excludeStatusIds: activeExcludeStatusIds,
-          search: search.trim() || undefined,
+          search: debouncedSearch.trim() || undefined,
           archived,
         },
       });
       return res.values ?? [];
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [entityId, adHocKey, dateKey, statusKey, excludeKey, search, archived, baseFiltersKey, selectedConfig.filterConjunction, fetchFilterOptions],
+    [entityId, adHocKey, dateKey, statusKey, excludeKey, debouncedSearch, archived, baseFiltersKey, selectedConfig.filterConjunction, fetchFilterOptions],
   );
 
   const setFieldFilter = useCallback((fieldKey: string, values: string[]) => {
@@ -3019,6 +3038,7 @@ export function EntityRecords({
     setPage(1);
     const cfg = value === NO_VIEW ? undefined : (views.find((v: View) => String(v.id) === value)?.configJson as ViewConfig | undefined);
     setSearch(cfg?.search ?? "");
+    setDebouncedSearch(cfg?.search ?? "");
   };
 
   const createMutation = useCreateEntityRecord({
@@ -3836,10 +3856,13 @@ export function EntityRecords({
             <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <Input
               value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              onChange={(e) => setSearch(e.target.value)}
               placeholder={t("records.searchPlaceholder", "Поиск…")}
-              className="h-9 w-full sm:w-56 pl-8 text-sm"
+              className="h-9 w-full sm:w-56 pl-8 pr-8 text-sm"
             />
+            {(search !== debouncedSearch || (recordsLoading && search.trim() !== "")) && (
+              <Loader2 className="w-4 h-4 text-slate-400 animate-spin absolute right-2.5 top-1/2 -translate-y-1/2" />
+            )}
           </div>
           <div className="flex items-center justify-center w-full sm:w-auto rounded-md border border-slate-200 p-0.5 bg-white">
             {([
