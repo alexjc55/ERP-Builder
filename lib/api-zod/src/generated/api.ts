@@ -641,7 +641,7 @@ export const ListUsersResponse = zod.object({
  */
 export const createUserBodyPasswordMin = 6;
 
-
+export const createUserBodyLastNameDefault = ``;
 export const createUserBodyLanguageDefault = `ru`;
 export const createUserBodyDirectionDefault = `ltr`;
 
@@ -649,7 +649,7 @@ export const CreateUserBody = zod.object({
   "email": zod.string().email(),
   "password": zod.string().min(createUserBodyPasswordMin).nullish().describe('Omit or null to create a passwordless guest user (cannot log in with a password; access only via a guest link).'),
   "firstName": zod.string(),
-  "lastName": zod.string(),
+  "lastName": zod.string().default(createUserBodyLastNameDefault).describe('Optional — only the first name is required.'),
   "roleId": zod.number().optional().describe('Deprecated and ignored on create — the primary role is roleIds[0]. Retained only because user responses still expose roleId.'),
   "roleIds": zod.array(zod.number()).min(1).describe('All roles to assign (non-empty). The first element is the primary role (used by JWT, display, impersonation, guest flows).'),
   "language": zod.enum(['ru', 'en', 'he']).default(createUserBodyLanguageDefault),
@@ -667,6 +667,7 @@ export const CreateUserFromFieldParams = zod.object({
 
 export const createUserFromFieldBodyPasswordMin = 6;
 
+export const createUserFromFieldBodyLastNameDefault = ``;
 export const createUserFromFieldBodyLanguageDefault = `ru`;
 export const createUserFromFieldBodyDirectionDefault = `ltr`;
 
@@ -674,7 +675,7 @@ export const CreateUserFromFieldBody = zod.object({
   "email": zod.string().email(),
   "password": zod.string().min(createUserFromFieldBodyPasswordMin).nullish().describe('Omit or null to create a passwordless guest user (cannot log in with a password; access only via a guest link).'),
   "firstName": zod.string(),
-  "lastName": zod.string(),
+  "lastName": zod.string().default(createUserFromFieldBodyLastNameDefault).describe('Optional — only the first name is required.'),
   "roleId": zod.number().describe('The single role to assign. Must be allowed by the field and must not be a privileged (admin) role.'),
   "language": zod.enum(['ru', 'en', 'he']).default(createUserFromFieldBodyLanguageDefault),
   "direction": zod.enum(['ltr', 'rtl']).default(createUserFromFieldBodyDirectionDefault),

@@ -3956,7 +3956,7 @@ components:
 
     UserInput:
       type: object
-      required: [email, firstName, lastName, roleIds]
+      required: [email, firstName, roleIds]
       properties:
         email:
           type: string
@@ -3969,6 +3969,8 @@ components:
           type: string
         lastName:
           type: string
+          default: ""
+          description: Optional — only the first name is required.
         roleId:
           type: integer
           description: Deprecated and ignored on create — the primary role is roleIds[0]. Retained only because user responses still expose roleId.
@@ -3991,7 +3993,7 @@ components:
 
     FieldUserInput:
       type: object
-      required: [email, firstName, lastName, roleId]
+      required: [email, firstName, roleId]
       description: >-
         Payload for creating a user inline from a user-type field. Unlike
         UserInput this assigns exactly ONE role, and the server hard-rejects any
@@ -4008,6 +4010,8 @@ components:
           type: string
         lastName:
           type: string
+          default: ""
+          description: Optional — only the first name is required.
         roleId:
           type: integer
           description: The single role to assign. Must be allowed by the field and must not be a privileged (admin) role.

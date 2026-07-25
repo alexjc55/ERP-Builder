@@ -223,7 +223,7 @@ router.post("/users", requireAuth, requireAdmin("users"), async (req, res): Prom
   const user = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(usersTable)
-      .values({ ...rest, roleId: primaryRoleId, language: lang, direction: rest.direction ?? dirForLang(lang), email: email.toLowerCase(), passwordHash })
+      .values({ ...rest, lastName: rest.lastName ?? "", roleId: primaryRoleId, language: lang, direction: rest.direction ?? dirForLang(lang), email: email.toLowerCase(), passwordHash })
       .returning({ id: usersTable.id, roleId: usersTable.roleId });
     await tx.insert(userRolesTable).values(roleSet.map((rid) => ({ userId: created.id, roleId: rid })));
     return created;
@@ -332,7 +332,7 @@ router.post("/fields/:fieldId/users", requireAuth, async (req, res): Promise<voi
   const user = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(usersTable)
-      .values({ ...rest, language: lang, direction: rest.direction ?? dirForLang(lang), roleId, email: email.toLowerCase(), passwordHash })
+      .values({ ...rest, lastName: rest.lastName ?? "", language: lang, direction: rest.direction ?? dirForLang(lang), roleId, email: email.toLowerCase(), passwordHash })
       .returning({ id: usersTable.id, roleId: usersTable.roleId });
     await tx.insert(userRolesTable).values({ userId: created.id, roleId });
     return created;

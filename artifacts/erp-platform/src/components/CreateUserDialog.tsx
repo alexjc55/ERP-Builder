@@ -129,16 +129,25 @@ export function CreateUserDialog({
     },
   });
 
+  // A role named "Гость"/"Guest"/"אורח" marks a guest role: the account is
+  // passwordless (guest-link entry only), so the password field is hidden and
+  // not required. Mirrors the same rule in the admin users page.
+  const isGuestRole = (r: Role) =>
+    Object.values(r.nameJson ?? {}).some(
+      (n) => typeof n === "string" && ["гость", "guest", "אורח"].includes(n.trim().toLowerCase()),
+    );
+  const guestRoleSelected = roles.some((r) => r.id === roleId && isGuestRole(r));
+
   const handleSubmit = () => {
-    if (!firstName.trim() || !lastName.trim() || !email.trim()) {
+    if (!firstName.trim() || !email.trim()) {
       toast({
         title: t("users.error", "Ошибка"),
-        description: t("users.fieldsRequired", "Заполните имя, фамилию и email"),
+        description: t("users.nameEmailRequired", "Заполните имя и email"),
         variant: "destructive",
       });
       return;
     }
-    if (password.length < 6) {
+    if (!guestRoleSelected && password.length < 6) {
       toast({
         title: t("users.error", "Ошибка"),
         description: t("users.passwordTooShort", "Пароль должен содержать минимум 6 символов"),
@@ -156,7 +165,7 @@ export function CreateUserDialog({
     }
     const create: FieldUserInput = {
       email: email.trim(),
-      password,
+      password: guestRoleSelected ? null : password,
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       roleId,
@@ -179,7 +188,7 @@ export function CreateUserDialog({
               <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>{t("users.lastName", "Фамилия")} *</Label>
+              <Label>{t("users.lastName", "Фамилия")}</Label>
               <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
             </div>
           </div>
@@ -187,10 +196,12 @@ export function CreateUserDialog({
             <Label>Email *</Label>
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
-          <div className="space-y-1.5">
-            <Label>{t("users.password", "Пароль")} *</Label>
-            <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} />
-          </div>
+          {!guestRoleSelected && (
+            <div className="space-y-1.5">
+              <Label>{t("users.password", "Пароль")} *</Label>
+              <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} />
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label>{t("users.primaryRole", "Основная роль")} *</Label>
             {roles.length === 0 ? (

@@ -11,6 +11,7 @@ import {
   useListGuestLinks,
   useCreateGuestLink,
   useRevokeGuestLink,
+  type Role,
   type User,
   type UserInput,
   type UserUpdate,
@@ -203,6 +204,17 @@ export default function UsersPage() {
     setDialogOpen(true);
   };
 
+  // A role named "Гость"/"Guest"/"אורח" (in any language) marks a guest role:
+  // selecting it as the primary role makes the account passwordless (same as
+  // the explicit "guest access" checkbox) — the password field is hidden and
+  // not required; such users enter only via a guest link.
+  const isGuestRole = (r: Role) =>
+    Object.values(r.nameJson ?? {}).some(
+      (n) => typeof n === "string" && ["гость", "guest", "אורח"].includes(n.trim().toLowerCase()),
+    );
+  const guestRoleSelected = roles.some((r) => r.id === form.roleId && isGuestRole(r));
+  const passwordless = form.isGuest || guestRoleSelected;
+
   const handleSubmit = async () => {
     if (editingUser) {
       // Optional password change from the edit card: only validate/apply when
@@ -249,7 +261,7 @@ export default function UsersPage() {
       // A guest user is passwordless; a regular user needs a password of at
       // least 6 characters. Validate here so the user sees a friendly localized
       // message instead of a raw server validation payload.
-      if (!form.isGuest && (form.password ?? "").length < 6) {
+      if (!passwordless && (form.password ?? "").length < 6) {
         toast({
           title: t("users.error", "Ошибка"),
           description: t("users.passwordTooShort", "Пароль должен содержать минимум 6 символов"),
@@ -269,7 +281,7 @@ export default function UsersPage() {
         email: form.email,
         // A guest user is passwordless: omit the password entirely so the server
         // stores a null hash. They can only enter via a guest link (read-only).
-        password: form.isGuest ? null : form.password,
+        password: passwordless ? null : form.password,
         firstName: form.firstName,
         lastName: form.lastName,
         roleId: form.roleId,
@@ -488,7 +500,7 @@ export default function UsersPage() {
                 <Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
               </div>
               <div className="space-y-1.5">
-                <Label>{t("users.lastName", "Фамилия")} *</Label>
+                <Label>{t("users.lastName", "Фамилия")}</Label>
                 <Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
               </div>
             </div>
@@ -502,7 +514,8 @@ export default function UsersPage() {
                   <input
                     type="checkbox"
                     className="mt-0.5"
-                    checked={form.isGuest}
+                    checked={passwordless}
+                    disabled={guestRoleSelected}
                     onChange={(e) => setForm({ ...form, isGuest: e.target.checked })}
                   />
                   <span className="text-sm">
@@ -514,7 +527,7 @@ export default function UsersPage() {
                 </label>
               </div>
             )}
-            {!editingUser && !form.isGuest && (
+            {!editingUser && !passwordless && (
               <div className="space-y-1.5">
                 <Label>{t("users.password", "Пароль")} *</Label>
                 <PasswordInput value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />

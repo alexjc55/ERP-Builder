@@ -20,7 +20,8 @@ export interface FieldUserInput {
      */
   password?: string | null;
   firstName: string;
-  lastName: string;
+  /** Optional — only the first name is required. */
+  lastName?: string;
   /** The single role to assign. Must be allowed by the field and must not be a privileged (admin) role. */
   roleId: number;
   language?: FieldUserInputLanguage;

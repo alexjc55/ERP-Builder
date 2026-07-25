@@ -554,7 +554,8 @@ export interface UserInput {
      */
   password?: string | null;
   firstName: string;
-  lastName: string;
+  /** Optional — only the first name is required. */
+  lastName?: string;
   /** Deprecated and ignored on create — the primary role is roleIds[0]. Retained only because user responses still expose roleId. */
   roleId?: number;
   /**
@@ -597,7 +598,8 @@ export interface FieldUserInput {
      */
   password?: string | null;
   firstName: string;
-  lastName: string;
+  /** Optional — only the first name is required. */
+  lastName?: string;
   /** The single role to assign. Must be allowed by the field and must not be a privileged (admin) role. */
   roleId: number;
   language?: FieldUserInputLanguage;

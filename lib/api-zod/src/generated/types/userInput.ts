@@ -17,7 +17,8 @@ export interface UserInput {
      */
   password?: string | null;
   firstName: string;
-  lastName: string;
+  /** Optional — only the first name is required. */
+  lastName?: string;
   /** Deprecated and ignored on create — the primary role is roleIds[0]. Retained only because user responses still expose roleId. */
   roleId?: number;
   /**
