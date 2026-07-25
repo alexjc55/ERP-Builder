@@ -1974,10 +1974,14 @@ export function EntityRecords({
   // Inline "add row" draft state (an alternative to the modal create dialog).
   const [addingRow, setAddingRow] = useState(false);
   // Floating "add row" affordance: the inline add-row link lives at the TOP of
-  // the table, so once the user scrolls down it disappears. Track the table's
-  // vertical scroll and surface a sticky button that jumps back up + starts a row.
+  // the table, so once the user scrolls down it disappears. The page can scroll
+  // at EITHER level (the table's own overflow container OR the window), so we
+  // watch the add-row row's actual visibility with an IntersectionObserver
+  // (viewport root covers both cases) and surface a fixed floating button that
+  // jumps back up + starts a row.
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
-  const [tableScrolled, setTableScrolled] = useState(false);
+  const addRowLinkRef = useRef<HTMLTableRowElement | null>(null);
+  const [addRowLinkVisible, setAddRowLinkVisible] = useState(true);
   const [newRow, setNewRow] = useState<FormState>({});
   const [newPageRow, setNewPageRow] = useState<FormState>({});
   const [newRowStatus, setNewRowStatus] = useState<string>(NO_STATUS);
@@ -3660,6 +3664,24 @@ export function EntityRecords({
   // header. Headers BEFORE + INCLUDING the expanded group render above the row
   // block, the rest render after it, so the visual order is stable.
   const showGroups = groupingActive && groups !== null;
+
+  // Watch the inline "add row" link's visibility (viewport root covers both the
+  // table's own overflow scroll AND window/page scroll); when it scrolls out of
+  // view a fixed floating duplicate appears.
+  const addRowLinkRendered = canCreate && !setupMode && !showGroups && !addingRow;
+  useEffect(() => {
+    const el = addRowLinkRef.current;
+    if (!addRowLinkRendered || !el) {
+      setAddRowLinkVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => setAddRowLinkVisible(entry.isIntersecting),
+      { root: null, threshold: 0 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [addRowLinkRendered, recordsLoading, hasLoadedRecords]);
   // The group selection the current render targets; `records` are only trusted
   // once the last completed fetch was for this same signature (else we'd flash
   // the previous group's / the full collapsed row set under the new header).
@@ -4450,14 +4472,7 @@ export function EntityRecords({
               {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
             </div>
           ) : (
-            <div
-              ref={tableScrollRef}
-              onScroll={(e) => {
-                const scrolled = e.currentTarget.scrollTop > 120;
-                setTableScrolled((prev) => (prev === scrolled ? prev : scrolled));
-              }}
-              className="overflow-auto pb-3 max-h-[calc(100vh-12rem)]"
-            >
+            <div ref={tableScrollRef} className="overflow-auto pb-3 max-h-[calc(100vh-12rem)]">
               <table
                 className="w-full text-sm"
                 style={borderColor ? ({ "--erp-table-border": borderColor } as CSSProperties) : undefined}
@@ -4994,7 +5009,7 @@ export function EntityRecords({
                     </tr>
                   )}
                   {canCreate && !setupMode && !showGroups && !addingRow && (
-                    <tr className="border-b border-slate-100">
+                    <tr ref={addRowLinkRef} className="border-b border-slate-100">
                       <td colSpan={orderedColumns.length + (showStatusColumn ? 1 : 0) + (showActionsColumn ? 1 : 0)} className="px-2 py-2">
                         <button
                           type="button"
@@ -5485,23 +5500,30 @@ export function EntityRecords({
                   {showGroups && groupsAfterExpanded.map(renderGroupRow)}
                 </tbody>
               </table>
-              {tableScrolled && canCreate && !setupMode && !showGroups && !addingRow && (
-                // Sticky within the scroll container (bottom-left), so the add-row
-                // affordance stays reachable no matter how far the user scrolled.
-                <div className="sticky bottom-2 left-2 z-30 inline-block">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      tableScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-                      startAddRow();
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-white px-3 py-1.5 text-sm text-blue-600 shadow-md hover:bg-blue-50 transition"
-                  >
-                    <Plus className="w-4 h-4" />
-                    {t("records.addRow", "Добавить строку")}
-                  </button>
-                </div>
-              )}
+            </div>
+          )}
+          {addRowLinkRendered && !addRowLinkVisible && (
+            // Fixed to the viewport (not the table's scroll container), so it
+            // stays visible no matter which level actually scrolled. Clicking it
+            // scrolls back to the inline link and opens the add-row editor.
+            <div className="fixed bottom-6 end-6 z-40">
+              <button
+                type="button"
+                onClick={() => {
+                  // Scroll targets the PERSISTENT container, not the link row —
+                  // startAddRow() unmounts that row, which would cancel a smooth
+                  // scroll aimed at it. The add-row editor appears at the top of
+                  // the table, exactly where we land.
+                  const scroller = tableScrollRef.current;
+                  scroller?.scrollTo({ top: 0, behavior: "smooth" });
+                  scroller?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  startAddRow();
+                }}
+                className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-white px-4 py-2 text-sm text-blue-600 shadow-lg hover:bg-blue-50 transition"
+              >
+                <Plus className="w-4 h-4" />
+                {t("records.addRow", "Добавить строку")}
+              </button>
             </div>
           )}
         </CardContent>
