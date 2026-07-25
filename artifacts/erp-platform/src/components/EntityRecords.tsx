@@ -1289,6 +1289,7 @@ export function EntityRecords({
   groupByFieldKey,
   groupDefaultExpanded,
   filtersCollapsedDefault,
+  pageHideStatusColumn,
 }: {
   entityId: number;
   /**
@@ -1394,6 +1395,13 @@ export function EntityRecords({
    * toggle is remembered per page in localStorage and wins over this default.
    */
   filtersCollapsedDefault?: boolean;
+  /**
+   * Per-page display-only hide of the Status column (from
+   * `page.hideStatusColumn`): hides the column for EVERYONE, including
+   * admins/superAdmin. Never a security boundary — the server still returns
+   * statuses; this only removes the column from this page's table.
+   */
+  pageHideStatusColumn?: boolean;
 }) {
   const ml = useML();
   const t = useT();
@@ -1934,7 +1942,7 @@ export function EntityRecords({
     : user?.permissions?.records?.[isMirror ? `mirror:${pageId}` : String(entityId)];
   const hideStatusColumn = ctxRecordPerm?.hideStatusColumn === true;
   const hideActionsColumn = ctxRecordPerm?.hideActionsColumn === true;
-  const showStatusColumn = statuses.length > 0 && !hideStatusColumn;
+  const showStatusColumn = statuses.length > 0 && !hideStatusColumn && !pageHideStatusColumn;
   const showActionsColumn = !hideActionsColumn;
   // Drop hidden-picker statuses but always keep `keepId` (a record's current
   // status) so its Select still renders the value it's actually set to.
@@ -2772,6 +2780,23 @@ export function EntityRecords({
               title: collapsedByDefault
                 ? t("records.filtersDefaultCollapsedSaved", "По умолчанию: фильтры свёрнуты")
                 : t("records.filtersDefaultExpandedSaved", "По умолчанию: фильтры развёрнуты"),
+            }),
+        },
+      );
+    },
+    [pageId, savePageGroupDefaultMutation, toast, t],
+  );
+  const saveHideStatusColumn = useCallback(
+    (hide: boolean) => {
+      if (pageId == null) return;
+      savePageGroupDefaultMutation.mutate(
+        { id: pageId, data: { hideStatusColumn: hide } },
+        {
+          onSuccess: () =>
+            toast({
+              title: hide
+                ? t("records.hideStatusColumnSaved", "Столбец «Статус» скрыт на этой странице")
+                : t("records.showStatusColumnSaved", "Столбец «Статус» показан на этой странице"),
             }),
         },
       );
@@ -4361,6 +4386,37 @@ export function EntityRecords({
                   </SelectItem>
                   <SelectItem value="collapsed">
                     {t("records.filtersDefaultCollapsed", "Свёрнута (скрывать фильтры)")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {pageId != null && canAdmin("pages") && statuses.length > 0 && (
+            <div className="rounded-md border border-slate-200 bg-white px-3 py-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                <Filter className="w-4 h-4 text-slate-400 shrink-0" />
+                <span>{t("records.statusColumnTitle", "Столбец «Статус»")}</span>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {t(
+                  "records.statusColumnHint",
+                  "Скрыть столбец статуса в таблице на этой странице для всех, включая администраторов. Это только отображение — статусы и рабочий процесс продолжают работать.",
+                )}
+              </p>
+              <Select
+                value={pageHideStatusColumn ? "hidden" : "visible"}
+                onValueChange={(v) => saveHideStatusColumn(v === "hidden")}
+                disabled={savePageGroupDefaultMutation.isPending}
+              >
+                <SelectTrigger className="h-9 w-full sm:w-72 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="visible">
+                    {t("records.statusColumnVisible", "Показывать столбец «Статус»")}
+                  </SelectItem>
+                  <SelectItem value="hidden">
+                    {t("records.statusColumnHidden", "Скрывать столбец «Статус»")}
                   </SelectItem>
                 </SelectContent>
               </Select>

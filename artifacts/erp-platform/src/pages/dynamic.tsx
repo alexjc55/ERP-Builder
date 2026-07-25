@@ -97,6 +97,7 @@ export default function DynamicPage() {
             groupByFieldKey={mirrorEntity ? page.groupByFieldKey ?? undefined : undefined}
             groupDefaultExpanded={mirrorEntity ? page.groupDefaultExpanded ?? undefined : undefined}
             filtersCollapsedDefault={page.filtersCollapsedDefault ?? undefined}
+            pageHideStatusColumn={page.hideStatusColumn ?? undefined}
           />
         </>
       ) : (

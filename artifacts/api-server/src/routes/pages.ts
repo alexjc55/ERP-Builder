@@ -400,6 +400,7 @@ router.put("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): P
   if ("pivotConfigJson" in body) updateData.pivotConfigJson = body.pivotConfigJson ?? null;
   if ("widgetsCollapsedDefault" in body) updateData.widgetsCollapsedDefault = body.widgetsCollapsedDefault ?? false;
   if ("filtersCollapsedDefault" in body) updateData.filtersCollapsedDefault = body.filtersCollapsedDefault ?? false;
+  if ("hideStatusColumn" in body) updateData.hideStatusColumn = body.hideStatusColumn ?? false;
   if ("defaultQuickFilterJson" in body) updateData.defaultQuickFilterJson = body.defaultQuickFilterJson ?? null;
   if ("groupByFieldKey" in body) updateData.groupByFieldKey = body.groupByFieldKey || null;
   if ("groupDefaultExpanded" in body) updateData.groupDefaultExpanded = body.groupDefaultExpanded ?? false;

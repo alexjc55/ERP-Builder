@@ -4576,6 +4576,9 @@ components:
         filtersCollapsedDefault:
           type: boolean
           description: Default collapsed state of the quick-filter bar above a page's records table
+        hideStatusColumn:
+          type: boolean
+          description: Hide the Status column on this page's records table for everyone, including admins (display-only)
         defaultQuickFilterJson:
           oneOf:
             - $ref: "#/components/schemas/PageQuickFilter"
@@ -4663,6 +4666,9 @@ components:
           type: boolean
           default: false
           description: Default collapsed state of the quick-filter bar above a page's records table
+        hideStatusColumn:
+          type: boolean
+          description: Hide the Status column on this page's records table for everyone, including admins (display-only)
         defaultQuickFilterJson:
           oneOf:
             - $ref: "#/components/schemas/PageQuickFilter"
@@ -4738,6 +4744,9 @@ components:
         filtersCollapsedDefault:
           type: boolean
           description: Default collapsed state of the quick-filter bar above a page's records table
+        hideStatusColumn:
+          type: boolean
+          description: Hide the Status column on this page's records table for everyone, including admins (display-only)
         defaultQuickFilterJson:
           oneOf:
             - $ref: "#/components/schemas/PageQuickFilter"

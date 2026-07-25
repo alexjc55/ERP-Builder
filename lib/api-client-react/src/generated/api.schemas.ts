@@ -1146,6 +1146,8 @@ export interface Page {
   widgetsCollapsedDefault?: boolean;
   /** Default collapsed state of the quick-filter bar above a page's records table */
   filtersCollapsedDefault?: boolean;
+  /** Hide the Status column on this page's records table for everyone, including admins (display-only) */
+  hideStatusColumn?: boolean;
   /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
   defaultQuickFilterJson?: PageQuickFilter | null;
   /**
@@ -1225,6 +1227,8 @@ export interface PageInput {
   widgetsCollapsedDefault?: boolean;
   /** Default collapsed state of the quick-filter bar above a page's records table */
   filtersCollapsedDefault?: boolean;
+  /** Hide the Status column on this page's records table for everyone, including admins (display-only) */
+  hideStatusColumn?: boolean;
   /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
   defaultQuickFilterJson?: PageQuickFilter | null;
   /**
@@ -1301,6 +1305,8 @@ export interface PageUpdate {
   widgetsCollapsedDefault?: boolean;
   /** Default collapsed state of the quick-filter bar above a page's records table */
   filtersCollapsedDefault?: boolean;
+  /** Hide the Status column on this page's records table for everyone, including admins (display-only) */
+  hideStatusColumn?: boolean;
   /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
   defaultQuickFilterJson?: PageQuickFilter | null;
   /**

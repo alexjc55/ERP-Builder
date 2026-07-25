@@ -1237,6 +1237,7 @@ export const ListPagesResponseItem = zod.object({
 }).describe('Configuration stored on a PIVOT PAGE (pages.pivotConfigJson). `source` selects where the effective PivotConfig is resolved from at compute time; the filter fields pre-filter which records feed the aggregation. Totals are admin-authoritative (computed over all records), so there is no per-page role list — page access is the boundary.'),zod.null()]).optional(),
   "widgetsCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
   "filtersCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the quick-filter bar above a page\'s records table'),
+  "hideStatusColumn": zod.boolean().optional().describe('Hide the Status column on this page\'s records table for everyone, including admins (display-only)'),
   "defaultQuickFilterJson": zod.union([zod.object({
   "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
   "statusIds": zod.array(zod.number()).optional(),
@@ -1353,6 +1354,7 @@ export const CreatePageBody = zod.object({
 }).describe('Configuration stored on a PIVOT PAGE (pages.pivotConfigJson). `source` selects where the effective PivotConfig is resolved from at compute time; the filter fields pre-filter which records feed the aggregation. Totals are admin-authoritative (computed over all records), so there is no per-page role list — page access is the boundary.'),zod.null()]).optional(),
   "widgetsCollapsedDefault": zod.boolean().default(createPageBodyWidgetsCollapsedDefaultDefault).describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
   "filtersCollapsedDefault": zod.boolean().default(createPageBodyFiltersCollapsedDefaultDefault).describe('Default collapsed state of the quick-filter bar above a page\'s records table'),
+  "hideStatusColumn": zod.boolean().optional().describe('Hide the Status column on this page\'s records table for everyone, including admins (display-only)'),
   "defaultQuickFilterJson": zod.union([zod.object({
   "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
   "statusIds": zod.array(zod.number()).optional(),
@@ -1465,6 +1467,7 @@ export const GetPageResponse = zod.object({
 }).describe('Configuration stored on a PIVOT PAGE (pages.pivotConfigJson). `source` selects where the effective PivotConfig is resolved from at compute time; the filter fields pre-filter which records feed the aggregation. Totals are admin-authoritative (computed over all records), so there is no per-page role list — page access is the boundary.'),zod.null()]).optional(),
   "widgetsCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
   "filtersCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the quick-filter bar above a page\'s records table'),
+  "hideStatusColumn": zod.boolean().optional().describe('Hide the Status column on this page\'s records table for everyone, including admins (display-only)'),
   "defaultQuickFilterJson": zod.union([zod.object({
   "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
   "statusIds": zod.array(zod.number()).optional(),
@@ -1579,6 +1582,7 @@ export const UpdatePageBody = zod.object({
 }).describe('Configuration stored on a PIVOT PAGE (pages.pivotConfigJson). `source` selects where the effective PivotConfig is resolved from at compute time; the filter fields pre-filter which records feed the aggregation. Totals are admin-authoritative (computed over all records), so there is no per-page role list — page access is the boundary.'),zod.null()]).optional(),
   "widgetsCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
   "filtersCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the quick-filter bar above a page\'s records table'),
+  "hideStatusColumn": zod.boolean().optional().describe('Hide the Status column on this page\'s records table for everyone, including admins (display-only)'),
   "defaultQuickFilterJson": zod.union([zod.object({
   "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
   "statusIds": zod.array(zod.number()).optional(),
@@ -1683,6 +1687,7 @@ export const UpdatePageResponse = zod.object({
 }).describe('Configuration stored on a PIVOT PAGE (pages.pivotConfigJson). `source` selects where the effective PivotConfig is resolved from at compute time; the filter fields pre-filter which records feed the aggregation. Totals are admin-authoritative (computed over all records), so there is no per-page role list — page access is the boundary.'),zod.null()]).optional(),
   "widgetsCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the analytics widgets block above a page\'s records table'),
   "filtersCollapsedDefault": zod.boolean().optional().describe('Default collapsed state of the quick-filter bar above a page\'s records table'),
+  "hideStatusColumn": zod.boolean().optional().describe('Hide the Status column on this page\'s records table for everyone, including admins (display-only)'),
   "defaultQuickFilterJson": zod.union([zod.object({
   "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
   "statusIds": zod.array(zod.number()).optional(),

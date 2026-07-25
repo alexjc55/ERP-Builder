@@ -101,6 +101,11 @@ export const pagesTable = pgTable("pages", {
   // each viewer's own toggle is remembered client-side (localStorage) and
   // falls back to this default. Mirrors widgetsCollapsedDefault.
   filtersCollapsedDefault: boolean("filters_collapsed_default").notNull().default(false),
+  // Hide the "Status" column on THIS page's records table for EVERYONE,
+  // including admins/superAdmin. Display-only (like the per-role
+  // hideStatusColumn permission, but page-scoped and role-independent): the
+  // server never strips statuses from API responses because of this flag.
+  hideStatusColumn: boolean("hide_status_column").notNull().default(false),
   // Per-page SOFT default filter that pre-fills the records filter bar on open.
   // Unlike a view's/entity's hard defaultFilterJson (a security boundary that
   // rows can never escape), this only seeds the user-adjustable AD-HOC quick
