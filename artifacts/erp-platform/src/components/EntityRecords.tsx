@@ -3663,12 +3663,6 @@ export function EntityRecords({
   // block, the rest render after it, so the visual order is stable.
   const showGroups = groupingActive && groups !== null;
 
-  // Floating "add row" button: shown deterministically whenever the table is
-  // long enough that the inline top link is likely out of sight. No scroll /
-  // IntersectionObserver tracking — previous attempts based on detecting the
-  // actual scrolled state proved fragile across scroll levels.
-  const showFloatingAddRow =
-    canCreate && !setupMode && !showGroups && !addingRow && records.length > 8;
   // The group selection the current render targets; `records` are only trusted
   // once the last completed fetch was for this same signature (else we'd flash
   // the previous group's / the full collapsed row set under the new header).
@@ -4853,6 +4847,31 @@ export function EntityRecords({
                       <th className="align-top text-center px-4 py-3 font-medium text-slate-600">{t("records.actions", "Действия")}</th>
                     ))}
                   </tr>
+                  {/* The "add row" link lives INSIDE the sticky thead, so it is
+                      pinned right under the header and never scrolls away —
+                      the link's position doesn't affect where the row is added. */}
+                  {canCreate && !setupMode && !showGroups && !addingRow && (
+                    <tr>
+                      <td
+                        colSpan={orderedColumns.length + (showStatusColumn ? 1 : 0) + (showActionsColumn ? 1 : 0)}
+                        className="bg-white border-b border-slate-200 px-2 py-1.5"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // The edit row appears at the top of tbody — bring
+                            // it into view if the table was scrolled down.
+                            tableScrollRef.current?.scrollTo({ top: 0 });
+                            startAddRow();
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-blue-600 hover:bg-blue-50 transition"
+                        >
+                          <Plus className="w-4 h-4" />
+                          {t("records.addRow", "Добавить строку")}
+                        </button>
+                      </td>
+                    </tr>
+                  )}
                 </thead>
                 <tbody>
                   {(showGroups ? groupList.length === 0 : records.length === 0) && (
@@ -4993,20 +5012,6 @@ export function EntityRecords({
                         </div>
                       </td>
                       )}
-                    </tr>
-                  )}
-                  {canCreate && !setupMode && !showGroups && !addingRow && (
-                    <tr className="border-b border-slate-100">
-                      <td colSpan={orderedColumns.length + (showStatusColumn ? 1 : 0) + (showActionsColumn ? 1 : 0)} className="px-2 py-2">
-                        <button
-                          type="button"
-                          onClick={startAddRow}
-                          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-blue-600 hover:bg-blue-50 transition"
-                        >
-                          <Plus className="w-4 h-4" />
-                          {t("records.addRow", "Добавить строку")}
-                        </button>
-                      </td>
                     </tr>
                   )}
                   {showGroups && groupsBeforeExpanded.map(renderGroupRow)}
@@ -5487,30 +5492,6 @@ export function EntityRecords({
                   {showGroups && groupsAfterExpanded.map(renderGroupRow)}
                 </tbody>
               </table>
-            </div>
-          )}
-          {showFloatingAddRow && (
-            // Fixed to the viewport (not the table's scroll container), so it
-            // stays visible no matter which level actually scrolled. Clicking it
-            // scrolls back to the inline link and opens the add-row editor.
-            <div className="fixed bottom-6 end-6 z-40">
-              <button
-                type="button"
-                onClick={() => {
-                  // Scroll targets the PERSISTENT container, not the link row —
-                  // startAddRow() unmounts that row, which would cancel a smooth
-                  // scroll aimed at it. The add-row editor appears at the top of
-                  // the table, exactly where we land.
-                  const scroller = tableScrollRef.current;
-                  scroller?.scrollTo({ top: 0, behavior: "smooth" });
-                  scroller?.scrollIntoView({ behavior: "smooth", block: "start" });
-                  startAddRow();
-                }}
-                className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-white px-4 py-2 text-sm text-blue-600 shadow-lg hover:bg-blue-50 transition"
-              >
-                <Plus className="w-4 h-4" />
-                {t("records.addRow", "Добавить строку")}
-              </button>
             </div>
           )}
         </CardContent>
