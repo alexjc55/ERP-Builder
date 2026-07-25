@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useListUsers,
   useCreateUser,
@@ -83,6 +83,8 @@ export default function UsersPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 50;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [deleteUser, setDeleteUser] = useState<User | null>(null);
@@ -108,7 +110,16 @@ export default function UsersPage() {
   const { user: currentUser, isSuperAdmin, canAdmin, impersonate } = useAuth();
   const canImpersonate = isSuperAdmin || canAdmin("users");
 
-  const { data: usersResult, isLoading } = useListUsers({ search: search || undefined });
+  // Filtering is SERVER-side: search + roleId (the server matches the FULL
+  // role set — primary + additional roles) + limit/offset pagination. A
+  // client-side filter over one fetched page would miss users on other pages
+  // ("не найдено" even though matches exist beyond the first 50).
+  const { data: usersResult, isLoading } = useListUsers({
+    search: search || undefined,
+    roleId: roleFilter !== "all" ? Number(roleFilter) : undefined,
+    limit: PAGE_SIZE,
+    offset: page * PAGE_SIZE,
+  });
   const { data: roles = [] } = useListRoles();
 
   const superRoleIds = new Set(roles.filter((r) => r.permissionsJson?.superAdmin).map((r) => r.id));
@@ -122,14 +133,20 @@ export default function UsersPage() {
   const users: User[] = Array.isArray(usersResult)
     ? usersResult
     : (usersResult as { data?: User[] } | undefined)?.data ?? [];
+  const totalUsers: number = Array.isArray(usersResult)
+    ? users.length
+    : (usersResult as { total?: number } | undefined)?.total ?? users.length;
+  const totalPages = Math.max(1, Math.ceil(totalUsers / PAGE_SIZE));
 
-  // Filter by the FULL role set (primary + additional roles), not just the primary.
-  const filteredUsers: User[] =
-    roleFilter === "all"
-      ? users
-      : users.filter((u) =>
-          [...new Set([u.roleId, ...(u.roleIds ?? [])])].some((id) => String(id) === roleFilter)
-        );
+  // Clamp the page when the dataset shrinks under us (e.g. deleting the last
+  // row of the last page, or a filter narrowing the total): otherwise the page
+  // index can point past the end, showing an empty list with no way back.
+  useEffect(() => {
+    if (!isLoading && page > totalPages - 1) setPage(Math.max(0, totalPages - 1));
+  }, [isLoading, page, totalPages]);
+
+  // Role/search filtering already happened on the server — render as-is.
+  const filteredUsers: User[] = users;
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["/api/users"] });
 
@@ -285,11 +302,11 @@ export default function UsersPage() {
           <Input
             placeholder={t("users.searchPlaceholder", "Поиск по имени или email...")}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
             className="pl-9"
           />
         </div>
-        <Select value={roleFilter} onValueChange={setRoleFilter}>
+        <Select value={roleFilter} onValueChange={(v) => { setRoleFilter(v); setPage(0); }}>
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder={t("users.filterByRole", "Фильтр по роли")} />
           </SelectTrigger>
@@ -428,6 +445,34 @@ export default function UsersPage() {
               </tbody>
             </table>
           </div>
+          {totalUsers > PAGE_SIZE && (
+            <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-slate-100">
+              <span className="text-sm text-slate-500">
+                {t("users.pageInfo", "Показано")} {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalUsers)} {t("users.pageOf", "из")} {totalUsers}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page === 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                >
+                  {t("users.prevPage", "Назад")}
+                </Button>
+                <span className="text-sm text-slate-500">
+                  {page + 1} / {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page + 1 >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                >
+                  {t("users.nextPage", "Вперёд")}
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
