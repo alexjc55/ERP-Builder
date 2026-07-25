@@ -1946,6 +1946,11 @@ export function EntityRecords({
   const [writeThroughEdit, setWriteThroughEdit] = useState<{ entityId: number; recordId: number } | null>(null);
   // Inline "add row" draft state (an alternative to the modal create dialog).
   const [addingRow, setAddingRow] = useState(false);
+  // Floating "add row" affordance: the inline add-row link lives at the TOP of
+  // the table, so once the user scrolls down it disappears. Track the table's
+  // vertical scroll and surface a sticky button that jumps back up + starts a row.
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+  const [tableScrolled, setTableScrolled] = useState(false);
   const [newRow, setNewRow] = useState<FormState>({});
   const [newPageRow, setNewPageRow] = useState<FormState>({});
   const [newRowStatus, setNewRowStatus] = useState<string>(NO_STATUS);
@@ -4418,7 +4423,14 @@ export function EntityRecords({
               {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
             </div>
           ) : (
-            <div className="overflow-auto pb-3 max-h-[calc(100vh-12rem)]">
+            <div
+              ref={tableScrollRef}
+              onScroll={(e) => {
+                const scrolled = e.currentTarget.scrollTop > 120;
+                setTableScrolled((prev) => (prev === scrolled ? prev : scrolled));
+              }}
+              className="overflow-auto pb-3 max-h-[calc(100vh-12rem)]"
+            >
               <table
                 className="w-full text-sm"
                 style={borderColor ? ({ "--erp-table-border": borderColor } as CSSProperties) : undefined}
@@ -5446,6 +5458,23 @@ export function EntityRecords({
                   {showGroups && groupsAfterExpanded.map(renderGroupRow)}
                 </tbody>
               </table>
+              {tableScrolled && canCreate && !setupMode && !showGroups && !addingRow && (
+                // Sticky within the scroll container (bottom-left), so the add-row
+                // affordance stays reachable no matter how far the user scrolled.
+                <div className="sticky bottom-2 left-2 z-30 inline-block">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      tableScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+                      startAddRow();
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-white px-3 py-1.5 text-sm text-blue-600 shadow-md hover:bg-blue-50 transition"
+                  >
+                    <Plus className="w-4 h-4" />
+                    {t("records.addRow", "Добавить строку")}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
@@ -7488,23 +7517,26 @@ function UserCombobox({
                   </CommandItem>
                 ))}
               </CommandGroup>
-              {allowCreate && (
-                <CommandGroup className="border-t border-slate-100">
-                  <CommandItem
-                    value="__create_user__"
-                    onSelect={() => {
-                      creatingRef.current = true;
-                      setOpen(false);
-                      setCreateOpen(true);
-                    }}
-                    className="text-blue-600"
-                  >
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    {t("records.addNewUser", "Добавить нового пользователя")}
-                  </CommandItem>
-                </CommandGroup>
-              )}
             </CommandList>
+            {allowCreate && (
+              // Fixed footer (outside the scrollable CommandList) so "Add user"
+              // stays reachable with hundreds of options AND still shows when the
+              // search text matches nobody (cmdk would filter a CommandItem out).
+              <div className="border-t border-slate-200 p-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    creatingRef.current = true;
+                    setOpen(false);
+                    setCreateOpen(true);
+                  }}
+                  className="flex w-full items-center rounded-sm px-2 py-1.5 text-sm text-blue-600 hover:bg-blue-50"
+                >
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  {t("records.addNewUser", "Добавить нового пользователя")}
+                </button>
+              </div>
+            )}
           </Command>
         </PopoverContent>
       </Popover>
