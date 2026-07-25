@@ -610,7 +610,19 @@ export default function UsersPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>{t("users.colLanguage", "Язык")}</Label>
-                <Select value={form.language} onValueChange={(v) => setForm({ ...form, language: v as UserInputLanguage })}>
+                <Select
+                  value={form.language}
+                  onValueChange={(v) =>
+                    setForm({
+                      ...form,
+                      language: v as UserInputLanguage,
+                      // Auto-derive direction from the language (he → RTL,
+                      // ru/en → LTR); a manual direction pick afterwards wins
+                      // until the language changes again.
+                      direction: (v === "he" ? "rtl" : "ltr") as UserInputDirection,
+                    })
+                  }
+                >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ru">{t("users.langRussian", "Русский")}</SelectItem>

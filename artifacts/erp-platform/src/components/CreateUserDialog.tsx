@@ -226,7 +226,15 @@ export function CreateUserDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>{t("users.colLanguage", "Язык")}</Label>
-              <Select value={language} onValueChange={(v) => setLanguage(v as FieldUserInputLanguage)}>
+              <Select
+                value={language}
+                onValueChange={(v) => {
+                  setLanguage(v as FieldUserInputLanguage);
+                  // Auto-derive direction from the language (he → RTL, ru/en →
+                  // LTR); a manual pick afterwards wins until language changes.
+                  setDirection((v === "he" ? "rtl" : "ltr") as FieldUserInputDirection);
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
