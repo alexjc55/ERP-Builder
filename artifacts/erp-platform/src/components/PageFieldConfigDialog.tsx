@@ -363,7 +363,13 @@ export function PageFieldConfigDialog({
                 ? { decimals: normalizeDecimals(formulaDecimals) as number }
                 : {}),
             }
-          : {},
+          : fieldType === "number"
+            ? // Number fields reuse the same decimals knob (display-only rounding
+              // of cell values and the column total); no expression is stored.
+              normalizeDecimals(formulaDecimals) != null
+              ? { decimals: normalizeDecimals(formulaDecimals) as number }
+              : {}
+            : {},
       percentConfigJson:
         fieldType === "percent"
           ? {
@@ -481,6 +487,29 @@ export function PageFieldConfigDialog({
                     )}
                   </p>
                 </div>
+              </div>
+            )}
+            {fieldType === "number" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="pfcd-number-decimals">
+                  {t("fields.formulaDecimals", "Знаков после запятой (округление)")}
+                </Label>
+                <Input
+                  id="pfcd-number-decimals"
+                  type="number"
+                  min={0}
+                  max={10}
+                  value={formulaDecimals}
+                  onChange={(e) => setFormulaDecimals(e.target.value)}
+                  placeholder={t("fields.formulaDecimalsNone", "Без округления")}
+                  className="w-48"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    "fields.numberDecimalsHint",
+                    "Округляет отображение значений и сумму по столбцу. Хранимое значение не меняется. Пусто — без округления.",
+                  )}
+                </p>
               </div>
             )}
             {fieldType === "function" && (

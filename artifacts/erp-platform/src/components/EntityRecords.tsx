@@ -293,9 +293,27 @@ function valueToForm(field: Field, value: unknown): CellValue {
   return typeof value === "string" ? value : value == null ? "" : String(value);
 }
 
-/** Format a numeric column total/average for display (percent columns get a % suffix). */
-function formatTotalValue(field: { fieldType: string }, n: number): string {
-  const s = n.toLocaleString("ru-RU");
+/**
+ * Format a numeric column total/average for display (percent columns get a % suffix).
+ * Respects the field's configured "знаков после запятой": percent fields keep
+ * decimals in percentConfigJson, number/function fields in formulaConfigJson.
+ */
+function formatTotalValue(
+  field: {
+    fieldType: string;
+    formulaConfigJson?: { decimals?: number | null } | null;
+    percentConfigJson?: { decimals?: number | null } | null;
+  },
+  n: number,
+): string {
+  const d =
+    field.fieldType === "percent"
+      ? field.percentConfigJson?.decimals
+      : field.formulaConfigJson?.decimals;
+  const s =
+    d != null
+      ? n.toLocaleString("ru-RU", { minimumFractionDigits: d, maximumFractionDigits: d })
+      : n.toLocaleString("ru-RU");
   return field.fieldType === "percent" ? `${s}%` : s;
 }
 
@@ -372,6 +390,15 @@ function renderCellValue(field: Field, value: unknown, t: (key: string, def: str
     const d = field.percentConfigJson?.decimals;
     const shown = d != null ? num.toFixed(d) : String(num);
     return <span className="text-slate-700" style={colorStyle}>{shown}%</span>;
+  }
+  if (field.fieldType === "number") {
+    // Display-only rounding to the field's configured decimals (the stored
+    // value stays untouched — same contract as percent/function fields).
+    const num = typeof value === "number" ? value : Number(value);
+    if (!Number.isFinite(num)) return <span className="text-slate-700" style={colorStyle}>{String(value)}</span>;
+    const d = field.formulaConfigJson?.decimals;
+    const shown = d != null ? num.toFixed(d) : String(num);
+    return <span className="text-slate-700" style={colorStyle}>{shown}</span>;
   }
   if (field.fieldType === "date" || field.fieldType === "datetime") {
     // Stored value is ISO (yyyy-MM-dd or full ISO datetime). Display it in the
