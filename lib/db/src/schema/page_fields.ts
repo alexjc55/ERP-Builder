@@ -36,6 +36,7 @@ export const pageFieldsTable = pgTable(
     showInTable: boolean("show_in_table").notNull().default(true),
     isPinned: boolean("is_pinned").notNull().default(false),
     showColumnTotal: boolean("show_column_total").notNull().default(false),
+    wrapText: boolean("wrap_text").notNull().default(false),
     totalFillColor: text("total_fill_color"),
     totalTextColor: text("total_text_color"),
     // Base column-group membership (points at column_groups.id). A page-local

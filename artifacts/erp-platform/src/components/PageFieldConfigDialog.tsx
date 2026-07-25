@@ -149,6 +149,7 @@ export function PageFieldConfigDialog({
   const [showInTable, setShowInTable] = useState(true);
   const [isPinned, setIsPinned] = useState(false);
   const [showColumnTotal, setShowColumnTotal] = useState(false);
+  const [wrapText, setWrapText] = useState(false);
   const [totalFillColor, setTotalFillColor] = useState("");
   const [totalTextColor, setTotalTextColor] = useState("");
   const [formatRules, setFormatRules] = useState<FieldFormatRule[]>([]);
@@ -183,6 +184,7 @@ export function PageFieldConfigDialog({
       setShowInTable(field.showInTable ?? true);
       setIsPinned(field.isPinned ?? false);
       setShowColumnTotal(field.showColumnTotal ?? false);
+      setWrapText(field.wrapText ?? false);
       setTotalFillColor(field.totalFillColor ?? "");
       setTotalTextColor(field.totalTextColor ?? "");
       setFormatRules(Array.isArray(field.formatRulesJson) ? field.formatRulesJson : []);
@@ -346,6 +348,7 @@ export function PageFieldConfigDialog({
       isPinned,
       showColumnTotal:
         fieldType === "number" || fieldType === "function" || fieldType === "percent" ? showColumnTotal : false,
+      wrapText,
       totalFillColor:
         (fieldType === "number" || fieldType === "function" || fieldType === "percent") && showColumnTotal && totalFillColor
           ? totalFillColor
@@ -648,6 +651,10 @@ export function PageFieldConfigDialog({
               <div className="flex items-center gap-2">
                 <Switch checked={isPinned} onCheckedChange={setIsPinned} id="pfcd-pinned" />
                 <Label htmlFor="pfcd-pinned">{t("fields.pinColumn", "Закрепить при горизонтальной прокрутке")}</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={wrapText} onCheckedChange={setWrapText} id="pfcd-wrap-text" />
+                <Label htmlFor="pfcd-wrap-text">{t("fields.wrapText", "Переносить текст в столбце на новую строку")}</Label>
               </div>
               {(fieldType === "number" || fieldType === "function" || fieldType === "percent") && (
                 <div className="flex items-center gap-2">

@@ -3196,6 +3196,7 @@ export const ListPageFieldsResponseItem = zod.object({
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
+  "wrapText": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
   "columnGroupId": zod.number().nullish(),
@@ -3225,7 +3226,7 @@ export const createPageFieldBodyPercentConfigJsonDecimalsMax = 10;
 
 export const createPageFieldBodyShowInTableDefault = true;
 export const createPageFieldBodyIsPinnedDefault = false;
-export const createPageFieldBodyShowColumnTotalDefault = false;
+export const createPageFieldBodyWrapTextDefault = false;
 export const createPageFieldBodyIsActiveDefault = true;
 
 export const CreatePageFieldBody = zod.object({
@@ -3278,7 +3279,8 @@ export const CreatePageFieldBody = zod.object({
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().default(createPageFieldBodyShowInTableDefault),
   "isPinned": zod.boolean().default(createPageFieldBodyIsPinnedDefault),
-  "showColumnTotal": zod.boolean().default(createPageFieldBodyShowColumnTotalDefault),
+  "showColumnTotal": zod.boolean().optional(),
+  "wrapText": zod.boolean().default(createPageFieldBodyWrapTextDefault),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
   "columnGroupId": zod.number().nullish(),
@@ -3353,6 +3355,7 @@ export const UpdatePageFieldBody = zod.object({
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
+  "wrapText": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
   "columnGroupId": zod.number().nullish(),
@@ -3421,6 +3424,7 @@ export const UpdatePageFieldResponse = zod.object({
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
+  "wrapText": zod.boolean().optional(),
   "totalFillColor": zod.string().nullish(),
   "totalTextColor": zod.string().nullish(),
   "columnGroupId": zod.number().nullish(),

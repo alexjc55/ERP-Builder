@@ -5295,7 +5295,7 @@ export function EntityRecords({
                                 renderCellValue(relField, rel?.value, t, userNames, cellText, ml)
                               );
                             return (
-                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px] truncate" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                              <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
                                 {relAssignable && pageId != null ? (
                                   <RelationLinkPicker
                                     pageId={pageId}
@@ -5306,7 +5306,7 @@ export function EntityRecords({
                                     onChanged={() => setRefreshTick((x) => x + 1)}
                                   />
                                 ) : (
-                                  <div className="truncate">{display}</div>
+                                  <div className={pf.wrapText ? "whitespace-normal break-words" : "truncate"}>{display}</div>
                                 )}
                               </td>
                             );
@@ -5325,8 +5325,8 @@ export function EntityRecords({
                                 renderCellValue(relField, rel?.value, t, userNames, cellText, ml)
                               );
                             return (
-                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px] truncate" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
-                                <div className="truncate">{display}</div>
+                              <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                                <div className={pf.wrapText ? "whitespace-normal break-words" : "truncate"}>{display}</div>
                               </td>
                             );
                           }
@@ -5358,7 +5358,7 @@ export function EntityRecords({
                           if (isFunction) {
                             const computed = formatFormulaResult(pf.formulaConfigJson?.expression ?? "", formulaValues, pf.formulaConfigJson?.decimals);
                             return (
-                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px] truncate" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                              <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
                                 {computed.error ? (
                                   <span className="text-red-400 text-xs" title={t("fields.formulaError", "Ошибка формулы")}>{t("fields.formulaError", "Ошибка формулы")}</span>
                                 ) : computed.text === "" ? (
@@ -5373,7 +5373,7 @@ export function EntityRecords({
                             <td
                               key={`pf-${pf.id}`}
                               onClick={cellEditable ? () => setEditingCell({ recordId: record.id, fieldKey: pfKey }) : undefined}
-                              className={`px-4 py-3 max-w-[240px] truncate ${cellEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
+                              className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"} ${cellEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
                               style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}
                               title={cellEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
                             >

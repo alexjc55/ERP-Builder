@@ -639,6 +639,7 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
   if (body.showInTable != null) updateData.showInTable = body.showInTable;
   if (body.isPinned != null) updateData.isPinned = body.isPinned;
   if (body.showColumnTotal != null) updateData.showColumnTotal = body.showColumnTotal;
+  if (body.wrapText != null) updateData.wrapText = body.wrapText;
   if ("totalFillColor" in body) updateData.totalFillColor = body.totalFillColor ?? null;
   if ("totalTextColor" in body) updateData.totalTextColor = body.totalTextColor ?? null;
   if ("columnGroupId" in body) updateData.columnGroupId = body.columnGroupId ?? null;

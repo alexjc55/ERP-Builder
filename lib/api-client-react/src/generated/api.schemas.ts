@@ -2536,6 +2536,7 @@ export interface PageField {
   showInTable?: boolean;
   isPinned?: boolean;
   showColumnTotal?: boolean;
+  wrapText?: boolean;
   /** @nullable */
   totalFillColor?: string | null;
   /** @nullable */
@@ -2567,6 +2568,7 @@ export interface PageFieldInput {
   showInTable?: boolean;
   isPinned?: boolean;
   showColumnTotal?: boolean;
+  wrapText?: boolean;
   /** @nullable */
   totalFillColor?: string | null;
   /** @nullable */
@@ -2596,6 +2598,7 @@ export interface PageFieldUpdate {
   showInTable?: boolean;
   isPinned?: boolean;
   showColumnTotal?: boolean;
+  wrapText?: boolean;
   /** @nullable */
   totalFillColor?: string | null;
   /** @nullable */
