@@ -114,3 +114,9 @@ id = "GQHCVxCEmZmiY1COmkNLn"
 uri = "file://exports/erp-dump.sql"
 type = "unspecified"
 title = "Дамп БД ERP от 30.07 (с удалением старых таблиц)"
+
+[[outputs]]
+id = "rg3EC9F3iH-mDbbwJa7TO"
+uri = "file://exports/merge-yanush-client.sql"
+type = "unspecified"
+title = "SQL: объединение клиента ינושבסקי (для удалённого сервера)"
