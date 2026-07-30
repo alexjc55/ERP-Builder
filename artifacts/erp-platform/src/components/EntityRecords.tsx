@@ -5081,18 +5081,21 @@ export function EntityRecords({
                           <button
                             type="button"
                             onClick={() => toggleHeaderSort((fld as Field).fieldKey)}
-                            className="inline-flex items-center gap-1 hover:text-slate-900 transition"
+                            className="hover:text-slate-900 transition"
                             title={t("records.sortByColumn", "Сортировать по этой колонке")}
                           >
-                            <span>{ml(fld.nameJson)}</span>
+                            {/* Icon flows INLINE with the label text (no flex row) so the
+                                header keeps wrapping exactly like a plain-text header and
+                                the column can stay as narrow as before. */}
+                            {ml(fld.nameJson)}
                             {effectiveSorts[0]?.field === (fld as Field).fieldKey ? (
                               (effectiveSorts[0].direction ?? "asc") === "asc" ? (
-                                <ArrowUp className="w-3.5 h-3.5 shrink-0 text-blue-600" />
+                                <ArrowUp className="inline-block w-3.5 h-3.5 ml-0.5 align-[-2px] text-blue-600" />
                               ) : (
-                                <ArrowDown className="w-3.5 h-3.5 shrink-0 text-blue-600" />
+                                <ArrowDown className="inline-block w-3.5 h-3.5 ml-0.5 align-[-2px] text-blue-600" />
                               )
                             ) : (
-                              <ArrowUpDown className="w-3 h-3 opacity-40 shrink-0" />
+                              <ArrowUpDown className="inline-block w-3 h-3 ml-0.5 align-[-1px] opacity-40" />
                             )}
                           </button>
                         ) : (
