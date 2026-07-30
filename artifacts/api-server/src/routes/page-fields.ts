@@ -35,7 +35,7 @@ import {
   mostPermissiveFieldPerm,
 } from "../middlewares/permissions";
 import { ownScopeWhere, isRecordOwned } from "./own-scope";
-import { emitEvent, EVENT_PAGE_FIELD_SAVED } from "../lib/events";
+import { emitEvent, EVENT_PAGE_FIELD_SAVED, EVENT_RECORD_UPDATED } from "../lib/events";
 import {
   ListPageFieldsParams,
   CreatePageFieldParams,
@@ -1748,6 +1748,7 @@ router.put("/pages/:pageId/related-link", requireAuth, async (req, res): Promise
     linkedValues = lv;
   }
 
+  let previousLinkedIds: number[] = [];
   try {
     const lockMsg = await db.transaction(async (tx) => {
       // Lock the relation so the relationType copied into record_links cannot
@@ -1774,7 +1775,12 @@ router.put("/pages/:pageId/related-link", requireAuth, async (req, res): Promise
       // Remove the existing single link on the base record's side, then insert
       // the new one (or leave it cleared when linkedRecordId is null).
       const baseCol = direction === "source" ? recordLinksTable.sourceRecordId : recordLinksTable.targetRecordId;
-      await tx.delete(recordLinksTable).where(and(eq(recordLinksTable.relationId, relation.id), eq(baseCol, baseRecordId)));
+      const otherCol = direction === "source" ? recordLinksTable.targetRecordId : recordLinksTable.sourceRecordId;
+      const removed = await tx
+        .delete(recordLinksTable)
+        .where(and(eq(recordLinksTable.relationId, relation.id), eq(baseCol, baseRecordId)))
+        .returning({ other: otherCol });
+      previousLinkedIds = removed.map((r) => r.other);
       if (linkedRecordId != null) {
         await tx.insert(recordLinksTable).values({
           relationId: relation.id,
@@ -1796,6 +1802,25 @@ router.put("/pages/:pageId/related-link", requireAuth, async (req, res): Promise
       return;
     }
     throw err;
+  }
+
+  // A link change alters the effective relation value of the base record and of
+  // the previously/newly linked records — emit record.updated (post-commit) so
+  // automations can react, mirroring the relations.ts link endpoints.
+  {
+    const affectedLinked = [...new Set([...previousLinkedIds, ...(linkedRecordId != null ? [linkedRecordId] : [])])];
+    await emitEvent(
+      [
+        { eventName: EVENT_RECORD_UPDATED, entityId, recordId: baseRecordId, payload: { actorUserId: userId, changedFields: [] } },
+        ...affectedLinked.map((rid) => ({
+          eventName: EVENT_RECORD_UPDATED,
+          entityId: relatedEntityId,
+          recordId: rid,
+          payload: { actorUserId: userId, changedFields: [] },
+        })),
+      ],
+      req.log,
+    );
   }
 
   // Report the resulting value. The related field's hidden boundary was already

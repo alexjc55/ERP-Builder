@@ -34,3 +34,8 @@ Checking that the source/target records exist *before* the insert does not preve
 
 ## OpenAPI: avoid path + query params on the same endpoint
 In this repo's Orval setup, an endpoint with BOTH a path param AND a query param triggers a TS2308 duplicate-export collision between `generated/api.ts` and `generated/types/`. Keep list endpoints path-only; filter client-side instead (e.g. record links return all links, each carrying its relationId).
+
+## Link mutations emit record.updated
+Every record_links mutation path (relations.ts POST /records/:id/links, DELETE /links/:id, and the page-fields relation set/clear handler) emits `record.updated` for BOTH ends (and the previously linked record on replace) post-commit, with payload `{actorUserId, changedFields: []}`.
+**Why:** relation values live in record_links, not values_json — without these events, automations never see a link being set (record.created fires before the UI's separate link POST).
+**How to apply:** any NEW code path that inserts/deletes record_links rows must emit the same events; `changedFields: []` intentionally skips field_changed triggers. Automations that must react to "record linked on create" should use trigger `record_updated`, not `record_created`.
