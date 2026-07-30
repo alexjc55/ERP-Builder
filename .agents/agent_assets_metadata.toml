@@ -84,3 +84,9 @@ id = "aOCF19ObZs4LgsrLlXE-j"
 uri = "file://fix-deliveries.txt"
 type = "text"
 title = "SQL: исправление дублей доставок (копия для скачивания)"
+
+[[outputs]]
+id = "iY9T0HCRZLV1G0tXE47tm"
+uri = "file://docs/erp-import-template.xlsx"
+type = "table"
+title = "Шаблон импорта данных (Excel)"
