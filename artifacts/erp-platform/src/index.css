@@ -163,8 +163,21 @@
 @layer components {
   /* Vertical cell separators for data tables (horizontal row borders are set
      per-row in the markup; this adds the missing vertical grid lines). */
+  /* Logical side (inline-end) so the grid stays complete under RTL (Hebrew):
+     with physical border-right the boundary next to the visually-first column
+     is painted by the DOM-last cell, which :not(:last-child) excludes. */
   table th:not(:last-child),
   table td:not(:last-child) {
-    border-right: 1px solid var(--erp-table-border, hsl(var(--border) / 0.7));
+    border-inline-end: 1px solid var(--erp-table-border, hsl(var(--border) / 0.7));
+  }
+  /* The records header row is sticky while the table uses border-collapse;
+     collapsed borders belong to the table layer and do NOT travel with a stuck
+     header (they stay behind on scroll), so the header looks border-less.
+     Paint its separators as an inset shadow that moves with the sticky cell. */
+  tr.erp-main-header > th:not(:last-child) {
+    box-shadow: inset -1px 0 0 var(--erp-table-border, hsl(var(--border) / 0.7));
+  }
+  [dir="rtl"] tr.erp-main-header > th:not(:last-child) {
+    box-shadow: inset 1px 0 0 var(--erp-table-border, hsl(var(--border) / 0.7));
   }
 }

@@ -155,9 +155,13 @@ export async function loadMergedPermissions(roleIds: number[]): Promise<RolePerm
     .select({ id: rolesTable.id, permissionsJson: rolesTable.permissionsJson })
     .from(rolesTable)
     .where(inArray(rolesTable.id, ids));
-  const merged = mergePermissions(rows.map((r) => r.permissionsJson ?? NO_ACCESS_PERMS));
-  if (rows.length > 1) {
-    merged.perRole = Object.fromEntries(rows.map((r) => [String(r.id), r.permissionsJson ?? NO_ACCESS_PERMS]));
+  // Re-apply caller order (primary role first): SQL `IN` gives no ordering
+  // guarantee, and homePageId is resolved as "first non-null in list order".
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const ordered = ids.map((id) => byId.get(id)).filter((r): r is NonNullable<typeof r> => r != null);
+  const merged = mergePermissions(ordered.map((r) => r.permissionsJson ?? NO_ACCESS_PERMS));
+  if (ordered.length > 1) {
+    merged.perRole = Object.fromEntries(ordered.map((r) => [String(r.id), r.permissionsJson ?? NO_ACCESS_PERMS]));
   }
   return merged;
 }

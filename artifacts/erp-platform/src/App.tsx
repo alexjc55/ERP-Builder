@@ -142,6 +142,9 @@ function HomeRoute() {
       .filter((p: Page) => p.isActive && p.path && p.path !== "/" && !p.path.startsWith("/admin/") && canPage(p.id))
       .sort((a: Page, b: Page) => a.sortOrder - b.sortOrder)[0];
     if (fallback) return <Redirect to={fallback.path!} />;
+    // No accessible content page either: show an explicit no-access screen
+    // instead of silently rendering the denied dashboard.
+    return <NoAccess />;
   }
 
   const homePage = pages.find((p: Page) => p.path === "/");

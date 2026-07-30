@@ -64,9 +64,9 @@ export default function DynamicPage() {
   const entity = mirrorEntity ?? entities.find((e: Entity) => e.pageId === page.id && e.isActive);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="px-6 py-4 space-y-3">
       <div>
-        <h1 className="text-2xl font-bold text-slate-800">{ml(page.nameJson)}</h1>
+        <h1 className="text-xl font-bold text-slate-800">{ml(page.nameJson)}</h1>
         {ml(page.descriptionJson) && (
           <p className="text-sm text-slate-500 mt-0.5">{ml(page.descriptionJson)}</p>
         )}

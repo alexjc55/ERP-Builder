@@ -4071,6 +4071,26 @@ export function EntityRecords({
               </button>
             ))}
           </div>
+          {/* Collapsed filters toggle lives INLINE in the toolbar row so the
+              header stays one row tall on desktop instead of adding a row. */}
+          {!setupMode && (statuses.length > 0 || filterableFields.length > 0 || filterablePageFields.length > 0 || customFilterDefs.length > 0 || hasExclusion) && filtersBarCollapsed && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 text-xs text-slate-600 w-full sm:w-auto"
+              onClick={toggleFiltersCollapsed}
+            >
+              <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              {t("records.filtersShow", "Показать фильтры")}
+              {(statusFilter.length > 0 || Object.keys(fieldFilters).length > 0) && (
+                <Badge variant="secondary" className="ml-0.5 px-1.5">
+                  {statusFilter.length + Object.keys(fieldFilters).length}
+                </Badge>
+              )}
+              <ChevronDown className="w-3.5 h-3.5 opacity-60 shrink-0" />
+            </Button>
+          )}
         </div>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
           {pivotAvailable && !setupMode && (
@@ -4157,26 +4177,6 @@ export function EntityRecords({
         </div>
       </div>
 
-      {!setupMode && (statuses.length > 0 || filterableFields.length > 0 || filterablePageFields.length > 0 || customFilterDefs.length > 0 || hasExclusion) && filtersBarCollapsed && (
-        <div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 text-xs text-slate-600"
-            onClick={toggleFiltersCollapsed}
-          >
-            <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-            {t("records.filtersShow", "Показать фильтры")}
-            {(statusFilter.length > 0 || Object.keys(fieldFilters).length > 0) && (
-              <Badge variant="secondary" className="ml-0.5 px-1.5">
-                {statusFilter.length + Object.keys(fieldFilters).length}
-              </Badge>
-            )}
-            <ChevronDown className="w-3.5 h-3.5 opacity-60 shrink-0" />
-          </Button>
-        </div>
-      )}
       {!setupMode && (statuses.length > 0 || filterableFields.length > 0 || filterablePageFields.length > 0 || customFilterDefs.length > 0 || hasExclusion) && !filtersBarCollapsed && (
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
           <button
@@ -4851,7 +4851,7 @@ export function EntityRecords({
                     </tr>
                   )}
                   <tr
-                    className={cn("border-b border-slate-100 bg-slate-50", boldHeader && "bg-slate-200 text-slate-800 font-semibold border-b-2 border-slate-300")}
+                    className={cn("erp-main-header border-b border-slate-100 bg-slate-50", boldHeader && "bg-slate-200 text-slate-800 font-semibold border-b-2 border-slate-300")}
                     style={headerColor ? { backgroundColor: headerColor } : undefined}
                   >
                     {orderedColumns.map((col, ui) => {
@@ -5081,22 +5081,24 @@ export function EntityRecords({
                           <button
                             type="button"
                             onClick={() => toggleHeaderSort((fld as Field).fieldKey)}
-                            className="hover:text-slate-900 transition"
+                            className="relative inline-block max-w-full pe-4 hover:text-slate-900 transition"
                             title={t("records.sortByColumn", "Сортировать по этой колонке")}
                           >
-                            {/* Icon flows INLINE with the label text (no flex row) so the
-                                header keeps wrapping exactly like a plain-text header and
-                                the column can stay as narrow as before. */}
+                            {/* The label wraps freely (column can stay narrow), while the
+                                sort icon is absolutely pinned to the inline-end edge of
+                                the header — it never jumps to another line. */}
                             {ml(fld.nameJson)}
-                            {effectiveSorts[0]?.field === (fld as Field).fieldKey ? (
-                              (effectiveSorts[0].direction ?? "asc") === "asc" ? (
-                                <ArrowUp className="inline-block w-3.5 h-3.5 ml-0.5 align-[-2px] text-blue-600" />
+                            <span className="absolute end-0 top-1/2 -translate-y-1/2">
+                              {effectiveSorts[0]?.field === (fld as Field).fieldKey ? (
+                                (effectiveSorts[0].direction ?? "asc") === "asc" ? (
+                                  <ArrowUp className="w-3.5 h-3.5 text-blue-600" />
+                                ) : (
+                                  <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                                )
                               ) : (
-                                <ArrowDown className="inline-block w-3.5 h-3.5 ml-0.5 align-[-2px] text-blue-600" />
-                              )
-                            ) : (
-                              <ArrowUpDown className="inline-block w-3 h-3 ml-0.5 align-[-1px] opacity-40" />
-                            )}
+                                <ArrowUpDown className="w-3 h-3 opacity-40" />
+                              )}
+                            </span>
                           </button>
                         ) : (
                           ml(fld.nameJson)
