@@ -2235,6 +2235,38 @@ export function EntityRecords({
   // keep the previous table on screen so it never blinks out from under the user.
   const [hasLoadedRecords, setHasLoadedRecords] = useState(false);
 
+  // Dynamic table height: cap the scroll container so the horizontal scrollbar
+  // and the pagination below it stay inside the viewport without scrolling the
+  // PAGE. The old fixed `100vh - 12rem` broke whenever content above the table
+  // (title, widgets, expanded filters) was taller/shorter than assumed, so we
+  // measure the container's actual top offset and subtract room for pagination.
+  const [tableMaxHeight, setTableMaxHeight] = useState<string>("calc(100vh - 12rem)");
+  useLayoutEffect(() => {
+    const el = tableScrollRef.current;
+    if (!el) return;
+    const RESERVED_BELOW = 64; // pagination row + margins
+    const MIN_HEIGHT = 240; // never squeeze the table into a sliver
+    const measure = () => {
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      const h = Math.max(window.innerHeight - top - RESERVED_BELOW, MIN_HEIGHT);
+      setTableMaxHeight(`${h}px`);
+    };
+    measure();
+    // Content above the table changes height (filters expand/collapse, widgets
+    // load) — watch the whole body, not just window resizes.
+    const ro = new ResizeObserver(measure);
+    ro.observe(document.body);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+    // Re-attach once the real table container mounts (it's absent while the
+    // first-load skeleton renders). Same-value setState is a React no-op, so
+    // the body observer can't loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordsLoading, hasLoadedRecords]);
+
   const selectedView: View | undefined =
     selectedViewId === NO_VIEW ? undefined : views.find((v: View) => String(v.id) === selectedViewId);
   const selectedConfig = (selectedView?.configJson ?? {}) as ViewConfig;
@@ -4778,7 +4810,7 @@ export function EntityRecords({
               {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
             </div>
           ) : (
-            <div ref={tableScrollRef} className="overflow-auto pb-3 max-h-[calc(100vh-12rem)]">
+            <div ref={tableScrollRef} className="overflow-auto pb-3" style={{ maxHeight: tableMaxHeight }}>
               <table
                 className="w-full text-sm"
                 style={borderColor ? ({ "--erp-table-border": borderColor } as CSSProperties) : undefined}
