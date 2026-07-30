@@ -493,6 +493,17 @@ export function buildRecordQuery(
     }
     const field = fieldByKey.get(s.field);
     if (!field) return { error: `Unknown sort field: ${s.field}` };
+    // relation/lookup: no scalar in values_json — order by the single linked
+    // record's projected value (same subquery as relation filters). Numeric-
+    // looking values sort naturally first ("9" < "10"), then text as tiebreak.
+    const relMeta = relationMeta.get(s.field);
+    if (relMeta) {
+      const rv = relationValueScalar(relMeta);
+      const numExpr = sql`(CASE WHEN ${rv} ~ '^-?[0-9]+(\.[0-9]+)?$' THEN (${rv})::numeric END)`;
+      orderBy.push(s.direction === "desc" ? desc(numExpr) : asc(numExpr));
+      orderBy.push(s.direction === "desc" ? desc(rv) : asc(rv));
+      continue;
+    }
     let expr: SQL = textExpr(s.field);
     if (NUMERIC_TYPES.has(field.fieldType)) expr = sql`(${textExpr(s.field)})::numeric`;
     else if (DATE_TYPES.has(field.fieldType)) expr = sql`(${textExpr(s.field)})::timestamptz`;

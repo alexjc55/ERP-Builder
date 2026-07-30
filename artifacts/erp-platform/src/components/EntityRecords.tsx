@@ -236,9 +236,10 @@ function readableStatusTextColor(hex: string): string {
 const SYSTEM_SORT_CREATED_AT = "__created_at__";
 const SYSTEM_SORT_RECORD_ID = "__record_id__";
 const SYSTEM_SORT_KEYS = new Set<string>([SYSTEM_SORT_CREATED_AT, SYSTEM_SORT_RECORD_ID]);
-// Column types that cannot be sorted server-side (no scalar in valuesJson, or
-// computed client-side only).
-const NON_SORTABLE_FIELD_TYPES = new Set<string>(["relation", "lookup", "function", "formula", "file"]);
+// Column types that cannot be sorted server-side (computed client-side only, or
+// no comparable value). relation/lookup ARE sortable: the server orders by the
+// single linked record's projected value.
+const NON_SORTABLE_FIELD_TYPES = new Set<string>(["function", "formula", "file"]);
 
 function extractError(err: unknown): string | undefined {
   if (err && typeof err === "object") {
