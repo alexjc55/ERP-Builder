@@ -11,6 +11,7 @@ import type { FieldPermissions } from './fieldPermissions';
 import type { FieldType } from './fieldType';
 import type { FieldValidationRule } from './fieldValidationRule';
 import type { FileFieldConfig } from './fileFieldConfig';
+import type { FormatInheritSource } from './formatInheritSource';
 import type { FormulaFieldConfig } from './formulaFieldConfig';
 import type { MultilingualText } from './multilingualText';
 import type { PercentFieldConfig } from './percentFieldConfig';
@@ -32,6 +33,7 @@ export interface FieldUpdate {
   fileConfigJson?: FileFieldConfig;
   userConfigJson?: UserFieldConfig;
   formatRulesJson?: FieldFormatRule[];
+  formatInheritJson?: FormatInheritSource[];
   validationRulesJson?: FieldValidationRule[];
   formulaConfigJson?: FormulaFieldConfig;
   percentConfigJson?: PercentFieldConfig;

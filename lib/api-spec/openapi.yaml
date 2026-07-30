@@ -5490,6 +5490,26 @@ components:
         textColor:
           type: string
 
+    FormatInheritSource:
+      type: object
+      required: [kind]
+      description: >-
+        One source a field inherits conditional formatting from. Used when the
+        field's value is copied from elsewhere by automations: at read time the
+        source's rules are resolved server-side and appended after the field's
+        own formatRulesJson. kind "field" inherits the source entity field's
+        format rules (entityId + fieldKey required); kind "status" turns each of
+        the source entity's record statuses into equals-rules painted with the
+        status color (entityId required).
+      properties:
+        kind:
+          type: string
+          enum: [field, status]
+        entityId:
+          type: integer
+        fieldKey:
+          type: string
+
     ValidationOperator:
       type: string
       enum:
@@ -5683,6 +5703,16 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FieldFormatRule"
+        formatInheritJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/FormatInheritSource"
+        inheritedFormatRulesJson:
+          type: array
+          readOnly: true
+          description: Resolved rules inherited from formatInheritJson sources (response-only; apply after formatRulesJson).
+          items:
+            $ref: "#/components/schemas/FieldFormatRule"
         validationRulesJson:
           type: array
           items:
@@ -5762,6 +5792,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FieldFormatRule"
+        formatInheritJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/FormatInheritSource"
         validationRulesJson:
           type: array
           items:
@@ -5858,6 +5892,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FieldFormatRule"
+        formatInheritJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/FormatInheritSource"
         validationRulesJson:
           type: array
           items:

@@ -10,10 +10,12 @@ import {
   type Relation,
   type RelationFieldConfig,
 } from "@workspace/db";
+import type { FormatInheritSource } from "@workspace/db";
 import { eq, asc, and, ne, inArray, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
 import { sanitizeOptionsInput, normalizeOptions } from "../lib/selectOptions";
+import { validateFormatInherit, withInheritedFormatRules } from "../lib/format-inherit";
 import {
   ListEntityFieldsParams,
   CreateEntityFieldParams,
@@ -222,7 +224,7 @@ router.get("/entities/:entityId/fields", requireAuth, async (req, res): Promise<
     .where(eq(entityFieldsTable.entityId, params.data.entityId))
     .orderBy(asc(entityFieldsTable.sortOrder));
 
-  res.json(fields);
+  res.json(await withInheritedFormatRules(fields));
 });
 
 router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
@@ -249,6 +251,14 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
       error: "Field key must be lowercase and contain only letters, digits and underscores, starting with a letter",
     });
     return;
+  }
+
+  if (parsed.data.formatInheritJson != null) {
+    const inheritErr = validateFormatInherit(parsed.data.formatInheritJson);
+    if (inheritErr) {
+      res.status(400).json({ error: inheritErr });
+      return;
+    }
   }
 
   const createName = parsed.data.nameJson as Record<string, unknown> | null | undefined;
@@ -330,6 +340,8 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
       .insert(entityFieldsTable)
       .values({
         ...parsed.data,
+        // Validated above; the generated API type is looser than the db union.
+        formatInheritJson: (parsed.data.formatInheritJson ?? []) as FormatInheritSource[],
         optionsJson: createOptions,
         formulaConfigJson: clampFormulaDecimals(parsed.data.formulaConfigJson),
         percentConfigJson: clampFormulaDecimals(parsed.data.percentConfigJson),
@@ -413,7 +425,7 @@ router.get("/fields/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(field);
+  res.json((await withInheritedFormatRules([field]))[0]);
 });
 
 router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
@@ -580,6 +592,15 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   if (body.defaultToToday != null) updateData.defaultToToday = body.defaultToToday;
   if (sanitizedOptions != null) updateData.optionsJson = sanitizedOptions;
   if (body.formatRulesJson != null) updateData.formatRulesJson = body.formatRulesJson;
+  if (body.formatInheritJson != null) {
+    const inheritErr = validateFormatInherit(body.formatInheritJson);
+    if (inheritErr) {
+      res.status(400).json({ error: inheritErr });
+      return;
+    }
+    // Validated above; the generated API type is looser than the db union.
+    updateData.formatInheritJson = body.formatInheritJson as FormatInheritSource[];
+  }
   if (body.validationRulesJson != null) updateData.validationRulesJson = body.validationRulesJson;
   if (body.formulaConfigJson != null)
     updateData.formulaConfigJson = clampFormulaDecimals(body.formulaConfigJson);

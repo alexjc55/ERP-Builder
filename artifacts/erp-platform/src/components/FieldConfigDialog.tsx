@@ -19,6 +19,7 @@ import {
   type FileSource,
   type FieldFormatRule,
   type FieldValidationRule,
+  type FormatInheritSource,
 } from "@workspace/api-client-react";
 
 /** Flatten managed Drive folders into a depth-ordered list for indented display. */
@@ -76,6 +77,7 @@ import { SelectOptionsEditor } from "@/components/SelectOptionsEditor";
 import { PercentOptionsEditor } from "@/components/PercentOptionsEditor";
 import { normalizeSelectOptions, type SelectOption } from "@/lib/selectOptions";
 import { FieldFormatRulesEditor } from "@/components/FieldFormatRulesEditor";
+import { FormatInheritEditor } from "@/components/FormatInheritEditor";
 import { FieldValidationRulesEditor, type OtherField } from "@/components/FieldValidationRulesEditor";
 import { ColorPickerControl } from "@/components/ColorPickerControl";
 import { useToast } from "@/hooks/use-toast";
@@ -190,6 +192,7 @@ export function FieldConfigDialog({
   const [allowedRoleIds, setAllowedRoleIds] = useState<number[]>([]);
   const [allowCreateUser, setAllowCreateUser] = useState(false);
   const [formatRules, setFormatRules] = useState<FieldFormatRule[]>([]);
+  const [formatInherit, setFormatInherit] = useState<FormatInheritSource[]>([]);
   // For a `user` field restricted to certain roles ("Доступные роли пользователей"),
   // the format-rule value picker must offer the SAME narrowed user list — otherwise
   // an admin can pick someone the field can never hold. Uses the LIVE allowedRoleIds
@@ -263,6 +266,7 @@ export function FieldConfigDialog({
       );
       setAllowCreateUser(field.userConfigJson?.allowCreate === true);
       setFormatRules(Array.isArray(field.formatRulesJson) ? field.formatRulesJson : []);
+      setFormatInherit(Array.isArray(field.formatInheritJson) ? [...field.formatInheritJson] : []);
       setValidationRules(Array.isArray(field.validationRulesJson) ? field.validationRulesJson : []);
       setFormula(field.formulaConfigJson?.expression ?? "");
       setFormulaDecimals(
@@ -303,6 +307,7 @@ export function FieldConfigDialog({
       setAllowedRoleIds([]);
       setAllowCreateUser(false);
       setFormatRules([]);
+      setFormatInherit([]);
       setValidationRules([]);
       setFormula("");
       setFormulaDecimals("");
@@ -484,6 +489,11 @@ export function FieldConfigDialog({
           : {},
       userConfigJson: fieldType === "user" ? { allowedRoleIds, allowCreate: allowCreateUser } : {},
       formatRulesJson: formatRules,
+      // Only fully-specified sources are saved (entity picked; field sources
+      // also need a fieldKey) — the server rejects incomplete ones.
+      formatInheritJson: formatInherit.filter(
+        (s) => s.entityId != null && (s.kind === "status" || (s.kind === "field" && !!s.fieldKey)),
+      ),
       validationRulesJson: validationRules,
       formulaConfigJson:
         fieldType === "function"
@@ -1097,6 +1107,10 @@ export function FieldConfigDialog({
                 rules={formatRules}
                 onChange={setFormatRules}
               />
+            </div>
+
+            <div className="border-t border-slate-100 pt-4">
+              <FormatInheritEditor sources={formatInherit} onChange={setFormatInherit} />
             </div>
 
             <div className="border-t border-slate-100 pt-4">

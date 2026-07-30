@@ -60,6 +60,21 @@ export type FieldFormatRule = {
   textColor?: string;
 };
 
+/**
+ * One source a field can inherit conditional formatting from. Used by fields
+ * whose value is COPIED from elsewhere by automations (e.g. an order's
+ * "Общий статус" filled from an изделие's status fields): at read time the
+ * inherited rules are resolved server-side and appended after the field's own
+ * formatRulesJson, so the copied value is painted exactly like the source.
+ * - kind "field": the source entity field's formatRulesJson is inherited.
+ * - kind "status": each of the source entity's record statuses becomes an
+ *   `equals` rule (matching any of its ru/en/he labels) painted with the
+ *   status color.
+ */
+export type FormatInheritSource =
+  | { kind: "field"; entityId: number; fieldKey: string }
+  | { kind: "status"; entityId: number };
+
 /** Comparison used by a cross-field validation (fill) rule. */
 export type ValidationOperator =
   | "empty"
@@ -157,6 +172,9 @@ export const entityFieldsTable = pgTable(
     fileConfigJson: jsonb("file_config_json").$type<FileFieldConfig>().notNull().default({}),
     userConfigJson: jsonb("user_config_json").$type<UserFieldConfig>().notNull().default({}),
     formatRulesJson: jsonb("format_rules_json").$type<FieldFormatRule[]>().notNull().default([]),
+    // Sources this field inherits conditional formatting from (resolved at read
+    // time, appended after formatRulesJson). Empty [] = no inheritance.
+    formatInheritJson: jsonb("format_inherit_json").$type<FormatInheritSource[]>().notNull().default([]),
     // Cross-field validation (fill) rules — hard constraint on record save,
     // distinct from the cosmetic formatRulesJson. Empty [] = no constraints.
     validationRulesJson: jsonb("validation_rules_json").$type<FieldValidationRule[]>().notNull().default([]),

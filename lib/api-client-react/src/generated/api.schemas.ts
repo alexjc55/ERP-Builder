@@ -2213,6 +2213,23 @@ export interface FieldFormatRule {
   textColor?: string;
 }
 
+export type FormatInheritSourceKind = typeof FormatInheritSourceKind[keyof typeof FormatInheritSourceKind];
+
+
+export const FormatInheritSourceKind = {
+  field: 'field',
+  status: 'status',
+} as const;
+
+/**
+ * One source a field inherits conditional formatting from. Used when the field's value is copied from elsewhere by automations: at read time the source's rules are resolved server-side and appended after the field's own formatRulesJson. kind "field" inherits the source entity field's format rules (entityId + fieldKey required); kind "status" turns each of the source entity's record statuses into equals-rules painted with the status color (entityId required).
+ */
+export interface FormatInheritSource {
+  kind: FormatInheritSourceKind;
+  entityId?: number;
+  fieldKey?: string;
+}
+
 export type ValidationOperator = typeof ValidationOperator[keyof typeof ValidationOperator];
 
 
@@ -2357,6 +2374,9 @@ export interface Field {
   fileConfigJson?: FileFieldConfig;
   userConfigJson?: UserFieldConfig;
   formatRulesJson?: FieldFormatRule[];
+  formatInheritJson?: FormatInheritSource[];
+  /** Resolved rules inherited from formatInheritJson sources (response-only; apply after formatRulesJson). */
+  readonly inheritedFormatRulesJson?: readonly FieldFormatRule[];
   validationRulesJson?: FieldValidationRule[];
   formulaConfigJson?: FormulaFieldConfig;
   percentConfigJson?: PercentFieldConfig;
@@ -2396,6 +2416,7 @@ export interface FieldInput {
   fileConfigJson?: FileFieldConfig;
   userConfigJson?: UserFieldConfig;
   formatRulesJson?: FieldFormatRule[];
+  formatInheritJson?: FormatInheritSource[];
   validationRulesJson?: FieldValidationRule[];
   formulaConfigJson?: FormulaFieldConfig;
   percentConfigJson?: PercentFieldConfig;
@@ -2443,6 +2464,7 @@ export interface FieldUpdate {
   fileConfigJson?: FileFieldConfig;
   userConfigJson?: UserFieldConfig;
   formatRulesJson?: FieldFormatRule[];
+  formatInheritJson?: FormatInheritSource[];
   validationRulesJson?: FieldValidationRule[];
   formulaConfigJson?: FormulaFieldConfig;
   percentConfigJson?: PercentFieldConfig;

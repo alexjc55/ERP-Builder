@@ -122,6 +122,8 @@ export * from './filterOperator';
 export * from './filterValuesQuery';
 export * from './filterValuesQueryFilterConjunction';
 export * from './filterValuesResult';
+export * from './formatInheritSource';
+export * from './formatInheritSourceKind';
 export * from './formatOperator';
 export * from './formulaFieldConfig';
 export * from './googleDriveAuthUrl';

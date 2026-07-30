@@ -3980,8 +3980,8 @@ export function EntityRecords({
             // Conditional formatting: since every row in the group shares this
             // value, the first matching rule colours the group cell exactly
             // like it colours the individual cells (cell fill + text colour).
-            const rules =
-              ((col.field as { formatRulesJson?: FieldFormatRule[] | null }).formatRulesJson ?? []);
+            const colField = col.field as { formatRulesJson?: FieldFormatRule[] | null; inheritedFormatRulesJson?: FieldFormatRule[] | null };
+            const rules = [...(colField.formatRulesJson ?? []), ...(colField.inheritedFormatRulesJson ?? [])];
             for (const rule of rules) {
               if (ruleMatches(rule, renderValue)) {
                 if (rule.cellColor) commonCellColor = rule.cellColor;
@@ -5459,7 +5459,12 @@ export function EntityRecords({
                     const status = record.statusId != null ? statusById.get(record.statusId) : undefined;
                     // Conditional formatting across both entity and page columns.
                     const formatFields: FormatField[] = [
-                      ...displayFields.map((f: Field) => ({ fieldKey: f.fieldKey, formatRulesJson: f.formatRulesJson })),
+                      // Own rules first, then rules inherited from the field's
+                      // formatInheritJson sources (first match wins overall).
+                      ...displayFields.map((f: Field) => ({
+                        fieldKey: f.fieldKey,
+                        formatRulesJson: [...(f.formatRulesJson ?? []), ...(f.inheritedFormatRulesJson ?? [])],
+                      })),
                       ...displayedPageFields.map((pf: PageField) => ({ fieldKey: pf.fieldKey, formatRulesJson: pf.formatRulesJson })),
                     ];
                     const formatFieldByKey = new Map<string, { fieldType: string; formulaConfigJson?: { expression?: string } | null }>([
