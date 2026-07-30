@@ -2219,14 +2219,16 @@ export type FormatInheritSourceKind = typeof FormatInheritSourceKind[keyof typeo
 export const FormatInheritSourceKind = {
   field: 'field',
   status: 'status',
+  pageField: 'pageField',
 } as const;
 
 /**
- * One source a field inherits conditional formatting from. Used when the field's value is copied from elsewhere by automations: at read time the source's rules are resolved server-side and appended after the field's own formatRulesJson. kind "field" inherits the source entity field's format rules (entityId + fieldKey required); kind "status" turns each of the source entity's record statuses into equals-rules painted with the status color (entityId required).
+ * One source a field inherits conditional formatting from. Used when the field's value is copied from elsewhere by automations: at read time the source's rules are resolved server-side and appended after the field's own formatRulesJson. kind "field" inherits the source entity field's format rules (entityId + fieldKey required); kind "status" turns each of the source entity's record statuses into equals-rules painted with the status color (entityId required); kind "pageField" inherits a page-local field's format rules (pageId + fieldKey required).
  */
 export interface FormatInheritSource {
   kind: FormatInheritSourceKind;
   entityId?: number;
+  pageId?: number;
   fieldKey?: string;
 }
 

@@ -2,6 +2,7 @@ import {
   db,
   entityFieldsTable,
   entityStatusesTable,
+  pageFieldsTable,
   type FieldFormatRule,
   type FormatInheritSource,
 } from "@workspace/db";
@@ -35,6 +36,9 @@ export function validateFormatInherit(input: unknown): string | null {
     } else if (src.kind === "field") {
       if (!Number.isInteger(src.entityId)) return "Источник-поле: не указана сущность";
       if (typeof src.fieldKey !== "string" || src.fieldKey === "") return "Источник-поле: не указано поле";
+    } else if (src.kind === "pageField") {
+      if (!Number.isInteger(src.pageId)) return "Источник-поле страницы: не указана страница";
+      if (typeof src.fieldKey !== "string" || src.fieldKey === "") return "Источник-поле страницы: не указано поле";
     } else {
       return "Некорректный тип источника форматирования";
     }
@@ -65,9 +69,10 @@ function statusRulesFor(nameJson: unknown, color: string): FieldFormatRule[] {
  */
 async function buildResolver(allSources: FormatInheritSource[]): Promise<(sources: FormatInheritSource[]) => FieldFormatRule[]> {
   const fieldSrcs = allSources.filter((s): s is Extract<FormatInheritSource, { kind: "field" }> => s.kind === "field");
+  const pageFieldSrcs = allSources.filter((s): s is Extract<FormatInheritSource, { kind: "pageField" }> => s.kind === "pageField");
   const statusEntityIds = [...new Set(allSources.filter((s) => s.kind === "status").map((s) => s.entityId))];
 
-  const [srcFields, srcStatuses] = await Promise.all([
+  const [srcFields, srcStatuses, srcPageFields] = await Promise.all([
     fieldSrcs.length
       ? db
           .select({
@@ -95,6 +100,22 @@ async function buildResolver(allSources: FormatInheritSource[]): Promise<(source
           .from(entityStatusesTable)
           .where(and(inArray(entityStatusesTable.entityId, statusEntityIds), eq(entityStatusesTable.isActive, true)))
       : Promise.resolve([] as { entityId: number; nameJson: unknown; color: string; sortOrder: number }[]),
+    pageFieldSrcs.length
+      ? db
+          .select({
+            pageId: pageFieldsTable.pageId,
+            fieldKey: pageFieldsTable.fieldKey,
+            formatRulesJson: pageFieldsTable.formatRulesJson,
+          })
+          .from(pageFieldsTable)
+          .where(
+            and(
+              inArray(pageFieldsTable.pageId, [...new Set(pageFieldSrcs.map((s) => s.pageId))]),
+              inArray(pageFieldsTable.fieldKey, [...new Set(pageFieldSrcs.map((s) => s.fieldKey))]),
+              eq(pageFieldsTable.isActive, true),
+            ),
+          )
+      : Promise.resolve([] as { pageId: number; fieldKey: string; formatRulesJson: unknown }[]),
   ]);
 
   return (sources: FormatInheritSource[]): FieldFormatRule[] => {
@@ -103,6 +124,9 @@ async function buildResolver(allSources: FormatInheritSource[]): Promise<(source
       if (src.kind === "field") {
         const f = srcFields.find((sf) => sf.entityId === src.entityId && sf.fieldKey === src.fieldKey);
         if (f && Array.isArray(f.formatRulesJson)) rules.push(...(f.formatRulesJson as FieldFormatRule[]));
+      } else if (src.kind === "pageField") {
+        const pf = srcPageFields.find((sf) => sf.pageId === src.pageId && sf.fieldKey === src.fieldKey);
+        if (pf && Array.isArray(pf.formatRulesJson)) rules.push(...(pf.formatRulesJson as FieldFormatRule[]));
       } else {
         const statuses = srcStatuses
           .filter((st) => st.entityId === src.entityId)

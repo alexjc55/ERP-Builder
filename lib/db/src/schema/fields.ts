@@ -70,10 +70,13 @@ export type FieldFormatRule = {
  * - kind "status": each of the source entity's record statuses becomes an
  *   `equals` rule (matching any of its ru/en/he labels) painted with the
  *   status color.
+ * - kind "pageField": a page-local (mirror page) field's formatRulesJson is
+ *   inherited — for values copied from page fields like «Статус монтажа».
  */
 export type FormatInheritSource =
   | { kind: "field"; entityId: number; fieldKey: string }
-  | { kind: "status"; entityId: number };
+  | { kind: "status"; entityId: number }
+  | { kind: "pageField"; pageId: number; fieldKey: string };
 
 /** Comparison used by a cross-field validation (fill) rule. */
 export type ValidationOperator =

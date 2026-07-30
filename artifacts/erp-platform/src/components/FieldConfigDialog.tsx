@@ -491,8 +491,12 @@ export function FieldConfigDialog({
       formatRulesJson: formatRules,
       // Only fully-specified sources are saved (entity picked; field sources
       // also need a fieldKey) — the server rejects incomplete ones.
-      formatInheritJson: formatInherit.filter(
-        (s) => s.entityId != null && (s.kind === "status" || (s.kind === "field" && !!s.fieldKey)),
+      formatInheritJson: formatInherit.filter((s) =>
+        s.kind === "status"
+          ? s.entityId != null
+          : s.kind === "pageField"
+            ? s.pageId != null && !!s.fieldKey
+            : s.entityId != null && !!s.fieldKey,
       ),
       validationRulesJson: validationRules,
       formulaConfigJson:

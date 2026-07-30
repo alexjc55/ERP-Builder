@@ -3,7 +3,7 @@ name: Field format inheritance
 description: entity_fields.formatInheritJson — a field inherits conditional formatting from other entities' fields/statuses; resolved server-side into response-only inheritedFormatRulesJson.
 ---
 
-A field whose value is COPIED by automations (e.g. заказ «Общий статус» filled from изделие statuses) can declare `formatInheritJson` sources: `{kind:"field",entityId,fieldKey}` (inherits that field's formatRulesJson) or `{kind:"status",entityId}` (each active status → `equals` rules for every ru/en/he label, cellColor `${color}20`, textColor = color).
+A field whose value is COPIED by automations (e.g. заказ «Общий статус» filled from изделие statuses) can declare `formatInheritJson` sources: `{kind:"field",entityId,fieldKey}` (inherits that field's formatRulesJson), `{kind:"status",entityId}` (each active status → `equals` rules for every ru/en/he label, cellColor `${color}20`, textColor = color), or `{kind:"pageField",pageId,fieldKey}` (a mirror page's page-local field's rules — e.g. «Статус монтажа»).
 
 **Rules:**
 - Resolution happens server-side at READ time (`lib/format-inherit.ts`), attached as response-only `inheritedFormatRulesJson` on the entity-fields GET endpoints. NEVER merge inherited rules into `formatRulesJson` in responses — the field editor round-trips that column and would persist them.
@@ -12,4 +12,4 @@ A field whose value is COPIED by automations (e.g. заказ «Общий ст�
 - No RBAC issue: only cosmetic source config (rules/colors) is exposed, no record values.
 - **Why** status labels match by ANY language: automations copy one language's label string; matching all labels keeps it working regardless of which language was configured.
 
-**v1 limits:** sources are entity fields + entity statuses only — PAGE-LOCAL field sources (e.g. a mirror page's select) are not supported; page fields also cannot inherit.
+**Limits:** page fields themselves cannot inherit (only entity fields carry formatInheritJson); source picker offers pages only when they are mirror pages (page-local fields exist only there).

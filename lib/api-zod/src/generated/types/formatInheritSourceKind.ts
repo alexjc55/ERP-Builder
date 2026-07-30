@@ -12,4 +12,5 @@ export type FormatInheritSourceKind = typeof FormatInheritSourceKind[keyof typeo
 export const FormatInheritSourceKind = {
   field: 'field',
   status: 'status',
+  pageField: 'pageField',
 } as const;
