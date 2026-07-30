@@ -131,7 +131,7 @@ function extractError(err: unknown): string | undefined {
 const SYSTEM_SORT_CREATED_AT = "__created_at__";
 const SYSTEM_SORT_RECORD_ID = "__record_id__";
 // Allowed rows-per-page choices for the records table (0 is the "inherit" sentinel).
-const PAGE_SIZE_CHOICES: number[] = [50, 100, 200];
+const PAGE_SIZE_CHOICES: number[] = [50, 100, 200, 300, 500];
 
 
 export default function EntityViewsPage() {
@@ -593,7 +593,7 @@ export default function EntityViewsPage() {
       const cleaned = visibleFields.filter((k) => activeKeys.has(k));
       if (cleaned.length > 0) base.visibleFields = cleaned;
       // 0 = inherit (entity default / 50) — not written to config.
-      if (PAGE_SIZE_CHOICES.includes(viewPageSize) && viewPageSize !== 0) base.pageSize = viewPageSize as 50 | 100 | 200;
+      if (PAGE_SIZE_CHOICES.includes(viewPageSize) && viewPageSize !== 0) base.pageSize = viewPageSize as 50 | 100 | 200 | 300 | 500;
     }
     if (viewType === "calendar") {
       const cal: CalendarConfig = {

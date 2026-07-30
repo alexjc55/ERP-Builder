@@ -169,10 +169,10 @@ import {
 
 const NO_STATUS = "__none__";
 const NO_VIEW = "__all__";
-/** Allowed rows-per-page values; the server caps pageSize at 200. Configured in
+/** Allowed rows-per-page values; the server caps pageSize at 500. Configured in
  * the view settings (configJson.pageSize) or the entity's default-view settings
  * (entity.defaultPageSize); falls back to 50. */
-const PAGE_SIZE_OPTIONS = [50, 100, 200];
+const PAGE_SIZE_OPTIONS = [50, 100, 200, 300, 500];
 const DEFAULT_PAGE_SIZE = 50;
 /**
  * Client sentinel for the "no value" group bucket of a grouped mirror page

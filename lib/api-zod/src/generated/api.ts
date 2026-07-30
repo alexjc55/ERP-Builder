@@ -5192,7 +5192,7 @@ export const queryEntityRecordsBodyArchivedDefault = `active`;
 export const queryEntityRecordsBodyPageDefault = 1;
 
 export const queryEntityRecordsBodyPageSizeDefault = 50;
-export const queryEntityRecordsBodyPageSizeMax = 200;
+export const queryEntityRecordsBodyPageSizeMax = 500;
 
 export const queryEntityRecordsBodyGroupedDefault = false;
 export const queryEntityRecordsBodyWithRowGroupsDefault = false;
@@ -5796,7 +5796,7 @@ export const ListEntityViewsResponseItem = zod.object({
   "search": zod.string().optional(),
   "visibleFields": zod.array(zod.string()).optional(),
   "viewType": zod.enum(['table', 'pivot', 'calendar']).default(listEntityViewsResponseConfigJsonViewTypeDefault),
-  "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
+  "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
   "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
@@ -5898,7 +5898,7 @@ export const CreateEntityViewBody = zod.object({
   "search": zod.string().optional(),
   "visibleFields": zod.array(zod.string()).optional(),
   "viewType": zod.enum(['table', 'pivot', 'calendar']).default(createEntityViewBodyConfigJsonViewTypeDefault),
-  "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
+  "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
   "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
@@ -5997,7 +5997,7 @@ export const GetViewResponse = zod.object({
   "search": zod.string().optional(),
   "visibleFields": zod.array(zod.string()).optional(),
   "viewType": zod.enum(['table', 'pivot', 'calendar']).default(getViewResponseConfigJsonViewTypeDefault),
-  "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
+  "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
   "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
@@ -6096,7 +6096,7 @@ export const UpdateViewBody = zod.object({
   "search": zod.string().optional(),
   "visibleFields": zod.array(zod.string()).optional(),
   "viewType": zod.enum(['table', 'pivot', 'calendar']).default(updateViewBodyConfigJsonViewTypeDefault),
-  "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
+  "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
   "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
@@ -6187,7 +6187,7 @@ export const UpdateViewResponse = zod.object({
   "search": zod.string().optional(),
   "visibleFields": zod.array(zod.string()).optional(),
   "viewType": zod.enum(['table', 'pivot', 'calendar']).default(updateViewResponseConfigJsonViewTypeDefault),
-  "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
+  "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
   "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),

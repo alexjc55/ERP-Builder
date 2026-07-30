@@ -7176,7 +7176,7 @@ components:
           default: table
         pageSize:
           type: integer
-          enum: [50, 100, 200]
+          enum: [50, 100, 200, 300, 500]
           description: Rows per page for this view's records table. Absent = the entity's default (defaultPageSize) or 50.
         pivot:
           $ref: "#/components/schemas/PivotConfig"
@@ -7624,7 +7624,7 @@ components:
         pageSize:
           type: integer
           minimum: 1
-          maximum: 200
+          maximum: 500
           default: 50
         pageId:
           type: integer

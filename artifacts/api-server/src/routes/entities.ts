@@ -100,7 +100,7 @@ router.post("/entities", requireAuth, requireAdmin("entities"), async (req, res)
     }
   }
 
-  if (parsed.data.defaultPageSize != null && ![50, 100, 200].includes(parsed.data.defaultPageSize)) {
+  if (parsed.data.defaultPageSize != null && ![50, 100, 200, 300, 500].includes(parsed.data.defaultPageSize)) {
     res.status(400).json({ error: "defaultPageSize must be 50, 100 or 200" });
     return;
   }
@@ -186,7 +186,7 @@ router.put("/entities/:id", requireAuth, requireAdmin("entities"), async (req, r
   if (body.defaultPivotJson !== undefined) updateData.defaultPivotJson = body.defaultPivotJson;
   if (body.defaultPageSize !== undefined) {
     const dps = body.defaultPageSize;
-    if (dps != null && ![50, 100, 200].includes(dps)) {
+    if (dps != null && ![50, 100, 200, 300, 500].includes(dps)) {
       res.status(400).json({ error: "defaultPageSize must be 50, 100 or 200" });
       return;
     }

@@ -16,4 +16,6 @@ export const ViewConfigPageSize = {
   NUMBER_50: 50,
   NUMBER_100: 100,
   NUMBER_200: 200,
+  NUMBER_300: 300,
+  NUMBER_500: 500,
 } as const;

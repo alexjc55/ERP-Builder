@@ -3263,6 +3263,8 @@ export const ViewConfigPageSize = {
   NUMBER_50: 50,
   NUMBER_100: 100,
   NUMBER_200: 200,
+  NUMBER_300: 300,
+  NUMBER_500: 500,
 } as const;
 
 /**
@@ -3447,7 +3449,7 @@ export interface RecordQuery {
   page?: number;
   /**
      * @minimum 1
-     * @maximum 200
+     * @maximum 500
      */
   pageSize?: number;
   /** Optional mirror-page context (see RecordInput.pageId): applies the mirror page's view-rights override and field-access when querying records through it. */
