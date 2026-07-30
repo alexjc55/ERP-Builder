@@ -131,4 +131,4 @@ title = "SQL: объединение проекта בית ספר נרקיסים
 id = "jrDaKx-JeB_qBvpTBD3dz"
 uri = "file://exports/format-inherit-migration.sql"
 type = "unspecified"
-title = "SQL: наследование форматирования (для удалённого сервера)"
+title = "SQL: наследование форматирования (обновлён — вкл. переводы для полей страниц)"
