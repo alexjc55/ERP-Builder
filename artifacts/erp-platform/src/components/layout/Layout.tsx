@@ -108,7 +108,7 @@ function SidebarItem({
 }
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const { user, logout, isSuperAdmin, canAdmin, canPage, stopImpersonation, isGuest } = useAuth();
+  const { user, logout, isSuperAdmin, canAdmin, canPage, stopImpersonation, isGuest, permissions } = useAuth();
   const ml = useML();
   const t = useT();
   const { lang, setLang } = useLang();
@@ -160,7 +160,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const isPageVisible = (page: Page): boolean => {
     if (isSuperAdmin) return true;
     const path = page.path || "";
-    if (path === "/") return true;
+    // The home dashboard link hides when every role explicitly denies it
+    // (permissions.dashboard === false). Navigation-only; superAdmin bypasses.
+    if (path === "/") return permissions?.dashboard !== false;
     if (path.startsWith("/admin/")) {
       const cap = adminCapForPath(path);
       return cap ? canAdmin(cap) : false;

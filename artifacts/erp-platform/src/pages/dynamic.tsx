@@ -95,10 +95,12 @@ export default function DynamicPage() {
             isMirror={Boolean(mirrorEntity)}
             defaultQuickFilter={page.defaultQuickFilterJson ?? undefined}
             pageDefaultSorts={page.defaultSortJson ?? undefined}
+            pageDefaultPageSize={page.defaultPageSize ?? undefined}
             groupByFieldKey={mirrorEntity ? page.groupByFieldKey ?? undefined : undefined}
             groupDefaultExpanded={mirrorEntity ? page.groupDefaultExpanded ?? undefined : undefined}
             filtersCollapsedDefault={page.filtersCollapsedDefault ?? undefined}
             pageHideStatusColumn={page.hideStatusColumn ?? undefined}
+            pageDisableCreate={page.disableCreate ?? undefined}
           />
         </>
       ) : (

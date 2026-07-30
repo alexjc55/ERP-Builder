@@ -2355,6 +2355,19 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
     return;
   }
 
+  // Page-level create ban (pages.disableCreate): role-independent hard stop for
+  // creates issued FROM that page. Other pages of the same entity are unaffected.
+  if (body.data.pageId != null) {
+    const [crPage] = await db
+      .select({ disableCreate: pagesTable.disableCreate })
+      .from(pagesTable)
+      .where(eq(pagesTable.id, body.data.pageId));
+    if (crPage?.disableCreate) {
+      res.status(403).json({ error: "Creating records is disabled on this page" });
+      return;
+    }
+  }
+
   const fields = await loadActiveFields(entityId);
   const { editable, hidden } = await fieldAccessContext(req, entityId, fields, body.data.pageId);
   const activeKeys = new Set(fields.map((f) => f.fieldKey));

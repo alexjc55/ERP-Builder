@@ -184,7 +184,9 @@ export const LoginResponse = zod.object({
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
   "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
   "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
-}))
+})),
+  "dashboard": zod.boolean().optional().describe('Access to the built-in home dashboard (route \"\/\"). Absent = allowed. Navigation-only; superAdmin bypasses.'),
+  "homePageId": zod.number().nullish().describe('Start page id for this role (opens instead of the dashboard). Null\/absent = dashboard.')
 }).optional(),
   "isGuest": zod.boolean().optional(),
   "impersonator": zod.object({
@@ -252,7 +254,9 @@ export const GetMeResponse = zod.object({
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
   "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
   "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
-}))
+})),
+  "dashboard": zod.boolean().optional().describe('Access to the built-in home dashboard (route \"\/\"). Absent = allowed. Navigation-only; superAdmin bypasses.'),
+  "homePageId": zod.number().nullish().describe('Start page id for this role (opens instead of the dashboard). Null\/absent = dashboard.')
 }).optional(),
   "isGuest": zod.boolean().optional(),
   "impersonator": zod.object({
@@ -318,7 +322,9 @@ export const UpdateMeResponse = zod.object({
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
   "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
   "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
-}))
+})),
+  "dashboard": zod.boolean().optional().describe('Access to the built-in home dashboard (route \"\/\"). Absent = allowed. Navigation-only; superAdmin bypasses.'),
+  "homePageId": zod.number().nullish().describe('Start page id for this role (opens instead of the dashboard). Null\/absent = dashboard.')
 }).optional(),
   "isGuest": zod.boolean().optional(),
   "impersonator": zod.object({
@@ -382,7 +388,9 @@ export const ImpersonateResponse = zod.object({
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
   "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
   "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
-}))
+})),
+  "dashboard": zod.boolean().optional().describe('Access to the built-in home dashboard (route \"\/\"). Absent = allowed. Navigation-only; superAdmin bypasses.'),
+  "homePageId": zod.number().nullish().describe('Start page id for this role (opens instead of the dashboard). Null\/absent = dashboard.')
 }).optional(),
   "isGuest": zod.boolean().optional(),
   "impersonator": zod.object({
@@ -443,7 +451,9 @@ export const StopImpersonationResponse = zod.object({
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
   "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
   "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
-}))
+})),
+  "dashboard": zod.boolean().optional().describe('Access to the built-in home dashboard (route \"\/\"). Absent = allowed. Navigation-only; superAdmin bypasses.'),
+  "homePageId": zod.number().nullish().describe('Start page id for this role (opens instead of the dashboard). Null\/absent = dashboard.')
 }).optional(),
   "isGuest": zod.boolean().optional(),
   "impersonator": zod.object({
@@ -508,7 +518,9 @@ export const RedeemGuestLinkResponse = zod.object({
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
   "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
   "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
-}))
+})),
+  "dashboard": zod.boolean().optional().describe('Access to the built-in home dashboard (route \"\/\"). Absent = allowed. Navigation-only; superAdmin bypasses.'),
+  "homePageId": zod.number().nullish().describe('Start page id for this role (opens instead of the dashboard). Null\/absent = dashboard.')
 }).optional(),
   "isGuest": zod.boolean().optional(),
   "impersonator": zod.object({
@@ -916,7 +928,9 @@ export const ListRolesResponseItem = zod.object({
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
   "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
   "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
-}))
+})),
+  "dashboard": zod.boolean().optional().describe('Access to the built-in home dashboard (route \"\/\"). Absent = allowed. Navigation-only; superAdmin bypasses.'),
+  "homePageId": zod.number().nullish().describe('Start page id for this role (opens instead of the dashboard). Null\/absent = dashboard.')
 }),
   "userCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
@@ -968,7 +982,9 @@ export const CreateRoleBody = zod.object({
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
   "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
   "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
-}))
+})),
+  "dashboard": zod.boolean().optional().describe('Access to the built-in home dashboard (route \"\/\"). Absent = allowed. Navigation-only; superAdmin bypasses.'),
+  "homePageId": zod.number().nullish().describe('Start page id for this role (opens instead of the dashboard). Null\/absent = dashboard.')
 }).optional()
 })
 
@@ -1021,7 +1037,9 @@ export const GetRoleResponse = zod.object({
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
   "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
   "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
-}))
+})),
+  "dashboard": zod.boolean().optional().describe('Access to the built-in home dashboard (route \"\/\"). Absent = allowed. Navigation-only; superAdmin bypasses.'),
+  "homePageId": zod.number().nullish().describe('Start page id for this role (opens instead of the dashboard). Null\/absent = dashboard.')
 }),
   "userCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
@@ -1076,7 +1094,9 @@ export const UpdateRoleBody = zod.object({
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
   "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
   "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
-}))
+})),
+  "dashboard": zod.boolean().optional().describe('Access to the built-in home dashboard (route \"\/\"). Absent = allowed. Navigation-only; superAdmin bypasses.'),
+  "homePageId": zod.number().nullish().describe('Start page id for this role (opens instead of the dashboard). Null\/absent = dashboard.')
 }).optional()
 })
 
@@ -1121,7 +1141,9 @@ export const UpdateRoleResponse = zod.object({
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
   "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
   "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
-}))
+})),
+  "dashboard": zod.boolean().optional().describe('Access to the built-in home dashboard (route \"\/\"). Absent = allowed. Navigation-only; superAdmin bypasses.'),
+  "homePageId": zod.number().nullish().describe('Start page id for this role (opens instead of the dashboard). Null\/absent = dashboard.')
 }),
   "userCount": zod.number().optional(),
   "createdAt": zod.coerce.date(),
@@ -1249,6 +1271,8 @@ export const ListPagesResponseItem = zod.object({
   "field": zod.string(),
   "direction": zod.enum(['asc', 'desc']).default(listPagesResponseDefaultSortJsonOneItemDirectionDefault)
 })),zod.null()]).optional().describe('Per-page default sort (display-only) — overrides the entity\/view default sort for this page\'s records table. Null\/empty = inherit.'),
+  "defaultPageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500),zod.literal(null)]).nullish().describe('Per-page rows-per-page override for the records table. Null = inherit the view\'s pageSize \/ entity defaultPageSize \/ 50.'),
+  "disableCreate": zod.boolean().optional().describe('Forbid creating new records from this page for everyone (role-independent). Enforced server-side when the create request carries this pageId.'),
   "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display\/aggregation-only, never a security boundary.'),
   "groupDefaultExpanded": zod.boolean().optional().describe('Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.'),
   "sortOrder": zod.number(),
@@ -1371,6 +1395,8 @@ export const CreatePageBody = zod.object({
   "field": zod.string(),
   "direction": zod.enum(['asc', 'desc']).default(createPageBodyDefaultSortJsonOneItemDirectionDefault)
 })),zod.null()]).optional().describe('Per-page default sort (display-only) — overrides the entity\/view default sort for this page\'s records table. Null\/empty = inherit.'),
+  "defaultPageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500),zod.literal(null)]).nullish().describe('Per-page rows-per-page override for the records table. Null = inherit the view\'s pageSize \/ entity defaultPageSize \/ 50.'),
+  "disableCreate": zod.boolean().optional().describe('Forbid creating new records from this page for everyone (role-independent). Enforced server-side when the create request carries this pageId.'),
   "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.'),
   "groupDefaultExpanded": zod.boolean().default(createPageBodyGroupDefaultExpandedDefault).describe('Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.'),
   "sortOrder": zod.number().optional(),
@@ -1489,6 +1515,8 @@ export const GetPageResponse = zod.object({
   "field": zod.string(),
   "direction": zod.enum(['asc', 'desc']).default(getPageResponseDefaultSortJsonOneItemDirectionDefault)
 })),zod.null()]).optional().describe('Per-page default sort (display-only) — overrides the entity\/view default sort for this page\'s records table. Null\/empty = inherit.'),
+  "defaultPageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500),zod.literal(null)]).nullish().describe('Per-page rows-per-page override for the records table. Null = inherit the view\'s pageSize \/ entity defaultPageSize \/ 50.'),
+  "disableCreate": zod.boolean().optional().describe('Forbid creating new records from this page for everyone (role-independent). Enforced server-side when the create request carries this pageId.'),
   "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display\/aggregation-only, never a security boundary.'),
   "groupDefaultExpanded": zod.boolean().optional().describe('Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.'),
   "sortOrder": zod.number(),
@@ -1609,6 +1637,8 @@ export const UpdatePageBody = zod.object({
   "field": zod.string(),
   "direction": zod.enum(['asc', 'desc']).default(updatePageBodyDefaultSortJsonOneItemDirectionDefault)
 })),zod.null()]).optional().describe('Per-page default sort (display-only) — overrides the entity\/view default sort for this page\'s records table. Null\/empty = inherit.'),
+  "defaultPageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500),zod.literal(null)]).nullish().describe('Per-page rows-per-page override for the records table. Null = inherit the view\'s pageSize \/ entity defaultPageSize \/ 50.'),
+  "disableCreate": zod.boolean().optional().describe('Forbid creating new records from this page for everyone (role-independent). Enforced server-side when the create request carries this pageId.'),
   "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.'),
   "groupDefaultExpanded": zod.boolean().optional().describe('Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.'),
   "sortOrder": zod.number().optional(),
@@ -1719,6 +1749,8 @@ export const UpdatePageResponse = zod.object({
   "field": zod.string(),
   "direction": zod.enum(['asc', 'desc']).default(updatePageResponseDefaultSortJsonOneItemDirectionDefault)
 })),zod.null()]).optional().describe('Per-page default sort (display-only) — overrides the entity\/view default sort for this page\'s records table. Null\/empty = inherit.'),
+  "defaultPageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500),zod.literal(null)]).nullish().describe('Per-page rows-per-page override for the records table. Null = inherit the view\'s pageSize \/ entity defaultPageSize \/ 50.'),
+  "disableCreate": zod.boolean().optional().describe('Forbid creating new records from this page for everyone (role-independent). Enforced server-side when the create request carries this pageId.'),
   "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display\/aggregation-only, never a security boundary.'),
   "groupDefaultExpanded": zod.boolean().optional().describe('Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.'),
   "sortOrder": zod.number(),

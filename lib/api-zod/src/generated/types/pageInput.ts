@@ -7,6 +7,7 @@
  */
 import type { MultilingualText } from './multilingualText';
 import type { PageInputColumnGroupsJson } from './pageInputColumnGroupsJson';
+import type { PageInputDefaultPageSize } from './pageInputDefaultPageSize';
 import type { PageInputMirrorFieldLabelsJson } from './pageInputMirrorFieldLabelsJson';
 import type { PageInputMirrorPinnedJson } from './pageInputMirrorPinnedJson';
 import type { PageQuickFilter } from './pageQuickFilter';
@@ -64,6 +65,13 @@ export interface PageInput {
   defaultQuickFilterJson?: PageQuickFilter | null;
   /** Per-page default sort (display-only) — overrides the entity/view default sort for this page's records table. Null/empty = inherit. */
   defaultSortJson?: SortSpec[] | null;
+  /**
+     * Per-page rows-per-page override for the records table. Null = inherit the view's pageSize / entity defaultPageSize / 50.
+     * @nullable
+     */
+  defaultPageSize?: PageInputDefaultPageSize;
+  /** Forbid creating new records from this page for everyone (role-independent). Enforced server-side when the create request carries this pageId. */
+  disableCreate?: boolean;
   /**
      * Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.
      * @nullable

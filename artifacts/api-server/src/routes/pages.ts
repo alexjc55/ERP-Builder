@@ -403,6 +403,15 @@ router.put("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): P
   if ("hideStatusColumn" in body) updateData.hideStatusColumn = body.hideStatusColumn ?? false;
   if ("defaultQuickFilterJson" in body) updateData.defaultQuickFilterJson = body.defaultQuickFilterJson ?? null;
   if ("defaultSortJson" in body) updateData.defaultSortJson = body.defaultSortJson ?? null;
+  if ("disableCreate" in body) updateData.disableCreate = body.disableCreate === true;
+  if ("defaultPageSize" in body) {
+    const dps = body.defaultPageSize;
+    if (dps != null && ![50, 100, 200, 300, 500].includes(dps)) {
+      res.status(400).json({ error: "defaultPageSize must be one of 50, 100, 200, 300, 500" });
+      return;
+    }
+    updateData.defaultPageSize = dps ?? null;
+  }
   if ("groupByFieldKey" in body) updateData.groupByFieldKey = body.groupByFieldKey || null;
   if ("groupDefaultExpanded" in body) updateData.groupDefaultExpanded = body.groupDefaultExpanded ?? false;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;

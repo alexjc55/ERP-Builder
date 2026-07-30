@@ -124,6 +124,13 @@ export const pagesTable = pgTable("pages", {
   // config. Null/empty = inherit the view/entity default. The viewer's own
   // header-click sort always wins over this.
   defaultSortJson: jsonb("default_sort_json").$type<{ field: string; direction?: "asc" | "desc" }[]>(),
+  // Per-page rows-per-page override for the records table (50/100/200/300/500).
+  // NULL = inherit the view's pageSize / entity defaultPageSize / 50.
+  defaultPageSize: integer("default_page_size"),
+  // Forbid creating new records FROM THIS PAGE for everyone (role-independent,
+  // like hideStatusColumn). Enforced server-side on the create endpoint when the
+  // request carries this pageId; other pages of the same entity are unaffected.
+  disableCreate: boolean("disable_create").notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

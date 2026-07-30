@@ -93,6 +93,18 @@ export interface RolePermissions {
    */
   records: Record<string, RecordPermission>;
   /**
+   * Access to the built-in home dashboard (Панель управления, route "/").
+   * SPARSE: absent = allowed (backward compatible). Display/navigation-only —
+   * data on the dashboard is still bounded by records RBAC. superAdmin bypasses.
+   */
+  dashboard?: boolean;
+  /**
+   * Start page for this role: the page the user lands on when opening the app
+   * (route "/"). Null/absent = the dashboard. Only meaningful when the role can
+   * access that page (pageIds); merged most-permissively primary-role-first.
+   */
+  homePageId?: number | null;
+  /**
    * Runtime-only (never persisted): per-role permission specs keyed by role id,
    * attached when a user's roles are merged. Lets field-access resolution derive
    * each role's OWN inherited level instead of the merged one, so a role that

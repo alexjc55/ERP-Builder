@@ -365,6 +365,13 @@ export interface RolePermissions {
   admin: RoleAdminCaps;
   pageIds: number[];
   records: RolePermissionsRecords;
+  /** Access to the built-in home dashboard (route "/"). Absent = allowed. Navigation-only; superAdmin bypasses. */
+  dashboard?: boolean;
+  /**
+     * Start page id for this role (opens instead of the dashboard). Null/absent = dashboard.
+     * @nullable
+     */
+  homePageId?: number | null;
 }
 
 /**
@@ -909,6 +916,21 @@ export type PageColumnGroupsJson = {[key: string]: number} | null;
 export type PageMirrorPinnedJson = {[key: string]: boolean} | null;
 
 /**
+ * Per-page rows-per-page override for the records table. Null = inherit the view's pageSize / entity defaultPageSize / 50.
+ * @nullable
+ */
+export type PageDefaultPageSize = typeof PageDefaultPageSize[keyof typeof PageDefaultPageSize] | null;
+
+
+export const PageDefaultPageSize = {
+  NUMBER_50: 50,
+  NUMBER_100: 100,
+  NUMBER_200: 200,
+  NUMBER_300: 300,
+  NUMBER_500: 500,
+} as const;
+
+/**
  * entity = use the entity's defaultPivotJson; view = use the referenced pivot view's pivot config (viewId); custom = use the inline `pivot`.
  */
 export type PivotPageConfigSource = typeof PivotPageConfigSource[keyof typeof PivotPageConfigSource];
@@ -1166,6 +1188,13 @@ export interface Page {
   /** Per-page default sort (display-only) — overrides the entity/view default sort for this page's records table. Null/empty = inherit. */
   defaultSortJson?: SortSpec[] | null;
   /**
+     * Per-page rows-per-page override for the records table. Null = inherit the view's pageSize / entity defaultPageSize / 50.
+     * @nullable
+     */
+  defaultPageSize?: PageDefaultPageSize;
+  /** Forbid creating new records from this page for everyone (role-independent). Enforced server-side when the create request carries this pageId. */
+  disableCreate?: boolean;
+  /**
      * Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display/aggregation-only, never a security boundary.
      * @nullable
      */
@@ -1196,6 +1225,21 @@ export type PageInputColumnGroupsJson = {[key: string]: number} | null;
  * @nullable
  */
 export type PageInputMirrorPinnedJson = {[key: string]: boolean} | null;
+
+/**
+ * Per-page rows-per-page override for the records table. Null = inherit the view's pageSize / entity defaultPageSize / 50.
+ * @nullable
+ */
+export type PageInputDefaultPageSize = typeof PageInputDefaultPageSize[keyof typeof PageInputDefaultPageSize] | null;
+
+
+export const PageInputDefaultPageSize = {
+  NUMBER_50: 50,
+  NUMBER_100: 100,
+  NUMBER_200: 200,
+  NUMBER_300: 300,
+  NUMBER_500: 500,
+} as const;
 
 export interface PageInput {
   nameJson: MultilingualText;
@@ -1249,6 +1293,13 @@ export interface PageInput {
   /** Per-page default sort (display-only) — overrides the entity/view default sort for this page's records table. Null/empty = inherit. */
   defaultSortJson?: SortSpec[] | null;
   /**
+     * Per-page rows-per-page override for the records table. Null = inherit the view's pageSize / entity defaultPageSize / 50.
+     * @nullable
+     */
+  defaultPageSize?: PageInputDefaultPageSize;
+  /** Forbid creating new records from this page for everyone (role-independent). Enforced server-side when the create request carries this pageId. */
+  disableCreate?: boolean;
+  /**
      * Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.
      * @nullable
      */
@@ -1276,6 +1327,21 @@ export type PageUpdateColumnGroupsJson = {[key: string]: number} | null;
  * @nullable
  */
 export type PageUpdateMirrorPinnedJson = {[key: string]: boolean} | null;
+
+/**
+ * Per-page rows-per-page override for the records table. Null = inherit the view's pageSize / entity defaultPageSize / 50.
+ * @nullable
+ */
+export type PageUpdateDefaultPageSize = typeof PageUpdateDefaultPageSize[keyof typeof PageUpdateDefaultPageSize] | null;
+
+
+export const PageUpdateDefaultPageSize = {
+  NUMBER_50: 50,
+  NUMBER_100: 100,
+  NUMBER_200: 200,
+  NUMBER_300: 300,
+  NUMBER_500: 500,
+} as const;
 
 export interface PageUpdate {
   nameJson?: MultilingualText;
@@ -1328,6 +1394,13 @@ export interface PageUpdate {
   defaultQuickFilterJson?: PageQuickFilter | null;
   /** Per-page default sort (display-only) — overrides the entity/view default sort for this page's records table. Null/empty = inherit. */
   defaultSortJson?: SortSpec[] | null;
+  /**
+     * Per-page rows-per-page override for the records table. Null = inherit the view's pageSize / entity defaultPageSize / 50.
+     * @nullable
+     */
+  defaultPageSize?: PageUpdateDefaultPageSize;
+  /** Forbid creating new records from this page for everyone (role-independent). Enforced server-side when the create request carries this pageId. */
+  disableCreate?: boolean;
   /**
      * Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.
      * @nullable

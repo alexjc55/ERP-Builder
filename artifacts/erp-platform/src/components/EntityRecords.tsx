@@ -151,7 +151,7 @@ import { computeRowFormatting, ruleMatches, type FormatField } from "@/lib/forma
 import type { FieldFormatRule, CustomFilterPick, CustomFilter, CustomFilterInput } from "@workspace/api-client-react";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus, Zap, ChevronsUpDown, ChevronsDownUp, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus, Zap, ChevronsUpDown, ChevronsDownUp, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { Link, useLocation, useSearch } from "wouter";
 import { Calendar } from "@/components/ui/calendar";
 import type { DateRange } from "react-day-picker";
@@ -1291,10 +1291,12 @@ export function EntityRecords({
   mirrorPinned,
   defaultQuickFilter,
   pageDefaultSorts,
+  pageDefaultPageSize,
   groupByFieldKey,
   groupDefaultExpanded,
   filtersCollapsedDefault,
   pageHideStatusColumn,
+  pageDisableCreate,
 }: {
   entityId: number;
   /**
@@ -1383,6 +1385,11 @@ export function EntityRecords({
    */
   pageDefaultSorts?: SortSpec[] | null;
   /**
+   * Per-page rows-per-page override (from `page.defaultPageSize`). When set it
+   * wins over the view's pageSize and the entity default. Display-only.
+   */
+  pageDefaultPageSize?: number | null;
+  /**
    * Mirror-page grouping (from `page.groupByFieldKey`): when set, records are
    * shown as collapsed group rows (one per distinct value of this source-entity
    * field) with server-computed count + per-column sums, and expanding a group
@@ -1413,6 +1420,11 @@ export function EntityRecords({
    * statuses; this only removes the column from this page's table.
    */
   pageHideStatusColumn?: boolean;
+  /**
+   * Per-page create ban (`page.disableCreate`): hides every add-record entry
+   * point on this page for everyone. Mirrored by a hard server check on create.
+   */
+  pageDisableCreate?: boolean;
 }) {
   const ml = useML();
   const t = useT();
@@ -1439,7 +1451,7 @@ export function EntityRecords({
   const permPageId = isMirror ? pageId : undefined;
 
   const canView = canRecord(entityId, "view", permPageId);
-  const canCreate = canRecord(entityId, "create", permPageId);
+  const canCreate = canRecord(entityId, "create", permPageId) && !pageDisableCreate;
   const canUpdate = canRecord(entityId, "update", permPageId);
   const canDelete = canRecord(entityId, "delete", permPageId);
   // Field/column management (setup mode) is gated exactly like the fields builder.
@@ -2227,11 +2239,14 @@ export function EntityRecords({
     selectedViewId === NO_VIEW ? undefined : views.find((v: View) => String(v.id) === selectedViewId);
   const selectedConfig = (selectedView?.configJson ?? {}) as ViewConfig;
 
-  // Rows per page: the selected view's setting wins, then the entity's
-  // default-view setting, then 50. Configured in the views admin, not per user.
+  // Rows per page: the PAGE's own override wins, then the selected view's
+  // setting, then the entity's default-view setting, then 50.
   const cfgPageSize = selectedConfig.pageSize;
   const entityDefaultPageSize = entity?.defaultPageSize;
   const pageSize =
+    (typeof pageDefaultPageSize === "number" && PAGE_SIZE_OPTIONS.includes(pageDefaultPageSize)
+      ? pageDefaultPageSize
+      : null) ??
     (typeof cfgPageSize === "number" && PAGE_SIZE_OPTIONS.includes(cfgPageSize) ? cfgPageSize : null) ??
     (typeof entityDefaultPageSize === "number" && PAGE_SIZE_OPTIONS.includes(entityDefaultPageSize)
       ? entityDefaultPageSize
@@ -2848,6 +2863,23 @@ export function EntityRecords({
                 : t("records.pageDefaultSortCleared", "Сортировка страницы по умолчанию очищена"),
             });
           },
+        },
+      );
+    },
+    [pageId, savePageGroupDefaultMutation, toast, t],
+  );
+  const saveDisableCreate = useCallback(
+    (disable: boolean) => {
+      if (pageId == null) return;
+      savePageGroupDefaultMutation.mutate(
+        { id: pageId, data: { disableCreate: disable } },
+        {
+          onSuccess: () =>
+            toast({
+              title: disable
+                ? t("records.pageCreateDisabledSaved", "Добавление записей на этой странице запрещено")
+                : t("records.pageCreateEnabledSaved", "Добавление записей на этой странице разрешено"),
+            }),
         },
       );
     },
@@ -4546,6 +4578,88 @@ export function EntityRecords({
               </div>
             </div>
           )}
+          {pageId != null && canAdmin("pages") && (
+            <div className="rounded-md border border-slate-200 bg-white px-3 py-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                <LayoutList className="w-4 h-4 text-slate-400 shrink-0" />
+                <span>{t("records.pagePageSizeTitle", "Записей на странице (для этой страницы)")}</span>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {t(
+                  "records.pagePageSizeHint",
+                  "Сколько строк показывать в таблице на этой странице. «Наследовать» — как задано в настройках вида/сущности (или 50).",
+                )}
+              </p>
+              <Select
+                value={
+                  typeof pageDefaultPageSize === "number" && PAGE_SIZE_OPTIONS.includes(pageDefaultPageSize)
+                    ? String(pageDefaultPageSize)
+                    : "__inherit__"
+                }
+                onValueChange={(v) => {
+                  savePageGroupDefaultMutation.mutate(
+                    {
+                      id: pageId,
+                      data: {
+                        defaultPageSize:
+                          v === "__inherit__" ? null : (Number(v) as 50 | 100 | 200 | 300 | 500),
+                      },
+                    },
+                    {
+                      onSuccess: () =>
+                        toast({ title: t("records.pagePageSizeSaved", "Число записей на странице сохранено") }),
+                    },
+                  );
+                }}
+                disabled={savePageGroupDefaultMutation.isPending}
+              >
+                <SelectTrigger className="h-9 w-full sm:w-72 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__inherit__">
+                    {t("records.pagePageSizeInherit", "Наследовать (как в виде/сущности)")}
+                  </SelectItem>
+                  {PAGE_SIZE_OPTIONS.map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {pageId != null && canAdmin("pages") && (
+            <div className="rounded-md border border-slate-200 bg-white px-3 py-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                <Plus className="w-4 h-4 text-slate-400 shrink-0" />
+                <span>{t("records.pageCreateTitle", "Создание записей на этой странице")}</span>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {t(
+                  "records.pageCreateHint",
+                  "Запретить добавление новых записей с этой страницы для всех, включая администраторов. Запрет проверяется и на сервере. На других страницах этой сущности создание работает как обычно.",
+                )}
+              </p>
+              <Select
+                value={pageDisableCreate ? "disabled" : "enabled"}
+                onValueChange={(v) => saveDisableCreate(v === "disabled")}
+                disabled={savePageGroupDefaultMutation.isPending}
+              >
+                <SelectTrigger className="h-9 w-full sm:w-72 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="enabled">
+                    {t("records.pageCreateEnabled", "Разрешить добавление записей")}
+                  </SelectItem>
+                  <SelectItem value="disabled">
+                    {t("records.pageCreateDisabled", "Запретить добавление записей")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           {pageId != null && canAdmin("pages") && statuses.length > 0 && (
             <div className="rounded-md border border-slate-200 bg-white px-3 py-3 space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
@@ -5736,6 +5850,16 @@ export function EntityRecords({
               <Button
                 variant="outline"
                 size="sm"
+                className="h-8 px-2"
+                disabled={page <= 1 || recordsLoading}
+                onClick={() => setPage(1)}
+                title={t("records.firstPage", "На первую страницу")}
+              >
+                <ChevronsLeft className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 className="h-8 gap-1"
                 disabled={page <= 1 || recordsLoading}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
@@ -5753,6 +5877,16 @@ export function EntityRecords({
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               >
                 {t("records.next", "Вперёд")} <ChevronRight className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-2"
+                disabled={page >= totalPages || recordsLoading}
+                onClick={() => setPage(totalPages)}
+                title={t("records.lastPage", "На последнюю страницу")}
+              >
+                <ChevronsRight className="w-3.5 h-3.5" />
               </Button>
             </div>
           )}

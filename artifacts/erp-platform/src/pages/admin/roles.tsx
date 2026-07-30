@@ -196,6 +196,8 @@ export default function RolesPage() {
             admin: { ...base.admin, ...(p.admin ?? {}) },
             pageIds: p.pageIds ?? [],
             records,
+            ...(p.dashboard === false ? { dashboard: false } : {}),
+            ...(p.homePageId != null ? { homePageId: p.homePageId } : {}),
           }
         : base,
     );
@@ -238,6 +240,8 @@ export default function RolesPage() {
     setPerms((prev) => ({
       ...prev,
       pageIds: checked ? [...prev.pageIds, pageId] : prev.pageIds.filter((id) => id !== pageId),
+      // Revoking access to the configured start page resets it to the dashboard.
+      ...(!checked && prev.homePageId === pageId ? { homePageId: undefined } : {}),
     }));
 
   const toggleRecord = (entityId: number, action: keyof RecordPermission, checked: boolean) =>
@@ -787,6 +791,49 @@ export default function RolesPage() {
                       <span className="text-sm text-slate-700">{t(`roles.cap.${key}`, label)}</span>
                     </label>
                   ))}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-semibold text-slate-700 mb-2">{t("roles.homeSection", "Главная страница")}</h4>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2.5 rounded-md border border-slate-200 px-3 py-2 cursor-pointer hover:bg-slate-50">
+                    <Checkbox
+                      checked={perms.dashboard !== false}
+                      onCheckedChange={(v) => setPerms((prev) => ({ ...prev, dashboard: v === true ? undefined : false }))}
+                      disabled={locked}
+                    />
+                    <span className="text-sm text-slate-700">
+                      {t("roles.dashboardAccess", "Доступ к «Панели управления»")}
+                    </span>
+                  </label>
+                  <div className="space-y-1">
+                    <span className="text-xs text-slate-500">
+                      {t("roles.homePageHint", "Стартовая страница — открывается при входе в систему вместо «Панели управления».")}
+                    </span>
+                    <Select
+                      value={perms.homePageId != null ? String(perms.homePageId) : "__dashboard__"}
+                      onValueChange={(v) =>
+                        setPerms((prev) => ({ ...prev, homePageId: v === "__dashboard__" ? undefined : Number(v) }))
+                      }
+                    >
+                      <SelectTrigger className="h-9 w-full sm:w-80 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__dashboard__">
+                          {t("roles.homeDashboard", "Панель управления (по умолчанию)")}
+                        </SelectItem>
+                        {contentPages
+                          .filter((pg: Page) => perms.superAdmin || perms.pageIds.includes(pg.id))
+                          .map((pg: Page) => (
+                            <SelectItem key={pg.id} value={String(pg.id)}>
+                              {ml(pg.nameJson) || pg.path}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
 

@@ -4472,6 +4472,12 @@ components:
           type: object
           additionalProperties:
             $ref: "#/components/schemas/RecordPermission"
+        dashboard:
+          type: boolean
+          description: Access to the built-in home dashboard (route "/"). Absent = allowed. Navigation-only; superAdmin bypasses.
+        homePageId:
+          type: ["integer", "null"]
+          description: Start page id for this role (opens instead of the dashboard). Null/absent = dashboard.
 
     Role:
       type: object
@@ -4591,6 +4597,13 @@ components:
                 $ref: "#/components/schemas/SortSpec"
             - type: "null"
           description: Per-page default sort (display-only) — overrides the entity/view default sort for this page's records table. Null/empty = inherit.
+        defaultPageSize:
+          type: ["integer", "null"]
+          enum: [50, 100, 200, 300, 500, null]
+          description: Per-page rows-per-page override for the records table. Null = inherit the view's pageSize / entity defaultPageSize / 50.
+        disableCreate:
+          type: boolean
+          description: Forbid creating new records from this page for everyone (role-independent). Enforced server-side when the create request carries this pageId.
         groupByFieldKey:
           type: ["string", "null"]
           description: Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display/aggregation-only, never a security boundary.
@@ -4688,6 +4701,13 @@ components:
                 $ref: "#/components/schemas/SortSpec"
             - type: "null"
           description: Per-page default sort (display-only) — overrides the entity/view default sort for this page's records table. Null/empty = inherit.
+        defaultPageSize:
+          type: ["integer", "null"]
+          enum: [50, 100, 200, 300, 500, null]
+          description: Per-page rows-per-page override for the records table. Null = inherit the view's pageSize / entity defaultPageSize / 50.
+        disableCreate:
+          type: boolean
+          description: Forbid creating new records from this page for everyone (role-independent). Enforced server-side when the create request carries this pageId.
         groupByFieldKey:
           type: ["string", "null"]
           description: Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.
@@ -4773,6 +4793,13 @@ components:
                 $ref: "#/components/schemas/SortSpec"
             - type: "null"
           description: Per-page default sort (display-only) — overrides the entity/view default sort for this page's records table. Null/empty = inherit.
+        defaultPageSize:
+          type: ["integer", "null"]
+          enum: [50, 100, 200, 300, 500, null]
+          description: Per-page rows-per-page override for the records table. Null = inherit the view's pageSize / entity defaultPageSize / 50.
+        disableCreate:
+          type: boolean
+          description: Forbid creating new records from this page for everyone (role-independent). Enforced server-side when the create request carries this pageId.
         groupByFieldKey:
           type: ["string", "null"]
           description: Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.

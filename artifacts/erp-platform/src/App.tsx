@@ -114,6 +114,7 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 // dashboard instead so widgets + the "Настроить" edit mode appear.
 function HomeRoute() {
   const { data: pages = [], isLoading } = useListPages();
+  const { permissions, isSuperAdmin, canPage } = useAuth();
 
   if (isLoading) {
     return (
@@ -121,6 +122,26 @@ function HomeRoute() {
         <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
       </div>
     );
+  }
+
+  // Role start page: when configured (and accessible), "/" opens that page
+  // instead of the dashboard. superAdmin without a start page keeps the
+  // dashboard.
+  const homePageId = permissions?.homePageId;
+  if (homePageId != null) {
+    const target = pages.find((p: Page) => p.id === homePageId && p.isActive);
+    if (target && target.path && target.path !== "/" && (isSuperAdmin || canPage(target.id))) {
+      return <Redirect to={target.path} />;
+    }
+  }
+
+  // Dashboard denied for every role: fall back to the first accessible content
+  // page so the user doesn't land on a page they aren't meant to see.
+  if (!isSuperAdmin && permissions?.dashboard === false) {
+    const fallback = pages
+      .filter((p: Page) => p.isActive && p.path && p.path !== "/" && !p.path.startsWith("/admin/") && canPage(p.id))
+      .sort((a: Page, b: Page) => a.sortOrder - b.sortOrder)[0];
+    if (fallback) return <Redirect to={fallback.path!} />;
   }
 
   const homePage = pages.find((p: Page) => p.path === "/");

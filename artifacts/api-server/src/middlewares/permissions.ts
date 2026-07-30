@@ -110,6 +110,17 @@ export function mergePermissions(list: RolePermissions[]): RolePermissions {
     for (const id of p.pageIds ?? []) pageIdSet.add(id);
   }
   merged.pageIds = [...pageIdSet];
+  // Dashboard access: sparse, absent = allowed. Union most-permissive — any
+  // role that does NOT explicitly deny keeps it visible.
+  if (list.every((p) => p.dashboard === false)) merged.dashboard = false;
+  // Start page: first configured one wins; callers pass the primary role first,
+  // so the primary role's choice takes precedence.
+  for (const p of list) {
+    if (p.homePageId != null) {
+      merged.homePageId = p.homePageId;
+      break;
+    }
+  }
   const keys = new Set<string>();
   for (const p of list) for (const k of Object.keys(p.records ?? {})) keys.add(k);
   for (const key of keys) {

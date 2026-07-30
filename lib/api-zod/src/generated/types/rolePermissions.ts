@@ -13,4 +13,11 @@ export interface RolePermissions {
   admin: RoleAdminCaps;
   pageIds: number[];
   records: RolePermissionsRecords;
+  /** Access to the built-in home dashboard (route "/"). Absent = allowed. Navigation-only; superAdmin bypasses. */
+  dashboard?: boolean;
+  /**
+     * Start page id for this role (opens instead of the dashboard). Null/absent = dashboard.
+     * @nullable
+     */
+  homePageId?: number | null;
 }
