@@ -126,3 +126,9 @@ id = "ICxL3NkrhcLYxc_RGrTFh"
 uri = "file://exports/merge-narkisim-project.sql"
 type = "unspecified"
 title = "SQL: объединение проекта בית ספר נרקיסים (для удалённого сервера)"
+
+[[outputs]]
+id = "jrDaKx-JeB_qBvpTBD3dz"
+uri = "file://exports/format-inherit-migration.sql"
+type = "unspecified"
+title = "SQL: наследование форматирования (для удалённого сервера)"
