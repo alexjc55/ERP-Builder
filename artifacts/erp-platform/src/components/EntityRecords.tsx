@@ -5902,12 +5902,14 @@ export function EntityRecords({
       </Card>
 
       {total > 0 && groupRowsReady && (!showGroups || expandedGroupIndex >= 0 || expandAll) && (
-        <div className="flex items-center justify-between text-sm text-slate-500">
-          <span>
+        <div className="flex flex-col-reverse items-center gap-1.5 sm:flex-row sm:justify-between text-sm text-slate-500">
+          {/* Mobile: controls first, counter as a small line below; the counter
+              text stays on ONE line instead of wrapping into a tall column. */}
+          <span className="whitespace-nowrap text-xs sm:text-sm">
             {t("records.shown", "Показано")} {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} {t("records.of", "из")} {total}
           </span>
           {totalPages > 1 && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -5925,9 +5927,10 @@ export function EntityRecords({
                 disabled={page <= 1 || recordsLoading}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
               >
-                <ChevronLeft className="w-3.5 h-3.5" /> {t("records.prev", "Назад")}
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{t("records.prev", "Назад")}</span>
               </Button>
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-slate-400 whitespace-nowrap">
                 {t("records.page", "Стр.")} {page} {t("records.of", "из")} {totalPages}
               </span>
               <Button
@@ -5937,7 +5940,8 @@ export function EntityRecords({
                 disabled={page >= totalPages || recordsLoading}
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               >
-                {t("records.next", "Вперёд")} <ChevronRight className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{t("records.next", "Вперёд")}</span>
+                <ChevronRight className="w-3.5 h-3.5" />
               </Button>
               <Button
                 variant="outline"
