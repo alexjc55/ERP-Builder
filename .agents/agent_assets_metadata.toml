@@ -90,3 +90,9 @@ id = "iY9T0HCRZLV1G0tXE47tm"
 uri = "file://docs/erp-import-template.xlsx"
 type = "table"
 title = "Шаблон импорта данных (Excel)"
+
+[[outputs]]
+id = "dR_QUDOAv3keoPcJhflR6"
+uri = "file://docs/orders-rework.xlsx"
+type = "table"
+title = "Заказы, требующие доработки (клиент/проект)"
