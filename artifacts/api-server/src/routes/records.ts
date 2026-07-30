@@ -1011,6 +1011,22 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         ? relationLinkedIdScalar(groupRelMeta)
         : sql`(${entityRecordsTable.valuesJson} ->> ${groupField.fieldKey})`
       : null;
+  // Expand-all group ordering: the client interleaves headers following the ROW
+  // order, so the rows' group-clustering expression must honor the caller's sort
+  // when it targets the group field itself (label, numeric-aware, direction).
+  // Otherwise groups cluster by label A→Z (stable default). Empty group last.
+  let rowGroupOrder: SQL[] = [];
+  if (rowGroupKeyExpr && groupField) {
+    const gLbl = groupRelMeta ? relationValueScalar(groupRelMeta) : rowGroupKeyExpr;
+    const s0 = ((body.data.sorts ?? []) as { field: string; direction?: string }[])[0];
+    const gRowDir = s0?.field === groupField.fieldKey && s0.direction === "desc" ? sql`DESC` : sql`ASC`;
+    const gNum = sql`(CASE WHEN ${gLbl} ~ '^-?[0-9]+(\.[0-9]+)?$' THEN (${gLbl})::numeric END)`;
+    rowGroupOrder = [
+      sql`${gNum} ${gRowDir} NULLS LAST`,
+      sql`${gLbl} ${gRowDir} NULLS LAST`,
+      sql`${rowGroupKeyExpr} ASC NULLS LAST`,
+    ];
+  }
 
   const [countRow] = await db
     .select({ count: sql<number>`count(*)::int` })
@@ -1021,7 +1037,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     .select()
     .from(entityRecordsTable)
     .where(where)
-    .orderBy(...(rowGroupKeyExpr ? [sql`${rowGroupKeyExpr} ASC NULLS LAST`, ...built.orderBy] : built.orderBy))
+    .orderBy(...(rowGroupOrder.length > 0 ? [...rowGroupOrder, ...built.orderBy] : built.orderBy))
     .limit(pageSize)
     .offset(offset);
 
