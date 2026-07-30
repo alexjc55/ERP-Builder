@@ -2,7 +2,6 @@
 -- PostgreSQL database dump
 --
 
-\restrict DVnd4UODum6TTCkcsAlwNmKX2Up0xqkHCC1C8TcTeeWjPlcGrcANSnnPGyoNRbS
 
 -- Dumped from database version 16.10
 -- Dumped by pg_dump version 16.10
@@ -1970,6 +1969,138 @@ COPY public.audit_log (id, entity_id, record_id, field_key, old_value, new_value
 663	72	1936	paint_status	מוקפא	בשטח לפני צבע	5	2026-07-28 18:29:50.872199+00
 664	72	1936	paint_status	בשטח לפני צבע	בצבע	5	2026-07-28 18:30:19.607455+00
 665	72	1936	paint_status	בצבע	יצאה לאתר	5	2026-07-28 18:30:21.936335+00
+666	74	6202	order_number	\N	TEST-AUTO-1	1	2026-07-30 14:14:15.566698+00
+667	74	6202	order_file	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:14:15.566698+00
+668	74	6202	drawing	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:14:15.566698+00
+669	74	6202	designer	\N	1	1	2026-07-30 14:14:15.566698+00
+670	74	6202	production_date	\N	2026-07-30	1	2026-07-30 14:14:15.566698+00
+671	74	6202	manufacturer	\N	1	1	2026-07-30 14:14:15.566698+00
+672	74	6202	production_order	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:14:15.566698+00
+673	74	6202	painter	\N	צבוע אצל יצרן	1	2026-07-30 14:14:15.566698+00
+674	74	6202	__deleted__	{"drawing":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"},"painter":"צבוע אצל יצרן","designer":1,"order_file":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"},"manufacturer":1,"order_number":"TEST-AUTO-1","production_date":"2026-07-30","production_order":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"}}	\N	1	2026-07-30 14:14:15.724745+00
+675	72	6203	project_manager	\N	1	1	2026-07-30 14:14:32.684033+00
+676	72	6203	client	\N	1	1	2026-07-30 14:14:32.684033+00
+677	72	6203	item_name	\N	TEST-ITEM	1	2026-07-30 14:14:32.684033+00
+678	72	6203	__status__	\N	51	1	2026-07-30 14:14:32.684033+00
+679	72	6203	__status__	51	50	1	2026-07-30 14:14:34.291859+00
+680	72	6203	__deleted__	{"client":1,"item_name":"TEST-ITEM","project_manager":1}	\N	1	2026-07-30 14:14:35.81654+00
+681	74	6204	order_number	\N	TEST-AUTO-2	1	2026-07-30 14:14:50.332806+00
+682	74	6204	order_file	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:14:50.332806+00
+683	74	6204	drawing	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:14:50.332806+00
+684	74	6204	designer	\N	1	1	2026-07-30 14:14:50.332806+00
+685	74	6204	production_date	\N	2026-07-30	1	2026-07-30 14:14:50.332806+00
+686	74	6204	manufacturer	\N	1	1	2026-07-30 14:14:50.332806+00
+687	74	6204	production_order	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:14:50.332806+00
+688	74	6204	painter	\N	צבוע אצל יצרן	1	2026-07-30 14:14:50.332806+00
+689	72	6205	project_manager	\N	1	1	2026-07-30 14:14:50.354101+00
+690	72	6205	client	\N	1	1	2026-07-30 14:14:50.354101+00
+691	72	6205	item_name	\N	TEST-ITEM	1	2026-07-30 14:14:50.354101+00
+692	72	6205	__status__	\N	51	1	2026-07-30 14:14:50.354101+00
+693	74	6204	obshchiy_status	\N	Передано производителю	1	2026-07-30 14:14:50.41762+00
+694	72	6205	__status__	51	50	1	2026-07-30 14:14:51.910551+00
+695	74	6204	obshchiy_status	Передано производителю	Новая запись	1	2026-07-30 14:14:51.962184+00
+696	74	6204	obshchiy_status	Передано производителю	Новая запись	1	2026-07-30 14:14:51.970029+00
+697	72	6205	__deleted__	{"client":1,"item_name":"TEST-ITEM","project_manager":1}	\N	1	2026-07-30 14:14:53.487396+00
+698	74	6204	__deleted__	{"drawing":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"},"painter":"צבוע אצל יצרן","designer":1,"order_file":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"},"manufacturer":1,"order_number":"TEST-AUTO-2","obshchiy_status":"Новая запись","production_date":"2026-07-30","production_order":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"}}	\N	1	2026-07-30 14:14:53.506582+00
+699	74	6206	order_number	\N	TEST-AUTO-3	1	2026-07-30 14:18:04.488118+00
+700	74	6206	order_file	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:18:04.488118+00
+701	74	6206	drawing	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:18:04.488118+00
+702	74	6206	designer	\N	1	1	2026-07-30 14:18:04.488118+00
+703	74	6206	production_date	\N	2026-07-30	1	2026-07-30 14:18:04.488118+00
+704	74	6206	manufacturer	\N	1	1	2026-07-30 14:18:04.488118+00
+705	74	6206	production_order	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:18:04.488118+00
+706	74	6206	painter	\N	צבוע אצל יצרן	1	2026-07-30 14:18:04.488118+00
+707	72	6207	project_manager	\N	1	1	2026-07-30 14:18:04.537924+00
+708	72	6207	client	\N	1	1	2026-07-30 14:18:04.537924+00
+709	72	6207	item_name	\N	TEST-ITEM	1	2026-07-30 14:18:04.537924+00
+710	72	6207	__status__	\N	51	1	2026-07-30 14:18:04.537924+00
+711	74	6206	obshchiy_status	\N	Передано производителю	1	2026-07-30 14:18:04.645457+00
+712	72	6207	__deleted__	{"client":1,"item_name":"TEST-ITEM","project_manager":1}	\N	1	2026-07-30 14:18:06.106006+00
+713	74	6206	__deleted__	{"drawing":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"},"painter":"צבוע אצל יצרן","designer":1,"order_file":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"},"manufacturer":1,"order_number":"TEST-AUTO-3","obshchiy_status":"Передано производителю","production_date":"2026-07-30","production_order":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"}}	\N	1	2026-07-30 14:18:06.124517+00
+714	74	6208	order_number	\N	TEST-AUTO-4	1	2026-07-30 14:22:34.59815+00
+715	74	6208	order_file	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:22:34.59815+00
+716	74	6208	drawing	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:22:34.59815+00
+717	74	6208	designer	\N	1	1	2026-07-30 14:22:34.59815+00
+718	74	6208	production_date	\N	2026-07-30	1	2026-07-30 14:22:34.59815+00
+719	74	6208	manufacturer	\N	1	1	2026-07-30 14:22:34.59815+00
+720	74	6208	production_order	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:22:34.59815+00
+721	74	6208	painter	\N	צבוע אצל יצרן	1	2026-07-30 14:22:34.59815+00
+722	72	6209	project_manager	\N	1	1	2026-07-30 14:22:34.621984+00
+723	72	6209	client	\N	1	1	2026-07-30 14:22:34.621984+00
+724	72	6209	item_name	\N	TEST-ITEM	1	2026-07-30 14:22:34.621984+00
+725	72	6209	__status__	\N	51	1	2026-07-30 14:22:34.621984+00
+726	74	6208	obshchiy_status	\N	Передано производителю	1	2026-07-30 14:22:34.723266+00
+727	72	6209	production_status	\N	בצביעה	1	2026-07-30 14:22:35.923455+00
+728	74	6208	obshchiy_status	Передано производителю	בצביעה	1	2026-07-30 14:22:36.006876+00
+729	72	6209	__deleted__	{"client":1,"item_name":"TEST-ITEM","project_manager":1,"production_status":"בצביעה"}	\N	1	2026-07-30 14:22:37.154575+00
+730	74	6208	__deleted__	{"drawing":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"},"painter":"צבוע אצל יצרן","designer":1,"order_file":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"},"manufacturer":1,"order_number":"TEST-AUTO-4","obshchiy_status":"בצביעה","production_date":"2026-07-30","production_order":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"}}	\N	1	2026-07-30 14:22:37.170036+00
+731	74	6210	order_number	\N	TEST-AUTO-5	1	2026-07-30 14:22:48.787718+00
+732	74	6210	order_file	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:22:48.787718+00
+733	74	6210	drawing	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:22:48.787718+00
+734	74	6210	designer	\N	1	1	2026-07-30 14:22:48.787718+00
+735	74	6210	production_date	\N	2026-07-30	1	2026-07-30 14:22:48.787718+00
+736	74	6210	manufacturer	\N	1	1	2026-07-30 14:22:48.787718+00
+737	74	6210	production_order	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:22:48.787718+00
+738	74	6210	painter	\N	צבוע אצל יצרן	1	2026-07-30 14:22:48.787718+00
+739	74	6210	__deleted__	{"drawing":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"},"painter":"צבוע אצל יצרן","designer":1,"order_file":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"},"manufacturer":1,"order_number":"TEST-AUTO-5","production_date":"2026-07-30","production_order":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"}}	\N	1	2026-07-30 14:22:48.835403+00
+740	74	6211	order_number	\N	TEST-AUTO-6	1	2026-07-30 14:23:01.319727+00
+741	74	6211	order_file	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:23:01.319727+00
+742	74	6211	drawing	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:23:01.319727+00
+743	74	6211	designer	\N	1	1	2026-07-30 14:23:01.319727+00
+744	74	6211	production_date	\N	2026-07-30	1	2026-07-30 14:23:01.319727+00
+745	74	6211	manufacturer	\N	1	1	2026-07-30 14:23:01.319727+00
+746	74	6211	production_order	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:23:01.319727+00
+747	74	6211	painter	\N	צבוע אצל יצרן	1	2026-07-30 14:23:01.319727+00
+748	74	6211	__deleted__	{"drawing":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"},"painter":"צבוע אצל יצרן","designer":1,"order_file":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"},"manufacturer":1,"order_number":"TEST-AUTO-6","production_date":"2026-07-30","production_order":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"}}	\N	1	2026-07-30 14:23:01.346483+00
+749	74	6212	order_number	\N	TEST-AUTO-7	1	2026-07-30 14:23:14.361342+00
+750	74	6212	order_file	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:23:14.361342+00
+751	74	6212	drawing	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:23:14.361342+00
+752	74	6212	designer	\N	1	1	2026-07-30 14:23:14.361342+00
+753	74	6212	production_date	\N	2026-07-30	1	2026-07-30 14:23:14.361342+00
+754	74	6212	manufacturer	\N	1	1	2026-07-30 14:23:14.361342+00
+755	74	6212	production_order	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:23:14.361342+00
+756	74	6212	painter	\N	צבוע אצל יצרן	1	2026-07-30 14:23:14.361342+00
+757	75	6213	driver	\N	יסר	1	2026-07-30 14:23:14.383951+00
+758	75	6213	direction	\N	Производство-Покрасочная	1	2026-07-30 14:23:14.383951+00
+759	75	6213	pokrasichk	\N	Эпоколь	1	2026-07-30 14:23:14.383951+00
+760	75	6213	date	\N	2026-07-30	1	2026-07-30 14:23:14.383951+00
+761	75	6213	delivery_cost	\N	1	1	2026-07-30 14:23:14.383951+00
+762	75	6213	__status__	\N	58	1	2026-07-30 14:23:14.383951+00
+763	75	6213	__status__	58	59	1	2026-07-30 14:23:14.425641+00
+764	74	6212	obshchiy_status	\N	Готово к отправке на объект	1	2026-07-30 14:23:14.457898+00
+765	75	6213	__deleted__	{"date":"2026-07-30","driver":"יסר","direction":"Производство-Покрасочная","pokrasichk":"Эпоколь","delivery_cost":1}	\N	1	2026-07-30 14:23:15.651263+00
+766	74	6212	__deleted__	{"drawing":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"},"painter":"צבוע אצל יצרן","designer":1,"order_file":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"},"manufacturer":1,"order_number":"TEST-AUTO-7","obshchiy_status":"Готово к отправке на объект","production_date":"2026-07-30","production_order":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"}}	\N	1	2026-07-30 14:23:15.670199+00
+767	74	6214	order_number	\N	TEST-AUTO-8	1	2026-07-30 14:23:34.545507+00
+768	74	6214	order_file	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:23:34.545507+00
+769	74	6214	drawing	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:23:34.545507+00
+770	74	6214	designer	\N	1	1	2026-07-30 14:23:34.545507+00
+771	74	6214	production_date	\N	2026-07-30	1	2026-07-30 14:23:34.545507+00
+772	74	6214	manufacturer	\N	1	1	2026-07-30 14:23:34.545507+00
+773	74	6214	production_order	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:23:34.545507+00
+774	74	6214	painter	\N	צבוע אצל יצרן	1	2026-07-30 14:23:34.545507+00
+775	72	6215	project_manager	\N	1	1	2026-07-30 14:23:34.56602+00
+776	72	6215	client	\N	1	1	2026-07-30 14:23:34.56602+00
+777	72	6215	item_name	\N	TEST-ITEM	1	2026-07-30 14:23:34.56602+00
+778	72	6215	__status__	\N	51	1	2026-07-30 14:23:34.56602+00
+779	74	6214	obshchiy_status	\N	Передано производителю	1	2026-07-30 14:23:34.627541+00
+780	72	6215	__deleted__	{"client":1,"item_name":"TEST-ITEM","project_manager":1}	\N	1	2026-07-30 14:23:36.819517+00
+781	74	6214	__deleted__	{"drawing":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"},"painter":"צבוע אצל יצרן","designer":1,"order_file":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"},"manufacturer":1,"order_number":"TEST-AUTO-8","obshchiy_status":"Передано производителю","production_date":"2026-07-30","production_order":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"}}	\N	1	2026-07-30 14:23:36.836841+00
+782	74	6216	order_number	\N	TEST-AUTO-9	1	2026-07-30 14:23:47.061933+00
+783	74	6216	order_file	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:23:47.061933+00
+784	74	6216	drawing	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:23:47.061933+00
+785	74	6216	designer	\N	1	1	2026-07-30 14:23:47.061933+00
+786	74	6216	production_date	\N	2026-07-30	1	2026-07-30 14:23:47.061933+00
+787	74	6216	manufacturer	\N	1	1	2026-07-30 14:23:47.061933+00
+788	74	6216	production_order	\N	{"kind":"link","url":"https://example.com/t.pdf","name":"t.pdf"}	1	2026-07-30 14:23:47.061933+00
+789	74	6216	painter	\N	צבוע אצל יצרן	1	2026-07-30 14:23:47.061933+00
+790	72	6217	project_manager	\N	1	1	2026-07-30 14:23:47.099889+00
+791	72	6217	client	\N	1	1	2026-07-30 14:23:47.099889+00
+792	72	6217	item_name	\N	TEST-ITEM	1	2026-07-30 14:23:47.099889+00
+793	72	6217	__status__	\N	51	1	2026-07-30 14:23:47.099889+00
+794	74	6216	obshchiy_status	\N	Передано производителю	1	2026-07-30 14:23:47.154639+00
+795	74	6216	obshchiy_status	Передано производителю	На установке	1	2026-07-30 14:23:48.180849+00
+796	72	6217	__deleted__	{"client":1,"item_name":"TEST-ITEM","project_manager":1}	\N	1	2026-07-30 14:23:49.363593+00
+797	74	6216	__deleted__	{"drawing":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"},"painter":"צבוע אצל יצרן","designer":1,"order_file":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"},"manufacturer":1,"order_number":"TEST-AUTO-9","obshchiy_status":"На установке","production_date":"2026-07-30","production_order":{"url":"https://example.com/t.pdf","kind":"link","name":"t.pdf"}}	\N	1	2026-07-30 14:23:49.390973+00
 \.
 
 
@@ -2166,6 +2297,19 @@ COPY public.entity_automation_runs (id, automation_id, entity_id, record_id, sta
 148	9	72	158	success	page_field.saved	{"actions": [{"ok": true, "type": "update_records_where"}]}	\N	2026-07-07 07:04:14.796249+00
 149	8	72	158	success	page_field.saved	{"actions": [{"ok": true, "type": "update_records_where"}]}	\N	2026-07-07 07:04:47.43291+00
 150	9	72	158	success	page_field.saved	{"actions": [{"ok": true, "type": "update_records_where"}]}	\N	2026-07-07 07:04:56.323085+00
+151	10	72	6203	success	record.updated	{"actions": [{"ok": true, "type": "update_records_where"}]}	\N	2026-07-30 14:14:34.340241+00
+152	11	72	6203	success	status.changed	{"actions": [{"ok": true, "type": "update_records_where"}]}	\N	2026-07-30 14:14:34.347733+00
+153	10	72	6205	success	record.updated	{"actions": [{"ok": true, "type": "update_records_where"}]}	\N	2026-07-30 14:14:50.426557+00
+154	10	72	6205	success	record.updated	{"actions": [{"ok": true, "type": "update_records_where"}]}	\N	2026-07-30 14:14:51.973993+00
+155	11	72	6205	success	status.changed	{"actions": [{"ok": true, "type": "update_records_where"}]}	\N	2026-07-30 14:14:51.984572+00
+156	10	72	6207	success	record.updated	{"actions": [{"ok": true, "type": "update_records_where"}]}	\N	2026-07-30 14:18:04.655541+00
+157	10	72	6209	success	record.updated	{"actions": [{"ok": true, "type": "update_records_where"}]}	\N	2026-07-30 14:22:34.733865+00
+158	10	72	6209	success	record.updated	{"actions": [{"ok": true, "type": "update_records_where"}]}	\N	2026-07-30 14:22:35.964187+00
+159	12	72	6209	success	record.updated	{"actions": [{"ok": true, "type": "update_records_where"}]}	\N	2026-07-30 14:22:36.016125+00
+160	16	75	6213	success	status.changed	{"actions": [{"ok": true, "type": "update_records_where"}]}	\N	2026-07-30 14:23:14.467807+00
+161	10	72	6215	success	record.updated	{"actions": [{"ok": true, "type": "update_records_where"}]}	\N	2026-07-30 14:23:34.634685+00
+162	10	72	6217	success	record.updated	{"actions": [{"ok": true, "type": "update_records_where"}]}	\N	2026-07-30 14:23:47.162833+00
+163	15	72	6217	success	page_field.saved	{"actions": [{"ok": true, "type": "update_records_where"}]}	\N	2026-07-30 14:23:48.191145+00
 \.
 
 
@@ -2178,6 +2322,13 @@ COPY public.entity_automations (id, entity_id, name_json, is_active, trigger_jso
 7	72	{"ru": "Монтаж - Тип оплаты"}	t	{"type": "page_field_changed", "pageId": 81, "fieldKey": "tip_oplaty"}	[]	[{"type": "update_records_where", "match": [{"fieldKey": "order_number", "operator": "eq", "valueSource": "field", "valueFieldKey": "order_number"}], "mapping": [{"sourceType": "field", "sourcePageId": 81, "targetPageId": 81, "sourceFieldKey": "tip_oplaty", "targetFieldKey": "tip_oplaty", "sourceFieldSource": "page", "targetFieldSource": "page"}], "targetEntityId": 72}]	2	2026-07-06 06:39:32.826802+00	2026-07-06 07:11:48.73+00	and
 5	72	{"ru": "Монтажные бригады"}	t	{"type": "page_field_changed", "pageId": 81, "fieldKey": "installation_team"}	[]	[{"type": "update_records_where", "match": [{"fieldKey": "order_number", "operator": "eq", "valueSource": "field", "valueFieldKey": "order_number"}], "mapping": [{"sourceType": "field", "sourcePageId": 81, "targetPageId": 81, "sourceFieldKey": "installation_team", "targetFieldKey": "installation_team", "sourceFieldSource": "page", "targetFieldSource": "page"}], "targetEntityId": 72}]	1	2026-07-02 18:55:46.84854+00	2026-07-06 07:15:35.891684+00	and
 8	72	{"ru": "Монтаж - дата начала работ"}	t	{"type": "page_field_changed", "pageId": 81, "fieldKey": "data_nachala_rabot"}	[]	[{"type": "update_records_where", "match": [{"fieldKey": "order_number", "operator": "eq", "valueSource": "field", "valueFieldKey": "order_number"}], "mapping": [{"sourceType": "field", "sourcePageId": 81, "targetPageId": 81, "sourceFieldKey": "data_nachala_rabot", "targetFieldKey": "data_nachala_rabot", "sourceFieldSource": "page", "targetFieldSource": "page"}], "targetEntityId": 72}]	3	2026-07-07 07:02:24.863119+00	2026-07-07 07:02:24.863119+00	and
+11	72	{"en": "Order overall status: on product status change", "he": "סטטוס כללי של הזמנה: בשינוי סטטוס פריט", "ru": "Общий статус заказа: при смене статуса изделия"}	t	{"type": "status_changed"}	[]	[{"type": "update_records_where", "match": [{"fieldKey": "order_number", "operator": "eq", "valueSource": "field", "valueFieldKey": "order_number"}], "mapping": [{"value": "{__status__}", "sourceType": "combined", "targetFieldKey": "obshchiy_status"}], "targetEntityId": 74}]	0	2026-07-30 14:10:34.956777+00	2026-07-30 14:10:34.956777+00	and
+10	72	{"en": "Order overall status: on product create/update", "he": "סטטוס כללי של הזמנה: ביצירה/עדכון פריט", "ru": "Общий статус заказа: при создании/изменении изделия"}	t	{"type": "record_updated"}	[]	[{"type": "update_records_where", "match": [{"fieldKey": "order_number", "operator": "eq", "valueSource": "field", "valueFieldKey": "order_number"}], "mapping": [{"value": "{__status__}", "sourceType": "combined", "targetFieldKey": "obshchiy_status"}], "targetEntityId": 74}]	0	2026-07-30 14:10:34.679032+00	2026-07-30 14:13:25.883+00	and
+12	72	{"en": "Order overall status: production status", "he": "סטטוס כללי: סטטוס ייצור", "ru": "Общий статус заказа: Статус производства"}	t	{"type": "field_changed", "fieldKey": "production_status"}	[]	[{"type": "update_records_where", "match": [{"fieldKey": "order_number", "operator": "eq", "valueSource": "field", "valueFieldKey": "order_number"}], "mapping": [{"sourceType": "field", "sourceFieldKey": "production_status", "targetFieldKey": "obshchiy_status"}], "targetEntityId": 74}]	0	2026-07-30 14:22:15.804064+00	2026-07-30 14:22:15.804064+00	and
+13	72	{"en": "Order overall status: order approval", "he": "סטטוס כללי: אישור הזמנה", "ru": "Общий статус заказа: Разрешение заказа"}	t	{"type": "field_changed", "fieldKey": "comments"}	[]	[{"type": "update_records_where", "match": [{"fieldKey": "order_number", "operator": "eq", "valueSource": "field", "valueFieldKey": "order_number"}], "mapping": [{"sourceType": "field", "sourceFieldKey": "comments", "targetFieldKey": "obshchiy_status"}], "targetEntityId": 74}]	0	2026-07-30 14:22:15.857405+00	2026-07-30 14:22:15.857405+00	and
+14	72	{"en": "Order overall status: paint status", "he": "סטטוס כללי: סטטוס צביעה", "ru": "Общий статус заказа: Статус покраски"}	t	{"type": "field_changed", "fieldKey": "paint_status"}	[]	[{"type": "update_records_where", "match": [{"fieldKey": "order_number", "operator": "eq", "valueSource": "field", "valueFieldKey": "order_number"}], "mapping": [{"sourceType": "field", "sourceFieldKey": "paint_status", "targetFieldKey": "obshchiy_status"}], "targetEntityId": 74}]	0	2026-07-30 14:22:15.869932+00	2026-07-30 14:22:15.869932+00	and
+15	72	{"en": "Order overall status: installation status", "he": "סטטוס כללי: סטטוס התקנה", "ru": "Общий статус заказа: Статус монтажа"}	t	{"type": "page_field_changed", "pageId": 81, "fieldKey": "status_montazha"}	[]	[{"type": "update_records_where", "match": [{"fieldKey": "order_number", "operator": "eq", "valueSource": "field", "valueFieldKey": "order_number"}], "mapping": [{"sourceType": "field", "sourcePageId": 81, "sourceFieldKey": "status_montazha", "targetFieldKey": "obshchiy_status", "sourceFieldSource": "page"}], "targetEntityId": 74}]	0	2026-07-30 14:22:15.890032+00	2026-07-30 14:22:15.890032+00	and
+16	75	{"en": "Order overall status: delivery status", "he": "סטטוס כללי: סטטוס משלוח", "ru": "Общий статус заказа: Статус доставки"}	t	{"type": "status_changed"}	[]	[{"type": "update_records_where", "match": [{"fieldKey": "order_number", "operator": "eq", "valueSource": "field", "valueFieldKey": "order"}], "mapping": [{"value": "{__status__}", "sourceType": "combined", "targetFieldKey": "obshchiy_status"}], "targetEntityId": 74}]	0	2026-07-30 14:22:15.9022+00	2026-07-30 14:22:15.9022+00	and
 \.
 
 
@@ -2223,23 +2374,23 @@ COPY public.entity_fields (id, entity_id, field_key, name_json, description_json
 166	72	painter	{"en": "Painter", "he": "צבעי", "ru": "Покрасчик"}	{}	lookup	f	\N	[]	25	t	2026-06-08 21:01:23.18805+00	2026-07-30 11:18:13.720626+00	{"4": "view"}	t	t	{}	{}	[{"value": "צבוע אצל יצרן", "operator": "equals", "rowColor": "", "cellColor": "#D4EDBC"}, {"value": "צביע באפוקול", "operator": "equals", "rowColor": "", "cellColor": "#FFCFC9"}, {"value": "ללא צבע", "operator": "equals", "rowColor": "", "cellColor": "#E8EAED"}]	{}	f	\N	\N	{}	f	f	f	{"relationId": 25, "writeThrough": true, "relatedFieldKey": "painter"}	t	3	[]	f	f	{}
 174	72	paint_status	{"en": "Paint Status", "he": "סטטוס צביעה", "ru": "Статус покраски"}	{}	select	f	\N	[{"value": "בשטח לפני צבע", "labelJson": {"ru": "בשטח לפני צבע"}}, {"value": "בצבע", "labelJson": {"ru": "בצבע"}}, {"value": "מוקפא", "labelJson": {"ru": "מוקפא"}}, {"value": "לצבוע דחוף", "labelJson": {"ru": "לצבוע דחוף"}}, {"value": "מוכנ חלקי/פסולים", "labelJson": {"ru": "מוכנ חלקי/פסולים"}}, {"value": "יצאה לאתר", "labelJson": {"ru": "יצאה לאתר"}}, {"value": "יצאה חלקי", "labelJson": {"ru": "יצאה חלקי"}}, {"value": "מוכן להובלה", "labelJson": {"ru": "מוכן להובלה"}}]	26	t	2026-06-08 21:01:23.18805+00	2026-07-25 20:59:47.2+00	{"4": "hidden"}	t	f	{}	{}	[{"value": "בשטח לפני צבע", "operator": "equals", "rowColor": "", "cellColor": "#FFE5A0"}, {"value": "בצבע", "operator": "equals", "rowColor": "", "cellColor": "#E9DD3D"}, {"value": "מוקפא", "operator": "equals", "rowColor": "", "cellColor": "#0A53A8", "textColor": "#ffffff"}, {"value": "לצבוע דחוף", "operator": "equals", "rowColor": "", "cellColor": "#F10D0D", "textColor": "#ffffff"}, {"value": "מוכנ חלקי/פסולים", "operator": "equals", "rowColor": "", "cellColor": "#E6CFF2"}, {"value": "יצאה לאתר", "operator": "equals", "rowColor": "", "cellColor": "#D4EDBC"}, {"value": "יצאה חלקי", "operator": "equals", "rowColor": "", "cellColor": "#FFCFC9"}, {"value": "מוכן להובלה", "operator": "equals", "rowColor": "", "cellColor": "#FFCFC9"}]	{}	f	\N	\N	{}	f	f	f	{}	t	3	[]	f	f	{}
 216	74	crm_deal_id	{"en": "CRM deal id", "he": "מזהה עסקה CRM", "ru": "Id сделки CRM"}	{}	text	f	\N	[]	9000	t	2026-07-10 15:06:33.663933+00	2026-07-10 15:06:33.663933+00	{}	f	f	{}	{}	[]	{}	f	\N	\N	{}	f	f	f	{}	f	\N	[]	f	f	{}
-217	74	obshchiy_status	{"ru": "Общий статус"}	{}	text	f	\N	[]	9001	t	2026-07-23 13:53:16.050203+00	2026-07-23 13:53:16.050203+00	{}	f	f	{}	{}	[]	{}	f	\N	\N	{}	f	f	f	{}	f	\N	[]	f	f	{}
-178	72	comments	{"en": "", "he": "", "ru": "Разрешение заказа"}	{}	select	f	\N	[{"value": "מאושר לאיציה", "labelJson": {"ru": "מאושר לאיציה"}}, {"value": "לא מאושר", "labelJson": {"ru": "לא מאושר"}}, {"value": "חובה וידיו", "labelJson": {"ru": "חובה וידיו"}}, {"value": "מוקפא", "labelJson": {"ru": "מוקפא"}}, {"value": "דחוף מאוד", "labelJson": {"ru": "דחוף מאוד"}}]	20	t	2026-06-08 21:01:23.18805+00	2026-07-30 11:18:13.720626+00	{"4": "view"}	f	f	{}	{}	[{"value": "מאושר לאיציה", "operator": "equals", "rowColor": "", "cellColor": "#D4EDBC"}, {"value": "לא מאושר", "operator": "equals", "rowColor": "", "cellColor": "#FFCFC9"}, {"value": "חובה וידיו", "operator": "equals", "rowColor": "", "cellColor": "#FFCFC9"}, {"value": "מוקפא", "operator": "equals", "rowColor": "", "cellColor": "#0A53A8", "textColor": "#ffffff"}, {"value": "דחוף מאוד", "operator": "equals", "rowColor": "", "cellColor": "#B10202", "textColor": "#ffffff"}]	{}	f	\N	\N	{}	f	f	f	{}	t	2	[{"value": "מוכן לאיציה לישראל", "operator": "equals", "applyToValues": ["מאושר לאיציה"], "conditionFieldKey": "production_status"}]	f	f	{}
-218	72	obschiy_status	{"ru": "Общий статус"}	{}	relation	f	\N	[]	0	t	2026-07-23 13:57:35.305185+00	2026-07-30 11:18:13.720626+00	{"4": "view"}	t	t	{}	{}	[]	{}	f	\N	\N	{}	f	f	t	{"relationId": 25, "relatedFieldKey": "obshchiy_status"}	f	\N	[]	f	f	{}
 165	72	production_cost	{"en": "Production Cost", "he": "עלות ייצור", "ru": "Стоимость производства"}	{}	function	f	\N	[]	19	t	2026-06-08 21:01:23.18805+00	2026-07-30 11:18:13.720626+00	{"4": "view"}	f	t	{}	{}	[]	{"decimals": 0, "expression": "{quantity}*{mnf_cost_unit}"}	t	#F7F7B9	#000000	{}	f	f	f	{}	f	2	[]	f	f	{}
 150	72	project_manager	{"en": "Project Manager", "he": "מינהל פרוייקט", "ru": "Управляющий проектами"}	{}	user	t	\N	[]	1	t	2026-06-08 21:01:23.18805+00	2026-07-30 11:18:13.720626+00	{"4": "view"}	t	t	{}	{"allowCreate": false, "allowedRoleIds": [2]}	[{"value": "2", "operator": "equals", "rowColor": "", "cellColor": "#BFE1F6"}, {"value": "20", "operator": "equals", "rowColor": "", "cellColor": "#E6CFF2"}, {"value": "46", "operator": "equals", "rowColor": "", "cellColor": "#E8EAED"}]	{}	f	\N	\N	{}	f	f	f	{}	t	1	[]	f	f	{}
+178	72	comments	{"en": "Order approval", "he": "אישור הזמנה", "ru": "Разрешение заказа"}	{}	select	f	\N	[{"value": "מאושר לאיציה", "labelJson": {"ru": "מאושר לאיציה"}}, {"value": "לא מאושר", "labelJson": {"ru": "לא מאושר"}}, {"value": "חובה וידיו", "labelJson": {"ru": "חובה וידיו"}}, {"value": "מוקפא", "labelJson": {"ru": "מוקפא"}}, {"value": "דחוף מאוד", "labelJson": {"ru": "דחוף מאוד"}}]	20	t	2026-06-08 21:01:23.18805+00	2026-07-30 14:01:48.973869+00	{"4": "view"}	f	f	{}	{}	[{"value": "מאושר לאיציה", "operator": "equals", "rowColor": "", "cellColor": "#D4EDBC"}, {"value": "לא מאושר", "operator": "equals", "rowColor": "", "cellColor": "#FFCFC9"}, {"value": "חובה וידיו", "operator": "equals", "rowColor": "", "cellColor": "#FFCFC9"}, {"value": "מוקפא", "operator": "equals", "rowColor": "", "cellColor": "#0A53A8", "textColor": "#ffffff"}, {"value": "דחוף מאוד", "operator": "equals", "rowColor": "", "cellColor": "#B10202", "textColor": "#ffffff"}]	{}	f	\N	\N	{}	f	f	f	{}	t	2	[{"value": "מוכן לאיציה לישראל", "operator": "equals", "applyToValues": ["מאושר לאיציה"], "conditionFieldKey": "production_status"}]	f	f	{}
+217	74	obshchiy_status	{"en": "Overall status", "he": "סטטוס כללי", "ru": "Общий статус"}	{}	text	f	\N	[]	9001	t	2026-07-23 13:53:16.050203+00	2026-07-30 14:01:48.980207+00	{}	f	f	{}	{}	[]	{}	f	\N	\N	{}	f	f	f	{}	f	\N	[]	f	f	{}
+218	72	obschiy_status	{"en": "Overall status", "he": "סטטוס כללי", "ru": "Общий статус"}	{}	relation	f	\N	[]	0	t	2026-07-23 13:57:35.305185+00	2026-07-30 14:01:48.983458+00	{"4": "view"}	t	t	{}	{}	[]	{}	f	\N	\N	{}	f	f	t	{"relationId": 25, "relatedFieldKey": "obshchiy_status"}	f	\N	[]	f	f	{}
 151	72	project_name	{"en": "Project", "he": "פרויקט", "ru": "Проект"}	{}	relation	t	\N	[]	3	t	2026-06-08 21:01:23.18805+00	2026-07-30 11:18:13.720626+00	{"4": "view"}	t	t	{}	{}	[]	{}	f	\N	\N	{"dependsOnFieldKey": "client", "relatedFilterFieldKey": "client"}	f	f	t	{"relationId": 24, "relatedFieldKey": "name"}	t	1	[]	f	f	{}
 156	72	quantity	{"en": "mm/m/pcs", "he": "מ\\"א/מ\\"ר/יח", "ru": "мм/м/ед."}	{}	number	f	\N	[]	9	t	2026-06-08 21:01:23.18805+00	2026-07-30 11:18:13.720626+00	{"4": "view"}	f	t	{}	{}	[]	{}	f	\N	\N	{}	f	f	f	{}	t	1	[]	f	f	{}
 197	72	ral_color	{"en": "RAL Color", "he": "צבע RAL", "ru": "Цвет RAL"}	{}	lookup	f	\N	[]	8	t	2026-06-14 08:16:05.784124+00	2026-07-30 11:18:13.720626+00	{"4": "view"}	f	t	{}	{}	[]	{}	f	\N	\N	{}	f	f	f	{"relationId": 25, "writeThrough": true, "relatedFieldKey": "ral_color"}	t	1	[]	t	f	{}
-220	72	stoimost_pokraski	{"ru": "Стоимость покраски"}	{}	function	f	\N	[]	32	t	2026-07-25 19:30:37.951743+00	2026-07-30 11:18:13.720626+00	{"4": "view"}	f	t	{}	{}	[]	{"decimals": 0, "expression": "{quantity}*{stoimost_pokraski_za_m_kv_ed}"}	t	#fff4bd	#000000	{}	f	f	f	{}	f	\N	[]	f	f	{}
+220	72	stoimost_pokraski	{"en": "Painting cost", "he": "עלות צביעה", "ru": "Стоимость покраски"}	{}	function	f	\N	[]	32	t	2026-07-25 19:30:37.951743+00	2026-07-30 14:01:48.989317+00	{"4": "view"}	f	t	{}	{}	[]	{"decimals": 0, "expression": "{quantity}*{stoimost_pokraski_za_m_kv_ed}"}	t	#fff4bd	#000000	{}	f	f	f	{}	f	\N	[]	f	f	{}
 203	75	direction	{"en": "Direction", "he": "כיוון", "ru": "Направление"}	{}	select	t	\N	[{"value": "Производство-Покрасочная", "labelJson": {"ru": "Производство-Покрасочная"}}, {"value": "Покрасочная-Объект", "labelJson": {"ru": "Покрасочная-Объект"}}, {"value": "Производство-Объект", "labelJson": {"ru": "Производство-Объект"}}, {"value": "Производство-Склад", "labelJson": {"ru": "Производство-Склад"}}, {"value": "Покрасочная-Склад", "labelJson": {"ru": "Покрасочная-Склад"}}]	3	t	2026-06-30 17:20:04.970975+00	2026-07-30 10:38:50.421189+00	{}	f	t	{}	{}	[{"value": "Производство-Покрасочная", "operator": "equals", "rowColor": "", "cellColor": "#FFE5A0", "textColor": "#000000"}, {"value": "Производство-Объект", "operator": "equals", "rowColor": "", "cellColor": "#D4EDBC", "textColor": "#000000"}, {"value": "Покрасочная-Объект", "operator": "equals", "rowColor": "", "cellColor": "#cceeff", "textColor": "#000000"}]	{}	f	\N	\N	{}	f	f	t	{}	f	\N	[{"value": "", "operator": "notEmpty", "applyToValues": ["Производство-Покрасочная", "Покрасочная-Объект"], "conditionFieldKey": "pokrasichk"}]	f	f	{}
 207	75	driver	{"en": "Driver", "he": "נהג", "ru": "Водитель"}	{}	select	t	\N	[{"value": "יסר", "labelJson": {"ru": "יסר"}}, {"value": "סעיד", "labelJson": {"ru": "סעיד"}}, {"value": "אדם", "labelJson": {"ru": "אדם"}}, {"value": "סמיון", "labelJson": {"ru": "סמיון"}}, {"value": "חסן", "labelJson": {"ru": "חסן"}}, {"value": "חסן אדנן", "labelJson": {"ru": "חסן אדנן"}}, {"value": "אחר", "labelJson": {"ru": "אחר"}}, {"value": "רני-הובלות סעיר", "labelJson": {"ru": "רני-הובלות סעיר"}}, {"value": "יסר, נהג-סובחי", "labelJson": {"ru": "יסר, נהג-סובחי"}}, {"value": "נהג-סובחי", "labelJson": {"ru": "נהג-סובחי"}}, {"value": "ולדימיר", "labelJson": {"ru": "ולדימיר"}}]	2	t	2026-07-01 13:01:06.855766+00	2026-07-30 10:38:50.421189+00	{}	t	t	{}	{}	[{"value": "יסר", "operator": "equals", "rowColor": "", "cellColor": "#E6E6E6"}, {"value": "סעיד", "operator": "equals", "rowColor": "", "cellColor": "#E6E6E6"}, {"value": "אדם", "operator": "equals", "rowColor": "", "cellColor": "#E6E6E6"}, {"value": "סמיון", "operator": "equals", "rowColor": "", "cellColor": "#E6CFF2"}, {"value": "חסן", "operator": "equals", "rowColor": "", "cellColor": "#E6E6E6"}, {"value": "חסן אדנן", "operator": "equals", "rowColor": "", "cellColor": "#E6E6E6"}, {"value": "אחר", "operator": "equals", "rowColor": "", "cellColor": "#B10202", "textColor": "#ffffff"}]	{}	f	\N	\N	{}	f	f	f	{}	f	\N	[]	f	f	{}
-201	72	makasa	{"ru": "Makasa"}	{}	file	f	\N	[]	24	t	2026-06-22 13:52:42.33929+00	2026-07-30 11:18:13.720626+00	{"4": "edit"}	f	f	{"driveFolderId": "13jIMt-GPWfSCNOUsxMVYS2QK2Iqb4TYW", "allowedSources": ["gdrive", "link"]}	{}	[]	{}	f	\N	\N	{}	f	f	f	{}	f	2	[]	f	f	{}
 167	72	production_status	{"en": "Production Status", "he": "סטטוס ייצור", "ru": "Статус производства"}	{}	select	f	\N	[{"value": "בצביעה", "labelJson": {"ru": "בצביעה"}}, {"value": "מוכן לבדיקה", "labelJson": {"ru": "מוכן לבדיקה"}}, {"value": "מוכן לאיציה לישראל", "labelJson": {"ru": "מוכן לאיציה לישראל"}}, {"value": "מוכפא", "labelJson": {"ru": "מוכפא"}}, {"value": "יצאיה לישראל", "labelJson": {"ru": "יצאיה לישראל"}}, {"value": "ביצור", "labelJson": {"ru": "ביצור"}}, {"value": "עוד לא בעבודה", "labelJson": {"ru": "עוד לא בעבודה"}}, {"value": "לא לביצוע", "labelJson": {"ru": "לא לביצוע"}}, {"value": "בפינישים", "labelJson": {"ru": "בפינישים"}}, {"value": "בחיתוך", "labelJson": {"ru": "בחיתוך"}}, {"value": "בגילוון", "labelJson": {"ru": "בגילוון"}}]	21	t	2026-06-08 21:01:23.18805+00	2026-07-30 11:18:13.720626+00	{"4": "edit"}	t	f	{}	{}	[{"value": "בצביעה", "operator": "equals", "rowColor": "", "cellColor": "#FFE5A0"}, {"value": "מוכן לבדיקה", "operator": "equals", "rowColor": "", "cellColor": "#B10202", "textColor": "#ffffff"}, {"value": "מוכן לאיציה לישראל", "operator": "equals", "rowColor": "", "cellColor": "#D4EDBC"}, {"value": "מוכפא", "operator": "equals", "rowColor": "", "cellColor": "#0A53A8", "textColor": "#ffffff"}, {"value": "יצאיה לישראל", "operator": "equals", "rowColor": "", "cellColor": "#11734B", "textColor": "#ffffff"}, {"value": "עוד לא בעבודה", "operator": "equals", "rowColor": "", "cellColor": "#FFCFC9"}, {"value": "ביצור", "operator": "equals", "rowColor": "", "cellColor": "#eee670"}]	{}	f	\N	\N	{}	f	f	f	{}	t	2	[]	f	f	{}
 162	72	entry_date	{"en": "Entry Date", "he": "תאריך כניסה", "ru": "Дата на производство"}	{}	lookup	f	\N	[]	15	t	2026-06-08 21:01:23.18805+00	2026-07-30 11:18:13.720626+00	{"4": "view"}	t	t	{}	{}	[]	{}	f	\N	\N	{}	f	f	f	{"relationId": 25, "writeThrough": true, "relatedFieldKey": "production_date"}	t	2	[]	f	f	{}
 152	72	item_name	{"en": "Item", "he": "פריט", "ru": "Изделие"}	{}	text	t	\N	[]	4	t	2026-06-08 21:01:23.18805+00	2026-07-30 11:18:13.720626+00	{"4": "view"}	f	t	{}	{}	[]	{}	f	\N	\N	{}	f	f	f	{}	t	1	[]	f	f	{}
 159	72	materials_cost	{"en": "DWG Drawings", "he": " תוכניות DWG", "ru": "DWG Чертежи"}	{}	lookup	f	\N	[]	12	t	2026-06-08 21:01:23.18805+00	2026-07-30 11:18:13.720626+00	{"4": "view"}	f	t	{}	{}	[]	{}	f	\N	\N	{}	f	f	f	{"relationId": 25, "writeThrough": true, "relatedFieldKey": "dwg_drawings"}	t	1	[]	f	f	{}
-219	72	stoimost_pokraski_za_m_kv_ed	{"ru": "Стоимость покраски за м. кв./ед."}	{}	number	f	\N	[]	31	t	2026-07-25 19:29:39.129175+00	2026-07-30 11:18:13.720626+00	{"4": "view"}	f	t	{}	{}	[]	{}	f	\N	\N	{}	f	f	f	{}	f	\N	[]	f	f	{}
+219	72	stoimost_pokraski_za_m_kv_ed	{"en": "Painting cost per m²/unit", "he": "עלות צביעה למ״ר/יח׳", "ru": "Стоимость покраски за м. кв./ед."}	{}	number	f	\N	[]	31	t	2026-07-25 19:29:39.129175+00	2026-07-30 14:01:48.9861+00	{"4": "view"}	f	t	{}	{}	[]	{}	f	\N	\N	{}	f	f	f	{}	f	\N	[]	f	f	{}
+201	72	makasa	{"en": "Makasa", "he": "מקסה", "ru": "Makasa"}	{}	file	f	\N	[]	24	t	2026-06-22 13:52:42.33929+00	2026-07-30 14:01:48.977401+00	{"4": "edit"}	f	f	{"driveFolderId": "13jIMt-GPWfSCNOUsxMVYS2QK2Iqb4TYW", "allowedSources": ["gdrive", "link"]}	{}	[]	{}	f	\N	\N	{}	f	f	f	{}	f	2	[]	f	f	{}
 \.
 
 
@@ -5186,14 +5337,14 @@ COPY public.entity_statuses (id, entity_id, status_key, name_json, color, is_def
 59	75	gotovo_k_otpravke_na_obekt	{"ru": "Готово к отправке на объект"}	#8b5cf6	f	f	2	t	2026-06-30 20:31:40.290188+00	2026-06-30 20:36:21.274+00	f	0
 60	75	vyehalo_na_obekt	{"ru": "Выехало на объект"}	#10b981	f	t	3	t	2026-06-30 20:32:15.370581+00	2026-06-30 20:36:21.274+00	t	5
 58	75	dotsavleno_na_pokrasku	{"ru": "Дотсавлено на покраску"}	#f59e0b	t	f	1	t	2026-06-30 20:30:58.290615+00	2026-06-30 20:36:21.275+00	f	0
-50	72	new	{"en": "New", "he": "חדש", "ru": "Новая запись"}	#6b7280	t	f	1	t	2026-06-08 21:01:23.18805+00	2026-06-08 21:01:23.18805+00	f	0
-51	72	sent_to_manufacturer	{"en": "Sent to Manufacturer", "he": "נשלח ליצרן", "ru": "Передано производителю"}	#f59e0b	f	f	2	t	2026-06-08 21:01:23.18805+00	2026-06-08 21:01:23.18805+00	f	0
-52	72	in_production	{"en": "In Production", "he": "בייצור", "ru": "В производстве"}	#3b82f6	f	f	3	t	2026-06-08 21:01:23.18805+00	2026-06-08 21:01:23.18805+00	f	0
-53	72	ready	{"en": "Ready", "he": "מוכן", "ru": "Готово"}	#8b5cf6	f	f	4	t	2026-06-08 21:01:23.18805+00	2026-06-08 21:01:23.18805+00	f	0
-54	72	sent_to_logistics	{"en": "Sent to Logistics", "he": "נשלח ללוגיסטיקה", "ru": "Передано в логистику"}	#06b6d4	f	f	5	t	2026-06-08 21:01:23.18805+00	2026-06-08 21:01:23.18805+00	f	0
-55	72	delivered	{"en": "Delivered", "he": "נמסר", "ru": "Доставлено"}	#10b981	f	f	6	t	2026-06-08 21:01:23.18805+00	2026-06-08 21:01:23.18805+00	f	0
-56	72	installed	{"en": "Installed", "he": "הותקן", "ru": "Смонтировано"}	#22c55e	f	f	7	t	2026-06-08 21:01:23.18805+00	2026-06-08 21:01:23.18805+00	f	0
-57	72	closed	{"en": "Closed", "he": "סגור", "ru": "Закрыто"}	#1f2937	f	t	8	t	2026-06-08 21:01:23.18805+00	2026-06-08 21:01:23.18805+00	t	30
+50	72	new	{"en": "New", "he": "חדש", "ru": "Новая запись"}	#6b7280	f	f	1	t	2026-06-08 21:01:23.18805+00	2026-07-30 14:01:34.172+00	f	0
+52	72	in_production	{"en": "In Production", "he": "בייצור", "ru": "В производстве"}	#3b82f6	f	f	3	t	2026-06-08 21:01:23.18805+00	2026-07-30 14:01:34.172+00	f	0
+53	72	ready	{"en": "Ready", "he": "מוכן", "ru": "Готово"}	#8b5cf6	f	f	4	t	2026-06-08 21:01:23.18805+00	2026-07-30 14:01:34.172+00	f	0
+54	72	sent_to_logistics	{"en": "Sent to Logistics", "he": "נשלח ללוגיסטיקה", "ru": "Передано в логистику"}	#06b6d4	f	f	5	t	2026-06-08 21:01:23.18805+00	2026-07-30 14:01:34.172+00	f	0
+55	72	delivered	{"en": "Delivered", "he": "נמסר", "ru": "Доставлено"}	#10b981	f	f	6	t	2026-06-08 21:01:23.18805+00	2026-07-30 14:01:34.172+00	f	0
+56	72	installed	{"en": "Installed", "he": "הותקן", "ru": "Смонтировано"}	#22c55e	f	f	7	t	2026-06-08 21:01:23.18805+00	2026-07-30 14:01:34.172+00	f	0
+57	72	closed	{"en": "Closed", "he": "סגור", "ru": "Закрыто"}	#1f2937	f	t	8	t	2026-06-08 21:01:23.18805+00	2026-07-30 14:01:34.172+00	t	30
+51	72	sent_to_manufacturer	{"en": "Sent to Manufacturer", "he": "נשלח ליצרן", "ru": "Передано производителю"}	#f59e0b	t	f	2	t	2026-06-08 21:01:23.18805+00	2026-07-30 14:01:34.271+00	f	0
 \.
 
 
@@ -6725,11 +6876,11 @@ COPY public.pages (id, name_json, description_json, icon, parent_page_id, sort_o
 80	{"en": "Data Import", "he": "ייבוא נתונים", "ru": "Импорт данных"}	{}	upload	67	108	t	2026-06-30 16:26:42.972056+00	2026-06-30 16:26:42.972056+00	/admin/import	\N	\N	f	f	\N	f	\N	\N	\N	\N	\N	\N	\N	f	f	f	\N	\N	f
 64	{"en": "Project Management", "he": "ניהול פרויקטים", "ru": "Управление проектами"}	{}	table	\N	1	t	2026-06-08 21:01:23.18805+00	2026-07-18 20:31:44.245+00	/upravlenie-proektami	\N	\N	f	t	\N	f	\N	\N	\N	\N	\N	\N	\N	f	t	f	\N	\N	f
 83	{"ru": "Бухгалтерия"}	{}		\N	19	t	2026-07-25 18:30:21.533982+00	2026-07-25 18:30:21.533982+00	\N	\N	\N	f	f	\N	f	\N	\N	\N	\N	\N	\N	\N	f	f	f	\N	\N	f
-81	{"en": "Installation", "he": "התקנה", "ru": "Монтаж"}	{}	wrench	\N	18	t	2026-07-01 14:59:00.03861+00	2026-07-30 13:08:32.826+00	/installation	72	["project_name", "order_number", "item_name", "installation_team"]	f	f	\N	f	\N	\N	["e:order_number", "e:project_name", "e:item_name", "p:installation_team", "p:tip_oplaty", "p:data_nachala_rabot", "p:data_okonchaniya_rabot", "p:stavka", "p:dni_chasy", "p:vypolneniya", "p:stoimost_montazha", "p:oplacheno", "p:k_oplate"]	{"p:test": 5, "p:stavka": 5, "e:quantity": 5, "p:k_oplate": 5, "e:item_name": 5, "p:dni_chasy": 5, "p:oplacheno": 5, "p:tip_oplaty": 5, "p:vypolneniya": 5, "e:order_number": 5, "e:project_name": 5, "p:status_montazha": 5, "e:installation_team": 5, "p:installation_team": 5, "p:stoimost_montazha": 5, "p:data_nachala_rabot": 5, "p:data_okonchaniya_rabot": 5}	\N	order_number	{"e:order_number": true}	t	t	t	[{"field": "order_number", "direction": "asc"}]	500	t
+81	{"en": "Installation", "he": "התקנה", "ru": "Монтаж"}	{}	wrench	\N	18	t	2026-07-01 14:59:00.03861+00	2026-07-30 14:24:28.546+00	/installation	72	["project_name", "order_number", "item_name", "installation_team", "obschiy_status"]	f	f	\N	f	\N	\N	["e:order_number", "e:obschiy_status", "e:project_name", "e:item_name", "p:installation_team", "p:tip_oplaty", "p:data_nachala_rabot", "p:data_okonchaniya_rabot", "p:stavka", "p:dni_chasy", "p:vypolneniya", "p:stoimost_montazha", "p:oplacheno", "p:k_oplate", "p:status_montazha", "p:komentarii"]	{"p:test": 5, "p:stavka": 5, "e:quantity": 5, "p:k_oplate": 5, "e:item_name": 5, "p:dni_chasy": 5, "p:oplacheno": 5, "p:tip_oplaty": 5, "p:vypolneniya": 5, "e:order_number": 5, "e:project_name": 5, "e:obschiy_status": 5, "p:status_montazha": 5, "e:installation_team": 5, "p:installation_team": 5, "p:stoimost_montazha": 5, "p:data_nachala_rabot": 5, "p:data_okonchaniya_rabot": 5}	\N	order_number	{"e:order_number": true}	t	t	t	[{"field": "order_number", "direction": "asc"}]	500	t
 77	{"ru": "Эпоколь"}	{}	pencil	\N	14	t	2026-06-17 10:41:17.889278+00	2026-07-30 13:10:11.047+00	/epokol	72	["project_manager", "project_name", "item_name", "order_number", "drawing", "ral_color", "quantity", "painter", "paint_status", "paint_finish_date", "epokol_order_number"]	f	f	\N	f	\N	\N	\N	\N	{"fieldFilters": {"painter": ["צביע באפוקול"]}}	\N	\N	f	f	t	\N	\N	t
 66	{"en": "Production", "he": "ייצור", "ru": "Производство"}	{}	factory	\N	3	t	2026-06-08 21:01:23.18805+00	2026-07-30 13:09:07.304+00	/proizvodstvo	72	["project_name", "item_name", "order_number", "drawing_link", "ral_color", "quantity", "manufacturer_order_number", "production_status", "drawing", "mnf_cost_unit", "production_cost", "materials_cost", "entry_date", "painter", "production_finish_date", "material_release_date", "makasa", "project_manager", "comments"]	f	f	{"mnf_cost_unit": {"en": "Cost per sq. m./unit.", "he": "עלות למ\\"א/מ\\"ר/יח", "ru": "Стоимость за м. кв./ед."}, "materials_cost": {"en": "DWG", "he": "DWG", "ru": "DWG"}, "production_cost": {"en": "Cost", "he": "עלות", "ru": "Стоимость"}}	f	\N	\N	["e:project_manager", "e:project_name", "e:item_name", "e:order_number", "e:drawing", "e:ral_color", "e:materials_cost", "e:quantity", "e:mnf_cost_unit", "e:production_cost", "e:entry_date", "e:manufacturer_order_number", "e:painter", "e:production_status", "e:production_finish_date", "e:comments", "e:material_release_date", "e:makasa"]	\N	{"excludeFieldFilters": {"production_status": ["יצאיה לישראל"]}}	\N	\N	f	f	t	\N	\N	t
-65	{"en": "Logistics", "he": "לוגיסטיקה", "ru": "Логистика"}	{}	truck	\N	2	t	2026-06-08 21:01:23.18805+00	2026-07-30 13:09:34.296+00	/logistika	72	["project_name", "item_name", "order_number", "manufacturer", "manufacturer_order_number", "production_status", "production_finish_date", "painter", "paint_status", "paint_finish_date", "driver", "delivery_status", "delivery_date", "delivery_cost", "comments", "project_manager", "client", "drawing", "ral_color", "quantity", "materials_cost", "designer", "entry_date", "material_release_date"]	f	f	\N	f	\N	\N	\N	\N	\N	\N	\N	f	f	t	\N	\N	t
 84	{"ru": "Производство"}	{}		83	20	t	2026-07-25 18:30:42.081035+00	2026-07-30 13:10:48.309+00	/fin-pro	72	["order_number", "project_name", "item_name", "project_manager", "quantity", "mnf_cost_unit", "production_cost", "manufacturer", "comments", "production_status"]	f	f	\N	f	\N	\N	\N	\N	\N	order_number	\N	f	f	t	\N	\N	t
+65	{"en": "Logistics", "he": "לוגיסטיקה", "ru": "Логистика"}	{}	truck	\N	2	t	2026-06-08 21:01:23.18805+00	2026-07-30 14:22:23.094+00	/logistika	72	["project_name", "item_name", "order_number", "manufacturer", "manufacturer_order_number", "production_status", "production_finish_date", "painter", "paint_status", "paint_finish_date", "driver", "delivery_status", "delivery_date", "delivery_cost", "comments", "project_manager", "client", "drawing", "ral_color", "quantity", "materials_cost", "designer", "entry_date", "material_release_date", "obschiy_status"]	f	f	\N	f	\N	\N	\N	\N	\N	\N	\N	f	f	t	\N	\N	t
 \.
 
 
@@ -11361,6 +11512,69 @@ COPY public.system_events (id, event_name, entity_id, record_id, payload_json, c
 566	record.updated	72	1936	{"actorUserId": 5, "changedFields": ["paint_status"]}	2026-07-28 18:29:50.874369+00
 567	record.updated	72	1936	{"actorUserId": 5, "changedFields": ["paint_status"]}	2026-07-28 18:30:19.610268+00
 568	record.updated	72	1936	{"actorUserId": 5, "changedFields": ["paint_status"]}	2026-07-28 18:30:21.938232+00
+569	record.created	74	6202	{"statusId": null, "actorUserId": 1}	2026-07-30 14:14:15.682615+00
+570	record.deleted	74	6202	{"actorUserId": 1}	2026-07-30 14:14:15.729621+00
+571	record.created	72	6203	{"statusId": 51, "actorUserId": 1}	2026-07-30 14:14:32.749994+00
+572	record.updated	72	6203	{"actorUserId": 1, "changedFields": []}	2026-07-30 14:14:34.296462+00
+573	status.changed	72	6203	{"to": 50, "from": 51, "actorUserId": 1}	2026-07-30 14:14:34.296462+00
+574	record.deleted	72	6203	{"actorUserId": 1}	2026-07-30 14:14:35.82096+00
+575	record.created	74	6204	{"statusId": null, "actorUserId": 1}	2026-07-30 14:14:50.336758+00
+576	record.created	72	6205	{"statusId": 51, "actorUserId": 1}	2026-07-30 14:14:50.358595+00
+577	record.updated	72	6205	{"actorUserId": 1, "changedFields": []}	2026-07-30 14:14:50.37844+00
+578	record.updated	74	6204	{"actorUserId": 1, "changedFields": []}	2026-07-30 14:14:50.37844+00
+579	record.updated	74	6204	{"actorUserId": 1, "changedFields": ["obshchiy_status"]}	2026-07-30 14:14:50.421608+00
+580	record.updated	72	6205	{"actorUserId": 1, "changedFields": []}	2026-07-30 14:14:51.915101+00
+581	status.changed	72	6205	{"to": 50, "from": 51, "actorUserId": 1}	2026-07-30 14:14:51.915101+00
+582	record.updated	74	6204	{"actorUserId": 1, "changedFields": ["obshchiy_status"]}	2026-07-30 14:14:51.966566+00
+583	record.updated	74	6204	{"actorUserId": 1, "changedFields": ["obshchiy_status"]}	2026-07-30 14:14:51.976842+00
+584	record.deleted	72	6205	{"actorUserId": 1}	2026-07-30 14:14:53.491672+00
+585	record.deleted	74	6204	{"actorUserId": 1}	2026-07-30 14:14:53.51047+00
+586	record.created	74	6206	{"statusId": null, "actorUserId": 1}	2026-07-30 14:18:04.51398+00
+587	record.created	72	6207	{"statusId": 51, "actorUserId": 1}	2026-07-30 14:18:04.542364+00
+588	record.updated	72	6207	{"actorUserId": 1, "changedFields": []}	2026-07-30 14:18:04.578585+00
+589	record.updated	74	6206	{"actorUserId": 1, "changedFields": []}	2026-07-30 14:18:04.578585+00
+590	record.updated	74	6206	{"actorUserId": 1, "changedFields": ["obshchiy_status"]}	2026-07-30 14:18:04.649232+00
+591	record.deleted	72	6207	{"actorUserId": 1}	2026-07-30 14:18:06.109636+00
+592	record.deleted	74	6206	{"actorUserId": 1}	2026-07-30 14:18:06.132743+00
+593	record.created	74	6208	{"statusId": null, "actorUserId": 1}	2026-07-30 14:22:34.602107+00
+594	record.created	72	6209	{"statusId": 51, "actorUserId": 1}	2026-07-30 14:22:34.62611+00
+595	record.updated	72	6209	{"actorUserId": 1, "changedFields": []}	2026-07-30 14:22:34.691998+00
+596	record.updated	74	6208	{"actorUserId": 1, "changedFields": []}	2026-07-30 14:22:34.691998+00
+597	record.updated	74	6208	{"actorUserId": 1, "changedFields": ["obshchiy_status"]}	2026-07-30 14:22:34.7273+00
+598	record.updated	72	6209	{"actorUserId": 1, "changedFields": ["production_status"]}	2026-07-30 14:22:35.927766+00
+599	record.updated	74	6208	{"actorUserId": 1, "changedFields": []}	2026-07-30 14:22:35.959935+00
+600	record.updated	74	6208	{"actorUserId": 1, "changedFields": ["obshchiy_status"]}	2026-07-30 14:22:36.011556+00
+601	record.deleted	72	6209	{"actorUserId": 1}	2026-07-30 14:22:37.158684+00
+602	record.deleted	74	6208	{"actorUserId": 1}	2026-07-30 14:22:37.173994+00
+603	record.created	74	6210	{"statusId": null, "actorUserId": 1}	2026-07-30 14:22:48.792486+00
+604	record.deleted	74	6210	{"actorUserId": 1}	2026-07-30 14:22:48.838719+00
+605	record.created	74	6211	{"statusId": null, "actorUserId": 1}	2026-07-30 14:23:01.325251+00
+606	record.deleted	74	6211	{"actorUserId": 1}	2026-07-30 14:23:01.349929+00
+607	record.created	74	6212	{"statusId": null, "actorUserId": 1}	2026-07-30 14:23:14.365608+00
+608	record.created	75	6213	{"statusId": 58, "actorUserId": 1}	2026-07-30 14:23:14.388676+00
+609	record.updated	75	6213	{"actorUserId": 1, "changedFields": []}	2026-07-30 14:23:14.403863+00
+610	record.updated	74	6212	{"actorUserId": 1, "changedFields": []}	2026-07-30 14:23:14.403863+00
+611	record.updated	75	6213	{"actorUserId": 1, "changedFields": []}	2026-07-30 14:23:14.429928+00
+612	status.changed	75	6213	{"to": 59, "from": 58, "actorUserId": 1}	2026-07-30 14:23:14.429928+00
+613	record.updated	74	6212	{"actorUserId": 1, "changedFields": ["obshchiy_status"]}	2026-07-30 14:23:14.462727+00
+614	record.deleted	75	6213	{"actorUserId": 1}	2026-07-30 14:23:15.655232+00
+615	record.deleted	74	6212	{"actorUserId": 1}	2026-07-30 14:23:15.674371+00
+616	record.created	74	6214	{"statusId": null, "actorUserId": 1}	2026-07-30 14:23:34.549051+00
+617	record.created	72	6215	{"statusId": 51, "actorUserId": 1}	2026-07-30 14:23:34.570578+00
+618	record.updated	72	6215	{"actorUserId": 1, "changedFields": []}	2026-07-30 14:23:34.591969+00
+619	record.updated	74	6214	{"actorUserId": 1, "changedFields": []}	2026-07-30 14:23:34.591969+00
+620	record.updated	74	6214	{"actorUserId": 1, "changedFields": ["obshchiy_status"]}	2026-07-30 14:23:34.630816+00
+621	record.deleted	72	6215	{"actorUserId": 1}	2026-07-30 14:23:36.823407+00
+622	record.deleted	74	6214	{"actorUserId": 1}	2026-07-30 14:23:36.840595+00
+623	record.created	74	6216	{"statusId": null, "actorUserId": 1}	2026-07-30 14:23:47.065895+00
+624	record.created	72	6217	{"statusId": 51, "actorUserId": 1}	2026-07-30 14:23:47.10657+00
+625	record.updated	72	6217	{"actorUserId": 1, "changedFields": []}	2026-07-30 14:23:47.122971+00
+626	record.updated	74	6216	{"actorUserId": 1, "changedFields": []}	2026-07-30 14:23:47.122971+00
+627	record.updated	74	6216	{"actorUserId": 1, "changedFields": ["obshchiy_status"]}	2026-07-30 14:23:47.158028+00
+628	page_field.saved	72	6217	{"pageId": 81, "actorUserId": 1, "changedPageFieldKeys": ["status_montazha"]}	2026-07-30 14:23:48.142436+00
+629	record.updated	74	6216	{"actorUserId": 1, "changedFields": ["obshchiy_status"]}	2026-07-30 14:23:48.185723+00
+630	record.deleted	72	6217	{"actorUserId": 1}	2026-07-30 14:23:49.373647+00
+631	record.deleted	74	6216	{"actorUserId": 1}	2026-07-30 14:23:49.395101+00
 \.
 
 
@@ -13050,6 +13264,7 @@ COPY public.translations (id, translation_key, translations_json, created_at, up
 171	relations.colKey	{"en": "Key", "he": "מפתח", "ru": "Ключ"}	2026-06-05 11:02:47.479143+00	2026-07-30 13:10:05.295+00
 412	roles.adminSections	{"en": "Administration sections", "he": "מקטעי ניהול", "ru": "Разделы администрирования"}	2026-06-05 11:02:48.046008+00	2026-07-30 13:10:05.447+00
 432	roles.noOwnerSelected	{"en": "No owner field selected — with \\"Own only\\" records will not be visible. Select at least one field.", "he": "לא נבחר אף שדה בעלים — עם «רק שלי» הרשומות לא יוצגו. סמנו לפחות שדה אחד.", "ru": "Не выбрано ни одного поля-владельца — при «Только свои» записи не будут видны. Отметьте хотя бы одно поле."}	2026-06-05 11:02:48.090192+00	2026-07-30 13:10:05.624+00
+122270	records.pageSetupPanelsTitle	{"en": "Page settings", "he": "הגדרות דף", "ru": "Настройки страницы"}	2026-07-30 14:29:33.224383+00	2026-07-30 14:29:33.224383+00
 62719	pages.pivotSourceEntity	{"en": "Entity default", "he": "ברירת מחדל של הישות", "ru": "По умолчанию из сущности"}	2026-06-19 04:59:02.280138+00	2026-07-30 13:10:04.458+00
 466	records.actions	{"en": "Actions", "he": "פעולות", "ru": "Действия"}	2026-06-05 11:02:48.165475+00	2026-07-30 13:10:04.51+00
 478	records.dialogDesc	{"en": "Fill in the record fields. Required fields are marked with an asterisk.", "he": "מלא את שדות הרשומה. שדות חובה מסומנים בכוכבית.", "ru": "Заполните поля записи. Обязательные поля помечены звёздочкой."}	2026-06-05 11:02:48.191714+00	2026-07-30 13:10:04.72+00
@@ -13075,47 +13290,47 @@ COPY public.translations (id, translation_key, translations_json, created_at, up
 58279	pivot.entitySettingsDesc	{"en": "Allow pivot mode for this entity and choose the fields available as dimensions and measures.", "he": "אפשר מצב טבלת ציר לישות זו ובחר את השדות הזמינים כמימדים ומדדים.", "ru": "Разрешите режим сводной таблицы для этой сущности и выберите поля, доступные как измерения и меры."}	2026-06-18 14:19:33.355347+00	2026-07-30 13:10:07.133+00
 64696	calendar.cardFieldsHint	{"en": "Extra record fields shown on the event chip under the title.", "he": "שדות רשומה נוספים המוצגים על תווית האירוע מתחת לכותרת.", "ru": "Дополнительные поля записи, показываемые на плашке события под заголовком."}	2026-06-19 06:29:46.758452+00	2026-07-30 13:10:07.665+00
 78524	views.columnsHint	{"en": "None selected — all default columns are shown. A selection only narrows the set within the columns available to you.", "he": "לא נבחר דבר — כל עמודות ברירת המחדל מוצגות. בחירה רק מצמצמת את הסט בגבולות העמודות הזמינות לך.", "ru": "Не выбрано ни одного — показываются все столбцы по умолчанию. Выбор только сужает набор в пределах доступных вам столбцов."}	2026-06-26 08:04:41.379753+00	2026-07-30 13:10:06.694+00
-115223	fields.localFolderDefault	{"en": "По умолчанию (Общая)", "he": "По умолчанию (Общая)", "ru": "По умолчанию (Общая)"}	2026-07-30 12:05:10.231444+00	2026-07-30 13:10:09.252+00
-115204	users.nameEmailRequired	{"en": "Заполните имя и email", "he": "Заполните имя и email", "ru": "Заполните имя и email"}	2026-07-30 12:05:10.150066+00	2026-07-30 13:10:09.11+00
-115205	records.pageDefaultSortSaved	{"en": "Сортировка страницы по умолчанию сохранена", "he": "Сортировка страницы по умолчанию сохранена", "ru": "Сортировка страницы по умолчанию сохранена"}	2026-07-30 12:05:10.153891+00	2026-07-30 13:10:09.117+00
-115206	records.pageDefaultSortCleared	{"en": "Сортировка страницы по умолчанию очищена", "he": "Сортировка страницы по умолчанию очищена", "ru": "Сортировка страницы по умолчанию очищена"}	2026-07-30 12:05:10.156919+00	2026-07-30 13:10:09.122+00
-115207	records.hideStatusColumnSaved	{"en": "Столбец «Статус» скрыт на этой странице", "he": "Столбец «Статус» скрыт на этой странице", "ru": "Столбец «Статус» скрыт на этой странице"}	2026-07-30 12:05:10.160487+00	2026-07-30 13:10:09.133+00
-115208	records.showStatusColumnSaved	{"en": "Столбец «Статус» показан на этой странице", "he": "Столбец «Статус» показан на этой странице", "ru": "Столбец «Статус» показан на этой странице"}	2026-07-30 12:05:10.165088+00	2026-07-30 13:10:09.137+00
-115209	records.mobileToolbarToggle	{"en": "Поиск, фильтры и настройки", "he": "Поиск, фильтры и настройки", "ru": "Поиск, фильтры и настройки"}	2026-07-30 12:05:10.169989+00	2026-07-30 13:10:09.14+00
-115212	records.pageDefaultSortInherit	{"en": "Наследовать (как в виде/сущности)", "he": "Наследовать (как в виде/сущности)", "ru": "Наследовать (как в виде/сущности)"}	2026-07-30 12:05:10.181117+00	2026-07-30 13:10:09.153+00
-115213	records.sortCreatedAt	{"en": "Дата создания (системная)", "he": "Дата создания (системная)", "ru": "Дата создания (системная)"}	2026-07-30 12:05:10.184708+00	2026-07-30 13:10:09.157+00
-115214	records.sortAsc	{"en": "По возрастанию", "he": "По возрастанию", "ru": "По возрастанию"}	2026-07-30 12:05:10.188402+00	2026-07-30 13:10:09.16+00
-115215	records.sortDesc	{"en": "По убыванию", "he": "По убыванию", "ru": "По убыванию"}	2026-07-30 12:05:10.191879+00	2026-07-30 13:10:09.164+00
-115216	records.statusColumnTitle	{"en": "Столбец «Статус»", "he": "Столбец «Статус»", "ru": "Столбец «Статус»"}	2026-07-30 12:05:10.194629+00	2026-07-30 13:10:09.202+00
-115218	records.statusColumnVisible	{"en": "Показывать столбец «Статус»", "he": "Показывать столбец «Статус»", "ru": "Показывать столбец «Статус»"}	2026-07-30 12:05:10.201997+00	2026-07-30 13:10:09.216+00
-115219	records.statusColumnHidden	{"en": "Скрывать столбец «Статус»", "he": "Скрывать столбец «Статус»", "ru": "Скрывать столбец «Статус»"}	2026-07-30 12:05:10.205589+00	2026-07-30 13:10:09.22+00
-115210	records.pageDefaultSortTitle	{"en": "Сортировка по умолчанию для этой страницы", "he": "Сортировка по умолчанию для этой страницы", "ru": "Сортировка по умолчанию для этой страницы"}	2026-07-30 12:05:10.174505+00	2026-07-30 13:10:09.143+00
-115220	records.sortByColumn	{"en": "Сортировать по этой колонке", "he": "Сортировать по этой колонке", "ru": "Сортировать по этой колонке"}	2026-07-30 12:05:10.212475+00	2026-07-30 13:10:09.226+00
-115221	fields.localFolder	{"en": "Папка на сервере", "he": "Папка на сервере", "ru": "Папка на сервере"}	2026-07-30 12:05:10.220556+00	2026-07-30 13:10:09.242+00
-115222	fields.localFolderHint	{"en": "Куда сохранять загруженные файлы этого поля. По умолчанию — папка «Общая».", "he": "Куда сохранять загруженные файлы этого поля. По умолчанию — папка «Общая».", "ru": "Куда сохранять загруженные файлы этого поля. По умолчанию — папка «Общая»."}	2026-07-30 12:05:10.227378+00	2026-07-30 13:10:09.247+00
-115234	localFolders.deleted	{"en": "Папка удалена", "he": "Папка удалена", "ru": "Папка удалена"}	2026-07-30 12:05:10.27432+00	2026-07-30 13:10:09.361+00
-115238	localFolders.default	{"en": "(по умолчанию)", "he": "(по умолчанию)", "ru": "(по умолчанию)"}	2026-07-30 12:05:10.290504+00	2026-07-30 13:10:09.376+00
-115239	localFolders.newName	{"en": "Название папки", "he": "Название папки", "ru": "Название папки"}	2026-07-30 12:05:10.295148+00	2026-07-30 13:10:09.379+00
-115243	localFolders.add	{"en": "Добавить", "he": "Добавить", "ru": "Добавить"}	2026-07-30 12:05:10.30963+00	2026-07-30 13:10:09.395+00
+115210	records.pageDefaultSortTitle	{"en": "Default sorting for this page", "he": "מיון ברירת מחדל לדף זה", "ru": "Сортировка по умолчанию для этой страницы"}	2026-07-30 12:05:10.174505+00	2026-07-30 14:01:48.895005+00
+115221	fields.localFolder	{"en": "Folder on server", "he": "תיקייה בשרת", "ru": "Папка на сервере"}	2026-07-30 12:05:10.220556+00	2026-07-30 14:01:48.715794+00
+115208	records.showStatusColumnSaved	{"en": "The “Status” column is shown on this page", "he": "עמודת «סטטוס» מוצגת בדף זה", "ru": "Столбец «Статус» показан на этой странице"}	2026-07-30 12:05:10.165088+00	2026-07-30 14:01:48.911167+00
+115214	records.sortAsc	{"en": "Ascending", "he": "בסדר עולה", "ru": "По возрастанию"}	2026-07-30 12:05:10.188402+00	2026-07-30 14:01:48.913905+00
+115220	records.sortByColumn	{"en": "Sort by this column", "he": "מיון לפי עמודה זו", "ru": "Сортировать по этой колонке"}	2026-07-30 12:05:10.212475+00	2026-07-30 14:01:48.917599+00
+115213	records.sortCreatedAt	{"en": "Creation date (system)", "he": "תאריך יצירה (מערכתי)", "ru": "Дата создания (системная)"}	2026-07-30 12:05:10.184708+00	2026-07-30 14:01:48.920168+00
+115215	records.sortDesc	{"en": "Descending", "he": "בסדר יורד", "ru": "По убыванию"}	2026-07-30 12:05:10.191879+00	2026-07-30 14:01:48.923214+00
+115219	records.statusColumnHidden	{"en": "Hide the “Status” column", "he": "להסתיר את עמודת «סטטוס»", "ru": "Скрывать столбец «Статус»"}	2026-07-30 12:05:10.205589+00	2026-07-30 14:01:48.925842+00
+115223	fields.localFolderDefault	{"en": "Default (Shared)", "he": "ברירת מחדל (כללית)", "ru": "По умолчанию (Общая)"}	2026-07-30 12:05:10.231444+00	2026-07-30 14:01:48.720333+00
+115222	fields.localFolderHint	{"en": "Where uploaded files of this field are stored. Default is the “Shared” folder.", "he": "היכן יישמרו קבצים שהועלו בשדה זה. ברירת המחדל — תיקיית «כללית».", "ru": "Куда сохранять загруженные файлы этого поля. По умолчанию — папка «Общая»."}	2026-07-30 12:05:10.227378+00	2026-07-30 14:01:48.723704+00
+115207	records.hideStatusColumnSaved	{"en": "The “Status” column is hidden on this page", "he": "עמודת «סטטוס» הוסתרה בדף זה", "ru": "Столбец «Статус» скрыт на этой странице"}	2026-07-30 12:05:10.160487+00	2026-07-30 14:01:48.856745+00
+115209	records.mobileToolbarToggle	{"en": "Search, filters and settings", "he": "חיפוש, מסננים והגדרות", "ru": "Поиск, фильтры и настройки"}	2026-07-30 12:05:10.169989+00	2026-07-30 14:01:48.86216+00
+115206	records.pageDefaultSortCleared	{"en": "Page default sorting cleared", "he": "מיון ברירת המחדל של הדף נוקה", "ru": "Сортировка страницы по умолчанию очищена"}	2026-07-30 12:05:10.156919+00	2026-07-30 14:01:48.882371+00
+115212	records.pageDefaultSortInherit	{"en": "Inherit (as in view/entity)", "he": "ירושה (כמו בתצוגה/בישות)", "ru": "Наследовать (как в виде/сущности)"}	2026-07-30 12:05:10.181117+00	2026-07-30 14:01:48.888579+00
+115205	records.pageDefaultSortSaved	{"en": "Page default sorting saved", "he": "מיון ברירת המחדל של הדף נשמר", "ru": "Сортировка страницы по умолчанию сохранена"}	2026-07-30 12:05:10.153891+00	2026-07-30 14:01:48.891291+00
+115216	records.statusColumnTitle	{"en": "“Status” column", "he": "עמודת «סטטוס»", "ru": "Столбец «Статус»"}	2026-07-30 12:05:10.194629+00	2026-07-30 14:01:48.931264+00
+115218	records.statusColumnVisible	{"en": "Show the “Status” column", "he": "להציג את עמודת «סטטוס»", "ru": "Показывать столбец «Статус»"}	2026-07-30 12:05:10.201997+00	2026-07-30 14:01:48.934453+00
+115204	users.nameEmailRequired	{"en": "Fill in name and email", "he": "יש למלא שם ואימייל", "ru": "Заполните имя и email"}	2026-07-30 12:05:10.150066+00	2026-07-30 14:01:48.950078+00
+115239	localFolders.newName	{"en": "Folder name", "he": "שם התיקייה", "ru": "Название папки"}	2026-07-30 12:05:10.295148+00	2026-07-30 14:01:48.838332+00
+115235	localFolders.deleteError	{"en": "Failed to delete folder", "he": "מחיקת התיקייה נכשלה", "ru": "Не удалось удалить папку"}	2026-07-30 12:05:10.277505+00	2026-07-30 14:01:48.829666+00
+115229	users.nextPage	{"en": "Next", "he": "הבא", "ru": "Вперёд"}	2026-07-30 12:05:10.25566+00	2026-07-30 14:01:48.959856+00
+115234	localFolders.deleted	{"en": "Folder deleted", "he": "התיקייה נמחקה", "ru": "Папка удалена"}	2026-07-30 12:05:10.27432+00	2026-07-30 14:01:48.832346+00
+115243	localFolders.add	{"en": "Add", "he": "הוספה", "ru": "Добавить"}	2026-07-30 12:05:10.30963+00	2026-07-30 14:01:48.816721+00
+115233	localFolders.createError	{"en": "Failed to create folder", "he": "יצירת התיקייה נכשלה", "ru": "Не удалось создать папку"}	2026-07-30 12:05:10.270068+00	2026-07-30 14:01:48.819416+00
+115232	localFolders.created	{"en": "Folder created", "he": "התיקייה נוצרה", "ru": "Папка создана"}	2026-07-30 12:05:10.266082+00	2026-07-30 14:01:48.822656+00
+115237	localFolders.hint	{"en": "Folders used to organize files uploaded to the server. A folder can be chosen for each file field.", "he": "תיקיות שאליהן מסודרים קבצים שהועלו לשרת. לכל שדה קובץ אפשר לבחור תיקייה.", "ru": "Папки, по которым раскладываются загруженные на сервер файлы. Для каждого файлового поля можно выбрать папку."}	2026-07-30 12:05:10.287244+00	2026-07-30 14:01:48.834825+00
 14424	dash.formulaHint	{"en": "Combine metrics by key: {m1}. Without a formula the first metric is shown.", "he": "שלב מדדים לפי מפתח: {m1}. ללא נוסחה מוצג המדד הראשון.", "ru": "Комбинируйте метрики по ключу: {m1}. Без формулы показывается первая метрика."}	2026-06-07 20:54:44.918067+00	2026-07-30 13:10:02.006+00
 28138	dash.notesEditableRolesHint	{"en": "Admins can always edit. Check the roles that are also allowed to change the content directly on the page.", "he": "מנהלים תמיד יכולים לערוך. סמן את התפקידים שמורשים גם הם לשנות את התוכן ישירות בדף.", "ru": "Администраторы могут редактировать всегда. Отметьте роли, которым тоже разрешено менять содержимое прямо на странице."}	2026-06-08 16:43:28.124776+00	2026-07-30 13:10:02.167+00
 47254	fields.dependsOnHint	{"en": "Values for this field are suggested from existing records that share the same parent value.", "he": "ערכי שדה זה יוצעו מתוך רשומות קיימות בעלות אותו ערך אב.", "ru": "Значения этого поля будут подсказываться из существующих записей с тем же родительским значением."}	2026-06-10 14:14:34.869126+00	2026-07-30 13:10:02.738+00
 27270	fileTrash.subtitle	{"en": "Local files removed from records. They can be downloaded for recovery or deleted permanently. Google Drive files are not stored here.", "he": "קבצים מקומיים שהוסרו מרשומות. ניתן להוריד אותם לשחזור או למחוק לצמיתות. קבצי Google Drive אינם נשמרים כאן.", "ru": "Локальные файлы, удалённые из записей. Их можно скачать для восстановления или удалить навсегда. Файлы Google Drive здесь не хранятся."}	2026-06-08 16:12:01.483181+00	2026-07-30 13:10:03.583+00
-115225	users.passwordChangeFailed	{"en": "Данные сохранены, но пароль сменить не удалось", "he": "Данные сохранены, но пароль сменить не удалось", "ru": "Данные сохранены, но пароль сменить не удалось"}	2026-07-30 12:05:10.240749+00	2026-07-30 13:10:09.327+00
-115226	users.pageInfo	{"en": "Показано", "he": "Показано", "ru": "Показано"}	2026-07-30 12:05:10.244537+00	2026-07-30 13:10:09.331+00
-115227	users.pageOf	{"en": "из", "he": "из", "ru": "из"}	2026-07-30 12:05:10.248258+00	2026-07-30 13:10:09.335+00
-115228	users.prevPage	{"en": "Назад", "he": "Назад", "ru": "Назад"}	2026-07-30 12:05:10.251838+00	2026-07-30 13:10:09.339+00
-115229	users.nextPage	{"en": "Вперёд", "he": "Вперёд", "ru": "Вперёд"}	2026-07-30 12:05:10.25566+00	2026-07-30 13:10:09.343+00
-115230	users.newPassword	{"en": "Новый пароль", "he": "Новый пароль", "ru": "Новый пароль"}	2026-07-30 12:05:10.259616+00	2026-07-30 13:10:09.346+00
-115231	users.newPasswordKeepHint	{"en": "Оставьте пустым, чтобы не менять", "he": "Оставьте пустым, чтобы не менять", "ru": "Оставьте пустым, чтобы не менять"}	2026-07-30 12:05:10.263146+00	2026-07-30 13:10:09.35+00
-115232	localFolders.created	{"en": "Папка создана", "he": "Папка создана", "ru": "Папка создана"}	2026-07-30 12:05:10.266082+00	2026-07-30 13:10:09.353+00
-115233	localFolders.createError	{"en": "Не удалось создать папку", "he": "Не удалось создать папку", "ru": "Не удалось создать папку"}	2026-07-30 12:05:10.270068+00	2026-07-30 13:10:09.357+00
-115235	localFolders.deleteError	{"en": "Не удалось удалить папку", "he": "Не удалось удалить папку", "ru": "Не удалось удалить папку"}	2026-07-30 12:05:10.277505+00	2026-07-30 13:10:09.365+00
-115236	localFolders.title	{"en": "Папки для файлов", "he": "Папки для файлов", "ru": "Папки для файлов"}	2026-07-30 12:05:10.281218+00	2026-07-30 13:10:09.368+00
-115237	localFolders.hint	{"en": "Папки, по которым раскладываются загруженные на сервер файлы. Для каждого файлового поля можно выбрать папку.", "he": "Папки, по которым раскладываются загруженные на сервер файлы. Для каждого файлового поля можно выбрать папку.", "ru": "Папки, по которым раскладываются загруженные на сервер файлы. Для каждого файлового поля можно выбрать папку."}	2026-07-30 12:05:10.287244+00	2026-07-30 13:10:09.372+00
-115240	localFolders.newNamePlaceholder	{"en": "Например, Договоры", "he": "Например, Договоры", "ru": "Например, Договоры"}	2026-07-30 12:05:10.2984+00	2026-07-30 13:10:09.383+00
-115241	localFolders.parent	{"en": "Родительская папка", "he": "Родительская папка", "ru": "Родительская папка"}	2026-07-30 12:05:10.302111+00	2026-07-30 13:10:09.387+00
-115242	localFolders.parentRoot	{"en": "Верхний уровень", "he": "Верхний уровень", "ru": "Верхний уровень"}	2026-07-30 12:05:10.306451+00	2026-07-30 13:10:09.391+00
+115226	users.pageInfo	{"en": "Showing", "he": "מוצגים", "ru": "Показано"}	2026-07-30 12:05:10.244537+00	2026-07-30 14:01:48.962934+00
+115227	users.pageOf	{"en": "of", "he": "מתוך", "ru": "из"}	2026-07-30 12:05:10.248258+00	2026-07-30 14:01:48.965975+00
+115240	localFolders.newNamePlaceholder	{"en": "For example, Contracts", "he": "לדוגמה, חוזים", "ru": "Например, Договоры"}	2026-07-30 12:05:10.2984+00	2026-07-30 14:01:48.840757+00
+115241	localFolders.parent	{"en": "Parent folder", "he": "תיקיית אב", "ru": "Родительская папка"}	2026-07-30 12:05:10.302111+00	2026-07-30 14:01:48.84345+00
+115242	localFolders.parentRoot	{"en": "Top level", "he": "רמה עליונה", "ru": "Верхний уровень"}	2026-07-30 12:05:10.306451+00	2026-07-30 14:01:48.845965+00
+115225	users.passwordChangeFailed	{"en": "Data saved, but the password could not be changed", "he": "הנתונים נשמרו, אך שינוי הסיסמה נכשל", "ru": "Данные сохранены, но пароль сменить не удалось"}	2026-07-30 12:05:10.240749+00	2026-07-30 14:01:48.968361+00
+115236	localFolders.title	{"en": "File folders", "he": "תיקיות לקבצים", "ru": "Папки для файлов"}	2026-07-30 12:05:10.281218+00	2026-07-30 14:01:48.849894+00
+115228	users.prevPage	{"en": "Back", "he": "הקודם", "ru": "Назад"}	2026-07-30 12:05:10.251838+00	2026-07-30 14:01:48.97125+00
+115238	localFolders.default	{"en": "(default)", "he": "(ברירת מחדל)", "ru": "(по умолчанию)"}	2026-07-30 12:05:10.290504+00	2026-07-30 14:01:48.826146+00
+115230	users.newPassword	{"en": "New password", "he": "סיסמה חדשה", "ru": "Новый пароль"}	2026-07-30 12:05:10.259616+00	2026-07-30 14:01:48.953418+00
+115231	users.newPasswordKeepHint	{"en": "Leave empty to keep unchanged", "he": "השאירו ריק כדי לא לשנות", "ru": "Оставьте пустым, чтобы не менять"}	2026-07-30 12:05:10.263146+00	2026-07-30 14:01:48.956567+00
 36047	roles.statusRightsDesc	{"en": "For a chosen entity you can hide individual statuses from this role: \\"Show status\\" — the status is available in the picker and filter; \\"Show rows\\" — records in that status are visible to the role. Everything is enabled by default.", "he": "עבור ישות נבחרת ניתן להסתיר סטטוסים מסוימים מתפקיד זה: «הצג סטטוס» — הסטטוס זמין בבחירה ובסינון; «הצג שורות» — רשומות בסטטוס זה גלויות לתפקיד. הכול מופעל כברירת מחדל.", "ru": "Для выбранной сущности можно скрыть отдельные статусы у этой роли: «Отображать статус» — статус доступен в выборе и фильтре; «Отображать строки» — записи в этом статусе видны роли. По умолчанию включено всё."}	2026-06-09 08:50:23.358076+00	2026-07-30 13:10:05.665+00
 108374	cf.dialogDesc	{"en": "Build the condition from groups. Groups combine by the top-level logic; conditions within a group by the group's logic: (A AND B) OR (C AND D).", "he": "בנה את התנאי מקבוצות. הקבוצות משתלבות לפי הלוגיקה העליונה, והתנאים בתוך קבוצה לפי לוגיקת הקבוצה: (A וגם B) או (C וגם D).", "ru": "Соберите условие из групп. Группы объединяются логикой верхнего уровня, условия внутри группы — логикой группы: (A И B) ИЛИ (C И D)."}	2026-07-07 09:44:01.627605+00	2026-07-30 13:10:08.925+00
 27302	gdrive.folderDeleteConfirm	{"en": "The folder and all its subfolders will no longer be available for new uploads. The folders and files in Google Drive themselves are not deleted. Fields linked to them will start using the default folder.", "he": "התיקייה וכל תיקיות המשנה שלה לא יהיו זמינות יותר להעלאות חדשות. התיקיות והקבצים ב-Google Drive עצמם אינם נמחקים. שדות המקושרים אליהן יתחילו להשתמש בתיקיית ברירת המחדל.", "ru": "Папка и все её подпапки перестанут быть доступными для новых загрузок. Сами папки и файлы в Google Drive не удаляются. Поля, привязанные к ним, начнут использовать папку по умолчанию."}	2026-06-08 16:12:01.561343+00	2026-07-30 13:10:03.684+00
@@ -13123,29 +13338,29 @@ COPY public.translations (id, translation_key, translations_json, created_at, up
 419	roles.recordScopeDesc	{"en": "\\"All\\" — the role sees all records of the entity. \\"Own only\\" — only records where the selected \\"User\\" field equals the current user are visible.", "he": "«הכול» — התפקיד רואה את כל הרשומות של הישות. «רק שלי» — מוצגות רק רשומות שבהן שדה ה«משתמש» הנבחר שווה למשתמש הנוכחי.", "ru": "«Все» — роль видит все записи сущности. «Только свои» — видны только записи, где выбранное поле типа «Пользователь» равно текущему пользователю."}	2026-06-05 11:02:48.059497+00	2026-07-30 13:10:05.649+00
 39285	users.additionalRolesHint	{"en": "Permissions are combined across all roles (the most permissive access wins).", "he": "ההרשאות משולבות מכל התפקידים (הגישה המתירנית ביותר גוברת).", "ru": "Права суммируются по всем ролям (выбирается наиболее разрешающий доступ)."}	2026-06-09 16:12:55.01295+00	2026-07-30 13:10:06.076+00
 60789	pivot.defaultRoleVisibilityHint	{"en": "If no roles are selected, the Pivot toggle is visible to everyone with record access. Otherwise only to the selected roles (super admin always sees it). The plain table stays available per record permissions.", "he": "אם לא נבחרו תפקידים, מתג «טבלה מסכמת» גלוי לכל מי שיש לו גישה לרשומות. אחרת רק לתפקידים שנבחרו (מנהל-על תמיד רואה). הטבלה הרגילה נשארת זמינה לפי הרשאות הרשומות.", "ru": "Если роли не выбраны, переключатель «Сводная» виден всем, у кого есть доступ к записям. Иначе — только выбранным ролям (суперадмин видит всегда). Обычная таблица остаётся доступна по правам на записи."}	2026-06-18 16:57:02.331572+00	2026-07-30 13:10:07.208+00
-115217	records.statusColumnHint	{"en": "Скрыть столбец статуса в таблице на этой странице для всех, включая администраторов. Это только отображение — статусы и рабочий процесс продолжают работать.", "he": "Скрыть столбец статуса в таблице на этой странице для всех, включая администраторов. Это только отображение — статусы и рабочий процесс продолжают работать.", "ru": "Скрыть столбец статуса в таблице на этой странице для всех, включая администраторов. Это только отображение — статусы и рабочий процесс продолжают работать."}	2026-07-30 12:05:10.198155+00	2026-07-30 13:10:09.207+00
-115224	fields.numberDecimalsHint	{"en": "Округляет отображение значений и сумму по столбцу. Хранимое значение не меняется. Пусто — без округления.", "he": "Округляет отображение значений и сумму по столбцу. Хранимое значение не меняется. Пусто — без округления.", "ru": "Округляет отображение значений и сумму по столбцу. Хранимое значение не меняется. Пусто — без округления."}	2026-07-30 12:05:10.235732+00	2026-07-30 13:10:09.257+00
+116965	records.pagePageSizeInherit	{"en": "Inherit (as in view/entity)", "he": "ירושה (כמו בתצוגה/בישות)", "ru": "Наследовать (как в виде/сущности)"}	2026-07-30 12:57:58.728252+00	2026-07-30 14:01:48.901474+00
+115224	fields.numberDecimalsHint	{"en": "Rounds displayed values and the column total. The stored value is not changed. Empty — no rounding.", "he": "מעגל את תצוגת הערכים ואת סכום העמודה. הערך השמור אינו משתנה. ריק — ללא עיגול.", "ru": "Округляет отображение значений и сумму по столбцу. Хранимое значение не меняется. Пусто — без округления."}	2026-07-30 12:05:10.235732+00	2026-07-30 14:01:48.81231+00
+116963	records.pagePageSizeHint	{"en": "How many rows to show in the table on this page. “Inherit” — as set in the view/entity settings (or 50).", "he": "כמה שורות להציג בטבלה בדף זה. «ירושה» — כפי שהוגדר בתצוגה/בישות (או 50).", "ru": "Сколько строк показывать в таблице на этой странице. «Наследовать» — как задано в настройках вида/сущности (или 50)."}	2026-07-30 12:57:58.721303+00	2026-07-30 14:01:48.898846+00
 10007	fields.formulaHint	{"en": "Reference other fields of this record via {field_key}. Operators: + - * / %, comparisons, && || !, ternary ?:. Functions: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce. Computed on display and not stored.", "he": "הפנו לשדות אחרים של רשומה זו באמצעות {field_key}. אופרטורים: + - * / %, השוואות, && || !, תנאי ?:. פונקציות: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce. מחושב בעת התצוגה ואינו נשמר.", "ru": "Ссылайтесь на другие поля этой записи через {ключ_поля}. Операторы: + - * / %, сравнения, && || !, тернарный ?:. Функции: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce. Вычисляется при показе и не хранится."}	2026-06-07 16:48:22.099369+00	2026-07-30 13:10:03.13+00
 45197	fields.userAllowCreateHint	{"en": "Adds an action to the dropdown for creating a new user. Anyone who can edit records will be able to create users. The new user's role is limited to the roles selected above; an administrative (privileged) role cannot be assigned through a field.", "he": "מוסיף לרשימה הנפתחת פעולה ליצירת משתמש חדש. כל מי שיכול לערוך רשומות יוכל ליצור משתמשים. תפקיד המשתמש החדש מוגבל לתפקידים שנבחרו למעלה; לא ניתן להקצות תפקיד ניהולי (מורשה) דרך שדה.", "ru": "Добавляет в выпадающий список действие для создания нового пользователя. Создавать пользователей сможет любой, у кого есть право редактировать записи. Роль создаваемого пользователя ограничена выбранными выше ролями; назначить административную (привилегированную) роль через поле нельзя."}	2026-06-10 12:35:39.833852+00	2026-07-30 13:10:03.485+00
 2698	gdrive.builtinMissing	{"en": "Built-in keys are set at the platform level via the GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET environment variables (not through this form) and are not configured yet. Add these secrets to the environment, or choose the \\"Own\\" mode and enter your own keys below.", "he": "המפתחות המובנים מוגדרים ברמת הפלטפורמה דרך משתני הסביבה GOOGLE_OAUTH_CLIENT_ID ו-GOOGLE_OAUTH_CLIENT_SECRET (לא דרך טופס זה) וכרגע אינם מוגדרים. הוסיפו סודות אלה לסביבה או בחרו במצב «משלך» והזינו מפתחות משלכם למטה.", "ru": "Встроенные ключи задаются на уровне платформы через переменные окружения GOOGLE_OAUTH_CLIENT_ID и GOOGLE_OAUTH_CLIENT_SECRET (не через эту форму) и сейчас не настроены. Добавьте эти секреты в окружение или выберите режим «Собственные» и введите свои ключи ниже."}	2026-06-07 12:47:46.760534+00	2026-07-30 13:10:03.595+00
-116962	records.pagePageSizeTitle	{"en": "Записей на странице (для этой страницы)", "he": "Записей на странице (для этой страницы)", "ru": "Записей на странице (для этой страницы)"}	2026-07-30 12:57:58.717141+00	2026-07-30 13:10:09.168+00
-116963	records.pagePageSizeHint	{"en": "Сколько строк показывать в таблице на этой странице. «Наследовать» — как задано в настройках вида/сущности (или 50).", "he": "Сколько строк показывать в таблице на этой странице. «Наследовать» — как задано в настройках вида/сущности (или 50).", "ru": "Сколько строк показывать в таблице на этой странице. «Наследовать» — как задано в настройках вида/сущности (или 50)."}	2026-07-30 12:57:58.721303+00	2026-07-30 13:10:09.176+00
-116964	records.pagePageSizeSaved	{"en": "Число записей на странице сохранено", "he": "Число записей на странице сохранено", "ru": "Число записей на странице сохранено"}	2026-07-30 12:57:58.725035+00	2026-07-30 13:10:09.18+00
-116965	records.pagePageSizeInherit	{"en": "Наследовать (как в виде/сущности)", "he": "Наследовать (как в виде/сущности)", "ru": "Наследовать (как в виде/сущности)"}	2026-07-30 12:57:58.728252+00	2026-07-30 13:10:09.183+00
-118704	records.pageCreateEnabledSaved	{"en": "Добавление записей на этой странице разрешено", "he": "Добавление записей на этой странице разрешено", "ru": "Добавление записей на этой странице разрешено"}	2026-07-30 13:01:31.872534+00	2026-07-30 13:10:09.129+00
-118718	records.pageCreateTitle	{"en": "Создание записей на этой странице", "he": "Создание записей на этой странице", "ru": "Создание записей на этой странице"}	2026-07-30 13:01:31.933644+00	2026-07-30 13:10:09.187+00
+116964	records.pagePageSizeSaved	{"en": "Rows per page saved", "he": "מספר הרשומות בעמוד נשמר", "ru": "Число записей на странице сохранено"}	2026-07-30 12:57:58.725035+00	2026-07-30 14:01:48.904149+00
+116962	records.pagePageSizeTitle	{"en": "Rows per page (for this page)", "he": "רשומות בעמוד (לדף זה)", "ru": "Записей на странице (для этой страницы)"}	2026-07-30 12:57:58.717141+00	2026-07-30 14:01:48.906703+00
+115217	records.statusColumnHint	{"en": "Hides the status column in the table on this page for everyone, including administrators. Display only — statuses and the workflow keep working.", "he": "מסתיר את עמודת הסטטוס בטבלה בדף זה לכולם, כולל מנהלים. תצוגה בלבד — הסטטוסים ותהליך העבודה ממשיכים לפעול.", "ru": "Скрыть столбец статуса в таблице на этой странице для всех, включая администраторов. Это только отображение — статусы и рабочий процесс продолжают работать."}	2026-07-30 12:05:10.198155+00	2026-07-30 14:01:48.928584+00
+118719	records.pageCreateHint	{"en": "Blocks creating new records from this page for everyone, including administrators. The restriction is also enforced on the server. On other pages of this entity creation works as usual.", "he": "חוסם הוספת רשומות חדשות מדף זה לכולם, כולל מנהלים. החסימה נאכפת גם בשרת. בדפים אחרים של ישות זו היצירה עובדת כרגיל.", "ru": "Запретить добавление новых записей с этой страницы для всех, включая администраторов. Запрет проверяется и на сервере. На других страницах этой сущности создание работает как обычно."}	2026-07-30 13:01:31.937769+00	2026-07-30 14:01:48.876615+00
+118718	records.pageCreateTitle	{"en": "Creating records on this page", "he": "יצירת רשומות בדף זה", "ru": "Создание записей на этой странице"}	2026-07-30 13:01:31.933644+00	2026-07-30 14:01:48.879826+00
 87040	records.pageDefaultFilterHint	{"en": "Set the filters you want in the bar above the table (in normal mode), then save them here. They will be applied automatically when the page opens, but the user can change or clear them. A default filter can never reveal rows hidden by the view's filter.", "he": "הגדירו את המסננים הרצויים בסרגל שמעל הטבלה (במצב רגיל), ואז שמרו אותם כאן. הם יוחלו אוטומטית בעת פתיחת העמוד, אך המשתמש יוכל לשנות או לנקות אותם. מסנן ברירת מחדל לעולם אינו יכול לחשוף שורות המוסתרות על ידי מסנן התצוגה.", "ru": "Выставьте нужные фильтры в панели над таблицей (в обычном режиме), затем сохраните их здесь. При открытии страницы они применятся автоматически, но пользователь сможет их изменить или очистить. Фильтр по умолчанию не может показать строки, скрытые фильтром вида."}	2026-07-01 14:44:23.711186+00	2026-07-30 13:10:04.836+00
-118703	records.pageCreateDisabledSaved	{"en": "Добавление записей на этой странице запрещено", "he": "Добавление записей на этой странице запрещено", "ru": "Добавление записей на этой странице запрещено"}	2026-07-30 13:01:31.867149+00	2026-07-30 13:10:09.125+00
-118719	records.pageCreateHint	{"en": "Запретить добавление новых записей с этой страницы для всех, включая администраторов. Запрет проверяется и на сервере. На других страницах этой сущности создание работает как обычно.", "he": "Запретить добавление новых записей с этой страницы для всех, включая администраторов. Запрет проверяется и на сервере. На других страницах этой сущности создание работает как обычно.", "ru": "Запретить добавление новых записей с этой страницы для всех, включая администраторов. Запрет проверяется и на сервере. На других страницах этой сущности создание работает как обычно."}	2026-07-30 13:01:31.937769+00	2026-07-30 13:10:09.19+00
-118720	records.pageCreateEnabled	{"en": "Разрешить добавление записей", "he": "Разрешить добавление записей", "ru": "Разрешить добавление записей"}	2026-07-30 13:01:31.941628+00	2026-07-30 13:10:09.194+00
-118721	records.pageCreateDisabled	{"en": "Запретить добавление записей", "he": "Запретить добавление записей", "ru": "Запретить добавление записей"}	2026-07-30 13:01:31.944837+00	2026-07-30 13:10:09.197+00
-115211	records.pageDefaultSortHint	{"en": "Записи на этой странице будут открываться отсортированными по выбранному полю — независимо от сортировки в настройках видов сущности. Пользователь всё равно сможет пересортировать таблицу, нажав на заголовок колонки.", "he": "Записи на этой странице будут открываться отсортированными по выбранному полю — независимо от сортировки в настройках видов сущности. Пользователь всё равно сможет пересортировать таблицу, нажав на заголовок колонки.", "ru": "Записи на этой странице будут открываться отсортированными по выбранному полю — независимо от сортировки в настройках видов сущности. Пользователь всё равно сможет пересортировать таблицу, нажав на заголовок колонки."}	2026-07-30 12:05:10.177388+00	2026-07-30 13:10:09.148+00
-120483	records.firstPage	{"en": "На первую страницу", "he": "На первую страницу", "ru": "На первую страницу"}	2026-07-30 13:05:58.173145+00	2026-07-30 13:10:09.229+00
-120484	records.lastPage	{"en": "На последнюю страницу", "he": "На последнюю страницу", "ru": "На последнюю страницу"}	2026-07-30 13:05:58.17691+00	2026-07-30 13:10:09.237+00
-122247	roles.homeSection	{"en": "Главная страница", "he": "Главная страница", "ru": "Главная страница"}	2026-07-30 13:10:09.263442+00	2026-07-30 13:10:09.263442+00
-122248	roles.dashboardAccess	{"en": "Доступ к «Панели управления»", "he": "Доступ к «Панели управления»", "ru": "Доступ к «Панели управления»"}	2026-07-30 13:10:09.269178+00	2026-07-30 13:10:09.269178+00
-122249	roles.homePageHint	{"en": "Стартовая страница — открывается при входе в систему вместо «Панели управления».", "he": "Стартовая страница — открывается при входе в систему вместо «Панели управления».", "ru": "Стартовая страница — открывается при входе в систему вместо «Панели управления»."}	2026-07-30 13:10:09.320412+00	2026-07-30 13:10:09.320412+00
-122250	roles.homeDashboard	{"en": "Панель управления (по умолчанию)", "he": "Панель управления (по умолчанию)", "ru": "Панель управления (по умолчанию)"}	2026-07-30 13:10:09.323917+00	2026-07-30 13:10:09.323917+00
+118721	records.pageCreateDisabled	{"en": "Disable adding records", "he": "לחסום הוספת רשומות", "ru": "Запретить добавление записей"}	2026-07-30 13:01:31.944837+00	2026-07-30 14:01:48.865132+00
+118703	records.pageCreateDisabledSaved	{"en": "Adding records on this page is disabled", "he": "הוספת רשומות בדף זה חסומה", "ru": "Добавление записей на этой странице запрещено"}	2026-07-30 13:01:31.867149+00	2026-07-30 14:01:48.86838+00
+118720	records.pageCreateEnabled	{"en": "Allow adding records", "he": "לאפשר הוספת רשומות", "ru": "Разрешить добавление записей"}	2026-07-30 13:01:31.941628+00	2026-07-30 14:01:48.870744+00
+118704	records.pageCreateEnabledSaved	{"en": "Adding records on this page is allowed", "he": "הוספת רשומות בדף זה מותרת", "ru": "Добавление записей на этой странице разрешено"}	2026-07-30 13:01:31.872534+00	2026-07-30 14:01:48.874+00
+120483	records.firstPage	{"en": "First page", "he": "לעמוד הראשון", "ru": "На первую страницу"}	2026-07-30 13:05:58.173145+00	2026-07-30 14:01:48.852789+00
+120484	records.lastPage	{"en": "Last page", "he": "לעמוד האחרון", "ru": "На последнюю страницу"}	2026-07-30 13:05:58.17691+00	2026-07-30 14:01:48.85926+00
+115211	records.pageDefaultSortHint	{"en": "Records on this page will open sorted by the selected field, regardless of the sorting in the entity's views. Users can still re-sort the table by clicking a column header.", "he": "הרשומות בדף זה ייפתחו ממוינות לפי השדה שנבחר — ללא תלות במיון שבהגדרות התצוגות של הישות. המשתמש עדיין יוכל למיין מחדש בלחיצה על כותרת עמודה.", "ru": "Записи на этой странице будут открываться отсортированными по выбранному полю — независимо от сортировки в настройках видов сущности. Пользователь всё равно сможет пересортировать таблицу, нажав на заголовок колонки."}	2026-07-30 12:05:10.177388+00	2026-07-30 14:01:48.885848+00
+122248	roles.dashboardAccess	{"en": "Access to the Dashboard", "he": "גישה ל«לוח הבקרה»", "ru": "Доступ к «Панели управления»"}	2026-07-30 13:10:09.269178+00	2026-07-30 14:01:48.937684+00
+122250	roles.homeDashboard	{"en": "Dashboard (default)", "he": "לוח הבקרה (ברירת מחדל)", "ru": "Панель управления (по умолчанию)"}	2026-07-30 13:10:09.323917+00	2026-07-30 14:01:48.940744+00
+122249	roles.homePageHint	{"en": "Start page — opens on login instead of the Dashboard.", "he": "דף הבית — נפתח בכניסה למערכת במקום «לוח הבקרה».", "ru": "Стартовая страница — открывается при входе в систему вместо «Панели управления»."}	2026-07-30 13:10:09.320412+00	2026-07-30 14:01:48.943966+00
+122247	roles.homeSection	{"en": "Home page", "he": "דף הבית", "ru": "Главная страница"}	2026-07-30 13:10:09.263442+00	2026-07-30 14:01:48.947081+00
 \.
 
 
@@ -13354,7 +13569,7 @@ COPY public.views (id, entity_id, view_key, name_json, config_json, is_default, 
 -- Name: audit_log_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.audit_log_id_seq', 665, true);
+SELECT pg_catalog.setval('public.audit_log_id_seq', 797, true);
 
 
 --
@@ -13396,14 +13611,14 @@ SELECT pg_catalog.setval('public.entities_id_seq', 77, true);
 -- Name: entity_automation_runs_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.entity_automation_runs_id_seq', 150, true);
+SELECT pg_catalog.setval('public.entity_automation_runs_id_seq', 163, true);
 
 
 --
 -- Name: entity_automations_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.entity_automations_id_seq', 9, true);
+SELECT pg_catalog.setval('public.entity_automations_id_seq', 16, true);
 
 
 --
@@ -13417,7 +13632,7 @@ SELECT pg_catalog.setval('public.entity_fields_id_seq', 220, true);
 -- Name: entity_records_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.entity_records_id_seq', 6201, true);
+SELECT pg_catalog.setval('public.entity_records_id_seq', 6217, true);
 
 
 --
@@ -13487,7 +13702,7 @@ SELECT pg_catalog.setval('public.page_fields_id_seq', 60, true);
 -- Name: page_record_values_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.page_record_values_id_seq', 3934, true);
+SELECT pg_catalog.setval('public.page_record_values_id_seq', 3935, true);
 
 
 --
@@ -13501,7 +13716,7 @@ SELECT pg_catalog.setval('public.pages_id_seq', 84, true);
 -- Name: record_links_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.record_links_id_seq', 7716, true);
+SELECT pg_catalog.setval('public.record_links_id_seq', 7722, true);
 
 
 --
@@ -13522,14 +13737,14 @@ SELECT pg_catalog.setval('public.roles_id_seq', 14, true);
 -- Name: system_events_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.system_events_id_seq', 568, true);
+SELECT pg_catalog.setval('public.system_events_id_seq', 631, true);
 
 
 --
 -- Name: translations_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.translations_id_seq', 122269, true);
+SELECT pg_catalog.setval('public.translations_id_seq', 122270, true);
 
 
 --
@@ -14208,5 +14423,4 @@ ALTER TABLE ONLY public.views
 -- PostgreSQL database dump complete
 --
 
-\unrestrict DVnd4UODum6TTCkcsAlwNmKX2Up0xqkHCC1C8TcTeeWjPlcGrcANSnnPGyoNRbS
 
