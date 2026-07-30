@@ -2829,6 +2829,7 @@ router.put("/entities/:entityId/related-link", requireAuth, async (req, res): Pr
     }
   }
 
+  let previousLinkedIds: number[] = [];
   try {
     const lockMsg = await db.transaction(async (tx) => {
       const [locked] = await tx
@@ -2851,7 +2852,12 @@ router.put("/entities/:entityId/related-link", requireAuth, async (req, res): Pr
       );
       if (lockViolation) return lockViolation;
       const baseCol = direction === "source" ? recordLinksTable.sourceRecordId : recordLinksTable.targetRecordId;
-      await tx.delete(recordLinksTable).where(and(eq(recordLinksTable.relationId, relation.id), eq(baseCol, baseRecordId)));
+      const otherCol = direction === "source" ? recordLinksTable.targetRecordId : recordLinksTable.sourceRecordId;
+      const removed = await tx
+        .delete(recordLinksTable)
+        .where(and(eq(recordLinksTable.relationId, relation.id), eq(baseCol, baseRecordId)))
+        .returning({ other: otherCol });
+      previousLinkedIds = removed.map((r) => r.other);
       if (linkedRecordId != null) {
         await tx.insert(recordLinksTable).values({
           relationId: relation.id,
@@ -2873,6 +2879,25 @@ router.put("/entities/:entityId/related-link", requireAuth, async (req, res): Pr
       return;
     }
     throw err;
+  }
+
+  // A link change alters the effective relation value of the base record and of
+  // the previously/newly linked records — emit record.updated (post-commit) so
+  // automations can react, mirroring the page-level related-link handler above.
+  {
+    const affectedLinked = [...new Set([...previousLinkedIds, ...(linkedRecordId != null ? [linkedRecordId] : [])])];
+    await emitEvent(
+      [
+        { eventName: EVENT_RECORD_UPDATED, entityId, recordId: baseRecordId, payload: { actorUserId: userId, changedFields: [] } },
+        ...affectedLinked.map((rid) => ({
+          eventName: EVENT_RECORD_UPDATED,
+          entityId: relatedEntityId,
+          recordId: rid,
+          payload: { actorUserId: userId, changedFields: [] },
+        })),
+      ],
+      req.log,
+    );
   }
 
   // For page-source the value is read from the linked record's page_record_values.
