@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import {
   useListUsers,
   useCreateUser,
@@ -109,6 +110,7 @@ export default function UsersPage() {
   });
 
   const { user: currentUser, isSuperAdmin, canAdmin, impersonate } = useAuth();
+  const [, setLocation] = useLocation();
   const canImpersonate = isSuperAdmin || canAdmin("users");
 
   // Filtering is SERVER-side: search + roleId (the server matches the FULL
@@ -411,12 +413,17 @@ export default function UsersPage() {
                               className="h-8 w-8 text-blue-600"
                               title={t("users.impersonate", "Войти под пользователем")}
                               onClick={() => {
-                                impersonate(user.id).catch(() =>
-                                  toast({
-                                    title: t("users.impersonateError", "Не удалось войти под пользователем"),
-                                    variant: "destructive",
-                                  })
-                                );
+                                impersonate(user.id)
+                                  // Land on "/" so the impersonated user's own
+                                  // start page / dashboard rules apply instead
+                                  // of staying on the admin users page.
+                                  .then(() => setLocation("/"))
+                                  .catch(() =>
+                                    toast({
+                                      title: t("users.impersonateError", "Не удалось войти под пользователем"),
+                                      variant: "destructive",
+                                    })
+                                  );
                               }}
                             >
                               <LogIn className="w-3.5 h-3.5" />
