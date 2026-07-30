@@ -5902,7 +5902,7 @@ export function EntityRecords({
       </Card>
 
       {total > 0 && groupRowsReady && (!showGroups || expandedGroupIndex >= 0 || expandAll) && (
-        <div className="flex flex-col-reverse items-center gap-1.5 sm:flex-row sm:justify-between text-sm text-slate-500">
+        <div className="flex flex-col-reverse items-center gap-1.5 pb-4 sm:pb-0 sm:flex-row sm:justify-between text-sm text-slate-500">
           {/* Mobile: controls first, counter as a small line below; the counter
               text stays on ONE line instead of wrapping into a tall column. */}
           <span className="whitespace-nowrap text-xs sm:text-sm">
