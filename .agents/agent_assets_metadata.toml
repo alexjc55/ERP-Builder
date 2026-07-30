@@ -96,3 +96,9 @@ id = "dR_QUDOAv3keoPcJhflR6"
 uri = "file://docs/orders-rework.xlsx"
 type = "table"
 title = "Заказы, требующие доработки (клиент/проект)"
+
+[[outputs]]
+id = "XgAZu9MyjfZAlhpA8kYLn"
+uri = "file://docs/prod-data-update.sql"
+type = "unspecified"
+title = "SQL для обновления данных на проде"
