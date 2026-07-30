@@ -1618,11 +1618,45 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         }
       }
     }
-    groups = [...buckets.values()]
+    // Group-list ordering: honor the caller's first sort that is applicable to
+    // a GROUP — the group field itself (label), a summed column, or a column
+    // with a group-common value. Anything else (e.g. __created_at__) falls back
+    // to the label A→Z, matching the old fixed behavior. The empty-key group
+    // always sorts last regardless of direction.
+    const gSpecSorts = (body.data.sorts ?? []) as { field: string; direction?: "asc" | "desc" }[];
+    const allBuckets = [...buckets.values()];
+    const gSortSpec = gSpecSorts.find(
+      (s) =>
+        s.field === groupField.fieldKey ||
+        allBuckets.some((b) => b.sums[s.field] !== undefined || b.common.has(s.field)),
+    );
+    const gDir = gSortSpec?.direction === "desc" ? -1 : 1;
+    const cmpLabel = (a: GroupBucket, b: GroupBucket) =>
+      (a.label ?? a.key ?? "").localeCompare(b.label ?? b.key ?? "", "ru", { numeric: true, sensitivity: "base" });
+    const groupSortVal = (b: GroupBucket): unknown =>
+      !gSortSpec || gSortSpec.field === groupField.fieldKey
+        ? (b.label ?? b.key)
+        : b.sums[gSortSpec.field] !== undefined
+          ? b.sums[gSortSpec.field]
+          : b.common.get(gSortSpec.field);
+    groups = allBuckets
       .sort((a, b) => {
         if (a.key === null) return 1;
         if (b.key === null) return -1;
-        return (a.label ?? a.key).localeCompare(b.label ?? b.key, "ru", { numeric: true, sensitivity: "base" });
+        if (!gSortSpec) return cmpLabel(a, b);
+        const av = groupSortVal(a);
+        const bv = groupSortVal(b);
+        // Groups without a value for the sorted column (mixed/empty) go last.
+        if (av == null && bv == null) return cmpLabel(a, b);
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        const an = typeof av === "number" ? av : Number(String(av).trim() === "" ? NaN : av);
+        const bn = typeof bv === "number" ? bv : Number(String(bv).trim() === "" ? NaN : bv);
+        const c =
+          Number.isFinite(an) && Number.isFinite(bn)
+            ? an - bn
+            : String(av).localeCompare(String(bv), "ru", { numeric: true, sensitivity: "base" });
+        return c !== 0 ? c * gDir : cmpLabel(a, b);
       })
       .map((b) => {
         const values: Record<string, unknown> = {};
