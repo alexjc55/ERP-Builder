@@ -1146,6 +1146,7 @@ export const DeleteRoleResponse = zod.object({
  * @summary List all pages (menu structure)
  */
 export const listPagesResponsePivotConfigJsonOneFilterConjunctionDefault = `and`;
+export const listPagesResponseDefaultSortJsonOneItemDirectionDefault = `asc`;
 
 export const ListPagesResponseItem = zod.object({
   "id": zod.number(),
@@ -1244,6 +1245,10 @@ export const ListPagesResponseItem = zod.object({
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
+  "defaultSortJson": zod.union([zod.array(zod.object({
+  "field": zod.string(),
+  "direction": zod.enum(['asc', 'desc']).default(listPagesResponseDefaultSortJsonOneItemDirectionDefault)
+})),zod.null()]).optional().describe('Per-page default sort (display-only) — overrides the entity\/view default sort for this page\'s records table. Null\/empty = inherit.'),
   "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display\/aggregation-only, never a security boundary.'),
   "groupDefaultExpanded": zod.boolean().optional().describe('Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.'),
   "sortOrder": zod.number(),
@@ -1262,6 +1267,7 @@ export const createPageBodyIsPivotDefault = false;
 export const createPageBodyPivotConfigJsonOneFilterConjunctionDefault = `and`;
 export const createPageBodyWidgetsCollapsedDefaultDefault = false;
 export const createPageBodyFiltersCollapsedDefaultDefault = false;
+export const createPageBodyDefaultSortJsonOneItemDirectionDefault = `asc`;
 export const createPageBodyGroupDefaultExpandedDefault = false;
 export const createPageBodyIsActiveDefault = true;
 
@@ -1361,6 +1367,10 @@ export const CreatePageBody = zod.object({
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
+  "defaultSortJson": zod.union([zod.array(zod.object({
+  "field": zod.string(),
+  "direction": zod.enum(['asc', 'desc']).default(createPageBodyDefaultSortJsonOneItemDirectionDefault)
+})),zod.null()]).optional().describe('Per-page default sort (display-only) — overrides the entity\/view default sort for this page\'s records table. Null\/empty = inherit.'),
   "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.'),
   "groupDefaultExpanded": zod.boolean().default(createPageBodyGroupDefaultExpandedDefault).describe('Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.'),
   "sortOrder": zod.number().optional(),
@@ -1376,6 +1386,7 @@ export const GetPageParams = zod.object({
 })
 
 export const getPageResponsePivotConfigJsonOneFilterConjunctionDefault = `and`;
+export const getPageResponseDefaultSortJsonOneItemDirectionDefault = `asc`;
 
 export const GetPageResponse = zod.object({
   "id": zod.number(),
@@ -1474,6 +1485,10 @@ export const GetPageResponse = zod.object({
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
+  "defaultSortJson": zod.union([zod.array(zod.object({
+  "field": zod.string(),
+  "direction": zod.enum(['asc', 'desc']).default(getPageResponseDefaultSortJsonOneItemDirectionDefault)
+})),zod.null()]).optional().describe('Per-page default sort (display-only) — overrides the entity\/view default sort for this page\'s records table. Null\/empty = inherit.'),
   "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display\/aggregation-only, never a security boundary.'),
   "groupDefaultExpanded": zod.boolean().optional().describe('Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.'),
   "sortOrder": zod.number(),
@@ -1492,6 +1507,7 @@ export const UpdatePageParams = zod.object({
 })
 
 export const updatePageBodyPivotConfigJsonOneFilterConjunctionDefault = `and`;
+export const updatePageBodyDefaultSortJsonOneItemDirectionDefault = `asc`;
 
 export const UpdatePageBody = zod.object({
   "nameJson": zod.object({
@@ -1589,6 +1605,10 @@ export const UpdatePageBody = zod.object({
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
+  "defaultSortJson": zod.union([zod.array(zod.object({
+  "field": zod.string(),
+  "direction": zod.enum(['asc', 'desc']).default(updatePageBodyDefaultSortJsonOneItemDirectionDefault)
+})),zod.null()]).optional().describe('Per-page default sort (display-only) — overrides the entity\/view default sort for this page\'s records table. Null\/empty = inherit.'),
   "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.'),
   "groupDefaultExpanded": zod.boolean().optional().describe('Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.'),
   "sortOrder": zod.number().optional(),
@@ -1596,6 +1616,7 @@ export const UpdatePageBody = zod.object({
 })
 
 export const updatePageResponsePivotConfigJsonOneFilterConjunctionDefault = `and`;
+export const updatePageResponseDefaultSortJsonOneItemDirectionDefault = `asc`;
 
 export const UpdatePageResponse = zod.object({
   "id": zod.number(),
@@ -1694,6 +1715,10 @@ export const UpdatePageResponse = zod.object({
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
+  "defaultSortJson": zod.union([zod.array(zod.object({
+  "field": zod.string(),
+  "direction": zod.enum(['asc', 'desc']).default(updatePageResponseDefaultSortJsonOneItemDirectionDefault)
+})),zod.null()]).optional().describe('Per-page default sort (display-only) — overrides the entity\/view default sort for this page\'s records table. Null\/empty = inherit.'),
   "groupByFieldKey": zod.string().nullish().describe('Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display\/aggregation-only, never a security boundary.'),
   "groupDefaultExpanded": zod.boolean().optional().describe('Default accordion state for a grouped mirror page — true starts with all groups expanded, false collapsed. Display-only.'),
   "sortOrder": zod.number(),

@@ -4584,6 +4584,13 @@ components:
             - $ref: "#/components/schemas/PageQuickFilter"
             - type: "null"
           description: Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter).
+        defaultSortJson:
+          oneOf:
+            - type: array
+              items:
+                $ref: "#/components/schemas/SortSpec"
+            - type: "null"
+          description: Per-page default sort (display-only) — overrides the entity/view default sort for this page's records table. Null/empty = inherit.
         groupByFieldKey:
           type: ["string", "null"]
           description: Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display/aggregation-only, never a security boundary.
@@ -4674,6 +4681,13 @@ components:
             - $ref: "#/components/schemas/PageQuickFilter"
             - type: "null"
           description: Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter).
+        defaultSortJson:
+          oneOf:
+            - type: array
+              items:
+                $ref: "#/components/schemas/SortSpec"
+            - type: "null"
+          description: Per-page default sort (display-only) — overrides the entity/view default sort for this page's records table. Null/empty = inherit.
         groupByFieldKey:
           type: ["string", "null"]
           description: Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.
@@ -4752,6 +4766,13 @@ components:
             - $ref: "#/components/schemas/PageQuickFilter"
             - type: "null"
           description: Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter).
+        defaultSortJson:
+          oneOf:
+            - type: array
+              items:
+                $ref: "#/components/schemas/SortSpec"
+            - type: "null"
+          description: Per-page default sort (display-only) — overrides the entity/view default sort for this page's records table. Null/empty = inherit.
         groupByFieldKey:
           type: ["string", "null"]
           description: Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.

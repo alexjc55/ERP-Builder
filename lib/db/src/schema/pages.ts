@@ -119,6 +119,11 @@ export const pagesTable = pgTable("pages", {
     fieldFilters?: Record<string, string[]>;
     statusIds?: number[];
   }>(),
+  // Per-page default sort (display-only). Overrides the entity/view default
+  // sort for THIS page's records table, independently of the entity's views
+  // config. Null/empty = inherit the view/entity default. The viewer's own
+  // header-click sort always wins over this.
+  defaultSortJson: jsonb("default_sort_json").$type<{ field: string; direction?: "asc" | "desc" }[]>(),
   sortOrder: integer("sort_order").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

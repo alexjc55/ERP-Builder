@@ -151,7 +151,7 @@ import { computeRowFormatting, ruleMatches, type FormatField } from "@/lib/forma
 import type { FieldFormatRule, CustomFilterPick, CustomFilter, CustomFilterInput } from "@workspace/api-client-react";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus, Zap, ChevronsUpDown, ChevronsDownUp } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus, Zap, ChevronsUpDown, ChevronsDownUp, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { Link, useLocation, useSearch } from "wouter";
 import { Calendar } from "@/components/ui/calendar";
 import type { DateRange } from "react-day-picker";
@@ -236,6 +236,9 @@ function readableStatusTextColor(hex: string): string {
 const SYSTEM_SORT_CREATED_AT = "__created_at__";
 const SYSTEM_SORT_RECORD_ID = "__record_id__";
 const SYSTEM_SORT_KEYS = new Set<string>([SYSTEM_SORT_CREATED_AT, SYSTEM_SORT_RECORD_ID]);
+// Column types that cannot be sorted server-side (no scalar in valuesJson, or
+// computed client-side only).
+const NON_SORTABLE_FIELD_TYPES = new Set<string>(["relation", "lookup", "function", "formula", "file"]);
 
 function extractError(err: unknown): string | undefined {
   if (err && typeof err === "object") {
@@ -1286,6 +1289,7 @@ export function EntityRecords({
   columnGroups,
   mirrorPinned,
   defaultQuickFilter,
+  pageDefaultSorts,
   groupByFieldKey,
   groupDefaultExpanded,
   filtersCollapsedDefault,
@@ -1371,6 +1375,12 @@ export function EntityRecords({
     excludeFieldFilters?: Record<string, string[]>;
     excludeStatusIds?: number[];
   } | null;
+  /**
+   * Per-page default sort (from `page.defaultSortJson`). When non-empty it
+   * overrides the entity/view default sort for THIS page's table (display-only).
+   * The viewer's own header-click sort always wins over it.
+   */
+  pageDefaultSorts?: SortSpec[] | null;
   /**
    * Mirror-page grouping (from `page.groupByFieldKey`): when set, records are
    * shown as collapsed group rows (one per distinct value of this source-entity
@@ -2371,8 +2381,40 @@ export function EntityRecords({
     const known = new Set(allFields.filter((f: Field) => f.isActive).map((f: Field) => f.fieldKey));
     return raw.filter((s) => known.has(s.field) || SYSTEM_SORT_KEYS.has(s.field));
   }, [entity?.defaultSortJson, allFields]);
-  const effectiveSorts = selectedView ? (selectedConfig.sorts ?? []) : entityDefaultSorts;
+  // Per-page default sort (page.defaultSortJson) overrides the view/entity
+  // default; a header-click sort by the viewer (userSorts) wins over everything.
+  const [userSorts, setUserSorts] = useState<SortSpec[] | null>(null);
+  // Mobile-only: the whole toolbar (search/filters/etc.) collapses to a single
+  // toggle row to leave room for the table.
+  const [mobileToolbarOpen, setMobileToolbarOpen] = useState(false);
+  const pageDefaultSortsClean = useMemo(() => {
+    const raw = Array.isArray(pageDefaultSorts) ? pageDefaultSorts : [];
+    const known = new Set(allFields.filter((f: Field) => f.isActive).map((f: Field) => f.fieldKey));
+    return raw.filter((s) => known.has(s.field) || SYSTEM_SORT_KEYS.has(s.field));
+  }, [pageDefaultSorts, allFields]);
+  const defaultEffectiveSorts =
+    pageDefaultSortsClean.length > 0
+      ? pageDefaultSortsClean
+      : selectedView
+        ? (selectedConfig.sorts ?? [])
+        : entityDefaultSorts;
+  const effectiveSorts = userSorts ?? defaultEffectiveSorts;
   const sortsKey = JSON.stringify(effectiveSorts);
+  // Header-click sorting: asc → desc → back to the default sort.
+  const toggleHeaderSort = useCallback(
+    (fieldKey: string) => {
+      setPage(1);
+      setUserSorts((prev) => {
+        const cur = (prev ?? defaultEffectiveSorts)[0];
+        if (cur?.field === fieldKey && (cur.direction ?? "asc") === "asc") {
+          return [{ field: fieldKey, direction: "desc" }];
+        }
+        if (cur?.field === fieldKey && prev != null) return null;
+        return [{ field: fieldKey, direction: "asc" }];
+      });
+    },
+    [defaultEffectiveSorts],
+  );
 
   // When no view is selected, the entity's default filters (configured on the
   // Views admin screen) act as the base filters, mirroring entityDefaultSorts.
@@ -2781,6 +2823,30 @@ export function EntityRecords({
                 ? t("records.filtersDefaultCollapsedSaved", "По умолчанию: фильтры свёрнуты")
                 : t("records.filtersDefaultExpandedSaved", "По умолчанию: фильтры развёрнуты"),
             }),
+        },
+      );
+    },
+    [pageId, savePageGroupDefaultMutation, toast, t],
+  );
+  // Fields offered in the per-page default-sort picker (setup mode).
+  const sortableFields = useMemo(
+    () => allFields.filter((f: Field) => f.isActive && !NON_SORTABLE_FIELD_TYPES.has(f.fieldType)),
+    [allFields],
+  );
+  const savePageDefaultSort = useCallback(
+    (field: string | null, direction: "asc" | "desc") => {
+      if (pageId == null) return;
+      savePageGroupDefaultMutation.mutate(
+        { id: pageId, data: { defaultSortJson: field ? [{ field, direction }] : null } },
+        {
+          onSuccess: () => {
+            setUserSorts(null);
+            toast({
+              title: field
+                ? t("records.pageDefaultSortSaved", "Сортировка страницы по умолчанию сохранена")
+                : t("records.pageDefaultSortCleared", "Сортировка страницы по умолчанию очищена"),
+            });
+          },
         },
       );
     },
@@ -3888,8 +3954,36 @@ export function EntityRecords({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-2">
+      {/* Mobile-only: collapse the whole toolbar behind a single toggle row so
+          the table gets the screen space. Desktop (sm+) always shows it. */}
+      <div className="flex sm:hidden items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 flex-1 justify-between gap-1.5 text-xs text-slate-600"
+          onClick={() => setMobileToolbarOpen((v) => !v)}
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            {t("records.mobileToolbarToggle", "Поиск, фильтры и настройки")}
+            {(statusFilter.length > 0 || Object.keys(fieldFilters).length > 0 || search.trim() !== "") && (
+              <Badge variant="secondary" className="ml-0.5 px-1.5">
+                {statusFilter.length + Object.keys(fieldFilters).length + (search.trim() !== "" ? 1 : 0)}
+              </Badge>
+            )}
+          </span>
+          <ChevronDown className={cn("w-4 h-4 shrink-0 transition-transform", mobileToolbarOpen && "rotate-180")} />
+        </Button>
+        {canCreate && (
+          <Button size="sm" className="h-8 gap-1 shrink-0 bg-blue-600 hover:bg-blue-700" onClick={openCreate}>
+            <Plus className="w-4 h-4" />
+          </Button>
+        )}
+      </div>
+      <div className={cn("space-y-2", !mobileToolbarOpen && "max-sm:hidden")}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {views.length > 0 && (
             <div className="flex items-center gap-1.5 w-full sm:w-auto">
@@ -4203,6 +4297,7 @@ export function EntityRecords({
           )}
         </div>
       )}
+      </div>
 
       {setupMode && (
         <div className="space-y-2">
@@ -4389,6 +4484,65 @@ export function EntityRecords({
                   </SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          )}
+          {pageId != null && canAdmin("pages") && (
+            <div className="rounded-md border border-slate-200 bg-white px-3 py-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                <ArrowUpDown className="w-4 h-4 text-slate-400 shrink-0" />
+                <span>{t("records.pageDefaultSortTitle", "Сортировка по умолчанию для этой страницы")}</span>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {t(
+                  "records.pageDefaultSortHint",
+                  "Записи на этой странице будут открываться отсортированными по выбранному полю — независимо от сортировки в настройках видов сущности. Пользователь всё равно сможет пересортировать таблицу, нажав на заголовок колонки.",
+                )}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Select
+                  value={pageDefaultSortsClean[0]?.field ?? "__none__"}
+                  onValueChange={(v) =>
+                    savePageDefaultSort(
+                      v === "__none__" ? null : v,
+                      pageDefaultSortsClean[0]?.direction ?? "asc",
+                    )
+                  }
+                  disabled={savePageGroupDefaultMutation.isPending}
+                >
+                  <SelectTrigger className="h-9 w-full sm:w-72 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">
+                      {t("records.pageDefaultSortInherit", "Наследовать (как в виде/сущности)")}
+                    </SelectItem>
+                    <SelectItem value={SYSTEM_SORT_CREATED_AT}>
+                      {t("records.sortCreatedAt", "Дата создания (системная)")}
+                    </SelectItem>
+                    {sortableFields.map((f: Field) => (
+                      <SelectItem key={f.fieldKey} value={f.fieldKey}>
+                        {ml(f.nameJson)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={pageDefaultSortsClean[0]?.direction ?? "asc"}
+                  onValueChange={(v) => {
+                    const f = pageDefaultSortsClean[0]?.field;
+                    if (f) savePageDefaultSort(f, v as "asc" | "desc");
+                  }}
+                  disabled={savePageGroupDefaultMutation.isPending || !pageDefaultSortsClean[0]}
+                >
+                  <SelectTrigger className="h-9 w-full sm:w-48 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="asc">{t("records.sortAsc", "По возрастанию")}</SelectItem>
+                    <SelectItem value="desc">{t("records.sortDesc", "По убыванию")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           )}
           {pageId != null && canAdmin("pages") && statuses.length > 0 && (
@@ -4808,6 +4962,24 @@ export function EntityRecords({
                               <span>{ml(fld.nameJson)}</span>
                             )}
                           </div>
+                        ) : !NON_SORTABLE_FIELD_TYPES.has((fld as Field).fieldType) ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleHeaderSort((fld as Field).fieldKey)}
+                            className="inline-flex items-center gap-1 hover:text-slate-900 transition"
+                            title={t("records.sortByColumn", "Сортировать по этой колонке")}
+                          >
+                            <span>{ml(fld.nameJson)}</span>
+                            {effectiveSorts[0]?.field === (fld as Field).fieldKey ? (
+                              (effectiveSorts[0].direction ?? "asc") === "asc" ? (
+                                <ArrowUp className="w-3.5 h-3.5 shrink-0 text-blue-600" />
+                              ) : (
+                                <ArrowDown className="w-3.5 h-3.5 shrink-0 text-blue-600" />
+                              )
+                            ) : (
+                              <ArrowUpDown className="w-3 h-3 opacity-40 shrink-0" />
+                            )}
+                          </button>
                         ) : (
                           ml(fld.nameJson)
                         )}

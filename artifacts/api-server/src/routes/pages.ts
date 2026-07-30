@@ -402,6 +402,7 @@ router.put("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): P
   if ("filtersCollapsedDefault" in body) updateData.filtersCollapsedDefault = body.filtersCollapsedDefault ?? false;
   if ("hideStatusColumn" in body) updateData.hideStatusColumn = body.hideStatusColumn ?? false;
   if ("defaultQuickFilterJson" in body) updateData.defaultQuickFilterJson = body.defaultQuickFilterJson ?? null;
+  if ("defaultSortJson" in body) updateData.defaultSortJson = body.defaultSortJson ?? null;
   if ("groupByFieldKey" in body) updateData.groupByFieldKey = body.groupByFieldKey || null;
   if ("groupDefaultExpanded" in body) updateData.groupDefaultExpanded = body.groupDefaultExpanded ?? false;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;

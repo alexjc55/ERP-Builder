@@ -1100,6 +1100,19 @@ export interface PageQuickFilter {
   excludeStatusIds?: number[];
 }
 
+export type SortSpecDirection = typeof SortSpecDirection[keyof typeof SortSpecDirection];
+
+
+export const SortSpecDirection = {
+  asc: 'asc',
+  desc: 'desc',
+} as const;
+
+export interface SortSpec {
+  field: string;
+  direction?: SortSpecDirection;
+}
+
 export interface Page {
   id: number;
   nameJson: MultilingualText;
@@ -1150,6 +1163,8 @@ export interface Page {
   hideStatusColumn?: boolean;
   /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
   defaultQuickFilterJson?: PageQuickFilter | null;
+  /** Per-page default sort (display-only) — overrides the entity/view default sort for this page's records table. Null/empty = inherit. */
+  defaultSortJson?: SortSpec[] | null;
   /**
      * Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display/aggregation-only, never a security boundary.
      * @nullable
@@ -1231,6 +1246,8 @@ export interface PageInput {
   hideStatusColumn?: boolean;
   /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
   defaultQuickFilterJson?: PageQuickFilter | null;
+  /** Per-page default sort (display-only) — overrides the entity/view default sort for this page's records table. Null/empty = inherit. */
+  defaultSortJson?: SortSpec[] | null;
   /**
      * Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.
      * @nullable
@@ -1309,6 +1326,8 @@ export interface PageUpdate {
   hideStatusColumn?: boolean;
   /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
   defaultQuickFilterJson?: PageQuickFilter | null;
+  /** Per-page default sort (display-only) — overrides the entity/view default sort for this page's records table. Null/empty = inherit. */
+  defaultSortJson?: SortSpec[] | null;
   /**
      * Mirror-page grouping — source-entity field key (scalar or relation) to group the records table by. Only allowed on mirror pages.
      * @nullable
@@ -1996,19 +2015,6 @@ export interface NotesContentInput {
      * @nullable
      */
   cells?: NotesContentInputCellsItem[] | null;
-}
-
-export type SortSpecDirection = typeof SortSpecDirection[keyof typeof SortSpecDirection];
-
-
-export const SortSpecDirection = {
-  asc: 'asc',
-  desc: 'desc',
-} as const;
-
-export interface SortSpec {
-  field: string;
-  direction?: SortSpecDirection;
 }
 
 export interface Entity {

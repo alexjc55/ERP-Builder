@@ -11,6 +11,7 @@ import type { PageMirrorFieldLabelsJson } from './pageMirrorFieldLabelsJson';
 import type { PageMirrorPinnedJson } from './pageMirrorPinnedJson';
 import type { PageQuickFilter } from './pageQuickFilter';
 import type { PivotPageConfig } from './pivotPageConfig';
+import type { SortSpec } from './sortSpec';
 
 export interface Page {
   id: number;
@@ -62,6 +63,8 @@ export interface Page {
   hideStatusColumn?: boolean;
   /** Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view's hard filter). */
   defaultQuickFilterJson?: PageQuickFilter | null;
+  /** Per-page default sort (display-only) — overrides the entity/view default sort for this page's records table. Null/empty = inherit. */
+  defaultSortJson?: SortSpec[] | null;
   /**
      * Mirror-page grouping — source-entity field key (scalar or relation) the records table groups by. Null = no grouping. Display/aggregation-only, never a security boundary.
      * @nullable
