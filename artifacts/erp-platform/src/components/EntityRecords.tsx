@@ -2246,16 +2246,40 @@ export function EntityRecords({
     if (!el) return;
     const RESERVED_BELOW = 64; // pagination row + margins
     const MIN_HEIGHT = 240; // never squeeze the table into a sliver
+    // The app shell scrolls inside <main class="overflow-y-auto">, NOT the
+    // window — so both the offset and the "size changed" signal must come from
+    // that scroller, and the offset must be scroll-position independent
+    // (content-relative), or an already-scrolled page inflates the height.
+    const findScroller = (node: HTMLElement | null): HTMLElement | null => {
+      for (let p = node?.parentElement ?? null; p; p = p.parentElement) {
+        const oy = getComputedStyle(p).overflowY;
+        if (oy === "auto" || oy === "scroll") return p;
+      }
+      return null;
+    };
+    const scroller = findScroller(el);
     const measure = () => {
-      const top = el.getBoundingClientRect().top + window.scrollY;
-      const h = Math.max(window.innerHeight - top - RESERVED_BELOW, MIN_HEIGHT);
+      let topInContent: number;
+      let viewportH: number;
+      if (scroller) {
+        topInContent =
+          el.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+        viewportH = scroller.clientHeight;
+      } else {
+        topInContent = el.getBoundingClientRect().top + window.scrollY;
+        viewportH = window.innerHeight;
+      }
+      const h = Math.max(viewportH - topInContent - RESERVED_BELOW, MIN_HEIGHT);
       setTableMaxHeight(`${h}px`);
     };
     measure();
     // Content above the table changes height (filters expand/collapse, widgets
-    // load) — watch the whole body, not just window resizes.
+    // load): observe the scroller's CONTENT (its child grows even when the
+    // scroller box itself stays the same size).
     const ro = new ResizeObserver(measure);
-    ro.observe(document.body);
+    const contentEl = scroller?.firstElementChild instanceof HTMLElement ? scroller.firstElementChild : null;
+    ro.observe(contentEl ?? document.body);
+    if (scroller) ro.observe(scroller);
     window.addEventListener("resize", measure);
     return () => {
       ro.disconnect();
