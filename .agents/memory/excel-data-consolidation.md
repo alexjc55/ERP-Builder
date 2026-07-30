@@ -19,6 +19,8 @@ Ongoing multi-stage import of the user's "Управление проектам�
 - Scripts: exceljs only resolves from artifacts/erp-platform; `pg` only from lib/db — extract to /tmp/rows.json in one, apply transactionally in the other. Always --dry first.
 - Name→user matching must strip quote variants (' " ״ ׳); PM pairs map to second name (רינה/ברוך→ברוך id2, ארינה/יבגניי→יבגניי id20, ולדימיר→46).
 
+**Logistics load (done):** rows join to items via the shared UUID column (col «ID») between the two Excel files — when a cell has a hyperlink, `value.text` must be extracted (String() of the cell object silently becomes "[object Object]" and breaks matching). Deliveries were rebuilt per order from direction cols: «про-во - эпоколь» → two legs (leg1 Производство-Покрасочная + Покрасчик=Эпоколь + status 58, leg2 Покрасочная-Объект with file status), other dirs → one leg from part2-fallback-part1. Typo maps: Емит 1801/1802→1800, יצאה/יאציה לישראל→יצאיה לישראל, %=fraction×100.
+
 **Open/pending:**
 - Logistics file (הובלות/נהג/даты доставки/התקנה columns) not yet delivered — separate confirmed mapping needed.
 - תל חי 9 duplicate projects (169/263, different זוארץ clients) — awaiting user decision.
