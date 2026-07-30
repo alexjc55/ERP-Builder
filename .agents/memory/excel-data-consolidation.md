@@ -23,6 +23,5 @@ Ongoing multi-stage import of the user's "Управление проектам�
 
 **Open/pending:**
 - Logistics file (הובלות/נהג/даты доставки/התקנה columns) not yet delivered — separate confirmed mapping needed.
-- תל חי 9 duplicate projects (169/263, different זוארץ clients) — awaiting user decision.
 - 39 DB items had no match in the file (possible renamed duplicates); 6 mixed-archive orders: 3287, 3325, 3462, 3463, 3744, 3969.
 - «Оплата SD» column has no extractable values (Google formula residue) — never loaded.
