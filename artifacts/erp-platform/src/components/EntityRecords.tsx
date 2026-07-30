@@ -2195,6 +2195,8 @@ export function EntityRecords({
   // Reset on entity/page switch so each page's default governs from a clean slate.
   const [showHidden, setShowHidden] = useState(false);
   const [pageFilterSettingsOpen, setPageFilterSettingsOpen] = useState(false);
+  /** Single collapsed-by-default container for ALL per-page setup panels in setup mode. */
+  const [pageSetupPanelsOpen, setPageSetupPanelsOpen] = useState(false);
   // Setup-mode exclusion editor drafts (admins only). Synced from the page's
   // stored default; saved together with the inclusion filters from the bar.
   const [excludeFieldDraft, setExcludeFieldDraft] = useState<Record<string, string[]>>({});
@@ -4395,6 +4397,22 @@ export function EntityRecords({
             {t("records.setupHint", "Режим настройки включён. Нажмите на заголовок колонки, чтобы изменить её свойства и права, или «+», чтобы добавить новую колонку.")}
           </div>
           {pageId != null && canAdmin("pages") && (
+            <div className="rounded-md border border-slate-200 bg-white">
+              <button
+                type="button"
+                onClick={() => setPageSetupPanelsOpen((v) => !v)}
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-sm font-medium text-slate-700"
+                aria-expanded={pageSetupPanelsOpen}
+              >
+                <Settings2 className="w-4 h-4 text-slate-400 shrink-0" />
+                <span className="text-left">{t("records.pageSetupPanelsTitle", "Настройки страницы")}</span>
+                <ChevronDown
+                  className={`w-4 h-4 text-slate-400 shrink-0 ml-auto transition-transform ${pageSetupPanelsOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+              {pageSetupPanelsOpen && (
+                <div className="space-y-2 px-2 pb-2">
+          {pageId != null && canAdmin("pages") && (
             <div className="rounded-md border border-slate-200 bg-white px-3 py-3 space-y-2">
               <button
                 type="button"
@@ -4776,6 +4794,10 @@ export function EntityRecords({
                   </SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          )}
+                </div>
+              )}
             </div>
           )}
           <div className="flex flex-wrap items-center gap-2">
