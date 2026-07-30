@@ -102,3 +102,9 @@ id = "XgAZu9MyjfZAlhpA8kYLn"
 uri = "file://docs/prod-data-update.sql"
 type = "unspecified"
 title = "SQL для обновления данных на проде"
+
+[[outputs]]
+id = "iWAxJAxoFegW75Cp0Dnrg"
+uri = "file://exports/dostupy-proizvoditeli.xlsx"
+type = "table"
+title = "Доступы — Производители"
