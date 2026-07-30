@@ -108,3 +108,9 @@ id = "iWAxJAxoFegW75Cp0Dnrg"
 uri = "file://exports/dostupy-proizvoditeli.xlsx"
 type = "table"
 title = "Доступы — Производители"
+
+[[outputs]]
+id = "GQHCVxCEmZmiY1COmkNLn"
+uri = "file://exports/erp-dump.sql"
+type = "unspecified"
+title = "Дамп БД ERP (с удалением старых таблиц)"
