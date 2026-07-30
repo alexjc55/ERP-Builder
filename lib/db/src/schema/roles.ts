@@ -92,6 +92,13 @@ export interface RolePermissions {
    * per-mirror-page override.
    */
   records: Record<string, RecordPermission>;
+  /**
+   * Runtime-only (never persisted): per-role permission specs keyed by role id,
+   * attached when a user's roles are merged. Lets field-access resolution derive
+   * each role's OWN inherited level instead of the merged one, so a role that
+   * grants nothing on an entity cannot widen field access for the union.
+   */
+  perRole?: Record<string, RolePermissions>;
 }
 
 /** Default permissions for new/existing roles: no access until granted. */

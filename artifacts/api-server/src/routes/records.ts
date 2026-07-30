@@ -389,7 +389,7 @@ async function fieldAccessContext(
   const hidden = new Set<string>();
   const editable = new Set<string>();
   for (const f of fields) {
-    const access = resolveFieldAccess(f, perms, roleIds, entityId, rp);
+    const access = resolveFieldAccess(f, perms, roleIds, entityId, rp, pageId);
     if (access === "hidden") hidden.add(f.fieldKey);
     if (access === "edit") editable.add(f.fieldKey);
   }
@@ -861,7 +861,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           (pf) =>
             pf.isFilterable &&
             PAGE_LOCAL_FILTERABLE_TYPES.has(pf.fieldType) &&
-            mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view") !== "hidden",
+            mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view", perms, entityId, plPageId) !== "hidden",
         )
         .map((pf) => [pf.fieldKey, pf] as const),
     );
@@ -1176,13 +1176,13 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     const pageTotalFields = pageFieldRows.filter(
       (pf) =>
         (pf.fieldType === "number" || pf.fieldType === "function") &&
-        mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view") !== "hidden",
+        mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view", perms, entityId, totalsPageId) !== "hidden",
     );
     // Percent page fields flagged showColumnTotal: average over records WITH a value.
     const pagePercentFields = pageFieldRows.filter(
       (pf) =>
         pf.fieldType === "percent" &&
-        mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view") !== "hidden",
+        mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view", perms, entityId, totalsPageId) !== "hidden",
     );
     if (pageTotalFields.length > 0 || pagePercentFields.length > 0) {
       const recRows = await db
@@ -1365,7 +1365,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       .from(pageFieldsTable)
       .where(and(eq(pageFieldsTable.pageId, gPageId), eq(pageFieldsTable.isActive, true)));
     const gPfVisible = gPfRows.filter(
-      (pf) => mostPermissiveFieldPerm(pf.permissionsJson, gRoleIds, "view") !== "hidden",
+      (pf) => mostPermissiveFieldPerm(pf.permissionsJson, gRoleIds, "view", perms, entityId, gPageId) !== "hidden",
     );
     const gPfSumFields = gPfVisible.filter(
       (pf) => pf.showColumnTotal && (pf.fieldType === "number" || pf.fieldType === "function"),
@@ -1693,6 +1693,7 @@ router.post(
     // holds the per-role VISIBLE ones (for dims/measures); the filterable subset
     // (for pageLocalFilters) is derived below, mirroring the records/query rules.
     const roleIds = await getUserRoleIds(req);
+    const plPerms = await getPermissions(req);
     const plAll =
       pageId != null
         ? await db
@@ -1701,7 +1702,7 @@ router.post(
             .where(and(eq(pageFieldsTable.pageId, pageId), eq(pageFieldsTable.isActive, true)))
         : [];
     const visiblePl = plAll.filter(
-      (pf) => mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view") !== "hidden",
+      (pf) => mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view", plPerms, entityId, pageId) !== "hidden",
     );
 
     // Relation/lookup dims project the SINGLE linked record's value. Built from
@@ -1999,6 +2000,7 @@ router.post(
     // The target must be an active, filterable, value-backed page field that is
     // not hidden for this caller's roles — identical gate to /records/query.
     const roleIds = await getUserRoleIds(req);
+    const fvPerms = await getPermissions(req);
     const plRows = await db
       .select()
       .from(pageFieldsTable)
@@ -2008,7 +2010,7 @@ router.post(
         pf.fieldKey === body.data.field &&
         pf.isFilterable &&
         PAGE_LOCAL_FILTERABLE_TYPES.has(pf.fieldType) &&
-        mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view") !== "hidden",
+        mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view", fvPerms, entityId, pageId) !== "hidden",
     );
     if (!target) {
       res.status(400).json({ error: `Field is not a filterable page field: ${body.data.field}` });

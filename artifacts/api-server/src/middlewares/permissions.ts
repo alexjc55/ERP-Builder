@@ -132,6 +132,25 @@ export async function loadPermissionsForRoles(roleIds: number[]): Promise<RolePe
   return rows.map((r) => r.permissionsJson ?? NO_ACCESS_PERMS);
 }
 
+/**
+ * Merged permissions for a set of role ids with the runtime-only `perRole` map
+ * attached (per-role specs keyed by role id). Field-access resolution uses the
+ * map so a role that grants nothing on an entity cannot widen field access.
+ */
+export async function loadMergedPermissions(roleIds: number[]): Promise<RolePermissions> {
+  const ids = [...new Set(roleIds)];
+  if (ids.length === 0) return NO_ACCESS_PERMS;
+  const rows = await db
+    .select({ id: rolesTable.id, permissionsJson: rolesTable.permissionsJson })
+    .from(rolesTable)
+    .where(inArray(rolesTable.id, ids));
+  const merged = mergePermissions(rows.map((r) => r.permissionsJson ?? NO_ACCESS_PERMS));
+  if (rows.length > 1) {
+    merged.perRole = Object.fromEntries(rows.map((r) => [String(r.id), r.permissionsJson ?? NO_ACCESS_PERMS]));
+  }
+  return merged;
+}
+
 /** Load a single role's effective permissions from the DB (fresh per request). */
 export async function loadPermissions(roleId: number): Promise<RolePermissions> {
   const [role] = await db
@@ -175,7 +194,7 @@ export async function loadRoleContext(
   if (!ids.includes(primaryRoleId)) ids = [primaryRoleId, ...ids];
   if (ids.length === 0) ids = [primaryRoleId];
   ids = [...new Set(ids)];
-  return { roleIds: ids, permissions: mergePermissions(await loadPermissionsForRoles(ids)) };
+  return { roleIds: ids, permissions: await loadMergedPermissions(ids) };
 }
 
 /**
@@ -202,7 +221,7 @@ export async function getPermissions(req: Request): Promise<RolePermissions> {
   if (req.permissions) return req.permissions;
   if (!req.user) return NO_ACCESS_PERMS;
   const roleIds = await getUserRoleIds(req);
-  const perms = mergePermissions(await loadPermissionsForRoles(roleIds));
+  const perms = await loadMergedPermissions(roleIds);
   req.permissions = perms;
   return perms;
 }
@@ -431,6 +450,7 @@ export function resolveFieldAccess(
   roleIds: number[],
   entityId: number,
   rpOverride?: RecordPermission,
+  mirrorPageId?: number,
 ): FieldAccess {
   if (perms.superAdmin) return "edit";
   // When a mirror-page override is supplied it replaces the entity-level record
@@ -438,6 +458,27 @@ export function resolveFieldAccess(
   const rp = rpOverride ?? perms.records[String(entityId)];
   const inherited: FieldAccess = rp?.create || rp?.update ? "edit" : "view";
   const permsJson = field.permissionsJson as FieldPermissions | undefined;
+  // Multi-role per-role resolution: each role contributes its explicit entry or
+  // an inherited level derived from ITS OWN record perms — but only roles that
+  // actually grant `view` on the entity (or its mirror override) contribute at
+  // all. A role that grants nothing must never widen field access for the union
+  // (e.g. an empty second role re-widening an explicit "view" back to "edit").
+  if (perms.perRole && roleIds.length > 1) {
+    let best: FieldAccess | null = null;
+    for (const rid of roleIds) {
+      const rperms = perms.perRole[String(rid)];
+      if (!rperms) { best = null; break; } // incomplete map → legacy path below
+      if (rperms.superAdmin) return "edit";
+      const rrp =
+        (mirrorPageId != null ? rperms.records?.[mirrorPermKey(mirrorPageId)] : undefined) ??
+        rperms.records?.[String(entityId)];
+      if (rrp?.view !== true) continue; // non-granting role contributes nothing
+      const roleLevel = permsJson?.[String(rid)] ?? (rrp.create || rrp.update ? "edit" : "view");
+      best = maxAccess(best, roleLevel);
+    }
+    if (best !== null) return best;
+    // No view-granting role resolved a level → fall through to legacy merged logic.
+  }
   const explicits = roleIds
     .map((rid) => permsJson?.[String(rid)])
     .filter((v): v is FieldAccess => v != null);
@@ -463,7 +504,31 @@ export function mostPermissiveFieldPerm(
   permsJson: FieldPermissions | null | undefined,
   roleIds: number[],
   fallback: FieldAccess,
+  perms?: RolePermissions,
+  entityId?: number,
+  mirrorPageId?: number,
 ): FieldAccess {
+  // Multi-role per-role gating (mirrors resolveFieldAccess): when the per-role
+  // map is available, only roles that actually grant `view` on the underlying
+  // entity (or its mirror override) contribute — their explicit entry, or the
+  // fallback when they have none. A role that grants nothing must never widen
+  // (nor spuriously narrow) field access for the union.
+  if (perms?.perRole && roleIds.length > 1 && entityId != null && !perms.superAdmin) {
+    let best: FieldAccess | null = null;
+    let complete = true;
+    for (const rid of roleIds) {
+      const rperms = perms.perRole[String(rid)];
+      if (!rperms) { complete = false; break; }
+      if (rperms.superAdmin) return "edit";
+      const rrp =
+        (mirrorPageId != null ? rperms.records?.[mirrorPermKey(mirrorPageId)] : undefined) ??
+        rperms.records?.[String(entityId)];
+      if (rrp?.view !== true) continue;
+      best = maxAccess(best, permsJson?.[String(rid)] ?? fallback);
+    }
+    if (complete && best !== null) return best;
+    // No view-granting role (or incomplete map) → legacy merged behavior below.
+  }
   let best: FieldAccess | null = null;
   let anyMissing = false;
   for (const rid of roleIds) {

@@ -140,6 +140,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const rp = recordPermFor(entityId, pageId);
     const inherited: FieldAccess = rp?.create || rp?.update ? "edit" : "view";
     const permsJson = field.permissionsJson;
+    // Multi-role per-role resolution (mirrors the server): only roles that grant
+    // `view` on the entity (or its mirror override) contribute a level — a role
+    // that grants nothing must not widen field access for the union.
+    const perRole = (permissions as { perRole?: Record<string, RolePermissions> } | null)?.perRole;
+    if (perRole && roleIds.length > 1) {
+      let best: FieldAccess | null = null;
+      let complete = true;
+      for (const rid of roleIds) {
+        const rperms = perRole[String(rid)];
+        if (!rperms) { complete = false; break; }
+        if (rperms.superAdmin) return "edit";
+        const rrp =
+          (pageId != null ? rperms.records?.[`mirror:${pageId}`] : undefined) ??
+          rperms.records?.[String(entityId)];
+        if (rrp?.view !== true) continue;
+        const lvl = permsJson?.[String(rid)] ?? (rrp.create || rrp.update ? "edit" : "view");
+        best = maxAccess(best, lvl);
+      }
+      if (complete && best !== null) return best;
+    }
     const explicits = roleIds
       .map((rid) => permsJson?.[String(rid)])
       .filter((v): v is FieldAccess => v != null);

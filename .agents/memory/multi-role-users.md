@@ -20,3 +20,11 @@ Every place that gated something on a *single* role must consider the **full rol
 - `roleIds` is the authoritative input: **non-empty, `roleIds[0]` = primary**. The server persists `users.roleId = roleIds[0]` and replaces the `user_roles` set.
 - `roleId` is kept in **responses** (JWT/display/impersonation/guest still key off the primary) but is deprecated/ignored on create input. On `UserUpdate` it stays an optional alias because `roleIds` is optional there (a roleId-only update changes just the primary).
 - **How to apply:** the admin UI sends `roleIds` with the chosen primary placed first (`[...new Set([primary, ...others])]`). After editing the spec, regenerate Orval/Zod.
+
+## Per-role field-access gate (perRole map)
+
+Merged permissions carry a RUNTIME-ONLY `perRole` map (roleId → that role's RolePermissions), attached by `loadMergedPermissions` when a user has >1 role; never persisted. `resolveFieldAccess` and `mostPermissiveFieldPerm` (page fields — pass perms+entityId+mirrorPageId at every call site) resolve field access PER ROLE: only roles that grant `view` on the entity (or its `mirror:<pageId>` override) contribute their explicit entry or their OWN inherited level (create||update⇒edit).
+
+**Why:** the old logic folded an inherited fallback derived from MERGED record perms, so a second role with NO rights on the entity re-widened an explicit per-field "view" back to "edit" (Производитель+Проектировщик bug).
+
+**How to apply:** any new field-access site must pass the per-role context (perms with perRole, entityId, mirror pageId) — a site that omits it silently falls back to the widening legacy behavior for multi-role users. Client mirrors the same rule in auth.tsx `fieldAccess`.

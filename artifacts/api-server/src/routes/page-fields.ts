@@ -415,7 +415,9 @@ router.get("/pages/:pageId/fields", requireAuth, async (req, res): Promise<void>
   }
   const roleIds = await getUserRoleIds(req);
   const visible = fields.filter(
-    (f) => mostPermissiveFieldPerm(f.permissionsJson as FieldPermissions | null, roleIds, "view") !== "hidden",
+    (f) =>
+      mostPermissiveFieldPerm(f.permissionsJson as FieldPermissions | null, roleIds, "view", perms, eff.entityId ?? undefined, params.data.pageId) !==
+      "hidden",
   );
   res.json(visible);
 });
@@ -911,7 +913,7 @@ async function resolveChainValues(
         ),
       );
     if (!rpf) return empty;
-    const pagePerm = mostPermissiveFieldPerm(rpf.permissionsJson as FieldPermissions | null, roleIds, "view");
+    const pagePerm = mostPermissiveFieldPerm(rpf.permissionsJson as FieldPermissions | null, roleIds, "view", perms, relatedEntityId, relatedPageId);
     access = canViewRelated && pagePerm !== "hidden" ? "view" : "hidden";
     relatedFieldType = access === "hidden" ? null : rpf.fieldType;
     optionsJson = access === "hidden" ? [] : normalizeOptions(rpf.optionsJson);
@@ -1066,7 +1068,7 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
       .orderBy(asc(pageFieldsTable.sortOrder))
   ).filter((pf) => {
     // Per-page role visibility: a "hidden" page-field is dropped entirely.
-    const pagePerm = mostPermissiveFieldPerm(pf.permissionsJson as FieldPermissions | null, roleIds, "view");
+    const pagePerm = mostPermissiveFieldPerm(pf.permissionsJson as FieldPermissions | null, roleIds, "view", perms, entityId, params.data.pageId);
     return pagePerm !== "hidden";
   });
 
@@ -1168,6 +1170,9 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
         relatedPageField.permissionsJson as FieldPermissions | null,
         roleIds,
         "view",
+        perms,
+        relatedEntityId,
+        relatedPageId,
       );
       access = canViewRelated && projPerm !== "hidden" ? "view" : "hidden";
       relatedFieldType = access === "hidden" ? null : relatedPageField.fieldType;
@@ -1207,7 +1212,7 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
       if (chain.access === "hidden") access = "hidden";
     }
 
-    const pagePerm = mostPermissiveFieldPerm(pf.permissionsJson as FieldPermissions | null, roleIds, "edit");
+    const pagePerm = mostPermissiveFieldPerm(pf.permissionsJson as FieldPermissions | null, roleIds, "edit", perms, entityId, params.data.pageId);
     // The column ASSIGNS the link (not edits the related value): a cell is
     // assignable when the viewer may edit this page-field column, can update the
     // base entity's records (links belong to the base record), and the related
@@ -1359,7 +1364,9 @@ function resolveRelatedAccess(
 ): "hidden" | "view" | "edit" {
   if (!canRecord(perms, resolved.relatedEntityId, "view")) return "hidden";
   if (resolved.relatedPageId != null) {
-    return mostPermissiveFieldPerm(resolved.relatedPagePerms, roleIds, "view") === "hidden" ? "hidden" : "view";
+    return mostPermissiveFieldPerm(resolved.relatedPagePerms, roleIds, "view", perms, resolved.relatedEntityId, resolved.relatedPageId ?? undefined) === "hidden"
+      ? "hidden"
+      : "view";
   }
   return resolveFieldAccess(resolved.relatedField!, perms, roleIds, resolved.relatedEntityId);
 }
@@ -1598,7 +1605,7 @@ router.post("/pages/:pageId/related-candidates", requireAuth, async (req, res): 
   const perms = await getPermissions(req);
   const roleIds = await getUserRoleIds(req);
   const userId = req.user!.userId;
-  const pagePerm = mostPermissiveFieldPerm(pageField.permissionsJson as FieldPermissions | null, roleIds, "edit");
+  const pagePerm = mostPermissiveFieldPerm(pageField.permissionsJson as FieldPermissions | null, roleIds, "edit", perms, entityId, params.data.pageId);
   // Mirror the related-values column boundary: the viewer must be able to view
   // the related entity AND the specific related field must not be hidden for
   // their role. The label/search expose that field's value, so a hidden related
@@ -1658,7 +1665,7 @@ router.put("/pages/:pageId/related-link", requireAuth, async (req, res): Promise
   const perms = await getPermissions(req);
   const roleIds = await getUserRoleIds(req);
   const userId = req.user!.userId;
-  const pagePerm = mostPermissiveFieldPerm(pageField.permissionsJson as FieldPermissions | null, roleIds, "edit");
+  const pagePerm = mostPermissiveFieldPerm(pageField.permissionsJson as FieldPermissions | null, roleIds, "edit", perms, entityId, params.data.pageId);
   // Mirror the related-values assignability boundary: the column is only
   // assignable when the page-field column is editable for the role, the viewer
   // can update the base entity, AND the related field is not hidden for them.
@@ -2306,6 +2313,9 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
         relatedPageField.permissionsJson as FieldPermissions | null,
         roleIds,
         "view",
+        perms,
+        relatedEntityId,
+        relatedPageId,
       );
       access = canViewRelated && pagePerm !== "hidden" ? "view" : "hidden";
       relatedFieldType = access === "hidden" ? null : relatedPageField.fieldType;
