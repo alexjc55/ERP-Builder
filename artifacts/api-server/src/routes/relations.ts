@@ -10,7 +10,7 @@ import {
 } from "@workspace/db";
 import { eq, and, ne, asc, desc, inArray, sql } from "drizzle-orm";
 import { relationLinkLockViolation } from "../lib/relation-lock";
-import { emitEvent, EVENT_RECORD_UPDATED } from "../lib/events";
+import { emitLinkChangedEvents } from "../lib/record-links";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin, getPermissions, canRecord } from "../middlewares/permissions";
 import {
@@ -414,15 +414,15 @@ router.post("/records/:recordId/links", requireAuth, async (req, res): Promise<v
     });
     if (result.status === 201) {
       // A link change alters the record's effective relation value even though
-      // values_json is untouched — emit record.updated for both ends so
-      // automations (e.g. sync a linked order's field) can react.
-      await emitEvent(
-        [
-          { eventName: EVENT_RECORD_UPDATED, entityId: srcEntity, recordId: sourceRecordId, payload: { actorUserId: req.user?.userId, changedFields: [] } },
-          { eventName: EVENT_RECORD_UPDATED, entityId: tgtEntity, recordId: targetRecordId, payload: { actorUserId: req.user?.userId, changedFields: [] } },
-        ],
-        req.log,
-      );
+      // values_json is untouched — notify both ends so automations can react.
+      await emitLinkChangedEvents({
+        entityId: srcEntity,
+        baseRecordId: sourceRecordId,
+        relatedEntityId: tgtEntity,
+        affectedLinkedIds: [targetRecordId],
+        actorUserId: req.user?.userId,
+        log: req.log,
+      });
       res.status(201).json(result.link);
       return;
     }
@@ -522,15 +522,14 @@ router.delete("/links/:id", requireAuth, async (req, res): Promise<void> => {
   }
   // Mirror the link-create path: a removed link changes the effective relation
   // value of both records, so let automations re-sync.
-  await emitEvent(
-    [
-      { eventName: EVENT_RECORD_UPDATED, entityId: srcEntity, recordId: link.sourceRecordId, payload: { actorUserId: req.user?.userId, changedFields: [] } },
-      ...(tgtEntity !== null
-        ? [{ eventName: EVENT_RECORD_UPDATED, entityId: tgtEntity, recordId: link.targetRecordId, payload: { actorUserId: req.user?.userId, changedFields: [] } }]
-        : []),
-    ],
-    req.log,
-  );
+  await emitLinkChangedEvents({
+    entityId: srcEntity,
+    baseRecordId: link.sourceRecordId,
+    relatedEntityId: tgtEntity ?? srcEntity,
+    affectedLinkedIds: tgtEntity !== null ? [link.targetRecordId] : [],
+    actorUserId: req.user?.userId,
+    log: req.log,
+  });
   res.json({ success: true });
 });
 

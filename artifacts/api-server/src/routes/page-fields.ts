@@ -19,7 +19,7 @@ import {
   type EntityField,
 } from "@workspace/db";
 import { eq, asc, desc, and, ne, inArray, or, sql, type SQL } from "drizzle-orm";
-import { relationLinkLockViolation } from "../lib/relation-lock";
+import { replaceSingleRelationLink, emitLinkChangedEvents } from "../lib/record-links";
 import { sanitizeOptionsInput, normalizeOptions, optionValues, optionNumbers, type SelectOption } from "../lib/selectOptions";
 import { requireAuth } from "../middlewares/auth";
 import {
@@ -35,7 +35,7 @@ import {
   mostPermissiveFieldPerm,
 } from "../middlewares/permissions";
 import { ownScopeWhere, isRecordOwned } from "./own-scope";
-import { emitEvent, EVENT_PAGE_FIELD_SAVED, EVENT_RECORD_UPDATED } from "../lib/events";
+import { emitEvent, EVENT_PAGE_FIELD_SAVED } from "../lib/events";
 import {
   ListPageFieldsParams,
   CreatePageFieldParams,
@@ -1323,21 +1323,6 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
   res.json({ columns, values });
 });
 
-/** Map a record_links unique-constraint violation to a friendly cardinality message. */
-function recordLinkUniqueMessage(err: unknown): string | null {
-  if (!isUniqueViolation(err)) return null;
-  const cause = err && typeof err === "object" && "cause" in err ? (err as { cause?: unknown }).cause : undefined;
-  const constraint =
-    [err, cause]
-      .map((e) => (e && typeof e === "object" && "constraint" in e ? (e as { constraint?: string }).constraint : undefined))
-      .find((c): c is string => typeof c === "string") ?? "";
-  if (constraint === "record_link_source_one" || constraint === "record_link_target_one") {
-    return "Эта запись уже связана с другой";
-  }
-  if (constraint === "record_link_unique") return "Эти записи уже связаны";
-  return "Эти записи уже связаны";
-}
-
 /**
  * Shape shared by both relation-field resolvers describing the projected
  * (related) field. For entity-source the value/label comes from one of the
@@ -1748,80 +1733,25 @@ router.put("/pages/:pageId/related-link", requireAuth, async (req, res): Promise
     linkedValues = lv;
   }
 
-  let previousLinkedIds: number[] = [];
-  try {
-    const lockMsg = await db.transaction(async (tx) => {
-      // Lock the relation so the relationType copied into record_links cannot
-      // drift from the parent under a concurrent type change.
-      const [locked] = await tx
-        .select()
-        .from(relationsTable)
-        .where(eq(relationsTable.id, relation.id))
-        .limit(1)
-        .for("update");
-      if (!locked) throw new Error("relation_gone");
-      // Immutability boundary for lockAfterCreate relation fields, checked under
-      // the relation row lock (TOCTOU-free). A relation page-field can target the
-      // same relation as a locked entity field, so this path must enforce it too.
-      const lockViolation = await relationLinkLockViolation(
-        tx,
-        entityId,
-        relation.id,
-        baseRecordId,
-        direction,
-        linkedRecordId,
-      );
-      if (lockViolation) return lockViolation;
-      // Remove the existing single link on the base record's side, then insert
-      // the new one (or leave it cleared when linkedRecordId is null).
-      const baseCol = direction === "source" ? recordLinksTable.sourceRecordId : recordLinksTable.targetRecordId;
-      const otherCol = direction === "source" ? recordLinksTable.targetRecordId : recordLinksTable.sourceRecordId;
-      const removed = await tx
-        .delete(recordLinksTable)
-        .where(and(eq(recordLinksTable.relationId, relation.id), eq(baseCol, baseRecordId)))
-        .returning({ other: otherCol });
-      previousLinkedIds = removed.map((r) => r.other);
-      if (linkedRecordId != null) {
-        await tx.insert(recordLinksTable).values({
-          relationId: relation.id,
-          relationType: locked.relationType,
-          sourceRecordId: direction === "source" ? baseRecordId : linkedRecordId,
-          targetRecordId: direction === "source" ? linkedRecordId : baseRecordId,
-        });
-      }
-      return null;
-    });
-    if (lockMsg) {
-      res.status(400).json({ error: lockMsg });
-      return;
-    }
-  } catch (err) {
-    const msg = recordLinkUniqueMessage(err);
-    if (msg) {
-      res.status(409).json({ error: msg });
-      return;
-    }
-    throw err;
+  const replaced = await replaceSingleRelationLink({
+    relationId: relation.id,
+    entityId,
+    baseRecordId,
+    direction,
+    linkedRecordId,
+  });
+  if (!replaced.ok) {
+    res.status(replaced.status).json({ error: replaced.error });
+    return;
   }
-
-  // A link change alters the effective relation value of the base record and of
-  // the previously/newly linked records — emit record.updated (post-commit) so
-  // automations can react, mirroring the relations.ts link endpoints.
-  {
-    const affectedLinked = [...new Set([...previousLinkedIds, ...(linkedRecordId != null ? [linkedRecordId] : [])])];
-    await emitEvent(
-      [
-        { eventName: EVENT_RECORD_UPDATED, entityId, recordId: baseRecordId, payload: { actorUserId: userId, changedFields: [] } },
-        ...affectedLinked.map((rid) => ({
-          eventName: EVENT_RECORD_UPDATED,
-          entityId: relatedEntityId,
-          recordId: rid,
-          payload: { actorUserId: userId, changedFields: [] },
-        })),
-      ],
-      req.log,
-    );
-  }
+  await emitLinkChangedEvents({
+    entityId,
+    baseRecordId,
+    relatedEntityId,
+    affectedLinkedIds: [...replaced.previousLinkedIds, ...(linkedRecordId != null ? [linkedRecordId] : [])],
+    actorUserId: userId,
+    log: req.log,
+  });
 
   // Report the resulting value. The related field's hidden boundary was already
   // enforced above (relatedAccess !== "hidden" is required to reach this point).
@@ -2829,76 +2759,26 @@ router.put("/entities/:entityId/related-link", requireAuth, async (req, res): Pr
     }
   }
 
-  let previousLinkedIds: number[] = [];
-  try {
-    const lockMsg = await db.transaction(async (tx) => {
-      const [locked] = await tx
-        .select()
-        .from(relationsTable)
-        .where(eq(relationsTable.id, relation.id))
-        .limit(1)
-        .for("update");
-      if (!locked) throw new Error("relation_gone");
-      // Immutability boundary for lockAfterCreate relation fields, checked under
-      // the relation row lock so two writers cannot both pass a "no link yet"
-      // check and race to set the value (TOCTOU-free).
-      const lockViolation = await relationLinkLockViolation(
-        tx,
-        entityId,
-        relation.id,
-        baseRecordId,
-        direction,
-        linkedRecordId,
-      );
-      if (lockViolation) return lockViolation;
-      const baseCol = direction === "source" ? recordLinksTable.sourceRecordId : recordLinksTable.targetRecordId;
-      const otherCol = direction === "source" ? recordLinksTable.targetRecordId : recordLinksTable.sourceRecordId;
-      const removed = await tx
-        .delete(recordLinksTable)
-        .where(and(eq(recordLinksTable.relationId, relation.id), eq(baseCol, baseRecordId)))
-        .returning({ other: otherCol });
-      previousLinkedIds = removed.map((r) => r.other);
-      if (linkedRecordId != null) {
-        await tx.insert(recordLinksTable).values({
-          relationId: relation.id,
-          relationType: locked.relationType,
-          sourceRecordId: direction === "source" ? baseRecordId : linkedRecordId,
-          targetRecordId: direction === "source" ? linkedRecordId : baseRecordId,
-        });
-      }
-      return null;
-    });
-    if (lockMsg) {
-      res.status(400).json({ error: lockMsg });
-      return;
-    }
-  } catch (err) {
-    const msg = recordLinkUniqueMessage(err);
-    if (msg) {
-      res.status(409).json({ error: msg });
-      return;
-    }
-    throw err;
+  const replaced = await replaceSingleRelationLink({
+    relationId: relation.id,
+    entityId,
+    baseRecordId,
+    direction,
+    linkedRecordId,
+  });
+  if (!replaced.ok) {
+    res.status(replaced.status).json({ error: replaced.error });
+    return;
   }
 
-  // A link change alters the effective relation value of the base record and of
-  // the previously/newly linked records — emit record.updated (post-commit) so
-  // automations can react, mirroring the page-level related-link handler above.
-  {
-    const affectedLinked = [...new Set([...previousLinkedIds, ...(linkedRecordId != null ? [linkedRecordId] : [])])];
-    await emitEvent(
-      [
-        { eventName: EVENT_RECORD_UPDATED, entityId, recordId: baseRecordId, payload: { actorUserId: userId, changedFields: [] } },
-        ...affectedLinked.map((rid) => ({
-          eventName: EVENT_RECORD_UPDATED,
-          entityId: relatedEntityId,
-          recordId: rid,
-          payload: { actorUserId: userId, changedFields: [] },
-        })),
-      ],
-      req.log,
-    );
-  }
+  await emitLinkChangedEvents({
+    entityId,
+    baseRecordId,
+    relatedEntityId,
+    affectedLinkedIds: [...replaced.previousLinkedIds, ...(linkedRecordId != null ? [linkedRecordId] : [])],
+    actorUserId: userId,
+    log: req.log,
+  });
 
   // For page-source the value is read from the linked record's page_record_values.
   const value = await loadLinkedValue(relatedPageId, relatedFieldKey, linkedRecordId, linkedValues);
