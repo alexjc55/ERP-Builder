@@ -132,3 +132,9 @@ id = "jrDaKx-JeB_qBvpTBD3dz"
 uri = "file://exports/format-inherit-migration.sql"
 type = "unspecified"
 title = "SQL: наследование форматирования (обновлён — вкл. переводы для полей страниц)"
+
+[[outputs]]
+id = "OiWyYXUwBzRLJMFOhML3c"
+uri = "file://exports/format-inherit-config.sql"
+type = "unspecified"
+title = "SQL: настроить источники наследования на сервере"
