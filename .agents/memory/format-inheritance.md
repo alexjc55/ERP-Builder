@@ -13,3 +13,5 @@ A field whose value is COPIED by automations (e.g. заказ «Общий ст�
 - **Why** status labels match by ANY language: automations copy one language's label string; matching all labels keeps it working regardless of which language was configured.
 
 **Limits:** page fields themselves cannot inherit (only entity fields carry formatInheritJson); source picker offers pages only when they are mirror pages (page-local fields exist only there).
+
+**pageField source boundary:** page-field inherited rules are attached only when the requester passes the page-fields read boundary (page access via effectiveRecordPerm + per-role hidden filter via mostPermissiveFieldPerm), mirroring GET /pages/:pageId/fields; unauthorized sources are silently dropped. Entity-field/status sources remain public-to-authenticated metadata.

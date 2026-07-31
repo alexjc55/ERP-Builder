@@ -117,3 +117,5 @@ Fix: strip the stored map to currently-active page-field keys before merge+valid
 orphans then self-heal (dropped on the next system write). The manual HTTP PUT path
 hides this because it validates only the incoming payload, which never carries the
 orphan.
+
+**Required fields on system writes:** systemUpdateRecord enforces required-ness ONLY for the keys the automation itself sets (validateValues optional `requiredOnlyKeys`). Pre-existing empty required fields (legacy imports) must not block unrelated automation updates; user-facing PUT/POST and systemCreateRecord stay strict. Explicitly clearing a required key is still blocked.
