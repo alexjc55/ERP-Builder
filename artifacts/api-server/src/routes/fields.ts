@@ -224,7 +224,7 @@ router.get("/entities/:entityId/fields", requireAuth, async (req, res): Promise<
     .where(eq(entityFieldsTable.entityId, params.data.entityId))
     .orderBy(asc(entityFieldsTable.sortOrder));
 
-  res.json(await withInheritedFormatRules(fields, req));
+  res.json(await withInheritedFormatRules(fields));
 });
 
 router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
@@ -425,7 +425,7 @@ router.get("/fields/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  res.json((await withInheritedFormatRules([field], req))[0]);
+  res.json((await withInheritedFormatRules([field]))[0]);
 });
 
 router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {

@@ -8,14 +8,6 @@ import {
   type FieldPermissions,
 } from "@workspace/db";
 import { and, eq, inArray } from "drizzle-orm";
-import type { Request } from "express";
-import {
-  getPermissions,
-  getUserRoleIds,
-  effectiveRecordPerm,
-  mostPermissiveFieldPerm,
-} from "../middlewares/permissions";
-import { effectiveEntityForPage } from "../routes/page-fields";
 
 /**
  * Format-inheritance resolution. A field whose value is COPIED from elsewhere
@@ -26,12 +18,14 @@ import { effectiveEntityForPage } from "../routes/page-fields";
  * apply AFTER the field's own formatRulesJson (first match wins, so own rules
  * take precedence; no match anywhere = no formatting).
  *
- * Entity-field and status sources are metadata any authenticated user can
- * already read via the fields/statuses endpoints. Page-field sources are NOT:
- * page columns are gated by page access + per-role hidden filtering (see
- * GET /pages/:pageId/fields), so their rules are only attached when the
- * requester passes the same boundary — otherwise that source is silently
- * dropped for this requester.
+ * Visibility decision (explicit, user-confirmed): inherited rules follow the
+ * TARGET field's visibility, not the source's. Whoever can see the target
+ * field sees its inherited coloring — even when a pageField source lives on a
+ * page the requester cannot open. Rationale: the VALUES matched by these rules
+ * are copied into the target field by automations anyway, so hiding the colors
+ * reveals nothing extra and only makes the field render inconsistently between
+ * roles. Only formatting config (operators/literals/colors) is exposed — never
+ * record data.
  */
 
 const HEX_RE = /^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/;
@@ -79,7 +73,7 @@ function statusRulesFor(nameJson: unknown, color: string): FieldFormatRule[] {
  * sources are resolved in the configured order; within a "status" source,
  * statuses follow their sortOrder.
  */
-async function buildResolver(allSources: FormatInheritSource[], req?: Request): Promise<(sources: FormatInheritSource[]) => FieldFormatRule[]> {
+async function buildResolver(allSources: FormatInheritSource[]): Promise<(sources: FormatInheritSource[]) => FieldFormatRule[]> {
   const fieldSrcs = allSources.filter((s): s is Extract<FormatInheritSource, { kind: "field" }> => s.kind === "field");
   const pageFieldSrcs = allSources.filter((s): s is Extract<FormatInheritSource, { kind: "pageField" }> => s.kind === "pageField");
   const statusEntityIds = [...new Set(allSources.filter((s) => s.kind === "status").map((s) => s.entityId))];
@@ -118,7 +112,6 @@ async function buildResolver(allSources: FormatInheritSource[], req?: Request): 
             pageId: pageFieldsTable.pageId,
             fieldKey: pageFieldsTable.fieldKey,
             formatRulesJson: pageFieldsTable.formatRulesJson,
-            permissionsJson: pageFieldsTable.permissionsJson,
           })
           .from(pageFieldsTable)
           .where(
@@ -128,37 +121,8 @@ async function buildResolver(allSources: FormatInheritSource[], req?: Request): 
               eq(pageFieldsTable.isActive, true),
             ),
           )
-      : Promise.resolve([] as { pageId: number; fieldKey: string; formatRulesJson: unknown; permissionsJson: unknown }[]),
+      : Promise.resolve([] as { pageId: number; fieldKey: string; formatRulesJson: unknown }[]),
   ]);
-
-  // Page-field sources must re-apply the page-fields read boundary for THIS
-  // requester (page access on the effective entity + per-role hidden filter),
-  // mirroring GET /pages/:pageId/fields. Sources the requester may not see are
-  // dropped. Without a request context, page-field sources resolve to nothing.
-  const allowedPageFields = new Set<string>();
-  if (req && srcPageFields.length > 0) {
-    const perms = await getPermissions(req);
-    const adminAll = perms.superAdmin || perms.admin.pages;
-    const roleIds = adminAll ? [] : await getUserRoleIds(req);
-    for (const pageId of [...new Set(srcPageFields.map((f) => f.pageId))]) {
-      const eff = await effectiveEntityForPage(pageId);
-      if (!eff.found) continue;
-      let pageOk = adminAll;
-      if (!pageOk) {
-        pageOk =
-          eff.entityId == null ||
-          (await effectiveRecordPerm(req, perms, eff.entityId, pageId))?.view === true;
-      }
-      if (!pageOk) continue;
-      for (const pf of srcPageFields) {
-        if (pf.pageId !== pageId) continue;
-        const visible =
-          adminAll ||
-          mostPermissiveFieldPerm(pf.permissionsJson as FieldPermissions | null, roleIds, "view", perms, eff.entityId ?? undefined, pageId) !== "hidden";
-        if (visible) allowedPageFields.add(`${pf.pageId}:${pf.fieldKey}`);
-      }
-    }
-  }
 
   return (sources: FormatInheritSource[]): FieldFormatRule[] => {
     const rules: FieldFormatRule[] = [];
@@ -167,7 +131,6 @@ async function buildResolver(allSources: FormatInheritSource[], req?: Request): 
         const f = srcFields.find((sf) => sf.entityId === src.entityId && sf.fieldKey === src.fieldKey);
         if (f && Array.isArray(f.formatRulesJson)) rules.push(...(f.formatRulesJson as FieldFormatRule[]));
       } else if (src.kind === "pageField") {
-        if (!allowedPageFields.has(`${src.pageId}:${src.fieldKey}`)) continue;
         const pf = srcPageFields.find((sf) => sf.pageId === src.pageId && sf.fieldKey === src.fieldKey);
         if (pf && Array.isArray(pf.formatRulesJson)) rules.push(...(pf.formatRulesJson as FieldFormatRule[]));
       } else {
@@ -189,13 +152,13 @@ async function buildResolver(allSources: FormatInheritSource[], req?: Request): 
  */
 export async function withInheritedFormatRules<
   T extends { formatInheritJson: unknown },
->(fields: T[], req?: Request): Promise<(T & { inheritedFormatRulesJson: FieldFormatRule[] })[]> {
+>(fields: T[]): Promise<(T & { inheritedFormatRulesJson: FieldFormatRule[] })[]> {
   const sourcesOf = (f: T): FormatInheritSource[] =>
     (Array.isArray(f.formatInheritJson) ? f.formatInheritJson : []) as FormatInheritSource[];
   const allSources = fields.flatMap(sourcesOf);
   if (allSources.length === 0) {
     return fields.map((f) => ({ ...f, inheritedFormatRulesJson: [] as FieldFormatRule[] }));
   }
-  const resolve = await buildResolver(allSources, req);
+  const resolve = await buildResolver(allSources);
   return fields.map((f) => ({ ...f, inheritedFormatRulesJson: resolve(sourcesOf(f)) }));
 }
