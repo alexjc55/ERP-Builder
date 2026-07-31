@@ -3149,6 +3149,32 @@ export interface RecordInput {
   pageId?: number;
 }
 
+export type BulkRecordsActionAction = typeof BulkRecordsActionAction[keyof typeof BulkRecordsActionAction];
+
+
+export const BulkRecordsActionAction = {
+  archive: 'archive',
+  unarchive: 'unarchive',
+  delete: 'delete',
+} as const;
+
+export interface BulkRecordsAction {
+  entityId: number;
+  action: BulkRecordsActionAction;
+  /**
+     * @minItems 1
+     * @maxItems 500
+     */
+  recordIds: number[];
+  /** Optional mirror-page context (see RecordInput.pageId): applies the mirror page's rights override when acting through it. */
+  pageId?: number;
+}
+
+export interface BulkRecordsResult {
+  successIds: number[];
+  failedIds: number[];
+}
+
 export interface RecordDelete {
   /** Optional mirror-page context (see RecordInput.pageId): applies the mirror page's delete-rights override when deleting through it. */
   pageId?: number;

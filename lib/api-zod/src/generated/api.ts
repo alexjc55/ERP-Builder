@@ -5008,6 +5008,26 @@ export const UnarchiveRecordResponse = zod.object({
 
 
 /**
+ * @summary Bulk archive/unarchive/delete records. Each record is checked against the SAME per-record permission boundary as the single-record endpoints (record cap + own scope; delete honours the mirror-page override via pageId). Records failing the check are reported in failedIds, the rest are processed.
+ */
+export const bulkRecordsActionBodyRecordIdsMax = 500;
+
+
+
+export const BulkRecordsActionBody = zod.object({
+  "entityId": zod.number(),
+  "action": zod.enum(['archive', 'unarchive', 'delete']),
+  "recordIds": zod.array(zod.number()).min(1).max(bulkRecordsActionBodyRecordIdsMax),
+  "pageId": zod.number().optional().describe('Optional mirror-page context (see RecordInput.pageId): applies the mirror page\'s rights override when acting through it.')
+})
+
+export const BulkRecordsActionResponse = zod.object({
+  "successIds": zod.array(zod.number()),
+  "failedIds": zod.array(zod.number())
+})
+
+
+/**
  * @summary List the change history (audit log) of a record
  */
 export const ListRecordAuditLogsParams = zod.object({

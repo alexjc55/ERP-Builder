@@ -31,6 +31,8 @@ import type {
   AutomationsReorderInput,
   BatchImportRequest,
   BatchImportResult,
+  BulkRecordsAction,
+  BulkRecordsResult,
   ChangePasswordInput,
   ColumnGroup,
   ColumnGroupInput,
@@ -7331,6 +7333,77 @@ export const useUnarchiveRecord = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUnarchiveRecordMutationOptions(options));
+    }
+
+export const getBulkRecordsActionUrl = () => {
+
+
+
+
+  return `/api/records/bulk`
+}
+
+/**
+ * @summary Bulk archive/unarchive/delete records. Each record is checked against the SAME per-record permission boundary as the single-record endpoints (record cap + own scope; delete honours the mirror-page override via pageId). Records failing the check are reported in failedIds, the rest are processed.
+ */
+export const bulkRecordsAction = async (bulkRecordsAction: BulkRecordsAction, options?: RequestInit): Promise<BulkRecordsResult> => {
+
+  return customFetch<BulkRecordsResult>(getBulkRecordsActionUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      bulkRecordsAction,)
+  }
+);}
+
+
+
+
+export const getBulkRecordsActionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkRecordsAction>>, TError,{data: BodyType<BulkRecordsAction>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bulkRecordsAction>>, TError,{data: BodyType<BulkRecordsAction>}, TContext> => {
+
+const mutationKey = ['bulkRecordsAction'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkRecordsAction>>, {data: BodyType<BulkRecordsAction>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  bulkRecordsAction(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BulkRecordsActionMutationResult = NonNullable<Awaited<ReturnType<typeof bulkRecordsAction>>>
+    export type BulkRecordsActionMutationBody = BodyType<BulkRecordsAction>
+    export type BulkRecordsActionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Bulk archive/unarchive/delete records. Each record is checked against the SAME per-record permission boundary as the single-record endpoints (record cap + own scope; delete honours the mirror-page override via pageId). Records failing the check are reported in failedIds, the rest are processed.
+ */
+export const useBulkRecordsAction = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkRecordsAction>>, TError,{data: BodyType<BulkRecordsAction>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof bulkRecordsAction>>,
+        TError,
+        {data: BodyType<BulkRecordsAction>},
+        TContext
+      > => {
+      return useMutation(getBulkRecordsActionMutationOptions(options));
     }
 
 export const getListRecordAuditLogsUrl = (id: number,) => {

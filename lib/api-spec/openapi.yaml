@@ -2190,6 +2190,30 @@ paths:
               schema:
                 $ref: "#/components/schemas/EntityRecord"
 
+  /records/bulk:
+    post:
+      operationId: bulkRecordsAction
+      tags: [records]
+      summary: >-
+        Bulk archive/unarchive/delete records. Each record is checked against
+        the SAME per-record permission boundary as the single-record endpoints
+        (record cap + own scope; delete honours the mirror-page override via
+        pageId). Records failing the check are reported in failedIds, the rest
+        are processed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkRecordsAction"
+      responses:
+        "200":
+          description: Per-record outcome
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkRecordsResult"
+
   /records/{id}/audit:
     get:
       operationId: listRecordAuditLogs
@@ -6965,6 +6989,40 @@ components:
             mirror page, send its page id so the server applies that page's
             record-rights override (if configured for the role) instead of the
             source entity's rights.
+
+    BulkRecordsAction:
+      type: object
+      required: [entityId, action, recordIds]
+      properties:
+        entityId:
+          type: integer
+        action:
+          type: string
+          enum: [archive, unarchive, delete]
+        recordIds:
+          type: array
+          items:
+            type: integer
+          minItems: 1
+          maxItems: 500
+        pageId:
+          type: integer
+          description: >-
+            Optional mirror-page context (see RecordInput.pageId): applies the
+            mirror page's rights override when acting through it.
+
+    BulkRecordsResult:
+      type: object
+      required: [successIds, failedIds]
+      properties:
+        successIds:
+          type: array
+          items:
+            type: integer
+        failedIds:
+          type: array
+          items:
+            type: integer
 
     RecordDelete:
       type: object

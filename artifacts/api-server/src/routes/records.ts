@@ -41,6 +41,7 @@ import {
   UnarchiveRecordParams,
   PivotEntityRecordsParams,
   PivotEntityRecordsBody,
+  BulkRecordsActionBody,
 } from "@workspace/api-zod";
 import type { EntityField, InsertAuditLog, FileSource, FileFieldConfig, FieldValidationRule } from "@workspace/db";
 import { optionValues, optionNumbers } from "../lib/selectOptions";
@@ -2973,18 +2974,35 @@ router.delete("/records/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  await db.delete(entityRecordsTable).where(eq(entityRecordsTable.id, params.data.id));
+  await performRecordDelete(req, existing.entityId, params.data.id, values);
+
+  res.json({ success: true });
+});
+
+/**
+ * Physical deletion of a record + the accompanying bookkeeping (file trash,
+ * audit marker with a data snapshot, delete event). ALL permission/ownership
+ * checks must have passed before calling this — it is shared by the single
+ * DELETE endpoint and the bulk action, so it performs no checks itself.
+ */
+async function performRecordDelete(
+  req: import("express").Request,
+  entityId: number,
+  recordId: number,
+  values: Record<string, unknown>,
+): Promise<void> {
+  await db.delete(entityRecordsTable).where(eq(entityRecordsTable.id, recordId));
 
   // Move the record's local files into the file trash so a mistaken delete is
   // recoverable (Drive/link values untouched). Best-effort; does not block.
-  await trashRemovedServerFiles(req, existing.entityId, params.data.id, values, null);
+  await trashRemovedServerFiles(req, entityId, recordId, values, null);
 
   // Audit: one deletion marker carrying a snapshot of the record's data so the
   // trail preserves what was removed even though the row is gone.
   await writeAudit(
     [{
-      entityId: existing.entityId,
-      recordId: params.data.id,
+      entityId,
+      recordId,
       fieldKey: AUDIT_DELETED,
       oldValue: Object.keys(values).length > 0 ? auditStr(values) : null,
       newValue: null,
@@ -2996,15 +3014,13 @@ router.delete("/records/:id", requireAuth, async (req, res): Promise<void> => {
   await emitEvent(
     {
       eventName: EVENT_RECORD_DELETED,
-      entityId: existing.entityId,
-      recordId: params.data.id,
+      entityId,
+      recordId,
       payload: { actorUserId: req.user!.userId },
     },
     req.log,
   );
-
-  res.json({ success: true });
-});
+}
 
 /**
  * Manual archive/unarchive. Gated exactly like a record update (record `update`
@@ -3036,14 +3052,31 @@ async function setArchived(
     return;
   }
 
-  // Unarchive sets the exemption so the auto-archive sweep won't immediately
-  // re-archive a record still sitting in a (delay=0) archive-trigger status; the
-  // exemption is cleared on the next status change. Archiving clears it (an
-  // explicit archive needs no exemption). Guard: only an actual archived→active
-  // transition grants the exemption — unarchiving an already-active record is a
-  // no-op for exemption, so the endpoint can't be used to opt records out of
-  // auto-archival.
-  const wasArchived = existing.archivedAt != null;
+  const record = await applyArchiveFlag(req, existing.entityId, existing.id, existing.archivedAt != null, archived);
+
+  const { hidden } = await fieldAccessContext(req, existing.entityId, fields);
+  res.json(stripHidden(record, hidden));
+}
+
+/**
+ * Flip the archive flag + audit. Shared by the single archive/unarchive
+ * endpoints and the bulk action; performs NO permission checks itself.
+ *
+ * Unarchive sets the exemption so the auto-archive sweep won't immediately
+ * re-archive a record still sitting in a (delay=0) archive-trigger status; the
+ * exemption is cleared on the next status change. Archiving clears it (an
+ * explicit archive needs no exemption). Guard: only an actual archived→active
+ * transition grants the exemption — unarchiving an already-active record is a
+ * no-op for exemption, so the endpoint can't be used to opt records out of
+ * auto-archival.
+ */
+async function applyArchiveFlag(
+  req: import("express").Request,
+  entityId: number,
+  recordId: number,
+  wasArchived: boolean,
+  archived: boolean,
+): Promise<typeof entityRecordsTable.$inferSelect> {
   const set: { archivedAt: Date | null; archiveExempt?: boolean } = {
     archivedAt: archived ? new Date() : null,
   };
@@ -3062,7 +3095,7 @@ async function setArchived(
   if (wasArchived !== archived) {
     await writeAudit(
       [{
-        entityId: existing.entityId,
+        entityId,
         recordId,
         fieldKey: AUDIT_ARCHIVED,
         oldValue: String(wasArchived),
@@ -3073,8 +3106,7 @@ async function setArchived(
     );
   }
 
-  const { hidden } = await fieldAccessContext(req, existing.entityId, fields);
-  res.json(stripHidden(record, hidden));
+  return record;
 }
 
 router.post("/records/:id/archive", requireAuth, async (req, res): Promise<void> => {
@@ -3093,6 +3125,68 @@ router.post("/records/:id/unarchive", requireAuth, async (req, res): Promise<voi
     return;
   }
   await setArchived(req, res, params.data.id, false);
+});
+
+/**
+ * Bulk archive/unarchive/delete. The entity-level capability is asserted once
+ * (delete → record `delete` cap honouring the mirror-page override via pageId;
+ * archive/unarchive → record `update` cap, exactly like the single endpoints),
+ * then EVERY record is re-checked individually against the row-level own-scope
+ * boundary — records that fail (missing, wrong entity, not owned) are reported
+ * in `failedIds` while the rest are processed. No transaction on purpose: each
+ * record's outcome is independent, mirroring N single calls.
+ */
+router.post("/records/bulk", requireAuth, async (req, res): Promise<void> => {
+  const body = BulkRecordsActionBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  const { entityId, action, recordIds, pageId } = body.data;
+  const isDelete = action === "delete";
+  if (!(await assertRecord(req, res, entityId, isDelete ? "delete" : "update", isDelete ? pageId : undefined))) return;
+
+  const perms = await getPermissions(req);
+  const fields = await loadActiveFields(entityId);
+  // Same scope resolution as the corresponding single endpoint: delete honours
+  // the mirror-page override, archive/unarchive uses the plain entity scope.
+  const { scope, scopeFieldKeys } = isDelete
+    ? await effectiveScopeFor(req, perms, entityId, pageId)
+    : effectiveScope(perms, entityId);
+
+  const uniqueIds = [...new Set(recordIds)];
+  const rows = await db
+    .select()
+    .from(entityRecordsTable)
+    .where(and(eq(entityRecordsTable.entityId, entityId), inArray(entityRecordsTable.id, uniqueIds)));
+  const byId = new Map(rows.map((r) => [r.id, r]));
+
+  const successIds: number[] = [];
+  const failedIds: number[] = [];
+  for (const id of uniqueIds) {
+    const existing = byId.get(id);
+    if (!existing) {
+      failedIds.push(id);
+      continue;
+    }
+    if (scope === "own" && !(await isRecordOwned(entityId, existing, scopeFieldKeys, req.user!.userId, fields))) {
+      failedIds.push(id);
+      continue;
+    }
+    try {
+      if (isDelete) {
+        await performRecordDelete(req, entityId, id, (existing.valuesJson as Record<string, unknown>) ?? {});
+      } else {
+        await applyArchiveFlag(req, entityId, id, existing.archivedAt != null, action === "archive");
+      }
+      successIds.push(id);
+    } catch (err) {
+      req.log.error({ err, recordId: id, action }, "bulk record action failed");
+      failedIds.push(id);
+    }
+  }
+
+  res.json({ successIds, failedIds });
 });
 
 export default router;

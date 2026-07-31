@@ -20,6 +20,7 @@ import {
   useRenameFieldValue,
   useArchiveRecord,
   useUnarchiveRecord,
+  useBulkRecordsAction,
   useListUserOptions,
   useListRecordAuditLogs,
   useListRoles,
@@ -151,7 +152,8 @@ import { computeRowFormatting, ruleMatches, type FormatField } from "@/lib/forma
 import type { FieldFormatRule, CustomFilterPick, CustomFilter, CustomFilterInput } from "@workspace/api-client-react";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus, Zap, ChevronsUpDown, ChevronsDownUp, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus, Zap, ChevronsUpDown, ChevronsDownUp, ArrowUp, ArrowDown, ArrowUpDown, ListChecks } from "lucide-react";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Link, useLocation, useSearch } from "wouter";
 import { Calendar } from "@/components/ui/calendar";
 import type { DateRange } from "react-day-picker";
@@ -1993,6 +1995,11 @@ export function EntityRecords({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<EntityRecord | null>(null);
   const [toDelete, setToDelete] = useState<EntityRecord | null>(null);
+  // Bulk actions: selection mode with per-row checkboxes + a mass
+  // archive/unarchive/delete over the selected rows.
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkConfirm, setBulkConfirm] = useState<null | "archive" | "unarchive" | "delete">(null);
   const [historyFor, setHistoryFor] = useState<EntityRecord | null>(null);
   const [form, setForm] = useState<FormState>({});
   const [statusId, setStatusId] = useState<string>(NO_STATUS);
@@ -3294,6 +3301,27 @@ export function EntityRecords({
       onError: (err) => toast({ title: t("records.unarchiveError", "Ошибка восстановления"), description: extractError(err), variant: "destructive" }),
     },
   });
+  const bulkMutation = useBulkRecordsAction({
+    mutation: {
+      onSuccess: (resp) => {
+        const ok = resp.successIds?.length ?? 0;
+        const failed = resp.failedIds?.length ?? 0;
+        toast({
+          title: `${t("records.bulkDone", "Обработано записей")}: ${ok}`,
+          ...(failed > 0
+            ? { description: `${t("records.bulkFailed", "Не удалось (нет прав или запись не найдена)")}: ${failed}`, variant: "destructive" as const }
+            : {}),
+        });
+        setSelectedIds(new Set());
+        setBulkConfirm(null);
+        invalidate();
+      },
+      onError: (err) => {
+        setBulkConfirm(null);
+        toast({ title: t("records.bulkError", "Ошибка массового действия"), description: extractError(err), variant: "destructive" });
+      },
+    },
+  });
   // Used to persist relation-field links chosen during a CREATE flow, once the
   // base record exists (a link cannot be written before the record id is known).
   const setEntityLinkMutation = useSetEntityRelatedLink();
@@ -3756,6 +3784,34 @@ export function EntityRecords({
   const lastPinnedKey = pinnedOrder[pinnedOrder.length - 1];
   const pinHeaderRefs = useRef<Record<string, HTMLTableCellElement | null>>({});
   const [pinnedLeft, setPinnedLeft] = useState<Record<string, number>>({});
+  // Bulk selection mode is only offered where the actions column itself is
+  // visible (hiding the actions column for a role hides bulk actions too) and
+  // the viewer can actually update (archive) or delete records.
+  const bulkAvailable = !setupMode && !showPivot && showActionsColumn && (canUpdate || canDelete);
+  const showBulk = bulkMode && bulkAvailable;
+  const BULK_COL_W = 40;
+  // Sticky style for the checkbox column: pinned to the inline start (left in
+  // LTR, right in RTL) independent of horizontal scroll.
+  const bulkColStyle = (bg: string, isHeader = false): CSSProperties => ({
+    position: "sticky",
+    insetInlineStart: 0,
+    zIndex: isHeader ? 3 : 2,
+    backgroundColor: bg,
+    width: BULK_COL_W,
+    minWidth: BULK_COL_W,
+    maxWidth: BULK_COL_W,
+  });
+  // Keep the selection limited to rows that are still in the current result
+  // set (filters/page/tab changes drop stale ids so a bulk action never hits
+  // rows the user no longer sees).
+  useEffect(() => {
+    if (!bulkMode) return;
+    setSelectedIds((prev) => {
+      const visible = new Set(records.map((r: EntityRecord) => r.id));
+      const next = new Set([...prev].filter((id) => visible.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [records, bulkMode]);
   useLayoutEffect(() => {
     if (pinnedOrder.length === 0) {
       setPinnedLeft((prev) => (Object.keys(prev).length ? {} : prev));
@@ -3763,7 +3819,12 @@ export function EntityRecords({
     }
     const measure = () => {
       const next: Record<string, number> = {};
-      let acc = 0;
+      // The bulk-select checkbox column is sticky at the inline start; in LTR
+      // it occupies the first BULK_COL_W physical-left pixels, so pinned
+      // columns shift right by that amount. In RTL pinned columns stick to the
+      // physical left while the checkbox sticks to the physical right (inline
+      // start), so no shift is needed.
+      let acc = showBulk && !isRtl ? BULK_COL_W : 0;
       for (const key of pinnedOrder) {
         next[key] = acc;
         acc += pinHeaderRefs.current[key]?.offsetWidth ?? 0;
@@ -3778,7 +3839,7 @@ export function EntityRecords({
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
-  }, [pinnedOrder, columnWidths, records, recordsLoading, numericTotals]);
+  }, [pinnedOrder, columnWidths, records, recordsLoading, numericTotals, showBulk, isRtl]);
   // Sticky is only applied once every pinned column's offset has been measured;
   // until then we render columns normally rather than risk several collapsing to
   // left:0 and overlapping during a transient render before refs resolve.
@@ -3899,6 +3960,7 @@ export function EntityRecords({
           setPage(1);
         }}
       >
+        {showBulk && <td style={bulkColStyle(groupBg)} onClick={(e) => e.stopPropagation()} />}
         {orderedColumns.map((col, idx) => {
           const totalKey = col.kind === "entity" ? col.field.fieldKey : col.pinKey;
           const sum = g.sums?.[totalKey];
@@ -4148,6 +4210,58 @@ export function EntityRecords({
               )}
               <ChevronDown className="w-3.5 h-3.5 opacity-60 shrink-0" />
             </Button>
+          )}
+          {bulkAvailable && (
+            <Button
+              type="button"
+              variant={bulkMode ? "default" : "outline"}
+              size="sm"
+              className="h-9 gap-1.5 text-xs w-full sm:w-auto"
+              onClick={() => {
+                setBulkMode((m) => !m);
+                setSelectedIds(new Set());
+              }}
+            >
+              <ListChecks className="w-3.5 h-3.5 shrink-0" />
+              {t("records.bulkToggle", "Выбрать")}
+            </Button>
+          )}
+          {showBulk && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-9 gap-1.5 text-xs w-full sm:w-auto border-blue-300 text-blue-700"
+                  disabled={selectedIds.size === 0 || bulkMutation.isPending}
+                >
+                  {t("records.bulkActions", "Действия")}
+                  <Badge variant="secondary" className="px-1.5">{selectedIds.size}</Badge>
+                  <ChevronDown className="w-3.5 h-3.5 opacity-60 shrink-0" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {canUpdate && (
+                  <DropdownMenuItem onClick={() => setBulkConfirm("archive")}>
+                    <Archive className="w-3.5 h-3.5 mr-2" />
+                    {t("records.toArchive", "В архив")}
+                  </DropdownMenuItem>
+                )}
+                {canUpdate && archived !== "active" && (
+                  <DropdownMenuItem onClick={() => setBulkConfirm("unarchive")}>
+                    <ArchiveRestore className="w-3.5 h-3.5 mr-2" />
+                    {t("records.restoreFromArchive", "Восстановить из архива")}
+                  </DropdownMenuItem>
+                )}
+                {canDelete && (
+                  <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => setBulkConfirm("delete")}>
+                    <Trash2 className="w-3.5 h-3.5 mr-2" />
+                    {t("records.delete", "Удалить")}
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
@@ -4864,6 +4978,9 @@ export function EntityRecords({
                 <thead className="sticky top-0 z-20">
                   {Object.keys(numericTotals).length > 0 && (
                     <tr style={{ backgroundColor: "#F8FAFC" }}>
+                      {showBulk && (
+                        <th style={{ ...bulkColStyle("#F8FAFC", true), borderTop: "1px solid #F8FAFC", borderBottom: "none" }} />
+                      )}
                       {orderedColumns.map((col, idx) => {
                         const totalKey = col.kind === "entity" ? col.field.fieldKey : col.pinKey;
                         const hasTotal = numericTotals[totalKey] !== undefined;
@@ -4932,6 +5049,24 @@ export function EntityRecords({
                     className={cn("erp-main-header border-b border-slate-100 bg-slate-50", boldHeader && "bg-slate-200 text-slate-800 font-semibold border-b-2 border-slate-300")}
                     style={headerColor ? { backgroundColor: headerColor } : undefined}
                   >
+                    {showBulk && (
+                      <th
+                        className="px-2 py-3 text-center align-middle"
+                        style={bulkColStyle(headerColor ?? (boldHeader ? "#E2E8F0" : "#F8FAFC"), true)}
+                      >
+                        <Checkbox
+                          aria-label={t("records.bulkSelectAll", "Выбрать все")}
+                          checked={records.length > 0 && records.every((r: EntityRecord) => selectedIds.has(r.id))
+                            ? true
+                            : selectedIds.size > 0
+                              ? "indeterminate"
+                              : false}
+                          onCheckedChange={(v) => {
+                            setSelectedIds(v === true ? new Set(records.map((r: EntityRecord) => r.id)) : new Set());
+                          }}
+                        />
+                      </th>
+                    )}
                     {orderedColumns.map((col, ui) => {
                       const fld = col.field;
                       const pinKey = col.pinKey;
@@ -5279,7 +5414,7 @@ export function EntityRecords({
                   {canCreate && !setupMode && !showGroups && !addingRow && (
                     <tr>
                       <td
-                        colSpan={orderedColumns.length + (showStatusColumn ? 1 : 0) + (showActionsColumn ? 1 : 0)}
+                        colSpan={orderedColumns.length + (showBulk ? 1 : 0) + (showStatusColumn ? 1 : 0) + (showActionsColumn ? 1 : 0)}
                         className="bg-white border-b border-slate-200 px-2 py-1.5"
                       >
                         <button
@@ -5303,7 +5438,7 @@ export function EntityRecords({
                   {(showGroups ? groupList.length === 0 : records.length === 0) && (
                     <tr>
                       <td
-                        colSpan={orderedColumns.length + (showStatusColumn ? 1 : 0) + (showActionsColumn ? 1 : 0)}
+                        colSpan={orderedColumns.length + (showBulk ? 1 : 0) + (showStatusColumn ? 1 : 0) + (showActionsColumn ? 1 : 0)}
                         className="text-center py-12 text-slate-400"
                       >
                         {total === 0 && (search.trim() || (selectedConfig.filters?.length ?? 0) > 0)
@@ -5314,6 +5449,7 @@ export function EntityRecords({
                   )}
                   {canCreate && !setupMode && !showGroups && addingRow && (
                     <tr className="border-b border-blue-100 bg-blue-50/40">
+                      {showBulk && <td style={bulkColStyle("#EFF6FF")} />}
                       {orderedColumns.map((col) => {
                         if (col.kind === "page") {
                           const pf = col.field;
@@ -5444,7 +5580,7 @@ export function EntityRecords({
                   {showGroups && !groupRowsReady && (expandedGroupIndex >= 0 || expandAll) && (
                     <tr>
                       <td
-                        colSpan={orderedColumns.length + (showStatusColumn ? 1 : 0) + (showActionsColumn ? 1 : 0)}
+                        colSpan={orderedColumns.length + (showBulk ? 1 : 0) + (showStatusColumn ? 1 : 0) + (showActionsColumn ? 1 : 0)}
                         className="text-center py-8 text-slate-400"
                       >
                         <Loader2 className="w-4 h-4 animate-spin inline-block" />
@@ -5523,6 +5659,21 @@ export function EntityRecords({
                         className="border-b border-slate-100 hover:bg-slate-50"
                         style={rowBgForTr ? { backgroundColor: rowBgForTr } : undefined}
                       >
+                        {showBulk && (
+                          <td className="px-2 py-3 text-center align-middle" style={bulkColStyle(rowBgConcrete)}>
+                            <Checkbox
+                              checked={selectedIds.has(record.id)}
+                              onCheckedChange={(v) => {
+                                setSelectedIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (v === true) next.add(record.id);
+                                  else next.delete(record.id);
+                                  return next;
+                                });
+                              }}
+                            />
+                          </td>
+                        )}
                         {orderedColumns.map((col) => {
                           if (col.kind === "entity") {
                           const f = col.field;
@@ -6087,6 +6238,52 @@ export function EntityRecords({
               onClick={() => toDelete && deleteMutation.mutate({ id: toDelete.id, data: { pageId: permPageId } })}
             >
               {t("records.delete", "Удалить")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!bulkConfirm} onOpenChange={(o) => !o && setBulkConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {bulkConfirm === "delete"
+                ? t("records.bulkDeleteTitle", "Удалить выбранные записи?")
+                : bulkConfirm === "unarchive"
+                  ? t("records.bulkUnarchiveTitle", "Восстановить выбранные записи из архива?")
+                  : t("records.bulkArchiveTitle", "Отправить выбранные записи в архив?")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {(bulkConfirm === "delete"
+                ? t("records.bulkDeleteConfirm", "Записи ({n} шт.) будут удалены безвозвратно.")
+                : bulkConfirm === "unarchive"
+                  ? t("records.bulkUnarchiveConfirm", "Записи ({n} шт.) будут восстановлены из архива.")
+                  : t("records.bulkArchiveConfirm", "Записи ({n} шт.) будут отправлены в архив.")
+              ).replace("{n}", String(selectedIds.size))}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("records.cancel", "Отмена")}</AlertDialogCancel>
+            <AlertDialogAction
+              className={bulkConfirm === "delete" ? "bg-red-600 hover:bg-red-700" : undefined}
+              disabled={bulkMutation.isPending}
+              onClick={() =>
+                bulkConfirm &&
+                bulkMutation.mutate({
+                  data: {
+                    entityId,
+                    action: bulkConfirm,
+                    recordIds: [...selectedIds],
+                    ...(permPageId != null ? { pageId: permPageId } : {}),
+                  },
+                })
+              }
+            >
+              {bulkConfirm === "delete"
+                ? t("records.delete", "Удалить")
+                : bulkConfirm === "unarchive"
+                  ? t("records.restoreFromArchive", "Восстановить из архива")
+                  : t("records.toArchive", "В архив")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
