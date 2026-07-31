@@ -28,7 +28,8 @@ BEGIN
     jsonb_build_object('kind', 'status', 'entityId', v_izdeliya_id),
     jsonb_build_object('kind', 'field', 'entityId', v_izdeliya_id, 'fieldKey', 'production_status'),
     jsonb_build_object('kind', 'field', 'entityId', v_izdeliya_id, 'fieldKey', 'paint_status'),
-    jsonb_build_object('kind', 'pageField', 'pageId', v_montazh_page_id, 'fieldKey', 'status_montazha')
+    jsonb_build_object('kind', 'pageField', 'pageId', v_montazh_page_id, 'fieldKey', 'status_montazha'),
+    jsonb_build_object('kind', 'field', 'entityId', v_izdeliya_id, 'fieldKey', 'comments')
   )
   WHERE ef.field_key IN ('obshchiy_status', 'obschiy_status')
     AND ef.entity_id IN (SELECT id FROM entities WHERE name_json->>'ru' IN ('Заказы', 'Изделия'));
