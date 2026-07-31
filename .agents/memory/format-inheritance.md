@@ -14,4 +14,4 @@ A field whose value is COPIED by automations (e.g. заказ «Общий ст�
 
 **Limits:** page fields themselves cannot inherit (only entity fields carry formatInheritJson); source picker offers pages only when they are mirror pages (page-local fields exist only there).
 
-**pageField source boundary:** page-field inherited rules are attached only when the requester passes the page-fields read boundary (page access via effectiveRecordPerm + per-role hidden filter via mostPermissiveFieldPerm), mirroring GET /pages/:pageId/fields; unauthorized sources are silently dropped. Entity-field/status sources remain public-to-authenticated metadata.
+**Visibility decision (user-confirmed, 2026-07-31, supersedes earlier gating):** inherited rules follow the TARGET field's visibility — anyone who sees the target field sees its inherited coloring, even from pages they can't open. Why: the matched values are copied into the target field anyway, so hiding colors leaks nothing extra and just renders inconsistently across roles. The earlier pageField page-access gating was deliberately reverted; do NOT re-add it as a "fix".
