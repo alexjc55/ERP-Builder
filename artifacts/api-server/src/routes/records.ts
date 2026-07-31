@@ -214,7 +214,19 @@ function validateFileValue(field: EntityField, raw: unknown, gdriveModuleEnabled
   return out;
 }
 
-export function validateValues(fields: EntityField[], values: Record<string, unknown>, gdriveModuleEnabled: boolean, prevValues: Record<string, unknown> = {}): { values: Record<string, unknown> } | { error: string } {
+export function validateValues(
+  fields: EntityField[],
+  values: Record<string, unknown>,
+  gdriveModuleEnabled: boolean,
+  prevValues: Record<string, unknown> = {},
+  /**
+   * When set, the required-field check applies ONLY to these field keys.
+   * Used by SYSTEM writes (automations): they update specific fields and must
+   * not be blocked by pre-existing empty required fields they do not touch —
+   * user-facing create/update paths keep the strict all-fields check.
+   */
+  requiredOnlyKeys?: Set<string>,
+): { values: Record<string, unknown> } | { error: string } {
   const fieldByKey = new Map(fields.map((f) => [f.fieldKey, f]));
 
   // Reject unknown keys (metadata-driven integrity: no junk columns).
@@ -241,7 +253,7 @@ export function validateValues(fields: EntityField[], values: Record<string, unk
     const raw = values[field.fieldKey];
 
     if (isEmpty(raw)) {
-      if (field.isRequired) {
+      if (field.isRequired && (requiredOnlyKeys === undefined || requiredOnlyKeys.has(field.fieldKey))) {
         return { error: `Поле «${fieldRuName(field)}» обязательно для заполнения` };
       }
       continue;

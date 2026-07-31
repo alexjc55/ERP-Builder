@@ -543,7 +543,10 @@ export async function systemUpdateRecord(
         candidate[f.fieldKey] = f.fieldKey in partialValues! ? partialValues![f.fieldKey] : existingValues[f.fieldKey];
       }
       const gdrive = await isGoogleDriveModuleEnabled();
-      const result = validateValues(fields, candidate, gdrive, existingValues);
+      // System writes enforce required-ness only for the fields the automation
+      // itself sets: a pre-existing empty required field (e.g. legacy imported
+      // records) must not silently block an unrelated automation update.
+      const result = validateValues(fields, candidate, gdrive, existingValues, new Set(Object.keys(partialValues!)));
       if ("error" in result) {
         log.error({ recordId, error: result.error }, "Automation set_field validation failed");
         return false;
