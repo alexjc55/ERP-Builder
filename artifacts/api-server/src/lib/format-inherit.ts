@@ -52,7 +52,18 @@ export function validateFormatInherit(input: unknown): string | null {
   return null;
 }
 
-/** Text color with enough contrast against a light `${color}20` background: the status color itself. */
+/** Black or white, whichever contrasts more with a solid `#rrggbb` background (WCAG relative luminance). */
+function contrastText(hex: string): string {
+  const n = parseInt(hex.slice(1, 7), 16);
+  const lin = (c: number) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  const lum = 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+  return lum > 0.35 ? "#111827" : "#ffffff";
+}
+
+/** Solid status-color fill + contrast text (user-confirmed: pale chip-style `${color}20` looked "uncolored"). */
 function statusRulesFor(nameJson: unknown, color: string): FieldFormatRule[] {
   const labels =
     nameJson && typeof nameJson === "object"
@@ -62,8 +73,8 @@ function statusRulesFor(nameJson: unknown, color: string): FieldFormatRule[] {
   return labels.map((label) => ({
     operator: "equals" as const,
     value: label,
-    cellColor: `${safeColor}20`,
-    textColor: safeColor,
+    cellColor: safeColor,
+    textColor: contrastText(safeColor),
   }));
 }
 
