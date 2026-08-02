@@ -7157,6 +7157,7 @@ function RecordFormBody({
   setForm,
   userOptions,
   onRelationChanged,
+  lockedFieldKeys,
 }: {
   entityId: number;
   pageId?: number;
@@ -7171,6 +7172,9 @@ function RecordFormBody({
   userOptions: UserOption[];
   /** Bubbled when a relation link changes, so the parent table can refresh. */
   onRelationChanged?: () => void;
+  /** Field keys forced read-only by the caller (e.g. the quick-create dialog's
+   * prefilled dependency-filter field). Values still submit; inputs are locked. */
+  lockedFieldKeys?: ReadonlySet<string>;
 }) {
   const t = useT();
   const ml = useML();
@@ -7354,12 +7358,16 @@ function RecordFormBody({
       {formFields.map((field: Field) => {
         const access = fieldAccess(field, entityId, pageId);
         const relVal = relByField.get(field.fieldKey);
-        const relLocked = mode === "edit" && relationFieldLocked(field, relVal?.linkedRecordId);
+        const callerLocked = lockedFieldKeys?.has(field.fieldKey) === true;
+        const relLocked =
+          (mode === "edit" && relationFieldLocked(field, relVal?.linkedRecordId)) ||
+          (callerLocked && field.fieldType === "relation");
         // A lookup is always read-only (it projects a linked record's value); a
         // lockAfterCreate scalar becomes read-only in edit mode once it has a value.
         const readOnly =
           access === "view" ||
           field.fieldType === "lookup" ||
+          (callerLocked && field.fieldType !== "relation") ||
           (mode === "edit" && scalarFieldLocked(field, form[field.fieldKey]));
         const dep = depInfo(field);
         return (
@@ -7405,6 +7413,16 @@ function RecordFormBody({
                     relatedFilterFieldKey={dep.relatedFilterFieldKey}
                     pageSource={!!field.relationConfigJson?.relatedPageId}
                   />
+                )
+              ) : mode === "create" && callerLocked ? (
+                // Caller-locked relation in a create flow: the link doesn't exist
+                // yet (set after create), so show the prefilled target id.
+                roBox(
+                  typeof form[field.fieldKey] === "number" ? (
+                    `#${form[field.fieldKey]}`
+                  ) : (
+                    <span className="text-slate-300">—</span>
+                  ),
                 )
               ) : (
                 roBox(relDisplayFor(field))
@@ -7649,63 +7667,98 @@ function QuickCreateRelatedRecordDialog({
   const t = useT();
   const ml = useML();
   const { toast } = useToast();
-  const { data: relFields = [], isLoading: fieldsLoading } = useListEntityFields(relatedEntityId);
+  const { data: relFieldsRaw = [], isLoading: fieldsLoading } = useListEntityFields(relatedEntityId);
+  const { data: relStatuses = [] } = useListEntityStatuses(relatedEntityId);
+  const { data: entities = [] } = useListEntities();
+  const allowNoStatus = entities.find((e: Entity) => e.id === relatedEntityId)?.allowNoStatus ?? true;
   const { data: userOptions = [] } = useListUserOptions();
   const createMutation = useCreateEntityRecord();
   const setLinkMutation = useSetEntityRelatedLink();
   const [form, setForm] = useState<FormState>({});
+  const [statusId, setStatusId] = useState<string>(NO_STATUS);
   const [submitting, setSubmitting] = useState(false);
 
   // Is the locked dependency filter field a relation field on the related entity?
   // If so it cannot live in valuesJson; we set it as a link after create.
+  const relFields = useMemo(
+    () => [...relFieldsRaw].filter((f: Field) => f.isActive).sort((a: Field, b: Field) => a.sortOrder - b.sortOrder),
+    [relFieldsRaw],
+  );
   const lockedField = lockedFieldKey ? relFields.find((f: Field) => f.fieldKey === lockedFieldKey) : undefined;
   const lockedIsRelation = lockedField?.fieldType === "relation";
+  const lockedFieldKeys = useMemo(
+    () => new Set<string>(lockedFieldKey ? [lockedFieldKey] : []),
+    [lockedFieldKey],
+  );
 
-  // Fields editable in the quick-create form: skip read-only/computed types and
-  // any relation field (relations are linked separately, not stored in values).
-  // Also honour the field's active toggle and per-role field permissions —
-  // parity with the main record form (visibleFormFields).
+  // The form's field set is computed EXACTLY like the main record form's
+  // visibleFormFields (isActive + sortOrder above, field perms + per-role
+  // display-only hide here) — the rendering itself is the shared RecordFormBody,
+  // so the quick dialog can no longer drift from the entity-page form.
   const { fieldAccess: quickFieldAccess, user: quickUser } = useAuth();
-  // Same per-role display-only hide as the main form: a field explicitly
-  // marked "hidden" for every assigned role is dropped even for superAdmin.
   const quickRoleIds: number[] =
     quickUser?.roleIds && quickUser.roleIds.length > 0
       ? quickUser.roleIds
       : quickUser?.roleId != null
         ? [quickUser.roleId]
         : [];
-  const editableFields = relFields.filter(
+  const formFields = relFields.filter(
     (f: Field) =>
-      f.isActive &&
-      f.fieldType !== "relation" &&
-      f.fieldType !== "function" &&
       quickFieldAccess(f, relatedEntityId) !== "hidden" &&
       (quickRoleIds.length === 0 ||
         quickRoleIds.some((rid) => f.permissionsJson?.[String(rid)] !== "hidden")),
   );
 
+  // Cosmetic mirror of the related entity's per-role status visibility, same as
+  // the main create form: hidden-picker statuses are not offered; if the default
+  // status is hidden, the create payload omits statusId so the server assigns it.
+  const isSuperAdmin = quickUser?.permissions?.superAdmin === true;
+  const hiddenStatusIds = new Set<number>(
+    isSuperAdmin
+      ? []
+      : ((quickUser?.permissions?.records?.[String(relatedEntityId)]?.hiddenStatusIds ?? []).filter(
+          (n): n is number => Number.isInteger(n),
+        )),
+  );
+  const selectableStatuses = relStatuses.filter((s: Status) => !hiddenStatusIds.has(s.id));
+  const defaultStatusObj = relStatuses.find((s: Status) => s.isDefault);
+  const defaultStatusHidden = defaultStatusObj != null && hiddenStatusIds.has(defaultStatusObj.id);
+
   useEffect(() => {
     if (!open) return;
+    // Same seeding as the main form's openCreate (incl. defaultToToday), plus the
+    // locked dependency-filter prefill. A locked RELATION field keeps its linked
+    // record id in the form so dependent children can resolve their parent; the
+    // link itself is written after create (relations never live in valuesJson).
     const initial: FormState = {};
-    for (const f of editableFields) {
-      initial[f.fieldKey] =
-        f.fieldKey === lockedFieldKey && !lockedIsRelation && lockedValue != null
-          ? valueToForm(f, lockedValue)
-          : emptyForField(f);
+    for (const f of relFields) initial[f.fieldKey] = initialForField(f);
+    if (lockedFieldKey && lockedField && lockedValue != null) {
+      initial[lockedFieldKey] = lockedIsRelation
+        ? Number.isFinite(Number(lockedValue))
+          ? Number(lockedValue)
+          : ""
+        : valueToForm(lockedField, lockedValue);
     }
     setForm(initial);
+    const def = relStatuses.find((s: Status) => s.isDefault);
+    setStatusId(def && !hiddenStatusIds.has(def.id) ? String(def.id) : NO_STATUS);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, relatedEntityId, relFields.length]);
+  }, [open, relatedEntityId, relFieldsRaw.length, relStatuses.length]);
 
   const submit = async () => {
     setSubmitting(true);
     // Step 1 — create. A failure here means nothing was written.
     let newId: number;
     try {
-      const valuesJson = formToValues(editableFields, form);
+      const valuesJson = formToValues(formFields, form);
+      const statusValue = statusId === NO_STATUS ? null : Number(statusId);
+      // When the default status is hidden from this role's picker, omit statusId
+      // entirely so the server assigns the (hidden) default itself.
+      const statusPart =
+        statusValue === null && defaultStatusHidden ? {} : { statusId: statusValue };
       const created = await createMutation.mutateAsync({
         entityId: relatedEntityId,
-        data: { valuesJson, ...(pageId != null ? { pageId } : {}) },
+        data: { valuesJson, ...statusPart, ...(pageId != null ? { pageId } : {}) },
       });
       newId = created.id;
     } catch (e) {
@@ -7760,6 +7813,28 @@ function QuickCreateRelatedRecordDialog({
         return;
       }
     }
+    // Step 3 — persist any OTHER relation selections made in the form, same as the
+    // main create dialog's persistPendingRelationLinks: best-effort per field, a
+    // failure is surfaced but does not undo the created record.
+    for (const rf of formFields) {
+      if (rf.fieldType !== "relation" || rf.fieldKey === lockedFieldKey) continue;
+      if (quickFieldAccess(rf, relatedEntityId) !== "edit") continue;
+      const v = form[rf.fieldKey];
+      const linkedRecordId = typeof v === "number" ? v : v != null && v !== "" ? Number(v) : null;
+      if (linkedRecordId == null || !Number.isFinite(linkedRecordId)) continue;
+      try {
+        await setLinkMutation.mutateAsync({
+          entityId: relatedEntityId,
+          data: { fieldKey: rf.fieldKey, recordId: newId, linkedRecordId },
+        });
+      } catch (e) {
+        toast({
+          variant: "destructive",
+          title: t("records.linkFailed", "Не удалось изменить связь"),
+          description: e instanceof Error ? e.message : undefined,
+        });
+      }
+    }
     setSubmitting(false);
     // Derive the new record's display label from the label field the caller named,
     // so the picker can show the name immediately (the record is not yet in the
@@ -7771,39 +7846,49 @@ function QuickCreateRelatedRecordDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t("records.relatedCreateTitle", "Новая связанная запись")}</DialogTitle>
+          <DialogDescription>
+            {t("records.dialogDesc", "Заполните поля записи. Обязательные поля помечены звёздочкой.")}
+          </DialogDescription>
         </DialogHeader>
         {fieldsLoading ? (
           <div className="py-8 text-center text-sm text-slate-400">{t("common.loading", "Загрузка...")}</div>
         ) : (
-          <div className="max-h-[60vh] space-y-4 overflow-y-auto py-2 pr-2">
-            {editableFields.length === 0 && (
+          <div className="space-y-4 py-2 min-w-0">
+            {formFields.length === 0 && (
               <p className="text-sm text-slate-400">{t("records.relatedCreateNoFields", "Нет полей для заполнения")}</p>
             )}
-            {editableFields.map((f: Field) => {
-              const isLockedScalar = f.fieldKey === lockedFieldKey && !lockedIsRelation;
-              return (
-                <div key={f.id} className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-700">
-                    {ml(f.nameJson) || f.fieldKey}
-                    {f.isRequired && <span className="ml-0.5 text-rose-500">*</span>}
-                  </label>
-                  <FieldInput
-                    field={f}
-                    value={form[f.fieldKey]}
-                    onChange={(v) => setForm((prev) => ({ ...prev, [f.fieldKey]: v }))}
-                    disabled={isLockedScalar}
-                    userOptions={userOptions}
-                    allFields={relFields}
-                    rowValues={form}
-                    entityId={relatedEntityId}
-                    pageId={pageId}
-                  />
-                </div>
-              );
-            })}
+            <RecordFormBody
+              entityId={relatedEntityId}
+              mode="create"
+              recordId={null}
+              allFields={relFields}
+              formFields={formFields}
+              form={form}
+              setForm={setForm}
+              userOptions={userOptions}
+              lockedFieldKeys={lockedFieldKeys}
+            />
+            {relStatuses.length > 0 && (
+              <div className="space-y-1.5">
+                <Label>{t("records.status", "Статус")}</Label>
+                <Select value={statusId} onValueChange={setStatusId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("records.noStatus", "Без статуса")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(allowNoStatus || statusId === NO_STATUS) && (
+                      <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
+                    )}
+                    {selectableStatuses.map((s: Status) => (
+                      <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         )}
         <DialogFooter>
