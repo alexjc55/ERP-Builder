@@ -1365,10 +1365,11 @@ function ScopeFilterEditor({
   const values = filter?.values ?? [];
   // Free-text draft for fields without configured options (comma-separated).
   const [draft, setDraft] = useState(values.join(", "));
+  const valuesSerialized = values.join(", ");
   useEffect(() => {
-    setDraft((filter?.values ?? []).join(", "));
+    setDraft(valuesSerialized);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter?.fieldKey]);
+  }, [filter?.fieldKey, valuesSerialized]);
   const commitDraft = (text: string) => {
     if (!filter) return;
     const vals = text.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
