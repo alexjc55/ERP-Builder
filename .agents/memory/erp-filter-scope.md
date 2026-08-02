@@ -22,3 +22,20 @@ Scope select gains «По значению поля»; `ScopeFilterEditor` (v1 s
 
 **Why:** users abused resettable SOFT quick-filters (Эпоколь page) to see/edit other painters' orders; needed a per-role hard row boundary configurable on any field value.
 **How to apply:** any new own-scope enforcement site automatically gets filter scope for free — never special-case "filter" at call sites; keep SQL and in-memory checks in lockstep; prod translations in exports/scope-filter-translations.sql.
+
+## Page-local scope filters (pageId, added 2026-08)
+
+`ScopeFilter` has optional `pageId`: when set, `fieldKey` is a PAGE-LOCAL field
+of that mirror page (value in page_record_values). Encoded as `p` in the
+`__valfilter__:` synthetic key. own-scope.ts partitions these into a third
+bucket; clause = `inArray(pageLocalValueExpr(pageId, key), values)` — NULL never
+matches (deny-safe), applied in BOTH ownScopeWhere and isRecordOwned.
+
+**Config boundary:** role writes (POST/PUT /roles) validate pageId-bearing
+scopeFilters — only allowed inside the matching `mirror:<pageId>` override, and
+the field must be an ACTIVE value-backed page field. Runtime stays deny-safe
+regardless, but bad configs are rejected at write time.
+
+Roles UI: ScopeFilterEditor disambiguates page fields via a `pf:` select-value
+prefix; mirror rows pass `mirrorPageId` down (forget this and the page-field
+candidates silently never load).

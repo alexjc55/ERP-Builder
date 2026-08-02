@@ -91,3 +91,20 @@ matching rows until the viewer flips a "Показать скрытые" checkbo
   scoped to the viewer and exclusion is cosmetic. Revisit if uniform behavior is
   wanted: would need `excludeFilters`/`excludeStatusIds` added to the pivot schema
   + spec construction (they share `computePivot`/`buildRecordQuery` core).
+
+
+## Page-local fields in the SOFT default + exclusions (added 2026-08)
+
+`defaultQuickFilterJson` also carries `pageFieldFilters` and
+`excludePageFieldFilters` (Record<fieldKey,string[]>) for PAGE-LOCAL fields.
+Inclusions ride the existing `pageLocalFilters` query channel; exclusions ride a
+dedicated `RecordQuery.excludePageLocalFilters` (NULL-safe `expr IS NULL OR NOT IN`
+over `pageLocalValueExpr`, always AND — never widens). Exclusions stay table-only
+(pivot/calendar excluded, same v1 rule as entity exclusions) and are validated
+server-side against ACTIVE value-backed page fields (no isFilterable/visibility
+gate — parity with entity exclusions, which only narrow).
+
+**Client rule:** every outgoing page-local inclusion condition must be pruned
+against the current `filterablePageFields` set (deleted/deactivated/hidden/type-
+changed fields) — the server hard-400s unknown or non-filterable page-local
+filter keys, which would break the whole table.
