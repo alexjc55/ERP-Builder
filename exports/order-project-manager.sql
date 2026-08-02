@@ -51,6 +51,42 @@ SET format_rules_json = (
     updated_at = now()
 WHERE entity_id = 72 AND field_key = 'order_project_manager';
 
+-- 3в. Перенос остальных настроек поля со старого на новое
+-- (права ролей, фильтруемость, сводные таблицы, группа колонок, перенос текста и т.д.).
+-- is_required не переносится: lookup только для чтения, заполняется из заказа.
+UPDATE entity_fields new
+SET permissions_json  = old.permissions_json,
+    is_filterable     = old.is_filterable,
+    show_in_table     = old.show_in_table,
+    show_column_total = old.show_column_total,
+    total_fill_color  = old.total_fill_color,
+    total_text_color  = old.total_text_color,
+    is_pinned         = old.is_pinned,
+    pivot_enabled     = old.pivot_enabled,
+    column_group_id   = old.column_group_id,
+    wrap_text         = old.wrap_text,
+    description_json  = old.description_json,
+    updated_at = now()
+FROM entity_fields old
+WHERE old.entity_id = 72 AND old.field_key = 'project_manager'
+  AND new.entity_id = 72 AND new.field_key = 'order_project_manager';
+
+-- 3г. Страницы с явным порядком колонок: новая колонка встаёт сразу после старой
+UPDATE pages
+SET mirror_column_order_json = (
+  SELECT jsonb_agg(x) FROM (
+    SELECT CASE WHEN v = '"e:project_manager"'::jsonb
+                THEN jsonb_build_array(v, '"e:order_project_manager"'::jsonb)
+                ELSE jsonb_build_array(v) END AS grp
+    FROM jsonb_array_elements(mirror_column_order_json) WITH ORDINALITY t(v, ord)
+    ORDER BY ord
+  ) s, jsonb_array_elements(s.grp) x
+)
+WHERE mirror_entity_id = 72
+  AND mirror_column_order_json IS NOT NULL
+  AND mirror_column_order_json @> '["e:project_manager"]'::jsonb
+  AND NOT (mirror_column_order_json @> '["e:order_project_manager"]'::jsonb);
+
 -- 4. Колонка на зеркальных страницах Изделий
 UPDATE pages
 SET mirror_field_keys_json = mirror_field_keys_json || '["order_project_manager"]'::jsonb,
