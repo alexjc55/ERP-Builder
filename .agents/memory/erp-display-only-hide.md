@@ -7,9 +7,9 @@ description: When a UI-only hide is intentionally applied even to superAdmin whi
 
 In the records data table, a field whose `permissionsJson[currentRoleId] === "hidden"` hides its whole **column** even for a superAdmin. This is a **display-only** rule, deliberately separate from the security boundary.
 
-**Why:** The user wanted hidden fields to declutter the table for everyone, including super, but super must still be able to *edit* the field. So:
-- The table column list (`tableFields` in `EntityRecords.tsx`) drops role-hidden fields for everyone, super included.
-- The edit dialog still uses `visibleFormFields` (driven by `fieldAccess`), which keeps super at `edit` — so super can still edit the field.
-- The **server is unchanged**: `resolveFieldAccess` still grants super `edit`, so API responses are NOT stripped for super. The column hide is purely cosmetic on the client.
+**Why:** The user wanted hidden fields to declutter the UI for everyone, including super. Since 2026-08 (user request) the display-only hide applies to **forms too**, not just the table:
+- `visibleFormFields` in `EntityRecords.tsx` now also drops fields explicitly `hidden` for every assigned role (per-role config read directly, so super is included); `tableFields === visibleFormFields`.
+- The quick-create related-record dialog applies the same predicate (it previously showed ALL fields — even inactive ones; both fixed).
+- The **server is unchanged**: `resolveFieldAccess` still grants super `edit`, so API responses are NOT stripped for super. The hide is purely cosmetic on the client; to let super edit such a field again, un-hide it in field settings first.
 
 **How to apply:** Never implement a "display-only" preference by tightening the server, and never assume a hidden column means the value is protected from super — for super it is only hidden in that one table view. The field-access editor (`entity-fields.tsx`) intentionally lets you assign access to superAdmin roles too (`assignableRoles = roles`), purely to drive this cosmetic rule.
