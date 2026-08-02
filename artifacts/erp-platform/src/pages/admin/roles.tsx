@@ -22,6 +22,8 @@ import {
   type Status,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { normalizeSelectOptions } from "@/lib/selectOptions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -319,6 +321,7 @@ export default function RolesPage() {
           delete: ent.delete,
           scope: ent.scope ?? "all",
           scopeFieldKeys: [...(ent.scopeFieldKeys ?? [])],
+          ...(ent.scopeFilters ? { scopeFilters: ent.scopeFilters.map((f) => ({ ...f, values: [...f.values] })) } : {}),
         };
       } else {
         delete records[key];
@@ -342,6 +345,18 @@ export default function RolesPage() {
       const keys = current.scopeFieldKeys ?? [];
       const next = checked ? [...new Set([...keys, fieldKey])] : keys.filter((k) => k !== fieldKey);
       return { ...prev, records: { ...prev.records, [key]: { ...current, scopeFieldKeys: next } } };
+    });
+
+  // Value-filter conditions for the "filter" row scope (v1: single condition,
+  // stored as scopeFilters[0]).
+  const setScopeFiltersForKey = (key: string, filters: { fieldKey: string; values: string[] }[]) =>
+    setPerms((prev) => {
+      const current: RecordPermission =
+        prev.records[key] ?? { view: false, create: false, update: false, delete: false };
+      const next: RecordPermission = { ...current };
+      if (filters.length > 0) next.scopeFilters = filters;
+      else delete next.scopeFilters;
+      return { ...prev, records: { ...prev.records, [key]: next } };
     });
 
   const setScope = (entityId: number, scope: RecordScope) => setScopeForKey(String(entityId), scope);
@@ -959,8 +974,10 @@ export default function RolesPage() {
                           entity={entity}
                           scope={rp.scope ?? "all"}
                           scopeFieldKeys={rp.scopeFieldKeys ?? []}
+                          scopeFilters={rp.scopeFilters ?? []}
                           onScopeChange={(s) => setScope(entity.id, s)}
                           onToggleFieldKey={(k, c) => toggleScopeFieldKey(entity.id, k, c)}
+                          onScopeFiltersChange={(fl) => setScopeFiltersForKey(String(entity.id), fl)}
                           hideStatusColumn={rp.hideStatusColumn === true}
                           hideActionsColumn={rp.hideActionsColumn === true}
                           onToggleHideStatusColumn={(c) => setRecordFlag(String(entity.id), "hideStatusColumn", c)}
@@ -978,8 +995,10 @@ export default function RolesPage() {
                           mirrorLabel={ml(page.nameJson) || page.path || undefined}
                           scope={rp.scope ?? "all"}
                           scopeFieldKeys={rp.scopeFieldKeys ?? []}
+                          scopeFilters={rp.scopeFilters ?? []}
                           onScopeChange={(s) => setScopeForKey(key, s)}
                           onToggleFieldKey={(k, c) => toggleScopeFieldKeyForKey(key, k, c)}
+                          onScopeFiltersChange={(fl) => setScopeFiltersForKey(key, fl)}
                           hideStatusColumn={rp.hideStatusColumn === true}
                           hideActionsColumn={rp.hideActionsColumn === true}
                           onToggleHideStatusColumn={(c) => setRecordFlag(key, "hideStatusColumn", c)}
@@ -1148,8 +1167,10 @@ function EntityScopeRow({
   mirrorLabel,
   scope,
   scopeFieldKeys,
+  scopeFilters,
   onScopeChange,
   onToggleFieldKey,
+  onScopeFiltersChange,
   hideStatusColumn,
   hideActionsColumn,
   onToggleHideStatusColumn,
@@ -1159,8 +1180,10 @@ function EntityScopeRow({
   mirrorLabel?: string;
   scope: RecordScope;
   scopeFieldKeys: string[];
+  scopeFilters: { fieldKey: string; values: string[] }[];
   onScopeChange: (scope: RecordScope) => void;
   onToggleFieldKey: (key: string, checked: boolean) => void;
+  onScopeFiltersChange: (filters: { fieldKey: string; values: string[] }[]) => void;
   hideStatusColumn: boolean;
   hideActionsColumn: boolean;
   onToggleHideStatusColumn: (checked: boolean) => void;
@@ -1242,6 +1265,7 @@ function EntityScopeRow({
           <SelectContent>
             <SelectItem value="all">{t("roles.scopeAll", "Все")}</SelectItem>
             <SelectItem value="own">{t("roles.scopeOwn", "Только свои")}</SelectItem>
+            <SelectItem value="filter">{t("roles.scopeFilter", "По значению поля")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -1261,6 +1285,14 @@ function EntityScopeRow({
           <span className="truncate">{t("roles.hideActionsColumn", "Скрыть колонку «Действия»")}</span>
         </label>
       </div>
+      {scope === "filter" && (
+        <ScopeFilterEditor
+          fields={fields}
+          projections={relProjections}
+          filter={scopeFilters[0] ?? null}
+          onChange={(fl) => onScopeFiltersChange(fl ? [fl] : [])}
+        />
+      )}
       {scope === "own" && (
         <div className="pt-1">
           {ownerOptions.length === 0 ? (
@@ -1296,6 +1328,177 @@ function EntityScopeRow({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Editor for the "filter" row scope (v1: one condition). The role sees only
+ * rows where the chosen field's stored value is one of the listed values —
+ * a hard server boundary (reads and writes), not a resettable filter.
+ * Relation/lookup/function fields are excluded: they store no scalar value.
+ */
+function ScopeFilterEditor({
+  fields,
+  projections,
+  filter,
+  onChange,
+}: {
+  fields: Field[];
+  /** relation/lookup fields resolved to their related entity + projected key. */
+  projections: { field: Field; relatedEntityId: number; relatedFieldKey: string }[];
+  filter: { fieldKey: string; values: string[] } | null;
+  onChange: (filter: { fieldKey: string; values: string[] } | null) => void;
+}) {
+  const t = useT();
+  const ml = useML();
+  const projByKey = new Map(projections.map((p) => [p.field.fieldKey, p]));
+  const candidates = fields.filter(
+    (f: Field) =>
+      f.isActive &&
+      f.fieldType !== "function" &&
+      f.fieldType !== "file" &&
+      (f.fieldType !== "relation" && f.fieldType !== "lookup" ? true : projByKey.has(f.fieldKey)),
+  );
+  const selected = candidates.find((f: Field) => f.fieldKey === filter?.fieldKey);
+  const selectedProj = selected ? projByKey.get(selected.fieldKey) : undefined;
+  const options = selected && !selectedProj ? normalizeSelectOptions(selected.optionsJson) : [];
+  const values = filter?.values ?? [];
+  // Free-text draft for fields without configured options (comma-separated).
+  const [draft, setDraft] = useState(values.join(", "));
+  useEffect(() => {
+    setDraft((filter?.values ?? []).join(", "));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter?.fieldKey]);
+  const commitDraft = (text: string) => {
+    if (!filter) return;
+    const vals = text.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+    onChange({ fieldKey: filter.fieldKey, values: vals });
+  };
+  return (
+    <div className="pt-1 space-y-1.5">
+      {candidates.length === 0 ? (
+        <p className="text-xs text-amber-600">
+          {t("roles.scopeFilterNoFields", "Нет подходящих полей для ограничения по значению.")}
+        </p>
+      ) : (
+        <>
+          <p className="text-xs text-slate-400">
+            {t("roles.scopeFilterDesc", "Роль видит только записи, где выбранное поле имеет одно из указанных значений. Это жёсткое ограничение: его нельзя сбросить фильтрами, оно действует и на изменение записей.")}
+          </p>
+          <Select
+            value={filter?.fieldKey ?? ""}
+            onValueChange={(v) => onChange({ fieldKey: v, values: [] })}
+          >
+            <SelectTrigger className="w-full sm:w-72">
+              <SelectValue placeholder={t("roles.scopeFilterField", "Выберите поле")} />
+            </SelectTrigger>
+            <SelectContent>
+              {candidates.map((f: Field) => (
+                <SelectItem key={f.fieldKey} value={f.fieldKey}>
+                  {ml(f.nameJson) || f.fieldKey}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selected && selectedProj && (
+            <ScopeFilterRelatedValues
+              relatedEntityId={selectedProj.relatedEntityId}
+              relatedFieldKey={selectedProj.relatedFieldKey}
+              values={values}
+              onValuesChange={(vals) => onChange({ fieldKey: selected.fieldKey, values: vals })}
+              draft={draft}
+              setDraft={setDraft}
+              commitDraft={commitDraft}
+            />
+          )}
+          {selected && !selectedProj && options.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
+              {options.map((o) => (
+                <label key={o.value} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                  <Checkbox
+                    checked={values.includes(o.value)}
+                    onCheckedChange={(c) =>
+                      onChange({
+                        fieldKey: selected.fieldKey,
+                        values: c === true ? [...new Set([...values, o.value])] : values.filter((v) => v !== o.value),
+                      })
+                    }
+                  />
+                  <span className="truncate">{ml(o.labelJson) || o.value}</span>
+                </label>
+              ))}
+            </div>
+          )}
+          {selected && !selectedProj && options.length === 0 && (
+            <Input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={() => commitDraft(draft)}
+              placeholder={t("roles.scopeFilterValues", "Значения через запятую, напр.: цева бэпоколь")}
+            />
+          )}
+          {(!selected || values.length === 0) && (
+            <p className="text-xs text-amber-600">
+              {t("roles.scopeFilterEmpty", "Поле или значения не выбраны — записи не будут видны вовсе.")}
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Value picker for a filter-scope condition on a relation/lookup field: the
+ * compared value lives on the RELATED entity's projected field, so its option
+ * list (when it is a select) comes from that entity's field config.
+ */
+function ScopeFilterRelatedValues({
+  relatedEntityId,
+  relatedFieldKey,
+  values,
+  onValuesChange,
+  draft,
+  setDraft,
+  commitDraft,
+}: {
+  relatedEntityId: number;
+  relatedFieldKey: string;
+  values: string[];
+  onValuesChange: (values: string[]) => void;
+  draft: string;
+  setDraft: (v: string) => void;
+  commitDraft: (v: string) => void;
+}) {
+  const t = useT();
+  const ml = useML();
+  const { data: relatedFields = [] } = useListEntityFields(relatedEntityId);
+  const target = relatedFields.find((f: Field) => f.fieldKey === relatedFieldKey);
+  const options = target ? normalizeSelectOptions(target.optionsJson) : [];
+  if (options.length > 0) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
+        {options.map((o) => (
+          <label key={o.value} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+            <Checkbox
+              checked={values.includes(o.value)}
+              onCheckedChange={(c) =>
+                onValuesChange(c === true ? [...new Set([...values, o.value])] : values.filter((v) => v !== o.value))
+              }
+            />
+            <span className="truncate">{ml(o.labelJson) || o.value}</span>
+          </label>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <Input
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => commitDraft(draft)}
+      placeholder={t("roles.scopeFilterValues", "Значения через запятую, напр.: цева бэпоколь")}
+    />
   );
 }
 

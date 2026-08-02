@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import { db, rolesTable, userRolesTable, pagesTable, mirrorPermKey, NO_ACCESS_PERMS, type RolePermissions, type RoleAdminCaps, type RecordPermission, type RecordScope, type EntityField, type FieldAccess, type FieldPermissions } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
+import type { ScopeFilter } from "@workspace/db";
+import { encodeScopeFilters } from "../lib/scope-filter";
 
 declare global {
   namespace Express {
@@ -42,7 +44,11 @@ function intersectIds(a: number[], b: number[]): number[] {
 function mergeRecordPerms(rps: RecordPermission[]): RecordPermission {
   const out: RecordPermission = { view: false, create: false, update: false, delete: false };
   let anyAllScope = false;
+  let anyOwnScope = false;
   const scopeKeys = new Set<string>();
+  // Value-filter conditions are OR'd across granting roles (most-permissive
+  // union: a row visible under ANY granting role stays visible), so merge = concat.
+  const scopeFilters: ScopeFilter[] = [];
   let hiddenStatus: number[] | null = null;
   let hiddenRow: number[] | null = null;
   // Cosmetic column hides are restrictions: a column stays hidden only if EVERY
@@ -64,8 +70,10 @@ function mergeRecordPerms(rps: RecordPermission[]): RecordPermission {
   for (const rp of rps) {
     if (rp.view !== true) continue;
     // Missing/`"all"` scope means full visibility for that role.
-    if (rp.scope !== "own") anyAllScope = true;
+    if (rp.scope !== "own" && rp.scope !== "filter") anyAllScope = true;
+    if (rp.scope === "own") anyOwnScope = true;
     for (const k of rp.scopeFieldKeys ?? []) scopeKeys.add(k);
+    for (const f of rp.scopeFilters ?? []) scopeFilters.push(f);
     const hs = intIds(rp.hiddenStatusIds);
     hiddenStatus = hiddenStatus === null ? hs : intersectIds(hiddenStatus, hs);
     const hr = intIds(rp.hiddenRowStatusIds);
@@ -75,8 +83,9 @@ function mergeRecordPerms(rps: RecordPermission[]): RecordPermission {
     const hac = rp.hideActionsColumn === true;
     hideActionsCol = hideActionsCol === null ? hac : hideActionsCol && hac;
   }
-  out.scope = anyAllScope ? "all" : "own";
-  if (out.scope === "own" && scopeKeys.size > 0) out.scopeFieldKeys = [...scopeKeys];
+  out.scope = anyAllScope ? "all" : anyOwnScope || scopeFilters.length === 0 ? "own" : "filter";
+  if (out.scope !== "all" && scopeKeys.size > 0) out.scopeFieldKeys = [...scopeKeys];
+  if (out.scope !== "all" && scopeFilters.length > 0) out.scopeFilters = scopeFilters;
   if (hiddenStatus && hiddenStatus.length > 0) out.hiddenStatusIds = hiddenStatus;
   if (hiddenRow && hiddenRow.length > 0) out.hiddenRowStatusIds = hiddenRow;
   if (hideStatusCol) out.hideStatusColumn = true;
@@ -394,7 +403,23 @@ export async function assertRecord(
 export function effectiveScope(perms: RolePermissions, entityId: number): { scope: RecordScope; scopeFieldKeys: string[] } {
   if (perms.superAdmin) return { scope: "all", scopeFieldKeys: [] };
   const rp = perms.records[String(entityId)];
-  return { scope: rp?.scope === "own" ? "own" : "all", scopeFieldKeys: rp?.scopeFieldKeys ?? [] };
+  return resolveScopeEntry(rp);
+}
+
+/**
+ * Normalize one stored record-permission entry into the enforcement shape.
+ * The "filter" scope reuses the ENTIRE "own" enforcement pipeline: each value
+ * condition is encoded as a synthetic scopeFieldKeys entry (decoded back in
+ * routes/own-scope.ts), and the returned scope is reported as "own" so every
+ * existing `scope === "own"` enforcement site applies it. "filter" with no
+ * conditions resolves to own+[] = deny (never fail-open). A role may also
+ * carry scopeFilters alongside "own" (merged multi-role perms do): conditions
+ * and owner keys OR together, mirroring the most-permissive union.
+ */
+function resolveScopeEntry(rp: RecordPermission | undefined): { scope: RecordScope; scopeFieldKeys: string[] } {
+  if (!rp || (rp.scope !== "own" && rp.scope !== "filter")) return { scope: "all", scopeFieldKeys: [] };
+  const ownKeys = rp.scope === "own" || (rp.scopeFilters?.length ?? 0) === 0 ? (rp.scopeFieldKeys ?? []) : [];
+  return { scope: "own", scopeFieldKeys: [...ownKeys, ...encodeScopeFilters(rp.scopeFilters)] };
 }
 
 /**
@@ -422,10 +447,7 @@ export async function effectiveScopeFor(
     if (mirrorEntityId === entityId) {
       const override = perms.records[mirrorPermKey(pageId)];
       if (override) {
-        return {
-          scope: override.scope === "own" ? "own" : "all",
-          scopeFieldKeys: override.scopeFieldKeys ?? [],
-        };
+        return resolveScopeEntry(override);
       }
     }
   }

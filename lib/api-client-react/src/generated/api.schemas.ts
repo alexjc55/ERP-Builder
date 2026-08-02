@@ -341,7 +341,13 @@ export type RecordScope = typeof RecordScope[keyof typeof RecordScope];
 export const RecordScope = {
   all: 'all',
   own: 'own',
+  filter: 'filter',
 } as const;
+
+export interface ScopeFilter {
+  fieldKey: string;
+  values: string[];
+}
 
 export interface RecordPermission {
   view: boolean;
@@ -350,6 +356,7 @@ export interface RecordPermission {
   delete: boolean;
   scope?: RecordScope;
   scopeFieldKeys?: string[];
+  scopeFilters?: ScopeFilter[];
   hiddenStatusIds?: number[];
   hiddenRowStatusIds?: number[];
   /** Cosmetic per-role hide of the whole "Status" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses). */

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RecordScope } from './recordScope';
+import type { ScopeFilter } from './scopeFilter';
 
 export interface RecordPermission {
   view: boolean;
@@ -14,6 +15,7 @@ export interface RecordPermission {
   delete: boolean;
   scope?: RecordScope;
   scopeFieldKeys?: string[];
+  scopeFilters?: ScopeFilter[];
   hiddenStatusIds?: number[];
   hiddenRowStatusIds?: number[];
   /** Cosmetic per-role hide of the whole "Status" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses). */

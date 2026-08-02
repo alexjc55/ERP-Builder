@@ -274,6 +274,7 @@ export * from './roleInput';
 export * from './rolePermissions';
 export * from './rolePermissionsRecords';
 export * from './roleUpdate';
+export * from './scopeFilter';
 export * from './selectOption';
 export * from './sortSpec';
 export * from './sortSpecDirection';

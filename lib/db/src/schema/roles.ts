@@ -3,7 +3,19 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 /** Row-visibility scope for a role's records on an entity. */
-export type RecordScope = "all" | "own";
+export type RecordScope = "all" | "own" | "filter";
+
+/**
+ * One value-filter condition for the "filter" row scope: the row is visible
+ * when the record's value for `fieldKey` (text form, `values_json ->> key`)
+ * is one of `values`. Several conditions in `scopeFilters` are OR'd (a row
+ * matching ANY condition is visible) — mirroring how several owner fields
+ * behave under the "own" scope.
+ */
+export interface ScopeFilter {
+  fieldKey: string;
+  values: string[];
+}
 
 /** Per-entity record CRUD rights (keyed by entityId in RolePermissions.records). */
 export interface RecordPermission {
@@ -19,6 +31,13 @@ export interface RecordPermission {
   scope?: RecordScope;
   /** User-type field keys that designate ownership when scope === "own". */
   scopeFieldKeys?: string[];
+  /**
+   * Value conditions restricting visible rows when scope === "filter" (hard
+   * server boundary, enforced on reads AND single-record writes exactly like
+   * "own"). Empty/missing with scope "filter" means NO rows (deny, never
+   * fail-open). superAdmin bypasses.
+   */
+  scopeFilters?: ScopeFilter[];
   /**
    * Per-entity status visibility for this role (records UI). Both arrays are
    * SPARSE — they list only the exceptions, so any status not listed (including

@@ -12,4 +12,5 @@ export type RecordScope = typeof RecordScope[keyof typeof RecordScope];
 export const RecordScope = {
   all: 'all',
   own: 'own',
+  filter: 'filter',
 } as const;

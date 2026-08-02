@@ -104,7 +104,7 @@ export function relationDirection(
  * literal table/column names; only the relationId, relatedFieldKey and any
  * filter values are bound params.
  */
-function relationValueExists(meta: RelationFilterMeta, valueCond: (linkedVal: SQL) => SQL): SQL {
+export function relationValueExists(meta: RelationFilterMeta, valueCond: (linkedVal: SQL) => SQL): SQL {
   const baseCol = meta.direction === "source" ? sql`rl.source_record_id` : sql`rl.target_record_id`;
   const linkedCol = meta.direction === "source" ? sql`rl.target_record_id` : sql`rl.source_record_id`;
   const linkedVal = sql`(lt.values_json ->> ${meta.relatedFieldKey})`;

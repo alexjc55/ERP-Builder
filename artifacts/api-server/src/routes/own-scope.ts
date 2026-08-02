@@ -1,6 +1,7 @@
 import { sql, and, or, eq, inArray, type SQL } from "drizzle-orm";
-import { db, entityRecordsTable, relationsTable, type EntityField } from "@workspace/db";
-import { relationDirection, ownRelationExists, type RelationFilterMeta } from "./record-query";
+import { db, entityRecordsTable, relationsTable, type EntityField, type ScopeFilter } from "@workspace/db";
+import { decodeScopeFilter } from "../lib/scope-filter";
+import { relationDirection, ownRelationExists, relationValueExists, type RelationFilterMeta } from "./record-query";
 
 /**
  * Resolve filter/own-scope metadata for the `relation` & `lookup` fields among
@@ -53,11 +54,17 @@ export async function buildRelationMeta(
 function partitionOwnerFields(
   scopeFieldKeys: string[],
   fields: EntityField[],
-): { native: string[]; relation: EntityField[] } {
+): { native: string[]; relation: EntityField[]; filters: ScopeFilter[] } {
   const byKey = new Map(fields.map((f) => [f.fieldKey, f]));
   const native: string[] = [];
   const relation: EntityField[] = [];
+  const filters: ScopeFilter[] = [];
   for (const k of scopeFieldKeys) {
+    const fl = decodeScopeFilter(k);
+    if (fl) {
+      filters.push(fl);
+      continue;
+    }
     const f = byKey.get(k);
     if (
       f &&
@@ -70,7 +77,63 @@ function partitionOwnerFields(
       native.push(k);
     }
   }
-  return { native, relation };
+  return { native, relation, filters };
+}
+
+/**
+ * SQL predicate for one value-filter condition of the "filter" row scope:
+ * the record's text value for the field is one of the configured values.
+ * NULL/absent values never match (a filter scope only shows explicit matches).
+ * The condition compares `values_json ->> key` (text), matching the in-memory
+ * re-check in {@link isRecordOwned} exactly.
+ */
+function scopeFilterClause(f: ScopeFilter): SQL | null {
+  const vals = f.values.map((v) => String(v));
+  if (vals.length === 0) return null;
+  return inArray(sql`(${entityRecordsTable.valuesJson} ->> ${f.fieldKey})`, vals);
+}
+
+/** In-memory equivalent of {@link scopeFilterClause} for single-record re-checks. */
+function recordMatchesScopeFilter(values: Record<string, unknown>, f: ScopeFilter): boolean {
+  if (f.values.length === 0) return false;
+  const v = values[f.fieldKey];
+  if (v == null) return false;
+  return f.values.some((x) => String(x) === String(v));
+}
+
+/**
+ * Split value-filter conditions by where the filtered value lives: NATIVE
+ * (scalar in this record's values_json) vs RELATION (the condition's field is
+ * a relation/lookup field, so the value is the linked record's projected
+ * `relatedFieldKey` — matched via EXISTS through record_links, exactly like
+ * relation owner fields).
+ */
+function partitionScopeFilters(
+  filters: ScopeFilter[],
+  fields: EntityField[],
+): { nativeFilters: ScopeFilter[]; relationFilters: { field: EntityField; filter: ScopeFilter }[] } {
+  const byKey = new Map(fields.map((f) => [f.fieldKey, f]));
+  const nativeFilters: ScopeFilter[] = [];
+  const relationFilters: { field: EntityField; filter: ScopeFilter }[] = [];
+  for (const fl of filters) {
+    const f = byKey.get(fl.fieldKey);
+    if (
+      f &&
+      (f.fieldType === "relation" || f.fieldType === "lookup") &&
+      f.relationConfigJson?.relationId != null &&
+      !!f.relationConfigJson?.relatedFieldKey
+    ) {
+      relationFilters.push({ field: f, filter: fl });
+    } else {
+      nativeFilters.push(fl);
+    }
+  }
+  return { nativeFilters, relationFilters };
+}
+
+/** EXISTS clause: the linked record's projected value is one of the filter values. */
+function relationFilterExists(meta: RelationFilterMeta, values: string[]): SQL {
+  return relationValueExists(meta, (v) => inArray(v, values.map((x) => String(x))));
 }
 
 /**
@@ -93,15 +156,24 @@ export async function ownScopeWhere(
   fields: EntityField[],
 ): Promise<SQL> {
   if (scopeFieldKeys.length === 0) return sql`false`;
-  const { native, relation } = partitionOwnerFields(scopeFieldKeys, fields);
+  const { native, relation, filters } = partitionOwnerFields(scopeFieldKeys, fields);
   const clauses: SQL[] = native.map(
     (k) => sql`(${entityRecordsTable.valuesJson} ->> ${k}) = ${String(userId)}`,
   );
-  if (relation.length > 0) {
-    const meta = await buildRelationMeta(entityId, relation);
+  const { nativeFilters, relationFilters } = partitionScopeFilters(filters, fields);
+  for (const fl of nativeFilters) {
+    const c = scopeFilterClause(fl);
+    if (c) clauses.push(c);
+  }
+  if (relation.length > 0 || relationFilters.length > 0) {
+    const meta = await buildRelationMeta(entityId, [...relation, ...relationFilters.map((rf) => rf.field)]);
     for (const f of relation) {
       const m = meta.get(f.fieldKey);
       if (m) clauses.push(ownRelationExists(m, userId));
+    }
+    for (const rf of relationFilters) {
+      const m = meta.get(rf.field.fieldKey);
+      if (m && rf.filter.values.length > 0) clauses.push(relationFilterExists(m, rf.filter.values));
     }
   }
   if (clauses.length === 0) return sql`false`;
@@ -127,8 +199,12 @@ export async function isRecordOwned(
   fields: EntityField[],
 ): Promise<boolean> {
   if (scopeFieldKeys.length === 0) return false;
-  const { native, relation } = partitionOwnerFields(scopeFieldKeys, fields);
+  const { native, relation, filters } = partitionOwnerFields(scopeFieldKeys, fields);
   const values = (record.valuesJson as Record<string, unknown>) ?? {};
+  const { nativeFilters, relationFilters } = partitionScopeFilters(filters, fields);
+  for (const fl of nativeFilters) {
+    if (recordMatchesScopeFilter(values, fl)) return true;
+  }
   // Compare as text to match ownScopeWhere's SQL `values_json ->> key = <userId>`
   // exactly (the `->>` operator yields the textual representation). A numeric
   // compare here would diverge for odd stored forms like "01"/"1.0", letting the
@@ -137,12 +213,16 @@ export async function isRecordOwned(
     const v = values[k];
     if (v != null && String(v) === String(userId)) return true;
   }
-  if (relation.length === 0) return false;
-  const meta = await buildRelationMeta(entityId, relation);
+  if (relation.length === 0 && relationFilters.length === 0) return false;
+  const meta = await buildRelationMeta(entityId, [...relation, ...relationFilters.map((rf) => rf.field)]);
   const relClauses: SQL[] = [];
   for (const f of relation) {
     const m = meta.get(f.fieldKey);
     if (m) relClauses.push(ownRelationExists(m, userId));
+  }
+  for (const rf of relationFilters) {
+    const m = meta.get(rf.field.fieldKey);
+    if (m && rf.filter.values.length > 0) relClauses.push(relationFilterExists(m, rf.filter.values));
   }
   if (relClauses.length === 0) return false;
   const [row] = await db

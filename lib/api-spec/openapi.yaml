@@ -4266,7 +4266,18 @@ components:
     # ROLES
     RecordScope:
       type: string
-      enum: [all, own]
+      enum: [all, own, filter]
+
+    ScopeFilter:
+      type: object
+      required: [fieldKey, values]
+      properties:
+        fieldKey:
+          type: string
+        values:
+          type: array
+          items:
+            type: string
 
     RecordPermission:
       type: object
@@ -4286,6 +4297,10 @@ components:
           type: array
           items:
             type: string
+        scopeFilters:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScopeFilter"
         hiddenStatusIds:
           type: array
           items:
