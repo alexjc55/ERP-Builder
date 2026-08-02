@@ -42,6 +42,15 @@ SELECT 72, 'order_project_manager',
        '{"relationId": 25, "relatedFieldKey": "project_manager"}'::jsonb
 WHERE NOT EXISTS (SELECT 1 FROM entity_fields WHERE entity_id = 72 AND field_key = 'order_project_manager');
 
+-- 3б. Перенос условного форматирования со старого поля изделий на новое lookup-поле
+UPDATE entity_fields
+SET format_rules_json = (
+      SELECT format_rules_json FROM entity_fields
+      WHERE entity_id = 72 AND field_key = 'project_manager'
+    ),
+    updated_at = now()
+WHERE entity_id = 72 AND field_key = 'order_project_manager';
+
 -- 4. Колонка на зеркальных страницах Изделий
 UPDATE pages
 SET mirror_field_keys_json = mirror_field_keys_json || '["order_project_manager"]'::jsonb,
