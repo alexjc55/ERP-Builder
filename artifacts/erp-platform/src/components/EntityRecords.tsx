@@ -1901,6 +1901,21 @@ export function EntityRecords({
   const visibleFormFields = fields.filter(
     (f: Field) => fieldAccess(f, entityId, permPageId) !== "hidden" && roleDisplayVisible(f),
   );
+  // Per-role display-only "view": when EVERY assigned role explicitly limits the
+  // field to view/hidden, treat it as read-only in the UI even for superAdmin
+  // (same philosophy as the display-only hide; server access for super unchanged).
+  const roleDisplayView = (f: Field) =>
+    userRoleIds.length > 0 &&
+    userRoleIds.every((rid) => {
+      const e = f.permissionsJson?.[String(rid)];
+      return e === "view" || e === "hidden";
+    });
+  // Effective field access for editability decisions on this page (inline cells,
+  // add-row, relation persist) — fieldAccess capped by the display-only view rule.
+  const effFieldAccess = (f: Field) => {
+    const a = fieldAccess(f, entityId, permPageId);
+    return a === "edit" && roleDisplayView(f) ? "view" : a;
+  };
   // Map relationId → the relation FIELD key that carries the chosen linked record.
   // A lookup field projects from the SAME relation, so during a CREATE flow (no
   // base record yet) we resolve which linked record id was picked to preview its
@@ -3427,7 +3442,7 @@ export function EntityRecords({
   const persistPendingRelationLinks = async (recordId: number, src: FormState) => {
     for (const rf of fields) {
       if (rf.fieldType !== "relation") continue;
-      if (fieldAccess(rf, entityId, permPageId) !== "edit") continue;
+      if (effFieldAccess(rf) !== "edit") continue;
       const v = src[rf.fieldKey];
       const linkedRecordId = typeof v === "number" ? v : v != null && v !== "" ? Number(v) : null;
       if (linkedRecordId == null || !Number.isFinite(linkedRecordId)) continue;
@@ -3629,7 +3644,7 @@ export function EntityRecords({
 
   const commitNewRow = () => {
     const valuesJson = formToValues(
-      visibleFormFields.filter((f: Field) => fieldAccess(f, entityId, permPageId) === "edit"),
+      visibleFormFields.filter((f: Field) => effFieldAccess(f) === "edit"),
       newRow,
     );
     const statusValue = newRowStatus === NO_STATUS ? null : Number(newRowStatus);
@@ -5479,7 +5494,7 @@ export function EntityRecords({
                         }
                         const f = col.field;
                         const editable =
-                          fieldAccess(f, entityId, permPageId) === "edit" &&
+                          effFieldAccess(f) === "edit" &&
                           f.fieldType !== "function" &&
                           f.fieldType !== "lookup";
                         const addRowRelInfo = relCreateDepInfo(f, newRow);
@@ -5684,7 +5699,7 @@ export function EntityRecords({
                         {orderedColumns.map((col) => {
                           if (col.kind === "entity") {
                           const f = col.field;
-                          const access = fieldAccess(f, entityId, permPageId);
+                          const access = effFieldAccess(f);
                           const isFunction = f.fieldType === "function";
                           // A lockAfterCreate field stops being editable once it has a
                           // value (mirrors the hard server boundary on records update).
@@ -7178,7 +7193,22 @@ function RecordFormBody({
 }) {
   const t = useT();
   const ml = useML();
-  const { fieldAccess, canRecord } = useAuth();
+  const { fieldAccess, canRecord, user: formUser } = useAuth();
+  // Per-role display-only restriction (applies even to superAdmin, mirroring the
+  // display-only "hidden" rule): when EVERY assigned role explicitly limits the
+  // field to view/hidden, render it read-only. Server access for super unchanged.
+  const formUserRoleIds: number[] =
+    formUser?.roleIds && formUser.roleIds.length > 0
+      ? formUser.roleIds
+      : formUser?.roleId != null
+        ? [formUser.roleId]
+        : [];
+  const roleDisplayView = (f: Field) =>
+    formUserRoleIds.length > 0 &&
+    formUserRoleIds.every((rid) => {
+      const e = f.permissionsJson?.[String(rid)];
+      return e === "view" || e === "hidden";
+    });
   const userNames = useMemo(
     () => new Map<number, string>(userOptions.map((u: UserOption) => [u.id, u.name])),
     [userOptions],
@@ -7356,7 +7386,8 @@ function RecordFormBody({
   return (
     <>
       {formFields.map((field: Field) => {
-        const access = fieldAccess(field, entityId, pageId);
+        const rawAccess = fieldAccess(field, entityId, pageId);
+        const access = rawAccess === "edit" && roleDisplayView(field) ? "view" : rawAccess;
         const relVal = relByField.get(field.fieldKey);
         const callerLocked = lockedFieldKeys?.has(field.fieldKey) === true;
         const relLocked =
