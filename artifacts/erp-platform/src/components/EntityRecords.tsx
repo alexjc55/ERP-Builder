@@ -7656,8 +7656,15 @@ function QuickCreateRelatedRecordDialog({
 
   // Fields editable in the quick-create form: skip read-only/computed types and
   // any relation field (relations are linked separately, not stored in values).
+  // Also honour the field's active toggle and per-role field permissions —
+  // parity with the main record form (visibleFormFields).
+  const { fieldAccess: quickFieldAccess } = useAuth();
   const editableFields = relFields.filter(
-    (f: Field) => f.fieldType !== "relation" && f.fieldType !== "function",
+    (f: Field) =>
+      f.isActive &&
+      f.fieldType !== "relation" &&
+      f.fieldType !== "function" &&
+      quickFieldAccess(f, relatedEntityId) !== "hidden",
   );
 
   useEffect(() => {
