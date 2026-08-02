@@ -1996,10 +1996,14 @@ export function EntityRecords({
   const dropHidden = (list: Status[], keepId?: number | null): Status[] =>
     list.filter((s: Status) => !hiddenStatusIds.has(s.id) || s.id === keepId);
   // Quick-filter chips: a role can neither filter by hidden-picker statuses nor by
-  // hidden-row statuses (the latter have no rows to surface anyway).
-  const filterableStatuses = statuses.filter(
-    (s: Status) => !hiddenStatusIds.has(s.id) && !hiddenRowStatusIds.has(s.id),
-  );
+  // hidden-row statuses (the latter have no rows to surface anyway). When the
+  // status column is hidden entirely (role flag or page-level), the status
+  // quick-filter disappears with it — filtering by an invisible column only
+  // confuses users (and cosmetically re-surfaces a hidden concept).
+  const filterableStatuses =
+    hideStatusColumn || pageHideStatusColumn
+      ? []
+      : statuses.filter((s: Status) => !hiddenStatusIds.has(s.id) && !hiddenRowStatusIds.has(s.id));
   // When the entity's default status is hidden from this role's picker, the create
   // form falls back to NO_STATUS. The server only assigns the (hidden) default
   // when statusId is OMITTED — a null value is stored as an explicit no-status —
