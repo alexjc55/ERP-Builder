@@ -96,4 +96,30 @@ WHERE id IN (65, 66, 77, 84)
   AND mirror_field_keys_json IS NOT NULL
   AND NOT (mirror_field_keys_json @> '["order_project_manager"]'::jsonb);
 
+-- 5. Удаление старого поля «Управляющий проектами» из Изделий.
+-- Значения в values_json записей физически остаются (архив); роли/автоматизации
+-- на поле не ссылаются (проверено). Сначала подчищаем ссылки на страницах.
+UPDATE pages
+SET mirror_field_keys_json = (
+      SELECT COALESCE(jsonb_agg(v ORDER BY ord), '[]'::jsonb)
+      FROM jsonb_array_elements(mirror_field_keys_json) WITH ORDINALITY t(v, ord)
+      WHERE v <> '"project_manager"'::jsonb
+    ),
+    updated_at = now()
+WHERE mirror_entity_id = 72
+  AND mirror_field_keys_json @> '["project_manager"]'::jsonb;
+
+UPDATE pages
+SET mirror_column_order_json = (
+      SELECT COALESCE(jsonb_agg(v ORDER BY ord), '[]'::jsonb)
+      FROM jsonb_array_elements(mirror_column_order_json) WITH ORDINALITY t(v, ord)
+      WHERE v <> '"e:project_manager"'::jsonb
+    ),
+    updated_at = now()
+WHERE mirror_entity_id = 72
+  AND mirror_column_order_json IS NOT NULL
+  AND mirror_column_order_json @> '["e:project_manager"]'::jsonb;
+
+DELETE FROM entity_fields WHERE entity_id = 72 AND field_key = 'project_manager' AND field_type = 'user';
+
 COMMIT;
