@@ -1890,7 +1890,17 @@ export function EntityRecords({
     .filter((f: Field) => !mirrorKeySet || mirrorKeySet.has(f.fieldKey))
     .sort((a: Field, b: Field) => a.sortOrder - b.sortOrder);
   // Fields the current user is allowed to see (not hidden by field-level perms).
-  const visibleFormFields = fields.filter((f: Field) => fieldAccess(f, entityId, permPageId) !== "hidden");
+  // Per-role display-only hide: a field explicitly marked "hidden" for EVERY
+  // assigned role disappears for that user everywhere in the UI — including
+  // superAdmin and including create/edit forms (user preference, 2026-08).
+  // The server boundary is unchanged: for super this remains cosmetic.
+  const roleDisplayVisible = (f: Field) => {
+    if (userRoleIds.length === 0) return true;
+    return userRoleIds.some((rid) => f.permissionsJson?.[String(rid)] !== "hidden");
+  };
+  const visibleFormFields = fields.filter(
+    (f: Field) => fieldAccess(f, entityId, permPageId) !== "hidden" && roleDisplayVisible(f),
+  );
   // Map relationId → the relation FIELD key that carries the chosen linked record.
   // A lookup field projects from the SAME relation, so during a CREATE flow (no
   // base record yet) we resolve which linked record id was picked to preview its
@@ -1920,10 +1930,7 @@ export function EntityRecords({
   // display-only hide still applies even to superAdmin because it reads the
   // per-role config directly (not `fieldAccess`, which gives super a pass) — the
   // field stays editable in the record dialog and the server bypass is unchanged.
-  const tableFields = visibleFormFields.filter((f: Field) => {
-    if (userRoleIds.length === 0) return true;
-    return userRoleIds.some((rid) => f.permissionsJson?.[String(rid)] !== "hidden");
-  });
+  const tableFields = visibleFormFields;
   // Fields opted-in to filtering (the "участвует в фильтре" flag), restricted to fields the
   // role may see — a hidden field must never surface as a filter.
   const filterableFields = visibleFormFields.filter((f: Field) => f.isFilterable);
@@ -7658,13 +7665,23 @@ function QuickCreateRelatedRecordDialog({
   // any relation field (relations are linked separately, not stored in values).
   // Also honour the field's active toggle and per-role field permissions —
   // parity with the main record form (visibleFormFields).
-  const { fieldAccess: quickFieldAccess } = useAuth();
+  const { fieldAccess: quickFieldAccess, user: quickUser } = useAuth();
+  // Same per-role display-only hide as the main form: a field explicitly
+  // marked "hidden" for every assigned role is dropped even for superAdmin.
+  const quickRoleIds: number[] =
+    quickUser?.roleIds && quickUser.roleIds.length > 0
+      ? quickUser.roleIds
+      : quickUser?.roleId != null
+        ? [quickUser.roleId]
+        : [];
   const editableFields = relFields.filter(
     (f: Field) =>
       f.isActive &&
       f.fieldType !== "relation" &&
       f.fieldType !== "function" &&
-      quickFieldAccess(f, relatedEntityId) !== "hidden",
+      quickFieldAccess(f, relatedEntityId) !== "hidden" &&
+      (quickRoleIds.length === 0 ||
+        quickRoleIds.some((rid) => f.permissionsJson?.[String(rid)] !== "hidden")),
   );
 
   useEffect(() => {
