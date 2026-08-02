@@ -5092,7 +5092,7 @@ export function EntityRecords({
                     </tr>
                   )}
                   <tr
-                    className={cn("erp-main-header border-b border-slate-100 bg-slate-50", boldHeader && "bg-slate-200 text-slate-800 font-semibold border-b-2 border-slate-300")}
+                    className={cn("erp-main-header border-b border-slate-100 bg-slate-50 text-xs leading-snug", boldHeader && "bg-slate-200 text-slate-800 font-semibold border-b-2 border-slate-300")}
                     style={headerColor ? { backgroundColor: headerColor } : undefined}
                   >
                     {showBulk && (
@@ -5211,7 +5211,7 @@ export function EntityRecords({
                         ref={(el) => { pinHeaderRefs.current[pinKey] = el; }}
                         title={!setupMode && groupName ? groupName : undefined}
                         className={cn(
-                          "relative align-top text-center px-4 py-3 font-medium text-slate-600 break-words",
+                          "relative align-top text-center px-4 py-2 font-medium text-slate-600 break-words",
                           // Setup-mode ONLY: tint page-local headers on a mirror page so
                           // admins can tell them apart from source-entity columns. Normal
                           // view stays byte-for-byte identical (page-local invariant).
@@ -5423,7 +5423,7 @@ export function EntityRecords({
                       </th>
                     )}
                     {showActionsColumn && (setupMode ? (
-                      <th className="align-top text-center px-4 py-3 font-medium text-slate-600">
+                      <th className="align-top text-center px-4 py-2 font-medium text-slate-600">
                         <div className="inline-flex items-center gap-2">
                           {!isMirror && (
                             <Button
@@ -5451,7 +5451,7 @@ export function EntityRecords({
                         </div>
                       </th>
                     ) : (
-                      <th className="align-top text-center px-4 py-3 font-medium text-slate-600">{t("records.actions", "Действия")}</th>
+                      <th className="align-top text-center px-4 py-2 font-medium text-slate-600">{t("records.actions", "Действия")}</th>
                     ))}
                   </tr>
                   {/* The "add row" link lives INSIDE the sticky thead, so it is
