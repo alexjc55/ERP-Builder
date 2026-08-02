@@ -4278,6 +4278,11 @@ components:
           type: array
           items:
             type: string
+        pageId:
+          type: integer
+          description: >-
+            When set, fieldKey names a PAGE-LOCAL field of this mirror page
+            (value stored in page_record_values), not an entity field.
 
     RecordPermission:
       type: object
@@ -7750,6 +7755,14 @@ components:
             list. AND-combined; never widens beyond the view's hard filter.
           items:
             type: integer
+        excludePageLocalFilters:
+          type: array
+          description: >-
+            SOFT exclusions on PAGE-LOCAL fields (values in page_record_values;
+            requires pageId). NULL-safe like excludeFilters: rows with no stored
+            value are kept. Always AND-combined; never widens.
+          items:
+            $ref: "#/components/schemas/ExcludeFilter"
         sorts:
           type: array
           items:
@@ -7952,6 +7965,26 @@ components:
             revealable via "show hidden". Authored from the full status list.
           items:
             type: integer
+        pageFieldFilters:
+          type: object
+          description: >-
+            SOFT default filter on PAGE-LOCAL fields (mirror pages), keyed by
+            page-field fieldKey. Seeds the page-local filter dropdowns exactly
+            like fieldFilters seeds the entity ones.
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        excludePageFieldFilters:
+          type: object
+          description: >-
+            SOFT exclusions authored per PAGE-LOCAL select field: hide rows
+            whose page-local value is one of the listed values until the viewer
+            toggles "show hidden". Same semantics as excludeFieldFilters.
+          additionalProperties:
+            type: array
+            items:
+              type: string
 
     PageFilterValuesQuery:
       type: object

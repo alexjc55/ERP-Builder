@@ -9,4 +9,6 @@
 export interface ScopeFilter {
   fieldKey: string;
   values: string[];
+  /** When set, fieldKey names a PAGE-LOCAL field of this mirror page (value stored in page_record_values), not an entity field. */
+  pageId?: number;
 }

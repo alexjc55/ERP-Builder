@@ -1,7 +1,7 @@
 import { sql, and, or, eq, inArray, type SQL } from "drizzle-orm";
 import { db, entityRecordsTable, relationsTable, type EntityField, type ScopeFilter } from "@workspace/db";
 import { decodeScopeFilter } from "../lib/scope-filter";
-import { relationDirection, ownRelationExists, relationValueExists, type RelationFilterMeta } from "./record-query";
+import { relationDirection, ownRelationExists, relationValueExists, pageLocalValueExpr, type RelationFilterMeta } from "./record-query";
 
 /**
  * Resolve filter/own-scope metadata for the `relation` & `lookup` fields among
@@ -111,11 +111,23 @@ function recordMatchesScopeFilter(values: Record<string, unknown>, f: ScopeFilte
 function partitionScopeFilters(
   filters: ScopeFilter[],
   fields: EntityField[],
-): { nativeFilters: ScopeFilter[]; relationFilters: { field: EntityField; filter: ScopeFilter }[] } {
+): {
+  nativeFilters: ScopeFilter[];
+  relationFilters: { field: EntityField; filter: ScopeFilter }[];
+  pageFilters: ScopeFilter[];
+} {
   const byKey = new Map(fields.map((f) => [f.fieldKey, f]));
   const nativeFilters: ScopeFilter[] = [];
   const relationFilters: { field: EntityField; filter: ScopeFilter }[] = [];
+  const pageFilters: ScopeFilter[] = [];
   for (const fl of filters) {
+    // PAGE-LOCAL condition: the value lives in page_record_values keyed by
+    // (fl.pageId, recordId) — matched via a correlated subquery, never against
+    // the entity's values_json. An unknown page field never matches (deny-safe).
+    if (fl.pageId != null) {
+      pageFilters.push(fl);
+      continue;
+    }
     const f = byKey.get(fl.fieldKey);
     if (
       f &&
@@ -128,7 +140,18 @@ function partitionScopeFilters(
       nativeFilters.push(fl);
     }
   }
-  return { nativeFilters, relationFilters };
+  return { nativeFilters, relationFilters, pageFilters };
+}
+
+/**
+ * SQL predicate for one PAGE-LOCAL value-filter condition: the (pageId, record)
+ * stored page value is one of the configured values. NULL / missing page value
+ * never matches (`IN` over a NULL subquery result is not true), matching the
+ * native scopeFilterClause semantics.
+ */
+function pageScopeFilterClause(f: ScopeFilter): SQL | null {
+  if (f.pageId == null || f.values.length === 0) return null;
+  return inArray(pageLocalValueExpr(f.pageId, f.fieldKey), f.values.map((v) => String(v)));
 }
 
 /** EXISTS clause: the linked record's projected value is one of the filter values. */
@@ -160,9 +183,13 @@ export async function ownScopeWhere(
   const clauses: SQL[] = native.map(
     (k) => sql`(${entityRecordsTable.valuesJson} ->> ${k}) = ${String(userId)}`,
   );
-  const { nativeFilters, relationFilters } = partitionScopeFilters(filters, fields);
+  const { nativeFilters, relationFilters, pageFilters } = partitionScopeFilters(filters, fields);
   for (const fl of nativeFilters) {
     const c = scopeFilterClause(fl);
+    if (c) clauses.push(c);
+  }
+  for (const fl of pageFilters) {
+    const c = pageScopeFilterClause(fl);
     if (c) clauses.push(c);
   }
   if (relation.length > 0 || relationFilters.length > 0) {
@@ -201,7 +228,7 @@ export async function isRecordOwned(
   if (scopeFieldKeys.length === 0) return false;
   const { native, relation, filters } = partitionOwnerFields(scopeFieldKeys, fields);
   const values = (record.valuesJson as Record<string, unknown>) ?? {};
-  const { nativeFilters, relationFilters } = partitionScopeFilters(filters, fields);
+  const { nativeFilters, relationFilters, pageFilters } = partitionScopeFilters(filters, fields);
   for (const fl of nativeFilters) {
     if (recordMatchesScopeFilter(values, fl)) return true;
   }
@@ -213,7 +240,7 @@ export async function isRecordOwned(
     const v = values[k];
     if (v != null && String(v) === String(userId)) return true;
   }
-  if (relation.length === 0 && relationFilters.length === 0) return false;
+  if (relation.length === 0 && relationFilters.length === 0 && pageFilters.length === 0) return false;
   const meta = await buildRelationMeta(entityId, [...relation, ...relationFilters.map((rf) => rf.field)]);
   const relClauses: SQL[] = [];
   for (const f of relation) {
@@ -223,6 +250,13 @@ export async function isRecordOwned(
   for (const rf of relationFilters) {
     const m = meta.get(rf.field.fieldKey);
     if (m && rf.filter.values.length > 0) relClauses.push(relationFilterExists(m, rf.filter.values));
+  }
+  // Page-local conditions live in page_record_values, so (like relation
+  // conditions) they need a DB probe scoped to this record id. The correlated
+  // subquery references the outer entity_records row, matching ownScopeWhere.
+  for (const fl of pageFilters) {
+    const c = pageScopeFilterClause(fl);
+    if (c) relClauses.push(c);
   }
   if (relClauses.length === 0) return false;
   const [row] = await db

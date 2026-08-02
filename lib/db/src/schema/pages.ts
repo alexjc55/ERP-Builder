@@ -118,6 +118,13 @@ export const pagesTable = pgTable("pages", {
   defaultQuickFilterJson: jsonb("default_quick_filter_json").$type<{
     fieldFilters?: Record<string, string[]>;
     statusIds?: number[];
+    /** SOFT default filter on PAGE-LOCAL fields (mirror pages), keyed by page-field fieldKey. */
+    pageFieldFilters?: Record<string, string[]>;
+    /** SOFT exclusions on entity select fields ("hide rows with these values until 'show hidden'"). */
+    excludeFieldFilters?: Record<string, string[]>;
+    excludeStatusIds?: number[];
+    /** SOFT exclusions on PAGE-LOCAL select fields, keyed by page-field fieldKey. */
+    excludePageFieldFilters?: Record<string, string[]>;
   }>(),
   // Per-page default sort (display-only). Overrides the entity/view default
   // sort for THIS page's records table, independently of the entity's views

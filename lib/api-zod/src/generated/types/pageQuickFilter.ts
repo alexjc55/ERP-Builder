@@ -6,7 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PageQuickFilterExcludeFieldFilters } from './pageQuickFilterExcludeFieldFilters';
+import type { PageQuickFilterExcludePageFieldFilters } from './pageQuickFilterExcludePageFieldFilters';
 import type { PageQuickFilterFieldFilters } from './pageQuickFilterFieldFilters';
+import type { PageQuickFilterPageFieldFilters } from './pageQuickFilterPageFieldFilters';
 
 /**
  * A page's SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view's hard filter boundary.
@@ -18,4 +20,8 @@ export interface PageQuickFilter {
   excludeFieldFilters?: PageQuickFilterExcludeFieldFilters;
   /** SOFT status exclusions: hide rows with these statuses by default, revealable via "show hidden". Authored from the full status list. */
   excludeStatusIds?: number[];
+  /** SOFT default filter on PAGE-LOCAL fields (mirror pages), keyed by page-field fieldKey. Seeds the page-local filter dropdowns exactly like fieldFilters seeds the entity ones. */
+  pageFieldFilters?: PageQuickFilterPageFieldFilters;
+  /** SOFT exclusions authored per PAGE-LOCAL select field: hide rows whose page-local value is one of the listed values until the viewer toggles "show hidden". Same semantics as excludeFieldFilters. */
+  excludePageFieldFilters?: PageQuickFilterExcludePageFieldFilters;
 }

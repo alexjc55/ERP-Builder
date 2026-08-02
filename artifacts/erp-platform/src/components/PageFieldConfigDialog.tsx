@@ -86,7 +86,22 @@ const FIELD_ACCESS_OPTIONS: { value: FieldAccess; label: string }[] = [
 // Page-local field types that can participate in the records filter bar. Limited
 // to types whose filter options are deterministic on the client (select options,
 // yes/no) or use a date range — so no dependent-values endpoint is needed.
-const PAGE_FILTERABLE_TYPES = new Set<FieldType>(["select", "boolean", "date", "datetime"]);
+// Value-backed page-local types the records query accepts on its
+// pageLocalFilters channel. MUST stay in lockstep with
+// PAGE_LOCAL_FILTERABLE_TYPES in api-server/src/routes/records.ts.
+const PAGE_FILTERABLE_TYPES = new Set<FieldType>([
+  "text",
+  "textarea",
+  "email",
+  "url",
+  "phone",
+  "select",
+  "number",
+  "boolean",
+  "date",
+  "datetime",
+  "user",
+]);
 
 function extractError(err: unknown): string | undefined {
   if (err && typeof err === "object") {

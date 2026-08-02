@@ -15,7 +15,8 @@ import type { ScopeFilter } from "@workspace/db";
  */
 const PREFIX = "__valfilter__:";
 
-export const encodeScopeFilter = (f: ScopeFilter): string => PREFIX + JSON.stringify({ k: f.fieldKey, v: f.values });
+export const encodeScopeFilter = (f: ScopeFilter): string =>
+  PREFIX + JSON.stringify({ k: f.fieldKey, v: f.values, ...(f.pageId != null ? { p: f.pageId } : {}) });
 
 export const encodeScopeFilters = (filters: ScopeFilter[] | undefined): string[] =>
   (filters ?? [])
@@ -26,9 +27,13 @@ export const encodeScopeFilters = (filters: ScopeFilter[] | undefined): string[]
 export function decodeScopeFilter(key: string): ScopeFilter | null {
   if (!key.startsWith(PREFIX)) return null;
   try {
-    const parsed = JSON.parse(key.slice(PREFIX.length)) as { k?: unknown; v?: unknown };
+    const parsed = JSON.parse(key.slice(PREFIX.length)) as { k?: unknown; v?: unknown; p?: unknown };
     if (typeof parsed.k !== "string" || !Array.isArray(parsed.v)) return null;
-    return { fieldKey: parsed.k, values: parsed.v.map((x) => String(x)) };
+    return {
+      fieldKey: parsed.k,
+      values: parsed.v.map((x) => String(x)),
+      ...(typeof parsed.p === "number" && Number.isInteger(parsed.p) ? { pageId: parsed.p } : {}),
+    };
   } catch {
     return null;
   }

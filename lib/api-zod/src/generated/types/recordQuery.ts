@@ -25,6 +25,8 @@ export interface RecordQuery {
   excludeFilters?: ExcludeFilter[];
   /** SOFT status exclusions (from the page default filter, unless the viewer toggled "show hidden"): hide rows whose statusId is in this list. AND-combined; never widens beyond the view's hard filter. */
   excludeStatusIds?: number[];
+  /** SOFT exclusions on PAGE-LOCAL fields (values in page_record_values; requires pageId). NULL-safe like excludeFilters: rows with no stored value are kept. Always AND-combined; never widens. */
+  excludePageLocalFilters?: ExcludeFilter[];
   sorts?: SortSpec[];
   search?: string;
   archived?: ArchiveFilter;

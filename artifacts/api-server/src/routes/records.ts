@@ -49,6 +49,7 @@ import { resolveCustomFilterClauses, type CustomFilterPick } from "./custom-filt
 import {
   buildRecordQuery,
   buildPageLocalCondition,
+  pageLocalValueExpr,
   relationLinkFilter,
   relationLinkedIdScalar,
   relationValueScalar,
@@ -890,6 +891,41 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         return;
       }
       clauses.push(r.sql);
+    }
+  }
+
+  // SOFT exclusions on PAGE-LOCAL fields (page default filter, "show hidden"
+  // off). Same semantics as entity excludeFilters: always AND-combined (never
+  // routed through the view conjunction, so they can only NARROW) and NULL-safe
+  // (a row with no stored page value is kept). Validated against the page's
+  // ACTIVE value-backed fields — no isFilterable/visibility gate, matching the
+  // entity exclusion path (exclusions are authored by a pages admin and only
+  // ever hide rows, so they cannot leak values).
+  const excludePageLocal = (body.data.excludePageLocalFilters ?? []) as { field: string; values?: string[] }[];
+  if (excludePageLocal.length > 0) {
+    const eplPageId = body.data.pageId;
+    if (eplPageId == null) {
+      res.status(400).json({ error: "excludePageLocalFilters require pageId" });
+      return;
+    }
+    const eplRows = await db
+      .select()
+      .from(pageFieldsTable)
+      .where(and(eq(pageFieldsTable.pageId, eplPageId), eq(pageFieldsTable.isActive, true)));
+    const eplByKey = new Map(
+      eplRows.filter((pf) => PAGE_LOCAL_FILTERABLE_TYPES.has(pf.fieldType)).map((pf) => [pf.fieldKey, pf] as const),
+    );
+    for (const ex of excludePageLocal) {
+      const pf = eplByKey.get(ex.field);
+      if (!pf) {
+        res.status(400).json({ error: `Unknown exclude page field "${ex.field}"` });
+        return;
+      }
+      const vals = (ex.values ?? []).filter((v) => v != null && v !== "").map((v) => String(v));
+      if (vals.length === 0) continue;
+      const expr = pageLocalValueExpr(eplPageId, ex.field);
+      const parts = vals.map((v) => sql`${v}`);
+      clauses.push(sql`(${expr} IS NULL OR ${expr} NOT IN (${sql.join(parts, sql`, `)}))`);
     }
   }
 

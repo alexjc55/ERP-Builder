@@ -347,6 +347,8 @@ export const RecordScope = {
 export interface ScopeFilter {
   fieldKey: string;
   values: string[];
+  /** When set, fieldKey names a PAGE-LOCAL field of this mirror page (value stored in page_record_values), not an entity field. */
+  pageId?: number;
 }
 
 export interface RecordPermission {
@@ -1118,6 +1120,16 @@ export type PageQuickFilterFieldFilters = {[key: string]: string[]};
 export type PageQuickFilterExcludeFieldFilters = {[key: string]: string[]};
 
 /**
+ * SOFT default filter on PAGE-LOCAL fields (mirror pages), keyed by page-field fieldKey. Seeds the page-local filter dropdowns exactly like fieldFilters seeds the entity ones.
+ */
+export type PageQuickFilterPageFieldFilters = {[key: string]: string[]};
+
+/**
+ * SOFT exclusions authored per PAGE-LOCAL select field: hide rows whose page-local value is one of the listed values until the viewer toggles "show hidden". Same semantics as excludeFieldFilters.
+ */
+export type PageQuickFilterExcludePageFieldFilters = {[key: string]: string[]};
+
+/**
  * A page's SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view's hard filter boundary.
  */
 export interface PageQuickFilter {
@@ -1127,6 +1139,10 @@ export interface PageQuickFilter {
   excludeFieldFilters?: PageQuickFilterExcludeFieldFilters;
   /** SOFT status exclusions: hide rows with these statuses by default, revealable via "show hidden". Authored from the full status list. */
   excludeStatusIds?: number[];
+  /** SOFT default filter on PAGE-LOCAL fields (mirror pages), keyed by page-field fieldKey. Seeds the page-local filter dropdowns exactly like fieldFilters seeds the entity ones. */
+  pageFieldFilters?: PageQuickFilterPageFieldFilters;
+  /** SOFT exclusions authored per PAGE-LOCAL select field: hide rows whose page-local value is one of the listed values until the viewer toggles "show hidden". Same semantics as excludeFieldFilters. */
+  excludePageFieldFilters?: PageQuickFilterExcludePageFieldFilters;
 }
 
 export type SortSpecDirection = typeof SortSpecDirection[keyof typeof SortSpecDirection];
@@ -3572,6 +3588,8 @@ export interface RecordQuery {
   excludeFilters?: ExcludeFilter[];
   /** SOFT status exclusions (from the page default filter, unless the viewer toggled "show hidden"): hide rows whose statusId is in this list. AND-combined; never widens beyond the view's hard filter. */
   excludeStatusIds?: number[];
+  /** SOFT exclusions on PAGE-LOCAL fields (values in page_record_values; requires pageId). NULL-safe like excludeFilters: rows with no stored value are kept. Always AND-combined; never widens. */
+  excludePageLocalFilters?: ExcludeFilter[];
   sorts?: SortSpec[];
   search?: string;
   archived?: ArchiveFilter;

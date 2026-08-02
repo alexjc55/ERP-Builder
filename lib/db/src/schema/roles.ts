@@ -15,6 +15,13 @@ export type RecordScope = "all" | "own" | "filter";
 export interface ScopeFilter {
   fieldKey: string;
   values: string[];
+  /**
+   * When set, `fieldKey` names a PAGE-LOCAL field of this mirror page (its
+   * value lives in page_record_values keyed by (pageId, recordId)), not an
+   * entity field. Configured on mirror-page scope overrides; an unknown page
+   * field simply never matches (deny-safe, like unknown entity keys).
+   */
+  pageId?: number;
 }
 
 /** Per-entity record CRUD rights (keyed by entityId in RolePermissions.records). */

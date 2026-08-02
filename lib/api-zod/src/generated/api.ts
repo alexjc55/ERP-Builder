@@ -182,7 +182,8 @@ export const LoginResponse = zod.object({
   "scopeFieldKeys": zod.array(zod.string()).optional(),
   "scopeFilters": zod.array(zod.object({
   "fieldKey": zod.string(),
-  "values": zod.array(zod.string())
+  "values": zod.array(zod.string()),
+  "pageId": zod.number().optional().describe('When set, fieldKey names a PAGE-LOCAL field of this mirror page (value stored in page_record_values), not an entity field.')
 })).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
@@ -256,7 +257,8 @@ export const GetMeResponse = zod.object({
   "scopeFieldKeys": zod.array(zod.string()).optional(),
   "scopeFilters": zod.array(zod.object({
   "fieldKey": zod.string(),
-  "values": zod.array(zod.string())
+  "values": zod.array(zod.string()),
+  "pageId": zod.number().optional().describe('When set, fieldKey names a PAGE-LOCAL field of this mirror page (value stored in page_record_values), not an entity field.')
 })).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
@@ -328,7 +330,8 @@ export const UpdateMeResponse = zod.object({
   "scopeFieldKeys": zod.array(zod.string()).optional(),
   "scopeFilters": zod.array(zod.object({
   "fieldKey": zod.string(),
-  "values": zod.array(zod.string())
+  "values": zod.array(zod.string()),
+  "pageId": zod.number().optional().describe('When set, fieldKey names a PAGE-LOCAL field of this mirror page (value stored in page_record_values), not an entity field.')
 })).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
@@ -398,7 +401,8 @@ export const ImpersonateResponse = zod.object({
   "scopeFieldKeys": zod.array(zod.string()).optional(),
   "scopeFilters": zod.array(zod.object({
   "fieldKey": zod.string(),
-  "values": zod.array(zod.string())
+  "values": zod.array(zod.string()),
+  "pageId": zod.number().optional().describe('When set, fieldKey names a PAGE-LOCAL field of this mirror page (value stored in page_record_values), not an entity field.')
 })).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
@@ -465,7 +469,8 @@ export const StopImpersonationResponse = zod.object({
   "scopeFieldKeys": zod.array(zod.string()).optional(),
   "scopeFilters": zod.array(zod.object({
   "fieldKey": zod.string(),
-  "values": zod.array(zod.string())
+  "values": zod.array(zod.string()),
+  "pageId": zod.number().optional().describe('When set, fieldKey names a PAGE-LOCAL field of this mirror page (value stored in page_record_values), not an entity field.')
 })).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
@@ -536,7 +541,8 @@ export const RedeemGuestLinkResponse = zod.object({
   "scopeFieldKeys": zod.array(zod.string()).optional(),
   "scopeFilters": zod.array(zod.object({
   "fieldKey": zod.string(),
-  "values": zod.array(zod.string())
+  "values": zod.array(zod.string()),
+  "pageId": zod.number().optional().describe('When set, fieldKey names a PAGE-LOCAL field of this mirror page (value stored in page_record_values), not an entity field.')
 })).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
@@ -950,7 +956,8 @@ export const ListRolesResponseItem = zod.object({
   "scopeFieldKeys": zod.array(zod.string()).optional(),
   "scopeFilters": zod.array(zod.object({
   "fieldKey": zod.string(),
-  "values": zod.array(zod.string())
+  "values": zod.array(zod.string()),
+  "pageId": zod.number().optional().describe('When set, fieldKey names a PAGE-LOCAL field of this mirror page (value stored in page_record_values), not an entity field.')
 })).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
@@ -1008,7 +1015,8 @@ export const CreateRoleBody = zod.object({
   "scopeFieldKeys": zod.array(zod.string()).optional(),
   "scopeFilters": zod.array(zod.object({
   "fieldKey": zod.string(),
-  "values": zod.array(zod.string())
+  "values": zod.array(zod.string()),
+  "pageId": zod.number().optional().describe('When set, fieldKey names a PAGE-LOCAL field of this mirror page (value stored in page_record_values), not an entity field.')
 })).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
@@ -1067,7 +1075,8 @@ export const GetRoleResponse = zod.object({
   "scopeFieldKeys": zod.array(zod.string()).optional(),
   "scopeFilters": zod.array(zod.object({
   "fieldKey": zod.string(),
-  "values": zod.array(zod.string())
+  "values": zod.array(zod.string()),
+  "pageId": zod.number().optional().describe('When set, fieldKey names a PAGE-LOCAL field of this mirror page (value stored in page_record_values), not an entity field.')
 })).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
@@ -1128,7 +1137,8 @@ export const UpdateRoleBody = zod.object({
   "scopeFieldKeys": zod.array(zod.string()).optional(),
   "scopeFilters": zod.array(zod.object({
   "fieldKey": zod.string(),
-  "values": zod.array(zod.string())
+  "values": zod.array(zod.string()),
+  "pageId": zod.number().optional().describe('When set, fieldKey names a PAGE-LOCAL field of this mirror page (value stored in page_record_values), not an entity field.')
 })).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
@@ -1179,7 +1189,8 @@ export const UpdateRoleResponse = zod.object({
   "scopeFieldKeys": zod.array(zod.string()).optional(),
   "scopeFilters": zod.array(zod.object({
   "fieldKey": zod.string(),
-  "values": zod.array(zod.string())
+  "values": zod.array(zod.string()),
+  "pageId": zod.number().optional().describe('When set, fieldKey names a PAGE-LOCAL field of this mirror page (value stored in page_record_values), not an entity field.')
 })).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
@@ -1309,7 +1320,9 @@ export const ListPagesResponseItem = zod.object({
   "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
   "statusIds": zod.array(zod.number()).optional(),
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
-  "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
+  "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.'),
+  "pageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT default filter on PAGE-LOCAL fields (mirror pages), keyed by page-field fieldKey. Seeds the page-local filter dropdowns exactly like fieldFilters seeds the entity ones.'),
+  "excludePageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per PAGE-LOCAL select field: hide rows whose page-local value is one of the listed values until the viewer toggles \"show hidden\". Same semantics as excludeFieldFilters.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "defaultSortJson": zod.union([zod.array(zod.object({
   "field": zod.string(),
@@ -1433,7 +1446,9 @@ export const CreatePageBody = zod.object({
   "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
   "statusIds": zod.array(zod.number()).optional(),
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
-  "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
+  "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.'),
+  "pageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT default filter on PAGE-LOCAL fields (mirror pages), keyed by page-field fieldKey. Seeds the page-local filter dropdowns exactly like fieldFilters seeds the entity ones.'),
+  "excludePageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per PAGE-LOCAL select field: hide rows whose page-local value is one of the listed values until the viewer toggles \"show hidden\". Same semantics as excludeFieldFilters.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "defaultSortJson": zod.union([zod.array(zod.object({
   "field": zod.string(),
@@ -1553,7 +1568,9 @@ export const GetPageResponse = zod.object({
   "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
   "statusIds": zod.array(zod.number()).optional(),
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
-  "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
+  "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.'),
+  "pageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT default filter on PAGE-LOCAL fields (mirror pages), keyed by page-field fieldKey. Seeds the page-local filter dropdowns exactly like fieldFilters seeds the entity ones.'),
+  "excludePageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per PAGE-LOCAL select field: hide rows whose page-local value is one of the listed values until the viewer toggles \"show hidden\". Same semantics as excludeFieldFilters.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "defaultSortJson": zod.union([zod.array(zod.object({
   "field": zod.string(),
@@ -1675,7 +1692,9 @@ export const UpdatePageBody = zod.object({
   "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
   "statusIds": zod.array(zod.number()).optional(),
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
-  "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
+  "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.'),
+  "pageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT default filter on PAGE-LOCAL fields (mirror pages), keyed by page-field fieldKey. Seeds the page-local filter dropdowns exactly like fieldFilters seeds the entity ones.'),
+  "excludePageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per PAGE-LOCAL select field: hide rows whose page-local value is one of the listed values until the viewer toggles \"show hidden\". Same semantics as excludeFieldFilters.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "defaultSortJson": zod.union([zod.array(zod.object({
   "field": zod.string(),
@@ -1787,7 +1806,9 @@ export const UpdatePageResponse = zod.object({
   "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
   "statusIds": zod.array(zod.number()).optional(),
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
-  "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.')
+  "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.'),
+  "pageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT default filter on PAGE-LOCAL fields (mirror pages), keyed by page-field fieldKey. Seeds the page-local filter dropdowns exactly like fieldFilters seeds the entity ones.'),
+  "excludePageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per PAGE-LOCAL select field: hide rows whose page-local value is one of the listed values until the viewer toggles \"show hidden\". Same semantics as excludeFieldFilters.')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "defaultSortJson": zod.union([zod.array(zod.object({
   "field": zod.string(),
@@ -5372,6 +5393,10 @@ export const QueryEntityRecordsBody = zod.object({
   "values": zod.array(zod.string())
 }).describe('A SOFT exclusion: hide rows whose `field` value is one of `values`. Always AND-combined with the rest of the query independently of the view\'s filterConjunction, and NULL-safe (rows with an empty value are kept). Only narrows the result — it can never reveal rows the view\'s hard filter hides. Driven by a page\'s default filter and toggled off by the viewer via \"show hidden\".')).optional().describe('SOFT per-field exclusions (from the page default filter, when the viewer has NOT toggled \"show hidden\"). Hides rows whose field value is one of the listed values. Always AND-combined and NULL-safe.'),
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions (from the page default filter, unless the viewer toggled \"show hidden\"): hide rows whose statusId is in this list. AND-combined; never widens beyond the view\'s hard filter.'),
+  "excludePageLocalFilters": zod.array(zod.object({
+  "field": zod.string(),
+  "values": zod.array(zod.string())
+}).describe('A SOFT exclusion: hide rows whose `field` value is one of `values`. Always AND-combined with the rest of the query independently of the view\'s filterConjunction, and NULL-safe (rows with an empty value are kept). Only narrows the result — it can never reveal rows the view\'s hard filter hides. Driven by a page\'s default filter and toggled off by the viewer via \"show hidden\".')).optional().describe('SOFT exclusions on PAGE-LOCAL fields (values in page_record_values; requires pageId). NULL-safe like excludeFilters: rows with no stored value are kept. Always AND-combined; never widens.'),
   "sorts": zod.array(zod.object({
   "field": zod.string(),
   "direction": zod.enum(['asc', 'desc']).default(queryEntityRecordsBodySortsItemDirectionDefault)

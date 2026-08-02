@@ -242,6 +242,22 @@ const SYSTEM_SORT_KEYS = new Set<string>([SYSTEM_SORT_CREATED_AT, SYSTEM_SORT_RE
 // no comparable value). relation/lookup ARE sortable: the server orders by the
 // single linked record's projected value.
 const NON_SORTABLE_FIELD_TYPES = new Set<string>(["function", "formula", "file"]);
+// Page-local field types the server accepts on the pageLocalFilters channel
+// (value-backed types stored in page_record_values). MUST stay in lockstep with
+// PAGE_LOCAL_FILTERABLE_TYPES in api-server/src/routes/records.ts.
+const PAGE_LOCAL_FILTERABLE_TYPES = new Set<string>([
+  "text",
+  "textarea",
+  "email",
+  "url",
+  "phone",
+  "select",
+  "number",
+  "boolean",
+  "date",
+  "datetime",
+  "user",
+]);
 
 function extractError(err: unknown): string | undefined {
   if (err && typeof err === "object") {
@@ -1377,8 +1393,10 @@ export function EntityRecords({
   defaultQuickFilter?: {
     fieldFilters?: Record<string, string[]>;
     statusIds?: number[];
+    pageFieldFilters?: Record<string, string[]>;
     excludeFieldFilters?: Record<string, string[]>;
     excludeStatusIds?: number[];
+    excludePageFieldFilters?: Record<string, string[]>;
   } | null;
   /**
    * Per-page default sort (from `page.defaultSortJson`). When non-empty it
@@ -1949,21 +1967,18 @@ export function EntityRecords({
   // Fields opted-in to filtering (the "участвует в фильтре" flag), restricted to fields the
   // role may see — a hidden field must never surface as a filter.
   const filterableFields = visibleFormFields.filter((f: Field) => f.isFilterable);
-  // Page-local fields opted into filtering, restricted to types whose filter UI is
-  // self-contained on the client (select options / yes-no / date range) so no
-  // dependent-values server call is needed. Also drop any field hidden for every
-  // assigned role (same per-role display-only hide as `tableFields`, applied even
-  // to admins): the /query endpoint rejects a hidden page-local filter as a hard
-  // boundary, so never offer one the server would 400 on.
+  // Page-local fields opted into filtering — all value-backed types the server
+  // accepts (select/boolean/date get self-contained pickers; text/number/user
+  // load distinct existing values via getPageFilterOptions). Also drop any field
+  // hidden for every assigned role (same per-role display-only hide as
+  // `tableFields`, applied even to admins): the /query endpoint rejects a hidden
+  // page-local filter as a hard boundary, so never offer one the server would 400 on.
   const filterablePageFields = useMemo(
     () =>
       pageFields.filter(
         (pf: PageField) =>
           pf.isFilterable &&
-          (pf.fieldType === "select" ||
-            pf.fieldType === "boolean" ||
-            pf.fieldType === "date" ||
-            pf.fieldType === "datetime") &&
+          PAGE_LOCAL_FILTERABLE_TYPES.has(pf.fieldType) &&
           (userRoleIds.length === 0 ||
             userRoleIds.some((rid) => pf.permissionsJson?.[String(rid)] !== "hidden")),
       ),
@@ -2234,6 +2249,8 @@ export function EntityRecords({
   // stored default; saved together with the inclusion filters from the bar.
   const [excludeFieldDraft, setExcludeFieldDraft] = useState<Record<string, string[]>>({});
   const [excludeStatusDraft, setExcludeStatusDraft] = useState<number[]>([]);
+  // Same exclusion draft for PAGE-LOCAL select fields (mirror pages).
+  const [excludePageFieldDraft, setExcludePageFieldDraft] = useState<Record<string, string[]>>({});
   // Page-local field filters (separate from entity-field filters: their keys live in
   // page_record_values, not the record's own valuesJson, so they ride a dedicated
   // pageLocalFilters channel on the query).
@@ -2460,21 +2477,31 @@ export function EntityRecords({
   // Page-local filters mirror the entity ad-hoc/date filters but are sent on the
   // separate pageLocalFilters channel (validated against page_record_values
   // server-side), since their keys aren't entity fields.
+  // Drop conditions whose page field no longer qualifies (deleted, deactivated,
+  // isFilterable off, type changed, or newly hidden for the role) so a stale
+  // seeded/kept filter can't 400 the whole query — the server hard-rejects
+  // unknown or non-filterable page-local filter keys.
+  const filterablePageFieldKeys = useMemo(
+    () => new Set(filterablePageFields.map((pf: PageField) => pf.fieldKey)),
+    [filterablePageFields],
+  );
   const pageAdHocFilters = useMemo(
     () =>
       Object.entries(pageFieldFilters)
-        .filter(([, vals]) => vals.length > 0)
+        .filter(([field, vals]) => vals.length > 0 && filterablePageFieldKeys.has(field))
         .map(([field, vals]) => ({ field, operator: "in" as const, value: vals })),
-    [pageFieldFilters],
+    [pageFieldFilters, filterablePageFieldKeys],
   );
   const pageDateFilterConditions = useMemo(
     () =>
-      Object.entries(pageDateFilters).map(([field, range]) => ({
-        field,
-        operator: "between" as const,
-        value: [range.from, formatDate(addDays(parseISO(range.to), 1), DAY_FMT)],
-      })),
-    [pageDateFilters],
+      Object.entries(pageDateFilters)
+        .filter(([field]) => filterablePageFieldKeys.has(field))
+        .map(([field, range]) => ({
+          field,
+          operator: "between" as const,
+          value: [range.from, formatDate(addDays(parseISO(range.to), 1), DAY_FMT)],
+        })),
+    [pageDateFilters, filterablePageFieldKeys],
   );
   const pageAdHocKey = JSON.stringify(pageFieldFilters);
   const pageDateKey = JSON.stringify(pageDateFilters);
@@ -2549,13 +2576,29 @@ export function EntityRecords({
     () => (defaultQuickFilter?.excludeStatusIds ?? []).filter((n) => Number.isInteger(n)),
     [defaultQuickFilter?.excludeStatusIds],
   );
-  const hasExclusion = excludeFieldFilters.length > 0 || excludeStatusIds.length > 0;
+  // PAGE-LOCAL exclusions: drop entries whose page field no longer exists (or is
+  // no longer a value-backed type) so a deleted field can't 400 the query.
+  const excludePageFieldFilters = useMemo(() => {
+    const raw = defaultQuickFilter?.excludePageFieldFilters ?? {};
+    const known = new Set(
+      pageFields
+        .filter((pf: PageField) => PAGE_LOCAL_FILTERABLE_TYPES.has(pf.fieldType))
+        .map((pf: PageField) => pf.fieldKey),
+    );
+    return Object.entries(raw)
+      .filter(([field, vals]) => known.has(field) && Array.isArray(vals) && vals.length > 0)
+      .map(([field, vals]) => ({ field, values: vals }));
+  }, [defaultQuickFilter?.excludePageFieldFilters, pageFields]);
+  const hasExclusion =
+    excludeFieldFilters.length > 0 || excludeStatusIds.length > 0 || excludePageFieldFilters.length > 0;
   // Only send exclusions when they exist AND the viewer hasn't asked to see
   // hidden rows. Setup mode always shows everything so admins can review.
   const applyExclusion = hasExclusion && !showHidden && !setupMode;
   const activeExcludeFilters = applyExclusion && excludeFieldFilters.length > 0 ? excludeFieldFilters : undefined;
   const activeExcludeStatusIds = applyExclusion && excludeStatusIds.length > 0 ? excludeStatusIds : undefined;
-  const excludeKey = JSON.stringify([activeExcludeFilters, activeExcludeStatusIds]);
+  const activeExcludePageFilters =
+    applyExclusion && excludePageFieldFilters.length > 0 && permPageId != null ? excludePageFieldFilters : undefined;
+  const excludeKey = JSON.stringify([activeExcludeFilters, activeExcludeStatusIds, activeExcludePageFilters]);
 
   // Mirror-page grouping is active whenever the page carries groupByFieldKey.
   // Setup mode keeps the flat table (admins need the full column/row toolkit).
@@ -2572,6 +2615,7 @@ export function EntityRecords({
       statusIds: statusFilter.length > 0 ? statusFilter : undefined,
       excludeFilters: activeExcludeFilters,
       excludeStatusIds: activeExcludeStatusIds,
+      excludePageLocalFilters: activeExcludePageFilters,
       sorts: effectiveSorts,
       search: debouncedSearch.trim() || undefined,
       archived,
@@ -2875,6 +2919,20 @@ export function EntityRecords({
     // Field list still loading → we can't judge visibility yet; try again on the
     // next render instead of wrongly dropping (or keeping) conditions.
     if (rawSeedFields && fields.length === 0) return;
+    // PAGE-LOCAL default filter: same deal — wait for the page-field list when
+    // a page-local seed is stored, then keep only conditions the viewer may
+    // actually send (filterablePageFields already applies the isFilterable +
+    // type + visibility gates the server enforces).
+    const rawSeedPageFields =
+      dq?.pageFieldFilters && Object.keys(dq.pageFieldFilters).length > 0 ? dq.pageFieldFilters : null;
+    if (rawSeedPageFields && hasPage && pageFields.length === 0) return;
+    const seedPageFields = rawSeedPageFields
+      ? Object.fromEntries(
+          Object.entries(rawSeedPageFields).filter(([k]) =>
+            filterablePageFields.some((pf: PageField) => pf.fieldKey === k),
+          ),
+        )
+      : null;
     const visibleSeedFields = rawSeedFields
       ? Object.fromEntries(
           Object.entries(rawSeedFields).filter(([k]) => {
@@ -2892,14 +2950,16 @@ export function EntityRecords({
     // page's picks in place; clearing here keeps each page's default independent.
     setFieldFilters(seedFields ? { ...seedFields } : {});
     setStatusFilter(seedStatuses ? [...seedStatuses] : []);
+    setPageFieldFilters(seedPageFields && Object.keys(seedPageFields).length > 0 ? { ...seedPageFields } : {});
     // Sync the setup-mode exclusion editor drafts from the stored default so an
     // admin opening setup mode sees (and can amend) the current exclusion.
     setExcludeFieldDraft(dq?.excludeFieldFilters ? { ...dq.excludeFieldFilters } : {});
     setExcludeStatusDraft(dq?.excludeStatusIds ? [...dq.excludeStatusIds] : []);
+    setExcludePageFieldDraft(dq?.excludePageFieldFilters ? { ...dq.excludePageFieldFilters } : {});
     setPage(1);
     setQuickFilterSeeded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quickFilterSeeded, defaultQuickFilter, fields.length]);
+  }, [quickFilterSeeded, defaultQuickFilter, fields.length, pageFields.length]);
 
   const savePageDefaultFilterMutation = useUpdatePage({
     mutation: {
@@ -3030,6 +3090,32 @@ export function EntityRecords({
       ),
     [allFields],
   );
+  // Same for PAGE-LOCAL select fields (mirror pages): authored from the page
+  // field's configured options.
+  const excludablePageSelectFields = useMemo(
+    () =>
+      pageFields.filter(
+        (pf: PageField) => pf.fieldType === "select" && normalizeSelectOptions(pf.optionsJson).length > 0,
+      ),
+    [pageFields],
+  );
+  const cleanExcludePageFieldDraft = useMemo(() => {
+    const out: Record<string, string[]> = {};
+    for (const [key, vals] of Object.entries(excludePageFieldDraft)) {
+      if (Array.isArray(vals) && vals.length > 0) out[key] = vals;
+    }
+    return out;
+  }, [excludePageFieldDraft]);
+  const toggleExcludePageFieldValue = useCallback((fieldKey: string, value: string) => {
+    setExcludePageFieldDraft((prev) => {
+      const cur = prev[fieldKey] ?? [];
+      const next = cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value];
+      const out = { ...prev };
+      if (next.length === 0) delete out[fieldKey];
+      else out[fieldKey] = next;
+      return out;
+    });
+  }, []);
   const toggleExcludeStatus = useCallback((id: number) => {
     setExcludeStatusDraft((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }, []);
@@ -3044,10 +3130,13 @@ export function EntityRecords({
     });
   }, []);
   const hasExclusionDraft =
-    Object.keys(cleanExcludeFieldDraft).length > 0 || excludeStatusDraft.length > 0;
+    Object.keys(cleanExcludeFieldDraft).length > 0 ||
+    excludeStatusDraft.length > 0 ||
+    Object.keys(cleanExcludePageFieldDraft).length > 0;
   const saveDefaultQuickFilter = useCallback(() => {
     if (pageId == null) return;
     const hasExcludeFields = Object.keys(cleanExcludeFieldDraft).length > 0;
+    const hasExcludePageFields = Object.keys(cleanExcludePageFieldDraft).length > 0;
     savePageDefaultFilterMutation.mutate(
       {
         id: pageId,
@@ -3055,14 +3144,16 @@ export function EntityRecords({
           defaultQuickFilterJson: {
             fieldFilters: Object.keys(fieldFilters).length > 0 ? fieldFilters : undefined,
             statusIds: statusFilter.length > 0 ? statusFilter : undefined,
+            pageFieldFilters: Object.keys(pageFieldFilters).length > 0 ? pageFieldFilters : undefined,
             excludeFieldFilters: hasExcludeFields ? cleanExcludeFieldDraft : undefined,
             excludeStatusIds: excludeStatusDraft.length > 0 ? excludeStatusDraft : undefined,
+            excludePageFieldFilters: hasExcludePageFields ? cleanExcludePageFieldDraft : undefined,
           },
         },
       },
       { onSuccess: () => toast({ title: t("records.pageDefaultFilterSaved", "Фильтр по умолчанию сохранён") }) },
     );
-  }, [pageId, fieldFilters, statusFilter, cleanExcludeFieldDraft, excludeStatusDraft, savePageDefaultFilterMutation, toast, t]);
+  }, [pageId, fieldFilters, statusFilter, pageFieldFilters, cleanExcludeFieldDraft, excludeStatusDraft, cleanExcludePageFieldDraft, savePageDefaultFilterMutation, toast, t]);
   const clearDefaultQuickFilter = useCallback(() => {
     if (pageId == null) return;
     savePageDefaultFilterMutation.mutate(
@@ -3092,8 +3183,11 @@ export function EntityRecords({
   const hasStoredDefaultQuickFilter = Boolean(
     (defaultQuickFilter?.fieldFilters && Object.keys(defaultQuickFilter.fieldFilters).length > 0) ||
       (defaultQuickFilter?.statusIds && defaultQuickFilter.statusIds.length > 0) ||
+      (defaultQuickFilter?.pageFieldFilters && Object.keys(defaultQuickFilter.pageFieldFilters).length > 0) ||
       (defaultQuickFilter?.excludeFieldFilters && Object.keys(defaultQuickFilter.excludeFieldFilters).length > 0) ||
-      (defaultQuickFilter?.excludeStatusIds && defaultQuickFilter.excludeStatusIds.length > 0),
+      (defaultQuickFilter?.excludeStatusIds && defaultQuickFilter.excludeStatusIds.length > 0) ||
+      (defaultQuickFilter?.excludePageFieldFilters &&
+        Object.keys(defaultQuickFilter.excludePageFieldFilters).length > 0),
   );
   // Human-readable labels for the field filters that WOULD be saved (status is
   // summarized separately). Values are omitted on purpose — user/relation values
@@ -3106,8 +3200,13 @@ export function EntityRecords({
       const override = fieldLabelOverrides?.[key];
       out.push((override && ml(override)) || (f ? ml(f.nameJson) : key));
     }
+    for (const [key, vals] of Object.entries(pageFieldFilters)) {
+      if (!vals || vals.length === 0) continue;
+      const pf = pageFields.find((x: PageField) => x.fieldKey === key);
+      out.push(pf ? ml(pf.nameJson) || key : key);
+    }
     return out;
-  }, [fieldFilters, allFields, fieldLabelOverrides, ml]);
+  }, [fieldFilters, pageFieldFilters, allFields, pageFields, fieldLabelOverrides, ml]);
 
   const queryKey = JSON.stringify(recordQuery);
   useEffect(() => {
@@ -4685,10 +4784,43 @@ export function EntityRecords({
                     </div>
                   );
                 })}
+                {excludablePageSelectFields.map((pf: PageField) => {
+                  const opts = normalizeSelectOptions(pf.optionsJson);
+                  const picked = excludePageFieldDraft[pf.fieldKey] ?? [];
+                  return (
+                    <div key={`pf-${pf.id}`} className="space-y-1">
+                      <div className="text-xs font-medium text-slate-400">
+                        {ml(pf.nameJson)}{" "}
+                        <span className="text-slate-300">· {t("records.pageLocalFieldTag", "поле страницы")}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {opts.map((o) => {
+                          const on = picked.includes(o.value);
+                          return (
+                            <button
+                              key={o.value}
+                              type="button"
+                              onClick={() => toggleExcludePageFieldValue(pf.fieldKey, o.value)}
+                              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                                on
+                                  ? "border-rose-300 bg-rose-50 text-rose-700"
+                                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                              }`}
+                            >
+                              <span className="truncate max-w-[10rem]">{ml(o.labelJson) || o.value}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
                 {hasExclusionDraft && (
                   <div className="text-xs text-rose-600">
                     {t("records.pageExcludeSelected", "Будет скрыто значений")}:{" "}
-                    {Object.values(cleanExcludeFieldDraft).reduce((n, v) => n + v.length, 0) + excludeStatusDraft.length}
+                    {Object.values(cleanExcludeFieldDraft).reduce((n, v) => n + v.length, 0) +
+                      Object.values(cleanExcludePageFieldDraft).reduce((n, v) => n + v.length, 0) +
+                      excludeStatusDraft.length}
                   </div>
                 )}
               </div>

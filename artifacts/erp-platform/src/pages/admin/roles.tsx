@@ -8,6 +8,9 @@ import {
   useListEntities,
   useListEntityFields,
   useListEntityRelations,
+  useListPageFields,
+  getListPageFieldsQueryKey,
+  type PageField,
   useListEntityStatuses,
   getListEntityStatusesQueryKey,
   type Role,
@@ -993,6 +996,7 @@ export default function RolesPage() {
                           key={`m-${page.id}`}
                           entity={entity}
                           mirrorLabel={ml(page.nameJson) || page.path || undefined}
+                          mirrorPageId={page.id}
                           scope={rp.scope ?? "all"}
                           scopeFieldKeys={rp.scopeFieldKeys ?? []}
                           scopeFilters={rp.scopeFilters ?? []}
@@ -1165,6 +1169,7 @@ function RelatedUserFieldsProbe({
 function EntityScopeRow({
   entity,
   mirrorLabel,
+  mirrorPageId,
   scope,
   scopeFieldKeys,
   scopeFilters,
@@ -1178,12 +1183,14 @@ function EntityScopeRow({
 }: {
   entity: Entity;
   mirrorLabel?: string;
+  /** Set for MIRROR-page rows: that page's PAGE-LOCAL fields become scope-filter candidates too. */
+  mirrorPageId?: number;
   scope: RecordScope;
   scopeFieldKeys: string[];
-  scopeFilters: { fieldKey: string; values: string[] }[];
+  scopeFilters: { fieldKey: string; values: string[]; pageId?: number }[];
   onScopeChange: (scope: RecordScope) => void;
   onToggleFieldKey: (key: string, checked: boolean) => void;
-  onScopeFiltersChange: (filters: { fieldKey: string; values: string[] }[]) => void;
+  onScopeFiltersChange: (filters: { fieldKey: string; values: string[]; pageId?: number }[]) => void;
   hideStatusColumn: boolean;
   hideActionsColumn: boolean;
   onToggleHideStatusColumn: (checked: boolean) => void;
@@ -1193,6 +1200,20 @@ function EntityScopeRow({
   const t = useT();
   const { data: fields = [] } = useListEntityFields(entity.id);
   const { data: relations = [] } = useListEntityRelations(entity.id);
+  // Mirror rows only: the page's own (page-local) fields are also valid scope
+  // filter candidates — their values live in page_record_values, keyed by pageId.
+  const { data: allPageFields = [] } = useListPageFields(mirrorPageId ?? 0, {
+    query: { enabled: mirrorPageId != null, queryKey: getListPageFieldsQueryKey(mirrorPageId ?? 0) },
+  });
+  // Only value-backed page-local types can back a value filter (function/formula
+  // compute at render time; relation/lookup/file store no comparable scalar).
+  const pageFilterCandidates =
+    mirrorPageId == null
+      ? []
+      : allPageFields.filter(
+          (pf: PageField) =>
+            pf.isActive && !["function", "formula", "relation", "lookup", "file"].includes(pf.fieldType),
+        );
 
   // Native `user` fields are owner candidates directly.
   const nativeUserFields = fields.filter((f: Field) => f.fieldType === "user");
@@ -1289,6 +1310,8 @@ function EntityScopeRow({
         <ScopeFilterEditor
           fields={fields}
           projections={relProjections}
+          pageId={mirrorPageId}
+          pageFields={pageFilterCandidates}
           filter={scopeFilters[0] ?? null}
           onChange={(fl) => onScopeFiltersChange(fl ? [fl] : [])}
         />
@@ -1340,14 +1363,20 @@ function EntityScopeRow({
 function ScopeFilterEditor({
   fields,
   projections,
+  pageId,
+  pageFields = [],
   filter,
   onChange,
 }: {
   fields: Field[];
   /** relation/lookup fields resolved to their related entity + projected key. */
   projections: { field: Field; relatedEntityId: number; relatedFieldKey: string }[];
-  filter: { fieldKey: string; values: string[] } | null;
-  onChange: (filter: { fieldKey: string; values: string[] } | null) => void;
+  /** Mirror rows only: the mirror page id — page-local candidates below belong to it. */
+  pageId?: number;
+  /** Value-backed PAGE-LOCAL fields of that mirror page (candidates alongside entity fields). */
+  pageFields?: PageField[];
+  filter: { fieldKey: string; values: string[]; pageId?: number } | null;
+  onChange: (filter: { fieldKey: string; values: string[]; pageId?: number } | null) => void;
 }) {
   const t = useT();
   const ml = useML();
@@ -1359,9 +1388,19 @@ function ScopeFilterEditor({
       f.fieldType !== "file" &&
       (f.fieldType !== "relation" && f.fieldType !== "lookup" ? true : projByKey.has(f.fieldKey)),
   );
-  const selected = candidates.find((f: Field) => f.fieldKey === filter?.fieldKey);
+  // Page-local vs entity condition, disambiguated in the Select via a "pf:" value
+  // prefix (entity field keys are plain). The stored filter carries pageId.
+  const isPageFilter = filter?.pageId != null;
+  const selectedPageField = isPageFilter
+    ? pageFields.find((pf: PageField) => pf.fieldKey === filter?.fieldKey)
+    : undefined;
+  const selected = !isPageFilter ? candidates.find((f: Field) => f.fieldKey === filter?.fieldKey) : undefined;
   const selectedProj = selected ? projByKey.get(selected.fieldKey) : undefined;
-  const options = selected && !selectedProj ? normalizeSelectOptions(selected.optionsJson) : [];
+  const options = selectedPageField
+    ? normalizeSelectOptions(selectedPageField.optionsJson)
+    : selected && !selectedProj
+      ? normalizeSelectOptions(selected.optionsJson)
+      : [];
   const values = filter?.values ?? [];
   // Free-text draft for fields without configured options (comma-separated).
   const [draft, setDraft] = useState(values.join(", "));
@@ -1373,7 +1412,7 @@ function ScopeFilterEditor({
   const commitDraft = (text: string) => {
     if (!filter) return;
     const vals = text.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
-    onChange({ fieldKey: filter.fieldKey, values: vals });
+    onChange({ fieldKey: filter.fieldKey, values: vals, ...(filter.pageId != null ? { pageId: filter.pageId } : {}) });
   };
   return (
     <div className="pt-1 space-y-1.5">
@@ -1387,8 +1426,12 @@ function ScopeFilterEditor({
             {t("roles.scopeFilterDesc", "Роль видит только записи, где выбранное поле имеет одно из указанных значений. Это жёсткое ограничение: его нельзя сбросить фильтрами, оно действует и на изменение записей.")}
           </p>
           <Select
-            value={filter?.fieldKey ?? ""}
-            onValueChange={(v) => onChange({ fieldKey: v, values: [] })}
+            value={filter ? (isPageFilter ? `pf:${filter.fieldKey}` : filter.fieldKey) : ""}
+            onValueChange={(v) =>
+              v.startsWith("pf:") && pageId != null
+                ? onChange({ fieldKey: v.slice(3), values: [], pageId })
+                : onChange({ fieldKey: v, values: [] })
+            }
           >
             <SelectTrigger className="w-full sm:w-72">
               <SelectValue placeholder={t("roles.scopeFilterField", "Выберите поле")} />
@@ -1397,6 +1440,12 @@ function ScopeFilterEditor({
               {candidates.map((f: Field) => (
                 <SelectItem key={f.fieldKey} value={f.fieldKey}>
                   {ml(f.nameJson) || f.fieldKey}
+                </SelectItem>
+              ))}
+              {pageFields.map((pf: PageField) => (
+                <SelectItem key={`pf:${pf.fieldKey}`} value={`pf:${pf.fieldKey}`}>
+                  {ml(pf.nameJson) || pf.fieldKey}
+                  <span className="text-slate-400"> · {t("roles.scopeFilterPageField", "поле страницы")}</span>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -1412,7 +1461,7 @@ function ScopeFilterEditor({
               commitDraft={commitDraft}
             />
           )}
-          {selected && !selectedProj && options.length > 0 && (
+          {((selected && !selectedProj) || selectedPageField) && options.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
               {options.map((o) => (
                 <label key={o.value} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
@@ -1420,8 +1469,9 @@ function ScopeFilterEditor({
                     checked={values.includes(o.value)}
                     onCheckedChange={(c) =>
                       onChange({
-                        fieldKey: selected.fieldKey,
+                        fieldKey: (selectedPageField ?? selected)!.fieldKey,
                         values: c === true ? [...new Set([...values, o.value])] : values.filter((v) => v !== o.value),
+                        ...(selectedPageField && pageId != null ? { pageId } : {}),
                       })
                     }
                   />
@@ -1430,7 +1480,7 @@ function ScopeFilterEditor({
               ))}
             </div>
           )}
-          {selected && !selectedProj && options.length === 0 && (
+          {((selected && !selectedProj) || selectedPageField) && options.length === 0 && (
             <Input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
