@@ -97,6 +97,7 @@ const PAGE_FILTERABLE_TYPES = new Set<FieldType>([
   "phone",
   "select",
   "number",
+  "percent",
   "boolean",
   "date",
   "datetime",

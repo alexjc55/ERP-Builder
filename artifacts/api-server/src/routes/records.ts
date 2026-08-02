@@ -90,6 +90,7 @@ const PAGE_LOCAL_FILTERABLE_TYPES = new Set([
   "phone",
   "select",
   "number",
+  "percent",
   "boolean",
   "date",
   "datetime",
