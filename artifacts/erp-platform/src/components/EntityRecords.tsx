@@ -2863,7 +2863,27 @@ export function EntityRecords({
   useEffect(() => {
     if (quickFilterSeeded) return;
     const dq = defaultQuickFilter;
-    const seedFields = dq?.fieldFilters && Object.keys(dq.fieldFilters).length > 0 ? dq.fieldFilters : null;
+    // Drop default-filter conditions the VIEWER cannot express: the server
+    // whitelists query filters to fields visible for the role, so seeding a
+    // condition on a field hidden for this role (e.g. an admin saved a default
+    // on «Покрасчик» which the role can't see) would make every query fail
+    // with "Unknown filter field" and show an empty table. The rows such a
+    // condition was narrowing are typically already bounded by the role's own
+    // hard scope; visibility here follows the SERVER rule (fieldAccess), not
+    // the cosmetic display-only hide.
+    const rawSeedFields = dq?.fieldFilters && Object.keys(dq.fieldFilters).length > 0 ? dq.fieldFilters : null;
+    // Field list still loading → we can't judge visibility yet; try again on the
+    // next render instead of wrongly dropping (or keeping) conditions.
+    if (rawSeedFields && fields.length === 0) return;
+    const visibleSeedFields = rawSeedFields
+      ? Object.fromEntries(
+          Object.entries(rawSeedFields).filter(([k]) => {
+            const f = fields.find((ff: Field) => ff.fieldKey === k);
+            return f != null && fieldAccess(f, entityId, permPageId) !== "hidden";
+          }),
+        )
+      : null;
+    const seedFields = visibleSeedFields && Object.keys(visibleSeedFields).length > 0 ? visibleSeedFields : null;
     const seedStatuses = dq?.statusIds && dq.statusIds.length > 0 ? dq.statusIds : null;
     // Seeding is AUTHORITATIVE for the two quick-filter dimensions it owns: set
     // them to this page's default, or CLEAR them when the page has none. The
@@ -2879,7 +2899,7 @@ export function EntityRecords({
     setPage(1);
     setQuickFilterSeeded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quickFilterSeeded, defaultQuickFilter]);
+  }, [quickFilterSeeded, defaultQuickFilter, fields.length]);
 
   const savePageDefaultFilterMutation = useUpdatePage({
     mutation: {
