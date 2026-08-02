@@ -122,4 +122,16 @@ WHERE mirror_entity_id = 72
 
 DELETE FROM entity_fields WHERE entity_id = 72 AND field_key = 'project_manager' AND field_type = 'user';
 
+-- 6. Роль «Управляющий проектами» (id 2): видеть только свои записи
+-- по полю управляющего — Изделия (72, через lookup из заказа), Заказы (74),
+-- Логистика (mirror:65), Производство (mirror:66).
+UPDATE roles
+SET permissions_json = jsonb_set(jsonb_set(jsonb_set(jsonb_set(permissions_json,
+      '{records,72}',        coalesce(permissions_json->'records'->'72','{}')        || '{"scope":"own","scopeFieldKeys":["order_project_manager"]}'),
+      '{records,74}',        coalesce(permissions_json->'records'->'74','{}')        || '{"scope":"own","scopeFieldKeys":["project_manager"]}'),
+      '{records,mirror:65}', coalesce(permissions_json->'records'->'mirror:65','{}') || '{"scope":"own","scopeFieldKeys":["order_project_manager"]}'),
+      '{records,mirror:66}', coalesce(permissions_json->'records'->'mirror:66','{}') || '{"scope":"own","scopeFieldKeys":["order_project_manager"]}'),
+    updated_at = now()
+WHERE id = 2;
+
 COMMIT;
