@@ -81,6 +81,8 @@ import type {
   LoginInput,
   MergeRecords,
   MergeRecordsResult,
+  MergeUsers,
+  MergeUsersResult,
   Module,
   ModuleInput,
   ModuleUpdate,
@@ -1553,6 +1555,77 @@ export function useListUserOptions<TData = Awaited<ReturnType<typeof listUserOpt
 
 
 
+
+export const getMergeUsersUrl = () => {
+
+
+
+
+  return `/api/users/merge`
+}
+
+/**
+ * @summary Merge duplicate user accounts into one (superAdmin only). Every reference to the source users — user-type field values in records and page-local values, audit/history authorship, file-trash authorship — is repointed to the target user, the source users' roles are added to the target (deduplicated; the target keeps its primary role), then the source users are deleted. Runs in one transaction.
+ */
+export const mergeUsers = async (mergeUsers: MergeUsers, options?: RequestInit): Promise<MergeUsersResult> => {
+
+  return customFetch<MergeUsersResult>(getMergeUsersUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      mergeUsers,)
+  }
+);}
+
+
+
+
+export const getMergeUsersMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mergeUsers>>, TError,{data: BodyType<MergeUsers>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof mergeUsers>>, TError,{data: BodyType<MergeUsers>}, TContext> => {
+
+const mutationKey = ['mergeUsers'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof mergeUsers>>, {data: BodyType<MergeUsers>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  mergeUsers(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MergeUsersMutationResult = NonNullable<Awaited<ReturnType<typeof mergeUsers>>>
+    export type MergeUsersMutationBody = BodyType<MergeUsers>
+    export type MergeUsersMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Merge duplicate user accounts into one (superAdmin only). Every reference to the source users — user-type field values in records and page-local values, audit/history authorship, file-trash authorship — is repointed to the target user, the source users' roles are added to the target (deduplicated; the target keeps its primary role), then the source users are deleted. Runs in one transaction.
+ */
+export const useMergeUsers = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mergeUsers>>, TError,{data: BodyType<MergeUsers>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof mergeUsers>>,
+        TError,
+        {data: BodyType<MergeUsers>},
+        TContext
+      > => {
+      return useMutation(getMergeUsersMutationOptions(options));
+    }
 
 export const getGetUserUrl = (id: number,) => {
 

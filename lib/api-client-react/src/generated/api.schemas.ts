@@ -3218,6 +3218,27 @@ export interface MergeRecordsResult {
   deletedRecordIds: number[];
 }
 
+export interface MergeUsers {
+  /** The surviving user account. */
+  targetUserId: number;
+  /**
+     * Duplicate accounts merged into the target and then deleted.
+     * @minItems 1
+     * @maxItems 20
+     */
+  sourceUserIds: number[];
+}
+
+export interface MergeUsersResult {
+  /** Entity records whose user-field values were repointed. */
+  updatedRecordValues: number;
+  /** Page-local value rows whose user-field values were repointed. */
+  updatedPageValues: number;
+  /** Additional roles inherited by the target user. */
+  mergedRoles: number;
+  deletedUserIds: number[];
+}
+
 export interface RecordDelete {
   /** Optional mirror-page context (see RecordInput.pageId): applies the mirror page's delete-rights override when deleting through it. */
   pageId?: number;

@@ -1,9 +1,24 @@
 import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
-import { db, usersTable, rolesTable, userRolesTable, loginHistoryTable, entityFieldsTable, appSettingsTable } from "@workspace/db";
+import {
+  db,
+  usersTable,
+  rolesTable,
+  userRolesTable,
+  loginHistoryTable,
+  entityFieldsTable,
+  appSettingsTable,
+  entityRecordsTable,
+  pageFieldsTable,
+  pageRecordValuesTable,
+  auditLogTable,
+  deletedFilesTable,
+  guestLinksTable,
+  entityAutomationsTable,
+} from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
-import { requireAuth } from "../middlewares/auth";
-import { requireAdmin, getPermissions, effectiveRecordPerm, isPrivilegedRole } from "../middlewares/permissions";
+import { requireAuth, invalidateUserAliveCache } from "../middlewares/auth";
+import { requireAdmin, requireSuperAdmin, getPermissions, effectiveRecordPerm, isPrivilegedRole } from "../middlewares/permissions";
 import { emitEvent, EVENT_USER_CREATED } from "../lib/events";
 import {
   CreateUserBody,
@@ -19,6 +34,7 @@ import {
   ListUsersQueryParams,
   CreateUserFromFieldParams,
   CreateUserFromFieldBody,
+  MergeUsersBody,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -485,6 +501,255 @@ router.put("/users/:id", requireAuth, requireAdmin("users"), async (req, res): P
   res.json(user);
 });
 
+/**
+ * Merge duplicate user accounts (superAdmin only). Every stored reference to a
+ * source user — user-type field values in entity records and page-local values,
+ * audit/history authorship, file-trash authorship, guest-link creator — is
+ * repointed to the target, the sources' roles are inherited by the target
+ * (deduplicated; the target keeps its own primary role), then the sources are
+ * hard-deleted (cascade removes their user_roles and guest links). Runs in one
+ * transaction. Guards: cannot merge yourself away, cannot delete a privileged
+ * (superAdmin) account as a source.
+ */
+router.post("/users/merge", requireAuth, requireSuperAdmin(), async (req, res): Promise<void> => {
+  const parsed = MergeUsersBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { targetUserId } = parsed.data;
+  const sourceIds = [...new Set(parsed.data.sourceUserIds)];
+  if (sourceIds.includes(targetUserId)) {
+    res.status(422).json({ error: "Главная учётная запись не может быть в списке дубликатов" });
+    return;
+  }
+  if (sourceIds.includes(req.user!.userId)) {
+    res.status(422).json({ error: "Нельзя объединить собственную учётную запись как дубликат" });
+    return;
+  }
+
+  const allIds = [targetUserId, ...sourceIds];
+  const users = await db.select().from(usersTable).where(inArray(usersTable.id, allIds));
+  if (users.length !== allIds.length) {
+    res.status(404).json({ error: "Некоторые учётные записи не найдены" });
+    return;
+  }
+
+  // A privileged (superAdmin) account may be the TARGET but never a deleted
+  // source — merging away an admin account by mistake would be unrecoverable.
+  const sourceRoleRows = await db
+    .select({ roleId: userRolesTable.roleId })
+    .from(userRolesTable)
+    .where(inArray(userRolesTable.userId, sourceIds));
+  const sourceRoleIds = new Set<number>(sourceRoleRows.map((r) => r.roleId));
+  for (const u of users) if (u.id !== targetUserId) sourceRoleIds.add(u.roleId);
+  const sourceRoles = sourceRoleIds.size
+    ? await db.select().from(rolesTable).where(inArray(rolesTable.id, [...sourceRoleIds]))
+    : [];
+  if (sourceRoles.some((r) => isPrivilegedRole(r.permissionsJson))) {
+    res.status(422).json({ error: "Нельзя объединять привилегированные учётные записи как дубликаты" });
+    return;
+  }
+
+  const sourceIdSet = new Set<number>(sourceIds);
+  // Rewrite a stored user-field value: scalar id (number or numeric string) or
+  // an array of ids. Arrays are deduplicated after the rewrite. Returns
+  // undefined when nothing changed, so callers can skip the row.
+  const rewriteValue = (v: unknown): unknown => {
+    const mapOne = (x: unknown): unknown => {
+      const n = typeof x === "number" ? x : typeof x === "string" && /^\d+$/.test(x.trim()) ? Number(x.trim()) : null;
+      if (n != null && sourceIdSet.has(n)) return typeof x === "string" ? String(targetUserId) : targetUserId;
+      return x;
+    };
+    if (Array.isArray(v)) {
+      const mapped = v.map(mapOne);
+      if (mapped.every((x, i) => x === v[i])) return undefined;
+      const seen = new Set<string>();
+      return mapped.filter((x) => {
+        const k = String(x);
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    }
+    const mapped = mapOne(v);
+    return mapped === v ? undefined : mapped;
+  };
+
+  let updatedRecordValues = 0;
+  let updatedPageValues = 0;
+  let mergedRoles = 0;
+
+  // SQL prefilter: only rows whose JSON text contains one of the source ids as
+  // a standalone number can possibly reference them — avoids loading every
+  // record of every entity that merely HAS a user field.
+  const idsRegex = `\\m(${sourceIds.join("|")})\\M`;
+
+  await db.transaction(async (tx) => {
+    // ---- 1. User-type entity fields: rewrite values_json --------------
+    const userFields = await tx
+      .select({ entityId: entityFieldsTable.entityId, fieldKey: entityFieldsTable.fieldKey })
+      .from(entityFieldsTable)
+      .where(and(eq(entityFieldsTable.fieldType, "user"), eq(entityFieldsTable.isActive, true)));
+    const keysByEntity = new Map<number, string[]>();
+    for (const f of userFields) {
+      const arr = keysByEntity.get(f.entityId) ?? [];
+      arr.push(f.fieldKey);
+      keysByEntity.set(f.entityId, arr);
+    }
+    if (keysByEntity.size > 0) {
+      const recs = await tx
+        .select({ id: entityRecordsTable.id, entityId: entityRecordsTable.entityId, valuesJson: entityRecordsTable.valuesJson })
+        .from(entityRecordsTable)
+        .where(
+          and(
+            inArray(entityRecordsTable.entityId, [...keysByEntity.keys()]),
+            sql`${entityRecordsTable.valuesJson}::text ~ ${idsRegex}`,
+          )!,
+        );
+      for (const rec of recs) {
+        const keys = keysByEntity.get(rec.entityId)!;
+        const values = { ...(rec.valuesJson as Record<string, unknown>) };
+        let changed = false;
+        for (const k of keys) {
+          if (!(k in values)) continue;
+          const next = rewriteValue(values[k]);
+          if (next !== undefined) {
+            values[k] = next;
+            changed = true;
+          }
+        }
+        if (changed) {
+          await tx.update(entityRecordsTable).set({ valuesJson: values }).where(eq(entityRecordsTable.id, rec.id));
+          updatedRecordValues += 1;
+        }
+      }
+    }
+
+    // ---- 2. User-type page-local fields: rewrite page values ----------
+    const pageUserFields = await tx
+      .select({ pageId: pageFieldsTable.pageId, fieldKey: pageFieldsTable.fieldKey })
+      .from(pageFieldsTable)
+      .where(and(eq(pageFieldsTable.fieldType, "user"), eq(pageFieldsTable.isActive, true)));
+    const keysByPage = new Map<number, string[]>();
+    for (const f of pageUserFields) {
+      const arr = keysByPage.get(f.pageId) ?? [];
+      arr.push(f.fieldKey);
+      keysByPage.set(f.pageId, arr);
+    }
+    if (keysByPage.size > 0) {
+      const rows = await tx
+        .select({ id: pageRecordValuesTable.id, pageId: pageRecordValuesTable.pageId, valuesJson: pageRecordValuesTable.valuesJson })
+        .from(pageRecordValuesTable)
+        .where(
+          and(
+            inArray(pageRecordValuesTable.pageId, [...keysByPage.keys()]),
+            sql`${pageRecordValuesTable.valuesJson}::text ~ ${idsRegex}`,
+          )!,
+        );
+      for (const row of rows) {
+        const keys = keysByPage.get(row.pageId)!;
+        const values = { ...(row.valuesJson as Record<string, unknown>) };
+        let changed = false;
+        for (const k of keys) {
+          if (!(k in values)) continue;
+          const next = rewriteValue(values[k]);
+          if (next !== undefined) {
+            values[k] = next;
+            changed = true;
+          }
+        }
+        if (changed) {
+          await tx.update(pageRecordValuesTable).set({ valuesJson: values }).where(eq(pageRecordValuesTable.id, row.id));
+          updatedPageValues += 1;
+        }
+      }
+    }
+
+    // ---- 2b. Automation configs: rewrite literal user ids -------------
+    // Automation conditions/actions may store user ids as literal `value`s
+    // next to a `fieldKey` that is a user-type field (of the automation's own
+    // entity or of an action's target entity). Walk the JSON and rewrite any
+    // `value` whose sibling `fieldKey` is a known user-field key. Keyed on the
+    // GLOBAL user-field key set: a fieldKey shared with a non-user field in
+    // another entity is theoretically over-matched, but only when its literal
+    // value exactly equals a deleted duplicate's id — acceptable for a
+    // superAdmin-only maintenance operation.
+    const globalUserFieldKeys = new Set(userFields.map((f) => f.fieldKey));
+    for (const f of pageUserFields) globalUserFieldKeys.add(f.fieldKey);
+    const rewriteAutomationNode = (node: unknown): boolean => {
+      let changed = false;
+      if (Array.isArray(node)) {
+        for (const item of node) changed = rewriteAutomationNode(item) || changed;
+        return changed;
+      }
+      if (node && typeof node === "object") {
+        const obj = node as Record<string, unknown>;
+        if (typeof obj.fieldKey === "string" && globalUserFieldKeys.has(obj.fieldKey) && "value" in obj) {
+          const next = rewriteValue(obj.value);
+          if (next !== undefined) {
+            obj.value = next;
+            changed = true;
+          }
+        }
+        for (const k of Object.keys(obj)) {
+          if (k !== "value") changed = rewriteAutomationNode(obj[k]) || changed;
+        }
+      }
+      return changed;
+    };
+    if (globalUserFieldKeys.size > 0) {
+      const automations = await tx
+        .select({ id: entityAutomationsTable.id, conditionsJson: entityAutomationsTable.conditionsJson, actionsJson: entityAutomationsTable.actionsJson })
+        .from(entityAutomationsTable)
+        .where(sql`(${entityAutomationsTable.conditionsJson}::text ~ ${idsRegex} OR ${entityAutomationsTable.actionsJson}::text ~ ${idsRegex})`);
+      for (const a of automations) {
+        const conditions = JSON.parse(JSON.stringify(a.conditionsJson ?? []));
+        const actions = JSON.parse(JSON.stringify(a.actionsJson ?? []));
+        const changed = [rewriteAutomationNode(conditions), rewriteAutomationNode(actions)].some(Boolean);
+        if (changed) {
+          await tx
+            .update(entityAutomationsTable)
+            .set({ conditionsJson: conditions, actionsJson: actions })
+            .where(eq(entityAutomationsTable.id, a.id));
+        }
+      }
+    }
+
+    // ---- 3. Plain authorship columns (no FK) ---------------------------
+    await tx.update(auditLogTable).set({ userId: targetUserId }).where(inArray(auditLogTable.userId, sourceIds));
+    await tx.update(loginHistoryTable).set({ userId: targetUserId }).where(inArray(loginHistoryTable.userId, sourceIds));
+    await tx.update(deletedFilesTable).set({ deletedBy: targetUserId }).where(inArray(deletedFilesTable.deletedBy, sourceIds));
+    await tx.update(guestLinksTable).set({ createdBy: targetUserId }).where(inArray(guestLinksTable.createdBy, sourceIds));
+
+    // ---- 4. Roles: target inherits the sources' roles (additive) ------
+    const target = users.find((u) => u.id === targetUserId)!;
+    const targetRoleRows = await tx
+      .select({ roleId: userRolesTable.roleId })
+      .from(userRolesTable)
+      .where(eq(userRolesTable.userId, targetUserId));
+    const targetRoleIds = new Set<number>([target.roleId, ...targetRoleRows.map((r) => r.roleId)]);
+    for (const roleId of sourceRoleIds) {
+      if (targetRoleIds.has(roleId)) continue;
+      await tx.insert(userRolesTable).values({ userId: targetUserId, roleId }).onConflictDoNothing();
+      mergedRoles += 1;
+    }
+
+    // ---- 5. Delete the duplicates (cascade: user_roles, guest_links) --
+    await tx.delete(usersTable).where(inArray(usersTable.id, sourceIds));
+  });
+
+  // Any still-valid JWTs of the deleted accounts die at the auth layer: drop
+  // their cached "alive" verdicts so the next request re-checks the DB.
+  for (const id of sourceIds) invalidateUserAliveCache(id);
+
+  req.log.info(
+    { targetUserId, sourceIds, updatedRecordValues, updatedPageValues, mergedRoles },
+    "users merged",
+  );
+  res.json({ updatedRecordValues, updatedPageValues, mergedRoles, deletedUserIds: sourceIds });
+});
+
 router.delete("/users/:id", requireAuth, requireAdmin("users"), async (req, res): Promise<void> => {
   const params = DeleteUserParams.safeParse(req.params);
   if (!params.success) {
@@ -502,6 +767,7 @@ router.delete("/users/:id", requireAuth, requireAdmin("users"), async (req, res)
     return;
   }
 
+  invalidateUserAliveCache(deleted.id);
   res.json({ success: true, message: "User deleted" });
 });
 
@@ -516,6 +782,8 @@ router.post("/users/:id/block", requireAuth, requireAdmin("users"), async (req, 
     .update(usersTable)
     .set({ isActive: false })
     .where(eq(usersTable.id, params.data.id));
+
+  invalidateUserAliveCache(params.data.id);
 
   const user = await getUserWithRole(params.data.id);
   if (!user) { res.status(404).json({ error: "User not found" }); return; }
@@ -533,6 +801,8 @@ router.post("/users/:id/unblock", requireAuth, requireAdmin("users"), async (req
     .update(usersTable)
     .set({ isActive: true })
     .where(eq(usersTable.id, params.data.id));
+
+  invalidateUserAliveCache(params.data.id);
 
   const user = await getUserWithRole(params.data.id);
   if (!user) { res.status(404).json({ error: "User not found" }); return; }

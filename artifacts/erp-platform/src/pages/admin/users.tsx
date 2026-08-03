@@ -8,6 +8,7 @@ import {
   useBlockUser,
   useUnblockUser,
   useResetUserPassword,
+  useMergeUsers,
   useListRoles,
   useListGuestLinks,
   useCreateGuestLink,
@@ -55,7 +56,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Search, UserPlus, Pencil, Trash2, Ban, CheckCircle, Key, Loader2, LogIn,
-  Link2, Copy, Check as CheckIcon
+  Link2, Copy, Check as CheckIcon, Merge
 } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
@@ -93,6 +94,12 @@ export default function UsersPage() {
   const [resetPwUser, setResetPwUser] = useState<User | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [linksUser, setLinksUser] = useState<User | null>(null);
+  // Merge duplicates (superAdmin): selection can span pages/searches, so keep
+  // the picked users as full objects (id → user) rather than ids of the
+  // currently visible page.
+  const [mergePick, setMergePick] = useState<Map<number, User>>(new Map());
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeTargetId, setMergeTargetId] = useState<number | null>(null);
   const [newLinkLabel, setNewLinkLabel] = useState("");
   const [createdLink, setCreatedLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -170,6 +177,23 @@ export default function UsersPage() {
   const deleteMutation = useDeleteUser({
     mutation: {
       onSuccess: () => { toast({ title: t("users.deleted", "Пользователь удалён") }); setDeleteUser(null); invalidate(); },
+    },
+  });
+
+  const mergeMutation = useMergeUsers({
+    mutation: {
+      onSuccess: (resp) => {
+        toast({
+          title: t("users.mergeDone", "Пользователи объединены"),
+          description: `${t("users.mergeUpdatedRefs", "Обновлено упоминаний в записях")}: ${resp.updatedRecordValues + resp.updatedPageValues}`,
+        });
+        setMergeOpen(false);
+        setMergeTargetId(null);
+        setMergePick(new Map());
+        invalidate();
+      },
+      onError: (e: unknown) =>
+        toast({ title: t("users.mergeError", "Ошибка объединения"), description: (e as { message?: string })?.message, variant: "destructive" }),
     },
   });
 
@@ -333,6 +357,17 @@ export default function UsersPage() {
             ))}
           </SelectContent>
         </Select>
+        {isSuperAdmin && mergePick.size > 0 && (
+          <Button
+            variant="outline"
+            className="gap-2"
+            disabled={mergePick.size < 2}
+            onClick={() => { setMergeTargetId(null); setMergeOpen(true); }}
+          >
+            <Merge className="w-4 h-4" />
+            {t("users.mergeAction", "Объединить")} ({mergePick.size})
+          </Button>
+        )}
       </div>
 
       <Card className="border-slate-200 shadow-sm">
@@ -341,6 +376,7 @@ export default function UsersPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
+                  {isSuperAdmin && <th className="w-8 px-3 py-3" title={t("users.mergePickHint", "Отметьте дубликаты для объединения")} />}
                   <th className="text-left px-4 py-3 font-medium text-slate-600">{t("users.colUser", "Пользователь")}</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Email</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">{t("users.colRole", "Роль")}</th>
@@ -353,20 +389,38 @@ export default function UsersPage() {
                 {isLoading ? (
                   Array.from({ length: 4 }).map((_, i) => (
                     <tr key={i} className="border-b border-slate-100">
-                      {Array.from({ length: 6 }).map((_, j) => (
+                      {Array.from({ length: isSuperAdmin ? 7 : 6 }).map((_, j) => (
                         <td key={j} className="px-4 py-3"><Skeleton className="h-5 w-full" /></td>
                       ))}
                     </tr>
                   ))
                 ) : filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
+                    <td colSpan={isSuperAdmin ? 7 : 6} className="px-4 py-12 text-center text-slate-400">
                       {t("users.empty", "Пользователи не найдены")}
                     </td>
                   </tr>
                 ) : (
                   filteredUsers.map((user) => (
                     <tr key={user.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                      {isSuperAdmin && (
+                        <td className="px-3 py-3">
+                          <input
+                            type="checkbox"
+                            className="accent-blue-600"
+                            title={t("users.mergePickHint", "Отметьте дубликаты для объединения")}
+                            checked={mergePick.has(user.id)}
+                            onChange={(e) => {
+                              setMergePick((prev) => {
+                                const next = new Map(prev);
+                                if (e.target.checked) next.set(user.id, user);
+                                else next.delete(user.id);
+                                return next;
+                              });
+                            }}
+                          />
+                        </td>
+                      )}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2.5">
                           <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
@@ -494,6 +548,64 @@ export default function UsersPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={mergeOpen} onOpenChange={(o) => { if (!o) { setMergeOpen(false); setMergeTargetId(null); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("users.mergeTitle", "Объединить пользователей")}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-slate-500">
+            {t(
+              "users.mergeDesc",
+              "Выберите главную учётную запись. Все упоминания остальных (в полях записей, истории изменений) перейдут к ней, её роли дополнятся ролями дубликатов, после чего дубликаты будут удалены безвозвратно.",
+            )}
+          </p>
+          <div className="max-h-[45vh] space-y-1 overflow-y-auto">
+            {[...mergePick.values()].map((u) => (
+              <label
+                key={u.id}
+                className={`flex cursor-pointer items-center gap-2.5 rounded border px-3 py-2 text-sm ${
+                  mergeTargetId === u.id ? "border-blue-400 bg-blue-50/60" : "border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="merge-user-target"
+                  className="accent-blue-600"
+                  checked={mergeTargetId === u.id}
+                  onChange={() => setMergeTargetId(u.id)}
+                />
+                <span className="min-w-0 truncate">
+                  {u.firstName} {u.lastName}
+                  <span className="ml-1.5 text-xs text-slate-400">{u.email}</span>
+                </span>
+                <span className="ml-auto shrink-0 text-xs text-slate-400">#{u.id}</span>
+              </label>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setMergeOpen(false); setMergeTargetId(null); }}>
+              {t("users.cancel", "Отмена")}
+            </Button>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700"
+              disabled={mergeTargetId == null || mergeMutation.isPending}
+              onClick={() =>
+                mergeTargetId != null &&
+                mergeMutation.mutate({
+                  data: {
+                    targetUserId: mergeTargetId,
+                    sourceUserIds: [...mergePick.keys()].filter((id) => id !== mergeTargetId),
+                  },
+                })
+              }
+            >
+              {mergeMutation.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              {t("users.mergeConfirm", "Объединить")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">

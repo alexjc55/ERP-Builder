@@ -156,6 +156,8 @@ export * from './loginHistoryEntry';
 export * from './loginInput';
 export * from './mergeRecords';
 export * from './mergeRecordsResult';
+export * from './mergeUsers';
+export * from './mergeUsersResult';
 export * from './module';
 export * from './moduleInput';
 export * from './moduleInputSettingsJson';

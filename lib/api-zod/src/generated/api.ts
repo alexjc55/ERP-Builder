@@ -738,6 +738,26 @@ export const ListUserOptionsResponse = zod.array(ListUserOptionsResponseItem)
 
 
 /**
+ * @summary Merge duplicate user accounts into one (superAdmin only). Every reference to the source users — user-type field values in records and page-local values, audit/history authorship, file-trash authorship — is repointed to the target user, the source users' roles are added to the target (deduplicated; the target keeps its primary role), then the source users are deleted. Runs in one transaction.
+ */
+export const mergeUsersBodySourceUserIdsMax = 20;
+
+
+
+export const MergeUsersBody = zod.object({
+  "targetUserId": zod.number().describe('The surviving user account.'),
+  "sourceUserIds": zod.array(zod.number()).min(1).max(mergeUsersBodySourceUserIdsMax).describe('Duplicate accounts merged into the target and then deleted.')
+})
+
+export const MergeUsersResponse = zod.object({
+  "updatedRecordValues": zod.number().describe('Entity records whose user-field values were repointed.'),
+  "updatedPageValues": zod.number().describe('Page-local value rows whose user-field values were repointed.'),
+  "mergedRoles": zod.number().describe('Additional roles inherited by the target user.'),
+  "deletedUserIds": zod.array(zod.number())
+})
+
+
+/**
  * @summary Get user by ID
  */
 export const GetUserParams = zod.object({

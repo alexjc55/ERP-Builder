@@ -521,6 +521,31 @@ paths:
                 items:
                   $ref: "#/components/schemas/UserOption"
 
+  /users/merge:
+    post:
+      operationId: mergeUsers
+      tags: [users]
+      summary: >-
+        Merge duplicate user accounts into one (superAdmin only). Every
+        reference to the source users — user-type field values in records and
+        page-local values, audit/history authorship, file-trash authorship —
+        is repointed to the target user, the source users' roles are added to
+        the target (deduplicated; the target keeps its primary role), then the
+        source users are deleted. Runs in one transaction.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MergeUsers"
+      responses:
+        "200":
+          description: Merge summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MergeUsersResult"
+
   /users/{id}:
     get:
       operationId: getUser
@@ -7097,6 +7122,39 @@ components:
           type: integer
           description: Empty target fields filled from the duplicates.
         deletedRecordIds:
+          type: array
+          items:
+            type: integer
+
+    MergeUsers:
+      type: object
+      required: [targetUserId, sourceUserIds]
+      properties:
+        targetUserId:
+          type: integer
+          description: The surviving user account.
+        sourceUserIds:
+          type: array
+          items:
+            type: integer
+          minItems: 1
+          maxItems: 20
+          description: Duplicate accounts merged into the target and then deleted.
+
+    MergeUsersResult:
+      type: object
+      required: [updatedRecordValues, updatedPageValues, mergedRoles, deletedUserIds]
+      properties:
+        updatedRecordValues:
+          type: integer
+          description: Entity records whose user-field values were repointed.
+        updatedPageValues:
+          type: integer
+          description: Page-local value rows whose user-field values were repointed.
+        mergedRoles:
+          type: integer
+          description: Additional roles inherited by the target user.
+        deletedUserIds:
           type: array
           items:
             type: integer

@@ -1,5 +1,35 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyToken, type JwtPayload } from "../lib/jwt";
+import { db, usersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
+
+/**
+ * A JWT stays valid for days, but the account behind it can be deleted (e.g.
+ * merged away as a duplicate) or blocked meanwhile. Verify the account still
+ * exists and is active, with a short in-memory cache so the check costs one
+ * DB read per user per minute, not per request.
+ */
+const USER_ALIVE_TTL_MS = 60_000;
+const userAliveCache = new Map<number, { ok: boolean; ts: number }>();
+
+async function isUserAlive(userId: number): Promise<boolean> {
+  const cached = userAliveCache.get(userId);
+  const now = Date.now();
+  if (cached && now - cached.ts < USER_ALIVE_TTL_MS) return cached.ok;
+  const [row] = await db
+    .select({ isActive: usersTable.isActive })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+  const ok = row?.isActive === true;
+  userAliveCache.set(userId, { ok, ts: now });
+  return ok;
+}
+
+/** Drop the cached "alive" verdict for a user (call after delete/block/merge). */
+export function invalidateUserAliveCache(userId: number): void {
+  userAliveCache.delete(userId);
+}
 
 declare global {
   namespace Express {
@@ -33,8 +63,16 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     return;
   }
 
-  req.user = payload;
-  next();
+  isUserAlive(payload.userId)
+    .then((alive) => {
+      if (!alive) {
+        res.status(401).json({ error: "Account no longer active" });
+        return;
+      }
+      req.user = payload;
+      next();
+    })
+    .catch(next);
 }
 
 /** Requests a guest token is allowed to make: any GET, or the POST records-query read. */
