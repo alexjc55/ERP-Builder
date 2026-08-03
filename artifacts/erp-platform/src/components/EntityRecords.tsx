@@ -5655,6 +5655,22 @@ export function EntityRecords({
                                   onChange={(v) => setNewPageRow((prev) => ({ ...prev, [pf.fieldKey]: v }))}
                                   userOptions={userOptions}
                                 />
+                              ) : pf.fieldType === "function" ? (
+                                // Live formula preview in the add-row (page-local).
+                                (() => {
+                                  const computed = formatFormulaResult(
+                                    pf.formulaConfigJson?.expression ?? "",
+                                    buildFormulaScope(resolveFormulaValues({ ...newRow, ...newPageRow }), formulaFieldDefs),
+                                    pf.formulaConfigJson?.decimals,
+                                  );
+                                  return computed.error ? (
+                                    <span className="text-red-400 text-xs">#ОШИБКА</span>
+                                  ) : computed.text === "" ? (
+                                    <span className="text-slate-300 text-xs">—</span>
+                                  ) : (
+                                    <span className="text-sm">{computed.bool !== undefined ? (computed.bool ? "Да" : "Нет") : computed.text}</span>
+                                  );
+                                })()
                               ) : (
                                 <span className="text-slate-300 text-xs">—</span>
                               )}
@@ -5700,6 +5716,22 @@ export function EntityRecords({
                                 entityId={entityId}
                                 pageId={permPageId}
                               />
+                            ) : f.fieldType === "function" ? (
+                              // Live formula preview in the add-row (entity field).
+                              (() => {
+                                const computed = formatFormulaResult(
+                                  f.formulaConfigJson?.expression ?? "",
+                                  buildFormulaScope(resolveFormulaValues({ ...newRow, ...newPageRow }), formulaFieldDefs),
+                                  f.formulaConfigJson?.decimals,
+                                );
+                                return computed.error ? (
+                                  <span className="text-red-400 text-xs">#ОШИБКА</span>
+                                ) : computed.text === "" ? (
+                                  <span className="text-slate-300 text-xs">—</span>
+                                ) : (
+                                  <span className="text-sm">{computed.bool !== undefined ? (computed.bool ? "Да" : "Нет") : computed.text}</span>
+                                );
+                              })()
                             ) : f.fieldType === "lookup" ? (
                               (() => {
                                 const linkedId = lookupLinkedId(f, newRow);
@@ -7481,6 +7513,33 @@ function RecordFormBody({
     onRelationChanged?.();
   };
 
+  // Live formula preview: compute `function` fields from the CURRENT form values
+  // (create and edit alike) so e.g. "Сумма" updates as the user types instead of
+  // only after saving. user-type refs resolve ids → names (same as the table);
+  // formula-to-formula refs go through buildFormulaScope (lazy + cycle-guarded).
+  const formFormulaDefs = useMemo<FormulaFieldDef[]>(
+    () =>
+      allFields
+        .filter((f: Field) => f.fieldType === "function")
+        .map((f: Field) => ({
+          key: f.fieldKey,
+          expression: f.formulaConfigJson?.expression ?? "",
+          decimals: f.formulaConfigJson?.decimals ?? null,
+        })),
+    [allFields],
+  );
+  const formFormulaScope = useMemo(() => {
+    const vals: Record<string, unknown> = { ...formWithRelationParents };
+    for (const f of allFields) {
+      if (f.fieldType !== "user") continue;
+      const v = vals[f.fieldKey];
+      if (v == null || v === "") continue;
+      if (Array.isArray(v)) vals[f.fieldKey] = v.map((id) => userNames.get(Number(id)) ?? String(id)).join(", ");
+      else vals[f.fieldKey] = userNames.get(Number(v)) ?? v;
+    }
+    return buildFormulaScope(vals, formFormulaDefs);
+  }, [formWithRelationParents, allFields, formFormulaDefs, userNames]);
+
   // Read-only display node for a relation/lookup field's current value (its
   // configured display field), or an em dash when nothing is linked.
   const relDisplayFor = (field: Field): React.ReactNode => {
@@ -7617,10 +7676,26 @@ function RecordFormBody({
                 )
               ) : mode === "create" && callerLocked ? (
                 // Caller-locked relation in a create flow: the link doesn't exist
-                // yet (set after create), so show the prefilled target id.
+                // yet (set after create), so preview the prefilled target record's
+                // display field (not its raw #id).
                 roBox(
                   typeof form[field.fieldKey] === "number" ? (
-                    `#${form[field.fieldKey]}`
+                    (() => {
+                      const meta = relColMetaMap.get(field.fieldKey);
+                      const fallbackField = {
+                        ...field,
+                        fieldType: (meta?.relatedFieldType ?? "text") as Field["fieldType"],
+                        optionsJson: meta?.optionsJson ?? [],
+                      } as unknown as Field;
+                      return (
+                        <LookupCreatePreview
+                          linkedRecordId={form[field.fieldKey] as number}
+                          relatedFieldKey={field.relationConfigJson?.relatedFieldKey ?? ""}
+                          fallbackField={fallbackField}
+                          userNames={userNames}
+                        />
+                      );
+                    })()
                   ) : (
                     <span className="text-slate-300">—</span>
                   ),
@@ -7650,6 +7725,27 @@ function RecordFormBody({
                 })()
               ) : (
                 roBox(<span className="text-slate-300">—</span>)
+              )
+            ) : field.fieldType === "function" ? (
+              // Read-only live-computed formula preview from the current form
+              // values — updates as the user types, not only after saving.
+              roBox(
+                (() => {
+                  const computed = formatFormulaResult(
+                    field.formulaConfigJson?.expression ?? "",
+                    formFormulaScope,
+                    field.formulaConfigJson?.decimals,
+                  );
+                  return computed.error ? (
+                    <span className="text-red-400">#ОШИБКА</span>
+                  ) : computed.text === "" ? (
+                    <span className="text-slate-300">—</span>
+                  ) : computed.bool !== undefined ? (
+                    computed.bool ? "Да" : "Нет"
+                  ) : (
+                    computed.text
+                  );
+                })(),
               )
             ) : (
               <FieldInput
