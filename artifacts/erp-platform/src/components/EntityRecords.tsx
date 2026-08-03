@@ -2042,6 +2042,11 @@ export function EntityRecords({
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkConfirm, setBulkConfirm] = useState<null | "archive" | "unarchive" | "delete">(null);
+  // Click-to-highlight: the row whose top/bottom borders are accented. Any
+  // click inside the row (including a cell that opens an inline editor) selects
+  // it — handlers don't stop propagation, so editing keeps working. Clicking
+  // the same row again clears the highlight.
+  const [highlightedRowId, setHighlightedRowId] = useState<number | null>(null);
   const [historyFor, setHistoryFor] = useState<EntityRecord | null>(null);
   const [form, setForm] = useState<FormState>({});
   const [statusId, setStatusId] = useState<string>(NO_STATUS);
@@ -5838,8 +5843,9 @@ export function EntityRecords({
                       <Fragment key={record.id}>
                       {interleavedHeader && renderGroupRow(interleavedHeader)}
                       <tr
-                        className="border-b border-slate-100 hover:bg-slate-50"
+                        className={`border-b border-slate-100 hover:bg-slate-50 ${highlightedRowId === record.id ? "erp-row-selected" : ""}`}
                         style={rowBgForTr ? { backgroundColor: rowBgForTr } : undefined}
+                        onClick={() => setHighlightedRowId((prev) => (prev === record.id ? null : record.id))}
                       >
                         {showBulk && (
                           <td className="px-2 py-3 text-center align-middle" style={bulkColStyle(rowBgConcrete)}>

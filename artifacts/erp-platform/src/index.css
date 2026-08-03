@@ -180,4 +180,19 @@
   [dir="rtl"] tr.erp-main-header > th:not(:last-child) {
     box-shadow: inset 1px 0 0 var(--erp-table-border, hsl(var(--border) / 0.7));
   }
+
+  /* Click-to-highlight row: accent the row's top and bottom edges. Painted as a
+     td::after overlay (not tr border / box-shadow) so it renders ABOVE cell
+     backgrounds and inline pin shadows, and travels with sticky pinned cells. */
+  tr.erp-row-selected > td {
+    position: relative;
+  }
+  tr.erp-row-selected > td::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-top: 2px solid #3b82f6;
+    border-bottom: 2px solid #3b82f6;
+    pointer-events: none;
+  }
 }
