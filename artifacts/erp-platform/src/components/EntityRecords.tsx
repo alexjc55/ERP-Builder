@@ -756,6 +756,10 @@ function FieldFilterPopover({
       onChange={onChange}
       getOptions={getOptions}
       labelFor={labelFor}
+      // Server-side search matches the RAW stored value, so it only helps when
+      // the label IS the value (text/number/date/…). user/select/boolean render
+      // labels that differ from the stored value — those search client-side.
+      serverSearch={ft !== "user" && ft !== "select" && ft !== "boolean"}
       t={t}
       trigger={
         <Button

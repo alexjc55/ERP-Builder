@@ -22,6 +22,7 @@ export function ValueChecklistPicker({
   onChange,
   getOptions,
   labelFor,
+  serverSearch = false,
   multiple = true,
   allowManual = false,
   trigger,
@@ -39,6 +40,14 @@ export function ValueChecklistPicker({
    */
   getOptions: (fieldKey: string, search?: string) => Promise<string[]>;
   labelFor?: (v: string) => string;
+  /**
+   * Pass the search box text to `getOptions` so the SERVER narrows the list
+   * before its row limit. Must be OFF for fields whose displayed label differs
+   * from the stored value (user ids → names, select values → labels, booleans)
+   * — the server matches raw stored values, so a label search would find
+   * nothing. Those fields keep the client-side label filter only.
+   */
+  serverSearch?: boolean;
   multiple?: boolean;
   /** Allow typing a value not present in the fetched list (filter authoring). */
   allowManual?: boolean;
@@ -53,22 +62,26 @@ export function ValueChecklistPicker({
   const label = labelFor ?? ((v: string) => v);
 
   // Debounce the search box so typing doesn't fire a request per keystroke.
+  // Only used when serverSearch is on; otherwise the constant "" keeps the
+  // fetch effect from re-firing while typing.
   const [debouncedSearch, setDebouncedSearch] = useState("");
   useEffect(() => {
+    if (!serverSearch) return;
     const h = setTimeout(() => setDebouncedSearch(optSearch.trim()), 300);
     return () => clearTimeout(h);
-  }, [optSearch]);
+  }, [optSearch, serverSearch]);
+  const effectiveSearch = serverSearch ? debouncedSearch : "";
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setLoading(true);
-    getOptions(fieldKey, debouncedSearch || undefined)
+    getOptions(fieldKey, effectiveSearch || undefined)
       .then((vals) => { if (!cancelled) setOptions(vals); })
       .catch(() => { if (!cancelled) setOptions([]); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [open, getOptions, fieldKey, debouncedSearch]);
+  }, [open, getOptions, fieldKey, effectiveSearch]);
 
   const toggle = (v: string) => {
     if (multiple) {
