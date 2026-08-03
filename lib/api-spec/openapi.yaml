@@ -2214,6 +2214,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/BulkRecordsResult"
 
+  /records/merge:
+    post:
+      operationId: mergeRecords
+      tags: [records]
+      summary: >-
+        Merge duplicate records into one (superAdmin only). All relation links
+        of the source records are repointed to the target (deduplicated,
+        cardinality-safe: the target's own existing link wins), the target's
+        EMPTY fields are filled from the sources (first source with a value
+        wins), page-local values are merged the same way, then the source
+        records are deleted. Runs in one transaction.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MergeRecords"
+      responses:
+        "200":
+          description: Merge summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MergeRecordsResult"
+
   /records/{id}/audit:
     get:
       operationId: listRecordAuditLogs
@@ -7040,6 +7065,38 @@ components:
           items:
             type: integer
         failedIds:
+          type: array
+          items:
+            type: integer
+
+    MergeRecords:
+      type: object
+      required: [entityId, targetRecordId, sourceRecordIds]
+      properties:
+        entityId:
+          type: integer
+        targetRecordId:
+          type: integer
+          description: The surviving record; keeps its own values.
+        sourceRecordIds:
+          type: array
+          items:
+            type: integer
+          minItems: 1
+          maxItems: 20
+          description: Duplicates merged into the target and then deleted.
+
+    MergeRecordsResult:
+      type: object
+      required: [movedLinks, filledFields, deletedRecordIds]
+      properties:
+        movedLinks:
+          type: integer
+          description: Relation links repointed to the target.
+        filledFields:
+          type: integer
+          description: Empty target fields filled from the duplicates.
+        deletedRecordIds:
           type: array
           items:
             type: integer

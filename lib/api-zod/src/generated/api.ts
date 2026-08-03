@@ -5093,6 +5093,26 @@ export const BulkRecordsActionResponse = zod.object({
 
 
 /**
+ * @summary Merge duplicate records into one (superAdmin only). All relation links of the source records are repointed to the target (deduplicated, cardinality-safe: the target's own existing link wins), the target's EMPTY fields are filled from the sources (first source with a value wins), page-local values are merged the same way, then the source records are deleted. Runs in one transaction.
+ */
+export const mergeRecordsBodySourceRecordIdsMax = 20;
+
+
+
+export const MergeRecordsBody = zod.object({
+  "entityId": zod.number(),
+  "targetRecordId": zod.number().describe('The surviving record; keeps its own values.'),
+  "sourceRecordIds": zod.array(zod.number()).min(1).max(mergeRecordsBodySourceRecordIdsMax).describe('Duplicates merged into the target and then deleted.')
+})
+
+export const MergeRecordsResponse = zod.object({
+  "movedLinks": zod.number().describe('Relation links repointed to the target.'),
+  "filledFields": zod.number().describe('Empty target fields filled from the duplicates.'),
+  "deletedRecordIds": zod.array(zod.number())
+})
+
+
+/**
  * @summary List the change history (audit log) of a record
  */
 export const ListRecordAuditLogsParams = zod.object({

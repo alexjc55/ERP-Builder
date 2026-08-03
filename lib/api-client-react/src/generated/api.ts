@@ -79,6 +79,8 @@ import type {
   LocalFolder,
   LoginHistoryEntry,
   LoginInput,
+  MergeRecords,
+  MergeRecordsResult,
   Module,
   ModuleInput,
   ModuleUpdate,
@@ -7404,6 +7406,77 @@ export const useBulkRecordsAction = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getBulkRecordsActionMutationOptions(options));
+    }
+
+export const getMergeRecordsUrl = () => {
+
+
+
+
+  return `/api/records/merge`
+}
+
+/**
+ * @summary Merge duplicate records into one (superAdmin only). All relation links of the source records are repointed to the target (deduplicated, cardinality-safe: the target's own existing link wins), the target's EMPTY fields are filled from the sources (first source with a value wins), page-local values are merged the same way, then the source records are deleted. Runs in one transaction.
+ */
+export const mergeRecords = async (mergeRecords: MergeRecords, options?: RequestInit): Promise<MergeRecordsResult> => {
+
+  return customFetch<MergeRecordsResult>(getMergeRecordsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      mergeRecords,)
+  }
+);}
+
+
+
+
+export const getMergeRecordsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mergeRecords>>, TError,{data: BodyType<MergeRecords>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof mergeRecords>>, TError,{data: BodyType<MergeRecords>}, TContext> => {
+
+const mutationKey = ['mergeRecords'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof mergeRecords>>, {data: BodyType<MergeRecords>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  mergeRecords(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MergeRecordsMutationResult = NonNullable<Awaited<ReturnType<typeof mergeRecords>>>
+    export type MergeRecordsMutationBody = BodyType<MergeRecords>
+    export type MergeRecordsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Merge duplicate records into one (superAdmin only). All relation links of the source records are repointed to the target (deduplicated, cardinality-safe: the target's own existing link wins), the target's EMPTY fields are filled from the sources (first source with a value wins), page-local values are merged the same way, then the source records are deleted. Runs in one transaction.
+ */
+export const useMergeRecords = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mergeRecords>>, TError,{data: BodyType<MergeRecords>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof mergeRecords>>,
+        TError,
+        {data: BodyType<MergeRecords>},
+        TContext
+      > => {
+      return useMutation(getMergeRecordsMutationOptions(options));
     }
 
 export const getListRecordAuditLogsUrl = (id: number,) => {

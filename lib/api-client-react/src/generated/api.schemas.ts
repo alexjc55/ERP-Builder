@@ -3198,6 +3198,26 @@ export interface BulkRecordsResult {
   failedIds: number[];
 }
 
+export interface MergeRecords {
+  entityId: number;
+  /** The surviving record; keeps its own values. */
+  targetRecordId: number;
+  /**
+     * Duplicates merged into the target and then deleted.
+     * @minItems 1
+     * @maxItems 20
+     */
+  sourceRecordIds: number[];
+}
+
+export interface MergeRecordsResult {
+  /** Relation links repointed to the target. */
+  movedLinks: number;
+  /** Empty target fields filled from the duplicates. */
+  filledFields: number;
+  deletedRecordIds: number[];
+}
+
 export interface RecordDelete {
   /** Optional mirror-page context (see RecordInput.pageId): applies the mirror page's delete-rights override when deleting through it. */
   pageId?: number;

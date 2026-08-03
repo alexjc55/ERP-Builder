@@ -17,6 +17,7 @@ import {
   resolveFieldAccess,
   mostPermissiveFieldPerm,
   canRecord,
+  requireSuperAdmin,
 } from "../middlewares/permissions";
 import {
   ListEntityRecordsParams,
@@ -42,6 +43,7 @@ import {
   PivotEntityRecordsParams,
   PivotEntityRecordsBody,
   BulkRecordsActionBody,
+  MergeRecordsBody,
 } from "@workspace/api-zod";
 import type { EntityField, InsertAuditLog, FileSource, FileFieldConfig, FieldValidationRule } from "@workspace/db";
 import { optionValues, optionNumbers } from "../lib/selectOptions";
@@ -3233,6 +3235,260 @@ router.post("/records/bulk", requireAuth, async (req, res): Promise<void> => {
   }
 
   res.json({ successIds, failedIds });
+});
+
+/** True when a stored field value counts as "empty" for merge fill-in. */
+function mergeValueEmpty(v: unknown): boolean {
+  if (v == null || v === "") return true;
+  if (Array.isArray(v) && v.length === 0) return true;
+  return false;
+}
+
+/**
+ * Merge duplicate records into one (superAdmin only).
+ *
+ * In ONE transaction: every relation link of the source records is repointed
+ * to the target — deduplicated and cardinality-safe (the target's own existing
+ * link on a unique side always wins; a link that would connect the target to
+ * itself is dropped); the target's EMPTY fields are filled from the sources
+ * (first source with a value wins; the target's own values are never
+ * overwritten); page-local values are merged the same way. After the commit
+ * the source records are deleted via the shared delete core (file trash +
+ * audit snapshot + delete event) — file values inherited by the target are
+ * excluded from trashing so the surviving record's files stay downloadable.
+ */
+router.post("/records/merge", requireAuth, requireSuperAdmin(), async (req, res): Promise<void> => {
+  const body = MergeRecordsBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  const { entityId, targetRecordId } = body.data;
+  const sourceIds = [...new Set(body.data.sourceRecordIds)].filter((id) => id !== targetRecordId);
+  if (sourceIds.length === 0) {
+    res.status(400).json({ error: "sourceRecordIds must contain at least one record different from the target" });
+    return;
+  }
+
+  const rows = await db
+    .select()
+    .from(entityRecordsTable)
+    .where(and(eq(entityRecordsTable.entityId, entityId), inArray(entityRecordsTable.id, [targetRecordId, ...sourceIds])));
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const target = byId.get(targetRecordId);
+  if (!target || sourceIds.some((id) => !byId.get(id))) {
+    res.status(404).json({ error: "Record not found in this entity" });
+    return;
+  }
+
+  const fields = await loadActiveFields(entityId);
+  const sourceIdSet = new Set(sourceIds);
+  // Fields whose value the target inherits from a source (fill-empty). Tracked
+  // so the sources' delete does NOT trash the physical files behind them.
+  const inheritedFileKeys = new Set<string>();
+
+  let movedLinks = 0;
+  let filledFields = 0;
+
+  const filledFieldKeys: string[] = [];
+
+  try {
+  await db.transaction(async (tx) => {
+    // ---- 1. Repoint relation links ------------------------------------
+    const links = await tx
+      .select()
+      .from(recordLinksTable)
+      .where(or(inArray(recordLinksTable.sourceRecordId, sourceIds), inArray(recordLinksTable.targetRecordId, sourceIds)))
+      .orderBy(asc(recordLinksTable.id));
+
+    // Serialize against concurrent link writes / relation type changes: the
+    // shared link core locks the relation row FOR UPDATE, so locking the same
+    // rows here means no link can move under us mid-merge.
+    const lockRelationIds = [...new Set(links.map((l) => l.relationId))];
+    if (lockRelationIds.length > 0) {
+      await tx
+        .select({ id: relationsTable.id })
+        .from(relationsTable)
+        .where(inArray(relationsTable.id, lockRelationIds))
+        .for("update");
+    }
+
+    // The target's CURRENT links per relation, to enforce dedupe + the partial
+    // unique indexes (source unique for one_to_one/many_to_one, target unique
+    // for one_to_one/one_to_many) in application order.
+    const relationIds = [...new Set(links.map((l) => l.relationId))];
+    const targetLinks =
+      relationIds.length === 0
+        ? []
+        : await tx
+            .select()
+            .from(recordLinksTable)
+            .where(
+              and(
+                inArray(recordLinksTable.relationId, relationIds),
+                or(eq(recordLinksTable.sourceRecordId, targetRecordId), eq(recordLinksTable.targetRecordId, targetRecordId)),
+              ),
+            );
+    const pairKey = (relationId: number, s: number, t: number) => `${relationId}:${s}:${t}`;
+    const existingPairs = new Set(targetLinks.map((l) => pairKey(l.relationId, l.sourceRecordId, l.targetRecordId)));
+    const sourceSideTaken = new Set(
+      targetLinks.filter((l) => l.sourceRecordId === targetRecordId).map((l) => l.relationId),
+    );
+    const targetSideTaken = new Set(
+      targetLinks.filter((l) => l.targetRecordId === targetRecordId).map((l) => l.relationId),
+    );
+
+    for (const link of links) {
+      const newSource = sourceIdSet.has(link.sourceRecordId) ? targetRecordId : link.sourceRecordId;
+      const newTarget = sourceIdSet.has(link.targetRecordId) ? targetRecordId : link.targetRecordId;
+      const sourceUnique = link.relationType === "one_to_one" || link.relationType === "many_to_one";
+      const targetUnique = link.relationType === "one_to_one" || link.relationType === "one_to_many";
+      const drop =
+        newSource === newTarget || // would link the target to itself
+        existingPairs.has(pairKey(link.relationId, newSource, newTarget)) || // identical link exists
+        (sourceUnique && newSource === targetRecordId && link.sourceRecordId !== targetRecordId && sourceSideTaken.has(link.relationId)) ||
+        (targetUnique && newTarget === targetRecordId && link.targetRecordId !== targetRecordId && targetSideTaken.has(link.relationId));
+      if (drop) {
+        await tx.delete(recordLinksTable).where(eq(recordLinksTable.id, link.id));
+        continue;
+      }
+      await tx
+        .update(recordLinksTable)
+        .set({ sourceRecordId: newSource, targetRecordId: newTarget })
+        .where(eq(recordLinksTable.id, link.id));
+      movedLinks += 1;
+      existingPairs.add(pairKey(link.relationId, newSource, newTarget));
+      if (newSource === targetRecordId) sourceSideTaken.add(link.relationId);
+      if (newTarget === targetRecordId) targetSideTaken.add(link.relationId);
+    }
+
+    // ---- 2. Fill the target's empty fields from the sources ------------
+    const targetValues = { ...((target.valuesJson as Record<string, unknown>) ?? {}) };
+    const auditEntries: InsertAuditLog[] = [];
+    for (const f of fields) {
+      if (f.fieldType === "relation" || f.fieldType === "lookup" || f.fieldType === "function") continue;
+      if (!mergeValueEmpty(targetValues[f.fieldKey])) continue;
+      for (const srcId of sourceIds) {
+        const srcValues = (byId.get(srcId)!.valuesJson as Record<string, unknown>) ?? {};
+        const v = srcValues[f.fieldKey];
+        if (mergeValueEmpty(v)) continue;
+        targetValues[f.fieldKey] = v;
+        filledFields += 1;
+        filledFieldKeys.push(f.fieldKey);
+        if (f.fieldType === "file") inheritedFileKeys.add(f.fieldKey);
+        auditEntries.push({
+          entityId,
+          recordId: targetRecordId,
+          fieldKey: f.fieldKey,
+          oldValue: null,
+          newValue: auditStr(v),
+          userId: req.user!.userId,
+        });
+        break;
+      }
+    }
+    if (filledFields > 0) {
+      // isKey uniqueness on inherited values, under the same advisory lock as
+      // normal writes. The duplicate-holding SOURCE records don't count (they
+      // are deleted by this merge); any OTHER record owning the value aborts.
+      const keyFields = fields.filter((f) => f.isKey && filledFieldKeys.includes(f.fieldKey));
+      if (keyFields.length > 0) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${UNIQUE_KEY_LOCK_NS}, ${entityId})`);
+        for (const f of keyFields) {
+          const raw = targetValues[f.fieldKey];
+          if (raw == null || raw === "") continue;
+          const v = typeof raw === "string" ? raw.trim() : String(raw);
+          const valueExpr = sql`lower(trim(${entityRecordsTable.valuesJson} ->> ${f.fieldKey}))`;
+          const [hit] = await tx
+            .select({ id: entityRecordsTable.id })
+            .from(entityRecordsTable)
+            .where(
+              and(
+                eq(entityRecordsTable.entityId, entityId),
+                sql`${valueExpr} = ${v.trim().toLowerCase()}`,
+                sql`${entityRecordsTable.id} NOT IN (${sql.join([targetRecordId, ...sourceIds].map((n) => sql`${n}`), sql`, `)})`,
+              )!,
+            )
+            .limit(1);
+          if (hit) throw new UniqueKeyError(`Поле «${fieldRuName(f)}»: значение «${v}» уже используется в другой записи`);
+        }
+      }
+      await tx.update(entityRecordsTable).set({ valuesJson: targetValues }).where(eq(entityRecordsTable.id, targetRecordId));
+    }
+
+    // ---- 3. Merge page-local values (fill-empty, per page) -------------
+    const pageRows = await tx
+      .select()
+      .from(pageRecordValuesTable)
+      .where(inArray(pageRecordValuesTable.recordId, [targetRecordId, ...sourceIds]));
+    const targetPageRows = new Map(pageRows.filter((r) => r.recordId === targetRecordId).map((r) => [r.pageId, r]));
+    const sourcePageRows = pageRows.filter((r) => sourceIdSet.has(r.recordId));
+    const mergedByPage = new Map<number, Record<string, unknown>>();
+    for (const row of sourcePageRows) {
+      const acc = mergedByPage.get(row.pageId) ?? {};
+      const vals = (row.valuesJson as Record<string, unknown>) ?? {};
+      for (const [k, v] of Object.entries(vals)) {
+        if (mergeValueEmpty(v) || !mergeValueEmpty(acc[k])) continue;
+        acc[k] = v;
+      }
+      mergedByPage.set(row.pageId, acc);
+    }
+    for (const [pageId, srcVals] of mergedByPage.entries()) {
+      const existing = targetPageRows.get(pageId);
+      const current = { ...(((existing?.valuesJson as Record<string, unknown>) ?? {}) as Record<string, unknown>) };
+      let changed = false;
+      for (const [k, v] of Object.entries(srcVals)) {
+        if (!mergeValueEmpty(current[k])) continue;
+        current[k] = v;
+        changed = true;
+      }
+      if (!changed) continue;
+      if (existing) {
+        await tx.update(pageRecordValuesTable).set({ valuesJson: current }).where(eq(pageRecordValuesTable.id, existing.id));
+      } else {
+        await tx.insert(pageRecordValuesTable).values({ pageId, recordId: targetRecordId, valuesJson: current });
+      }
+    }
+
+    if (auditEntries.length > 0) await writeAudit(auditEntries, req.log);
+  });
+  } catch (err) {
+    if (err instanceof UniqueKeyError) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
+    throw err;
+  }
+
+  // ---- 4. Delete the source records (shared core: trash + audit + event).
+  // Outside the transaction (the core is non-transactional by design, like the
+  // bulk endpoint); the merge itself is already committed, so a failed delete
+  // leaves a harmless empty duplicate that can be removed manually.
+  const deletedRecordIds: number[] = [];
+  for (const srcId of sourceIds) {
+    const values = { ...((byId.get(srcId)!.valuesJson as Record<string, unknown>) ?? {}) };
+    // Files inherited by the target must survive: keep them OUT of the trash
+    // snapshot (the value now lives on the target and points at the same path).
+    for (const k of inheritedFileKeys) delete values[k];
+    try {
+      await performRecordDelete(req, entityId, srcId, values);
+      deletedRecordIds.push(srcId);
+    } catch (err) {
+      req.log.error({ err, recordId: srcId }, "merge: source record delete failed");
+    }
+  }
+
+  await emitEvent(
+    {
+      eventName: EVENT_RECORD_UPDATED,
+      entityId,
+      recordId: targetRecordId,
+      payload: { actorUserId: req.user!.userId, changedFields: filledFieldKeys },
+    },
+    req.log,
+  );
+
+  res.json({ movedLinks, filledFields, deletedRecordIds });
 });
 
 export default router;

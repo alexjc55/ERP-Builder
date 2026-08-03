@@ -154,6 +154,8 @@ export * from './listUsersParams';
 export * from './localFolder';
 export * from './loginHistoryEntry';
 export * from './loginInput';
+export * from './mergeRecords';
+export * from './mergeRecordsResult';
 export * from './module';
 export * from './moduleInput';
 export * from './moduleInputSettingsJson';

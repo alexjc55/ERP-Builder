@@ -21,6 +21,7 @@ import {
   useArchiveRecord,
   useUnarchiveRecord,
   useBulkRecordsAction,
+  useMergeRecords,
   useListUserOptions,
   useListRecordAuditLogs,
   useListRoles,
@@ -152,7 +153,7 @@ import { computeRowFormatting, ruleMatches, type FormatField } from "@/lib/forma
 import type { FieldFormatRule, CustomFilterPick, CustomFilter, CustomFilterInput } from "@workspace/api-client-react";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus, Zap, ChevronsUpDown, ChevronsDownUp, ArrowUp, ArrowDown, ArrowUpDown, ListChecks } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus, Zap, ChevronsUpDown, ChevronsDownUp, ArrowUp, ArrowDown, ArrowUpDown, ListChecks, Merge } from "lucide-react";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Link, useLocation, useSearch } from "wouter";
 import { Calendar } from "@/components/ui/calendar";
@@ -2061,6 +2062,9 @@ export function EntityRecords({
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkConfirm, setBulkConfirm] = useState<null | "archive" | "unarchive" | "delete">(null);
+  // Merge duplicates (superAdmin): pick the surviving record among the selected.
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeTargetId, setMergeTargetId] = useState<number | null>(null);
   // Click-to-highlight: the row whose top/bottom borders are accented. Any
   // click inside the row (including a cell that opens an inline editor) selects
   // it — handlers don't stop propagation, so editing keeps working. Clicking
@@ -3495,6 +3499,23 @@ export function EntityRecords({
       },
     },
   });
+  const mergeMutation = useMergeRecords({
+    mutation: {
+      onSuccess: (resp) => {
+        toast({
+          title: t("records.mergeDone", "Записи объединены"),
+          description: `${t("records.mergeMovedLinks", "Перенесено связей")}: ${resp.movedLinks}, ${t("records.mergeFilledFields", "заполнено полей")}: ${resp.filledFields}`,
+        });
+        setMergeOpen(false);
+        setMergeTargetId(null);
+        setSelectedIds(new Set());
+        invalidate();
+      },
+      onError: (err) => {
+        toast({ title: t("records.mergeError", "Ошибка объединения"), description: extractError(err), variant: "destructive" });
+      },
+    },
+  });
   // Used to persist relation-field links chosen during a CREATE flow, once the
   // base record exists (a link cannot be written before the record id is known).
   const setEntityLinkMutation = useSetEntityRelatedLink();
@@ -4431,6 +4452,18 @@ export function EntityRecords({
                   <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => setBulkConfirm("delete")}>
                     <Trash2 className="w-3.5 h-3.5 mr-2" />
                     {t("records.delete", "Удалить")}
+                  </DropdownMenuItem>
+                )}
+                {isSuperAdmin && (
+                  <DropdownMenuItem
+                    disabled={selectedIds.size < 2}
+                    onClick={() => {
+                      setMergeTargetId(null);
+                      setMergeOpen(true);
+                    }}
+                  >
+                    <Merge className="w-3.5 h-3.5 mr-2" />
+                    {t("records.mergeAction", "Объединить записи")}
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>
@@ -6527,6 +6560,64 @@ export function EntityRecords({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={mergeOpen} onOpenChange={(o) => { if (!o) { setMergeOpen(false); setMergeTargetId(null); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("records.mergeTitle", "Объединить записи")}</DialogTitle>
+            <DialogDescription>
+              {t(
+                "records.mergeDesc",
+                "Выберите главную запись. Все связи остальных записей перейдут к ней, её пустые поля дозаполнятся из дубликатов, после чего дубликаты будут удалены безвозвратно.",
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[45vh] space-y-1 overflow-y-auto">
+            {records
+              .filter((r: EntityRecord) => selectedIds.has(r.id))
+              .map((r: EntityRecord) => (
+                <label
+                  key={r.id}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded border px-3 py-2 text-sm ${
+                    mergeTargetId === r.id ? "border-blue-400 bg-blue-50/60" : "border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="merge-target"
+                    className="accent-blue-600"
+                    checked={mergeTargetId === r.id}
+                    onChange={() => setMergeTargetId(r.id)}
+                  />
+                  <span className="min-w-0 truncate">{recordLabel(r)}</span>
+                  <span className="ml-auto shrink-0 text-xs text-slate-400">#{r.id}</span>
+                </label>
+              ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setMergeOpen(false); setMergeTargetId(null); }}>
+              {t("records.cancel", "Отмена")}
+            </Button>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700"
+              disabled={mergeTargetId == null || mergeMutation.isPending}
+              onClick={() =>
+                mergeTargetId != null &&
+                mergeMutation.mutate({
+                  data: {
+                    entityId,
+                    targetRecordId: mergeTargetId,
+                    sourceRecordIds: [...selectedIds].filter((id) => id !== mergeTargetId),
+                  },
+                })
+              }
+            >
+              {mergeMutation.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              {t("records.mergeConfirm", "Объединить")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <RecordHistoryDialog
         record={historyFor}
