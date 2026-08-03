@@ -1943,11 +1943,18 @@ export function EntityRecords({
   // A lookup field projects from the SAME relation, so during a CREATE flow (no
   // base record yet) we resolve which linked record id was picked to preview its
   // value before the record is saved.
-  const relationFieldKeyByRelationId = useMemo(() => {
-    const m = new Map<number, string>();
+  // ALL relation field keys per relationId — an entity may surface the SAME
+  // relation through several relation fields (different display projections);
+  // whichever one the user picked in holds the linked id during a create.
+  const relationFieldKeysByRelationId = useMemo(() => {
+    const m = new Map<number, string[]>();
     for (const f of fields) {
       const rid = f.relationConfigJson?.relationId;
-      if (f.fieldType === "relation" && rid != null && !m.has(rid)) m.set(rid, f.fieldKey);
+      if (f.fieldType === "relation" && rid != null) {
+        const list = m.get(rid) ?? [];
+        list.push(f.fieldKey);
+        m.set(rid, list);
+      }
     }
     return m;
   }, [fields]);
@@ -1956,10 +1963,11 @@ export function EntityRecords({
   const lookupLinkedId = (f: Field, rowValues: FormState): number | null => {
     const rid = f.relationConfigJson?.relationId;
     if (rid == null) return null;
-    const relKey = relationFieldKeyByRelationId.get(rid);
-    if (!relKey) return null;
-    const v = rowValues[relKey];
-    return typeof v === "number" && v > 0 ? v : null;
+    for (const relKey of relationFieldKeysByRelationId.get(rid) ?? []) {
+      const v = rowValues[relKey];
+      if (typeof v === "number" && v > 0) return v;
+    }
+    return null;
   };
   // Columns shown in the records table. A field is dropped from the table only
   // when EVERY assigned role hides it (most-permissive multi-role union). A role
@@ -7475,11 +7483,18 @@ function RecordFormBody({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form, relByField]);
 
-  const relationFieldKeyByRelationId = useMemo(() => {
-    const m = new Map<number, string>();
+  // ALL relation field keys per relationId — an entity may surface the SAME
+  // relation through several relation fields (different display projections);
+  // whichever one the user picked in holds the linked id during a create.
+  const relationFieldKeysByRelationId = useMemo(() => {
+    const m = new Map<number, string[]>();
     for (const f of allFields) {
       const rid = f.fieldType === "relation" ? f.relationConfigJson?.relationId : undefined;
-      if (rid != null) m.set(rid, f.fieldKey);
+      if (rid != null) {
+        const list = m.get(rid) ?? [];
+        list.push(f.fieldKey);
+        m.set(rid, list);
+      }
     }
     return m;
   }, [allFields]);
@@ -7489,10 +7504,11 @@ function RecordFormBody({
   const lookupLinkedId = (f: Field): number | null => {
     const rid = f.relationConfigJson?.relationId;
     if (rid == null) return null;
-    const relKey = relationFieldKeyByRelationId.get(rid);
-    if (!relKey) return null;
-    const v = formWithRelationParents[relKey];
-    return typeof v === "number" && v > 0 ? v : null;
+    for (const relKey of relationFieldKeysByRelationId.get(rid) ?? []) {
+      const v = formWithRelationParents[relKey];
+      if (typeof v === "number" && v > 0) return v;
+    }
+    return null;
   };
 
   // ONE dependent-field resolver: the parent value comes from the relation-merged
