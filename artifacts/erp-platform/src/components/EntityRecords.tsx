@@ -1963,11 +1963,18 @@ export function EntityRecords({
   const lookupLinkedId = (f: Field, rowValues: FormState): number | null => {
     const rid = f.relationConfigJson?.relationId;
     if (rid == null) return null;
+    // record_links are stored per relationId (not per field), so all relation
+    // fields of one relation share a single link. If drafts disagree (two
+    // pickers hold DIFFERENT ids), the preview is ambiguous — show nothing.
+    let id: number | null = null;
     for (const relKey of relationFieldKeysByRelationId.get(rid) ?? []) {
       const v = rowValues[relKey];
-      if (typeof v === "number" && v > 0) return v;
+      if (typeof v === "number" && v > 0) {
+        if (id != null && id !== v) return null;
+        id = v;
+      }
     }
-    return null;
+    return id;
   };
   // Columns shown in the records table. A field is dropped from the table only
   // when EVERY assigned role hides it (most-permissive multi-role union). A role
@@ -7504,11 +7511,18 @@ function RecordFormBody({
   const lookupLinkedId = (f: Field): number | null => {
     const rid = f.relationConfigJson?.relationId;
     if (rid == null) return null;
+    // record_links are stored per relationId (not per field), so all relation
+    // fields of one relation share a single link. If drafts disagree (two
+    // pickers hold DIFFERENT ids), the preview is ambiguous — show nothing.
+    let id: number | null = null;
     for (const relKey of relationFieldKeysByRelationId.get(rid) ?? []) {
       const v = formWithRelationParents[relKey];
-      if (typeof v === "number" && v > 0) return v;
+      if (typeof v === "number" && v > 0) {
+        if (id != null && id !== v) return null;
+        id = v;
+      }
     }
-    return null;
+    return id;
   };
 
   // ONE dependent-field resolver: the parent value comes from the relation-merged
