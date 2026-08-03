@@ -59,3 +59,4 @@
 - [Bulk record actions](bulk-record-actions.md) — multi-select archive/delete: per-record boundary re-check in one endpoint, shared no-check cores with singles, sticky checkbox column rules.
 - [Filter row scope](erp-filter-scope.md) — third record scope "filter" (rows where field value ∈ set): encoded as synthetic own-scope keys so all own-scope sites enforce it; lookup fields via EXISTS.
 - [Mirror-page grouping](mirror-page-grouping.md) — groupByFieldKey accordion groups: buckets computed WITHOUT groupValue; relation group label must re-apply the linked-entity field boundary (else header leaks); sums follow numericTotals raw-value invariant.
+- [Record merge](record-merge.md) — superAdmin duplicate merge: one tx repoints links (target's link wins on unique sides), fill-empty values, isKey re-check; sources deleted via shared delete core AFTER commit.
