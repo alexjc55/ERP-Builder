@@ -29,3 +29,7 @@ options (e.g. `wrapText`) must be wired there explicitly — including the assig
 branch; lookup columns kept a hardcoded `truncate` and never wrapped. **How to apply:** when adding a per-field
 table-display option, grep every `<td>` branch in the records table (scalar, function, relation/lookup, picker
 trigger) and thread the flag through each; page-local fields have no such column and stay out of scope.
+
+## Create-time lookup preview (2026-08)
+- record_links are stored per relationId with NO field key: several relation fields of one entity can surface the SAME relation. Any create-time resolver mapping relationId → relation-field value must scan ALL such fields (first Map.set-wins picked the wrong/empty one → blank lookup previews); if two drafts hold DIFFERENT ids the preview is ambiguous — render nothing.
+- Formula ("function") fields now compute LIVE in the record form and inline add-row from current draft values (buildFormulaScope over form state, user ids → names); a caller-locked relation in quick-create previews the target's display field via LookupCreatePreview, never `#id`.
