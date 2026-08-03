@@ -23,5 +23,7 @@ export interface FilterValuesQuery {
   excludeFilters?: ExcludeFilter[];
   excludeStatusIds?: number[];
   search?: string;
+  /** Substring search over the OPTION VALUES themselves (the picker's search box), applied server-side BEFORE the 500-row limit so a value outside the first 500 distinct values can still be found. */
+  valueSearch?: string;
   archived?: ArchiveFilter;
 }

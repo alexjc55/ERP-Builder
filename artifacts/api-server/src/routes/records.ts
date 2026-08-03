@@ -2025,6 +2025,10 @@ router.post(
     const fvHiddenRowWhere = hiddenRowStatusWhere(hiddenRowStatusIds);
     if (fvHiddenRowWhere) clauses.push(fvHiddenRowWhere);
 
+    // Picker search box, applied server-side BEFORE the 500-row limit so a value
+    // outside the first 500 distinct values (alphabetically) is still findable.
+    const valueSearch = (body.data.valueSearch ?? "").trim();
+
     const targetMeta = relationMeta.get(body.data.field);
     let values: string[];
     if (targetMeta) {
@@ -2037,7 +2041,8 @@ router.post(
       const baseCol = targetMeta.direction === "source" ? frl.sourceRecordId : frl.targetRecordId;
       const linkedCol = targetMeta.direction === "source" ? frl.targetRecordId : frl.sourceRecordId;
       const valueExpr = sql<string | null>`(${flt.valuesJson} ->> ${targetMeta.relatedFieldKey})`;
-      const where = and(...clauses, sql`${valueExpr} IS NOT NULL AND ${valueExpr} <> ''`)!;
+      const vsClauses = valueSearch ? [sql`${valueExpr} ILIKE ${"%" + valueSearch + "%"}`] : [];
+      const where = and(...clauses, ...vsClauses, sql`${valueExpr} IS NOT NULL AND ${valueExpr} <> ''`)!;
       // ORDER BY ordinal (1) — same SELECT DISTINCT constraint as below.
       const rows = await db
         .selectDistinct({ v: valueExpr })
@@ -2050,7 +2055,8 @@ router.post(
       values = rows.map((r) => r.v).filter((v): v is string => v != null && v !== "");
     } else {
       const valueExpr = sql<string | null>`(${entityRecordsTable.valuesJson} ->> ${body.data.field})`;
-      const where = and(...clauses, sql`${valueExpr} IS NOT NULL AND ${valueExpr} <> ''`)!;
+      const vsClauses = valueSearch ? [sql`${valueExpr} ILIKE ${"%" + valueSearch + "%"}`] : [];
+      const where = and(...clauses, ...vsClauses, sql`${valueExpr} IS NOT NULL AND ${valueExpr} <> ''`)!;
       // ORDER BY ordinal (1) — for SELECT DISTINCT the order-by expression must match the
       // selected column; re-emitting valueExpr would bind a fresh param and Postgres would
       // reject it as not in the select list.
@@ -2133,6 +2139,9 @@ router.post(
     const pfvHiddenRowWhere = hiddenRowStatusWhere(hiddenRowStatusIds);
     if (pfvHiddenRowWhere) clauses.push(pfvHiddenRowWhere);
     clauses.push(sql`${valueExpr} IS NOT NULL AND ${valueExpr} <> ''`);
+    // Same server-side picker search as entity filter-values (pre-limit).
+    const pfValueSearch = (body.data.valueSearch ?? "").trim();
+    if (pfValueSearch) clauses.push(sql`${valueExpr} ILIKE ${"%" + pfValueSearch + "%"}`);
     const where = and(...clauses)!;
 
     // ORDER BY ordinal (1) — same SELECT DISTINCT constraint as filter-values:

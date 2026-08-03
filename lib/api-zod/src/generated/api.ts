@@ -5579,6 +5579,7 @@ export const GetEntityFilterValuesBody = zod.object({
 }).describe('A SOFT exclusion: hide rows whose `field` value is one of `values`. Always AND-combined with the rest of the query independently of the view\'s filterConjunction, and NULL-safe (rows with an empty value are kept). Only narrows the result — it can never reveal rows the view\'s hard filter hides. Driven by a page\'s default filter and toggled off by the viewer via \"show hidden\".')).optional().describe('SOFT per-field exclusions from the page default (when \"show hidden\" is off). Applied to the option list too so co-occurring values stay consistent with the visible rows. The exclusion matching the target field is skipped by the server so the target\'s own dropdown still lists all its selectable values.'),
   "excludeStatusIds": zod.array(zod.number()).optional(),
   "search": zod.string().optional(),
+  "valueSearch": zod.string().optional().describe('Substring search over the OPTION VALUES themselves (the picker\'s search box), applied server-side BEFORE the 500-row limit so a value outside the first 500 distinct values can still be found.'),
   "archived": zod.enum(['active', 'archived', 'all']).default(getEntityFilterValuesBodyArchivedDefault)
 })
 
@@ -5599,6 +5600,7 @@ export const getPageFilterValuesBodyArchivedDefault = `active`;
 export const GetPageFilterValuesBody = zod.object({
   "pageId": zod.number().describe('The mirror-page context that owns the page-local field.'),
   "field": zod.string().describe('The page-local field key whose distinct existing values to list.'),
+  "valueSearch": zod.string().optional().describe('Substring search over the option values, applied server-side before the row limit (same semantics as FilterValuesQuery.valueSearch).'),
   "archived": zod.enum(['active', 'archived', 'all']).default(getPageFilterValuesBodyArchivedDefault)
 })
 

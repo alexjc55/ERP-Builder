@@ -12,5 +12,7 @@ export interface PageFilterValuesQuery {
   pageId: number;
   /** The page-local field key whose distinct existing values to list. */
   field: string;
+  /** Substring search over the option values, applied server-side before the row limit (same semantics as FilterValuesQuery.valueSearch). */
+  valueSearch?: string;
   archived?: ArchiveFilter;
 }

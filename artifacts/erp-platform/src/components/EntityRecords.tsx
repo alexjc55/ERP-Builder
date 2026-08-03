@@ -2726,7 +2726,7 @@ export function EntityRecords({
   const filterValuesMutation = useGetEntityFilterValues();
   const fetchFilterOptions = filterValuesMutation.mutateAsync;
   const getFilterOptions = useCallback(
-    async (fieldKey: string): Promise<string[]> => {
+    async (fieldKey: string, valueSearch?: string): Promise<string[]> => {
       // Self-exclude the target field from BOTH the value filters and the date filters so the
       // option list reflects what the OTHER active filters (incl. date ranges) narrow to.
       const others = adHocFilters.filter((c) => c.field !== fieldKey);
@@ -2751,6 +2751,9 @@ export function EntityRecords({
           excludeFilters: activeExcludeFilters,
           excludeStatusIds: activeExcludeStatusIds,
           search: debouncedSearch.trim() || undefined,
+          // Picker search box → server-side narrowing BEFORE the 500-value
+          // limit, so values outside the first 500 are still findable.
+          valueSearch: valueSearch || undefined,
           archived,
         },
       });
@@ -2847,7 +2850,7 @@ export function EntityRecords({
   const pageFilterValuesMutation = useGetPageFilterValues();
   const fetchPageFilterOptions = pageFilterValuesMutation.mutateAsync;
   const getPageFilterOptions = useCallback(
-    async (fieldKey: string): Promise<string[]> => {
+    async (fieldKey: string, valueSearch?: string): Promise<string[]> => {
       const pf = filterablePageFields.find((f: PageField) => f.fieldKey === fieldKey);
       if (!pf) return [];
       if (pf.fieldType === "boolean") return ["true", "false"];
@@ -2855,7 +2858,7 @@ export function EntityRecords({
       if (permPageId == null) return [];
       const res = await fetchPageFilterOptions({
         entityId,
-        data: { pageId: permPageId, field: fieldKey, archived },
+        data: { pageId: permPageId, field: fieldKey, valueSearch: valueSearch || undefined, archived },
       });
       return res.values ?? [];
     },

@@ -7926,6 +7926,12 @@ components:
             type: integer
         search:
           type: string
+        valueSearch:
+          type: string
+          description: >-
+            Substring search over the OPTION VALUES themselves (the picker's
+            search box), applied server-side BEFORE the 500-row limit so a
+            value outside the first 500 distinct values can still be found.
         archived:
           $ref: "#/components/schemas/ArchiveFilter"
 
@@ -7996,6 +8002,11 @@ components:
         field:
           type: string
           description: The page-local field key whose distinct existing values to list.
+        valueSearch:
+          type: string
+          description: >-
+            Substring search over the option values, applied server-side before
+            the row limit (same semantics as FilterValuesQuery.valueSearch).
         archived:
           $ref: "#/components/schemas/ArchiveFilter"
 

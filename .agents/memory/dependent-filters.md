@@ -206,3 +206,14 @@ its ORDER BY; order by ordinal or by the column alias.
 
 ## Collapse default (2026-07-18)
 - The quick-filter bar can be collapsed/expanded by default per page (`pages.filters_collapsed_default`), mirroring the Analytics `widgetsCollapsedDefault` pattern: viewer localStorage override (`erp.filters.collapsed.<pageId|e<entityId>>`, "1"/"0", null → admin default), setup-mode Select saves via page PUT (pages cap). Display-only, never a data boundary.
+
+## Filter-values 500-row limit needs server-side picker search (2026-08)
+
+Both filter-values endpoints (entity + page-local) cap DISTINCT values at 500
+ordered alphabetically. With >500 distinct values a value outside the first 500
+was unfindable — the picker's search box only filtered the fetched list, and
+after switching the archive toggle to "all" the same selection silently emptied.
+Fix: optional `valueSearch` in the request, applied as ILIKE on the value
+expression BEFORE the limit; ValueChecklistPicker debounces its search box and
+passes it as getOptions' second arg. Any new value-list endpoint with a row cap
+must accept the picker search server-side.

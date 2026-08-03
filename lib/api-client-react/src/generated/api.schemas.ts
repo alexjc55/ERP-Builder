@@ -3680,6 +3680,8 @@ export interface FilterValuesQuery {
   excludeFilters?: ExcludeFilter[];
   excludeStatusIds?: number[];
   search?: string;
+  /** Substring search over the OPTION VALUES themselves (the picker's search box), applied server-side BEFORE the 500-row limit so a value outside the first 500 distinct values can still be found. */
+  valueSearch?: string;
   archived?: ArchiveFilter;
 }
 
@@ -3688,6 +3690,8 @@ export interface PageFilterValuesQuery {
   pageId: number;
   /** The page-local field key whose distinct existing values to list. */
   field: string;
+  /** Substring search over the option values, applied server-side before the row limit (same semantics as FilterValuesQuery.valueSearch). */
+  valueSearch?: string;
   archived?: ArchiveFilter;
 }
 

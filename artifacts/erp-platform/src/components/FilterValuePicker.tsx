@@ -30,7 +30,14 @@ export function ValueChecklistPicker({
   fieldKey: string;
   selected: string[];
   onChange: (values: string[]) => void;
-  getOptions: (fieldKey: string) => Promise<string[]>;
+  /**
+   * Fetch the option values. The optional second arg is the picker's search
+   * text: implementations that support it pass it to the server so the search
+   * narrows BEFORE the server's row limit (a value outside the first 500
+   * distinct values is otherwise unfindable). Implementations that ignore it
+   * still work — the client-side label filter below applies regardless.
+   */
+  getOptions: (fieldKey: string, search?: string) => Promise<string[]>;
   labelFor?: (v: string) => string;
   multiple?: boolean;
   /** Allow typing a value not present in the fetched list (filter authoring). */
@@ -45,16 +52,23 @@ export function ValueChecklistPicker({
   const [manual, setManual] = useState("");
   const label = labelFor ?? ((v: string) => v);
 
+  // Debounce the search box so typing doesn't fire a request per keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const h = setTimeout(() => setDebouncedSearch(optSearch.trim()), 300);
+    return () => clearTimeout(h);
+  }, [optSearch]);
+
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setLoading(true);
-    getOptions(fieldKey)
+    getOptions(fieldKey, debouncedSearch || undefined)
       .then((vals) => { if (!cancelled) setOptions(vals); })
       .catch(() => { if (!cancelled) setOptions([]); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [open, getOptions, fieldKey]);
+  }, [open, getOptions, fieldKey, debouncedSearch]);
 
   const toggle = (v: string) => {
     if (multiple) {
