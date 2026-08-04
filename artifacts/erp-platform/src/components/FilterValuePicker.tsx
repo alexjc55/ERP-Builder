@@ -16,6 +16,14 @@ import { Loader2, Plus } from "lucide-react";
  * ids → names, booleans → Да/Нет); selected values not present in the fetched set
  * are still shown so a committed value never disappears.
  */
+/**
+ * Sentinel value returned by the filter-values endpoints meaning "no stored
+ * value" (NULL/''). Rendered as a localized "(Пусто)" label here; translated
+ * into the empty predicate server-side. Keep the literal in sync with
+ * EMPTY_FILTER_VALUE in api-server record-query.ts.
+ */
+export const EMPTY_FILTER_VALUE = "__empty__";
+
 export function ValueChecklistPicker({
   fieldKey,
   selected,
@@ -59,7 +67,9 @@ export function ValueChecklistPicker({
   const [loading, setLoading] = useState(false);
   const [optSearch, setOptSearch] = useState("");
   const [manual, setManual] = useState("");
-  const label = labelFor ?? ((v: string) => v);
+  const baseLabel = labelFor ?? ((v: string) => v);
+  const label = (v: string): string =>
+    v === EMPTY_FILTER_VALUE ? t("records.filterEmptyValue", "(Пусто)") : baseLabel(v);
 
   // Debounce the search box so typing doesn't fire a request per keystroke.
   // Only used when serverSearch is on; otherwise the constant "" keeps the

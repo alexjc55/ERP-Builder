@@ -52,6 +52,8 @@ import {
   buildRecordQuery,
   buildPageLocalCondition,
   pageLocalValueExpr,
+  relationValueExists,
+  EMPTY_FILTER_VALUE,
   relationLinkFilter,
   relationLinkedIdScalar,
   relationValueScalar,
@@ -2055,6 +2057,17 @@ router.post(
         .orderBy(sql`1`)
         .limit(500);
       values = rows.map((r) => r.v).filter((v): v is string => v != null && v !== "");
+      // Offer "(empty)" when some visible row has NO linked non-empty value.
+      // Skipped while the user is text-searching values.
+      if (!valueSearch) {
+        const noLink = sql`NOT ${relationValueExists({ relationId: targetMeta.relationId, direction: targetMeta.direction, relatedFieldKey: targetMeta.relatedFieldKey }, (v) => sql`${v} IS NOT NULL AND ${v} <> ''`)}`;
+        const [emptyRow] = await db
+          .select({ one: sql<number>`1` })
+          .from(entityRecordsTable)
+          .where(and(...clauses, noLink)!)
+          .limit(1);
+        if (emptyRow) values = [EMPTY_FILTER_VALUE, ...values];
+      }
     } else {
       const valueExpr = sql<string | null>`(${entityRecordsTable.valuesJson} ->> ${body.data.field})`;
       const vsClauses = valueSearch ? [sql`${valueExpr} ILIKE ${"%" + valueSearch + "%"}`] : [];
@@ -2069,6 +2082,15 @@ router.post(
         .orderBy(sql`1`)
         .limit(500);
       values = rows.map((r) => r.v).filter((v): v is string => v != null && v !== "");
+      // Offer "(empty)" when some visible row has no stored value for the field.
+      if (!valueSearch) {
+        const [emptyRow] = await db
+          .select({ one: sql<number>`1` })
+          .from(entityRecordsTable)
+          .where(and(...clauses, sql`(${valueExpr} IS NULL OR ${valueExpr} = '')`)!)
+          .limit(1);
+        if (emptyRow) values = [EMPTY_FILTER_VALUE, ...values];
+      }
     }
     res.json({ values });
   },
@@ -2140,6 +2162,8 @@ router.post(
     if (scope === "own") clauses.push(await ownScopeWhere(entityId, scopeFieldKeys, req.user!.userId, fields));
     const pfvHiddenRowWhere = hiddenRowStatusWhere(hiddenRowStatusIds);
     if (pfvHiddenRowWhere) clauses.push(pfvHiddenRowWhere);
+    // Boundary-only clauses (no value predicates) — reused for the "(empty)" probe below.
+    const pfBoundaryClauses = [...clauses];
     clauses.push(sql`${valueExpr} IS NOT NULL AND ${valueExpr} <> ''`);
     // Same server-side picker search as entity filter-values (pre-limit).
     const pfValueSearch = (body.data.valueSearch ?? "").trim();
@@ -2159,7 +2183,19 @@ router.post(
       .orderBy(sql`1`)
       .limit(500);
 
-    const values = rows.map((r) => r.v).filter((v): v is string => v != null && v !== "");
+    let values = rows.map((r) => r.v).filter((v): v is string => v != null && v !== "");
+    // Offer "(empty)" when some visible record has no stored page value for the
+    // field (no page_record_values row at all, or NULL/'' under the key). Uses
+    // the same correlated subquery as the page-local `in` filter so semantics match.
+    if (!pfValueSearch) {
+      const pfExpr = pageLocalValueExpr(pageId, target.fieldKey);
+      const [emptyRow] = await db
+        .select({ one: sql<number>`1` })
+        .from(entityRecordsTable)
+        .where(and(...pfBoundaryClauses, sql`(${pfExpr} IS NULL OR ${pfExpr} = '')`)!)
+        .limit(1);
+      if (emptyRow) values = [EMPTY_FILTER_VALUE, ...values];
+    }
     res.json({ values });
   },
 );

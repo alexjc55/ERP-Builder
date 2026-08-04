@@ -104,6 +104,14 @@ export function relationDirection(
  * literal table/column names; only the relationId, relatedFieldKey and any
  * filter values are bound params.
  */
+/**
+ * Sentinel value in an `in` filter list meaning "no stored value" (NULL or '').
+ * Offered by the filter-values endpoints when empty rows exist and translated
+ * into the empty predicate here. Duplicated as a literal on the client
+ * (FilterValuePicker) — keep in sync.
+ */
+export const EMPTY_FILTER_VALUE = "__empty__";
+
 export function relationValueExists(meta: RelationFilterMeta, valueCond: (linkedVal: SQL) => SQL): SQL {
   const baseCol = meta.direction === "source" ? sql`rl.source_record_id` : sql`rl.target_record_id`;
   const linkedCol = meta.direction === "source" ? sql`rl.target_record_id` : sql`rl.source_record_id`;
@@ -184,8 +192,15 @@ export function buildRelationCondition(cond: FilterCondition, meta: RelationFilt
       return { error: `Operator "in" requires an array value for field "${cond.field}"` };
     }
     if (cond.value.length === 0) return { sql: sql`false` };
-    const parts = cond.value.map((v) => sql`${String(v)}`);
-    return { sql: relationValueExists(meta, (v) => sql`${v} IN (${sql.join(parts, sql`, `)})`) };
+    // `__empty__` sentinel: rows with NO linked non-empty value (same semantics
+    // as the is_empty operator), OR-combined with the real linked values.
+    const vals = cond.value.map((v) => String(v));
+    const rest = vals.filter((v) => v !== EMPTY_FILTER_VALUE);
+    const emptySql = sql`NOT ${relationValueExists(meta, nonEmpty)}`;
+    if (rest.length === 0) return { sql: emptySql };
+    const parts = rest.map((v) => sql`${v}`);
+    const inSql = relationValueExists(meta, (v) => sql`${v} IN (${sql.join(parts, sql`, `)})`);
+    return { sql: rest.length < vals.length ? sql`(${inSql} OR ${emptySql})` : inSql };
   }
 
   // Half-open range [from, to) on a relation/lookup field. The live filter bar only emits
@@ -254,8 +269,15 @@ export function buildCondition(
       return { error: `Operator "in" requires an array value for field "${cond.field}"` };
     }
     if (cond.value.length === 0) return { sql: sql`false` };
-    const parts = cond.value.map((v) => sql`${String(v)}`);
-    return { sql: sql`${expr} IN (${sql.join(parts, sql`, `)})` };
+    // The sentinel `__empty__` (offered by the filter-values endpoints) matches
+    // rows with NO stored value (NULL or ''), OR-combined with the real values.
+    const vals = cond.value.map((v) => String(v));
+    const rest = vals.filter((v) => v !== EMPTY_FILTER_VALUE);
+    const emptySql = sql`(${expr} IS NULL OR ${expr} = '')`;
+    if (rest.length === 0) return { sql: emptySql };
+    const parts = rest.map((v) => sql`${v}`);
+    const inSql = sql`${expr} IN (${sql.join(parts, sql`, `)})`;
+    return { sql: rest.length < vals.length ? sql`(${inSql} OR ${emptySql})` : inSql };
   }
 
   // Half-open range [from, to): a single condition that is internally AND, so it stays correct
