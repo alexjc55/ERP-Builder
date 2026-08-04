@@ -217,3 +217,9 @@ Fix: optional `valueSearch` in the request, applied as ILIKE on the value
 expression BEFORE the limit; ValueChecklistPicker debounces its search box and
 passes it as getOptions' second arg. Any new value-list endpoint with a row cap
 must accept the picker search server-side.
+
+## "(Пусто)" filter option
+
+- Filter-values endpoints (entity stored, relation/lookup, page-local) prepend sentinel `__empty__` (EMPTY_FILTER_VALUE in record-query.ts, literal duplicated in FilterValuePicker.tsx) when a visible row has no stored value; probe reuses the SAME boundary clauses (own-scope/hidden-status/archive), skipped while valueSearch is set.
+- `in` conditions translate the sentinel: stored/page-local → `(expr IS NULL OR expr='')` OR-combined inside the single condition; relation/lookup → `NOT EXISTS` non-empty linked value. Never widens other AND conditions.
+- Known accepted risk: a REAL stored value literally `__empty__` would be reinterpreted as "empty" (same convention as other `__x__` system keys — treated as a reserved keyspace, not enforced at write paths).
