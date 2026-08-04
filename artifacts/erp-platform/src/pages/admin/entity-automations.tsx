@@ -845,7 +845,7 @@ export default function EntityAutomationsPage() {
             </Select>
             {c.fieldKey === RECORD_KEY ? null : c.fieldSource === "page" ? (
               !noValueOp(c.operator) && (
-                <Input className="flex-1" value={c.value} onChange={(e) => upd(i, { value: e.target.value })} placeholder={t("auto.pickValue", "Выберите значение")} />
+                <PageValueControl pageId={Number(c.pageId) || 0} fieldKey={c.fieldKey} value={c.value} onChange={(v) => upd(i, { value: v })} ml={ml} t={t} />
               )
             ) : (
               <>
@@ -1194,6 +1194,57 @@ type ConditionsEditorComp = (props: {
   fieldSourceOptions?: Field[];
   mirrorPages?: Page[];
 }) => ReactElement;
+
+/**
+ * Type-aware value control for a PAGE-sourced condition: looks up the page
+ * field's type and renders a select-options dropdown / boolean / number / date
+ * control instead of a bare text input.
+ */
+function PageValueControl({
+  pageId,
+  fieldKey,
+  value,
+  onChange,
+  ml,
+  t,
+}: {
+  pageId: number;
+  fieldKey: string;
+  value: string;
+  onChange: (v: string) => void;
+  ml: (val: MultilingualText | string | undefined | null) => string;
+  t: (k: string, d: string) => string;
+}): ReactElement {
+  const { data: pageFieldsRaw = [] } = useListPageFields(pageId, { query: { enabled: pageId > 0, queryKey: getListPageFieldsQueryKey(pageId) } });
+  const f = (pageFieldsRaw as PageField[]).find((pf) => pf.fieldKey === fieldKey);
+  const ph = t("auto.valuePlaceholder", "значение");
+  if (f?.fieldType === "select") {
+    const options = normalizeSelectOptions(f.optionsJson);
+    return (
+      <Select value={value || ""} onValueChange={onChange}>
+        <SelectTrigger className="flex-1"><SelectValue placeholder={ph} /></SelectTrigger>
+        <SelectContent>{options.map((o) => (<SelectItem key={o.value} value={o.value}>{ml(o.labelJson) || o.value}</SelectItem>))}</SelectContent>
+      </Select>
+    );
+  }
+  if (f?.fieldType === "boolean") {
+    return (
+      <Select value={value || ""} onValueChange={onChange}>
+        <SelectTrigger className="flex-1"><SelectValue placeholder={ph} /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="true">{t("auto.yes", "Да")}</SelectItem>
+          <SelectItem value="false">{t("auto.no", "Нет")}</SelectItem>
+        </SelectContent>
+      </Select>
+    );
+  }
+  if (f?.fieldType === "number" || f?.fieldType === "percent") {
+    return <Input type="number" className="flex-1" value={value} onChange={(e) => onChange(e.target.value)} placeholder={ph} />;
+  }
+  if (f?.fieldType === "date") return <Input type="date" className="flex-1" value={value} onChange={(e) => onChange(e.target.value)} />;
+  if (f?.fieldType === "datetime") return <Input type="datetime-local" className="flex-1" value={value} onChange={(e) => onChange(e.target.value)} />;
+  return <Input className="flex-1" value={value} onChange={(e) => onChange(e.target.value)} placeholder={ph} />;
+}
 
 /**
  * Select of a mirror page's active page-local fields. When `storableOnly`, the
