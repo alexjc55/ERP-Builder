@@ -61,6 +61,7 @@ import {
 } from "./events";
 import { buildFormulaScope, type FormulaFieldDef } from "@workspace/formula";
 import { validatePageValues } from "../routes/page-fields";
+import { applyPageFieldDefaults } from "./page-field-defaults";
 import { isGoogleDriveModuleEnabled } from "./googleDrive";
 import { logger } from "./logger";
 
@@ -497,6 +498,9 @@ export async function systemCreateRecord(
     if (statusId != null) entries.push({ entityId, recordId: record.id, fieldKey: AUDIT_STATUS, oldValue: null, newValue: String(statusId), userId: actorUserId });
     if (entries.length === 0) entries.push({ entityId, recordId: record.id, fieldKey: AUDIT_CREATED, oldValue: null, newValue: null, userId: actorUserId });
     await writeAudit(entries, logger);
+
+    // Same create-time page-field defaults as the user-facing create route.
+    await applyPageFieldDefaults(entityId, record.id, logger);
 
     await emitEvent(
       { eventName: EVENT_RECORD_CREATED, entityId, recordId: record.id, payload: { actorUserId, statusId: record.statusId } },

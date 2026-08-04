@@ -62,6 +62,7 @@ import {
   type RelationFilterMeta,
 } from "./record-query";
 import { buildRelationMeta, ownScopeWhere, isRecordOwned } from "./own-scope";
+import { applyPageFieldDefaults } from "../lib/page-field-defaults";
 import { computePivot } from "./pivot-compute";
 import { isGoogleDriveModuleEnabled } from "../lib/googleDrive";
 import {
@@ -2567,6 +2568,10 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
     createEntries.push({ entityId, recordId: record.id, fieldKey: AUDIT_CREATED, oldValue: null, newValue: null, userId });
   }
   await writeAudit(createEntries, req.log);
+
+  // Persist page-field defaults for every mirror page of this entity (create-time
+  // only; best-effort — never blocks the creation).
+  await applyPageFieldDefaults(entityId, record.id, req.log);
 
   await emitEvent(
     {

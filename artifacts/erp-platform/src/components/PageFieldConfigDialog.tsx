@@ -642,7 +642,37 @@ export function PageFieldConfigDialog({
             {fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup" && (
               <div className="space-y-1.5">
                 <Label>{t("fields.defaultValue", "Значение по умолчанию")}</Label>
-                <Input value={defaultValue} onChange={(e) => setDefaultValue(e.target.value)} placeholder="—" />
+                {/* Type-aware editor: the default is stored as the RAW value (a
+                    select option's value, "true"/"false", a number string) — the
+                    same shape record values use. */}
+                {fieldType === "select" ? (
+                  <Select value={defaultValue || "__none__"} onValueChange={(v) => setDefaultValue(v === "__none__" ? "" : v)}>
+                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">{t("fields.noDefault", "— без значения —")}</SelectItem>
+                      {options.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>{ml(o.labelJson) || o.value}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : fieldType === "boolean" ? (
+                  <Select value={defaultValue || "__none__"} onValueChange={(v) => setDefaultValue(v === "__none__" ? "" : v)}>
+                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">{t("fields.noDefault", "— без значения —")}</SelectItem>
+                      <SelectItem value="true">{t("common.yes", "Да")}</SelectItem>
+                      <SelectItem value="false">{t("common.no", "Нет")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : fieldType === "number" || fieldType === "percent" ? (
+                  <Input type="number" value={defaultValue} onChange={(e) => setDefaultValue(e.target.value)} placeholder="—" />
+                ) : fieldType === "date" ? (
+                  <Input type="date" value={defaultValue} onChange={(e) => setDefaultValue(e.target.value)} />
+                ) : fieldType === "datetime" ? (
+                  <Input type="datetime-local" value={defaultValue} onChange={(e) => setDefaultValue(e.target.value)} />
+                ) : (
+                  <Input value={defaultValue} onChange={(e) => setDefaultValue(e.target.value)} placeholder="—" />
+                )}
               </div>
             )}
             <div className="grid grid-cols-2 gap-x-4 gap-y-3">
