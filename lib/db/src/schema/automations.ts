@@ -24,6 +24,12 @@ import { entitiesTable } from "./entities";
 /** A condition's special "field" keys, alongside real entity field keys. */
 export const CONDITION_STATUS_KEY = "__status__";
 
+/**
+ * Special `update_records_where` match key: the candidate row's id compared to
+ * the TRIGGERING record's id ("this record"). eq/neq only; no value stored.
+ */
+export const CONDITION_RECORD_ID_KEY = "__record_id__";
+
 /** Comparison operators for conditions (type-aware on the client). */
 export const automationConditionSchema = z.object({
   /** A real field key, or `__status__` to compare the record's statusId. */

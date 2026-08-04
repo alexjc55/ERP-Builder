@@ -108,6 +108,8 @@ type MLValue = { ru?: string; en?: string; he?: string };
 
 /** Sentinel for the record's status pseudo-field in conditions. */
 const STATUS_KEY = "__status__";
+/** Special update-match key: the candidate row IS the triggering record (eq/neq, no value). */
+const RECORD_KEY = "__record_id__";
 /** Sentinel for the "any" status wildcard in status_changed trigger selects. */
 const ANY = "__any__";
 
@@ -529,6 +531,11 @@ export default function EntityAutomationsPage() {
       .filter((c) => c.fieldKey)
       .map((c) => {
         const isStatus = c.fieldKey === STATUS_KEY;
+        // "This record": no value stored — the server compares the candidate
+        // row id to the triggering record id (eq/neq only).
+        if (c.fieldKey === RECORD_KEY) {
+          return { fieldKey: RECORD_KEY, operator: c.operator === "neq" ? "neq" : "eq" } as AutomationCondition;
+        }
         const out: AutomationCondition = { fieldKey: c.fieldKey, operator: c.operator };
         // A page-sourced condition reads a page-local field on a mirror page; its
         // value stays a literal (the server coerces per page-field type at
@@ -764,6 +771,7 @@ export default function EntityAutomationsPage() {
     conjunction,
     onConjunctionChange,
     ownerEntityId,
+    allowSelfRecord,
     fieldSourceOptions,
   }: {
     list: ConditionDraft[];
@@ -775,6 +783,8 @@ export default function EntityAutomationsPage() {
     conjunction?: "and" | "or";
     onConjunctionChange?: (next: "and" | "or") => void;
     ownerEntityId?: number;
+    /** Update-match only: offer the special «Эта запись» key (row = triggering record). */
+    allowSelfRecord?: boolean;
     /** When set, the value may be sourced from one of these triggering-record fields. */
     fieldSourceOptions?: Field[];
     /** When set (top-level conditions only), a condition may read a page-local field on one of these mirror pages. */
@@ -820,9 +830,10 @@ export default function EntityAutomationsPage() {
                 )}
               </>
             ) : (
-              <Select value={c.fieldKey} onValueChange={(v) => upd(i, { fieldKey: v, value: "" })}>
+              <Select value={c.fieldKey} onValueChange={(v) => upd(i, v === RECORD_KEY ? { fieldKey: v, value: "", operator: "eq", valueSource: "literal", valueFieldKey: "" } : { fieldKey: v, value: "" })}>
                 <SelectTrigger className="w-40"><SelectValue placeholder={t("auto.field", "Поле")} /></SelectTrigger>
                 <SelectContent>
+                  {allowSelfRecord && <SelectItem value={RECORD_KEY}>{t("auto.selfRecord", "Эта запись (вызвавшая)")}</SelectItem>}
                   {allowStatus && <SelectItem value={STATUS_KEY}>{t("auto.recordStatus", "Статус записи")}</SelectItem>}
                   {fopts.map((f) => (<SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson) || f.fieldKey}</SelectItem>))}
                 </SelectContent>
@@ -830,9 +841,9 @@ export default function EntityAutomationsPage() {
             )}
             <Select value={c.operator} onValueChange={(v) => upd(i, { operator: v as AutomationConditionOperator })}>
               <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-              <SelectContent>{OPERATORS.map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent>
+              <SelectContent>{(c.fieldKey === RECORD_KEY ? OPERATORS.filter((o) => o.value === "eq" || o.value === "neq") : OPERATORS).map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent>
             </Select>
-            {c.fieldSource === "page" ? (
+            {c.fieldKey === RECORD_KEY ? null : c.fieldSource === "page" ? (
               !noValueOp(c.operator) && (
                 <Input className="flex-1" value={c.value} onChange={(e) => upd(i, { value: e.target.value })} placeholder={t("auto.pickValue", "Выберите значение")} />
               )
@@ -1170,6 +1181,7 @@ type ValueControlComp = (props: {
 }) => ReactElement;
 
 type ConditionsEditorComp = (props: {
+  allowSelfRecord?: boolean;
   list: ConditionDraft[];
   onChange: (next: ConditionDraft[]) => void;
   fopts: Field[];
@@ -1197,6 +1209,7 @@ function PageFieldSelect({
   className,
   placeholder,
   storableOnly = false,
+  readableOnly = false,
 }: {
   pageId: number;
   value: string;
@@ -1206,11 +1219,14 @@ function PageFieldSelect({
   className?: string;
   placeholder?: string;
   storableOnly?: boolean;
+  /** Read-only source: excludes relation/lookup (no scalar) but ALLOWS function (computed at run time). */
+  readableOnly?: boolean;
 }): ReactElement {
   const { data: pageFieldsRaw = [] } = useListPageFields(pageId, { query: { enabled: pageId > 0, queryKey: getListPageFieldsQueryKey(pageId) } });
   const NON_STORABLE = new Set(["relation", "lookup", "function"]);
+  const NON_READABLE = new Set(["relation", "lookup"]);
   const pageFields = (pageFieldsRaw as PageField[])
-    .filter((f) => f.isActive && (!storableOnly || !NON_STORABLE.has(f.fieldType)))
+    .filter((f) => f.isActive && (!storableOnly || !NON_STORABLE.has(f.fieldType)) && (!readableOnly || !NON_READABLE.has(f.fieldType)))
     .sort((a, b) => a.sortOrder - b.sortOrder);
   return (
     <Select value={value} onValueChange={onChange}>
@@ -1365,7 +1381,7 @@ function ActionCard({
           {draft.type === "update_records_where" && targetId > 0 && (
             <div className="space-y-1.5">
               <Label className="text-xs text-slate-500">{t("auto.matchConditions", "Условия выбора записей")}</Label>
-              <ConditionsEditor list={draft.match} onChange={(next) => onChange({ match: next })} fopts={targetFields} fmap={targetFieldByKey} sts={targetStatuses} allowStatus ownerEntityId={targetId} fieldSourceOptions={currentFields} />
+              <ConditionsEditor list={draft.match} onChange={(next) => onChange({ match: next })} fopts={targetFields} fmap={targetFieldByKey} sts={targetStatuses} allowStatus ownerEntityId={targetId} allowSelfRecord={targetId === currentEntityId} fieldSourceOptions={currentFields} />
               {draft.match.filter((c) => c.fieldKey).length === 0 && (
                 <div className="rounded-md border border-red-300 bg-red-50 p-2.5 space-y-2">
                   <div className="flex items-start gap-2 text-xs text-red-700">
@@ -1445,7 +1461,7 @@ function ActionCard({
                                 <SelectContent>{mirrorPages.map((p) => (<SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson) || `#${p.id}`}</SelectItem>))}</SelectContent>
                               </Select>
                               {m.sourcePageId && (
-                                <PageFieldSelect pageId={Number(m.sourcePageId)} value={m.sourceFieldKey} onChange={(v) => updMapping(i, { sourceFieldKey: v })} ml={ml} t={t} className="flex-1 min-w-0" storableOnly />
+                                <PageFieldSelect pageId={Number(m.sourcePageId)} value={m.sourceFieldKey} onChange={(v) => updMapping(i, { sourceFieldKey: v })} ml={ml} t={t} className="flex-1 min-w-0" readableOnly />
                               )}
                             </>
                           ) : (

@@ -25,6 +25,7 @@ import {
   automationConditionSchema,
   automationActionSchema,
   CONDITION_STATUS_KEY,
+  CONDITION_RECORD_ID_KEY,
 } from "@workspace/db";
 import { eq, and, asc, sql, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -58,6 +59,7 @@ import {
   EVENT_PAGE_FIELD_SAVED,
   type EventInput,
 } from "./events";
+import { buildFormulaScope, type FormulaFieldDef } from "@workspace/formula";
 import { validatePageValues } from "../routes/page-fields";
 import { isGoogleDriveModuleEnabled } from "./googleDrive";
 import { logger } from "./logger";
@@ -793,6 +795,18 @@ type MappingCtx = {
   pageContexts?: Map<number, PageContext>;
 };
 
+/** Formula defs of the `function`-type fields in a field list (entity or page). */
+function formulaDefsOf(
+  fields: Array<{ fieldKey: string; fieldType: string; formulaConfigJson?: unknown }>,
+): FormulaFieldDef[] {
+  return fields
+    .filter((f) => f.fieldType === "function")
+    .map((f) => ({
+      key: f.fieldKey,
+      expression: String((f.formulaConfigJson as { expression?: unknown } | null)?.expression ?? ""),
+    }));
+}
+
 /**
  * Resolve one mapping to the value it would write. `has: false` means "nothing to
  * write" (a fail-closed source: a missing entity field, or an unstored/absent page
@@ -806,12 +820,25 @@ async function resolveMappingValue(
   if (m.sourceType === "field") {
     // A page-sourced mapping reads the value from a page-local field of the
     // triggering record (sourcePageId + sourceFieldKey). Only meaningful for
-    // sourceType "field"; validated server-side. Relation/lookup/function page
-    // fields are unstored → nothing is mapped (fail closed).
+    // sourceType "field"; validated server-side. Relation/lookup page fields
+    // are unstored → nothing is mapped (fail closed). FUNCTION (formula)
+    // fields — entity or page-local — are computed on the fly below.
     if (m.sourceFieldSource === "page") {
       const ctxPage = m.sourcePageId != null ? ctx.pageContexts?.get(m.sourcePageId) : undefined;
       const pf = m.sourceFieldKey ? ctxPage?.fieldByKey.get(m.sourceFieldKey) : undefined;
       const pType = pf?.fieldType ?? "text";
+      if (m.sourceFieldKey && ctxPage && pType === "function") {
+        // A page-local formula may reference both entity fields and other
+        // page-local fields (and other formulas on either side). Scope: page
+        // values shadow entity values on key collision; formula defs from both.
+        const entityFields = await loadActiveFields(ctx.entityId);
+        const defs = [
+          ...formulaDefsOf(entityFields),
+          ...formulaDefsOf([...ctxPage.fieldByKey.values()]),
+        ];
+        const scope = buildFormulaScope({ ...ctx.values, ...ctxPage.values }, defs);
+        return { has: true, value: scope[m.sourceFieldKey] ?? null };
+      }
       if (
         m.sourceFieldKey &&
         ctxPage &&
@@ -826,6 +853,16 @@ async function resolveMappingValue(
     }
     if (m.sourceFieldKey && m.sourceFieldKey in ctx.values) {
       return { has: true, value: ctx.values[m.sourceFieldKey] };
+    }
+    if (m.sourceFieldKey) {
+      // Not stored: compute a function (formula) entity field on the fly so a
+      // formula like "Стоимость производства" can be copied by an automation.
+      const entityFields = await loadActiveFields(ctx.entityId);
+      const def = entityFields.find((f) => f.fieldKey === m.sourceFieldKey);
+      if (def?.fieldType === "function") {
+        const scope = buildFormulaScope({ ...ctx.values }, formulaDefsOf(entityFields));
+        return { has: true, value: scope[m.sourceFieldKey] ?? null };
+      }
     }
     return { has: false, value: undefined };
   }
@@ -1018,13 +1055,23 @@ async function runActions(
         const pageWrites = await buildPageTargetWrites(action.mapping ?? [], mapCtx);
         const hasEntityValues = Object.keys(mappedValues).length > 0;
         const relValues = await loadRelationValues(action.targetEntityId, rows.map((r) => r.id), targetFields);
+        // Special match key: `__record_id__` compares the candidate row's id to
+        // the TRIGGERING record's id ("this record"). eq/neq only; any other
+        // operator fails closed (matches nothing). Split out before the normal
+        // field-condition evaluation (it is not an entity field).
+        const recordIdConds = (action.match ?? []).filter((c) => c.fieldKey === CONDITION_RECORD_ID_KEY);
+        const fieldConds = (action.match ?? []).filter((c) => c.fieldKey !== CONDITION_RECORD_ID_KEY);
         let allOk = true;
         for (const row of rows) {
+          const selfOk = recordIdConds.every((c) =>
+            c.operator === "eq" ? row.id === ctx.recordId : c.operator === "neq" ? row.id !== ctx.recordId : false,
+          );
+          if (!selfOk) continue;
           const rv = { ...((row.valuesJson as Record<string, unknown>) ?? {}), ...(relValues.get(row.id) ?? {}) };
           // Match conditions run against each CANDIDATE target row and get NO
           // page context — page operands are rejected there server-side and fail
           // closed here.
-          if (!evalConditions(action.match ?? [], rv, row.statusId ?? null, fieldByKey, "and", ctx.values)) continue;
+          if (!evalConditions(fieldConds, rv, row.statusId ?? null, fieldByKey, "and", ctx.values)) continue;
           if (hasEntityValues) {
             const updated = await systemUpdateRecord(row.id, mappedValues, undefined, ctx.actorUserId, log);
             if (!updated) allOk = false;

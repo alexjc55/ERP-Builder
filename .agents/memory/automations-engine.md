@@ -119,3 +119,8 @@ hides this because it validates only the incoming payload, which never carries t
 orphan.
 
 **Required fields on system writes:** systemUpdateRecord enforces required-ness ONLY for the keys the automation itself sets (validateValues optional `requiredOnlyKeys`). Pre-existing empty required fields (legacy imports) must not block unrelated automation updates; user-facing PUT/POST and systemCreateRecord stay strict. Explicitly clearing a required key is still blocked.
+
+## Formula sources & "this record" match
+
+- Mapping `sourceType:"field"` now computes FUNCTION (formula) source fields on the fly via `buildFormulaScope` (`formulaDefsOf` in automations-engine.ts) — entity fields and page-local fields alike (page scope = entity values + page values + formula defs from both sides). Relation/lookup stay fail-closed. Validation/UI allow function only as a READ source (`readableOnly` in PageFieldSelect), never as a write target. Combined templates still do NOT compute formulas (display map reads stored values only).
+- Special `update_records_where` match key `__record_id__` (`CONDITION_RECORD_ID_KEY`): candidate row id vs the TRIGGERING record id, eq/neq only, no value stored; validated to own-entity targets. This is how an automation updates "the same record" (incl. its page fields) without needing a unique key field.

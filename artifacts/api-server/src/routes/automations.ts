@@ -12,6 +12,7 @@ import {
   automationConditionSchema,
   automationActionSchema,
   CONDITION_STATUS_KEY,
+  CONDITION_RECORD_ID_KEY,
   type AutomationTrigger,
   type AutomationCondition,
   type AutomationAction,
@@ -236,8 +237,14 @@ async function validateSpec(
           if (m.sourceType !== "field") return "Page source is only valid for a field mapping";
           if (m.sourcePageId == null) return "Missing sourcePageId for page-sourced mapping";
           if (!m.sourceFieldKey) return "Missing sourceFieldKey for page-sourced mapping";
-          const err = await checkPageRef(m.sourcePageId, m.sourceFieldKey, "mapping source", true);
-          if (err) return err;
+          // A mapping SOURCE is read-only: function (formula) page fields are
+          // allowed (computed on the fly at run time); relation/lookup have no
+          // scalar value and stay rejected.
+          const spf = await pageFieldsOf(m.sourcePageId);
+          const sType = spf.get(m.sourceFieldKey);
+          if (!mirrorPageIds.has(m.sourcePageId)) return "mapping source page is not a mirror page of this entity";
+          if (sType == null) return `Unknown mapping source page field: ${m.sourceFieldKey}`;
+          if (sType === "relation" || sType === "lookup") return `mapping source page field has no stored value: ${m.sourceFieldKey}`;
         } else if (m.sourceType === "field" && (!m.sourceFieldKey || !keys.has(m.sourceFieldKey))) {
           return `Unknown source field in mapping: ${m.sourceFieldKey ?? "(none)"}`;
         }
@@ -251,6 +258,13 @@ async function validateSpec(
           // Match conditions run against candidate target rows and cannot read a
           // page field (no page context there) — reject page sourcing outright.
           if (c.fieldSource === "page") return "A match condition cannot read a page field";
+          // "This record": row id vs the triggering record id — only meaningful
+          // when the action targets the automation's own entity; eq/neq only.
+          if (c.fieldKey === CONDITION_RECORD_ID_KEY) {
+            if (a.targetEntityId !== entityId) return "__record_id__ match requires the automation's own entity as target";
+            if (c.operator !== "eq" && c.operator !== "neq") return "__record_id__ match supports only eq/neq";
+            continue;
+          }
           const err = checkCondition(c, tk);
           if (err) return err.replace("condition field", "match field");
         }
