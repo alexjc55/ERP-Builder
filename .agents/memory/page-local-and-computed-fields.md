@@ -207,3 +207,8 @@ browser is silently dropped). Both surfaces (modal `NumberInput` + the inline
 "decimal"` and `sanitizeNumberInput`. Comma handling is REJECT, not strip: a
 typed comma is `preventDefault`-ed on keydown, and a comma-bearing paste returns
 without updating (the controlled input reverts) — never rewrite "1,5" to "15".
+
+## Page-field defaults (create-time)
+
+- `applyPageFieldDefaults` (api-server lib/page-field-defaults.ts) persists page-field defaults into page_record_values at RECORD CREATION for ALL mirror pages of the entity — called from the create route and automations create_record; best-effort, never blocks creation. Explicit stored values win. Import intentionally NOT covered (admin-authoritative data as-is).
+- Default is stored as the RAW value string (select option value, "true"/"false"); PageFieldConfigDialog edits it with a type-aware control. Defaults are NOT display fallbacks — old records stay empty unless backfilled.
