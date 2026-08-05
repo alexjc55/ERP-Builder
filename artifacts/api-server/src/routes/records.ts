@@ -1193,7 +1193,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
             // Summing raw then rounding once at the end would let `round(Σ raw)`
             // drift from `Σ round(row)` and show a total that doesn't match the
             // visible column.
-            sum += d != null ? Number(out.toFixed(d)) : out;
+            sum += d != null ? Number(out.toFixed(d)) : cleanFpNoise(out);
           }
         } catch {
           // Skip rows whose formula fails to parse/evaluate.
@@ -1299,7 +1299,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
               const out = evaluateFormula(expr, buildFormulaScope(merged, pageScopeFormulaDefs));
               // Round each per-row result to the configured decimals before summing
               // so the total matches the sum of the per-row values the user sees.
-              if (typeof out === "number" && Number.isFinite(out)) sum += d != null ? Number(out.toFixed(d)) : out;
+              if (typeof out === "number" && Number.isFinite(out)) sum += d != null ? Number(out.toFixed(d)) : cleanFpNoise(out);
             } catch {
               // Skip rows whose formula fails to parse/evaluate.
             }
@@ -1594,7 +1594,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         try {
           const out = evaluateFormula(expr, buildFormulaScope(vals, entityFormulaDefs));
           if (typeof out === "number" && Number.isFinite(out))
-            b.sums[f.fieldKey] = (b.sums[f.fieldKey] ?? 0) + (d != null ? Number(out.toFixed(d)) : out);
+            b.sums[f.fieldKey] = (b.sums[f.fieldKey] ?? 0) + (d != null ? Number(out.toFixed(d)) : cleanFpNoise(out));
         } catch {
           // Skip rows whose formula fails to parse/evaluate.
         }
@@ -1612,7 +1612,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           try {
             const out = evaluateFormula(expr, buildFormulaScope({ ...vals, ...pvVals }, gPfScopeFormulaDefs));
             if (typeof out === "number" && Number.isFinite(out))
-              b.sums[totalKey] = (b.sums[totalKey] ?? 0) + (d != null ? Number(out.toFixed(d)) : out);
+              b.sums[totalKey] = (b.sums[totalKey] ?? 0) + (d != null ? Number(out.toFixed(d)) : cleanFpNoise(out));
           } catch {
             // Skip rows whose formula fails to parse/evaluate.
           }

@@ -434,11 +434,14 @@ export function normalizeDecimals(input: unknown): number | null {
 }
 
 /**
- * Strip binary floating-point noise from a computed number without changing its
- * intended value: 7879.299999999999 → 7879.3. Rounds to 12 significant digits
- * (standard spreadsheet behavior); real data never carries that much precision,
- * while FP artifacts always show up beyond it. Used wherever a formula result is
- * displayed or aggregated WITHOUT an explicit `decimals` setting.
+ * Strip binary floating-point noise from a computed number by rounding to 12
+ * significant digits: 7879.299999999999 → 7879.3. This is a deliberate lossy
+ * precision policy (spreadsheet-style): values needing more than 12 significant
+ * digits are rounded, which is acceptable for this ERP's business data, while FP
+ * artifacts always show up beyond that boundary. Must be applied CONSISTENTLY —
+ * per-row before summing AND on the final aggregate — wherever a formula result
+ * is displayed or aggregated WITHOUT an explicit `decimals` setting, so totals
+ * always equal the sum of the visible cell values.
  */
 export function cleanFpNoise(n: number): number {
   if (!Number.isFinite(n)) return n;
