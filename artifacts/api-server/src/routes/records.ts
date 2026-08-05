@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable, pageFieldsTable, pageRecordValuesTable, pagesTable, relationsTable, recordLinksTable, viewsTable } from "@workspace/db";
 import { eq, asc, desc, and, or, sql, inArray, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { buildFormulaScope, evaluateFormula, normalizeDecimals, type FormulaFieldDef } from "@workspace/formula";
+import { buildFormulaScope, evaluateFormula, normalizeDecimals, cleanFpNoise, type FormulaFieldDef } from "@workspace/formula";
 import type { Request } from "express";
 import { requireAuth } from "../middlewares/auth";
 import {
@@ -1160,7 +1160,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       if (v == null) continue; // no filled rows → no average to show
       const d = normalizeDecimals(f.percentConfigJson?.decimals);
       const n = Number(v);
-      numericTotals[f.fieldKey] = d != null ? Number(n.toFixed(d)) : n;
+      numericTotals[f.fieldKey] = d != null ? Number(n.toFixed(d)) : cleanFpNoise(n);
     }
   }
   if (formulaTotalFields.length > 0) {
@@ -1199,7 +1199,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           // Skip rows whose formula fails to parse/evaluate.
         }
       }
-      numericTotals[f.fieldKey] = d != null ? Number(sum.toFixed(d)) : sum;
+      numericTotals[f.fieldKey] = d != null ? Number(sum.toFixed(d)) : cleanFpNoise(sum);
     }
   }
 
@@ -1304,7 +1304,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
               // Skip rows whose formula fails to parse/evaluate.
             }
           }
-          numericTotals[totalKey] = d != null ? Number(sum.toFixed(d)) : sum;
+          numericTotals[totalKey] = d != null ? Number(sum.toFixed(d)) : cleanFpNoise(sum);
         }
       }
       // Percent page fields: arithmetic mean over records that HAVE a value
@@ -1326,7 +1326,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         }
         if (count > 0) {
           const avg = sum / count;
-          numericTotals[totalKey] = d != null ? Number(avg.toFixed(d)) : avg;
+          numericTotals[totalKey] = d != null ? Number(avg.toFixed(d)) : cleanFpNoise(avg);
         }
       }
     }
@@ -1556,7 +1556,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         const out = evaluateFormula(expr, scope);
         if (typeof out === "number" && Number.isFinite(out)) {
           const d = normalizeDecimals(cfg?.decimals);
-          return d != null ? Number(out.toFixed(d)) : out;
+          return d != null ? Number(out.toFixed(d)) : cleanFpNoise(out);
         }
         return out ?? null;
       } catch {
@@ -1661,13 +1661,13 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     for (const b of buckets.values()) {
       for (const f of formulaTotalFields) {
         const d = normalizeDecimals((f.formulaConfigJson as { decimals?: number | null } | null)?.decimals);
-        if (d != null && b.sums[f.fieldKey] != null) b.sums[f.fieldKey] = Number(b.sums[f.fieldKey]!.toFixed(d));
+        if (b.sums[f.fieldKey] != null) b.sums[f.fieldKey] = d != null ? Number(b.sums[f.fieldKey]!.toFixed(d)) : cleanFpNoise(b.sums[f.fieldKey]!);
       }
       for (const pf of gPfSumFields) {
         if (pf.fieldType !== "function") continue;
         const d = normalizeDecimals((pf.formulaConfigJson as { decimals?: number | null } | null)?.decimals);
         const k = `pf:${pf.id}`;
-        if (d != null && b.sums[k] != null) b.sums[k] = Number(b.sums[k]!.toFixed(d));
+        if (b.sums[k] != null) b.sums[k] = d != null ? Number(b.sums[k]!.toFixed(d)) : cleanFpNoise(b.sums[k]!);
       }
       // Percent columns: divide the running sum by the filled-row count into `sums`
       // (rounded to the field's decimals). Skipped when no row in the group is filled.
@@ -1676,7 +1676,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         if (cnt > 0) {
           const d = normalizeDecimals(f.percentConfigJson?.decimals);
           const avg = b.pctSum[f.fieldKey]! / cnt;
-          b.sums[f.fieldKey] = d != null ? Number(avg.toFixed(d)) : avg;
+          b.sums[f.fieldKey] = d != null ? Number(avg.toFixed(d)) : cleanFpNoise(avg);
         }
       }
       for (const pf of gPfPercentFields) {
@@ -1685,7 +1685,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         if (cnt > 0) {
           const d = normalizeDecimals(pf.percentConfigJson?.decimals);
           const avg = b.pctSum[k]! / cnt;
-          b.sums[k] = d != null ? Number(avg.toFixed(d)) : avg;
+          b.sums[k] = d != null ? Number(avg.toFixed(d)) : cleanFpNoise(avg);
         }
       }
     }

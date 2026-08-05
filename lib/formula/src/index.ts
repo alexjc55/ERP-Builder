@@ -434,6 +434,18 @@ export function normalizeDecimals(input: unknown): number | null {
 }
 
 /**
+ * Strip binary floating-point noise from a computed number without changing its
+ * intended value: 7879.299999999999 → 7879.3. Rounds to 12 significant digits
+ * (standard spreadsheet behavior); real data never carries that much precision,
+ * while FP artifacts always show up beyond it. Used wherever a formula result is
+ * displayed or aggregated WITHOUT an explicit `decimals` setting.
+ */
+export function cleanFpNoise(n: number): number {
+  if (!Number.isFinite(n)) return n;
+  return Number(n.toPrecision(12));
+}
+
+/**
  * Display helper: evaluate and render the result as a string, or "—"/error.
  * When `decimals` is provided and the result is a finite number, the value is
  * rounded and shown with exactly that many decimal places. Non-numeric results
@@ -452,6 +464,9 @@ export function formatFormulaResult(
     if (typeof v === "number" && d != null && Number.isFinite(v)) {
       return { text: v.toFixed(d), error: false };
     }
+    // No decimals configured: still never expose binary FP noise
+    // (7879.299999999999) — clean to 12 significant digits before rendering.
+    if (typeof v === "number") return { text: String(cleanFpNoise(v)), error: false };
     return { text: String(v), error: false };
   } catch {
     return { text: "Ошибка формулы", error: true };
