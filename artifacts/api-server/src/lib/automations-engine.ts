@@ -1199,7 +1199,7 @@ async function dispatchEvent(kind: EventKind, ev: { entityId: number | null; rec
       .select()
       .from(entityAutomationsTable)
       .where(and(eq(entityAutomationsTable.entityId, entityId), eq(entityAutomationsTable.isActive, true)))
-      .orderBy(asc(entityAutomationsTable.sortOrder));
+      .orderBy(asc(entityAutomationsTable.sortOrder), asc(entityAutomationsTable.id));
   } catch (err) {
     log.error({ err, entityId }, "Failed to load automations");
     return;
@@ -1301,7 +1301,7 @@ export async function runDateSweep(now: Date = new Date()): Promise<void> {
       .select()
       .from(entityAutomationsTable)
       .where(eq(entityAutomationsTable.isActive, true))
-      .orderBy(asc(entityAutomationsTable.sortOrder));
+      .orderBy(asc(entityAutomationsTable.sortOrder), asc(entityAutomationsTable.id));
   } catch (err) {
     log.error({ err }, "Date sweep: failed to load automations");
     return;

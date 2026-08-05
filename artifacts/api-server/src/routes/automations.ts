@@ -289,7 +289,7 @@ router.get("/entities/:entityId/automations", requireAuth, requireAdmin("automat
     .select()
     .from(entityAutomationsTable)
     .where(eq(entityAutomationsTable.entityId, params.data.entityId))
-    .orderBy(asc(entityAutomationsTable.sortOrder));
+    .orderBy(asc(entityAutomationsTable.sortOrder), asc(entityAutomationsTable.id));
   res.json(automations);
 });
 
