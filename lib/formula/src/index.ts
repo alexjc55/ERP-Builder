@@ -274,9 +274,16 @@ function evalNode(node: Node, vars: Record<string, unknown>): FormulaValue {
       const l = evalNode(node.l, vars);
       const r = evalNode(node.r, vars);
       switch (node.op) {
-        case "+":
-          if (isNumeric(l) && isNumeric(r)) return toNum(l) + toNum(r);
+        case "+": {
+          // Spreadsheet semantics: an EMPTY operand (null/"") next to a numeric
+          // one counts as 0 — `{price}+{extra}` with extra unfilled must stay a
+          // NUMBER (so decimals rounding applies), not fall back to string
+          // concatenation. Concat still happens when a side is genuine text.
+          const lEmpty = l == null || (typeof l === "string" && l.trim() === "");
+          const rEmpty = r == null || (typeof r === "string" && r.trim() === "");
+          if ((isNumeric(l) || lEmpty) && (isNumeric(r) || rEmpty)) return toNum(l) + toNum(r);
           return toStr(l) + toStr(r);
+        }
         case "-":
           return toNum(l) - toNum(r);
         case "*":
