@@ -19,7 +19,13 @@ import {
 } from "@workspace/db";
 import { eq, sql, inArray, type SQL } from "drizzle-orm";
 import { evaluateFormula } from "@workspace/formula";
-import { relationValueScalar, pageLocalValueExpr, type RelationFilterMeta } from "./record-query";
+import {
+  relationValueScalar,
+  pageLocalValueExpr,
+  createdAtTextExpr,
+  SYSTEM_DATE_FIELD_TYPE,
+  type RelationFilterMeta,
+} from "./record-query";
 
 export const PIVOT_DIM_TYPES = new Set([
   "text",
@@ -33,8 +39,11 @@ export const PIVOT_DIM_TYPES = new Set([
   "url",
   "phone",
   "user",
+  // System date (record creation timestamp) — backed by the system column,
+  // grouped with the same date/datetime period semantics.
+  "created_at",
 ]);
-const PIVOT_DATE_TYPES = new Set(["date", "datetime"]);
+const PIVOT_DATE_TYPES = new Set(["date", "datetime", SYSTEM_DATE_FIELD_TYPE]);
 const PIVOT_PERIOD_UNITS = new Set(["year", "quarter", "month", "day"]);
 const PIVOT_NUMERIC_RE = "^-?[0-9]+(\\.[0-9]+)?$";
 export const PIVOT_COL_ALL = "__all__";
@@ -182,7 +191,12 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
       if (!PIVOT_DIM_TYPES.has(f.fieldType))
         return { error: `Field type cannot be a pivot dimension: ${key}` };
       ftype = f.fieldType;
-      ve = sql`(${entityRecordsTable.valuesJson} ->> ${key})`;
+      // created_at (system date) has NO stored value — it reads the record's
+      // system created_at column, ISO-formatted so date grouping applies.
+      ve =
+        f.fieldType === SYSTEM_DATE_FIELD_TYPE
+          ? createdAtTextExpr()
+          : sql`(${entityRecordsTable.valuesJson} ->> ${key})`;
     } else if (dim.source === "page") {
       const pf = pageFieldByKey.get(key);
       if (!pf) return { error: `Unknown or hidden page pivot field: ${key}` };
@@ -191,6 +205,10 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
       // (they project through links), so they can't be a page pivot dim here.
       if (pf.fieldType === "relation" || pf.fieldType === "lookup")
         return { error: `Связанные поля страницы пока не поддерживаются как измерение сводной таблицы: ${key}` };
+      // Page-local created_at fields are rejected at creation; guard anyway —
+      // a page value under a system type would be an unrelated user value.
+      if (pf.fieldType === SYSTEM_DATE_FIELD_TYPE)
+        return { error: `Page field type cannot be a pivot dimension: ${key}` };
       if (!PIVOT_DIM_TYPES.has(pf.fieldType))
         return { error: `Page field type cannot be a pivot dimension: ${key}` };
       ftype = pf.fieldType;

@@ -1527,9 +1527,9 @@ type PivotDraft = {
 // Field types eligible as a pivot grouping dimension (mirrors entity-views).
 const PIVOT_DIM_TYPES = new Set([
   "text", "textarea", "number", "boolean", "date", "datetime",
-  "select", "email", "url", "phone", "user", "relation", "lookup",
+  "select", "email", "url", "phone", "user", "relation", "lookup", "created_at",
 ]);
-const isPivotDateType = (t: string) => t === "date" || t === "datetime";
+const isPivotDateType = (t: string) => t === "date" || t === "datetime" || t === "created_at";
 
 function emptyPivotDraft(): PivotDraft {
   return {

@@ -1105,8 +1105,18 @@ async function computeChartSeries(
 
   // Group by raw field value. Empty/null values bucket under "—". Order by value
   // descending using the ordinal position (re-using a sql fragment re-binds params).
+  // created_at (system date) has no stored value: group by the record's system
+  // created_at column bucketed to UTC DAY (same bucketing as records grouping).
   const key = c.groupBy.fieldKey as string;
-  const labelExpr = sql<string>`COALESCE(NULLIF(${entityRecordsTable.valuesJson} ->> ${key}, ''), '—')`;
+  const [groupField] = await db
+    .select({ fieldType: entityFieldsTable.fieldType })
+    .from(entityFieldsTable)
+    .where(and(eq(entityFieldsTable.entityId, c.entityId), eq(entityFieldsTable.fieldKey, key)))
+    .limit(1);
+  const labelExpr =
+    groupField?.fieldType === "created_at"
+      ? sql<string>`to_char(${entityRecordsTable.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`
+      : sql<string>`COALESCE(NULLIF(${entityRecordsTable.valuesJson} ->> ${key}, ''), '—')`;
   const rows = await db
     .select({ label: labelExpr, v: valueExpr })
     .from(entityRecordsTable)
@@ -1163,6 +1173,7 @@ async function computeTableData(
       id: entityRecordsTable.id,
       valuesJson: entityRecordsTable.valuesJson,
       statusId: entityRecordsTable.statusId,
+      createdAt: entityRecordsTable.createdAt,
     })
     .from(entityRecordsTable)
     .where(and(...conds))
@@ -1209,10 +1220,21 @@ async function computeTableData(
     const linkedValues = new Map<number, Record<string, unknown>>();
     if (linkedIds.length > 0) {
       const lrs = await db
-        .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
+        .select({
+          id: entityRecordsTable.id,
+          valuesJson: entityRecordsTable.valuesJson,
+          createdAt: entityRecordsTable.createdAt,
+        })
         .from(entityRecordsTable)
         .where(and(eq(entityRecordsTable.entityId, resolved.relatedEntityId), inArray(entityRecordsTable.id, linkedIds)));
-      for (const lr of lrs) linkedValues.set(lr.id, (lr.valuesJson as Record<string, unknown>) ?? {});
+      for (const lr of lrs) {
+        const vals = { ...((lr.valuesJson as Record<string, unknown>) ?? {}) };
+        // Related created_at columns read the linked record's system timestamp.
+        if (resolved.relatedFieldType === "created_at") {
+          vals[rc.relatedFieldKey] = lr.createdAt instanceof Date ? lr.createdAt.toISOString() : String(lr.createdAt);
+        }
+        linkedValues.set(lr.id, vals);
+      }
     }
     relCols.push({
       fieldKey: `__rel_${rc.relationId}_${rc.relatedFieldKey}`,
@@ -1276,6 +1298,10 @@ async function computeTableData(
     for (const c of columns) {
       if (c.fieldKey === STATUS_COLUMN_KEY) {
         values[STATUS_COLUMN_KEY] = r.statusId != null ? statusById.get(r.statusId) ?? null : null;
+      } else if (c.fieldType === "created_at") {
+        // System date: no stored value — inject the record's system creation
+        // timestamp (ISO), same as record read paths do.
+        values[c.fieldKey] = r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt);
       } else {
         values[c.fieldKey] = all[c.fieldKey] ?? null;
       }
@@ -1307,11 +1333,20 @@ async function computeRecordField(
   fieldKey: string,
 ): Promise<number | string | null> {
   const [rec] = await db
-    .select({ valuesJson: entityRecordsTable.valuesJson })
+    .select({ valuesJson: entityRecordsTable.valuesJson, createdAt: entityRecordsTable.createdAt })
     .from(entityRecordsTable)
     .where(and(eq(entityRecordsTable.id, recordId), eq(entityRecordsTable.entityId, entityId)))
     .limit(1);
   if (!rec) return null;
+  // created_at (system date) fields have no stored value — read the system column.
+  const [fdef] = await db
+    .select({ fieldType: entityFieldsTable.fieldType })
+    .from(entityFieldsTable)
+    .where(and(eq(entityFieldsTable.entityId, entityId), eq(entityFieldsTable.fieldKey, fieldKey)))
+    .limit(1);
+  if (fdef?.fieldType === "created_at") {
+    return rec.createdAt instanceof Date ? rec.createdAt.toISOString() : String(rec.createdAt);
+  }
   const v = ((rec.valuesJson ?? {}) as Record<string, unknown>)[fieldKey];
   if (v == null) return null;
   if (typeof v === "object") {

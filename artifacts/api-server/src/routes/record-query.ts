@@ -69,7 +69,7 @@ const DATE_TYPES = new Set(["date", "datetime"]);
 export const SYSTEM_DATE_FIELD_TYPE = "created_at";
 /** Text expression over the system created_at column, ISO-formatted so the
  * shared `datetime` cast/compare semantics in buildCondition apply unchanged. */
-function createdAtTextExpr(): SQL {
+export function createdAtTextExpr(): SQL {
   return sql`to_char(${entityRecordsTable.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')`;
 }
 // Field types whose values are free text we can run a substring search against.

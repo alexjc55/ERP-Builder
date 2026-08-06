@@ -14,10 +14,20 @@ function isEmpty(v: unknown): boolean {
   return v === undefined || v === null || v === "";
 }
 
+// ISO date / datetime prefix (what date, datetime and created_at values look
+// like). Comparison operators treat such strings as timestamps so gt/lt/between
+// work with datetime semantics, not failed numeric parses.
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}([T ]|$)/;
+
 function asNum(v: unknown): number | null {
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
   if (typeof v === "string" && v.trim() !== "") {
-    const n = Number(v);
+    const s = v.trim();
+    if (ISO_DATE_RE.test(s)) {
+      const ts = Date.parse(s);
+      return Number.isFinite(ts) ? ts : null;
+    }
+    const n = Number(s);
     return Number.isFinite(n) ? n : null;
   }
   return null;

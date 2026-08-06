@@ -110,8 +110,8 @@ export type DraftSort = { field: string; direction: SortSpecDirection };
 export type DraftDim = { source: "entity" | "page" | "status"; fieldKey: string; datePeriod: PivotDimensionDatePeriod };
 
 // Field types eligible as a pivot grouping dimension (discrete-ish values).
-export const PIVOT_DIM_TYPES = new Set(["text", "textarea", "number", "boolean", "date", "datetime", "select", "email", "url", "phone", "user", "relation", "lookup"]);
-export const isDateLikeType = (t: string) => t === "date" || t === "datetime";
+export const PIVOT_DIM_TYPES = new Set(["text", "textarea", "number", "boolean", "date", "datetime", "select", "email", "url", "phone", "user", "relation", "lookup", "created_at"]);
+export const isDateLikeType = (t: string) => t === "date" || t === "datetime" || t === "created_at";
 
 /** Minimal page-local field shape offered as a pivot dim (namespaced "p:" in selects). */
 export type PageDimField = { fieldKey: string; nameJson: unknown; fieldType: string };
@@ -606,7 +606,9 @@ export function PivotDimEditor({
   );
 }
 
-const CALENDAR_DATE_TYPES = new Set(["date", "datetime"]);
+// created_at (системная дата создания) читается из системной колонки и
+// приходит в valuesJson как ISO-строка — календарь парсит её как datetime.
+const CALENDAR_DATE_TYPES = new Set(["date", "datetime", "created_at"]);
 const NONE_VALUE = "__none__";
 
 /**

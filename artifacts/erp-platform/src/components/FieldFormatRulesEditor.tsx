@@ -86,6 +86,13 @@ function operatorsForType(fieldType: FieldType): { value: FormatOperator; label:
     // sense (substring/ordering on an id is meaningless and misleading).
     return OPERATORS.filter((o) => ["equals", "notEquals", "empty", "notEmpty"].includes(o.value));
   }
+  if (fieldType === "date" || fieldType === "datetime" || fieldType === "created_at") {
+    // Date-like values (incl. the system creation date) compare as timestamps:
+    // the rule evaluator parses ISO strings, so ordering/range operators work.
+    return OPERATORS.filter((o) =>
+      ["equals", "notEquals", "gt", "lt", "gte", "lte", "between", "empty", "notEmpty"].includes(o.value),
+    );
+  }
   return OPERATORS.filter((o) =>
     ["equals", "notEquals", "contains", "notContains", "empty", "notEmpty"].includes(o.value),
   );
@@ -393,12 +400,16 @@ export function FieldFormatRulesEditor({
       fieldType === "number" ||
       fieldType === "percent" ||
       (fieldType === "function" && numericOp);
+    // Date-like fields get a date picker; the stored rule value is an ISO date
+    // string, which the evaluator compares as a timestamp.
+    const dateLike = fieldType === "date" || fieldType === "datetime" || fieldType === "created_at";
+    const inputType = numeric ? "number" : dateLike ? "date" : "text";
     if (rule.operator === "between") {
       return (
         <div className="flex items-center gap-1.5">
           <Input
             className="h-8"
-            type={numeric ? "number" : "text"}
+            type={inputType}
             value={rule.value ?? ""}
             onChange={(e) => update(idx, { value: e.target.value })}
             placeholder={t("fields.formatValueFrom", "от")}
@@ -406,7 +417,7 @@ export function FieldFormatRulesEditor({
           <span className="text-xs text-slate-400">–</span>
           <Input
             className="h-8"
-            type={numeric ? "number" : "text"}
+            type={inputType}
             value={rule.value2 ?? ""}
             onChange={(e) => update(idx, { value2: e.target.value })}
             placeholder={t("fields.formatValueTo", "до")}
@@ -417,7 +428,7 @@ export function FieldFormatRulesEditor({
     return (
       <Input
         className="h-8"
-        type={numeric ? "number" : "text"}
+        type={inputType}
         value={rule.value ?? ""}
         onChange={(e) => update(idx, { value: e.target.value })}
         placeholder={t("fields.formatValue", "значение")}
