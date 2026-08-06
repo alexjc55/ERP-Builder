@@ -73,6 +73,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const handleLogout = () => {
     localStorage.removeItem("erp_token");
+    // Drop all cached data (incl. the cached getMe user) — otherwise the
+    // cached user keeps ProtectedRoute satisfied and clicking "Выйти" appears
+    // to do nothing.
+    queryClient.clear();
     setToken(null);
   };
 
