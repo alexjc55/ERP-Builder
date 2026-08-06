@@ -2570,6 +2570,18 @@ export function EntityRecords({
         : entityDefaultSorts;
   const effectiveSorts = userSorts ?? defaultEffectiveSorts;
   const sortsKey = JSON.stringify(effectiveSorts);
+  // "Сначала новые": quick toggle sorting by the record's system creation date
+  // (reserved __created_at__ key), newest on top. Off → back to the default sort.
+  const newestFirst =
+    effectiveSorts[0]?.field === SYSTEM_SORT_CREATED_AT && (effectiveSorts[0].direction ?? "asc") === "desc";
+  const toggleNewestFirst = useCallback(() => {
+    setPage(1);
+    setUserSorts((prev) => {
+      const cur = prev ?? defaultEffectiveSorts;
+      const active = cur[0]?.field === SYSTEM_SORT_CREATED_AT && (cur[0].direction ?? "asc") === "desc";
+      return active ? null : [{ field: SYSTEM_SORT_CREATED_AT, direction: "desc" }];
+    });
+  }, [defaultEffectiveSorts]);
   // Header-click sorting: asc → desc → back to the default sort.
   const toggleHeaderSort = useCallback(
     (fieldKey: string) => {
@@ -4394,7 +4406,7 @@ export function EntityRecords({
           </div>
           {/* Collapsed filters toggle lives INLINE in the toolbar row so the
               header stays one row tall on desktop instead of adding a row. */}
-          {!setupMode && (statuses.length > 0 || filterableFields.length > 0 || filterablePageFields.length > 0 || customFilterDefs.length > 0 || hasExclusion) && filtersBarCollapsed && (
+          {!setupMode && filtersBarCollapsed && (
             <Button
               type="button"
               variant="outline"
@@ -4562,7 +4574,7 @@ export function EntityRecords({
         </div>
       </div>
 
-      {!setupMode && (statuses.length > 0 || filterableFields.length > 0 || filterablePageFields.length > 0 || customFilterDefs.length > 0 || hasExclusion) && !filtersBarCollapsed && (
+      {!setupMode && !filtersBarCollapsed && (
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
           <button
             type="button"
@@ -4695,6 +4707,20 @@ export function EntityRecords({
               />
             ),
           )}
+          {/* Quick sort toggle: newest records (by system creation date) first.
+              Uses the reserved __created_at__ sort key — a userSorts override, so
+              a header click or the default sort takes back over when turned off. */}
+          <Button
+            type="button"
+            variant={newestFirst ? "secondary" : "outline"}
+            size="sm"
+            className={`h-9 gap-1.5 col-span-2 w-full justify-center sm:col-span-1 sm:w-auto ${newestFirst ? "border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" : "text-slate-600"}`}
+            onClick={toggleNewestFirst}
+            title={t("records.newestFirstHint", "Показать последние добавленные записи сверху")}
+          >
+            {newestFirst ? <ArrowDown className="w-3.5 h-3.5" /> : <ArrowUpDown className="w-3.5 h-3.5 opacity-60" />}
+            {t("records.newestFirst", "Сначала новые")}
+          </Button>
           {hasExclusion && (
             <label className="flex items-center gap-2 h-9 px-2.5 rounded-md border border-slate-200 bg-white text-sm text-slate-600 cursor-pointer col-span-2 w-full justify-center sm:col-span-1 sm:w-auto">
               <Checkbox checked={showHidden} onCheckedChange={(v) => { setShowHidden(v === true); setPage(1); }} />
