@@ -2769,7 +2769,7 @@ export const ListEntityFieldsResponseItem = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "defaultToToday": zod.boolean().optional(),
@@ -2894,7 +2894,7 @@ export const CreateEntityFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at']),
   "isRequired": zod.boolean().default(createEntityFieldBodyIsRequiredDefault),
   "defaultValue": zod.string().nullish(),
   "defaultToToday": zod.boolean().default(createEntityFieldBodyDefaultToTodayDefault),
@@ -3000,7 +3000,7 @@ export const GetFieldResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "defaultToToday": zod.boolean().optional(),
@@ -3114,7 +3114,7 @@ export const UpdateFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent']).optional(),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at']).optional(),
   "isRequired": zod.boolean().optional(),
   "defaultValue": zod.string().nullish(),
   "defaultToToday": zod.boolean().optional(),
@@ -3212,7 +3212,7 @@ export const UpdateFieldResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "defaultToToday": zod.boolean().optional(),
@@ -3358,7 +3358,7 @@ export const ListPageFieldsResponseItem = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at']),
   "isRequired": zod.boolean(),
   "isFilterable": zod.boolean().optional(),
   "pivotEnabled": zod.boolean().optional(),
@@ -3442,7 +3442,7 @@ export const CreatePageFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at']),
   "isRequired": zod.boolean().default(createPageFieldBodyIsRequiredDefault),
   "isFilterable": zod.boolean().default(createPageFieldBodyIsFilterableDefault),
   "pivotEnabled": zod.boolean().default(createPageFieldBodyPivotEnabledDefault),
@@ -3517,7 +3517,7 @@ export const UpdatePageFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent']).optional(),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at']).optional(),
   "isRequired": zod.boolean().optional(),
   "isFilterable": zod.boolean().optional(),
   "pivotEnabled": zod.boolean().optional(),
@@ -3586,7 +3586,7 @@ export const UpdatePageFieldResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at']),
   "isRequired": zod.boolean(),
   "isFilterable": zod.boolean().optional(),
   "pivotEnabled": zod.boolean().optional(),

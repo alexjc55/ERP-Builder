@@ -76,6 +76,8 @@ const OPERATORS_BY_TYPE: Record<string, FilterOperator[]> = {
   number: ["eq", "neq", "gt", "gte", "lt", "lte", "in", "is_empty", "is_not_empty"],
   date: ["eq", "neq", "gt", "gte", "lt", "lte", "is_empty", "is_not_empty"],
   datetime: ["eq", "neq", "gt", "gte", "lt", "lte", "is_empty", "is_not_empty"],
+  // created_at — системная дата создания записи (read-only, system column).
+  created_at: ["eq", "neq", "gt", "gte", "lt", "lte"],
 };
 export function operatorsForType(type?: string): typeof FILTER_OPERATORS {
   const allowed = (type && OPERATORS_BY_TYPE[type]) ?? TEXT_OPERATORS;

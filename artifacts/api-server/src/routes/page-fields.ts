@@ -442,6 +442,12 @@ router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (
     res.status(400).json({ error: "Field key must be lowercase letters, digits and underscores, starting with a letter" });
     return;
   }
+  // created_at mirrors the record's SYSTEM creation timestamp — a page-local
+  // "created_at" field would store an unrelated user value under a system type.
+  if (parsed.data.fieldType === "created_at") {
+    res.status(400).json({ error: "Поле «Системная дата» недоступно для страничных полей" });
+    return;
+  }
   const createOptions = sanitizeOptionsInput(parsed.data.optionsJson);
   if (parsed.data.fieldType === "select" && createOptions.length === 0) {
     res.status(400).json({ error: "Select fields require at least one option" });
@@ -573,6 +579,10 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
     updateData.fieldKey = key;
   }
   const nextType = body.fieldType ?? current.fieldType;
+  if (nextType === "created_at") {
+    res.status(400).json({ error: "Поле «Системная дата» недоступно для страничных полей" });
+    return;
+  }
   const sanitizedOptions = body.optionsJson != null ? sanitizeOptionsInput(body.optionsJson) : null;
   if ("optionsJson" in body || body.fieldType != null) {
     const nextOptions = sanitizedOptions ?? normalizeOptions(current.optionsJson);

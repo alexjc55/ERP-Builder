@@ -5544,6 +5544,7 @@ components:
         - relation
         - lookup
         - percent
+        - created_at
 
     FormatOperator:
       type: string

@@ -103,6 +103,7 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "phone", label: "Телефон" },
   { value: "user", label: "Пользователь" },
   { value: "file", label: "Файл" },
+  { value: "created_at", label: "Системная дата (создание записи)" },
   { value: "function", label: "Формула (вычисляемое)" },
   { value: "relation", label: "Связанное поле" },
   { value: "lookup", label: "Поле подстановки" },
@@ -543,13 +544,14 @@ export function FieldConfigDialog({
               : { relationId, relatedFieldKey: relatedFieldKey || null }
             : {},
       isKey:
-        fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup"
+        fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup" && fieldType !== "created_at"
           ? isKey
           : false,
       lockAfterCreate:
         fieldType !== "file" &&
         fieldType !== "function" &&
-        fieldType !== "lookup"
+        fieldType !== "lookup" &&
+        fieldType !== "created_at"
           ? lockAfterCreate
           : false,
     };
@@ -1061,13 +1063,13 @@ export function FieldConfigDialog({
                 <Switch checked={wrapText} onCheckedChange={setWrapText} id="fcd-wrap-text" />
                 <Label htmlFor="fcd-wrap-text">{t("fields.wrapText", "Переносить текст в столбце на новую строку")}</Label>
               </div>
-              {fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup" && (
+              {fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup" && fieldType !== "created_at" && (
                 <div className="flex items-center gap-2">
                   <Switch checked={isKey} onCheckedChange={setIsKey} id="fcd-is-key" />
                   <Label htmlFor="fcd-is-key">{t("fields.isKey", "Ключевое поле (уникальное)")}</Label>
                 </div>
               )}
-              {fieldType !== "file" && fieldType !== "function" && fieldType !== "lookup" && (
+              {fieldType !== "file" && fieldType !== "function" && fieldType !== "lookup" && fieldType !== "created_at" && (
                 <div className="flex items-center gap-2">
                   <Switch checked={lockAfterCreate} onCheckedChange={setLockAfterCreate} id="fcd-lock-after-create" />
                   <Label htmlFor="fcd-lock-after-create">{t("fields.lockAfterCreate", "Запрет изменения после создания")}</Label>

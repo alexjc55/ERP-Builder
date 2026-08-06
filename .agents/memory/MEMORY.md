@@ -62,4 +62,5 @@
 - [Mirror-page grouping](mirror-page-grouping.md) — groupByFieldKey accordion groups: buckets computed WITHOUT groupValue; relation group label must re-apply the linked-entity field boundary (else header leaks); sums follow numericTotals raw-value invariant.
 - [Record merge](record-merge.md) — superAdmin duplicate merge: one tx repoints links (target's link wins on unique sides), fill-empty values, isKey re-check; sources deleted via shared delete core AFTER commit.
 - [User merge](user-merge.md) — superAdmin duplicate-account merge: rewrites user-field values/automations/authorship refs (regex prefilter), additive role inheritance; requireAuth now checks account liveness (60s cache).
+- [System date field](system-date-field.md) — read-only `created_at` field type backed by the record's system column; every read injects, every write drops, filters/sorts hit the column.
 - [Dialog outside-click policy](dialog-outside-click.md) — modals never close on outside click (dropdown+overlay clicks lost form input); close only via X/Cancel/Escape; fixed in base ui/dialog.

@@ -39,12 +39,12 @@ async function entityExists(entityId: number): Promise<boolean> {
   return Boolean(entity);
 }
 
-async function activeFieldKeys(entityId: number): Promise<Set<string>> {
+async function activeFieldKeys(entityId: number): Promise<Map<string, string>> {
   const rows = await db
-    .select({ fieldKey: entityFieldsTable.fieldKey })
+    .select({ fieldKey: entityFieldsTable.fieldKey, fieldType: entityFieldsTable.fieldType })
     .from(entityFieldsTable)
     .where(and(eq(entityFieldsTable.entityId, entityId), eq(entityFieldsTable.isActive, true)));
-  return new Set(rows.map((r) => r.fieldKey));
+  return new Map(rows.map((r) => [r.fieldKey, r.fieldType]));
 }
 
 async function statusIdsOf(entityId: number): Promise<Set<number>> {
@@ -91,7 +91,7 @@ async function validateSpec(
     return m;
   };
   /** Page-local field types whose value is computed/reference-only (never a stored scalar we can read or write here). */
-  const NON_STORABLE_PAGE_TYPES = new Set(["relation", "lookup", "function"]);
+  const NON_STORABLE_PAGE_TYPES = new Set(["relation", "lookup", "function", "created_at"]);
   /**
    * Validate a (pageId, fieldKey) reference: page mirrors this entity, field is
    * active, and (when `storableOnly`) the field type is a stored scalar.
@@ -153,7 +153,7 @@ async function validateSpec(
     if (err) return err;
   }
 
-  const checkCondition = (c: AutomationCondition, validKeys: Set<string>): string | null => {
+  const checkCondition = (c: AutomationCondition, validKeys: ReadonlyMap<string, string>): string | null => {
     // A dynamic value reads a field of the TRIGGERING record, so its source field
     // must exist on this automation's own entity (`keys`), regardless of which
     // entity the condition's `fieldKey` belongs to.
@@ -184,8 +184,8 @@ async function validateSpec(
   }
 
   // Cache target-entity field sets so cross-entity actions are validated too.
-  const targetKeysCache = new Map<number, Set<string>>();
-  const targetKeysFor = async (id: number): Promise<Set<string> | null> => {
+  const targetKeysCache = new Map<number, Map<string, string>>();
+  const targetKeysFor = async (id: number): Promise<Map<string, string> | null> => {
     if (targetKeysCache.has(id)) return targetKeysCache.get(id)!;
     if (!(await entityExists(id))) return null;
     const k = await activeFieldKeys(id);
@@ -210,6 +210,8 @@ async function validateSpec(
         if (err) return err;
       } else if (!keys.has(a.fieldKey)) {
         return `Unknown field in set_field action: ${a.fieldKey}`;
+      } else if (keys.get(a.fieldKey) === "created_at") {
+        return `Поле «Системная дата» доступно только для чтения: ${a.fieldKey}`;
       }
     } else if (a.type === "change_status") {
       if (!statusIds.has(a.statusId)) return "Unknown status in change_status action";
@@ -229,6 +231,8 @@ async function validateSpec(
           if (err) return err;
         } else if (!tk.has(m.targetFieldKey)) {
           return `Unknown target field in mapping: ${m.targetFieldKey}`;
+        } else if (tk.get(m.targetFieldKey) === "created_at") {
+          return `Поле «Системная дата» доступно только для чтения: ${m.targetFieldKey}`;
         }
         // A page-sourced mapping (only valid for sourceType "field") reads a
         // page-local field of the triggering record on a mirror page of this

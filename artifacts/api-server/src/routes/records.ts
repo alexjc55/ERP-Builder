@@ -252,10 +252,13 @@ export function validateValues(
     // record_links, assigned via the related-link endpoint) and never stored here.
     // Lookup fields project another field of that same linked record (read-only),
     // so they are likewise derived and never stored in valuesJson.
+    // created_at (system date) mirrors the record's system creation timestamp —
+    // read-only, never stored in valuesJson.
     if (
       field.fieldType === "function" ||
       field.fieldType === "relation" ||
-      field.fieldType === "lookup"
+      field.fieldType === "lookup" ||
+      field.fieldType === "created_at"
     )
       continue;
     const raw = values[field.fieldKey];
@@ -422,6 +425,26 @@ function stripHidden<T extends { valuesJson: unknown }>(record: T, hidden: Set<s
   const values = { ...((record.valuesJson as Record<string, unknown>) ?? {}) };
   for (const k of hidden) delete values[k];
   return { ...record, valuesJson: values };
+}
+
+/**
+ * Present a record for a response: strip hidden field values, then inject the
+ * system creation timestamp under every visible `created_at`-type field key.
+ * created_at fields have no stored value — the injected ISO value is display
+ * data only (writes drop the key), so this cannot round-trip into storage.
+ */
+function presentRecord<T extends { valuesJson: unknown; createdAt: Date | string }>(
+  record: T,
+  hidden: Set<string>,
+  fields: EntityField[],
+): T {
+  const out = stripHidden(record, hidden);
+  const sysKeys = fields.filter((f) => f.fieldType === "created_at" && !hidden.has(f.fieldKey));
+  if (sysKeys.length === 0) return out;
+  const iso = record.createdAt instanceof Date ? record.createdAt.toISOString() : String(record.createdAt);
+  const values = { ...((out.valuesJson as Record<string, unknown>) ?? {}) };
+  for (const f of sysKeys) values[f.fieldKey] = iso;
+  return { ...out, valuesJson: values };
 }
 
 /** Russian label for a field, falling back to its key (server-side getML-lite). */
@@ -795,7 +818,7 @@ router.get("/entities/:entityId/records", requireAuth, requireRecordParam("view"
     .from(entityRecordsTable)
     .where(where)
     .orderBy(desc(entityRecordsTable.createdAt));
-  res.json(records.map((r) => stripHidden(r, hidden)));
+  res.json(records.map((r) => presentRecord(r, hidden, fields)));
 });
 
 router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam("view"), async (req, res): Promise<void> => {
@@ -1346,7 +1369,10 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     const groupsWhere = and(...groupsClauses)!;
     const keyExpr = groupRelMeta
       ? relationLinkedIdScalar(groupRelMeta)
-      : sql`(${entityRecordsTable.valuesJson} ->> ${groupField.fieldKey})`;
+      : groupField.fieldType === "created_at"
+        ? // System date: group by the record's creation DAY (UTC), not the full timestamp.
+          sql`to_char(${entityRecordsTable.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`
+        : sql`(${entityRecordsTable.valuesJson} ->> ${groupField.fieldKey})`;
     // Label boundary: the projected linked-field value is only selected when the
     // viewer may see it on the linked entity (groupLabelAllowed); otherwise the
     // label is withheld and the client falls back to the opaque key.
@@ -1417,6 +1443,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       .select({
         id: entityRecordsTable.id,
         values: entityRecordsTable.valuesJson,
+        createdAt: entityRecordsTable.createdAt,
         statusId: entityRecordsTable.statusId,
         gkey: sql<string | null>`${keyExpr}`,
         glabel: sql<string | null>`${labelExpr}`,
@@ -1584,7 +1611,12 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         firstRow = true;
       }
       b.count += 1;
-      const vals = (r.values as Record<string, unknown> | null) ?? {};
+      const vals = { ...((r.values as Record<string, unknown> | null) ?? {}) };
+      // created_at fields carry no stored value — inject the system timestamp so
+      // the common-value pass sees it like any other scalar column.
+      for (const f of gScalarCommon) {
+        if (f.fieldType === "created_at") vals[f.fieldKey] = r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt);
+      }
       for (const f of totalFields) b.sums[f.fieldKey] = (b.sums[f.fieldKey] ?? 0) + numVal(vals[f.fieldKey]);
       for (const f of formulaTotalFields) {
         const cfg = f.formulaConfigJson as { expression?: string; decimals?: number | null } | null;
@@ -1743,7 +1775,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   }
 
   res.json({
-    data: data.map((r) => stripHidden(r, hidden)),
+    data: data.map((r) => presentRecord(r, hidden, fields)),
     total: countRow?.count ?? 0,
     ...(numericTotals ? { numericTotals } : {}),
     ...(groups ? { groups } : {}),
@@ -2070,7 +2102,12 @@ router.post(
         if (emptyRow) values = [EMPTY_FILTER_VALUE, ...values];
       }
     } else {
-      const valueExpr = sql<string | null>`(${entityRecordsTable.valuesJson} ->> ${body.data.field})`;
+      // created_at (system date): distinct DAYS from the system column (used by
+      // the date filter popover to enable days); other fields list stored values.
+      const valueExpr =
+        target.fieldType === "created_at"
+          ? sql<string | null>`to_char(${entityRecordsTable.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`
+          : sql<string | null>`(${entityRecordsTable.valuesJson} ->> ${body.data.field})`;
       const vsClauses = valueSearch ? [sql`${valueExpr} ILIKE ${"%" + valueSearch + "%"}`] : [];
       const where = and(...clauses, ...vsClauses, sql`${valueExpr} IS NOT NULL AND ${valueExpr} <> ''`)!;
       // ORDER BY ordinal (1) — for SELECT DISTINCT the order-by expression must match the
@@ -2583,7 +2620,7 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
     req.log,
   );
 
-  res.status(201).json(stripHidden(record, hidden));
+  res.status(201).json(presentRecord(record, hidden, fields));
 });
 
 router.get("/records/:id", requireAuth, async (req, res): Promise<void> => {
@@ -2619,7 +2656,7 @@ router.get("/records/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   const { hidden } = await fieldAccessContext(req, record.entityId, fields);
-  res.json(stripHidden(record, hidden));
+  res.json(presentRecord(record, hidden, fields));
 });
 
 type TrashReason = "record_deleted" | "field_cleared" | "field_replaced";
@@ -3029,7 +3066,7 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
   }
   await emitEvent(events, req.log);
 
-  res.json(stripHidden(record, hidden));
+  res.json(presentRecord(record, hidden, fields));
 });
 
 router.delete("/records/:id", requireAuth, async (req, res): Promise<void> => {
@@ -3144,7 +3181,7 @@ async function setArchived(
   const record = await applyArchiveFlag(req, existing.entityId, existing.id, existing.archivedAt != null, archived);
 
   const { hidden } = await fieldAccessContext(req, existing.entityId, fields);
-  res.json(stripHidden(record, hidden));
+  res.json(presentRecord(record, hidden, fields));
 }
 
 /**
@@ -3407,7 +3444,7 @@ router.post("/records/merge", requireAuth, requireSuperAdmin(), async (req, res)
     const targetValues = { ...((target.valuesJson as Record<string, unknown>) ?? {}) };
     const auditEntries: InsertAuditLog[] = [];
     for (const f of fields) {
-      if (f.fieldType === "relation" || f.fieldType === "lookup" || f.fieldType === "function") continue;
+      if (f.fieldType === "relation" || f.fieldType === "lookup" || f.fieldType === "function" || f.fieldType === "created_at") continue;
       if (!mergeValueEmpty(targetValues[f.fieldKey])) continue;
       for (const srcId of sourceIds) {
         const srcValues = (byId.get(srcId)!.valuesJson as Record<string, unknown>) ?? {};

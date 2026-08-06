@@ -59,6 +59,19 @@ export interface RecordQuerySpec {
 
 const NUMERIC_TYPES = new Set(["number"]);
 const DATE_TYPES = new Set(["date", "datetime"]);
+
+/**
+ * System-backed field type: `created_at` mirrors the record's system creation
+ * timestamp (entity_records.created_at). It has NO value in values_json — every
+ * read (filter/sort/exclude) must target the system column. It is read-only:
+ * record writes drop it, so a field of this type can never be stored.
+ */
+export const SYSTEM_DATE_FIELD_TYPE = "created_at";
+/** Text expression over the system created_at column, ISO-formatted so the
+ * shared `datetime` cast/compare semantics in buildCondition apply unchanged. */
+function createdAtTextExpr(): SQL {
+  return sql`to_char(${entityRecordsTable.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')`;
+}
 // Field types whose values are free text we can run a substring search against.
 const TEXT_SEARCH_TYPES = new Set(["text", "textarea", "email", "url", "phone", "select"]);
 
@@ -426,8 +439,14 @@ export function buildRecordQuery(
     if (!field) return { error: `Unknown filter field: ${cond.field}` };
     // relation/lookup fields have no value in values_json — filter via the linked
     // record's projected value (EXISTS subquery) instead of the text expression.
+    // created_at (system date) likewise has no stored value: it compares against
+    // the record's system created_at column with datetime semantics.
     const relMeta = relationMeta.get(cond.field);
-    const built = relMeta ? buildRelationCondition(cond, relMeta) : buildCondition(cond, field.fieldType);
+    const built = relMeta
+      ? buildRelationCondition(cond, relMeta)
+      : field.fieldType === SYSTEM_DATE_FIELD_TYPE
+        ? buildCondition(cond, "datetime", createdAtTextExpr())
+        : buildCondition(cond, field.fieldType);
     if ("error" in built) return { error: built.error };
     filterChunks.push(built.sql);
   }
@@ -483,7 +502,7 @@ export function buildRecordQuery(
       );
       excludeChunks.push(sql`NOT ${inCond}`);
     } else {
-      const expr = textExpr(ex.field);
+      const expr = field.fieldType === SYSTEM_DATE_FIELD_TYPE ? createdAtTextExpr() : textExpr(ex.field);
       excludeChunks.push(sql`(${expr} IS NULL OR ${expr} NOT IN (${sql.join(parts, sql`, `)}))`);
     }
   }
@@ -515,6 +534,15 @@ export function buildRecordQuery(
     }
     const field = fieldByKey.get(s.field);
     if (!field) return { error: `Unknown sort field: ${s.field}` };
+    // created_at (system date) sorts by the system column — same semantics as
+    // the reserved __created_at__ key, including the same-direction id tie-break
+    // (bulk imports share one created_at, so id keeps pagination stable).
+    if (field.fieldType === SYSTEM_DATE_FIELD_TYPE) {
+      orderBy.push(s.direction === "desc" ? desc(entityRecordsTable.createdAt) : asc(entityRecordsTable.createdAt));
+      orderBy.push(s.direction === "desc" ? desc(entityRecordsTable.id) : asc(entityRecordsTable.id));
+      hasIdTieBreak = true;
+      continue;
+    }
     // relation/lookup: no scalar in values_json — order by the single linked
     // record's projected value (same subquery as relation filters). Numeric-
     // looking values sort naturally first ("9" < "10"), then text as tiebreak.

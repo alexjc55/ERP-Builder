@@ -349,7 +349,12 @@ function formToValues(fields: Field[], form: FormState): Record<string, unknown>
     // function (computed), relation (linked record) and lookup (projected from a
     // linked record). The server drops them anyway, but we must not let the UI
     // even attempt to send them.
-    if (field.fieldType === "function" || field.fieldType === "relation" || field.fieldType === "lookup") {
+    if (
+      field.fieldType === "function" ||
+      field.fieldType === "relation" ||
+      field.fieldType === "lookup" ||
+      field.fieldType === "created_at"
+    ) {
       continue;
     }
     const raw = form[field.fieldKey];
@@ -424,14 +429,16 @@ function renderCellValue(field: Field, value: unknown, t: (key: string, def: str
     const shown = d != null ? num.toFixed(d) : String(num);
     return <span className="text-slate-700" style={colorStyle}>{shown}</span>;
   }
-  if (field.fieldType === "date" || field.fieldType === "datetime") {
+  if (field.fieldType === "date" || field.fieldType === "datetime" || field.fieldType === "created_at") {
     // Stored value is ISO (yyyy-MM-dd or full ISO datetime). Display it in the
     // same day-first format the native <input type="date"> shows in a ru locale
     // (dd.MM.yyyy), so the saved value matches what the user typed.
+    // created_at (системная дата) is the record's creation timestamp (ISO),
+    // injected server-side — shown date+time like a datetime field.
     const raw = String(value);
     const parsed = parseISO(raw);
     if (!Number.isNaN(parsed.getTime())) {
-      const fmt = field.fieldType === "datetime" ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy";
+      const fmt = field.fieldType === "date" ? "dd.MM.yyyy" : "dd.MM.yyyy HH:mm";
       return <span className="text-slate-700" style={colorStyle}>{formatDate(parsed, fmt)}</span>;
     }
     return <span className="text-slate-700" style={colorStyle}>{raw}</span>;
@@ -4622,7 +4629,7 @@ export function EntityRecords({
                     knownRelatedFieldTypes.get(f.fieldKey) ??
                     "text") as Field["fieldType"])
                 : f.fieldType;
-            return effType === "date" || effType === "datetime" ? (
+            return effType === "date" || effType === "datetime" || effType === "created_at" ? (
               <DateFilterPopover
                 key={f.id}
                 field={f}
@@ -5729,7 +5736,8 @@ export function EntityRecords({
                         const editable =
                           effFieldAccess(f) === "edit" &&
                           f.fieldType !== "function" &&
-                          f.fieldType !== "lookup";
+                          f.fieldType !== "lookup" &&
+                          f.fieldType !== "created_at";
                         const addRowRelInfo = relCreateDepInfo(f, newRow);
                         return (
                           <td key={col.pinKey} className="px-2 py-1.5 align-top max-w-[260px]" style={{ ...pinStyle(col.pinKey, "#eff6ff"), ...colWidthStyle(col.pinKey) }}>
@@ -7846,6 +7854,16 @@ function RecordFormBody({
                 })()
               ) : (
                 roBox(<span className="text-slate-300">—</span>)
+              )
+            ) : field.fieldType === "created_at" ? (
+              // Системная дата создания записи — read-only. On edit it shows the
+              // server-injected timestamp; on create the value doesn't exist yet.
+              roBox(
+                form[field.fieldKey] ? (
+                  renderCellValue(field, form[field.fieldKey], t, userNames, undefined, ml)
+                ) : (
+                  <span className="text-slate-300">—</span>
+                ),
               )
             ) : field.fieldType === "function" ? (
               // Read-only live-computed formula preview from the current form

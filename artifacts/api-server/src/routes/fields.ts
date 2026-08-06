@@ -310,7 +310,8 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
     (parsed.data.fieldType === "file" ||
       parsed.data.fieldType === "function" ||
       parsed.data.fieldType === "relation" ||
-      parsed.data.fieldType === "lookup")
+      parsed.data.fieldType === "lookup" ||
+      parsed.data.fieldType === "created_at")
   ) {
     res.status(400).json({ error: "Ключевое поле недоступно для полей типа «файл», «функция», «связанное поле» и «поле подстановки»" });
     return;
@@ -324,7 +325,8 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
     parsed.data.lockAfterCreate &&
     (parsed.data.fieldType === "file" ||
       parsed.data.fieldType === "function" ||
-      parsed.data.fieldType === "lookup")
+      parsed.data.fieldType === "lookup" ||
+      parsed.data.fieldType === "created_at")
   ) {
     res.status(400).json({ error: "Запрет изменения недоступен для полей типа «файл», «функция» и «поле подстановки»" });
     return;
@@ -529,14 +531,14 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   const nextLock = body.lockAfterCreate ?? current.lockAfterCreate;
   if (
     nextIsKey &&
-    (nextType === "file" || nextType === "function" || nextType === "relation" || nextType === "lookup")
+    (nextType === "file" || nextType === "function" || nextType === "relation" || nextType === "lookup" || nextType === "created_at")
   ) {
     res.status(400).json({ error: "Ключевое поле недоступно для полей типа «файл», «функция», «связанное поле» и «поле подстановки»" });
     return;
   }
   if (
     nextLock &&
-    (nextType === "file" || nextType === "function" || nextType === "lookup")
+    (nextType === "file" || nextType === "function" || nextType === "lookup" || nextType === "created_at")
   ) {
     res.status(400).json({ error: "Запрет изменения недоступен для полей типа «файл», «функция» и «поле подстановки»" });
     return;

@@ -2205,6 +2205,7 @@ export const FieldType = {
   relation: 'relation',
   lookup: 'lookup',
   percent: 'percent',
+  created_at: 'created_at',
 } as const;
 
 export type FormatOperator = typeof FormatOperator[keyof typeof FormatOperator];
