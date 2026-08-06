@@ -1048,7 +1048,9 @@ async function runActions(
         const rows = await db
           .select()
           .from(entityRecordsTable)
-          .where(and(eq(entityRecordsTable.entityId, action.targetEntityId), sql`${entityRecordsTable.archivedAt} is null`));
+          // Archived records are INCLUDED on purpose: an automation must keep
+          // downstream data consistent even for rows already swept to archive.
+          .where(eq(entityRecordsTable.entityId, action.targetEntityId));
         const mapCtx = { entityId: ctx.entityId, values: ctx.values, statusId: ctx.statusId, pageContexts: ctx.pageContexts };
         const mappedValues = await buildMappedValues(action.mapping ?? [], mapCtx);
         // Page-target mappings write a page-local field on a mirror page of the
@@ -1317,7 +1319,9 @@ export async function runDateSweep(now: Date = new Date()): Promise<void> {
       rows = await db
         .select()
         .from(entityRecordsTable)
-        .where(and(eq(entityRecordsTable.entityId, automation.entityId), sql`${entityRecordsTable.archivedAt} is null`));
+        // Archived records are INCLUDED on purpose: date-reached automations
+        // must still fire for rows already swept to archive.
+        .where(eq(entityRecordsTable.entityId, automation.entityId));
     } catch (err) {
       log.error({ err, automationId: automation.id }, "Date sweep: failed to load records");
       continue;
