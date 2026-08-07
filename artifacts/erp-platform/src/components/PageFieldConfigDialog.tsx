@@ -57,6 +57,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useML, useT } from "@/lib/i18n";
 import { FIELD_KEY_RE, slugifyKey, uniqueKey } from "@/lib/keys";
 import { Loader2, Trash2 } from "lucide-react";
+import { usePagePathLabel } from "@/lib/pagePath";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
@@ -143,6 +144,7 @@ export function PageFieldConfigDialog({
 }) {
   const ml = useML();
   const t = useT();
+  const pageLabel = usePagePathLabel();
   const { toast } = useToast();
   const { data: existingFields = [] } = useListPageFields(pageId);
   const { data: relationOptionsData } = useGetPageRelationOptions(pageId, {
@@ -613,7 +615,7 @@ export function PageFieldConfigDialog({
                         </SelectItem>
                         {relatedPages.map((p) => (
                           <SelectItem key={p.pageId} value={String(p.pageId)}>
-                            {t("fields.lookupSourcePagePrefix", "Страница")}: {ml(p.pageLabel)}
+                            {t("fields.lookupSourcePagePrefix", "Страница")}: {pageLabel(p.pageId)}
                           </SelectItem>
                         ))}
                       </SelectContent>

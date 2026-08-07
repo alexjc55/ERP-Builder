@@ -101,6 +101,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
+import { usePagePathLabel } from "@/lib/pagePath";
 import { normalizeSelectOptions } from "@/lib/selectOptions";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 
@@ -342,6 +343,7 @@ export default function EntityAutomationsPage() {
   const queryClient = useQueryClient();
   const ml = useML();
   const t = useT();
+  const pageLabel = usePagePathLabel();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Automation | null>(null);
@@ -669,7 +671,7 @@ export default function EntityAutomationsPage() {
     if (trig.type === "date_reached" && trig.fieldKey) return `${base}: ${trig.fieldKey}${trig.offsetDays ? ` ${trig.offsetDays > 0 ? "+" : ""}${trig.offsetDays}д` : ""}`;
     if (trig.type === "page_field_changed" && trig.fieldKey) {
       const pg = mirrorPages.find((p) => p.id === trig.pageId);
-      return `${base}: ${pg ? ml(pg.nameJson) || `#${trig.pageId}` : `#${trig.pageId}`} · ${trig.fieldKey}`;
+      return `${base}: ${pg ? pageLabel(pg) : `#${trig.pageId}`} · ${trig.fieldKey}`;
     }
     if (trig.type === "status_changed") {
       const f = trig.fromStatusId == null ? "*" : ml(statusById.get(trig.fromStatusId)?.nameJson) || `#${trig.fromStatusId}`;
@@ -823,7 +825,7 @@ export default function EntityAutomationsPage() {
               <>
                 <Select value={c.pageId} onValueChange={(v) => upd(i, { pageId: v, fieldKey: "" })}>
                   <SelectTrigger className="w-40"><SelectValue placeholder={t("auto.page", "Страница")} /></SelectTrigger>
-                  <SelectContent>{(mirrorPages ?? []).map((p) => (<SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson) || `#${p.id}`}</SelectItem>))}</SelectContent>
+                  <SelectContent>{(mirrorPages ?? []).map((p) => (<SelectItem key={p.id} value={String(p.id)}>{pageLabel(p)}</SelectItem>))}</SelectContent>
                 </Select>
                 {c.pageId && (
                   <PageFieldSelect pageId={Number(c.pageId)} value={c.fieldKey} onChange={(v) => upd(i, { fieldKey: v, value: "" })} ml={ml} t={t} className="w-40" placeholder={t("auto.pageField", "Поле страницы")} />
@@ -1042,7 +1044,7 @@ export default function EntityAutomationsPage() {
                     <Select value={trigPageId} onValueChange={(v) => { setTrigPageId(v); setTrigPageFieldKey(""); }}>
                       <SelectTrigger className="w-52"><SelectValue placeholder={t("auto.page", "Страница")} /></SelectTrigger>
                       <SelectContent>
-                        {mirrorPages.map((p) => (<SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson) || `#${p.id}`}</SelectItem>))}
+                        {mirrorPages.map((p) => (<SelectItem key={p.id} value={String(p.id)}>{pageLabel(p)}</SelectItem>))}
                       </SelectContent>
                     </Select>
                     {trigPageId && (
@@ -1329,6 +1331,7 @@ function ActionCard({
   onMove: (dir: -1 | 1) => void;
   onTargetFieldsLoaded: (entityId: number, fields: Field[]) => void;
 }): ReactElement {
+  const pageLabel = usePagePathLabel();
   const targetId = draft.targetEntityId ? Number(draft.targetEntityId) : 0;
   const crossEntity = draft.type === "create_record" || draft.type === "update_records_where";
   const { data: targetFieldsRaw = [] } = useListEntityFields(targetId, { query: { enabled: crossEntity && targetId > 0, queryKey: getListEntityFieldsQueryKey(targetId) } });
@@ -1376,7 +1379,7 @@ function ActionCard({
             <>
               <Select value={draft.targetPageId} onValueChange={(v) => onChange({ targetPageId: v, fieldKey: "" })}>
                 <SelectTrigger className="w-40"><SelectValue placeholder={t("auto.page", "Страница")} /></SelectTrigger>
-                <SelectContent>{mirrorPages.map((p) => (<SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson) || `#${p.id}`}</SelectItem>))}</SelectContent>
+                <SelectContent>{mirrorPages.map((p) => (<SelectItem key={p.id} value={String(p.id)}>{pageLabel(p)}</SelectItem>))}</SelectContent>
               </Select>
               {draft.targetPageId && (
                 <PageFieldSelect pageId={Number(draft.targetPageId)} value={draft.fieldKey} onChange={(v) => onChange({ fieldKey: v, value: "" })} ml={ml} t={t} className="w-44" storableOnly />
@@ -1474,7 +1477,7 @@ function ActionCard({
                       <>
                         <Select value={m.targetPageId ?? ""} onValueChange={(v) => updMapping(i, { targetPageId: v, targetFieldKey: "" })}>
                           <SelectTrigger className="w-36 shrink-0"><SelectValue placeholder={t("auto.page", "Страница")} /></SelectTrigger>
-                          <SelectContent>{mirrorPages.map((p) => (<SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson) || `#${p.id}`}</SelectItem>))}</SelectContent>
+                          <SelectContent>{mirrorPages.map((p) => (<SelectItem key={p.id} value={String(p.id)}>{pageLabel(p)}</SelectItem>))}</SelectContent>
                         </Select>
                         {m.targetPageId && (
                           <PageFieldSelect pageId={Number(m.targetPageId)} value={m.targetFieldKey} onChange={(v) => updMapping(i, { targetFieldKey: v })} ml={ml} t={t} className="w-40" storableOnly placeholder={t("auto.targetField", "Поле")} />
@@ -1509,7 +1512,7 @@ function ActionCard({
                             <>
                               <Select value={m.sourcePageId ?? ""} onValueChange={(v) => updMapping(i, { sourcePageId: v, sourceFieldKey: "" })}>
                                 <SelectTrigger className="w-36 shrink-0"><SelectValue placeholder={t("auto.page", "Страница")} /></SelectTrigger>
-                                <SelectContent>{mirrorPages.map((p) => (<SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson) || `#${p.id}`}</SelectItem>))}</SelectContent>
+                                <SelectContent>{mirrorPages.map((p) => (<SelectItem key={p.id} value={String(p.id)}>{pageLabel(p)}</SelectItem>))}</SelectContent>
                               </Select>
                               {m.sourcePageId && (
                                 <PageFieldSelect pageId={Number(m.sourcePageId)} value={m.sourceFieldKey} onChange={(v) => updMapping(i, { sourceFieldKey: v })} ml={ml} t={t} className="flex-1 min-w-0" readableOnly />

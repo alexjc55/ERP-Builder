@@ -26,6 +26,7 @@ import {
   type ImportRow,
 } from "@workspace/api-client-react";
 import { useML, useT } from "@/lib/i18n";
+import { usePagePathLabel } from "@/lib/pagePath";
 import { normalizeSelectOptions } from "@/lib/selectOptions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -183,6 +184,7 @@ function FileCard({
   onRemove: (id: string) => void;
   onFileParsed: (id: string, data: ParsedData | null) => void;
 }) {
+  const pageLabel = usePagePathLabel();
   const ml = useML();
   const t = useT();
   const { toast } = useToast();
@@ -494,7 +496,7 @@ function FileCard({
               <SelectContent>
                 {mirrorPages.map((p) => (
                   <SelectItem key={p.id} value={String(p.id)}>
-                    {ml(p.nameJson) || String(p.id)}
+                    {pageLabel(p)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -719,6 +721,7 @@ function FileResultView({ index, result }: { index: number; result: BatchImportF
 export default function ImportPage() {
   const t = useT();
   const ml = useML();
+  const pageLabel = usePagePathLabel();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -875,7 +878,7 @@ export default function ImportPage() {
         target = e ? ml(e.nameJson) || e.entityKey : "";
       } else if (bf?.kind === "page") {
         const p = pages.find((x) => x.id === bf.pageId);
-        target = p ? ml(p.nameJson) || String(p.id) : "";
+        target = p ? pageLabel(p) : "";
       }
       if (fr.error) {
         lines.push([fileLabel, target, "", fr.error].map(esc).join(","));

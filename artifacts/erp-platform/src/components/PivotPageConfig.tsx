@@ -44,6 +44,7 @@ import {
   buildMeasureConfig,
 } from "@/components/PivotMeasuresEditor";
 import { type FormulaFieldRef } from "@/components/FormulaEditor";
+import { usePagePathLabel } from "@/lib/pagePath";
 import {
   FilterRowsEditor,
   PivotDimEditor,
@@ -93,6 +94,7 @@ export function PivotPageConfig({
   ml: (val: MultilingualText | string | undefined | null) => string;
   t: (key: string, def: string) => string;
 }) {
+  const pageLabel = usePagePathLabel();
   const { data: allFields = [], isLoading: fieldsLoading } = useListEntityFields(entityId);
   const fields = useMemo(
     () => [...allFields].filter((f: Field) => f.isActive).sort((a, b) => a.sortOrder - b.sortOrder),
@@ -362,7 +364,7 @@ export function PivotPageConfig({
                 <SelectContent>
                   <SelectItem value="__none__">{t("dash.pivotPageNone", "Без страницы")}</SelectItem>
                   {entityPages.map((p) => (
-                    <SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson)}</SelectItem>
+                    <SelectItem key={p.id} value={String(p.id)}>{pageLabel(p)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

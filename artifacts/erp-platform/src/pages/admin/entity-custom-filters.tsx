@@ -67,6 +67,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
+import { usePagePathLabel } from "@/lib/pagePath";
 import { normalizeSelectOptions } from "@/lib/selectOptions";
 
 type MLValue = { ru?: string; en?: string; he?: string };
@@ -173,6 +174,7 @@ export default function EntityCustomFiltersPage() {
   const queryClient = useQueryClient();
   const ml = useML();
   const t = useT();
+  const pageLabel = usePagePathLabel();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<CustomFilter | null>(null);
@@ -570,7 +572,7 @@ export default function EntityCustomFiltersPage() {
                         <>
                           <Select value={c.pageId} onValueChange={(v) => updateCond(gi, ci, { pageId: v, fieldKey: "" })}>
                             <SelectTrigger className="w-40"><SelectValue placeholder={t("cf.page", "Страница")} /></SelectTrigger>
-                            <SelectContent>{mirrorPages.map((p) => (<SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson) || `#${p.id}`}</SelectItem>))}</SelectContent>
+                            <SelectContent>{mirrorPages.map((p) => (<SelectItem key={p.id} value={String(p.id)}>{pageLabel(p)}</SelectItem>))}</SelectContent>
                           </Select>
                           {c.pageId && (
                             <PageFieldSelect pageId={Number(c.pageId)} value={c.fieldKey} onChange={(v) => updateCond(gi, ci, { fieldKey: v })} ml={ml} className="w-40" placeholder={t("cf.pageField", "Поле страницы")} />

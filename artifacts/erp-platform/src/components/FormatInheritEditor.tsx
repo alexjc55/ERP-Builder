@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Plus, Trash2 } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
+import { usePagePathLabel } from "@/lib/pagePath";
 
 /**
  * Editor for a field's `formatInheritJson`: the list of sources this field
@@ -43,6 +44,7 @@ function SourceRow({
 }) {
   const t = useT();
   const ml = useML();
+  const pageLabel = usePagePathLabel();
   const { data: entities = [] } = useListEntities();
   const { data: pages = [] } = useListPages();
   // Only mirror pages can carry page-local fields.
@@ -95,7 +97,7 @@ function SourceRow({
               <SelectLabel>{t("fields.inheritPagesGroup", "Страницы")}</SelectLabel>
               {mirrorPages.map((p) => (
                 <SelectItem key={`p:${p.id}`} value={`p:${p.id}`}>
-                  {ml(p.nameJson)}
+                  {pageLabel(p)}
                 </SelectItem>
               ))}
             </SelectGroup>
