@@ -120,7 +120,6 @@ import {
 import { cn } from "@/lib/utils";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { ValueChecklistPicker } from "@/components/FilterValuePicker";
 import {
   uploadFile,
@@ -4602,7 +4601,9 @@ export function EntityRecords({
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="start" className="w-56 p-0">
-                <ScrollArea className="max-h-64">
+                {/* Plain overflow div, NOT Radix ScrollArea (h-full viewport
+                    breaks under max-height-only parent — list clips, no scroll). */}
+                <div className="max-h-64 overflow-y-auto">
                   <div className="p-1">
                     {filterableStatuses.map((s: Status) => (
                       <label
@@ -4615,7 +4616,7 @@ export function EntityRecords({
                       </label>
                     ))}
                   </div>
-                </ScrollArea>
+                </div>
                 {statusFilter.length > 0 && (
                   <div className="p-1.5 border-t border-slate-100">
                     <Button

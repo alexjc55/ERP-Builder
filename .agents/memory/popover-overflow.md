@@ -25,3 +25,5 @@ viewport edge. Without binding it to `max-h` + `overflow-y-auto`, the content ha
 no height limit and silently overflows. Consumers that already wrap their list in
 a fixed-height `ScrollArea` (e.g. FilterValuePicker `max-h-64`) stay unaffected —
 the inner cap is smaller, so the outer scroll never engages.
+
+- Radix ScrollArea with only `max-h-*` on the Root does NOT scroll: the Viewport is `h-full`, which cannot resolve against a max-height-only parent — list clips (~8 rows) with no scrollbar. Use a plain `div max-h-* overflow-y-auto` instead (fixed in filter value/status pickers, Aug 2026).

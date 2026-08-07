@@ -3,7 +3,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Plus } from "lucide-react";
 
 /**
@@ -131,7 +130,10 @@ export function ValueChecklistPicker({
             className="h-8 text-sm"
           />
         </div>
-        <ScrollArea className="max-h-64">
+        {/* Plain overflow div, NOT Radix ScrollArea: its viewport is h-full,
+            which doesn't resolve against a max-height-only parent, so the list
+            was clipped at ~8 rows with no scrollbar. */}
+        <div className="max-h-64 overflow-y-auto">
           <div className="p-1">
             {loading ? (
               <div className="flex items-center justify-center py-6 text-slate-400">
@@ -153,7 +155,7 @@ export function ValueChecklistPicker({
               ))
             )}
           </div>
-        </ScrollArea>
+        </div>
         {allowManual && (
           <div className="flex items-center gap-1.5 border-t border-slate-100 p-2">
             <Input
