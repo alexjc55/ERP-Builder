@@ -135,6 +135,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { HexColorPicker } from "react-colorful";
 import { addColorPreset, loadColorPresets, removeColorPreset } from "@/lib/colorPresets";
 import { useLocation } from "wouter";
+import { usePagePathLabel } from "@/lib/pagePath";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
@@ -2340,6 +2341,7 @@ function PivotEditor({
   ml: (v: unknown) => string;
   t: (key: string, fallback: string) => string;
 }) {
+  const pageLabel = usePagePathLabel();
   const { data: fields = [] } = useListEntityFields(pivot.entityId ?? 0, {
     query: { enabled: pivot.entityId != null, queryKey: getListEntityFieldsQueryKey(pivot.entityId ?? 0) },
   });
@@ -2431,7 +2433,7 @@ function PivotEditor({
             <SelectContent>
               <SelectItem value="__none__">{t("dash.pivotPageNone", "Без страницы")}</SelectItem>
               {entityPages.map((p) => (
-                <SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson)}</SelectItem>
+                <SelectItem key={p.id} value={String(p.id)}>{pageLabel(p)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -2524,6 +2526,7 @@ function ChartEditor({
   ml: (v: unknown) => string;
   t: (key: string, fallback: string) => string;
 }) {
+  const pageLabel = usePagePathLabel();
   const { data: fields = [] } = useListEntityFields(chart.entityId ?? 0, {
     query: { enabled: chart.source === "entity" && chart.entityId != null, queryKey: getListEntityFieldsQueryKey(chart.entityId ?? 0) },
   });
@@ -2609,7 +2612,7 @@ function ChartEditor({
                 <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectPage", "Страница")} /></SelectTrigger>
                 <SelectContent>
                   {pages.filter((p) => p.isActive).map((p) => (
-                    <SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson)}</SelectItem>
+                    <SelectItem key={p.id} value={String(p.id)}>{pageLabel(p)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -2748,6 +2751,7 @@ function TableEditor({
   ml: (v: unknown) => string;
   t: (key: string, fallback: string) => string;
 }) {
+  const pageLabel = usePagePathLabel();
   const { data: fields = [] } = useListEntityFields(table.entityId ?? 0, {
     query: { enabled: table.entityId != null, queryKey: getListEntityFieldsQueryKey(table.entityId ?? 0) },
   });
@@ -2856,7 +2860,7 @@ function TableEditor({
             <SelectContent>
               <SelectItem value="__none__">{t("dash.pivotPageNone", "Без страницы")}</SelectItem>
               {entityPages.map((p) => (
-                <SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson)}</SelectItem>
+                <SelectItem key={p.id} value={String(p.id)}>{pageLabel(p)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -2960,6 +2964,7 @@ function MetricEditor({
   ml: (v: unknown) => string;
   t: (key: string, fallback: string) => string;
 }) {
+  const pageLabel = usePagePathLabel();
   const { data: fields = [] } = useListEntityFields(metric.entityId ?? 0, {
     query: { enabled: metric.source === "entity" && metric.entityId != null, queryKey: getListEntityFieldsQueryKey(metric.entityId ?? 0) },
   });
@@ -3039,7 +3044,7 @@ function MetricEditor({
             <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectPage", "Страница")} /></SelectTrigger>
             <SelectContent>
               {pages.filter((p) => p.isActive).map((p) => (
-                <SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson)}</SelectItem>
+                <SelectItem key={p.id} value={String(p.id)}>{pageLabel(p)}</SelectItem>
               ))}
             </SelectContent>
           </Select>

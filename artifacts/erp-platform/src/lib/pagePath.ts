@@ -18,7 +18,7 @@ import { useML } from "@/lib/i18n";
  * cached by react-query), so it works even when the picker itself renders a
  * filtered subset (e.g. mirror pages only) whose parents are not in the subset.
  */
-export function usePagePathLabel(): (page: Page | number) => string {
+export function usePagePathLabel(): (page: Page | number, fallback?: string) => string {
   const { data: allPages = [] } = useListPages();
   const ml = useML();
 
@@ -29,9 +29,9 @@ export function usePagePathLabel(): (page: Page | number) => string {
   }, [allPages]);
 
   return useCallback(
-    (page: Page | number): string => {
+    (page: Page | number, fallback?: string): string => {
       const target = typeof page === "number" ? byId.get(page) : page;
-      if (!target) return `#${page}`;
+      if (!target) return fallback || `#${page}`;
       const parts: string[] = [];
       let cur: Page | undefined = target;
       const seen = new Set<number>(); // cycle guard

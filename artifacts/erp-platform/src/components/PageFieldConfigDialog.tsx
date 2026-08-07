@@ -615,7 +615,7 @@ export function PageFieldConfigDialog({
                         </SelectItem>
                         {relatedPages.map((p) => (
                           <SelectItem key={p.pageId} value={String(p.pageId)}>
-                            {t("fields.lookupSourcePagePrefix", "Страница")}: {pageLabel(p.pageId)}
+                            {t("fields.lookupSourcePagePrefix", "Страница")}: {pageLabel(p.pageId, ml(p.pageLabel))}
                           </SelectItem>
                         ))}
                       </SelectContent>

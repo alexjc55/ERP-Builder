@@ -86,6 +86,7 @@ import { normalizeDecimals } from "@workspace/formula";
 import { useML, useT } from "@/lib/i18n";
 import { FIELD_KEY_RE, slugifyKey, uniqueKey } from "@/lib/keys";
 import { Loader2, Trash2 } from "lucide-react";
+import { usePagePathLabel } from "@/lib/pagePath";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
@@ -147,6 +148,7 @@ export function FieldConfigDialog({
   onSaved: () => void;
 }) {
   const ml = useML();
+  const pageLabel = usePagePathLabel();
   const t = useT();
   const { toast } = useToast();
   const { data: roles = [] } = useListRoles();
@@ -678,7 +680,7 @@ export function FieldConfigDialog({
                         </SelectItem>
                         {relatedPages.map((p) => (
                           <SelectItem key={p.pageId} value={String(p.pageId)}>
-                            {t("fields.lookupSourcePagePrefix", "Страница")}: {ml(p.pageLabel)}
+                            {t("fields.lookupSourcePagePrefix", "Страница")}: {pageLabel(p.pageId, ml(p.pageLabel))}
                           </SelectItem>
                         ))}
                       </SelectContent>
