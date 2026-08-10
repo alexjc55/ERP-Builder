@@ -45,3 +45,7 @@ If `.env` changed or DB schema changed, source env first: `set -a; source .env; 
 - Low RAM: a 2G swapfile was added (fstab) after OOM kills during install/build.
 
 - Google Drive own-keys OAuth: redirect URI is derived from the request host (x-forwarded-host/Host), no REPLIT_DOMAINS needed on the external server. The Google OAuth app must be PUBLISHED (In production, no verification needed) — Testing mode revokes refresh tokens after 7 days, so Drive drops weekly.
+
+## Schema drift after code-only deploy (Aug 2026)
+- Symptom set: "values disappeared" / empty admin lists / "Аккаунт —" right after a git-pull deploy = missing `db push` on prod (Drizzle selects new columns → queries 500 → UI renders empty; data is intact). Check `pm2 logs erp-api` for `column ... does not exist`.
+- Fix option besides push: `scripts/prod-sync-schema.sql` — generated idempotent ADDITIVE-only sync (IF NOT EXISTS everywhere); regenerate from dev via the psql script pattern when schema changes again.
