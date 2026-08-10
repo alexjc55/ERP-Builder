@@ -145,3 +145,8 @@ merged). Template read endpoint `GET /google-drive/name-template` is auth-only
 sections are skipped; nothing resolves ⇒ original name. Field sections store only
 fieldKey (label is a display snapshot) — same-key ambiguity across entities is
 accepted v1.
+
+## Per-FIELD name templates override folder templates (Aug 2026)
+- `fileConfigJson.nameTemplateJson` (same DriveNameSection[] shape) on a file field takes priority over the folder's `google_drive_folders.nameTemplateJson`; empty/off falls back to folder, then original name. Precedence lives client-side in FileFieldInput (skips folder-template fetch when field template present).
+- Shared editor component `DriveNameTemplateEditor` (erp-platform/src/components) is used by BOTH the folder dialog and FieldConfigDialog — never fork a second sections editor. FieldConfigDialog passes defaultSource `e:<entityId>` so the picker preselects the owning entity.
+- Server fields routes must cast parsed `fileConfigJson` to the db `FileFieldConfig` type on create AND the PUT allowlist (generated API type is looser than db union).
