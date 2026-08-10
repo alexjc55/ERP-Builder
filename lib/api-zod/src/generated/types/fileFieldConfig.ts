@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { DriveNameSection } from './driveNameSection';
 import type { FileSource } from './fileSource';
 
 /**
@@ -16,4 +17,6 @@ export interface FileFieldConfig {
   driveFolderId?: string;
   /** Managed LOCAL folder id (local_folders.id) this field's `server` uploads land in. Unset means the default local folder. */
   localFolderId?: number;
+  /** Per-field Drive file-name template. Non-empty takes priority over the target folder's template; empty/unset falls back to the folder. */
+  nameTemplateJson?: DriveNameSection[] | null;
 }

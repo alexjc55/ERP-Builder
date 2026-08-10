@@ -21,7 +21,17 @@ export type FileSource = "server" | "gdrive" | "link";
  * (`local_folders.id`) that `server` uploads for this field land in; unset means
  * the default local folder.
  */
-export type FileFieldConfig = { allowedSources?: FileSource[]; driveFolderId?: string; localFolderId?: number };
+export type FileFieldConfig = {
+  allowedSources?: FileSource[];
+  driveFolderId?: string;
+  localFolderId?: number;
+  /**
+   * Per-FIELD Drive file-name template (sections, same shape as the folder's
+   * google_drive_folders.nameTemplateJson). When non-empty it takes priority
+   * over the target folder's template; empty/unset falls back to the folder.
+   */
+  nameTemplateJson?: import("./google_drive").DriveNameSection[];
+};
 
 /**
  * Per-field configuration for a `user`-type field. `allowedRoleIds` restricts the

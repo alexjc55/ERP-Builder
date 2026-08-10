@@ -145,7 +145,7 @@ import { useAuth } from "@/lib/auth";
 import { useML, useT, useLang } from "@/lib/i18n";
 import { normalizeSelectOptions, getOptionLabel } from "@/lib/selectOptions";
 import { useGoogleDriveReady } from "@/lib/googleDrive";
-import { composeDriveFileName } from "@/lib/driveNaming";
+import { composeDriveFileName, type DriveNameSection } from "@/lib/driveNaming";
 import { FieldConfigDialog } from "@/components/FieldConfigDialog";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { CreateUserDialog } from "@/components/CreateUserDialog";
@@ -8878,6 +8878,7 @@ function InlineCellEditor({
         driveFolderId={field.fileConfigJson?.driveFolderId}
         localFolderId={field.fileConfigJson?.localFolderId}
         rowValues={rowValues}
+        fieldNameTemplate={field.fileConfigJson?.nameTemplateJson as DriveNameSection[] | undefined}
         onCommit={commitOnce}
         onCancel={onCancel}
       />
@@ -9127,6 +9128,7 @@ function FieldInput({
           driveFolderId={field.fileConfigJson?.driveFolderId}
           localFolderId={field.fileConfigJson?.localFolderId}
           rowValues={rowValues}
+          fieldNameTemplate={field.fileConfigJson?.nameTemplateJson as DriveNameSection[] | undefined}
         />
       );
     case "textarea":
@@ -9224,6 +9226,7 @@ function FileFieldInput({
   driveFolderId,
   localFolderId,
   rowValues,
+  fieldNameTemplate,
 }: {
   value: unknown;
   onChange: (v: FileValue | "") => void;
@@ -9232,24 +9235,30 @@ function FileFieldInput({
   allowedSources?: FileSource[];
   driveFolderId?: string;
   localFolderId?: number | null;
-  /** Current form draft values — used to resolve the folder's file-name template. */
+  /** Current form draft values — used to resolve the file-name template. */
   rowValues?: Record<string, unknown>;
+  /** Per-FIELD name template (fileConfigJson.nameTemplateJson); overrides the folder's. */
+  fieldNameTemplate?: DriveNameSection[];
 }) {
   const t = useT();
   const { toast } = useToast();
   const gdriveReady = useGoogleDriveReady();
   // Folder file-name template (empty = keep original names). Fetched lazily only
   // when the Drive source is actually available for this field.
-  const { data: nameTemplate } = useGetGoogleDriveNameTemplate(
+  // Folder template is only a FALLBACK — a non-empty per-field template
+  // (fileConfigJson.nameTemplateJson) wins and we skip fetching the folder's.
+  const hasFieldTemplate = (fieldNameTemplate?.length ?? 0) > 0;
+  const { data: folderTemplate } = useGetGoogleDriveNameTemplate(
     driveFolderId ? { driveFolderId } : {},
     {
       query: {
-        enabled: gdriveReady && allowedSources.includes("gdrive"),
+        enabled: gdriveReady && allowedSources.includes("gdrive") && !hasFieldTemplate,
         staleTime: 60_000,
         queryKey: getGetGoogleDriveNameTemplateQueryKey(driveFolderId ? { driveFolderId } : {}),
       },
     },
   );
+  const activeTemplate = hasFieldTemplate ? fieldNameTemplate! : folderTemplate?.sections ?? [];
   const fileValue = isFileValue(value) ? value : null;
   const currentKind: FileSource = fileValue
     ? isLinkFile(fileValue)
@@ -9294,7 +9303,7 @@ function FileFieldInput({
     if (!file) return;
     setUploading(true);
     try {
-      const templateName = composeDriveFileName(file.name, nameTemplate?.sections ?? [], rowValues);
+      const templateName = composeDriveFileName(file.name, activeTemplate, rowValues);
       const res = await uploadToGoogleDrive(file, driveFolderId, templateName ?? undefined);
       onChange({
         kind: "gdrive",
@@ -9480,6 +9489,7 @@ function InlineFileEditor({
   driveFolderId,
   localFolderId,
   rowValues,
+  fieldNameTemplate,
   onCommit,
   onCancel,
 }: {
@@ -9488,6 +9498,7 @@ function InlineFileEditor({
   driveFolderId?: string;
   localFolderId?: number | null;
   rowValues?: Record<string, unknown>;
+  fieldNameTemplate?: DriveNameSection[];
   onCommit: (v: CellValue) => void;
   onCancel: () => void;
 }) {
@@ -9495,7 +9506,7 @@ function InlineFileEditor({
   const [draft, setDraft] = useState<FileValue | "">(isFileValue(initial) ? initial : "");
   return (
     <div className="min-w-[220px] space-y-2 rounded-md border border-blue-200 bg-white p-2 shadow-sm">
-      <FileFieldInput value={draft} onChange={setDraft} allowedSources={allowedSources} driveFolderId={driveFolderId} localFolderId={localFolderId} rowValues={rowValues} compact />
+      <FileFieldInput value={draft} onChange={setDraft} allowedSources={allowedSources} driveFolderId={driveFolderId} localFolderId={localFolderId} rowValues={rowValues} fieldNameTemplate={fieldNameTemplate} compact />
       <div className="flex items-center gap-1">
         <Button size="sm" className="h-7 bg-blue-600 hover:bg-blue-700" onClick={() => onCommit(draft)}>
           {t("records.save", "Сохранить")}

@@ -47,6 +47,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { FileSourcesConfig } from "@/components/FileSourcesConfig";
+import { DriveNameTemplateEditor } from "@/components/DriveNameTemplateEditor";
+import { type DriveNameSection } from "@/lib/driveNaming";
 import {
   Dialog,
   DialogContent,
@@ -192,6 +194,9 @@ export function FieldConfigDialog({
   const [allowedSources, setAllowedSources] = useState<FileSource[]>(["server"]);
   const [driveFolderId, setDriveFolderId] = useState<string>("");
   const [localFolderId, setLocalFolderId] = useState<number | null>(null);
+  // Per-field Drive file-name template; non-empty overrides the folder's template.
+  const [nameTemplate, setNameTemplate] = useState<DriveNameSection[]>([]);
+  const [nameTemplateEnabled, setNameTemplateEnabled] = useState(false);
   const [allowedRoleIds, setAllowedRoleIds] = useState<number[]>([]);
   const [allowCreateUser, setAllowCreateUser] = useState(false);
   const [formatRules, setFormatRules] = useState<FieldFormatRule[]>([]);
@@ -263,6 +268,9 @@ export function FieldConfigDialog({
         setAllowedSources(Array.isArray(src) && src.length > 0 ? src : ["server"]);
         setDriveFolderId(field.fileConfigJson?.driveFolderId ?? "");
         setLocalFolderId(field.fileConfigJson?.localFolderId ?? null);
+        const tpl = (field.fileConfigJson?.nameTemplateJson ?? []) as DriveNameSection[];
+        setNameTemplate(tpl);
+        setNameTemplateEnabled(tpl.length > 0);
       }
       setAllowedRoleIds(
         Array.isArray(field.userConfigJson?.allowedRoleIds) ? field.userConfigJson!.allowedRoleIds : [],
@@ -307,6 +315,9 @@ export function FieldConfigDialog({
       setPermissions({});
       setAllowedSources(["server"]);
       setDriveFolderId("");
+      setLocalFolderId(null);
+      setNameTemplate([]);
+      setNameTemplateEnabled(false);
       setAllowedRoleIds([]);
       setAllowCreateUser(false);
       setFormatRules([]);
@@ -456,6 +467,10 @@ export function FieldConfigDialog({
     }));
 
   const handleSubmit = () => {
+    // Drop degenerate template sections (empty text / no field picked).
+    const cleanedNameTemplate = nameTemplate.filter((s) =>
+      s.kind === "text" ? Boolean(s.text?.trim()) : s.kind === "field" ? Boolean(s.fieldKey) : true,
+    );
     const payload = {
       fieldKey: effectiveKey,
       nameJson: nameJson as MultilingualText,
@@ -488,6 +503,9 @@ export function FieldConfigDialog({
               allowedSources: allowedSources.length > 0 ? allowedSources : (["server"] as FileSource[]),
               ...(allowedSources.includes("gdrive") && driveFolderId ? { driveFolderId } : {}),
               ...(allowedSources.includes("server") && localFolderId != null ? { localFolderId } : {}),
+              ...(allowedSources.includes("gdrive") && nameTemplateEnabled && cleanedNameTemplate.length > 0
+                ? { nameTemplateJson: cleanedNameTemplate }
+                : {}),
             }
           : {},
       userConfigJson: fieldType === "user" ? { allowedRoleIds, allowCreate: allowCreateUser } : {},
@@ -895,6 +913,37 @@ export function FieldConfigDialog({
                         ))}
                       </SelectContent>
                     </Select>
+                    <div className="space-y-1.5 pt-2">
+                      <div className="flex items-center gap-2">
+                        <Switch checked={nameTemplateEnabled} onCheckedChange={setNameTemplateEnabled} />
+                        <Label className="cursor-pointer" onClick={() => setNameTemplateEnabled((v) => !v)}>
+                          {t("fields.driveNameTemplate", "Формировать имя файла")}
+                        </Label>
+                      </div>
+                      {nameTemplateEnabled ? (
+                        <>
+                          <p className="text-xs text-slate-400">
+                            {t(
+                              "fields.driveNameTemplateHint",
+                              "Собственный шаблон имени для файлов этого поля. Секции склеиваются через «_», расширение сохраняется. Имеет приоритет над шаблоном папки.",
+                            )}
+                          </p>
+                          <DriveNameTemplateEditor
+                            sections={nameTemplate}
+                            onChange={setNameTemplate}
+                            t={t}
+                            defaultSource={`e:${entityId}`}
+                          />
+                        </>
+                      ) : (
+                        <p className="text-xs text-slate-400">
+                          {t(
+                            "fields.driveNameTemplateOff",
+                            "Используется шаблон имени папки Google Drive, если он настроен; иначе — исходное имя файла.",
+                          )}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

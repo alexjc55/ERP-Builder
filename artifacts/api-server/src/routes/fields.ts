@@ -10,7 +10,7 @@ import {
   type Relation,
   type RelationFieldConfig,
 } from "@workspace/db";
-import type { FormatInheritSource } from "@workspace/db";
+import type { FormatInheritSource, FileFieldConfig } from "@workspace/db";
 import { eq, asc, and, ne, inArray, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
@@ -344,6 +344,8 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
         ...parsed.data,
         // Validated above; the generated API type is looser than the db union.
         formatInheritJson: (parsed.data.formatInheritJson ?? []) as FormatInheritSource[],
+        // Generated API type for name-template sections is looser than the db union.
+        fileConfigJson: (parsed.data.fileConfigJson ?? {}) as FileFieldConfig,
         optionsJson: createOptions,
         formulaConfigJson: clampFormulaDecimals(parsed.data.formulaConfigJson),
         percentConfigJson: clampFormulaDecimals(parsed.data.percentConfigJson),
@@ -634,7 +636,7 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   if ("totalFillColor" in body) updateData.totalFillColor = body.totalFillColor ?? null;
   if ("totalTextColor" in body) updateData.totalTextColor = body.totalTextColor ?? null;
   if ("columnGroupId" in body) updateData.columnGroupId = body.columnGroupId ?? null;
-  if ("fileConfigJson" in body) updateData.fileConfigJson = body.fileConfigJson ?? null;
+  if ("fileConfigJson" in body) updateData.fileConfigJson = (body.fileConfigJson ?? {}) as FileFieldConfig;
   if ("userConfigJson" in body) updateData.userConfigJson = body.userConfigJson ?? {};
 
   if (Object.keys(updateData).length === 0) {

@@ -2785,7 +2785,17 @@ export const ListEntityFieldsResponseItem = zod.object({
   "fileConfigJson": zod.object({
   "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional(),
   "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.'),
-  "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.')
+  "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.'),
+  "nameTemplateJson": zod.array(zod.object({
+  "kind": zod.enum(['text', 'field', 'hash']),
+  "text": zod.string().optional().describe('Literal text (kind=text).'),
+  "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
+  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string(),
+  "label": zod.string().optional()
+})).optional().describe('Fallback field keys (fields of other entities\/pages feeding the same folder); the first candidate with a non-empty value wins.')
+})).nullish().describe('Per-field Drive file-name template. Non-empty takes priority over the target folder\'s template; empty\/unset falls back to the folder.')
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "userConfigJson": zod.object({
   "allowedRoleIds": zod.array(zod.number()).optional(),
@@ -2910,7 +2920,17 @@ export const CreateEntityFieldBody = zod.object({
   "fileConfigJson": zod.object({
   "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional(),
   "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.'),
-  "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.')
+  "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.'),
+  "nameTemplateJson": zod.array(zod.object({
+  "kind": zod.enum(['text', 'field', 'hash']),
+  "text": zod.string().optional().describe('Literal text (kind=text).'),
+  "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
+  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string(),
+  "label": zod.string().optional()
+})).optional().describe('Fallback field keys (fields of other entities\/pages feeding the same folder); the first candidate with a non-empty value wins.')
+})).nullish().describe('Per-field Drive file-name template. Non-empty takes priority over the target folder\'s template; empty\/unset falls back to the folder.')
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "userConfigJson": zod.object({
   "allowedRoleIds": zod.array(zod.number()).optional(),
@@ -3016,7 +3036,17 @@ export const GetFieldResponse = zod.object({
   "fileConfigJson": zod.object({
   "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional(),
   "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.'),
-  "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.')
+  "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.'),
+  "nameTemplateJson": zod.array(zod.object({
+  "kind": zod.enum(['text', 'field', 'hash']),
+  "text": zod.string().optional().describe('Literal text (kind=text).'),
+  "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
+  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string(),
+  "label": zod.string().optional()
+})).optional().describe('Fallback field keys (fields of other entities\/pages feeding the same folder); the first candidate with a non-empty value wins.')
+})).nullish().describe('Per-field Drive file-name template. Non-empty takes priority over the target folder\'s template; empty\/unset falls back to the folder.')
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "userConfigJson": zod.object({
   "allowedRoleIds": zod.array(zod.number()).optional(),
@@ -3130,7 +3160,17 @@ export const UpdateFieldBody = zod.object({
   "fileConfigJson": zod.object({
   "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional(),
   "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.'),
-  "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.')
+  "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.'),
+  "nameTemplateJson": zod.array(zod.object({
+  "kind": zod.enum(['text', 'field', 'hash']),
+  "text": zod.string().optional().describe('Literal text (kind=text).'),
+  "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
+  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string(),
+  "label": zod.string().optional()
+})).optional().describe('Fallback field keys (fields of other entities\/pages feeding the same folder); the first candidate with a non-empty value wins.')
+})).nullish().describe('Per-field Drive file-name template. Non-empty takes priority over the target folder\'s template; empty\/unset falls back to the folder.')
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "userConfigJson": zod.object({
   "allowedRoleIds": zod.array(zod.number()).optional(),
@@ -3228,7 +3268,17 @@ export const UpdateFieldResponse = zod.object({
   "fileConfigJson": zod.object({
   "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional(),
   "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.'),
-  "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.')
+  "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.'),
+  "nameTemplateJson": zod.array(zod.object({
+  "kind": zod.enum(['text', 'field', 'hash']),
+  "text": zod.string().optional().describe('Literal text (kind=text).'),
+  "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
+  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string(),
+  "label": zod.string().optional()
+})).optional().describe('Fallback field keys (fields of other entities\/pages feeding the same folder); the first candidate with a non-empty value wins.')
+})).nullish().describe('Per-field Drive file-name template. Non-empty takes priority over the target folder\'s template; empty\/unset falls back to the folder.')
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "userConfigJson": zod.object({
   "allowedRoleIds": zod.array(zod.number()).optional(),
