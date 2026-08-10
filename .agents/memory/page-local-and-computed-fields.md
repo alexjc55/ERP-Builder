@@ -212,3 +212,11 @@ without updating (the controlled input reverts) — never rewrite "1,5" to "15".
 
 - `applyPageFieldDefaults` (api-server lib/page-field-defaults.ts) persists page-field defaults into page_record_values at RECORD CREATION for ALL mirror pages of the entity — called from the create route and automations create_record; best-effort, never blocks creation. Explicit stored values win. Import intentionally NOT covered (admin-authoritative data as-is).
 - Default is stored as the RAW value string (select option value, "true"/"false"); PageFieldConfigDialog edits it with a type-aware control. Defaults are NOT display fallbacks — old records stay empty unless backfilled.
+
+## File-type page fields (Aug 2026)
+
+- Page fields support fieldType "file" (same polymorphic server/gdrive/link value union as entity fields), stored in page_record_values; per-field config in page_fields.file_config_json.
+- One validator: records.ts exports `validateFileValue` (takes minimal FieldLike) — validatePageValues has the file case and needs (gdriveModuleEnabled, prevValues); every page-value write path (PUT route, automations systemSetPageValue) must pass them.
+- Object serving + Drive proxy boundary now ALSO scans page_record_values: shared `canReadFileViaPageValues` in storage.ts (record view via effectiveRecordPerm w/ pageId, page-field hidden check, own-scope, AND hiddenRowStatusIds — status-hidden rows must not disclose file bytes).
+- Trash: `trashRemovedPageServerFiles` (records.ts, structural actor so automations can call it without a Request) must run on PUT values replace/clear, automation page writes, and record delete (snapshot page_record_values BEFORE the delete — FK cascade wipes it).
+- File stays OUT of: PAGE_FILTERABLE_TYPES, import (NON_IMPORTABLE), pivot dims, dashboard metrics. Page gdrive uploads have no rename-on-save (pendingRename dropped by validator; acceptable v1).
