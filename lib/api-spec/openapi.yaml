@@ -3298,7 +3298,68 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /google-drive/name-template:
+    get:
+      operationId: getGoogleDriveNameTemplate
+      tags: [googleDrive]
+      summary: File-name template for a managed folder (any authenticated user; used at upload time)
+      parameters:
+        - name: driveFolderId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Google Drive folder id; when omitted, the default upload folder's template is returned.
+      responses:
+        "200":
+          description: Template sections (empty when naming is not configured)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriveNameTemplate"
+
   /google-drive/folders/{id}:
+    put:
+      operationId: updateGoogleDriveFolder
+      tags: [googleDrive]
+      summary: Update a managed Drive folder's file-name template (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDriveFolderBody"
+      responses:
+        "200":
+          description: Updated folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriveFolder"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Folder not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     delete:
       operationId: deleteGoogleDriveFolder
       tags: [googleDrive]
@@ -3615,6 +3676,47 @@ components:
           type: integer
           nullable: true
           description: Internal id of the parent folder for nested subfolders; null for top-level folders.
+        nameTemplateJson:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/DriveNameSection"
+          description: File-name template sections; null/empty = keep original file names.
+
+    DriveNameSection:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [text, field, hash]
+        text:
+          type: string
+          description: Literal text (kind=text).
+        fieldKey:
+          type: string
+          description: Record field key whose value is substituted (kind=field).
+        label:
+          type: string
+          description: Display-only snapshot of the field label for the admin UI (kind=field).
+
+    UpdateDriveFolderBody:
+      type: object
+      properties:
+        nameTemplateJson:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/DriveNameSection"
+
+    DriveNameTemplate:
+      type: object
+      required: [sections]
+      properties:
+        sections:
+          type: array
+          items:
+            $ref: "#/components/schemas/DriveNameSection"
 
     CreateDriveFolderBody:
       type: object

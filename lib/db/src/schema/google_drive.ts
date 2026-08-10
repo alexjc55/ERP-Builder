@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, boolean, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, boolean, jsonb, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 /** Which OAuth client credentials are used for the Drive connection. */
 export type GoogleDriveKeyMode = "builtin" | "own";
@@ -37,10 +37,27 @@ export type GoogleDriveConnection = typeof googleDriveConnectionTable.$inferSele
  * uploads fall back to the connection's default folder (`isDefault` = the
  * auto-created "ERP Uploads"). `driveFolderId` is Google's folder id.
  */
+/**
+ * One section of a managed folder's file-name template. When a folder has a
+ * non-empty template, files uploaded into it are renamed by concatenating the
+ * resolved sections with "_" and keeping the original file extension.
+ * - "text": a fixed literal typed by the admin.
+ * - "field": the current record's value for `fieldKey` (entity or page-local
+ *   field), resolved client-side from the form draft at upload time; `label`
+ *   is a display-only snapshot for the admin UI.
+ * - "hash": a random short alphanumeric id generated per upload.
+ */
+export type DriveNameSection =
+  | { kind: "text"; text: string }
+  | { kind: "field"; fieldKey: string; label?: string }
+  | { kind: "hash" };
+
 export const googleDriveFoldersTable = pgTable("google_drive_folders", {
   id: serial("id").primaryKey(),
   driveFolderId: text("drive_folder_id").notNull().unique(),
   name: text("name").notNull(),
+  // Null/empty = upload files with their original name (no template).
+  nameTemplateJson: jsonb("name_template_json").$type<DriveNameSection[] | null>(),
   sortOrder: integer("sort_order").notNull().default(0),
   isDefault: boolean("is_default").notNull().default(false),
   // Optional parent for nested folders (subfolders). Self-referencing FK; when a

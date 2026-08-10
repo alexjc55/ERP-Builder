@@ -7103,7 +7103,13 @@ export const ListGoogleDriveFoldersResponseItem = zod.object({
   "driveFolderId": zod.string().describe('Google Drive folder id (stored on a field\'s fileConfigJson.driveFolderId).'),
   "name": zod.string(),
   "isDefault": zod.boolean().describe('The auto-created default upload folder; cannot be removed.'),
-  "parentId": zod.number().nullish().describe('Internal id of the parent folder for nested subfolders; null for top-level folders.')
+  "parentId": zod.number().nullish().describe('Internal id of the parent folder for nested subfolders; null for top-level folders.'),
+  "nameTemplateJson": zod.array(zod.object({
+  "kind": zod.enum(['text', 'field', 'hash']),
+  "text": zod.string().optional().describe('Literal text (kind=text).'),
+  "fieldKey": zod.string().optional().describe('Record field key whose value is substituted (kind=field).'),
+  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).')
+})).nullish().describe('File-name template sections; null\/empty = keep original file names.')
 })
 export const ListGoogleDriveFoldersResponse = zod.array(ListGoogleDriveFoldersResponseItem)
 
@@ -7125,7 +7131,61 @@ export const CreateGoogleDriveFolderResponse = zod.object({
   "driveFolderId": zod.string().describe('Google Drive folder id (stored on a field\'s fileConfigJson.driveFolderId).'),
   "name": zod.string(),
   "isDefault": zod.boolean().describe('The auto-created default upload folder; cannot be removed.'),
-  "parentId": zod.number().nullish().describe('Internal id of the parent folder for nested subfolders; null for top-level folders.')
+  "parentId": zod.number().nullish().describe('Internal id of the parent folder for nested subfolders; null for top-level folders.'),
+  "nameTemplateJson": zod.array(zod.object({
+  "kind": zod.enum(['text', 'field', 'hash']),
+  "text": zod.string().optional().describe('Literal text (kind=text).'),
+  "fieldKey": zod.string().optional().describe('Record field key whose value is substituted (kind=field).'),
+  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).')
+})).nullish().describe('File-name template sections; null\/empty = keep original file names.')
+})
+
+
+/**
+ * @summary File-name template for a managed folder (any authenticated user; used at upload time)
+ */
+export const GetGoogleDriveNameTemplateQueryParams = zod.object({
+  "driveFolderId": zod.coerce.string().optional().describe('Google Drive folder id; when omitted, the default upload folder\'s template is returned.')
+})
+
+export const GetGoogleDriveNameTemplateResponse = zod.object({
+  "sections": zod.array(zod.object({
+  "kind": zod.enum(['text', 'field', 'hash']),
+  "text": zod.string().optional().describe('Literal text (kind=text).'),
+  "fieldKey": zod.string().optional().describe('Record field key whose value is substituted (kind=field).'),
+  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).')
+}))
+})
+
+
+/**
+ * @summary Update a managed Drive folder's file-name template (admin)
+ */
+export const UpdateGoogleDriveFolderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateGoogleDriveFolderBody = zod.object({
+  "nameTemplateJson": zod.array(zod.object({
+  "kind": zod.enum(['text', 'field', 'hash']),
+  "text": zod.string().optional().describe('Literal text (kind=text).'),
+  "fieldKey": zod.string().optional().describe('Record field key whose value is substituted (kind=field).'),
+  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).')
+})).nullish()
+})
+
+export const UpdateGoogleDriveFolderResponse = zod.object({
+  "id": zod.number().describe('Internal row id.'),
+  "driveFolderId": zod.string().describe('Google Drive folder id (stored on a field\'s fileConfigJson.driveFolderId).'),
+  "name": zod.string(),
+  "isDefault": zod.boolean().describe('The auto-created default upload folder; cannot be removed.'),
+  "parentId": zod.number().nullish().describe('Internal id of the parent folder for nested subfolders; null for top-level folders.'),
+  "nameTemplateJson": zod.array(zod.object({
+  "kind": zod.enum(['text', 'field', 'hash']),
+  "text": zod.string().optional().describe('Literal text (kind=text).'),
+  "fieldKey": zod.string().optional().describe('Record field key whose value is substituted (kind=field).'),
+  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).')
+})).nullish().describe('File-name template sections; null\/empty = keep original file names.')
 })
 
 

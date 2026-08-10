@@ -108,6 +108,25 @@ export interface GoogleDriveAuthUrl {
   authUrl: string;
 }
 
+export type DriveNameSectionKind = typeof DriveNameSectionKind[keyof typeof DriveNameSectionKind];
+
+
+export const DriveNameSectionKind = {
+  text: 'text',
+  field: 'field',
+  hash: 'hash',
+} as const;
+
+export interface DriveNameSection {
+  kind: DriveNameSectionKind;
+  /** Literal text (kind=text). */
+  text?: string;
+  /** Record field key whose value is substituted (kind=field). */
+  fieldKey?: string;
+  /** Display-only snapshot of the field label for the admin UI (kind=field). */
+  label?: string;
+}
+
 export interface DriveFolder {
   /** Internal row id. */
   id: number;
@@ -118,6 +137,16 @@ export interface DriveFolder {
   isDefault: boolean;
   /** Internal id of the parent folder for nested subfolders; null for top-level folders. */
   parentId?: number | null;
+  /** File-name template sections; null/empty = keep original file names. */
+  nameTemplateJson?: DriveNameSection[] | null;
+}
+
+export interface UpdateDriveFolderBody {
+  nameTemplateJson?: DriveNameSection[] | null;
+}
+
+export interface DriveNameTemplate {
+  sections: DriveNameSection[];
 }
 
 export interface CreateDriveFolderBody {
@@ -3876,5 +3905,12 @@ eventName?: string;
 entityId?: number;
 limit?: number;
 offset?: number;
+};
+
+export type GetGoogleDriveNameTemplateParams = {
+/**
+ * Google Drive folder id; when omitted, the default upload folder's template is returned.
+ */
+driveFolderId?: string;
 };
 

@@ -11,9 +11,10 @@ import {
   entityFieldsTable,
   type GoogleDriveConnection,
   type GoogleDriveFolder,
+  type DriveNameSection,
   type EntityField,
 } from "@workspace/db";
-import { UpdateGoogleDriveConnectionBody, CreateGoogleDriveFolderBody } from "@workspace/api-zod";
+import { UpdateGoogleDriveConnectionBody, CreateGoogleDriveFolderBody, UpdateGoogleDriveFolderBody } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/auth";
 import {
   requireAdmin,
@@ -208,7 +209,14 @@ router.post("/google-drive/disconnect", requireAuth, requireAdmin("googleDrive")
 
 /** Public-facing managed folder shape. */
 function folderInfo(f: GoogleDriveFolder) {
-  return { id: f.id, driveFolderId: f.driveFolderId, name: f.name, isDefault: f.isDefault, parentId: f.parentId };
+  return {
+    id: f.id,
+    driveFolderId: f.driveFolderId,
+    name: f.name,
+    isDefault: f.isDefault,
+    parentId: f.parentId,
+    nameTemplateJson: f.nameTemplateJson ?? null,
+  };
 }
 
 /** GET /google-drive/folders — list managed upload folders (admin). */
@@ -267,6 +275,70 @@ router.post("/google-drive/folders", requireAuth, requireAdmin("googleDrive"), a
     req.log.error({ err }, "Failed to create Google Drive folder");
     res.status(502).json({ error: "Failed to create Google Drive folder" });
   }
+});
+
+/**
+ * PUT /google-drive/folders/:id — update a managed folder's file-name template
+ * (admin). Null/empty template = uploads keep their original file names.
+ */
+router.put("/google-drive/folders/:id", requireAuth, requireAdmin("googleDrive"), async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    res.status(404).json({ error: "Folder not found" });
+    return;
+  }
+  const parsed = UpdateGoogleDriveFolderBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const raw = parsed.data.nameTemplateJson ?? [];
+  // Drop degenerate sections (empty text / missing fieldKey), normalize to the
+  // discriminated DB shape, and cap size.
+  const sections: DriveNameSection[] = [];
+  for (const s of raw) {
+    if (s.kind === "text") {
+      const text = s.text?.trim();
+      if (text) sections.push({ kind: "text", text });
+    } else if (s.kind === "field") {
+      const fieldKey = s.fieldKey?.trim();
+      if (fieldKey) sections.push({ kind: "field", fieldKey, label: s.label });
+    } else if (s.kind === "hash") {
+      sections.push({ kind: "hash" });
+    }
+  }
+  if (sections.length > 10) {
+    res.status(400).json({ error: "Too many template sections" });
+    return;
+  }
+  const [row] = await db
+    .update(googleDriveFoldersTable)
+    .set({ nameTemplateJson: sections.length > 0 ? sections : null })
+    .where(eq(googleDriveFoldersTable.id, id))
+    .returning();
+  if (!row) {
+    res.status(404).json({ error: "Folder not found" });
+    return;
+  }
+  res.json(folderInfo(row));
+});
+
+/**
+ * GET /google-drive/name-template — the file-name template for a managed folder,
+ * readable by ANY authenticated user (record editors need it at upload time; the
+ * folders LIST stays admin-only). Unknown/omitted folder id falls back to the
+ * default upload folder, mirroring the upload route's folder resolution.
+ */
+router.get("/google-drive/name-template", requireAuth, async (req, res): Promise<void> => {
+  const driveFolderId = typeof req.query.driveFolderId === "string" ? req.query.driveFolderId : undefined;
+  let row: GoogleDriveFolder | undefined;
+  if (driveFolderId) {
+    [row] = await db.select().from(googleDriveFoldersTable).where(eq(googleDriveFoldersTable.driveFolderId, driveFolderId));
+  }
+  if (!row) {
+    [row] = await db.select().from(googleDriveFoldersTable).where(eq(googleDriveFoldersTable.isDefault, true));
+  }
+  res.json({ sections: row?.nameTemplateJson ?? [] });
 });
 
 /**

@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { DriveNameSection } from './driveNameSection';
 
 export interface DriveFolder {
   /** Internal row id. */
@@ -16,4 +17,6 @@ export interface DriveFolder {
   isDefault: boolean;
   /** Internal id of the parent folder for nested subfolders; null for top-level folders. */
   parentId?: number | null;
+  /** File-name template sections; null/empty = keep original file names. */
+  nameTemplateJson?: DriveNameSection[] | null;
 }

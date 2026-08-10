@@ -72,6 +72,8 @@ import {
   type Role,
   type FieldAccess,
   type MultilingualText,
+  useGetGoogleDriveNameTemplate,
+  getGetGoogleDriveNameTemplateQueryKey,
 } from "@workspace/api-client-react";
 import { PivotView } from "./PivotView";
 import { CalendarView, defaultCalendarMode, type CalendarMode, type CalendarBaseQuery } from "./CalendarView";
@@ -143,6 +145,7 @@ import { useAuth } from "@/lib/auth";
 import { useML, useT, useLang } from "@/lib/i18n";
 import { normalizeSelectOptions, getOptionLabel } from "@/lib/selectOptions";
 import { useGoogleDriveReady } from "@/lib/googleDrive";
+import { composeDriveFileName } from "@/lib/driveNaming";
 import { FieldConfigDialog } from "@/components/FieldConfigDialog";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { CreateUserDialog } from "@/components/CreateUserDialog";
@@ -5736,6 +5739,7 @@ export function EntityRecords({
                                   value={newPageRow[pf.fieldKey]}
                                   onChange={(v) => setNewPageRow((prev) => ({ ...prev, [pf.fieldKey]: v }))}
                                   userOptions={userOptions}
+                                  rowValues={{ ...newRow, ...newPageRow }}
                                 />
                               ) : pf.fieldType === "function" ? (
                                 // Live formula preview in the add-row (page-local).
@@ -6228,6 +6232,7 @@ export function EntityRecords({
                                   field={pageFieldAsField}
                                   initial={valueToForm(pageFieldAsField, pageValues[pf.fieldKey])}
                                   userOptions={userOptions}
+                                  rowValues={{ ...values, ...pageValues }}
                                   onCommit={(raw) => commitPageCell(record, pf, raw)}
                                   onCancel={() => setEditingCell(null)}
                                 />
@@ -6714,6 +6719,7 @@ export function EntityRecords({
                         field={pfField}
                         value={pageRequiredDialog.form[pf.fieldKey]}
                         userOptions={userOptions}
+                        rowValues={pageRequiredDialog.form}
                         onChange={(v) =>
                           setPageRequiredDialog((prev) =>
                             prev == null ? prev : { ...prev, form: { ...prev.form, [pf.fieldKey]: v } },
@@ -8871,6 +8877,7 @@ function InlineCellEditor({
         allowedSources={fileAllowedSources(field.fileConfigJson)}
         driveFolderId={field.fileConfigJson?.driveFolderId}
         localFolderId={field.fileConfigJson?.localFolderId}
+        rowValues={rowValues}
         onCommit={commitOnce}
         onCancel={onCancel}
       />
@@ -9119,6 +9126,7 @@ function FieldInput({
           allowedSources={fileAllowedSources(field.fileConfigJson)}
           driveFolderId={field.fileConfigJson?.driveFolderId}
           localFolderId={field.fileConfigJson?.localFolderId}
+          rowValues={rowValues}
         />
       );
     case "textarea":
@@ -9215,6 +9223,7 @@ function FileFieldInput({
   allowedSources = ["server"],
   driveFolderId,
   localFolderId,
+  rowValues,
 }: {
   value: unknown;
   onChange: (v: FileValue | "") => void;
@@ -9223,10 +9232,24 @@ function FileFieldInput({
   allowedSources?: FileSource[];
   driveFolderId?: string;
   localFolderId?: number | null;
+  /** Current form draft values — used to resolve the folder's file-name template. */
+  rowValues?: Record<string, unknown>;
 }) {
   const t = useT();
   const { toast } = useToast();
   const gdriveReady = useGoogleDriveReady();
+  // Folder file-name template (empty = keep original names). Fetched lazily only
+  // when the Drive source is actually available for this field.
+  const { data: nameTemplate } = useGetGoogleDriveNameTemplate(
+    driveFolderId ? { driveFolderId } : {},
+    {
+      query: {
+        enabled: gdriveReady && allowedSources.includes("gdrive"),
+        staleTime: 60_000,
+        queryKey: getGetGoogleDriveNameTemplateQueryKey(driveFolderId ? { driveFolderId } : {}),
+      },
+    },
+  );
   const fileValue = isFileValue(value) ? value : null;
   const currentKind: FileSource = fileValue
     ? isLinkFile(fileValue)
@@ -9271,7 +9294,8 @@ function FileFieldInput({
     if (!file) return;
     setUploading(true);
     try {
-      const res = await uploadToGoogleDrive(file, driveFolderId);
+      const templateName = composeDriveFileName(file.name, nameTemplate?.sections ?? [], rowValues);
+      const res = await uploadToGoogleDrive(file, driveFolderId, templateName ?? undefined);
       onChange({
         kind: "gdrive",
         fileId: res.fileId,
@@ -9455,6 +9479,7 @@ function InlineFileEditor({
   allowedSources = ["server"],
   driveFolderId,
   localFolderId,
+  rowValues,
   onCommit,
   onCancel,
 }: {
@@ -9462,6 +9487,7 @@ function InlineFileEditor({
   allowedSources?: FileSource[];
   driveFolderId?: string;
   localFolderId?: number | null;
+  rowValues?: Record<string, unknown>;
   onCommit: (v: CellValue) => void;
   onCancel: () => void;
 }) {
@@ -9469,7 +9495,7 @@ function InlineFileEditor({
   const [draft, setDraft] = useState<FileValue | "">(isFileValue(initial) ? initial : "");
   return (
     <div className="min-w-[220px] space-y-2 rounded-md border border-blue-200 bg-white p-2 shadow-sm">
-      <FileFieldInput value={draft} onChange={setDraft} allowedSources={allowedSources} driveFolderId={driveFolderId} localFolderId={localFolderId} compact />
+      <FileFieldInput value={draft} onChange={setDraft} allowedSources={allowedSources} driveFolderId={driveFolderId} localFolderId={localFolderId} rowValues={rowValues} compact />
       <div className="flex items-center gap-1">
         <Button size="sm" className="h-7 bg-blue-600 hover:bg-blue-700" onClick={() => onCommit(draft)}>
           {t("records.save", "Сохранить")}

@@ -50,6 +50,7 @@ import type {
   DeletedFile,
   DependentValuesQuery,
   DriveFolder,
+  DriveNameTemplate,
   Entity,
   EntityInput,
   EntityRecord,
@@ -62,6 +63,7 @@ import type {
   FieldsReorderInput,
   FilterValuesQuery,
   FilterValuesResult,
+  GetGoogleDriveNameTemplateParams,
   GoogleDriveAuthUrl,
   GoogleDriveConnectionInfo,
   GoogleDriveConnectionUpdate,
@@ -135,6 +137,7 @@ import type {
   Translation,
   TranslationInput,
   TranslationUpdate,
+  UpdateDriveFolderBody,
   UpdateMeInput,
   UploadUrlRequest,
   UploadUrlResponse,
@@ -11227,6 +11230,162 @@ export const useCreateGoogleDriveFolder = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getCreateGoogleDriveFolderMutationOptions(options));
+    }
+
+export const getGetGoogleDriveNameTemplateUrl = (params?: GetGoogleDriveNameTemplateParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/google-drive/name-template?${stringifiedParams}` : `/api/google-drive/name-template`
+}
+
+/**
+ * @summary File-name template for a managed folder (any authenticated user; used at upload time)
+ */
+export const getGoogleDriveNameTemplate = async (params?: GetGoogleDriveNameTemplateParams, options?: RequestInit): Promise<DriveNameTemplate> => {
+
+  return customFetch<DriveNameTemplate>(getGetGoogleDriveNameTemplateUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGoogleDriveNameTemplateQueryKey = (params?: GetGoogleDriveNameTemplateParams,) => {
+    return [
+    `/api/google-drive/name-template`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetGoogleDriveNameTemplateQueryOptions = <TData = Awaited<ReturnType<typeof getGoogleDriveNameTemplate>>, TError = ErrorType<unknown>>(params?: GetGoogleDriveNameTemplateParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGoogleDriveNameTemplate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGoogleDriveNameTemplateQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGoogleDriveNameTemplate>>> = ({ signal }) => getGoogleDriveNameTemplate(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGoogleDriveNameTemplate>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGoogleDriveNameTemplateQueryResult = NonNullable<Awaited<ReturnType<typeof getGoogleDriveNameTemplate>>>
+export type GetGoogleDriveNameTemplateQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary File-name template for a managed folder (any authenticated user; used at upload time)
+ */
+
+export function useGetGoogleDriveNameTemplate<TData = Awaited<ReturnType<typeof getGoogleDriveNameTemplate>>, TError = ErrorType<unknown>>(
+ params?: GetGoogleDriveNameTemplateParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGoogleDriveNameTemplate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGoogleDriveNameTemplateQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateGoogleDriveFolderUrl = (id: number,) => {
+
+
+
+
+  return `/api/google-drive/folders/${id}`
+}
+
+/**
+ * @summary Update a managed Drive folder's file-name template (admin)
+ */
+export const updateGoogleDriveFolder = async (id: number,
+    updateDriveFolderBody: UpdateDriveFolderBody, options?: RequestInit): Promise<DriveFolder> => {
+
+  return customFetch<DriveFolder>(getUpdateGoogleDriveFolderUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      updateDriveFolderBody,)
+  }
+);}
+
+
+
+
+export const getUpdateGoogleDriveFolderMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateGoogleDriveFolder>>, TError,{id: number;data: BodyType<UpdateDriveFolderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateGoogleDriveFolder>>, TError,{id: number;data: BodyType<UpdateDriveFolderBody>}, TContext> => {
+
+const mutationKey = ['updateGoogleDriveFolder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateGoogleDriveFolder>>, {id: number;data: BodyType<UpdateDriveFolderBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateGoogleDriveFolder(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateGoogleDriveFolderMutationResult = NonNullable<Awaited<ReturnType<typeof updateGoogleDriveFolder>>>
+    export type UpdateGoogleDriveFolderMutationBody = BodyType<UpdateDriveFolderBody>
+    export type UpdateGoogleDriveFolderMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Update a managed Drive folder's file-name template (admin)
+ */
+export const useUpdateGoogleDriveFolder = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateGoogleDriveFolder>>, TError,{id: number;data: BodyType<UpdateDriveFolderBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateGoogleDriveFolder>>,
+        TError,
+        {id: number;data: BodyType<UpdateDriveFolderBody>},
+        TContext
+      > => {
+      return useMutation(getUpdateGoogleDriveFolderMutationOptions(options));
     }
 
 export const getDeleteGoogleDriveFolderUrl = (id: number,) => {
