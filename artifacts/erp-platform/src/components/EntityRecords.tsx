@@ -5500,7 +5500,7 @@ export function EntityRecords({
                               <button
                                 type="button"
                                 onClick={() => openPageColumnConfig(fld as PageField)}
-                                className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-2 py-1 text-amber-700 hover:bg-amber-100 transition"
+                                className="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-white px-2 py-1 text-blue-700 hover:bg-blue-100 transition"
                                 title={t("pageFields.configureColumn", "Настроить поле страницы")}
                               >
                                 {ml(fld.nameJson)}
