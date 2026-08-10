@@ -9,22 +9,14 @@ import {
   useCreateGoogleDriveFolder,
   useDeleteGoogleDriveFolder,
   useUpdateGoogleDriveFolder,
-  useListEntities,
-  useListEntityFields,
-  useListPages,
-  useListPageFields,
-  getListEntityFieldsQueryKey,
-  getListPageFieldsQueryKey,
   type GoogleDriveConnectionInfo,
   type DriveFolder,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useT, useML } from "@/lib/i18n";
-import { usePagePathLabel } from "@/lib/pagePath";
+import { useT } from "@/lib/i18n";
 import { type DriveNameSection } from "@/lib/driveNaming";
 import { DriveNameTemplateEditor } from "@/components/DriveNameTemplateEditor";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
