@@ -150,3 +150,8 @@ accepted v1.
 - `fileConfigJson.nameTemplateJson` (same DriveNameSection[] shape) on a file field takes priority over the folder's `google_drive_folders.nameTemplateJson`; empty/off falls back to folder, then original name. Precedence lives client-side in FileFieldInput (skips folder-template fetch when field template present).
 - Shared editor component `DriveNameTemplateEditor` (erp-platform/src/components) is used by BOTH the folder dialog and FieldConfigDialog — never fork a second sections editor. FieldConfigDialog passes defaultSource `e:<entityId>` so the picker preselects the owning entity.
 - Server fields routes must cast parsed `fileConfigJson` to the db `FileFieldConfig` type on create AND the PUT allowlist (generated API type is looser than db union).
+
+## Rename-on-save (Aug 2026)
+- Drive files upload MID-FORM; if a template FIELD section is empty at upload, the gdrive value gets `pendingRename: true`. After record save the client re-composes from FINAL values and calls POST /google-drive/rename — ONLY for pendingRename values and ONLY when every field section now resolves (else hash/date sections would churn the name on every save).
+- The rename endpoint mirrors the record UPDATE boundary (mirror-page override via mirrorPermKey + effectiveScopeFor + field edit access + own scope) and must stay in parity with records update. DB write is an atomic targeted jsonb_set guarded on the stored fileId (never read-modify-write the whole valuesJson — lost-update race).
+- Template section kinds: text / field(+alts) / hash / date (local `YYYY-MM-DD_HH-mm`) / user (email local part — always Latin). Literals duplicated in db type, openapi enum, client type, server normalization, editor.
