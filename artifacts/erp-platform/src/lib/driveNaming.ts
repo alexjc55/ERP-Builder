@@ -19,7 +19,9 @@ export type DriveNameSection =
       alts?: { fieldKey: string; label?: string }[];
     }
   | { kind: "hash" }
-  | { kind: "date" };
+  | { kind: "date" }
+  /** Uploader's email local part (before "@") — always Latin, unlike names. */
+  | { kind: "user" };
 
 const HASH_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
 
@@ -60,10 +62,18 @@ function valueToSegment(v: unknown): string {
  * Build the upload file name from template sections + form draft values.
  * Returns null when the template yields nothing (caller keeps the original name).
  */
+/** File-name-safe uploader segment: email local part (before "@"). */
+export function driveNameUserSegment(email: string | undefined | null): string {
+  if (!email) return "";
+  const local = email.split("@")[0] ?? "";
+  return sanitizeSegment(local);
+}
+
 export function composeDriveFileName(
   originalName: string,
   sections: DriveNameSection[],
   rowValues: Record<string, unknown> | undefined,
+  uploaderEmail?: string | null,
 ): string | null {
   if (!sections.length) return null;
   const parts: string[] = [];
@@ -84,6 +94,9 @@ export function composeDriveFileName(
       parts.push(driveNameHash());
     } else if (s.kind === "date") {
       parts.push(driveNameDate());
+    } else if (s.kind === "user") {
+      const seg = driveNameUserSegment(uploaderEmail);
+      if (seg) parts.push(seg);
     }
   }
   if (!parts.length) return null;

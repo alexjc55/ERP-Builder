@@ -9259,6 +9259,8 @@ function FileFieldInput({
     },
   );
   const activeTemplate = hasFieldTemplate ? fieldNameTemplate! : folderTemplate?.sections ?? [];
+  // Uploader for the "user" template section (email local part — always Latin).
+  const { user: uploaderUser } = useAuth();
   const fileValue = isFileValue(value) ? value : null;
   const currentKind: FileSource = fileValue
     ? isLinkFile(fileValue)
@@ -9303,7 +9305,7 @@ function FileFieldInput({
     if (!file) return;
     setUploading(true);
     try {
-      const templateName = composeDriveFileName(file.name, activeTemplate, rowValues);
+      const templateName = composeDriveFileName(file.name, activeTemplate, rowValues, uploaderUser?.email);
       const res = await uploadToGoogleDrive(file, driveFolderId, templateName ?? undefined);
       onChange({
         kind: "gdrive",

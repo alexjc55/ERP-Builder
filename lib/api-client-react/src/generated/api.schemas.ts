@@ -116,6 +116,7 @@ export const DriveNameSectionKind = {
   field: 'field',
   hash: 'hash',
   date: 'date',
+  user: 'user',
 } as const;
 
 export type DriveNameSectionAltsItem = {

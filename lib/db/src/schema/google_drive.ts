@@ -54,7 +54,9 @@ export type DriveNameSection =
   | { kind: "text"; text: string }
   | { kind: "field"; fieldKey: string; label?: string; alts?: { fieldKey: string; label?: string }[] }
   | { kind: "hash" }
-  | { kind: "date" };
+  | { kind: "date" }
+  /** Uploader's email local part (before "@") — always Latin, unlike names. */
+  | { kind: "user" };
 
 export const googleDriveFoldersTable = pgTable("google_drive_folders", {
   id: serial("id").primaryKey(),

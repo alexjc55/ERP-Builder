@@ -310,6 +310,8 @@ router.put("/google-drive/folders/:id", requireAuth, requireAdmin("googleDrive")
       sections.push({ kind: "hash" });
     } else if (s.kind === "date") {
       sections.push({ kind: "date" });
+    } else if (s.kind === "user") {
+      sections.push({ kind: "user" });
     }
   }
   if (sections.length > 10) {

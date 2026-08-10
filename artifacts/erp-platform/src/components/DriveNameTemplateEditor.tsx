@@ -168,7 +168,9 @@ export function DriveNameTemplateEditor({
               ? driveNameHash()
               : s.kind === "date"
                 ? driveNameDate()
-                : s.label || s.fieldKey
+                : s.kind === "user"
+                  ? "ivan.petrov"
+                  : s.label || s.fieldKey
                   ? `«${s.label || s.fieldKey}»`
                   : "",
         )
@@ -191,7 +193,9 @@ export function DriveNameTemplateEditor({
                     ? { kind: "field", fieldKey: "" }
                     : kind === "date"
                       ? { kind: "date" }
-                      : { kind: "hash" },
+                      : kind === "user"
+                        ? { kind: "user" }
+                        : { kind: "hash" },
               )
             }
           >
@@ -203,6 +207,7 @@ export function DriveNameTemplateEditor({
               <SelectItem value="field">{t("gdrive.tplKindField", "Значение поля")}</SelectItem>
               <SelectItem value="hash">{t("gdrive.tplKindHash", "Авто-хеш")}</SelectItem>
               <SelectItem value="date">{t("gdrive.tplKindDate", "Дата и время")}</SelectItem>
+              <SelectItem value="user">{t("gdrive.tplKindUser", "Пользователь")}</SelectItem>
             </SelectContent>
           </Select>
           {s.kind === "text" && (
@@ -219,6 +224,11 @@ export function DriveNameTemplateEditor({
           {s.kind === "hash" && (
             <span className="self-center flex-1 text-xs text-slate-500">
               {t("gdrive.tplHashHint", "Случайный код, например")} {`${driveNameHash()}`}
+            </span>
+          )}
+          {s.kind === "user" && (
+            <span className="self-center flex-1 text-xs text-slate-500">
+              {t("gdrive.tplUserHint", "Логин загрузившего (часть email до @), например ivan.petrov")}
             </span>
           )}
           {s.kind === "date" && (

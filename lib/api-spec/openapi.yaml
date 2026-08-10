@@ -3689,7 +3689,7 @@ components:
       properties:
         kind:
           type: string
-          enum: [text, field, hash, date]
+          enum: [text, field, hash, date, user]
         text:
           type: string
           description: Literal text (kind=text).
