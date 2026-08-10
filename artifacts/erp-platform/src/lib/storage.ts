@@ -18,6 +18,11 @@ export interface GDriveFileValue {
   contentType?: string;
   size?: number;
   webViewLink?: string;
+  /**
+   * Set when the upload-time name template had FIELD sections that were still
+   * empty in the form; the post-save rename pass re-checks (and clears) it.
+   */
+  pendingRename?: boolean;
 }
 
 /** An external link pasted by the user. */

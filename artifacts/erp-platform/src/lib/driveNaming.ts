@@ -75,7 +75,22 @@ export function composeDriveFileName(
   rowValues: Record<string, unknown> | undefined,
   uploaderEmail?: string | null,
 ): string | null {
-  if (!sections.length) return null;
+  return composeDriveFileNameDetailed(originalName, sections, rowValues, uploaderEmail).name;
+}
+
+/**
+ * Like composeDriveFileName but also reports whether some FIELD section could
+ * not be resolved from the current values (used to mark uploads that should be
+ * re-checked/renamed once the record is saved with its final values).
+ */
+export function composeDriveFileNameDetailed(
+  originalName: string,
+  sections: DriveNameSection[],
+  rowValues: Record<string, unknown> | undefined,
+  uploaderEmail?: string | null,
+): { name: string | null; unresolvedFieldSection: boolean } {
+  if (!sections.length) return { name: null, unresolvedFieldSection: false };
+  let unresolvedFieldSection = false;
   const parts: string[] = [];
   for (const s of sections) {
     if (s.kind === "text") {
@@ -83,13 +98,16 @@ export function composeDriveFileName(
       if (t) parts.push(t);
     } else if (s.kind === "field") {
       const candidates = [s.fieldKey, ...(s.alts ?? []).map((a) => a.fieldKey)].filter(Boolean) as string[];
+      let resolved = false;
       for (const key of candidates) {
         const seg = valueToSegment(rowValues?.[key]);
         if (seg) {
           parts.push(seg);
+          resolved = true;
           break;
         }
       }
+      if (!resolved) unresolvedFieldSection = true;
     } else if (s.kind === "hash") {
       parts.push(driveNameHash());
     } else if (s.kind === "date") {
@@ -99,8 +117,8 @@ export function composeDriveFileName(
       if (seg) parts.push(seg);
     }
   }
-  if (!parts.length) return null;
+  if (!parts.length) return { name: null, unresolvedFieldSection };
   const dot = originalName.lastIndexOf(".");
   const ext = dot > 0 ? originalName.slice(dot) : "";
-  return `${parts.join("_")}${ext}`;
+  return { name: `${parts.join("_")}${ext}`, unresolvedFieldSection };
 }

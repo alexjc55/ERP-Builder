@@ -1,5 +1,5 @@
 import { getGoogleDriveNameTemplate, renameGoogleDriveFile } from "@workspace/api-client-react";
-import { composeDriveFileName, type DriveNameSection } from "@/lib/driveNaming";
+import { composeDriveFileNameDetailed, type DriveNameSection } from "@/lib/driveNaming";
 
 /** Minimal field shape needed to resolve a file field's name template. */
 type FileTemplateField = {
@@ -23,14 +23,20 @@ export async function maybeRenameDriveFiles(opts: {
   /** FINAL saved values (entity fields; page-local values may be merged in for template resolution). */
   values: Record<string, unknown>;
   uploaderEmail?: string | null;
+  /** Mirror page context — forwarded so the server applies per-mirror-page overrides. */
+  pageId?: number | null;
 }): Promise<boolean> {
-  const { recordId, fields, values, uploaderEmail } = opts;
+  const { recordId, fields, values, uploaderEmail, pageId } = opts;
   let renamed = false;
   const folderTemplateCache = new Map<string, DriveNameSection[]>();
   for (const f of fields) {
     if (f.fieldType !== "file" || f.isActive === false) continue;
     const v = values[f.fieldKey] as Record<string, unknown> | undefined;
     if (!v || typeof v !== "object" || v.kind !== "gdrive" || !v.fileId || typeof v.name !== "string") continue;
+    // Only files uploaded while a FIELD section was still empty are re-checked;
+    // resolved uploads never rename again (hash/date sections would otherwise
+    // regenerate and churn the name on every save).
+    if (v.pendingRename !== true) continue;
     try {
       // Field template wins; else the target folder's template (default folder when unset).
       let template = (f.fileConfigJson?.nameTemplateJson ?? []) as DriveNameSection[];
@@ -45,9 +51,17 @@ export async function maybeRenameDriveFiles(opts: {
         template = cached;
       }
       if (template.length === 0) continue;
-      const expected = composeDriveFileName(v.name as string, template, values, uploaderEmail);
-      if (!expected || expected === v.name) continue;
-      await renameGoogleDriveFile({ recordId, fieldKey: f.fieldKey, fileId: v.fileId as string, name: expected });
+      const composed = composeDriveFileNameDetailed(v.name as string, template, values, uploaderEmail);
+      // Still unresolved (the field is STILL empty) — keep the flag; a later
+      // save may fill it. Rename only when every field section now resolves.
+      if (!composed.name || composed.unresolvedFieldSection || composed.name === v.name) continue;
+      await renameGoogleDriveFile({
+        recordId,
+        fieldKey: f.fieldKey,
+        fileId: v.fileId as string,
+        name: composed.name,
+        ...(pageId != null ? { pageId } : {}),
+      });
       renamed = true;
     } catch {
       // Best-effort: never surface rename problems as a save error.

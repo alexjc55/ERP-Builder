@@ -145,7 +145,7 @@ import { useAuth } from "@/lib/auth";
 import { useML, useT, useLang } from "@/lib/i18n";
 import { normalizeSelectOptions, getOptionLabel } from "@/lib/selectOptions";
 import { useGoogleDriveReady } from "@/lib/googleDrive";
-import { composeDriveFileName, type DriveNameSection } from "@/lib/driveNaming";
+import { composeDriveFileNameDetailed, type DriveNameSection } from "@/lib/driveNaming";
 import { maybeRenameDriveFiles } from "@/lib/driveRename";
 import { FieldConfigDialog } from "@/components/FieldConfigDialog";
 import { MultilingualInput } from "@/components/MultilingualInput";
@@ -3662,7 +3662,7 @@ export function EntityRecords({
         try {
           await updateMutation.mutateAsync({ id: editing.id, data: { valuesJson, statusId: statusValue, pageId: permPageId } });
           // Re-check Drive file names against the FINAL saved values (best-effort).
-          if (await maybeRenameDriveFiles({ recordId: editing.id, fields, values: valuesJson, uploaderEmail: user?.email })) invalidate();
+          if (await maybeRenameDriveFiles({ recordId: editing.id, fields, values: valuesJson, uploaderEmail: user?.email, pageId: permPageId })) invalidate();
         } catch {
           // errors surfaced via mutation onError toasts
         }
@@ -3673,7 +3673,7 @@ export function EntityRecords({
           const created = await createMutation.mutateAsync({ entityId, data: buildCreateData(valuesJson, statusValue) });
           if (created?.id != null) {
             await persistPendingRelationLinks(created.id, form);
-            if (await maybeRenameDriveFiles({ recordId: created.id, fields, values: valuesJson, uploaderEmail: user?.email })) invalidate();
+            if (await maybeRenameDriveFiles({ recordId: created.id, fields, values: valuesJson, uploaderEmail: user?.email, pageId: permPageId })) invalidate();
           }
         } catch {
           // errors surfaced via mutation onError toasts
@@ -8245,7 +8245,7 @@ function QuickCreateRelatedRecordDialog({
         data: { valuesJson, ...statusPart, ...(pageId != null ? { pageId } : {}) },
       });
       newId = created.id;
-      await maybeRenameDriveFiles({ recordId: newId, fields: formFields, values: valuesJson, uploaderEmail: quickUser?.email });
+      await maybeRenameDriveFiles({ recordId: newId, fields: formFields, values: valuesJson, uploaderEmail: quickUser?.email, pageId });
     } catch (e) {
       setSubmitting(false);
       // A 409 here means the typed value duplicates an existing record's unique
@@ -9321,8 +9321,8 @@ function FileFieldInput({
     if (!file) return;
     setUploading(true);
     try {
-      const templateName = composeDriveFileName(file.name, activeTemplate, rowValues, uploaderUser?.email);
-      const res = await uploadToGoogleDrive(file, driveFolderId, templateName ?? undefined);
+      const composed = composeDriveFileNameDetailed(file.name, activeTemplate, rowValues, uploaderUser?.email);
+      const res = await uploadToGoogleDrive(file, driveFolderId, composed.name ?? undefined);
       onChange({
         kind: "gdrive",
         fileId: res.fileId,
@@ -9330,6 +9330,8 @@ function FileFieldInput({
         contentType: res.contentType,
         size: res.size,
         webViewLink: res.webViewLink,
+        // A FIELD section was still empty — the post-save pass will rename once.
+        ...(activeTemplate.length > 0 && composed.unresolvedFieldSection ? { pendingRename: true } : {}),
       });
     } catch {
       toast({ title: t("records.driveUploadError", "Не удалось загрузить в Google Drive"), variant: "destructive" });

@@ -159,6 +159,8 @@ export interface RenameDriveFileBody {
   fileId: string;
   /** New file name (client-composed from the name template). */
   name: string;
+  /** Mirror page context — honors per-mirror-page CRUD/scope overrides, same as record updates. */
+  pageId?: number | null;
 }
 
 export interface RenameDriveFileResult {

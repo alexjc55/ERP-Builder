@@ -7227,7 +7227,8 @@ export const RenameGoogleDriveFileBody = zod.object({
   "recordId": zod.number().describe('Record whose file field holds the Drive file.'),
   "fieldKey": zod.string().describe('The file field on the record\'s entity.'),
   "fileId": zod.string().describe('Drive file id currently stored in that field\'s value.'),
-  "name": zod.string().describe('New file name (client-composed from the name template).')
+  "name": zod.string().describe('New file name (client-composed from the name template).'),
+  "pageId": zod.number().nullish().describe('Mirror page context — honors per-mirror-page CRUD\/scope overrides, same as record updates.')
 })
 
 export const RenameGoogleDriveFileResponse = zod.object({

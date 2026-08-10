@@ -9,6 +9,7 @@ import {
   googleDriveFoldersTable,
   entityRecordsTable,
   entityFieldsTable,
+  mirrorPermKey,
   type GoogleDriveConnection,
   type GoogleDriveFolder,
   type DriveNameSection,
@@ -22,6 +23,7 @@ import {
   getUserRoleIds,
   canRecord,
   effectiveScope,
+  effectiveScopeFor,
   resolveFieldAccess,
 } from "../middlewares/permissions";
 import { isRecordOwned } from "./own-scope";
@@ -407,8 +409,16 @@ router.post("/google-drive/rename", requireAuth, async (req: Request, res: Respo
       res.status(404).json({ error: "Record not found" });
       return;
     }
+    const pageId = parsed.data.pageId ?? undefined;
     const perms = await getPermissions(req);
-    if (!canRecord(perms, rec.entityId, "update")) {
+    // Same boundary as record updates: a mirror-page CRUD override (when the
+    // caller works through an authorized mirror page) replaces the entity perm.
+    const mirrorOverride =
+      pageId != null && (perms.pageIds?.includes(pageId) ?? false)
+        ? perms.records[mirrorPermKey(pageId)]
+        : undefined;
+    const mayUpdate = mirrorOverride ? mirrorOverride.update === true : canRecord(perms, rec.entityId, "update");
+    if (!mayUpdate) {
       res.status(403).json({ error: "No edit access" });
       return;
     }
@@ -422,11 +432,11 @@ router.post("/google-drive/rename", requireAuth, async (req: Request, res: Respo
       return;
     }
     const roleIds = await getUserRoleIds(req);
-    if (resolveFieldAccess(holder, perms, roleIds, rec.entityId) !== "edit") {
+    if (resolveFieldAccess(holder, perms, roleIds, rec.entityId, mirrorOverride, pageId) !== "edit") {
       res.status(403).json({ error: "No edit access to this field" });
       return;
     }
-    const { scope, scopeFieldKeys } = effectiveScope(perms, rec.entityId);
+    const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, rec.entityId, pageId);
     if (scope === "own" && !(await isRecordOwned(rec.entityId, rec, scopeFieldKeys, req.user!.userId, fields))) {
       res.status(403).json({ error: "No edit access to this record" });
       return;
@@ -443,9 +453,20 @@ router.post("/google-drive/rename", requireAuth, async (req: Request, res: Respo
     }
     const accessToken = await getAccessToken(conn);
     const finalName = await renameDriveFile(accessToken, fileId, name);
-    // Keep the stored value's display name in sync with Drive.
-    const nextValues = { ...values, [fieldKey]: { ...(values[fieldKey] as Record<string, unknown>), name: finalName } };
-    await db.update(entityRecordsTable).set({ valuesJson: nextValues }).where(eq(entityRecordsTable.id, recordId));
+    // Atomic, targeted JSON update: set only this field's name (and clear the
+    // pendingRename flag), guarded on the SAME fileId still being stored — a
+    // concurrent edit that replaced the file (or the whole record) is never
+    // clobbered, unlike a read-modify-write of the full valuesJson document.
+    await db.execute(sql`
+      UPDATE entity_records
+      SET values_json = jsonb_set(
+        (values_json #- ARRAY[${fieldKey}::text, 'pendingRename']),
+        ARRAY[${fieldKey}::text, 'name'],
+        to_jsonb(${finalName}::text)
+      )
+      WHERE id = ${recordId}
+        AND values_json -> ${fieldKey} ->> 'fileId' = ${fileId}
+    `);
     res.json({ name: finalName });
   } catch (err) {
     req.log.error({ err }, "Google Drive rename failed");

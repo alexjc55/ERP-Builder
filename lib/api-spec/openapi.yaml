@@ -3730,6 +3730,10 @@ components:
         name:
           type: string
           description: New file name (client-composed from the name template).
+        pageId:
+          type: integer
+          nullable: true
+          description: Mirror page context — honors per-mirror-page CRUD/scope overrides, same as record updates.
 
     RenameDriveFileResult:
       type: object
