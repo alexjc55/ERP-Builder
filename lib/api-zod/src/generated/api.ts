@@ -7221,6 +7221,21 @@ export const GetGoogleDriveNameTemplateResponse = zod.object({
 
 
 /**
+ * @summary Rename a Drive file after record save (record-edit boundary re-checked server-side)
+ */
+export const RenameGoogleDriveFileBody = zod.object({
+  "recordId": zod.number().describe('Record whose file field holds the Drive file.'),
+  "fieldKey": zod.string().describe('The file field on the record\'s entity.'),
+  "fileId": zod.string().describe('Drive file id currently stored in that field\'s value.'),
+  "name": zod.string().describe('New file name (client-composed from the name template).')
+})
+
+export const RenameGoogleDriveFileResponse = zod.object({
+  "name": zod.string().describe('The final name applied in Drive.')
+})
+
+
+/**
  * @summary Update a managed Drive folder's file-name template (admin)
  */
 export const UpdateGoogleDriveFolderParams = zod.object({

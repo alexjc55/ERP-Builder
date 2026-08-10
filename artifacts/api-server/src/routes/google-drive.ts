@@ -14,7 +14,7 @@ import {
   type DriveNameSection,
   type EntityField,
 } from "@workspace/db";
-import { UpdateGoogleDriveConnectionBody, CreateGoogleDriveFolderBody, UpdateGoogleDriveFolderBody } from "@workspace/api-zod";
+import { UpdateGoogleDriveConnectionBody, CreateGoogleDriveFolderBody, UpdateGoogleDriveFolderBody, RenameGoogleDriveFileBody } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/auth";
 import {
   requireAdmin,
@@ -40,6 +40,7 @@ import {
   createDriveFolder,
   uploadToFolder,
   downloadDriveFile,
+  renameDriveFile,
   fetchDriveThumbnail,
   saveConnectionTokens,
   isGoogleDriveModuleEnabled,
@@ -377,6 +378,82 @@ router.delete("/google-drive/folders/:id", requireAuth, requireAdmin("googleDriv
  * sent as the raw request body (Content-Type = file type, X-File-Name header
  * carries the URL-encoded name) to avoid a multipart parser dependency. The
  * server holds the Drive credentials; the client never sees a token. Returns the
+ * POST /google-drive/rename — rename a Drive file AFTER the record was saved,
+ * so the name reflects the FINAL field values (fields may be filled after the
+ * file was uploaded mid-form). The client composes the name from the template;
+ * the server re-checks the record EDIT boundary (record cap + field edit access
+ * + own scope) and verifies the file is actually the one stored in that field,
+ * then renames in Drive and updates the stored value's name.
+ */
+router.post("/google-drive/rename", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const parsed = RenameGoogleDriveFileBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid request body" });
+      return;
+    }
+    const { recordId, fieldKey, fileId } = parsed.data;
+    // Same sanitization spirit as the client: strip filesystem-hostile chars.
+    const name = parsed.data.name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
+    if (!name) {
+      res.status(400).json({ error: "Empty file name" });
+      return;
+    }
+    const [rec] = await db
+      .select({ id: entityRecordsTable.id, entityId: entityRecordsTable.entityId, valuesJson: entityRecordsTable.valuesJson })
+      .from(entityRecordsTable)
+      .where(eq(entityRecordsTable.id, recordId));
+    if (!rec) {
+      res.status(404).json({ error: "Record not found" });
+      return;
+    }
+    const perms = await getPermissions(req);
+    if (!canRecord(perms, rec.entityId, "update")) {
+      res.status(403).json({ error: "No edit access" });
+      return;
+    }
+    const fields = await db
+      .select()
+      .from(entityFieldsTable)
+      .where(and(eq(entityFieldsTable.entityId, rec.entityId), eq(entityFieldsTable.isActive, true)));
+    const holder = fields.find((f) => f.fieldType === "file" && f.fieldKey === fieldKey);
+    if (!holder) {
+      res.status(404).json({ error: "Field not found" });
+      return;
+    }
+    const roleIds = await getUserRoleIds(req);
+    if (resolveFieldAccess(holder, perms, roleIds, rec.entityId) !== "edit") {
+      res.status(403).json({ error: "No edit access to this field" });
+      return;
+    }
+    const { scope, scopeFieldKeys } = effectiveScope(perms, rec.entityId);
+    if (scope === "own" && !(await isRecordOwned(rec.entityId, rec, scopeFieldKeys, req.user!.userId, fields))) {
+      res.status(403).json({ error: "No edit access to this record" });
+      return;
+    }
+    const values = (rec.valuesJson as Record<string, unknown>) ?? {};
+    if (!gdriveValueRefersTo(values[fieldKey], fileId)) {
+      res.status(404).json({ error: "File is not referenced by this field" });
+      return;
+    }
+    const conn = await getConnection();
+    if (!conn?.refreshTokenEnc) {
+      res.status(409).json({ error: "Google Drive is not connected" });
+      return;
+    }
+    const accessToken = await getAccessToken(conn);
+    const finalName = await renameDriveFile(accessToken, fileId, name);
+    // Keep the stored value's display name in sync with Drive.
+    const nextValues = { ...values, [fieldKey]: { ...(values[fieldKey] as Record<string, unknown>), name: finalName } };
+    await db.update(entityRecordsTable).set({ valuesJson: nextValues }).where(eq(entityRecordsTable.id, recordId));
+    res.json({ name: finalName });
+  } catch (err) {
+    req.log.error({ err }, "Google Drive rename failed");
+    res.status(500).json({ error: "Failed to rename Drive file" });
+  }
+});
+
+/**
  * created Drive file's metadata to store as a `gdrive` file value.
  */
 router.post(

@@ -3318,6 +3318,37 @@ paths:
               schema:
                 $ref: "#/components/schemas/DriveNameTemplate"
 
+  /google-drive/rename:
+    post:
+      operationId: renameGoogleDriveFile
+      tags: [googleDrive]
+      summary: Rename a Drive file after record save (record-edit boundary re-checked server-side)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameDriveFileBody"
+      responses:
+        "200":
+          description: File renamed in Drive and in the stored field value
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RenameDriveFileResult"
+        "403":
+          description: No edit access to this record/field
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Record/field/file not found or file not referenced by the field
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /google-drive/folders/{id}:
     put:
       operationId: updateGoogleDriveFolder
@@ -3682,6 +3713,31 @@ components:
           items:
             $ref: "#/components/schemas/DriveNameSection"
           description: File-name template sections; null/empty = keep original file names.
+
+    RenameDriveFileBody:
+      type: object
+      required: [recordId, fieldKey, fileId, name]
+      properties:
+        recordId:
+          type: integer
+          description: Record whose file field holds the Drive file.
+        fieldKey:
+          type: string
+          description: The file field on the record's entity.
+        fileId:
+          type: string
+          description: Drive file id currently stored in that field's value.
+        name:
+          type: string
+          description: New file name (client-composed from the name template).
+
+    RenameDriveFileResult:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: The final name applied in Drive.
 
     DriveNameSection:
       type: object

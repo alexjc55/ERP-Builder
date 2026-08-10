@@ -274,6 +274,8 @@ export * from './relationSettingsJson';
 export * from './relationType';
 export * from './relationUpdate';
 export * from './relationUpdateSettingsJson';
+export * from './renameDriveFileBody';
+export * from './renameDriveFileResult';
 export * from './renameFieldValueInput';
 export * from './renameFieldValueResult';
 export * from './reorderInput';

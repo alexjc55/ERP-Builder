@@ -233,6 +233,21 @@ export async function uploadToFolder(
 }
 
 /** Fetch a Drive file's binary content (for the auth-gated server proxy). */
+/** Rename a managed Drive file (drive.file scope covers files this app created). */
+export async function renameDriveFile(accessToken: string, fileId: string, name: string): Promise<string> {
+  const resp = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=id,name`,
+    {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    },
+  );
+  if (!resp.ok) throw new Error(`Drive rename failed (${resp.status})`);
+  const file = (await resp.json()) as { id: string; name: string };
+  return file.name;
+}
+
 export async function downloadDriveFile(
   accessToken: string,
   fileId: string,

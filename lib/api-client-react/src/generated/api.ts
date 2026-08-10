@@ -117,6 +117,8 @@ import type {
   Relation,
   RelationInput,
   RelationUpdate,
+  RenameDriveFileBody,
+  RenameDriveFileResult,
   RenameFieldValueInput,
   RenameFieldValueResult,
   ReorderInput,
@@ -11315,6 +11317,77 @@ export function useGetGoogleDriveNameTemplate<TData = Awaited<ReturnType<typeof 
 
 
 
+
+export const getRenameGoogleDriveFileUrl = () => {
+
+
+
+
+  return `/api/google-drive/rename`
+}
+
+/**
+ * @summary Rename a Drive file after record save (record-edit boundary re-checked server-side)
+ */
+export const renameGoogleDriveFile = async (renameDriveFileBody: RenameDriveFileBody, options?: RequestInit): Promise<RenameDriveFileResult> => {
+
+  return customFetch<RenameDriveFileResult>(getRenameGoogleDriveFileUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      renameDriveFileBody,)
+  }
+);}
+
+
+
+
+export const getRenameGoogleDriveFileMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof renameGoogleDriveFile>>, TError,{data: BodyType<RenameDriveFileBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof renameGoogleDriveFile>>, TError,{data: BodyType<RenameDriveFileBody>}, TContext> => {
+
+const mutationKey = ['renameGoogleDriveFile'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof renameGoogleDriveFile>>, {data: BodyType<RenameDriveFileBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  renameGoogleDriveFile(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RenameGoogleDriveFileMutationResult = NonNullable<Awaited<ReturnType<typeof renameGoogleDriveFile>>>
+    export type RenameGoogleDriveFileMutationBody = BodyType<RenameDriveFileBody>
+    export type RenameGoogleDriveFileMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Rename a Drive file after record save (record-edit boundary re-checked server-side)
+ */
+export const useRenameGoogleDriveFile = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof renameGoogleDriveFile>>, TError,{data: BodyType<RenameDriveFileBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof renameGoogleDriveFile>>,
+        TError,
+        {data: BodyType<RenameDriveFileBody>},
+        TContext
+      > => {
+      return useMutation(getRenameGoogleDriveFileMutationOptions(options));
+    }
 
 export const getUpdateGoogleDriveFolderUrl = (id: number,) => {
 

@@ -146,6 +146,7 @@ import { useML, useT, useLang } from "@/lib/i18n";
 import { normalizeSelectOptions, getOptionLabel } from "@/lib/selectOptions";
 import { useGoogleDriveReady } from "@/lib/googleDrive";
 import { composeDriveFileName, type DriveNameSection } from "@/lib/driveNaming";
+import { maybeRenameDriveFiles } from "@/lib/driveRename";
 import { FieldConfigDialog } from "@/components/FieldConfigDialog";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { CreateUserDialog } from "@/components/CreateUserDialog";
@@ -3657,12 +3658,23 @@ export function EntityRecords({
     const valuesJson = formToValues(visibleFormFields, form);
     const statusValue = statusId === NO_STATUS ? null : Number(statusId);
     if (editing) {
-      updateMutation.mutate({ id: editing.id, data: { valuesJson, statusId: statusValue, pageId: permPageId } });
+      void (async () => {
+        try {
+          await updateMutation.mutateAsync({ id: editing.id, data: { valuesJson, statusId: statusValue, pageId: permPageId } });
+          // Re-check Drive file names against the FINAL saved values (best-effort).
+          if (await maybeRenameDriveFiles({ recordId: editing.id, fields, values: valuesJson, uploaderEmail: user?.email })) invalidate();
+        } catch {
+          // errors surfaced via mutation onError toasts
+        }
+      })();
     } else {
       void (async () => {
         try {
           const created = await createMutation.mutateAsync({ entityId, data: buildCreateData(valuesJson, statusValue) });
-          if (created?.id != null) await persistPendingRelationLinks(created.id, form);
+          if (created?.id != null) {
+            await persistPendingRelationLinks(created.id, form);
+            if (await maybeRenameDriveFiles({ recordId: created.id, fields, values: valuesJson, uploaderEmail: user?.email })) invalidate();
+          }
         } catch {
           // errors surfaced via mutation onError toasts
         }
@@ -3858,6 +3870,8 @@ export function EntityRecords({
           }
           setNewPageRow({});
           await persistPendingRelationLinks(created.id, newRow);
+          // Final-values rename pass (page-local values merged for template resolution).
+          if (await maybeRenameDriveFiles({ recordId: created.id, fields, values: { ...pageValuesJson, ...valuesJson }, uploaderEmail: user?.email })) invalidate();
         }
       } catch {
         // errors surfaced via mutation onError toasts
@@ -8029,6 +8043,7 @@ function RecordEditModal({
     const statusValue = statusId === NO_STATUS ? null : Number(statusId);
     try {
       await updateMutation.mutateAsync({ id: recordId, data: { valuesJson, statusId: statusValue } });
+      await maybeRenameDriveFiles({ recordId, fields, values: valuesJson, uploaderEmail: user?.email });
       setSubmitting(false);
       toast({ title: t("records.updated", "Запись обновлена") });
       onOpenChange(false);
@@ -8230,6 +8245,7 @@ function QuickCreateRelatedRecordDialog({
         data: { valuesJson, ...statusPart, ...(pageId != null ? { pageId } : {}) },
       });
       newId = created.id;
+      await maybeRenameDriveFiles({ recordId: newId, fields: formFields, values: valuesJson, uploaderEmail: quickUser?.email });
     } catch (e) {
       setSubmitting(false);
       // A 409 here means the typed value duplicates an existing record's unique

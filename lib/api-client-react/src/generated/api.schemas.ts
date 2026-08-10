@@ -150,6 +150,22 @@ export interface DriveFolder {
   nameTemplateJson?: DriveNameSection[] | null;
 }
 
+export interface RenameDriveFileBody {
+  /** Record whose file field holds the Drive file. */
+  recordId: number;
+  /** The file field on the record's entity. */
+  fieldKey: string;
+  /** Drive file id currently stored in that field's value. */
+  fileId: string;
+  /** New file name (client-composed from the name template). */
+  name: string;
+}
+
+export interface RenameDriveFileResult {
+  /** The final name applied in Drive. */
+  name: string;
+}
+
 export interface UpdateDriveFolderBody {
   nameTemplateJson?: DriveNameSection[] | null;
 }
