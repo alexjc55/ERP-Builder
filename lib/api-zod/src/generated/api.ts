@@ -7107,8 +7107,12 @@ export const ListGoogleDriveFoldersResponseItem = zod.object({
   "nameTemplateJson": zod.array(zod.object({
   "kind": zod.enum(['text', 'field', 'hash']),
   "text": zod.string().optional().describe('Literal text (kind=text).'),
-  "fieldKey": zod.string().optional().describe('Record field key whose value is substituted (kind=field).'),
-  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).')
+  "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
+  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string(),
+  "label": zod.string().optional()
+})).optional().describe('Fallback field keys (fields of other entities\/pages feeding the same folder); the first candidate with a non-empty value wins.')
 })).nullish().describe('File-name template sections; null\/empty = keep original file names.')
 })
 export const ListGoogleDriveFoldersResponse = zod.array(ListGoogleDriveFoldersResponseItem)
@@ -7135,8 +7139,12 @@ export const CreateGoogleDriveFolderResponse = zod.object({
   "nameTemplateJson": zod.array(zod.object({
   "kind": zod.enum(['text', 'field', 'hash']),
   "text": zod.string().optional().describe('Literal text (kind=text).'),
-  "fieldKey": zod.string().optional().describe('Record field key whose value is substituted (kind=field).'),
-  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).')
+  "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
+  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string(),
+  "label": zod.string().optional()
+})).optional().describe('Fallback field keys (fields of other entities\/pages feeding the same folder); the first candidate with a non-empty value wins.')
 })).nullish().describe('File-name template sections; null\/empty = keep original file names.')
 })
 
@@ -7152,8 +7160,12 @@ export const GetGoogleDriveNameTemplateResponse = zod.object({
   "sections": zod.array(zod.object({
   "kind": zod.enum(['text', 'field', 'hash']),
   "text": zod.string().optional().describe('Literal text (kind=text).'),
-  "fieldKey": zod.string().optional().describe('Record field key whose value is substituted (kind=field).'),
-  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).')
+  "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
+  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string(),
+  "label": zod.string().optional()
+})).optional().describe('Fallback field keys (fields of other entities\/pages feeding the same folder); the first candidate with a non-empty value wins.')
 }))
 })
 
@@ -7169,8 +7181,12 @@ export const UpdateGoogleDriveFolderBody = zod.object({
   "nameTemplateJson": zod.array(zod.object({
   "kind": zod.enum(['text', 'field', 'hash']),
   "text": zod.string().optional().describe('Literal text (kind=text).'),
-  "fieldKey": zod.string().optional().describe('Record field key whose value is substituted (kind=field).'),
-  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).')
+  "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
+  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string(),
+  "label": zod.string().optional()
+})).optional().describe('Fallback field keys (fields of other entities\/pages feeding the same folder); the first candidate with a non-empty value wins.')
 })).nullish()
 })
 
@@ -7183,8 +7199,12 @@ export const UpdateGoogleDriveFolderResponse = zod.object({
   "nameTemplateJson": zod.array(zod.object({
   "kind": zod.enum(['text', 'field', 'hash']),
   "text": zod.string().optional().describe('Literal text (kind=text).'),
-  "fieldKey": zod.string().optional().describe('Record field key whose value is substituted (kind=field).'),
-  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).')
+  "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
+  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string(),
+  "label": zod.string().optional()
+})).optional().describe('Fallback field keys (fields of other entities\/pages feeding the same folder); the first candidate with a non-empty value wins.')
 })).nullish().describe('File-name template sections; null\/empty = keep original file names.')
 })
 

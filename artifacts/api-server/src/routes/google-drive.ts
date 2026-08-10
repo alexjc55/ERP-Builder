@@ -302,7 +302,10 @@ router.put("/google-drive/folders/:id", requireAuth, requireAdmin("googleDrive")
       if (text) sections.push({ kind: "text", text });
     } else if (s.kind === "field") {
       const fieldKey = s.fieldKey?.trim();
-      if (fieldKey) sections.push({ kind: "field", fieldKey, label: s.label });
+      const alts = (s.alts ?? [])
+        .map((a) => ({ fieldKey: a.fieldKey.trim(), label: a.label }))
+        .filter((a) => a.fieldKey && a.fieldKey !== fieldKey);
+      if (fieldKey) sections.push({ kind: "field", fieldKey, label: s.label, alts: alts.length > 0 ? alts : undefined });
     } else if (s.kind === "hash") {
       sections.push({ kind: "hash" });
     }

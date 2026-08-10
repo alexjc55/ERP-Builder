@@ -533,7 +533,12 @@ function FolderManager({ t }: { t: (key: string, fallback: string) => string }) 
   );
 }
 
-/** One "field value" section editor: pick an entity or page, then one of its fields. */
+/**
+ * One "field value" section editor. A section can hold SEVERAL field variants
+ * (the same logical field, e.g. "order number", lives under different keys in
+ * different entities/pages that upload into this folder). At upload time the
+ * first variant with a non-empty value in the record wins.
+ */
 function FieldSectionPicker({
   section,
   onChange,
@@ -547,7 +552,7 @@ function FieldSectionPicker({
   const pageLabel = usePagePathLabel();
   const { data: entities = [] } = useListEntities();
   const { data: pages = [] } = useListPages();
-  // Source: "e:<entityId>" or "p:<pageId>" (page-local fields).
+  // Source of the field being added: "e:<entityId>" or "p:<pageId>" (page-local).
   const [source, setSource] = useState<string>("");
   const entityId = source.startsWith("e:") ? Number(source.slice(2)) : 0;
   const pageId = source.startsWith("p:") ? Number(source.slice(2)) : 0;
@@ -557,48 +562,90 @@ function FieldSectionPicker({
   const { data: pageFields = [] } = useListPageFields(pageId, {
     query: { enabled: pageId > 0, queryKey: getListPageFieldsQueryKey(pageId) },
   });
-  const fieldOptions = entityId > 0
-    ? entityFields.map((f) => ({ key: f.fieldKey, label: ml(f.nameJson) || f.fieldKey }))
-    : pageFields.map((f) => ({ key: f.fieldKey, label: ml(f.nameJson) || f.fieldKey }));
+  const sourceLabel = entityId > 0
+    ? ml(entities.find((e) => e.id === entityId)?.nameJson) || ""
+    : pageId > 0
+      ? pageLabel(pageId)
+      : "";
+  const fieldOptions = (entityId > 0 ? entityFields : pageFields).map((f) => ({
+    key: f.fieldKey,
+    label: `${ml(f.nameJson) || f.fieldKey}${sourceLabel ? ` (${sourceLabel})` : ""}`,
+  }));
+
+  // Chosen variants: primary + alts, in order.
+  const variants: { fieldKey: string; label?: string }[] = section.fieldKey
+    ? [{ fieldKey: section.fieldKey, label: section.label }, ...(section.alts ?? [])]
+    : [];
+
+  const commit = (next: { fieldKey: string; label?: string }[]) => {
+    const [first, ...rest] = next;
+    onChange(
+      first
+        ? { kind: "field", fieldKey: first.fieldKey, label: first.label, alts: rest.length > 0 ? rest : undefined }
+        : { kind: "field", fieldKey: "" },
+    );
+  };
+
+  const addVariant = (key: string) => {
+    if (variants.some((v) => v.fieldKey === key)) return;
+    const opt = fieldOptions.find((f) => f.key === key);
+    commit([...variants, { fieldKey: key, label: opt?.label ?? key }]);
+  };
 
   return (
-    <div className="flex flex-1 flex-wrap gap-1.5 min-w-0">
-      <Select value={source} onValueChange={(v) => { setSource(v); }}>
-        <SelectTrigger className="h-8 w-[170px] text-xs">
-          <SelectValue placeholder={t("gdrive.tplPickSource", "Сущность / страница")} />
-        </SelectTrigger>
-        <SelectContent>
-          {entities.map((e) => (
-            <SelectItem key={`e:${e.id}`} value={`e:${e.id}`}>{ml(e.nameJson)}</SelectItem>
+    <div className="flex-1 min-w-0 space-y-1.5">
+      {variants.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {variants.map((v, idx) => (
+            <Badge key={v.fieldKey} variant="secondary" className="gap-1 font-normal max-w-full">
+              <span className="truncate">{v.label || v.fieldKey}</span>
+              {idx === 0 && variants.length > 1 && (
+                <span className="text-[10px] text-slate-400">{t("gdrive.tplPrimary", "осн.")}</span>
+              )}
+              <button
+                type="button"
+                className="text-slate-400 hover:text-red-600"
+                onClick={() => commit(variants.filter((x) => x.fieldKey !== v.fieldKey))}
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </Badge>
           ))}
-          {pages.filter((p) => (p as { pageType?: string }).pageType !== "dashboard").map((p) => (
-            <SelectItem key={`p:${p.id}`} value={`p:${p.id}`}>
-              {t("gdrive.tplPagePrefix", "Стр.")} {pageLabel(p.id)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Select
-        value={section.fieldKey && fieldOptions.some((f) => f.key === section.fieldKey) ? section.fieldKey : ""}
-        onValueChange={(key) => {
-          const opt = fieldOptions.find((f) => f.key === key);
-          onChange({ kind: "field", fieldKey: key, label: opt?.label ?? key });
-        }}
-        disabled={!source}
-      >
-        <SelectTrigger className="h-8 w-[170px] text-xs">
-          <SelectValue placeholder={section.label || section.fieldKey || t("gdrive.tplPickField", "Поле")} />
-        </SelectTrigger>
-        <SelectContent>
-          {fieldOptions.map((f) => (
-            <SelectItem key={f.key} value={f.key}>{f.label}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {section.fieldKey && (
-        <span className="self-center text-xs text-slate-400 truncate">
-          {section.label || section.fieldKey}
-        </span>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-1.5">
+        <Select value={source} onValueChange={setSource}>
+          <SelectTrigger className="h-8 w-[170px] text-xs">
+            <SelectValue placeholder={t("gdrive.tplPickSource", "Сущность / страница")} />
+          </SelectTrigger>
+          <SelectContent>
+            {entities.map((e) => (
+              <SelectItem key={`e:${e.id}`} value={`e:${e.id}`}>{ml(e.nameJson)}</SelectItem>
+            ))}
+            {pages.filter((p) => (p as { pageType?: string }).pageType !== "dashboard").map((p) => (
+              <SelectItem key={`p:${p.id}`} value={`p:${p.id}`}>
+                {t("gdrive.tplPagePrefix", "Стр.")} {pageLabel(p.id)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value="" onValueChange={addVariant} disabled={!source}>
+          <SelectTrigger className="h-8 w-[190px] text-xs">
+            <SelectValue placeholder={variants.length > 0 ? t("gdrive.tplAddVariant", "Добавить вариант поля") : t("gdrive.tplPickField", "Поле")} />
+          </SelectTrigger>
+          <SelectContent>
+            {fieldOptions.map((f) => (
+              <SelectItem key={f.key} value={f.key} disabled={variants.some((v) => v.fieldKey === f.key)}>
+                {f.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      {variants.length > 1 && (
+        <p className="text-[11px] text-slate-400">
+          {t("gdrive.tplVariantsHint", "Подставится первое поле, у которого в записи есть значение.")}
+        </p>
       )}
     </div>
   );

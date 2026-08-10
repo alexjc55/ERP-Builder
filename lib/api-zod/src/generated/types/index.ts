@@ -99,6 +99,7 @@ export * from './dependentParentValue';
 export * from './dependentValuesQuery';
 export * from './driveFolder';
 export * from './driveNameSection';
+export * from './driveNameSectionAltsItem';
 export * from './driveNameSectionKind';
 export * from './driveNameTemplate';
 export * from './entity';

@@ -42,14 +42,17 @@ export type GoogleDriveConnection = typeof googleDriveConnectionTable.$inferSele
  * non-empty template, files uploaded into it are renamed by concatenating the
  * resolved sections with "_" and keeping the original file extension.
  * - "text": a fixed literal typed by the admin.
- * - "field": the current record's value for `fieldKey` (entity or page-local
- *   field), resolved client-side from the form draft at upload time; `label`
- *   is a display-only snapshot for the admin UI.
+ * - "field": the current record's value for one of several candidate field keys
+ *   (entity or page-local fields from DIFFERENT entities may feed the same
+ *   folder, e.g. "order number" exists under a different key in each entity).
+ *   `fieldKey` is the primary candidate, `alts` are fallbacks — at upload time
+ *   the FIRST candidate with a non-empty value in the form draft wins. Labels
+ *   are display-only snapshots for the admin UI.
  * - "hash": a random short alphanumeric id generated per upload.
  */
 export type DriveNameSection =
   | { kind: "text"; text: string }
-  | { kind: "field"; fieldKey: string; label?: string }
+  | { kind: "field"; fieldKey: string; label?: string; alts?: { fieldKey: string; label?: string }[] }
   | { kind: "hash" };
 
 export const googleDriveFoldersTable = pgTable("google_drive_folders", {

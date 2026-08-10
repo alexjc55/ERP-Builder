@@ -3695,10 +3695,21 @@ components:
           description: Literal text (kind=text).
         fieldKey:
           type: string
-          description: Record field key whose value is substituted (kind=field).
+          description: Primary record field key whose value is substituted (kind=field).
         label:
           type: string
           description: Display-only snapshot of the field label for the admin UI (kind=field).
+        alts:
+          type: array
+          description: Fallback field keys (fields of other entities/pages feeding the same folder); the first candidate with a non-empty value wins.
+          items:
+            type: object
+            required: [fieldKey]
+            properties:
+              fieldKey:
+                type: string
+              label:
+                type: string
 
     UpdateDriveFolderBody:
       type: object

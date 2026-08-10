@@ -117,14 +117,21 @@ export const DriveNameSectionKind = {
   hash: 'hash',
 } as const;
 
+export type DriveNameSectionAltsItem = {
+  fieldKey: string;
+  label?: string;
+};
+
 export interface DriveNameSection {
   kind: DriveNameSectionKind;
   /** Literal text (kind=text). */
   text?: string;
-  /** Record field key whose value is substituted (kind=field). */
+  /** Primary record field key whose value is substituted (kind=field). */
   fieldKey?: string;
   /** Display-only snapshot of the field label for the admin UI (kind=field). */
   label?: string;
+  /** Fallback field keys (fields of other entities/pages feeding the same folder); the first candidate with a non-empty value wins. */
+  alts?: DriveNameSectionAltsItem[];
 }
 
 export interface DriveFolder {

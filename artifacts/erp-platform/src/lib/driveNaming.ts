@@ -10,7 +10,14 @@
 
 export type DriveNameSection =
   | { kind: "text"; text?: string }
-  | { kind: "field"; fieldKey?: string; label?: string }
+  | {
+      kind: "field";
+      /** Primary candidate field key. */
+      fieldKey?: string;
+      label?: string;
+      /** Fallback candidates (same logical field under other entities/pages); first non-empty value wins. */
+      alts?: { fieldKey: string; label?: string }[];
+    }
   | { kind: "hash" };
 
 const HASH_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
@@ -55,8 +62,14 @@ export function composeDriveFileName(
       const t = sanitizeSegment(s.text ?? "");
       if (t) parts.push(t);
     } else if (s.kind === "field") {
-      const seg = s.fieldKey ? valueToSegment(rowValues?.[s.fieldKey]) : "";
-      if (seg) parts.push(seg);
+      const candidates = [s.fieldKey, ...(s.alts ?? []).map((a) => a.fieldKey)].filter(Boolean) as string[];
+      for (const key of candidates) {
+        const seg = valueToSegment(rowValues?.[key]);
+        if (seg) {
+          parts.push(seg);
+          break;
+        }
+      }
     } else if (s.kind === "hash") {
       parts.push(driveNameHash());
     }
