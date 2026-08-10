@@ -41,10 +41,22 @@ export function builtinCredsAvailable(): boolean {
   return Boolean(process.env.GOOGLE_OAUTH_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET);
 }
 
-/** Absolute OAuth redirect URI (must be registered in the Google OAuth client). */
-export function driveRedirectUri(): string {
-  const domains = (process.env.REPLIT_DOMAINS ?? "").split(",").map((d) => d.trim()).filter(Boolean);
-  const host = domains[0] ?? "localhost";
+/**
+ * Absolute OAuth redirect URI (must be registered in the Google OAuth client).
+ *
+ * Prefers the host of the CURRENT request (x-forwarded-host from the reverse
+ * proxy, then Host) so external deployments need no env configuration — the
+ * app is always reached on its public domain. Falls back to REPLIT_DOMAINS
+ * (scheme/slashes stripped defensively) for non-request contexts.
+ */
+export function driveRedirectUri(req?: { get(name: string): string | undefined }): string {
+  const cleanHost = (v: string | undefined): string =>
+    (v ?? "").split(",")[0]!.trim().replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  const host =
+    cleanHost(req?.get("x-forwarded-host")) ||
+    cleanHost(req?.get("host")) ||
+    cleanHost(process.env.REPLIT_DOMAINS) ||
+    "localhost";
   return `https://${host}/api/google-drive/oauth/callback`;
 }
 
@@ -62,11 +74,11 @@ export function resolveCreds(conn: GoogleDriveConnection | undefined): DriveClie
   return null;
 }
 
-export function makeOAuthClient(creds: DriveClientCreds): OAuth2Client {
+export function makeOAuthClient(creds: DriveClientCreds, redirectUri: string = driveRedirectUri()): OAuth2Client {
   return new OAuth2Client({
     clientId: creds.clientId,
     clientSecret: creds.clientSecret,
-    redirectUri: driveRedirectUri(),
+    redirectUri,
   });
 }
 
@@ -80,8 +92,8 @@ export async function getConnection(): Promise<GoogleDriveConnection | undefined
 }
 
 /** Build the consent URL. `state` is an opaque CSRF/return token. */
-export function buildAuthUrl(creds: DriveClientCreds, state: string): string {
-  const client = makeOAuthClient(creds);
+export function buildAuthUrl(creds: DriveClientCreds, state: string, redirectUri?: string): string {
+  const client = makeOAuthClient(creds, redirectUri);
   return client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
@@ -94,8 +106,9 @@ export function buildAuthUrl(creds: DriveClientCreds, state: string): string {
 export async function exchangeCode(
   creds: DriveClientCreds,
   code: string,
+  redirectUri?: string,
 ): Promise<{ refreshToken: string; accessToken: string; email?: string }> {
-  const client = makeOAuthClient(creds);
+  const client = makeOAuthClient(creds, redirectUri);
   const { tokens } = await client.getToken(code);
   if (!tokens.refresh_token || !tokens.access_token) {
     throw new Error("Google did not return a refresh token");

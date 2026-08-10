@@ -63,14 +63,14 @@ async function ensureConnectionRow(): Promise<GoogleDriveConnection> {
 }
 
 /** Public-facing connection info (never leaks secrets). */
-function connectionInfo(conn: GoogleDriveConnection) {
+function connectionInfo(conn: GoogleDriveConnection, req: Request) {
   return {
     keyMode: conn.keyMode,
     connected: Boolean(conn.refreshTokenEnc),
     folderConfigured: Boolean(conn.folderId),
     builtinAvailable: builtinCredsAvailable(),
     hasOwnCreds: Boolean(conn.ownClientId && conn.ownClientSecretEnc),
-    redirectUri: driveRedirectUri(),
+    redirectUri: driveRedirectUri(req),
     ...(conn.ownClientId ? { ownClientId: conn.ownClientId } : {}),
     ...(conn.accountEmail ? { accountEmail: conn.accountEmail } : {}),
     ...(conn.folderId ? { folderId: conn.folderId } : {}),
@@ -92,9 +92,9 @@ router.get("/google-drive/status", requireAuth, async (_req, res): Promise<void>
 });
 
 /** GET /google-drive/connection — full info (admin). */
-router.get("/google-drive/connection", requireAuth, requireAdmin("googleDrive"), async (_req, res): Promise<void> => {
+router.get("/google-drive/connection", requireAuth, requireAdmin("googleDrive"), async (req, res): Promise<void> => {
   const conn = await ensureConnectionRow();
-  res.json(connectionInfo(conn));
+  res.json(connectionInfo(conn, req));
 });
 
 /** PUT /google-drive/connection — set key mode + own credentials (admin). */
@@ -116,7 +116,7 @@ router.put("/google-drive/connection", requireAuth, requireAdmin("googleDrive"),
     .set(update)
     .where(eq(googleDriveConnectionTable.id, DRIVE_CONNECTION_ID))
     .returning();
-  res.json(connectionInfo(row));
+  res.json(connectionInfo(row, req));
 });
 
 /** POST /google-drive/oauth/start — build the consent URL (admin). */
@@ -133,7 +133,7 @@ router.post("/google-drive/oauth/start", requireAuth, requireAdmin("googleDrive"
     return;
   }
   const state = jwt.sign({ purpose: OAUTH_STATE_PURPOSE, uid: req.user!.userId }, SECRET, { expiresIn: "10m" });
-  res.json({ authUrl: buildAuthUrl(creds, state) });
+  res.json({ authUrl: buildAuthUrl(creds, state, driveRedirectUri(req)) });
 });
 
 /**
@@ -164,7 +164,7 @@ router.get("/google-drive/oauth/callback", async (req: Request, res: Response): 
       redirectBack("error");
       return;
     }
-    const { refreshToken, accessToken, email } = await exchangeCode(creds, code);
+    const { refreshToken, accessToken, email } = await exchangeCode(creds, code, driveRedirectUri(req));
     await saveConnectionTokens(refreshToken, email);
     const folder = await ensureFolder(accessToken, conn.folderId);
     await db
@@ -193,7 +193,7 @@ router.get("/google-drive/oauth/callback", async (req: Request, res: Response): 
 });
 
 /** POST /google-drive/disconnect — clear tokens, creds secret, folder (admin). */
-router.post("/google-drive/disconnect", requireAuth, requireAdmin("googleDrive"), async (_req, res): Promise<void> => {
+router.post("/google-drive/disconnect", requireAuth, requireAdmin("googleDrive"), async (req, res): Promise<void> => {
   await ensureConnectionRow();
   const [row] = await db
     .update(googleDriveConnectionTable)
@@ -203,7 +203,7 @@ router.post("/google-drive/disconnect", requireAuth, requireAdmin("googleDrive")
   // Drop the managed-folder list too; the Drive folders themselves are left
   // untouched (the platform never deletes Drive content).
   await db.delete(googleDriveFoldersTable);
-  res.json(connectionInfo(row));
+  res.json(connectionInfo(row, req));
 });
 
 /** Public-facing managed folder shape. */
