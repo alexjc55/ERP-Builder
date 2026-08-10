@@ -9,7 +9,7 @@ import {
 } from "@workspace/api-client-react";
 import { useML } from "@/lib/i18n";
 import { usePagePathLabel } from "@/lib/pagePath";
-import { driveNameHash, type DriveNameSection } from "@/lib/driveNaming";
+import { driveNameHash, driveNameDate, type DriveNameSection } from "@/lib/driveNaming";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -162,7 +162,15 @@ export function DriveNameTemplateEditor({
   const preview = sections.length > 0
     ? sections
         .map((s) =>
-          s.kind === "text" ? (s.text ?? "").trim() : s.kind === "hash" ? driveNameHash() : s.label || s.fieldKey ? `«${s.label || s.fieldKey}»` : "",
+          s.kind === "text"
+            ? (s.text ?? "").trim()
+            : s.kind === "hash"
+              ? driveNameHash()
+              : s.kind === "date"
+                ? driveNameDate()
+                : s.label || s.fieldKey
+                  ? `«${s.label || s.fieldKey}»`
+                  : "",
         )
         .filter(Boolean)
         .join("_") + ".pdf"
@@ -175,7 +183,16 @@ export function DriveNameTemplateEditor({
           <Select
             value={s.kind}
             onValueChange={(kind) =>
-              setSection(i, kind === "text" ? { kind: "text", text: "" } : kind === "field" ? { kind: "field", fieldKey: "" } : { kind: "hash" })
+              setSection(
+                i,
+                kind === "text"
+                  ? { kind: "text", text: "" }
+                  : kind === "field"
+                    ? { kind: "field", fieldKey: "" }
+                    : kind === "date"
+                      ? { kind: "date" }
+                      : { kind: "hash" },
+              )
             }
           >
             <SelectTrigger className="h-8 w-[150px] text-xs shrink-0">
@@ -185,6 +202,7 @@ export function DriveNameTemplateEditor({
               <SelectItem value="text">{t("gdrive.tplKindText", "Текст")}</SelectItem>
               <SelectItem value="field">{t("gdrive.tplKindField", "Значение поля")}</SelectItem>
               <SelectItem value="hash">{t("gdrive.tplKindHash", "Авто-хеш")}</SelectItem>
+              <SelectItem value="date">{t("gdrive.tplKindDate", "Дата и время")}</SelectItem>
             </SelectContent>
           </Select>
           {s.kind === "text" && (
@@ -201,6 +219,11 @@ export function DriveNameTemplateEditor({
           {s.kind === "hash" && (
             <span className="self-center flex-1 text-xs text-slate-500">
               {t("gdrive.tplHashHint", "Случайный код, например")} {`${driveNameHash()}`}
+            </span>
+          )}
+          {s.kind === "date" && (
+            <span className="self-center flex-1 text-xs text-slate-500">
+              {t("gdrive.tplDateHint", "Дата и время загрузки, например")} {driveNameDate()}
             </span>
           )}
           <Button

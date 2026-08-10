@@ -53,7 +53,8 @@ export type GoogleDriveConnection = typeof googleDriveConnectionTable.$inferSele
 export type DriveNameSection =
   | { kind: "text"; text: string }
   | { kind: "field"; fieldKey: string; label?: string; alts?: { fieldKey: string; label?: string }[] }
-  | { kind: "hash" };
+  | { kind: "hash" }
+  | { kind: "date" };
 
 export const googleDriveFoldersTable = pgTable("google_drive_folders", {
   id: serial("id").primaryKey(),

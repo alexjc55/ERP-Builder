@@ -18,7 +18,8 @@ export type DriveNameSection =
       /** Fallback candidates (same logical field under other entities/pages); first non-empty value wins. */
       alts?: { fieldKey: string; label?: string }[];
     }
-  | { kind: "hash" };
+  | { kind: "hash" }
+  | { kind: "date" };
 
 const HASH_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
 
@@ -29,6 +30,15 @@ export function driveNameHash(length = 7): string {
   let out = "";
   for (const b of bytes) out += HASH_ALPHABET[b % HASH_ALPHABET.length];
   return out;
+}
+
+/**
+ * Current LOCAL date+time for the "date" section, file-name-safe and sortable:
+ * `2026-08-10_14-35`.
+ */
+export function driveNameDate(now: Date = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}_${p(now.getHours())}-${p(now.getMinutes())}`;
 }
 
 /** Strip characters that are unsafe/ugly in file names; collapse whitespace. */
@@ -72,6 +82,8 @@ export function composeDriveFileName(
       }
     } else if (s.kind === "hash") {
       parts.push(driveNameHash());
+    } else if (s.kind === "date") {
+      parts.push(driveNameDate());
     }
   }
   if (!parts.length) return null;

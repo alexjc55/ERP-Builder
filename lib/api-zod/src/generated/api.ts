@@ -2787,7 +2787,7 @@ export const ListEntityFieldsResponseItem = zod.object({
   "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.'),
   "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.'),
   "nameTemplateJson": zod.array(zod.object({
-  "kind": zod.enum(['text', 'field', 'hash']),
+  "kind": zod.enum(['text', 'field', 'hash', 'date']),
   "text": zod.string().optional().describe('Literal text (kind=text).'),
   "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
   "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
@@ -2922,7 +2922,7 @@ export const CreateEntityFieldBody = zod.object({
   "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.'),
   "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.'),
   "nameTemplateJson": zod.array(zod.object({
-  "kind": zod.enum(['text', 'field', 'hash']),
+  "kind": zod.enum(['text', 'field', 'hash', 'date']),
   "text": zod.string().optional().describe('Literal text (kind=text).'),
   "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
   "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
@@ -3038,7 +3038,7 @@ export const GetFieldResponse = zod.object({
   "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.'),
   "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.'),
   "nameTemplateJson": zod.array(zod.object({
-  "kind": zod.enum(['text', 'field', 'hash']),
+  "kind": zod.enum(['text', 'field', 'hash', 'date']),
   "text": zod.string().optional().describe('Literal text (kind=text).'),
   "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
   "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
@@ -3162,7 +3162,7 @@ export const UpdateFieldBody = zod.object({
   "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.'),
   "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.'),
   "nameTemplateJson": zod.array(zod.object({
-  "kind": zod.enum(['text', 'field', 'hash']),
+  "kind": zod.enum(['text', 'field', 'hash', 'date']),
   "text": zod.string().optional().describe('Literal text (kind=text).'),
   "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
   "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
@@ -3270,7 +3270,7 @@ export const UpdateFieldResponse = zod.object({
   "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.'),
   "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.'),
   "nameTemplateJson": zod.array(zod.object({
-  "kind": zod.enum(['text', 'field', 'hash']),
+  "kind": zod.enum(['text', 'field', 'hash', 'date']),
   "text": zod.string().optional().describe('Literal text (kind=text).'),
   "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
   "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
@@ -7155,7 +7155,7 @@ export const ListGoogleDriveFoldersResponseItem = zod.object({
   "isDefault": zod.boolean().describe('The auto-created default upload folder; cannot be removed.'),
   "parentId": zod.number().nullish().describe('Internal id of the parent folder for nested subfolders; null for top-level folders.'),
   "nameTemplateJson": zod.array(zod.object({
-  "kind": zod.enum(['text', 'field', 'hash']),
+  "kind": zod.enum(['text', 'field', 'hash', 'date']),
   "text": zod.string().optional().describe('Literal text (kind=text).'),
   "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
   "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
@@ -7187,7 +7187,7 @@ export const CreateGoogleDriveFolderResponse = zod.object({
   "isDefault": zod.boolean().describe('The auto-created default upload folder; cannot be removed.'),
   "parentId": zod.number().nullish().describe('Internal id of the parent folder for nested subfolders; null for top-level folders.'),
   "nameTemplateJson": zod.array(zod.object({
-  "kind": zod.enum(['text', 'field', 'hash']),
+  "kind": zod.enum(['text', 'field', 'hash', 'date']),
   "text": zod.string().optional().describe('Literal text (kind=text).'),
   "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
   "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
@@ -7208,7 +7208,7 @@ export const GetGoogleDriveNameTemplateQueryParams = zod.object({
 
 export const GetGoogleDriveNameTemplateResponse = zod.object({
   "sections": zod.array(zod.object({
-  "kind": zod.enum(['text', 'field', 'hash']),
+  "kind": zod.enum(['text', 'field', 'hash', 'date']),
   "text": zod.string().optional().describe('Literal text (kind=text).'),
   "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
   "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
@@ -7229,7 +7229,7 @@ export const UpdateGoogleDriveFolderParams = zod.object({
 
 export const UpdateGoogleDriveFolderBody = zod.object({
   "nameTemplateJson": zod.array(zod.object({
-  "kind": zod.enum(['text', 'field', 'hash']),
+  "kind": zod.enum(['text', 'field', 'hash', 'date']),
   "text": zod.string().optional().describe('Literal text (kind=text).'),
   "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
   "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
@@ -7247,7 +7247,7 @@ export const UpdateGoogleDriveFolderResponse = zod.object({
   "isDefault": zod.boolean().describe('The auto-created default upload folder; cannot be removed.'),
   "parentId": zod.number().nullish().describe('Internal id of the parent folder for nested subfolders; null for top-level folders.'),
   "nameTemplateJson": zod.array(zod.object({
-  "kind": zod.enum(['text', 'field', 'hash']),
+  "kind": zod.enum(['text', 'field', 'hash', 'date']),
   "text": zod.string().optional().describe('Literal text (kind=text).'),
   "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
   "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
