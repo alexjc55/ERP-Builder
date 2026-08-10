@@ -461,7 +461,7 @@ export function PageFieldConfigDialog({
                 { relationId, relatedFieldKey: relatedFieldKey || null, relatedPageId }
               : { relationId, relatedFieldKey: relatedFieldKey || null }
             : {},
-      permissionsJson: fieldType === "relation" || fieldType === "lookup" ? permissions : {},
+      permissionsJson: permissions,
       fileConfigJson:
         fieldType === "file"
           ? {
@@ -901,14 +901,19 @@ export function PageFieldConfigDialog({
               </div>
             )}
 
-            {(fieldType === "relation" || fieldType === "lookup") && (
+            {(
               <div className="border-t border-slate-100 pt-4 space-y-2">
                 <Label>{t("fields.accessByRoles", "Доступ к полю по ролям")}</Label>
                 <p className="text-xs text-slate-400">
-                  {t(
-                    "pageFields.relationAccessHint",
-                    "«По умолчанию» — столбец наследует права роли на связанное поле. Доступ ограничивается правами роли на связанную сущность.",
-                  )}
+                  {fieldType === "relation" || fieldType === "lookup"
+                    ? t(
+                        "pageFields.relationAccessHint",
+                        "«По умолчанию» — столбец наследует права роли на связанное поле. Доступ ограничивается правами роли на связанную сущность.",
+                      )
+                    : t(
+                        "pageFields.accessHint",
+                        "«По умолчанию» — доступ по правам роли на записи этой страницы. «Скрыто» убирает столбец, «Просмотр» запрещает редактирование.",
+                      )}
                 </p>
                 {roles.length === 0 ? (
                   <p className="text-xs text-slate-400">{t("fields.noRoles", "Нет ролей для настройки.")}</p>
