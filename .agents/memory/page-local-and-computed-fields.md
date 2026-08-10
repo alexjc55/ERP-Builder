@@ -220,3 +220,9 @@ without updating (the controlled input reverts) — never rewrite "1,5" to "15".
 - Object serving + Drive proxy boundary now ALSO scans page_record_values: shared `canReadFileViaPageValues` in storage.ts (record view via effectiveRecordPerm w/ pageId, page-field hidden check, own-scope, AND hiddenRowStatusIds — status-hidden rows must not disclose file bytes).
 - Trash: `trashRemovedPageServerFiles` (records.ts, structural actor so automations can call it without a Request) must run on PUT values replace/clear, automation page writes, and record delete (snapshot page_record_values BEFORE the delete — FK cascade wipes it).
 - File stays OUT of: PAGE_FILTERABLE_TYPES, import (NON_IMPORTABLE), pivot dims, dashboard metrics. Page gdrive uploads have no rename-on-save (pendingRename dropped by validator; acceptable v1).
+
+## Per-role access on page fields (Aug 2026)
+
+- page_fields.permissions_json is enforced for ALL field types: list route strips hidden; PUT /pages/:id/records/:id/values rejects changes to view/hidden fields and PRESERVES stored values the caller can't edit (the PUT replaces the whole map — without preservation a viewer's resave wipes hidden values).
+- Client caveat: EntityRecords casts page fields to synthetic Field with `permissionsJson: {}` — entity-field UI perm checks do NOT apply; page cells use the dedicated `pageFieldReadOnly(pf)` mirror. Any new page-cell edit surface must call it.
+- Config dialog shows the roles block for every type (was relation/lookup only).
