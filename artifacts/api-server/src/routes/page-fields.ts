@@ -817,6 +817,31 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
     .from(pageRecordValuesTable)
     .where(and(eq(pageRecordValuesTable.pageId, pageId), eq(pageRecordValuesTable.recordId, recordId)));
   const prevValues = (existing?.valuesJson as Record<string, unknown> | undefined) ?? {};
+  // Per-field permission boundary (hard, server-side): the PUT replaces the
+  // WHOLE map, so for fields the caller may not edit we (a) preserve the stored
+  // value when it is missing/unchanged — a viewer resaving the row must not
+  // wipe values it cannot touch (hidden ones it never even received) — and
+  // (b) reject an actual change to a view-only/hidden field.
+  if (!perms.superAdmin) {
+    const roleIds = await getUserRoleIds(req);
+    for (const f of fields) {
+      const p = mostPermissiveFieldPerm(f.permissionsJson as FieldPermissions | null, roleIds, "edit", perms, entityId, pageId);
+      if (p === "edit") continue;
+      const prev = prevValues[f.fieldKey];
+      const changed =
+        f.fieldKey in incoming
+          ? JSON.stringify(incoming[f.fieldKey] ?? null) !== JSON.stringify(prev ?? null)
+          : false;
+      if (p === "hidden" || !changed) {
+        // Preserve the stored value (hidden values were never sent to this caller).
+        if (prev !== undefined) incoming[f.fieldKey] = prev;
+        else delete incoming[f.fieldKey];
+        continue;
+      }
+      res.status(403).json({ error: `Field "${f.fieldKey}" is read-only for your role` });
+      return;
+    }
+  }
   const result = validatePageValues(fields, incoming, await isGoogleDriveModuleEnabled(), prevValues);
   if ("error" in result) {
     res.status(400).json({ error: result.error });

@@ -1950,6 +1950,15 @@ export function EntityRecords({
     const a = fieldAccess(f, entityId, permPageId);
     return a === "edit" && roleDisplayView(f) ? "view" : a;
   };
+  // Cosmetic mirror of a PAGE-LOCAL field's per-role access: when every assigned
+  // role limits the page field to view/hidden, its cells are read-only in the UI.
+  // The hard boundary lives on the server (PUT page values rejects the change).
+  const pageFieldReadOnly = (pf: PageField) =>
+    userRoleIds.length > 0 &&
+    userRoleIds.every((rid) => {
+      const e = (pf.permissionsJson as Record<string, string> | null | undefined)?.[String(rid)];
+      return e === "view" || e === "hidden";
+    });
   // Map relationId → the relation FIELD key that carries the chosen linked record.
   // A lookup field projects from the SAME relation, so during a CREATE flow (no
   // base record yet) we resolve which linked record id was picked to preview its
@@ -5744,7 +5753,11 @@ export function EntityRecords({
                         if (col.kind === "page") {
                           const pf = col.field;
                           const pageFieldAsField = { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
-                          const editable = pf.fieldType !== "function" && pf.fieldType !== "relation" && pf.fieldType !== "lookup";
+                          const editable =
+                            pf.fieldType !== "function" &&
+                            pf.fieldType !== "relation" &&
+                            pf.fieldType !== "lookup" &&
+                            !pageFieldReadOnly(pf);
                           return (
                             <td key={col.pinKey} className="px-2 py-1.5 align-top max-w-[260px]" style={{ ...pinStyle(col.pinKey, "#eff6ff"), ...colWidthStyle(col.pinKey) }}>
                               {editable ? (
@@ -6237,7 +6250,7 @@ export function EntityRecords({
                               </td>
                             );
                           }
-                          const cellEditable = inlineEditEnabled && !isFunction;
+                          const cellEditable = inlineEditEnabled && !isFunction && !pageFieldReadOnly(pf);
                           const pageFieldAsField = { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
                           if (isEditingThis) {
                             return (
