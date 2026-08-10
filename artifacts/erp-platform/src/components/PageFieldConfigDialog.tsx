@@ -8,6 +8,9 @@ import {
   getGetPageRelationOptionsQueryKey,
   useListRoles,
   useListUserOptions,
+  useListGoogleDriveFolders,
+  useListLocalFolders,
+  type FileSource,
   type PageField,
   type FieldType,
   type MultilingualText,
@@ -20,6 +23,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { FileSourcesConfig } from "@/components/FileSourcesConfig";
+import { DriveNameTemplateEditor } from "@/components/DriveNameTemplateEditor";
+import { type DriveNameSection } from "@/lib/driveNaming";
 import {
   Dialog,
   DialogContent,
@@ -61,6 +67,27 @@ import { usePagePathLabel } from "@/lib/pagePath";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
+/** Flatten managed folders into a depth-ordered list for indented display. */
+function flattenDriveFolders<T extends { id: number; parentId?: number | null }>(
+  folders: T[],
+): { folder: T; depth: number }[] {
+  const byParent = new Map<number | null, T[]>();
+  for (const f of folders) {
+    const key = f.parentId ?? null;
+    if (!byParent.has(key)) byParent.set(key, []);
+    byParent.get(key)!.push(f);
+  }
+  const out: { folder: T; depth: number }[] = [];
+  const walk = (parent: number | null, depth: number) => {
+    for (const f of byParent.get(parent) ?? []) {
+      out.push({ folder: f, depth });
+      walk(f.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return out;
+}
+
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "text", label: "Текст" },
   { value: "textarea", label: "Многострочный текст" },
@@ -73,6 +100,7 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "email", label: "Email" },
   { value: "url", label: "Ссылка (URL)" },
   { value: "phone", label: "Телефон" },
+  { value: "file", label: "Файл" },
   { value: "function", label: "Формула (вычисляемое)" },
   { value: "relation", label: "Связанное поле" },
   { value: "lookup", label: "Поле подстановки" },
@@ -182,7 +210,14 @@ export function PageFieldConfigDialog({
   // relation field's link itself stays assignable).
   const [relatedPageId, setRelatedPageId] = useState<number | null>(null);
   const [permissions, setPermissions] = useState<FieldPermissions>({});
+  const [allowedSources, setAllowedSources] = useState<FileSource[]>(["server"]);
+  const [driveFolderId, setDriveFolderId] = useState<string>("");
+  const [localFolderId, setLocalFolderId] = useState<number | null>(null);
+  const [nameTemplate, setNameTemplate] = useState<DriveNameSection[]>([]);
+  const [nameTemplateEnabled, setNameTemplateEnabled] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const { data: driveFolders = [] } = useListGoogleDriveFolders();
+  const { data: localFolders = [] } = useListLocalFolders();
 
   useEffect(() => {
     if (!open) return;
@@ -218,6 +253,13 @@ export function PageFieldConfigDialog({
       setRelatedFieldKey(field.relationConfigJson?.relatedFieldKey ?? "");
       setRelatedPageId(field.relationConfigJson?.relatedPageId ?? null);
       setPermissions(field.permissionsJson ? { ...field.permissionsJson } : {});
+      const src = field.fileConfigJson?.allowedSources;
+      setAllowedSources(Array.isArray(src) && src.length > 0 ? (src as FileSource[]) : ["server"]);
+      setDriveFolderId(field.fileConfigJson?.driveFolderId ?? "");
+      setLocalFolderId(field.fileConfigJson?.localFolderId ?? null);
+      const tpl = (field.fileConfigJson?.nameTemplateJson ?? []) as DriveNameSection[];
+      setNameTemplate(tpl);
+      setNameTemplateEnabled(tpl.length > 0);
     } else {
       setFieldKey("");
       setNameJson({});
@@ -243,6 +285,11 @@ export function PageFieldConfigDialog({
       setRelatedFieldKey("");
       setRelatedPageId(null);
       setPermissions({});
+      setAllowedSources(["server"]);
+      setDriveFolderId("");
+      setLocalFolderId(null);
+      setNameTemplate([]);
+      setNameTemplateEnabled(false);
     }
   }, [open, field, nextSortOrder]);
 
@@ -351,6 +398,10 @@ export function PageFieldConfigDialog({
   };
 
   const handleSubmit = () => {
+    // Drop degenerate template sections (empty text / no field picked).
+    const cleanedNameTemplate = nameTemplate.filter((s) =>
+      s.kind === "text" ? Boolean(s.text?.trim()) : s.kind === "field" ? Boolean(s.fieldKey) : true,
+    );
     const payload = {
       fieldKey: effectiveKey,
       nameJson: nameJson as MultilingualText,
@@ -411,6 +462,17 @@ export function PageFieldConfigDialog({
               : { relationId, relatedFieldKey: relatedFieldKey || null }
             : {},
       permissionsJson: fieldType === "relation" || fieldType === "lookup" ? permissions : {},
+      fileConfigJson:
+        fieldType === "file"
+          ? {
+              allowedSources: allowedSources.length > 0 ? allowedSources : (["server"] as FileSource[]),
+              ...(allowedSources.includes("gdrive") && driveFolderId ? { driveFolderId } : {}),
+              ...(allowedSources.includes("server") && localFolderId != null ? { localFolderId } : {}),
+              ...(allowedSources.includes("gdrive") && nameTemplateEnabled && cleanedNameTemplate.length > 0
+                ? { nameTemplateJson: cleanedNameTemplate }
+                : {}),
+            }
+          : {},
     };
     if (field) updateMutation.mutate({ id: field.id, data: payload });
     else createMutation.mutate({ pageId, data: payload });
@@ -469,6 +531,111 @@ export function PageFieldConfigDialog({
             </div>
             {fieldType === "select" && (
               <SelectOptionsEditor value={options} onChange={setOptions} t={t} />
+            )}
+            {fieldType === "file" && (
+              <div className="space-y-2">
+                <Label>{t("fields.fileSources", "Разрешённые источники файлов")}</Label>
+                <p className="text-xs text-slate-400">
+                  {t("fields.fileSourcesHint", "Выберите, как пользователи смогут прикреплять файлы. Должен быть выбран хотя бы один источник.")}
+                </p>
+                <FileSourcesConfig
+                  value={allowedSources}
+                  onChange={setAllowedSources}
+                  t={t}
+                  idPrefix="pfcd-src"
+                />
+                {allowedSources.includes("server") && (
+                  <div className="space-y-1.5 pt-2">
+                    <Label>{t("fields.localFolder", "Папка на сервере")}</Label>
+                    <p className="text-xs text-slate-400">
+                      {t(
+                        "fields.localFolderHint",
+                        "Куда сохранять загруженные файлы этого поля. По умолчанию — папка «Общая».",
+                      )}
+                    </p>
+                    <Select
+                      value={localFolderId != null ? String(localFolderId) : "__default__"}
+                      onValueChange={(v) => setLocalFolderId(v === "__default__" ? null : Number(v))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__default__">
+                          {t("fields.localFolderDefault", "По умолчанию (Общая)")}
+                        </SelectItem>
+                        {flattenDriveFolders(localFolders).map(({ folder, depth }) => (
+                          <SelectItem key={folder.id} value={String(folder.id)}>
+                            {depth > 0 ? "\u00A0".repeat(depth * 3) + "└ " : ""}
+                            {folder.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {allowedSources.includes("gdrive") && (
+                  <div className="space-y-1.5 pt-2">
+                    <Label>{t("fields.driveFolder", "Папка Google Drive")}</Label>
+                    <p className="text-xs text-slate-400">
+                      {t(
+                        "fields.driveFolderHint",
+                        "Куда загружать файлы этого поля. По умолчанию — основная папка «ERP Uploads».",
+                      )}
+                    </p>
+                    <Select
+                      value={driveFolderId || "__default__"}
+                      onValueChange={(v) => setDriveFolderId(v === "__default__" ? "" : v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__default__">
+                          {t("fields.driveFolderDefault", "По умолчанию (ERP Uploads)")}
+                        </SelectItem>
+                        {flattenDriveFolders(driveFolders).map(({ folder, depth }) => (
+                          <SelectItem key={folder.driveFolderId} value={folder.driveFolderId}>
+                            {depth > 0 ? "\u00A0".repeat(depth * 3) + "└ " : ""}
+                            {folder.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="space-y-1.5 pt-2">
+                      <div className="flex items-center gap-2">
+                        <Switch checked={nameTemplateEnabled} onCheckedChange={setNameTemplateEnabled} />
+                        <Label className="cursor-pointer" onClick={() => setNameTemplateEnabled((v) => !v)}>
+                          {t("fields.driveNameTemplate", "Формировать имя файла")}
+                        </Label>
+                      </div>
+                      {nameTemplateEnabled ? (
+                        <>
+                          <p className="text-xs text-slate-400">
+                            {t(
+                              "fields.driveNameTemplateHint",
+                              "Собственный шаблон имени для файлов этого поля. Секции склеиваются через «_», расширение сохраняется. Имеет приоритет над шаблоном папки.",
+                            )}
+                          </p>
+                          <DriveNameTemplateEditor
+                            sections={nameTemplate}
+                            onChange={setNameTemplate}
+                            t={t}
+                            defaultSource={`e:${entityId}`}
+                          />
+                        </>
+                      ) : (
+                        <p className="text-xs text-slate-400">
+                          {t(
+                            "fields.driveNameTemplateOff",
+                            "Используется шаблон имени папки Google Drive, если он настроен; иначе — исходное имя файла.",
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
             {fieldType === "percent" && (
               <div className="space-y-3">

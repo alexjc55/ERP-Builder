@@ -6514,6 +6514,8 @@ components:
           $ref: "#/components/schemas/PercentFieldConfig"
         relationConfigJson:
           $ref: "#/components/schemas/RelationFieldConfig"
+        fileConfigJson:
+          $ref: "#/components/schemas/FileFieldConfig"
         permissionsJson:
           $ref: "#/components/schemas/FieldPermissions"
         showInTable:
@@ -6578,6 +6580,8 @@ components:
           $ref: "#/components/schemas/PercentFieldConfig"
         relationConfigJson:
           $ref: "#/components/schemas/RelationFieldConfig"
+        fileConfigJson:
+          $ref: "#/components/schemas/FileFieldConfig"
         permissionsJson:
           $ref: "#/components/schemas/FieldPermissions"
         showInTable:
@@ -6636,6 +6640,8 @@ components:
           $ref: "#/components/schemas/PercentFieldConfig"
         relationConfigJson:
           $ref: "#/components/schemas/RelationFieldConfig"
+        fileConfigJson:
+          $ref: "#/components/schemas/FileFieldConfig"
         permissionsJson:
           $ref: "#/components/schemas/FieldPermissions"
         showInTable:

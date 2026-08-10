@@ -8,6 +8,7 @@
 import type { FieldFormatRule } from './fieldFormatRule';
 import type { FieldPermissions } from './fieldPermissions';
 import type { FieldType } from './fieldType';
+import type { FileFieldConfig } from './fileFieldConfig';
 import type { FormulaFieldConfig } from './formulaFieldConfig';
 import type { MultilingualText } from './multilingualText';
 import type { PercentFieldConfig } from './percentFieldConfig';
@@ -29,6 +30,7 @@ export interface PageFieldInput {
   formulaConfigJson?: FormulaFieldConfig;
   percentConfigJson?: PercentFieldConfig;
   relationConfigJson?: RelationFieldConfig;
+  fileConfigJson?: FileFieldConfig;
   permissionsJson?: FieldPermissions;
   showInTable?: boolean;
   isPinned?: boolean;

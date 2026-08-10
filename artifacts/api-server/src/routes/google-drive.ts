@@ -27,6 +27,7 @@ import {
   resolveFieldAccess,
 } from "../middlewares/permissions";
 import { isRecordOwned } from "./own-scope";
+import { canReadFileViaPageValues } from "./storage";
 import { encryptSecret } from "../lib/crypto";
 import { APP_SECRET } from "../lib/secret";
 import {
@@ -571,7 +572,8 @@ async function canReadDriveFile(req: Request, fileId: string): Promise<boolean> 
     if (scope === "own" && !(await isRecordOwned(rec.entityId, rec, scopeFieldKeys, userId, fields))) continue;
     return true;
   }
-  return false;
+  // Fall back to page-local file fields (values live in page_record_values).
+  return canReadFileViaPageValues(req, fileId, (v) => gdriveValueRefersTo(v, fileId));
 }
 
 /**

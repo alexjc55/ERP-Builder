@@ -2723,6 +2723,7 @@ export interface PageField {
   formulaConfigJson?: FormulaFieldConfig;
   percentConfigJson?: PercentFieldConfig;
   relationConfigJson?: RelationFieldConfig;
+  fileConfigJson?: FileFieldConfig;
   permissionsJson?: FieldPermissions;
   showInTable?: boolean;
   isPinned?: boolean;
@@ -2755,6 +2756,7 @@ export interface PageFieldInput {
   formulaConfigJson?: FormulaFieldConfig;
   percentConfigJson?: PercentFieldConfig;
   relationConfigJson?: RelationFieldConfig;
+  fileConfigJson?: FileFieldConfig;
   permissionsJson?: FieldPermissions;
   showInTable?: boolean;
   isPinned?: boolean;
@@ -2785,6 +2787,7 @@ export interface PageFieldUpdate {
   formulaConfigJson?: FormulaFieldConfig;
   percentConfigJson?: PercentFieldConfig;
   relationConfigJson?: RelationFieldConfig;
+  fileConfigJson?: FileFieldConfig;
   permissionsJson?: FieldPermissions;
   showInTable?: boolean;
   isPinned?: boolean;

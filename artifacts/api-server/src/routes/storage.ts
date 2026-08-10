@@ -7,7 +7,10 @@ import {
   entityRecordsTable,
   entityFieldsTable,
   appSettingsTable,
+  pageRecordValuesTable,
+  pageFieldsTable,
   type EntityField,
+  type FieldPermissions,
 } from "@workspace/db";
 import {
   RequestUploadUrlBody,
@@ -26,6 +29,10 @@ import {
   getUserRoleIds,
   canRecord,
   effectiveScope,
+  effectiveRecordPerm,
+  effectiveScopeFor,
+  effectiveStatusVisibility,
+  mostPermissiveFieldPerm,
   resolveFieldAccess,
 } from "../middlewares/permissions";
 import { isRecordOwned } from "./own-scope";
@@ -85,6 +92,106 @@ async function canReadObjectPath(req: Request, objectPath: string): Promise<bool
     if (resolveFieldAccess(holder, perms, roleIds, rec.entityId) === "hidden") continue;
     const { scope, scopeFieldKeys } = effectiveScope(perms, rec.entityId);
     if (scope === "own" && !(await isRecordOwned(rec.entityId, rec, scopeFieldKeys, userId, fields))) continue;
+    return true;
+  }
+  // Fall back to page-local file fields: their values live in
+  // page_record_values, not on the record itself.
+  return canReadFileViaPageValues(req, objectPath, (v) => fileValueRefersTo(v, objectPath));
+}
+
+/**
+ * Shared page-local twin of the record-based file guards: a user may read a
+ * file referenced by a page-local file field only if they can view the page's
+ * effective entity record (honoring a mirror-page view override), the holding
+ * page field is not hidden for their roles, and own-scope allows the row.
+ * Used by both object serving and the Google Drive proxy.
+ */
+export async function canReadFileViaPageValues(
+  req: Request,
+  needle: string,
+  matches: (value: unknown) => boolean,
+): Promise<boolean> {
+  if (!req.user) return false;
+  const candidates = await db
+    .select({
+      pageId: pageRecordValuesTable.pageId,
+      recordId: pageRecordValuesTable.recordId,
+      pageValues: pageRecordValuesTable.valuesJson,
+      entityId: entityRecordsTable.entityId,
+      statusId: entityRecordsTable.statusId,
+      recordValues: entityRecordsTable.valuesJson,
+    })
+    .from(pageRecordValuesTable)
+    .innerJoin(entityRecordsTable, eq(entityRecordsTable.id, pageRecordValuesTable.recordId))
+    .where(sql`${pageRecordValuesTable.valuesJson}::text LIKE ${"%" + needle + "%"}`);
+  if (candidates.length === 0) return false;
+
+  const perms = await getPermissions(req);
+  const roleIds = await getUserRoleIds(req);
+  const userId = req.user.userId;
+  const pageFieldsByPage = new Map<number, { fieldKey: string; fieldType: string; permissionsJson: unknown }[]>();
+  const entityFieldsByEntity = new Map<number, EntityField[]>();
+
+  for (const cand of candidates) {
+    const values = (cand.pageValues as Record<string, unknown>) ?? {};
+    let pfs = pageFieldsByPage.get(cand.pageId);
+    if (!pfs) {
+      pfs = await db
+        .select({
+          fieldKey: pageFieldsTable.fieldKey,
+          fieldType: pageFieldsTable.fieldType,
+          permissionsJson: pageFieldsTable.permissionsJson,
+        })
+        .from(pageFieldsTable)
+        .where(and(eq(pageFieldsTable.pageId, cand.pageId), eq(pageFieldsTable.isActive, true)));
+      pageFieldsByPage.set(cand.pageId, pfs);
+    }
+    const holder = pfs.find((f) => f.fieldType === "file" && matches(values[f.fieldKey]));
+    if (!holder) continue;
+    // Record view permission on the effective entity, honoring a mirror-page
+    // override for the page that owns the value.
+    const rp = await effectiveRecordPerm(req, perms, cand.entityId, cand.pageId);
+    if (!perms.superAdmin && !rp?.view) continue;
+    // Status row-visibility boundary: rows whose status is hidden for the
+    // viewer are excluded from every record/page-value read — the file
+    // fallback must not disclose their bytes either.
+    if (
+      cand.statusId != null &&
+      effectiveStatusVisibility(perms, cand.entityId).hiddenRowStatusIds.includes(cand.statusId)
+    )
+      continue;
+    if (
+      mostPermissiveFieldPerm(
+        holder.permissionsJson as FieldPermissions | null,
+        roleIds,
+        "view",
+        perms,
+        cand.entityId,
+        cand.pageId,
+      ) === "hidden"
+    )
+      continue;
+    const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, cand.entityId, cand.pageId);
+    if (scope === "own") {
+      let efs = entityFieldsByEntity.get(cand.entityId);
+      if (!efs) {
+        efs = await db
+          .select()
+          .from(entityFieldsTable)
+          .where(and(eq(entityFieldsTable.entityId, cand.entityId), eq(entityFieldsTable.isActive, true)));
+        entityFieldsByEntity.set(cand.entityId, efs);
+      }
+      if (
+        !(await isRecordOwned(
+          cand.entityId,
+          { id: cand.recordId, valuesJson: cand.recordValues },
+          scopeFieldKeys,
+          userId,
+          efs,
+        ))
+      )
+        continue;
+    }
     return true;
   }
   return false;

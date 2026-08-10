@@ -17,6 +17,7 @@ import {
   type DependencyFieldConfig,
   type FieldPermissions,
   type EntityField,
+  type FileFieldConfig,
 } from "@workspace/db";
 import { eq, asc, desc, and, ne, inArray, or, sql, type SQL } from "drizzle-orm";
 import { replaceSingleRelationLink, emitLinkChangedEvents } from "../lib/record-links";
@@ -35,6 +36,8 @@ import {
   mostPermissiveFieldPerm,
 } from "../middlewares/permissions";
 import { ownScopeWhere, isRecordOwned } from "./own-scope";
+import { validateFileValue, trashRemovedPageServerFiles } from "./records";
+import { isGoogleDriveModuleEnabled } from "../lib/googleDrive";
 import { emitEvent, EVENT_PAGE_FIELD_SAVED } from "../lib/events";
 import {
   ListPageFieldsParams,
@@ -293,6 +296,13 @@ function diffChangedKeys(
 export function validatePageValues(
   fields: PageField[],
   values: Record<string, unknown>,
+  /**
+   * Needed only when a `file`-type page field is present: whether the Google
+   * Drive module is enabled (blocks NEW gdrive values when off) and the
+   * previously stored page-value map (an unchanged gdrive value stays valid).
+   */
+  gdriveModuleEnabled = false,
+  prevValues: Record<string, unknown> = {},
 ): { values: Record<string, unknown> } | { error: string } {
   const byKey = new Map(fields.map((f) => [f.fieldKey, f]));
   for (const key of Object.keys(values)) {
@@ -373,6 +383,14 @@ export function validatePageValues(
       case "datetime": {
         if (typeof raw !== "string" || Number.isNaN(Date.parse(raw))) return { error: `Field "${field.fieldKey}" must be a valid date` };
         cleaned[field.fieldKey] = raw;
+        break;
+      }
+      case "file": {
+        // Same polymorphic server/gdrive/link union + source boundary as entity
+        // file fields — one validator for both storages.
+        const cleanedFile = validateFileValue(field, raw, gdriveModuleEnabled, prevValues[field.fieldKey]);
+        if (typeof cleanedFile === "string") return { error: cleanedFile };
+        cleaned[field.fieldKey] = cleanedFile;
         break;
       }
       default: {
@@ -493,6 +511,7 @@ router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (
         formulaConfigJson: clampFormulaDecimals(parsed.data.formulaConfigJson),
         percentConfigJson: clampFormulaDecimals(parsed.data.percentConfigJson),
         relationConfigJson: relationConfigToInsert ?? {},
+        fileConfigJson: (parsed.data.fileConfigJson ?? {}) as FileFieldConfig,
         fieldKey: key,
         pageId: params.data.pageId,
       })
@@ -655,6 +674,7 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
   if ("totalFillColor" in body) updateData.totalFillColor = body.totalFillColor ?? null;
   if ("totalTextColor" in body) updateData.totalTextColor = body.totalTextColor ?? null;
   if ("columnGroupId" in body) updateData.columnGroupId = body.columnGroupId ?? null;
+  if (body.fileConfigJson != null) updateData.fileConfigJson = body.fileConfigJson as FileFieldConfig;
   if (Object.keys(updateData).length === 0) {
     res.status(400).json({ error: "No fields to update" });
     return;
@@ -792,15 +812,16 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
     .from(pageFieldsTable)
     .where(and(eq(pageFieldsTable.pageId, pageId), eq(pageFieldsTable.isActive, true)));
   const incoming = (parsed.data.valuesJson ?? {}) as Record<string, unknown>;
-  const result = validatePageValues(fields, incoming);
-  if ("error" in result) {
-    res.status(400).json({ error: result.error });
-    return;
-  }
   const [existing] = await db
     .select({ id: pageRecordValuesTable.id, valuesJson: pageRecordValuesTable.valuesJson })
     .from(pageRecordValuesTable)
     .where(and(eq(pageRecordValuesTable.pageId, pageId), eq(pageRecordValuesTable.recordId, recordId)));
+  const prevValues = (existing?.valuesJson as Record<string, unknown> | undefined) ?? {};
+  const result = validatePageValues(fields, incoming, await isGoogleDriveModuleEnabled(), prevValues);
+  if ("error" in result) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
   if (existing) {
     await db
       .update(pageRecordValuesTable)
@@ -809,6 +830,9 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
   } else {
     await db.insert(pageRecordValuesTable).values({ pageId, recordId, valuesJson: result.values });
   }
+  // Local files removed from page-local file fields go to the file trash
+  // (best-effort, never blocks the write) — same recovery path as entity fields.
+  await trashRemovedPageServerFiles(req, entityId, pageId, recordId, prevValues, result.values);
   // Emit a best-effort event for any page-field whose value actually changed,
   // so automations with a `page_field_changed` trigger can react. The event
   // carries the page's effective entity so the engine can find that entity's

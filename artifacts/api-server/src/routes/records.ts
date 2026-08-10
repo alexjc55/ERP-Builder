@@ -127,7 +127,7 @@ export function isEmpty(value: unknown): boolean {
  * default: server upload only. This is the hard server boundary for which kinds
  * of file value may be stored, regardless of what the client offers.
  */
-function allowedFileSources(field: EntityField): FileSource[] {
+function allowedFileSources(field: FileFieldLike): FileSource[] {
   const cfg = field.fileConfigJson as FileFieldConfig | null | undefined;
   const list = cfg?.allowedSources;
   return Array.isArray(list) && list.length > 0 ? list : ["server"];
@@ -139,7 +139,9 @@ function allowedFileSources(field: EntityField): FileSource[] {
  * server/gdrive/link union and treats legacy (kind-less, path-bearing) values
  * as server. The value's source must be within the field's allowedSources.
  */
-function validateFileValue(field: EntityField, raw: unknown, gdriveModuleEnabled: boolean, prevValue?: unknown): Record<string, unknown> | string {
+export type FileFieldLike = { fieldKey: string; fileConfigJson?: unknown };
+
+export function validateFileValue(field: FileFieldLike, raw: unknown, gdriveModuleEnabled: boolean, prevValue?: unknown): Record<string, unknown> | string {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     return `Field "${field.fieldKey}" must be a file`;
   }
@@ -2667,7 +2669,7 @@ type TrashReason = "record_deleted" | "field_cleared" | "field_replaced";
  * Google Drive (`fileId`) and link (`url`) values are deliberately ignored.
  * Legacy values without a `kind` but with such a path are treated as server files.
  */
-function asServerFile(
+export function asServerFile(
   v: unknown,
 ): { path: string; name: string; size: number | null; contentType: string | null } | null {
   if (!v || typeof v !== "object" || Array.isArray(v)) return null;
@@ -2749,6 +2751,74 @@ async function trashRemovedServerFiles(
     );
   } catch (err) {
     req.log.error({ err }, "Failed to record removed files in the file trash");
+  }
+}
+
+/**
+ * Page-local twin of `trashRemovedServerFiles`: moves LOCAL files removed from a
+ * page-local file field (page_record_values) into the file trash. Same rules:
+ * server files only, best-effort, `newValues === null` means the record (and its
+ * page values) were deleted. Field display names come from page_fields.
+ * The actor is structural (Request satisfies it) so the automations engine can
+ * attribute AS-SYSTEM trash entries to the triggering user without a Request.
+ */
+export async function trashRemovedPageServerFiles(
+  req: { user?: { userId: number } | null; log: { error: (obj: unknown, msg: string) => void } },
+  entityId: number,
+  pageId: number,
+  recordId: number,
+  oldValues: Record<string, unknown>,
+  newValues: Record<string, unknown> | null,
+): Promise<void> {
+  const toTrash: {
+    fieldKey: string;
+    file: NonNullable<ReturnType<typeof asServerFile>>;
+    reason: TrashReason;
+  }[] = [];
+  for (const [key, oldVal] of Object.entries(oldValues)) {
+    const oldFile = asServerFile(oldVal);
+    if (!oldFile) continue;
+    if (newValues === null) {
+      toTrash.push({ fieldKey: key, file: oldFile, reason: "record_deleted" });
+      continue;
+    }
+    const newRaw = newValues[key];
+    const newFile = asServerFile(newRaw);
+    if (newFile && newFile.path === oldFile.path) continue; // unchanged
+    const hasNew = newRaw != null && newRaw !== "";
+    toTrash.push({ fieldKey: key, file: oldFile, reason: hasNew ? "field_replaced" : "field_cleared" });
+  }
+  if (toTrash.length === 0) return;
+
+  try {
+    const [entity] = await db
+      .select({ nameJson: entitiesTable.nameJson })
+      .from(entitiesTable)
+      .where(eq(entitiesTable.id, entityId))
+      .limit(1);
+    const fieldRows = await db
+      .select({ fieldKey: pageFieldsTable.fieldKey, nameJson: pageFieldsTable.nameJson })
+      .from(pageFieldsTable)
+      .where(eq(pageFieldsTable.pageId, pageId));
+    const fieldName = new Map(fieldRows.map((f) => [f.fieldKey, f.nameJson]));
+
+    await db.insert(deletedFilesTable).values(
+      toTrash.map((t) => ({
+        entityId,
+        entityNameJson: entity?.nameJson ?? null,
+        recordId,
+        fieldKey: t.fieldKey,
+        fieldNameJson: fieldName.get(t.fieldKey) ?? null,
+        fileName: t.file.name,
+        filePath: t.file.path,
+        fileSize: t.file.size,
+        contentType: t.file.contentType,
+        reason: t.reason,
+        deletedBy: req.user?.userId ?? null,
+      })),
+    );
+  } catch (err) {
+    req.log.error({ err }, "Failed to record removed page-local files in the file trash");
   }
 }
 
@@ -3117,11 +3187,29 @@ async function performRecordDelete(
   recordId: number,
   values: Record<string, unknown>,
 ): Promise<void> {
+  // Snapshot page-local values BEFORE the delete — the FK cascade wipes
+  // page_record_values together with the record, and any server files stored in
+  // page-local file fields must land in the trash too.
+  let pageFileEntries: { pageId: number; valuesJson: Record<string, unknown> }[] = [];
+  try {
+    pageFileEntries = (
+      await db
+        .select({ pageId: pageRecordValuesTable.pageId, valuesJson: pageRecordValuesTable.valuesJson })
+        .from(pageRecordValuesTable)
+        .where(eq(pageRecordValuesTable.recordId, recordId))
+    ).map((r) => ({ pageId: r.pageId, valuesJson: (r.valuesJson as Record<string, unknown>) ?? {} }));
+  } catch (err) {
+    req.log.error({ err }, "Failed to snapshot page-local values before record delete");
+  }
+
   await db.delete(entityRecordsTable).where(eq(entityRecordsTable.id, recordId));
 
   // Move the record's local files into the file trash so a mistaken delete is
   // recoverable (Drive/link values untouched). Best-effort; does not block.
   await trashRemovedServerFiles(req, entityId, recordId, values, null);
+  for (const pv of pageFileEntries) {
+    await trashRemovedPageServerFiles(req, entityId, pv.pageId, recordId, pv.valuesJson, null);
+  }
 
   // Audit: one deletion marker carrying a snapshot of the record's data so the
   // trail preserves what was removed even though the row is gone.

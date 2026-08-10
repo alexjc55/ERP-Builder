@@ -3443,6 +3443,21 @@ export const ListPageFieldsResponseItem = zod.object({
   "relatedPageId": zod.number().nullish().describe('Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field\'s link itself stays assignable.'),
   "writeThrough": zod.boolean().optional().describe('Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record\'s full editor in the related entity (subject to that entity\'s own permissions). The projected value itself stays read-only; ignored for relation fields and for page-source lookups (when relatedPageId is set).')
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
+  "fileConfigJson": zod.object({
+  "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional(),
+  "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.'),
+  "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.'),
+  "nameTemplateJson": zod.array(zod.object({
+  "kind": zod.enum(['text', 'field', 'hash', 'date', 'user']),
+  "text": zod.string().optional().describe('Literal text (kind=text).'),
+  "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
+  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string(),
+  "label": zod.string().optional()
+})).optional().describe('Fallback field keys (fields of other entities\/pages feeding the same folder); the first candidate with a non-empty value wins.')
+})).nullish().describe('Per-field Drive file-name template. Non-empty takes priority over the target folder\'s template; empty\/unset falls back to the folder.')
+}).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
@@ -3527,6 +3542,21 @@ export const CreatePageFieldBody = zod.object({
   "relatedPageId": zod.number().nullish().describe('Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field\'s link itself stays assignable.'),
   "writeThrough": zod.boolean().optional().describe('Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record\'s full editor in the related entity (subject to that entity\'s own permissions). The projected value itself stays read-only; ignored for relation fields and for page-source lookups (when relatedPageId is set).')
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
+  "fileConfigJson": zod.object({
+  "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional(),
+  "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.'),
+  "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.'),
+  "nameTemplateJson": zod.array(zod.object({
+  "kind": zod.enum(['text', 'field', 'hash', 'date', 'user']),
+  "text": zod.string().optional().describe('Literal text (kind=text).'),
+  "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
+  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string(),
+  "label": zod.string().optional()
+})).optional().describe('Fallback field keys (fields of other entities\/pages feeding the same folder); the first candidate with a non-empty value wins.')
+})).nullish().describe('Per-field Drive file-name template. Non-empty takes priority over the target folder\'s template; empty\/unset falls back to the folder.')
+}).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().default(createPageFieldBodyShowInTableDefault),
   "isPinned": zod.boolean().default(createPageFieldBodyIsPinnedDefault),
@@ -3602,6 +3632,21 @@ export const UpdatePageFieldBody = zod.object({
   "relatedPageId": zod.number().nullish().describe('Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field\'s link itself stays assignable.'),
   "writeThrough": zod.boolean().optional().describe('Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record\'s full editor in the related entity (subject to that entity\'s own permissions). The projected value itself stays read-only; ignored for relation fields and for page-source lookups (when relatedPageId is set).')
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
+  "fileConfigJson": zod.object({
+  "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional(),
+  "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.'),
+  "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.'),
+  "nameTemplateJson": zod.array(zod.object({
+  "kind": zod.enum(['text', 'field', 'hash', 'date', 'user']),
+  "text": zod.string().optional().describe('Literal text (kind=text).'),
+  "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
+  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string(),
+  "label": zod.string().optional()
+})).optional().describe('Fallback field keys (fields of other entities\/pages feeding the same folder); the first candidate with a non-empty value wins.')
+})).nullish().describe('Per-field Drive file-name template. Non-empty takes priority over the target folder\'s template; empty\/unset falls back to the folder.')
+}).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
@@ -3671,6 +3716,21 @@ export const UpdatePageFieldResponse = zod.object({
   "relatedPageId": zod.number().nullish().describe('Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field\'s link itself stays assignable.'),
   "writeThrough": zod.boolean().optional().describe('Lookup-only. When true, a lookup field becomes an editable gateway: clicking the cell opens the LINKED record\'s full editor in the related entity (subject to that entity\'s own permissions). The projected value itself stays read-only; ignored for relation fields and for page-source lookups (when relatedPageId is set).')
 }).optional().describe('Config for a relation-type page field (surfaces one field of a linked related record).'),
+  "fileConfigJson": zod.object({
+  "allowedSources": zod.array(zod.enum(['server', 'gdrive', 'link']).describe('A source a file-type field value may come from.')).optional(),
+  "driveFolderId": zod.string().optional().describe('Google Drive folder id this field\'s uploads land in (one of the admin-managed folders). Unset means the default upload folder.'),
+  "localFolderId": zod.number().optional().describe('Managed LOCAL folder id (local_folders.id) this field\'s `server` uploads land in. Unset means the default local folder.'),
+  "nameTemplateJson": zod.array(zod.object({
+  "kind": zod.enum(['text', 'field', 'hash', 'date', 'user']),
+  "text": zod.string().optional().describe('Literal text (kind=text).'),
+  "fieldKey": zod.string().optional().describe('Primary record field key whose value is substituted (kind=field).'),
+  "label": zod.string().optional().describe('Display-only snapshot of the field label for the admin UI (kind=field).'),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string(),
+  "label": zod.string().optional()
+})).optional().describe('Fallback field keys (fields of other entities\/pages feeding the same folder); the first candidate with a non-empty value wins.')
+})).nullish().describe('Per-field Drive file-name template. Non-empty takes priority over the target folder\'s template; empty\/unset falls back to the folder.')
+}).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),

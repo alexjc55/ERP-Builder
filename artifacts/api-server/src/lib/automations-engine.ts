@@ -42,6 +42,7 @@ import {
   isEmpty,
   UNIQUE_KEY_LOCK_NS,
   UniqueKeyError,
+  trashRemovedPageServerFiles,
 } from "../routes/records";
 import {
   writeAudit,
@@ -970,7 +971,7 @@ async function systemSetPageValue(
     const current: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(stored)) if (activeKeys.has(k)) current[k] = v;
     const merged = { ...current, [fieldKey]: value };
-    const result = validatePageValues(pageFields, merged);
+    const result = validatePageValues(pageFields, merged, await isGoogleDriveModuleEnabled(), current);
     if ("error" in result) {
       log.error({ pageId, fieldKey, error: result.error }, "systemSetPageValue: validation failed");
       return false;
@@ -983,6 +984,16 @@ async function systemSetPageValue(
     } else {
       await db.insert(pageRecordValuesTable).values({ pageId, recordId, valuesJson: result.values });
     }
+    // Same recovery guarantee as the user PUT path: a page-local server file
+    // replaced/cleared by an automation lands in the file trash (best-effort).
+    await trashRemovedPageServerFiles(
+      { user: actorUserId != null ? { userId: actorUserId } : null, log },
+      entityId,
+      pageId,
+      recordId,
+      current,
+      result.values,
+    );
     const changed =
       JSON.stringify(current[fieldKey] ?? null) !== JSON.stringify(result.values[fieldKey] ?? null);
     if (changed) {
