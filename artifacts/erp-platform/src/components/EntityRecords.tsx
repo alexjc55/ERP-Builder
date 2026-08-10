@@ -5799,7 +5799,7 @@ export function EntityRecords({
                                 }
                                 userOptions={userOptions}
                                 allFields={fields}
-                                rowValues={newRow}
+                                rowValues={{ ...newPageRow, ...newRow }}
                                 entityId={entityId}
                                 pageId={permPageId}
                               />

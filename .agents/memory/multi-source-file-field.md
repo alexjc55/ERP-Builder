@@ -131,3 +131,17 @@ Client invariant: the thumbnail is always an **image** (even for PDFs), so rende
 as `<img>` regardless of file type, and fall back to the full `BlobPreview` on
 *both* fetch rejection AND `<img>` `onError` (a 200 with a broken payload must still
 fall back). Revoke the thumbnail blob URL on the error path before falling back.
+
+## Per-folder file-name templates (Aug 2026)
+
+Managed Drive folders (`google_drive_folders.nameTemplateJson`) can define name
+templates: sections `text | field(fieldKey) | hash`, joined with `_`, original
+extension kept. Composition happens CLIENT-side at upload time
+(`lib/driveNaming.ts`) because new-record files upload before the record exists —
+field sections resolve from the current form draft (`rowValues`), so every
+FileFieldInput surface must receive the full draft (entity + page-local values
+merged). Template read endpoint `GET /google-drive/name-template` is auth-only
+(uploaders aren't admins); folder LIST/update stay admin. Empty/unresolvable
+sections are skipped; nothing resolves ⇒ original name. Field sections store only
+fieldKey (label is a display snapshot) — same-key ambiguity across entities is
+accepted v1.
