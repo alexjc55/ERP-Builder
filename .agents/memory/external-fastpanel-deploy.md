@@ -43,3 +43,5 @@ If `.env` changed or DB schema changed, source env first: `set -a; source .env; 
 - esbuild build script must be allowed (`allowBuilds` in pnpm-workspace.yaml) + `pnpm -r rebuild esbuild`; the esbuild "bin check" ELF SyntaxError is cosmetic.
 - Root `pnpm build` fails on mockup-sandbox — build api-server and erp-platform with `--filter` instead.
 - Low RAM: a 2G swapfile was added (fstab) after OOM kills during install/build.
+
+- Google Drive own-keys OAuth: redirect URI is derived from the request host (x-forwarded-host/Host), no REPLIT_DOMAINS needed on the external server. The Google OAuth app must be PUBLISHED (In production, no verification needed) — Testing mode revokes refresh tokens after 7 days, so Drive drops weekly.
