@@ -5,6 +5,9 @@ description: Durable decisions for entity-to-entity relations and record links (
 
 # Relations engine
 
+## Links read endpoint boundary (Aug 2026)
+GET /records/:id/links enforces the FULL record read boundary: source visible like GET /records/:id; each linked record re-checked against ITS entity's view perm + own-scope + hidden-row statuses; hidden fields stripped via presentRecord; invisible rows silently dropped (never 403 — no existence leak). `?direction=both` opt-in returns reverse links with a `direction` field; default stays source-only for UI compatibility. **Why:** it previously returned raw target records with only requireAuth — a real leak once machine keys (AI agents) could call it.
+
 ## Cardinality is enforced by partial unique indexes on a denormalized type
 Record links carry a denormalized `relationType` copied from the parent relation. The four cardinalities are enforced purely by DB indexes on `record_links`:
 - duplicate-pair: unique(relationId, source, target)
