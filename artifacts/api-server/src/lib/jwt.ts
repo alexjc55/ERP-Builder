@@ -10,6 +10,8 @@ export interface JwtPayload {
   impersonatorId?: number;
   /** Set when this token was issued via a passwordless guest link. Read-only access. */
   guest?: boolean;
+  /** Set when the request is authenticated with an AI-agent API key (not a JWT). */
+  agentId?: number;
 }
 
 export function signToken(payload: JwtPayload): string {

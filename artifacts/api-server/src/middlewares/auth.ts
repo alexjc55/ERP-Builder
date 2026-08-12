@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyToken, type JwtPayload } from "../lib/jwt";
+import { AI_AGENT_KEY_PREFIX, resolveAgentKey, isAllowedByMask } from "../lib/aiAgentAuth";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
@@ -47,6 +48,28 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   }
 
   const token = authHeader.slice(7);
+
+  // AI-agent API keys are opaque tokens (never JWTs). They resolve to the
+  // agent's backing user account, so all RBAC boundaries apply as usual; the
+  // capability mask is an extra hard method-level guard on top.
+  if (token.startsWith(AI_AGENT_KEY_PREFIX)) {
+    resolveAgentKey(token)
+      .then((agent) => {
+        if (!agent) {
+          res.status(401).json({ error: "Invalid or revoked agent key" });
+          return;
+        }
+        if (!isAllowedByMask(req, agent.mask)) {
+          res.status(403).json({ error: "Agent key does not permit this operation" });
+          return;
+        }
+        req.user = agent.payload;
+        next();
+      })
+      .catch(next);
+    return;
+  }
+
   const payload = verifyToken(token);
 
   if (!payload) {

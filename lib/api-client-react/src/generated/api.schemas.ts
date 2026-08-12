@@ -794,6 +794,50 @@ export interface ModuleUpdate {
   settingsJson?: ModuleUpdateSettingsJson;
 }
 
+export type AiAgentMask = typeof AiAgentMask[keyof typeof AiAgentMask];
+
+
+export const AiAgentMask = {
+  full: 'full',
+  read: 'read',
+  read_edit: 'read_edit',
+  read_edit_create: 'read_edit_create',
+  read_edit_create_delete: 'read_edit_create_delete',
+} as const;
+
+export interface AiAgent {
+  id: number;
+  name: string;
+  userId: number;
+  roleId: number;
+  capabilityMask: AiAgentMask;
+  tokenPrefix: string;
+  isActive: boolean;
+  lastUsedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AiAgentWithKey = AiAgent & {
+  /** The raw API key. Shown only once; store it now. */
+  plainKey: string;
+};
+
+export interface AiAgentInput {
+  /** @minLength 1 */
+  name: string;
+  roleId: number;
+  capabilityMask?: AiAgentMask;
+}
+
+export interface AiAgentUpdate {
+  /** @minLength 1 */
+  name?: string;
+  roleId?: number;
+  capabilityMask?: AiAgentMask;
+  isActive?: boolean;
+}
+
 export type ColumnGroupDisplayMode = typeof ColumnGroupDisplayMode[keyof typeof ColumnGroupDisplayMode];
 
 

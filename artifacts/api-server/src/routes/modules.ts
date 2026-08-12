@@ -19,7 +19,7 @@ const MODULE_KEY_RE = /^[a-z][a-z0-9_]*$/;
  * System modules are platform-managed (seeded, with a dedicated settings screen)
  * and may be toggled on/off but never deleted from the registry.
  */
-const SYSTEM_MODULE_KEYS = ["google_drive"];
+const SYSTEM_MODULE_KEYS = ["google_drive", "ai_agents"];
 
 /** Unwrap drizzle's query-error wrapper to find the underlying pg error. */
 function pgError(err: unknown): { code?: string; constraint?: string } | null {

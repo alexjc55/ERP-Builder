@@ -26,6 +26,7 @@ import EventsPage from "@/pages/admin/events";
 import ModulesPage from "@/pages/admin/modules";
 import ColumnGroupsPage from "@/pages/admin/column-groups";
 import GoogleDrivePage from "@/pages/admin/google-drive";
+import AiAgentsPage from "@/pages/admin/ai-agents";
 import ImportPage from "@/pages/admin/import";
 import FileTrashPage from "@/pages/admin/file-trash";
 import DynamicPage from "@/pages/dynamic";
@@ -209,6 +210,12 @@ function Router() {
       <Route path="/admin/column-groups">
         <ProtectedRoute adminCap="columnGroups">
           <ColumnGroupsPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/ai-agents">
+        <ProtectedRoute adminCap="modules">
+          <AiAgentsPage />
         </ProtectedRoute>
       </Route>
 

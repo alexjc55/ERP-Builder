@@ -6,6 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './aiAgent';
+export * from './aiAgentInput';
+export * from './aiAgentMask';
+export * from './aiAgentUpdate';
+export * from './aiAgentWithKey';
 export * from './appSettings';
 export * from './appSettingsDefaultLanguage';
 export * from './appSettingsTableStyle';

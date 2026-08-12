@@ -64,6 +64,7 @@ function GoogleDriveLogo({ className }: { className?: string }) {
  */
 const MODULE_SETTINGS_ROUTES: Record<string, string> = {
   google_drive: "/admin/google-drive",
+  ai_agents: "/admin/ai-agents",
 };
 
 export default function ModulesPage() {

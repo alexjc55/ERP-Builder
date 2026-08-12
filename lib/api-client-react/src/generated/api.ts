@@ -20,6 +20,10 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AiAgent,
+  AiAgentInput,
+  AiAgentUpdate,
+  AiAgentWithKey,
   AppSettings,
   AppSettingsUpdate,
   AuditLogEntry,
@@ -8083,6 +8087,366 @@ export const useDeleteModule = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteModuleMutationOptions(options));
+    }
+
+export const getListAiAgentsUrl = () => {
+
+
+
+
+  return `/api/ai-agents`
+}
+
+/**
+ * @summary List AI agents (modules admin)
+ */
+export const listAiAgents = async ( options?: RequestInit): Promise<AiAgent[]> => {
+
+  return customFetch<AiAgent[]>(getListAiAgentsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAiAgentsQueryKey = () => {
+    return [
+    `/api/ai-agents`
+    ] as const;
+    }
+
+
+export const getListAiAgentsQueryOptions = <TData = Awaited<ReturnType<typeof listAiAgents>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAiAgents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAiAgentsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAiAgents>>> = ({ signal }) => listAiAgents({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAiAgents>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAiAgentsQueryResult = NonNullable<Awaited<ReturnType<typeof listAiAgents>>>
+export type ListAiAgentsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List AI agents (modules admin)
+ */
+
+export function useListAiAgents<TData = Awaited<ReturnType<typeof listAiAgents>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAiAgents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAiAgentsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateAiAgentUrl = () => {
+
+
+
+
+  return `/api/ai-agents`
+}
+
+/**
+ * @summary Create an AI agent; the plain key is returned ONCE
+ */
+export const createAiAgent = async (aiAgentInput: AiAgentInput, options?: RequestInit): Promise<AiAgentWithKey> => {
+
+  return customFetch<AiAgentWithKey>(getCreateAiAgentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      aiAgentInput,)
+  }
+);}
+
+
+
+
+export const getCreateAiAgentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAiAgent>>, TError,{data: BodyType<AiAgentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAiAgent>>, TError,{data: BodyType<AiAgentInput>}, TContext> => {
+
+const mutationKey = ['createAiAgent'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAiAgent>>, {data: BodyType<AiAgentInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAiAgent(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAiAgentMutationResult = NonNullable<Awaited<ReturnType<typeof createAiAgent>>>
+    export type CreateAiAgentMutationBody = BodyType<AiAgentInput>
+    export type CreateAiAgentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create an AI agent; the plain key is returned ONCE
+ */
+export const useCreateAiAgent = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAiAgent>>, TError,{data: BodyType<AiAgentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAiAgent>>,
+        TError,
+        {data: BodyType<AiAgentInput>},
+        TContext
+      > => {
+      return useMutation(getCreateAiAgentMutationOptions(options));
+    }
+
+export const getUpdateAiAgentUrl = (id: number,) => {
+
+
+
+
+  return `/api/ai-agents/${id}`
+}
+
+/**
+ * @summary Update an AI agent (name, role, mask, active)
+ */
+export const updateAiAgent = async (id: number,
+    aiAgentUpdate: AiAgentUpdate, options?: RequestInit): Promise<AiAgent> => {
+
+  return customFetch<AiAgent>(getUpdateAiAgentUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      aiAgentUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateAiAgentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAiAgent>>, TError,{id: number;data: BodyType<AiAgentUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAiAgent>>, TError,{id: number;data: BodyType<AiAgentUpdate>}, TContext> => {
+
+const mutationKey = ['updateAiAgent'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAiAgent>>, {id: number;data: BodyType<AiAgentUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateAiAgent(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAiAgentMutationResult = NonNullable<Awaited<ReturnType<typeof updateAiAgent>>>
+    export type UpdateAiAgentMutationBody = BodyType<AiAgentUpdate>
+    export type UpdateAiAgentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update an AI agent (name, role, mask, active)
+ */
+export const useUpdateAiAgent = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAiAgent>>, TError,{id: number;data: BodyType<AiAgentUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAiAgent>>,
+        TError,
+        {id: number;data: BodyType<AiAgentUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateAiAgentMutationOptions(options));
+    }
+
+export const getDeleteAiAgentUrl = (id: number,) => {
+
+
+
+
+  return `/api/ai-agents/${id}`
+}
+
+/**
+ * @summary Delete an AI agent (revokes its key, deactivates backing account)
+ */
+export const deleteAiAgent = async (id: number, options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getDeleteAiAgentUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteAiAgentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAiAgent>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAiAgent>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteAiAgent'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAiAgent>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteAiAgent(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteAiAgentMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAiAgent>>>
+
+    export type DeleteAiAgentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete an AI agent (revokes its key, deactivates backing account)
+ */
+export const useDeleteAiAgent = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAiAgent>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteAiAgent>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteAiAgentMutationOptions(options));
+    }
+
+export const getRegenerateAiAgentKeyUrl = (id: number,) => {
+
+
+
+
+  return `/api/ai-agents/${id}/regenerate-key`
+}
+
+/**
+ * @summary Regenerate the agent's key; the old key stops working immediately
+ */
+export const regenerateAiAgentKey = async (id: number, options?: RequestInit): Promise<AiAgentWithKey> => {
+
+  return customFetch<AiAgentWithKey>(getRegenerateAiAgentKeyUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getRegenerateAiAgentKeyMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof regenerateAiAgentKey>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof regenerateAiAgentKey>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['regenerateAiAgentKey'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof regenerateAiAgentKey>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  regenerateAiAgentKey(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegenerateAiAgentKeyMutationResult = NonNullable<Awaited<ReturnType<typeof regenerateAiAgentKey>>>
+
+    export type RegenerateAiAgentKeyMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Regenerate the agent's key; the old key stops working immediately
+ */
+export const useRegenerateAiAgentKey = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof regenerateAiAgentKey>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof regenerateAiAgentKey>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRegenerateAiAgentKeyMutationOptions(options));
     }
 
 export const getListColumnGroupsUrl = () => {

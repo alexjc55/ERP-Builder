@@ -5394,6 +5394,104 @@ export const DeleteModuleResponse = zod.object({
 
 
 /**
+ * @summary List AI agents (modules admin)
+ */
+export const ListAiAgentsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "userId": zod.number(),
+  "roleId": zod.number(),
+  "capabilityMask": zod.enum(['full', 'read', 'read_edit', 'read_edit_create', 'read_edit_create_delete']),
+  "tokenPrefix": zod.string(),
+  "isActive": zod.boolean(),
+  "lastUsedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListAiAgentsResponse = zod.array(ListAiAgentsResponseItem)
+
+
+/**
+ * @summary Create an AI agent; the plain key is returned ONCE
+ */
+
+
+
+export const CreateAiAgentBody = zod.object({
+  "name": zod.string().min(1),
+  "roleId": zod.number(),
+  "capabilityMask": zod.enum(['full', 'read', 'read_edit', 'read_edit_create', 'read_edit_create_delete']).optional()
+})
+
+
+/**
+ * @summary Update an AI agent (name, role, mask, active)
+ */
+export const UpdateAiAgentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const UpdateAiAgentBody = zod.object({
+  "name": zod.string().min(1).optional(),
+  "roleId": zod.number().optional(),
+  "capabilityMask": zod.enum(['full', 'read', 'read_edit', 'read_edit_create', 'read_edit_create_delete']).optional(),
+  "isActive": zod.boolean().optional()
+})
+
+export const UpdateAiAgentResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "userId": zod.number(),
+  "roleId": zod.number(),
+  "capabilityMask": zod.enum(['full', 'read', 'read_edit', 'read_edit_create', 'read_edit_create_delete']),
+  "tokenPrefix": zod.string(),
+  "isActive": zod.boolean(),
+  "lastUsedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete an AI agent (revokes its key, deactivates backing account)
+ */
+export const DeleteAiAgentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteAiAgentResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
+ * @summary Regenerate the agent's key; the old key stops working immediately
+ */
+export const RegenerateAiAgentKeyParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RegenerateAiAgentKeyResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "userId": zod.number(),
+  "roleId": zod.number(),
+  "capabilityMask": zod.enum(['full', 'read', 'read_edit', 'read_edit_create', 'read_edit_create_delete']),
+  "tokenPrefix": zod.string(),
+  "isActive": zod.boolean(),
+  "lastUsedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "plainKey": zod.string().describe('The raw API key. Shown only once; store it now.')
+}))
+
+
+/**
  * @summary List all column groups
  */
 export const ListColumnGroupsResponseItem = zod.object({

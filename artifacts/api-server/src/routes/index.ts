@@ -27,6 +27,8 @@ import settingsRouter from "./settings";
 import deletedFilesRouter from "./deleted-files";
 import localFoldersRouter from "./local-folders";
 import importRouter from "./import";
+import aiAgentsRouter from "./ai-agents";
+import agentApiSchemaRouter from "./agent-api-schema";
 
 const router: IRouter = Router();
 
@@ -58,5 +60,7 @@ router.use(settingsRouter);
 router.use(deletedFilesRouter);
 router.use(localFoldersRouter);
 router.use(importRouter);
+router.use(aiAgentsRouter);
+router.use(agentApiSchemaRouter);
 
 export default router;

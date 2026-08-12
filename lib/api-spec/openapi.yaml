@@ -2418,6 +2418,99 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  /ai-agents:
+    get:
+      operationId: listAiAgents
+      tags: [aiAgents]
+      summary: List AI agents (modules admin)
+      responses:
+        "200":
+          description: List of AI agents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AiAgent"
+    post:
+      operationId: createAiAgent
+      tags: [aiAgents]
+      summary: Create an AI agent; the plain key is returned ONCE
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiAgentInput"
+      responses:
+        "201":
+          description: Agent created (includes plainKey, shown once)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiAgentWithKey"
+
+  /ai-agents/{id}:
+    put:
+      operationId: updateAiAgent
+      tags: [aiAgents]
+      summary: Update an AI agent (name, role, mask, active)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiAgentUpdate"
+      responses:
+        "200":
+          description: Agent updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiAgent"
+    delete:
+      operationId: deleteAiAgent
+      tags: [aiAgents]
+      summary: Delete an AI agent (revokes its key, deactivates backing account)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /ai-agents/{id}/regenerate-key:
+    post:
+      operationId: regenerateAiAgentKey
+      tags: [aiAgents]
+      summary: Regenerate the agent's key; the old key stops working immediately
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: New key issued (plainKey shown once)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiAgentWithKey"
+
   /column-groups:
     get:
       operationId: listColumnGroups
@@ -4428,6 +4521,75 @@ components:
         settingsJson:
           type: object
           additionalProperties: true
+
+    # AI AGENTS
+    AiAgentMask:
+      type: string
+      enum: [full, read, read_edit, read_edit_create, read_edit_create_delete]
+
+    AiAgent:
+      type: object
+      required: [id, name, userId, roleId, capabilityMask, tokenPrefix, isActive, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        userId:
+          type: integer
+        roleId:
+          type: integer
+        capabilityMask:
+          $ref: "#/components/schemas/AiAgentMask"
+        tokenPrefix:
+          type: string
+        isActive:
+          type: boolean
+        lastUsedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    AiAgentWithKey:
+      allOf:
+        - $ref: "#/components/schemas/AiAgent"
+        - type: object
+          required: [plainKey]
+          properties:
+            plainKey:
+              type: string
+              description: The raw API key. Shown only once; store it now.
+
+    AiAgentInput:
+      type: object
+      required: [name, roleId]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        roleId:
+          type: integer
+        capabilityMask:
+          $ref: "#/components/schemas/AiAgentMask"
+
+    AiAgentUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        roleId:
+          type: integer
+        capabilityMask:
+          $ref: "#/components/schemas/AiAgentMask"
+        isActive:
+          type: boolean
 
     # COLUMN GROUPS
     ColumnGroupDisplayMode:

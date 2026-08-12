@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { ensureAiAgentsModule } from "./routes/ai-agents";
 
 const rawPort = process.env["PORT"];
 
@@ -14,6 +15,9 @@ const port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
+
+// Seed the system module row (idempotent); the server still starts if it fails.
+ensureAiAgentsModule().catch((err) => logger.error({ err }, "Failed to seed ai_agents module"));
 
 app.listen(port, (err) => {
   if (err) {
