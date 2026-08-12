@@ -214,7 +214,9 @@ function buildAgentSchema(req: Request): Record<string, unknown> {
         get: {
           operationId: "listPages",
           summary: "List pages (a page can add page-local extra fields to an entity's records)",
-          description: "Each page has id, multilingual nameJson and entityId (or mirrorEntityId) — the entity whose records it shows.",
+          description:
+            "To find the pages of an entity: the entity object from /entities has pageId (its main page), and a page with mirrorEntityId=<entityId> is a mirror page of that entity. " +
+            "Pages without an entity return 400 from record-values — skip them.",
           responses: { "200": { description: "Pages", content: { "application/json": { schema: { type: "array", items: { type: "object" } } } } } },
         },
       },
