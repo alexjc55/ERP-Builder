@@ -5394,6 +5394,22 @@ export const DeleteModuleResponse = zod.object({
 
 
 /**
+ * @summary Users eligible for an agent's "act as" link, for the given role
+ */
+export const ListAiAgentActsAsCandidatesQueryParams = zod.object({
+  "roleId": zod.coerce.number()
+})
+
+export const ListAiAgentActsAsCandidatesResponseItem = zod.object({
+  "id": zod.number(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "email": zod.string()
+})
+export const ListAiAgentActsAsCandidatesResponse = zod.array(ListAiAgentActsAsCandidatesResponseItem)
+
+
+/**
  * @summary List AI agents (modules admin)
  */
 export const ListAiAgentsResponseItem = zod.object({
@@ -5402,6 +5418,7 @@ export const ListAiAgentsResponseItem = zod.object({
   "userId": zod.number(),
   "roleId": zod.number(),
   "capabilityMask": zod.enum(['full', 'read', 'read_edit', 'read_edit_create', 'read_edit_create_delete']),
+  "actsAsUserId": zod.number().nullish().describe('When set, the agent acts under this user\'s identity (roles, own-scope, audit) instead of its backing account.'),
   "tokenPrefix": zod.string(),
   "isActive": zod.boolean(),
   "lastUsedAt": zod.coerce.date().nullish(),
@@ -5420,7 +5437,8 @@ export const ListAiAgentsResponse = zod.array(ListAiAgentsResponseItem)
 export const CreateAiAgentBody = zod.object({
   "name": zod.string().min(1),
   "roleId": zod.number(),
-  "capabilityMask": zod.enum(['full', 'read', 'read_edit', 'read_edit_create', 'read_edit_create_delete']).optional()
+  "capabilityMask": zod.enum(['full', 'read', 'read_edit', 'read_edit_create', 'read_edit_create_delete']).optional(),
+  "actsAsUserId": zod.number().nullish()
 })
 
 
@@ -5438,7 +5456,8 @@ export const UpdateAiAgentBody = zod.object({
   "name": zod.string().min(1).optional(),
   "roleId": zod.number().optional(),
   "capabilityMask": zod.enum(['full', 'read', 'read_edit', 'read_edit_create', 'read_edit_create_delete']).optional(),
-  "isActive": zod.boolean().optional()
+  "isActive": zod.boolean().optional(),
+  "actsAsUserId": zod.number().nullish()
 })
 
 export const UpdateAiAgentResponse = zod.object({
@@ -5447,6 +5466,7 @@ export const UpdateAiAgentResponse = zod.object({
   "userId": zod.number(),
   "roleId": zod.number(),
   "capabilityMask": zod.enum(['full', 'read', 'read_edit', 'read_edit_create', 'read_edit_create_delete']),
+  "actsAsUserId": zod.number().nullish().describe('When set, the agent acts under this user\'s identity (roles, own-scope, audit) instead of its backing account.'),
   "tokenPrefix": zod.string(),
   "isActive": zod.boolean(),
   "lastUsedAt": zod.coerce.date().nullish(),
@@ -5481,6 +5501,7 @@ export const RegenerateAiAgentKeyResponse = zod.object({
   "userId": zod.number(),
   "roleId": zod.number(),
   "capabilityMask": zod.enum(['full', 'read', 'read_edit', 'read_edit_create', 'read_edit_create_delete']),
+  "actsAsUserId": zod.number().nullish().describe('When set, the agent acts under this user\'s identity (roles, own-scope, audit) instead of its backing account.'),
   "tokenPrefix": zod.string(),
   "isActive": zod.boolean(),
   "lastUsedAt": zod.coerce.date().nullish(),

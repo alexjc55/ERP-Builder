@@ -13,4 +13,5 @@ export interface AiAgentUpdate {
   roleId?: number;
   capabilityMask?: AiAgentMask;
   isActive?: boolean;
+  actsAsUserId?: number | null;
 }

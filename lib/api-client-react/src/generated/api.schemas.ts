@@ -811,6 +811,8 @@ export interface AiAgent {
   userId: number;
   roleId: number;
   capabilityMask: AiAgentMask;
+  /** When set, the agent acts under this user's identity (roles, own-scope, audit) instead of its backing account. */
+  actsAsUserId?: number | null;
   tokenPrefix: string;
   isActive: boolean;
   lastUsedAt?: string | null;
@@ -828,6 +830,7 @@ export interface AiAgentInput {
   name: string;
   roleId: number;
   capabilityMask?: AiAgentMask;
+  actsAsUserId?: number | null;
 }
 
 export interface AiAgentUpdate {
@@ -836,6 +839,14 @@ export interface AiAgentUpdate {
   roleId?: number;
   capabilityMask?: AiAgentMask;
   isActive?: boolean;
+  actsAsUserId?: number | null;
+}
+
+export interface AiAgentActsAsCandidate {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
 }
 
 export type ColumnGroupDisplayMode = typeof ColumnGroupDisplayMode[keyof typeof ColumnGroupDisplayMode];
@@ -3981,6 +3992,10 @@ eventName?: string;
 entityId?: number;
 limit?: number;
 offset?: number;
+};
+
+export type ListAiAgentActsAsCandidatesParams = {
+roleId: number;
 };
 
 export type GetGoogleDriveNameTemplateParams = {

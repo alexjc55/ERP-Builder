@@ -6,6 +6,8 @@ import {
   useUpdateAiAgent,
   useDeleteAiAgent,
   useRegenerateAiAgentKey,
+  useListAiAgentActsAsCandidates,
+  getListAiAgentActsAsCandidatesQueryKey,
   useListRoles,
   type AiAgent,
   type AiAgentMask,
@@ -85,6 +87,11 @@ export default function AiAgentsPage() {
   const [name, setName] = useState("");
   const [roleId, setRoleId] = useState<string>("");
   const [mask, setMask] = useState<AiAgentMask>("read");
+  const [actsAsUserId, setActsAsUserId] = useState<string>("none");
+  const { data: actsAsCandidates = [] } = useListAiAgentActsAsCandidates(
+    { roleId: Number(roleId) },
+    { query: { enabled: dialogOpen && Boolean(roleId), queryKey: getListAiAgentActsAsCandidatesQueryKey({ roleId: Number(roleId) }) } },
+  );
   const [deleting, setDeleting] = useState<AiAgent | null>(null);
   const [regenTarget, setRegenTarget] = useState<AiAgent | null>(null);
   const [issuedKey, setIssuedKey] = useState<string | null>(null);
@@ -128,6 +135,7 @@ export default function AiAgentsPage() {
     setName("");
     setRoleId(roles[0] ? String(roles[0].id) : "");
     setMask("read");
+    setActsAsUserId("none");
     setDialogOpen(true);
   };
   const openEdit = (a: AiAgent) => {
@@ -135,14 +143,21 @@ export default function AiAgentsPage() {
     setName(a.name);
     setRoleId(String(a.roleId));
     setMask(a.capabilityMask);
+    setActsAsUserId(a.actsAsUserId != null ? String(a.actsAsUserId) : "none");
     setDialogOpen(true);
   };
   const submit = () => {
     if (!name.trim() || !roleId) return;
+    const data = {
+      name: name.trim(),
+      roleId: Number(roleId),
+      capabilityMask: mask,
+      actsAsUserId: actsAsUserId === "none" ? null : Number(actsAsUserId),
+    };
     if (editing) {
-      updateMutation.mutate({ id: editing.id, data: { name: name.trim(), roleId: Number(roleId), capabilityMask: mask } });
+      updateMutation.mutate({ id: editing.id, data });
     } else {
-      createMutation.mutate({ data: { name: name.trim(), roleId: Number(roleId), capabilityMask: mask } });
+      createMutation.mutate({ data });
     }
   };
 
@@ -225,6 +240,11 @@ export default function AiAgentsPage() {
                       <Badge variant="secondary" className="bg-slate-100 text-slate-600">
                         {maskLabel(t, a.capabilityMask)}
                       </Badge>
+                      {a.actsAsUserId != null && (
+                        <Badge variant="secondary" className="bg-violet-50 text-violet-700">
+                          {t("aiAgents.actsAsBadge", "От лица пользователя")}
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-xs text-slate-400 mt-1">
                       {t("aiAgents.keyPrefix", "Ключ")}: <span className="font-mono">{a.tokenPrefix}</span>
@@ -271,7 +291,7 @@ export default function AiAgentsPage() {
             </div>
             <div className="space-y-1.5">
               <Label>{t("aiAgents.role", "Роль (границы доступа)")}</Label>
-              <Select value={roleId} onValueChange={setRoleId}>
+              <Select value={roleId} onValueChange={(v) => { setRoleId(v); setActsAsUserId("none"); }}>
                 <SelectTrigger><SelectValue placeholder={t("aiAgents.rolePick", "Выберите роль")} /></SelectTrigger>
                 <SelectContent>
                   {roles.map((r) => (
@@ -279,6 +299,21 @@ export default function AiAgentsPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("aiAgents.actsAs", "Работать от лица пользователя")}</Label>
+              <Select value={actsAsUserId} onValueChange={setActsAsUserId}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{t("aiAgents.actsAsNone", "Не выбран (от собственного имени)")}</SelectItem>
+                  {actsAsCandidates.map((u) => (
+                    <SelectItem key={u.id} value={String(u.id)}>{u.firstName} {u.lastName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-400">
+                {t("aiAgents.actsAsHint", "Необязательно. Если выбран — агент видит и делает всё от лица этого пользователя: его роли, область «только свои» и авторство действий. Показаны пользователи с выбранной ролью.")}
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label>{t("aiAgents.mask", "Возможности в рамках роли")}</Label>

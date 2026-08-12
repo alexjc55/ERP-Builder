@@ -21,6 +21,7 @@ import type {
 
 import type {
   AiAgent,
+  AiAgentActsAsCandidate,
   AiAgentInput,
   AiAgentUpdate,
   AiAgentWithKey,
@@ -80,6 +81,7 @@ import type {
   ImpersonateInput,
   LinkInput,
   LinkedRecord,
+  ListAiAgentActsAsCandidatesParams,
   ListEventsParams,
   ListUsersParams,
   LocalFolder,
@@ -8088,6 +8090,90 @@ export const useDeleteModule = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getDeleteModuleMutationOptions(options));
     }
+
+export const getListAiAgentActsAsCandidatesUrl = (params: ListAiAgentActsAsCandidatesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/ai-agents/acts-as-candidates?${stringifiedParams}` : `/api/ai-agents/acts-as-candidates`
+}
+
+/**
+ * @summary Users eligible for an agent's "act as" link, for the given role
+ */
+export const listAiAgentActsAsCandidates = async (params: ListAiAgentActsAsCandidatesParams, options?: RequestInit): Promise<AiAgentActsAsCandidate[]> => {
+
+  return customFetch<AiAgentActsAsCandidate[]>(getListAiAgentActsAsCandidatesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAiAgentActsAsCandidatesQueryKey = (params?: ListAiAgentActsAsCandidatesParams,) => {
+    return [
+    `/api/ai-agents/acts-as-candidates`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAiAgentActsAsCandidatesQueryOptions = <TData = Awaited<ReturnType<typeof listAiAgentActsAsCandidates>>, TError = ErrorType<unknown>>(params: ListAiAgentActsAsCandidatesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAiAgentActsAsCandidates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAiAgentActsAsCandidatesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAiAgentActsAsCandidates>>> = ({ signal }) => listAiAgentActsAsCandidates(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAiAgentActsAsCandidates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAiAgentActsAsCandidatesQueryResult = NonNullable<Awaited<ReturnType<typeof listAiAgentActsAsCandidates>>>
+export type ListAiAgentActsAsCandidatesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Users eligible for an agent's "act as" link, for the given role
+ */
+
+export function useListAiAgentActsAsCandidates<TData = Awaited<ReturnType<typeof listAiAgentActsAsCandidates>>, TError = ErrorType<unknown>>(
+ params: ListAiAgentActsAsCandidatesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAiAgentActsAsCandidates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAiAgentActsAsCandidatesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getListAiAgentsUrl = () => {
 

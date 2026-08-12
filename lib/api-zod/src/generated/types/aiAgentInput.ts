@@ -12,4 +12,5 @@ export interface AiAgentInput {
   name: string;
   roleId: number;
   capabilityMask?: AiAgentMask;
+  actsAsUserId?: number | null;
 }

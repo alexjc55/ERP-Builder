@@ -34,6 +34,13 @@ export const aiAgentsTable = pgTable("ai_agents", {
   /** Backing passwordless user account (cannot log in; carries roleId, authorship, audit). */
   userId: integer("user_id").notNull(),
   roleId: integer("role_id").notNull(),
+  /**
+   * Optional "act as this user": when set, agent requests run under THIS
+   * user's identity (their full role set, own-scope, audit attribution)
+   * instead of the backing account. Never a superAdmin, never another
+   * agent-backed account (validated in the route). Null = act as backing user.
+   */
+  actsAsUserId: integer("acts_as_user_id"),
   capabilityMask: text("capability_mask").notNull().default("read"),
   tokenHash: text("token_hash").notNull().unique(),
   /** First characters of the key, for display ("agk_ab12…"). */

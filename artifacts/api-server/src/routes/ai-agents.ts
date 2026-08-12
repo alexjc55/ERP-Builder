@@ -1,9 +1,9 @@
 import { Router, type IRouter } from "express";
-import { db, aiAgentsTable, usersTable, rolesTable, modulesTable, AI_AGENT_MASKS, type AiAgentMask } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, aiAgentsTable, usersTable, rolesTable, userRolesTable, modulesTable, AI_AGENT_MASKS, type AiAgentMask, type RolePermissions } from "@workspace/db";
+import { eq, and, inArray } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { requireAuth, invalidateUserAliveCache } from "../middlewares/auth";
-import { requireAdmin } from "../middlewares/permissions";
+import { requireAdmin, isPrivilegedRole } from "../middlewares/permissions";
 import { generateAgentKey, invalidateAgentCache, AI_AGENTS_MODULE_KEY } from "../lib/aiAgentAuth";
 import {
   CreateAiAgentBody,
@@ -32,6 +32,79 @@ async function roleExists(roleId: number): Promise<boolean> {
   return Boolean(row);
 }
 
+/**
+ * Validate an "act as user" link. The linked user must be a real, active,
+ * human account whose FULL role set (primary + additional) contains no
+ * privileged role — otherwise a modules-cap admin could mint себе a key that
+ * acts as a superAdmin/admin (privilege escalation), or chain agents.
+ * Returns an error message or null when valid.
+ */
+async function validateActsAsUser(userId: number): Promise<string | null> {
+  const [user] = await db
+    .select({ id: usersTable.id, roleId: usersTable.roleId, isActive: usersTable.isActive })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+  if (!user || !user.isActive) return "Пользователь не найден или заблокирован";
+  const [agentBacked] = await db
+    .select({ id: aiAgentsTable.id })
+    .from(aiAgentsTable)
+    .where(eq(aiAgentsTable.userId, userId))
+    .limit(1);
+  if (agentBacked) return "Нельзя выбрать учётную запись другого ИИ-агента";
+  const extraRoles = await db
+    .select({ roleId: userRolesTable.roleId })
+    .from(userRolesTable)
+    .where(eq(userRolesTable.userId, userId));
+  const roleIds = [...new Set([user.roleId, ...extraRoles.map((r) => r.roleId)])];
+  const roles = await db
+    .select({ permissionsJson: rolesTable.permissionsJson })
+    .from(rolesTable)
+    .where(inArray(rolesTable.id, roleIds));
+  if (roles.some((r) => isPrivilegedRole(r.permissionsJson as RolePermissions))) {
+    return "Нельзя работать от лица администратора";
+  }
+  return null;
+}
+
+/**
+ * Users eligible for the "act as" link of an agent with the given role:
+ * active, human (not agent-backed), non-privileged, and having roleId in
+ * their FULL role set (primary or additional).
+ */
+router.get("/ai-agents/acts-as-candidates", requireAuth, requireAdmin("modules"), async (req, res): Promise<void> => {
+  const roleId = Number(req.query.roleId);
+  if (!Number.isInteger(roleId) || roleId <= 0) {
+    res.status(400).json({ error: "roleId is required" });
+    return;
+  }
+  const viaExtra = db
+    .select({ userId: userRolesTable.userId })
+    .from(userRolesTable)
+    .where(eq(userRolesTable.roleId, roleId));
+  const users = await db
+    .select({ id: usersTable.id, firstName: usersTable.firstName, lastName: usersTable.lastName, email: usersTable.email, roleId: usersTable.roleId })
+    .from(usersTable)
+    .where(and(eq(usersTable.isActive, true)))
+    .orderBy(usersTable.firstName);
+  const extraSet = new Set((await viaExtra).map((r) => r.userId));
+  const agentUserIds = new Set((await db.select({ userId: aiAgentsTable.userId }).from(aiAgentsTable)).map((r) => r.userId));
+  // Privileged roles (superAdmin / any admin cap) disqualify a user entirely.
+  const allRoles = await db.select({ id: rolesTable.id, permissionsJson: rolesTable.permissionsJson }).from(rolesTable);
+  const privilegedRoleIds = new Set(allRoles.filter((r) => isPrivilegedRole(r.permissionsJson as RolePermissions)).map((r) => r.id));
+  const allUserRoles = await db.select({ userId: userRolesTable.userId, roleId: userRolesTable.roleId }).from(userRolesTable);
+  const privilegedUserIds = new Set(allUserRoles.filter((r) => privilegedRoleIds.has(r.roleId)).map((r) => r.userId));
+  const candidates = users
+    .filter((u) =>
+      !agentUserIds.has(u.id) &&
+      (u.roleId === roleId || extraSet.has(u.id)) &&
+      !privilegedRoleIds.has(u.roleId) &&
+      !privilegedUserIds.has(u.id),
+    )
+    .map((u) => ({ id: u.id, firstName: u.firstName, lastName: u.lastName, email: u.email }));
+  res.json(candidates);
+});
+
 router.get("/ai-agents", requireAuth, requireAdmin("modules"), async (_req, res): Promise<void> => {
   const agents = await db.select().from(aiAgentsTable).orderBy(aiAgentsTable.createdAt);
   res.json(agents);
@@ -57,6 +130,14 @@ router.post("/ai-agents", requireAuth, requireAdmin("modules"), async (req, res)
     res.status(400).json({ error: "Role not found" });
     return;
   }
+  const actsAsUserId = parsed.data.actsAsUserId ?? null;
+  if (actsAsUserId != null) {
+    const err = await validateActsAsUser(actsAsUserId);
+    if (err) {
+      res.status(400).json({ error: err });
+      return;
+    }
+  }
 
   const key = generateAgentKey();
   const agent = await db.transaction(async (tx) => {
@@ -80,6 +161,7 @@ router.post("/ai-agents", requireAuth, requireAdmin("modules"), async (req, res)
         userId: user.id,
         roleId: parsed.data.roleId,
         capabilityMask: mask,
+        actsAsUserId,
         tokenHash: key.tokenHash,
         tokenPrefix: key.tokenPrefix,
       })
@@ -132,6 +214,17 @@ router.put("/ai-agents/:id", requireAuth, requireAdmin("modules"), async (req, r
     updateData.capabilityMask = parsed.data.capabilityMask;
   }
   if (parsed.data.isActive != null) updateData.isActive = parsed.data.isActive;
+  if ("actsAsUserId" in parsed.data) {
+    const actsAsUserId = parsed.data.actsAsUserId ?? null;
+    if (actsAsUserId != null) {
+      const err = await validateActsAsUser(actsAsUserId);
+      if (err) {
+        res.status(400).json({ error: err });
+        return;
+      }
+    }
+    updateData.actsAsUserId = actsAsUserId;
+  }
 
   if (Object.keys(updateData).length === 0) {
     res.status(400).json({ error: "No fields to update" });

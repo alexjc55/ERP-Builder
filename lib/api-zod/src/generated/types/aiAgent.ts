@@ -13,6 +13,8 @@ export interface AiAgent {
   userId: number;
   roleId: number;
   capabilityMask: AiAgentMask;
+  /** When set, the agent acts under this user's identity (roles, own-scope, audit) instead of its backing account. */
+  actsAsUserId?: number | null;
   tokenPrefix: string;
   isActive: boolean;
   lastUsedAt?: Date | null;

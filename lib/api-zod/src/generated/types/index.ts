@@ -7,6 +7,7 @@
  */
 
 export * from './aiAgent';
+export * from './aiAgentActsAsCandidate';
 export * from './aiAgentInput';
 export * from './aiAgentMask';
 export * from './aiAgentUpdate';
@@ -159,6 +160,7 @@ export * from './importRowResultStatus';
 export * from './importRowValues';
 export * from './linkedRecord';
 export * from './linkInput';
+export * from './listAiAgentActsAsCandidatesParams';
 export * from './listEventsParams';
 export * from './listUsersParams';
 export * from './localFolder';

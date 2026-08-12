@@ -2418,6 +2418,27 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  /ai-agents/acts-as-candidates:
+    get:
+      operationId: listAiAgentActsAsCandidates
+      tags: [aiAgents]
+      summary: Users eligible for an agent's "act as" link, for the given role
+      parameters:
+        - name: roleId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Eligible users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AiAgentActsAsCandidate"
+
   /ai-agents:
     get:
       operationId: listAiAgents
@@ -4541,6 +4562,10 @@ components:
           type: integer
         capabilityMask:
           $ref: "#/components/schemas/AiAgentMask"
+        actsAsUserId:
+          type: integer
+          nullable: true
+          description: When set, the agent acts under this user's identity (roles, own-scope, audit) instead of its backing account.
         tokenPrefix:
           type: string
         isActive:
@@ -4577,6 +4602,9 @@ components:
           type: integer
         capabilityMask:
           $ref: "#/components/schemas/AiAgentMask"
+        actsAsUserId:
+          type: integer
+          nullable: true
 
     AiAgentUpdate:
       type: object
@@ -4590,6 +4618,22 @@ components:
           $ref: "#/components/schemas/AiAgentMask"
         isActive:
           type: boolean
+        actsAsUserId:
+          type: integer
+          nullable: true
+
+    AiAgentActsAsCandidate:
+      type: object
+      required: [id, firstName, lastName, email]
+      properties:
+        id:
+          type: integer
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
 
     # COLUMN GROUPS
     ColumnGroupDisplayMode:

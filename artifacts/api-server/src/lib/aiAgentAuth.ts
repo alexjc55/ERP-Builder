@@ -67,6 +67,7 @@ export async function resolveAgentKey(plainKey: string): Promise<{ payload: JwtP
         agentId: aiAgentsTable.id,
         userId: aiAgentsTable.userId,
         roleId: aiAgentsTable.roleId,
+        actsAsUserId: aiAgentsTable.actsAsUserId,
         capabilityMask: aiAgentsTable.capabilityMask,
         agentActive: aiAgentsTable.isActive,
         userActive: usersTable.isActive,
@@ -77,8 +78,30 @@ export async function resolveAgentKey(plainKey: string): Promise<{ payload: JwtP
       .limit(1);
 
     if (row && row.agentActive && row.userActive) {
-      payload = { userId: row.userId, roleId: row.roleId, agentId: row.agentId };
-      mask = row.capabilityMask as AiAgentMask;
+      let effectiveUserId = row.userId;
+      let effectiveRoleId = row.roleId;
+      let actsAsOk = true;
+      if (row.actsAsUserId != null) {
+        // Act-as: the agent runs under the linked user's identity (their full
+        // role set, own-scope, audit). If that user is gone/blocked, the key
+        // is DENIED rather than silently falling back to the backing account —
+        // a fallback would quietly change what data the agent sees.
+        const [actsAs] = await db
+          .select({ id: usersTable.id, roleId: usersTable.roleId, isActive: usersTable.isActive })
+          .from(usersTable)
+          .where(eq(usersTable.id, row.actsAsUserId))
+          .limit(1);
+        if (actsAs && actsAs.isActive) {
+          effectiveUserId = actsAs.id;
+          effectiveRoleId = actsAs.roleId;
+        } else {
+          actsAsOk = false;
+        }
+      }
+      if (actsAsOk) {
+        payload = { userId: effectiveUserId, roleId: effectiveRoleId, agentId: row.agentId };
+        mask = row.capabilityMask as AiAgentMask;
+      }
       // Best-effort usage timestamp, at most once per cache window.
       void db
         .update(aiAgentsTable)
