@@ -400,7 +400,7 @@ export async function validateUserRefs(fields: EntityField[], values: Record<str
  * Resolve the requester's field-access context for an entity: which field keys
  * are hidden (stripped from responses) and which are editable (writable).
  */
-async function fieldAccessContext(
+export async function fieldAccessContext(
   req: Request,
   entityId: number,
   fields: EntityField[],
@@ -435,7 +435,7 @@ function stripHidden<T extends { valuesJson: unknown }>(record: T, hidden: Set<s
  * created_at fields have no stored value — the injected ISO value is display
  * data only (writes drop the key), so this cannot round-trip into storage.
  */
-function presentRecord<T extends { valuesJson: unknown; createdAt: Date | string }>(
+export function presentRecord<T extends { valuesJson: unknown; createdAt: Date | string }>(
   record: T,
   hidden: Set<string>,
   fields: EntityField[],

@@ -8,11 +8,13 @@ import {
   RELATION_TYPES,
   type RelationType,
 } from "@workspace/db";
-import { eq, and, ne, asc, desc, inArray, sql } from "drizzle-orm";
+import { eq, and, or, ne, asc, desc, inArray, sql } from "drizzle-orm";
 import { relationLinkLockViolation } from "../lib/relation-lock";
 import { emitLinkChangedEvents } from "../lib/record-links";
 import { requireAuth } from "../middlewares/auth";
-import { requireAdmin, getPermissions, canRecord } from "../middlewares/permissions";
+import { requireAdmin, getPermissions, canRecord, effectiveScope, effectiveStatusVisibility } from "../middlewares/permissions";
+import { isRecordOwned } from "./own-scope";
+import { loadActiveFields, fieldAccessContext, presentRecord } from "./records";
 import {
   ListEntityRelationsParams,
   CreateEntityRelationParams,
@@ -310,20 +312,53 @@ router.delete("/relations/:id", requireAuth, requireAdmin("entities"), async (re
 
 // ---- Record links (data) ----
 
+// Full read boundary for the linked-records listing. The source record must be
+// visible to the viewer exactly like GET /records/:id (view perm + own-scope +
+// row-hidden status), and every linked record is re-checked against ITS entity's
+// boundary — invisible rows are silently dropped (never a leak, never a 403 that
+// reveals existence). Hidden fields are stripped per entity via presentRecord.
 router.get("/records/:recordId/links", requireAuth, async (req, res): Promise<void> => {
   const params = ListRecordLinksParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  if ((await recordEntityId(params.data.recordId)) === null) {
+  const recordId = params.data.recordId;
+  const [source] = await db.select().from(entityRecordsTable).where(eq(entityRecordsTable.id, recordId)).limit(1);
+  if (!source) {
     res.status(404).json({ error: "Record not found" });
     return;
   }
+
+  const perms = await getPermissions(req);
+  if (!canRecord(perms, source.entityId, "view")) {
+    res.status(404).json({ error: "Record not found" });
+    return;
+  }
+  const sourceFields = await loadActiveFields(source.entityId);
+  const { scope: srcScope, scopeFieldKeys: srcScopeKeys } = effectiveScope(perms, source.entityId);
+  if (srcScope === "own" && !(await isRecordOwned(source.entityId, source, srcScopeKeys, req.user!.userId, sourceFields))) {
+    res.status(404).json({ error: "Record not found" });
+    return;
+  }
+  const srcVis = effectiveStatusVisibility(perms, source.entityId);
+  if (source.statusId != null && srcVis.hiddenRowStatusIds.includes(source.statusId)) {
+    res.status(404).json({ error: "Record not found" });
+    return;
+  }
+
+  // ?direction=both also returns links where this record is the TARGET (the
+  // other record then comes back as `record`). Default stays source-only for
+  // backward compatibility with existing UI consumers.
+  const both = req.query.direction === "both";
   const links = await db
     .select()
     .from(recordLinksTable)
-    .where(eq(recordLinksTable.sourceRecordId, params.data.recordId))
+    .where(
+      both
+        ? or(eq(recordLinksTable.sourceRecordId, recordId), eq(recordLinksTable.targetRecordId, recordId))
+        : eq(recordLinksTable.sourceRecordId, recordId),
+    )
     .orderBy(desc(recordLinksTable.createdAt));
 
   if (links.length === 0) {
@@ -331,17 +366,56 @@ router.get("/records/:recordId/links", requireAuth, async (req, res): Promise<vo
     return;
   }
 
-  const targetIds = links.map((l) => l.targetRecordId);
-  const targets = await db.select().from(entityRecordsTable).where(inArray(entityRecordsTable.id, targetIds));
-  const targetById = new Map(targets.map((t) => [t.id, t]));
+  const otherIds = [...new Set(links.map((l) => (l.sourceRecordId === recordId ? l.targetRecordId : l.sourceRecordId)))];
+  const others = await db.select().from(entityRecordsTable).where(inArray(entityRecordsTable.id, otherIds));
+  const otherById = new Map(others.map((t) => [t.id, t]));
 
-  const result = links
-    .map((link) => {
-      const record = targetById.get(link.targetRecordId);
-      if (!record) return null;
-      return { linkId: link.id, relationId: link.relationId, record };
-    })
-    .filter((x): x is { linkId: number; relationId: number; record: typeof entityRecordsTable.$inferSelect } => x !== null);
+  // Per-entity boundary context, computed once per linked entity.
+  type EntityCtx = {
+    visible: boolean;
+    fields: Awaited<ReturnType<typeof loadActiveFields>>;
+    scope: ReturnType<typeof effectiveScope>;
+    hiddenRowStatusIds: number[];
+    hidden: Set<string>;
+  };
+  const ctxByEntity = new Map<number, EntityCtx>();
+  const entityCtx = async (entityId: number): Promise<EntityCtx> => {
+    let ctx = ctxByEntity.get(entityId);
+    if (!ctx) {
+      if (!canRecord(perms, entityId, "view")) {
+        ctx = { visible: false, fields: [], scope: { scope: "all", scopeFieldKeys: [] }, hiddenRowStatusIds: [], hidden: new Set() };
+      } else {
+        const fields = await loadActiveFields(entityId);
+        const { hidden } = await fieldAccessContext(req, entityId, fields);
+        ctx = {
+          visible: true,
+          fields,
+          scope: effectiveScope(perms, entityId),
+          hiddenRowStatusIds: effectiveStatusVisibility(perms, entityId).hiddenRowStatusIds,
+          hidden,
+        };
+      }
+      ctxByEntity.set(entityId, ctx);
+    }
+    return ctx;
+  };
+
+  const result: Array<{ linkId: number; relationId: number; direction: "source" | "target"; record: unknown }> = [];
+  for (const link of links) {
+    const otherId = link.sourceRecordId === recordId ? link.targetRecordId : link.sourceRecordId;
+    const record = otherById.get(otherId);
+    if (!record) continue;
+    const ctx = await entityCtx(record.entityId);
+    if (!ctx.visible) continue;
+    if (record.statusId != null && ctx.hiddenRowStatusIds.includes(record.statusId)) continue;
+    if (ctx.scope.scope === "own" && !(await isRecordOwned(record.entityId, record, ctx.scope.scopeFieldKeys, req.user!.userId, ctx.fields))) continue;
+    result.push({
+      linkId: link.id,
+      relationId: link.relationId,
+      direction: link.sourceRecordId === recordId ? "source" : "target",
+      record: presentRecord(record, ctx.hidden, ctx.fields),
+    });
+  }
 
   res.json(result);
 });

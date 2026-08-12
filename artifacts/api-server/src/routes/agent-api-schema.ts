@@ -70,7 +70,12 @@ function buildAgentSchema(req: Request): Record<string, unknown> {
         "for kind=gdrive via GET /google-drive/files/{fileId}/content; for kind=link just give the url to the user. " +
         "Query details (queryRecords): filter operators are eq, neq, contains, gt, gte, lt, lte, is_empty, is_not_empty; `filterConjunction` is and|or; " +
         "for 'about 2 years ago' use a gte/lte range on a date field or on `__created_at__`; `sorts` items are {field, direction: asc|desc}; " +
-        "the response is {data: Record[], total} where each record has id, statusId, createdAt and valuesJson keyed by fieldKey.",
+        "the response is {data: Record[], total} where each record has id, statusId, createdAt and valuesJson keyed by fieldKey. " +
+        "IMPORTANT — linked records: relations between records (e.g. project ↔ its orders/items) are NOT stored in valuesJson and cannot be found by text search on the other entity. " +
+        "After finding a record's id, call GET /records/{id}/links?direction=both to get ALL records linked to it (its orders, items, etc.) with their full valuesJson, then filter/read them locally. " +
+        "Archive: archived records are EXCLUDED from queryRecords by default; if something is not found, retry with \"archived\": true — closed/old orders are often archived, not absent. " +
+        "Page-local fields: some pages add their OWN extra fields to records (stored separately from entity fields). To get the complete picture of a record, also check GET /pages, then " +
+        "GET /pages/{pageId}/fields and GET /pages/{pageId}/record-values for pages of that entity, and merge those values with the record's valuesJson by recordId.",
     },
     servers: [{ url: baseUrl(req) }],
     security: [{ bearerAuth: [] }],
@@ -169,6 +174,84 @@ function buildAgentSchema(req: Request): Record<string, unknown> {
           summary: "Get one record with all values",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
           responses: { "200": { description: "Record", content: { "application/json": { schema: RECORD } } } },
+        },
+      },
+      "/records/{id}/links": {
+        get: {
+          operationId: "listRecordLinks",
+          summary: "Get all records LINKED to a record (e.g. orders/items of a project)",
+          description:
+            "The primary way to traverse relations. Always pass direction=both. Returns linked records from other entities with full valuesJson; " +
+            "check each item's record.entityId to know which entity it belongs to. Rows the agent's role may not see are omitted.",
+          parameters: [
+            { name: "id", in: "path", required: true, schema: { type: "integer" } },
+            { name: "direction", in: "query", required: false, schema: { type: "string", enum: ["both"] }, description: "Use 'both' to include links in either direction." },
+          ],
+          responses: {
+            "200": {
+              description: "Linked records",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        linkId: { type: "integer" },
+                        relationId: { type: "integer" },
+                        direction: { type: "string", enum: ["source", "target"] },
+                        record: RECORD,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/pages": {
+        get: {
+          operationId: "listPages",
+          summary: "List pages (a page can add page-local extra fields to an entity's records)",
+          description: "Each page has id, multilingual nameJson and entityId (or mirrorEntityId) — the entity whose records it shows.",
+          responses: { "200": { description: "Pages", content: { "application/json": { schema: { type: "array", items: { type: "object" } } } } } },
+        },
+      },
+      "/pages/{pageId}/fields": {
+        get: {
+          operationId: "listPageFields",
+          summary: "List page-local fields of a page",
+          description: "Page-local fields are EXTRA columns stored per page, not in the record's valuesJson. Use fieldKey to read values from record-values.",
+          parameters: [{ name: "pageId", in: "path", required: true, schema: { type: "integer" } }],
+          responses: { "200": { description: "Page fields", content: { "application/json": { schema: { type: "array", items: { type: "object" } } } } } },
+        },
+      },
+      "/pages/{pageId}/record-values": {
+        get: {
+          operationId: "listPageRecordValues",
+          summary: "Page-local field values for records of a page",
+          description: "Returns [{recordId, valuesJson}] with the page's OWN field values. Merge with the record's entity valuesJson by recordId for the full picture.",
+          parameters: [{ name: "pageId", in: "path", required: true, schema: { type: "integer" } }],
+          responses: {
+            "200": {
+              description: "Page-local values",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        recordId: { type: "integer" },
+                        valuesJson: { type: "object", additionalProperties: true },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       },
       "/records/{id}/audit": {
