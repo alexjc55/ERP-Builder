@@ -3,6 +3,7 @@ import { db, modulesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
+import { invalidateAgentCache, AI_AGENTS_MODULE_KEY } from "../lib/aiAgentAuth";
 import {
   CreateModuleBody,
   UpdateModuleBody,
@@ -149,6 +150,10 @@ router.put("/modules/:id", requireAuth, requireAdmin("modules"), async (req, res
     res.status(404).json({ error: "Module not found" });
     return;
   }
+
+  // Toggling the AI-agents module must take effect immediately, not after the
+  // agent auth cache's TTL: cached key verdicts embed the module-enabled check.
+  if (module.moduleKey === AI_AGENTS_MODULE_KEY) invalidateAgentCache();
 
   res.json(module);
 });

@@ -15,6 +15,7 @@ import {
   deletedFilesTable,
   guestLinksTable,
   entityAutomationsTable,
+  aiAgentsTable,
 } from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth, invalidateUserAliveCache } from "../middlewares/auth";
@@ -423,10 +424,31 @@ router.get("/users/:id", requireAuth, requireAdmin("users"), async (req, res): P
   res.json(user);
 });
 
+/**
+ * Accounts that back an AI agent are managed exclusively through the AI-agents
+ * module: editing them here would desynchronize the agent's role, and setting
+ * a password would turn a machine key into a login — a privilege escalation.
+ */
+async function isAgentBackedUser(userId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: aiAgentsTable.id })
+    .from(aiAgentsTable)
+    .where(eq(aiAgentsTable.userId, userId))
+    .limit(1);
+  return Boolean(row);
+}
+
+const AGENT_USER_ERROR = "Эта учётная запись принадлежит ИИ-агенту и управляется в модуле «ИИ-агенты»";
+
 router.put("/users/:id", requireAuth, requireAdmin("users"), async (req, res): Promise<void> => {
   const params = UpdateUserParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  if (await isAgentBackedUser(params.data.id)) {
+    res.status(400).json({ error: AGENT_USER_ERROR });
     return;
   }
 
@@ -532,6 +554,15 @@ router.post("/users/merge", requireAuth, requireSuperAdmin(), async (req, res): 
   const users = await db.select().from(usersTable).where(inArray(usersTable.id, allIds));
   if (users.length !== allIds.length) {
     res.status(404).json({ error: "Некоторые учётные записи не найдены" });
+    return;
+  }
+
+  const agentBacked = await db
+    .select({ userId: aiAgentsTable.userId })
+    .from(aiAgentsTable)
+    .where(inArray(aiAgentsTable.userId, allIds));
+  if (agentBacked.length > 0) {
+    res.status(400).json({ error: AGENT_USER_ERROR });
     return;
   }
 
@@ -757,6 +788,11 @@ router.delete("/users/:id", requireAuth, requireAdmin("users"), async (req, res)
     return;
   }
 
+  if (await isAgentBackedUser(params.data.id)) {
+    res.status(400).json({ error: AGENT_USER_ERROR });
+    return;
+  }
+
   const [deleted] = await db
     .delete(usersTable)
     .where(eq(usersTable.id, params.data.id))
@@ -819,6 +855,11 @@ router.post("/users/:id/reset-password", requireAuth, requireAdmin("users"), asy
   const parsed = ResetUserPasswordBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  if (await isAgentBackedUser(params.data.id)) {
+    res.status(400).json({ error: AGENT_USER_ERROR });
     return;
   }
 

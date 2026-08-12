@@ -100,15 +100,35 @@ function isReadRequest(req: Request): boolean {
 }
 
 /**
+ * Routes an agent key may NEVER touch, regardless of mask or role. These are
+ * identity/credential surfaces: without this list an agent could mint itself
+ * a stronger key (POST /ai-agents), impersonate a user (ordinary JWT with no
+ * mask), set a password on an account, or issue guest links — all defeating
+ * the "mask only narrows" guarantee.
+ */
+function isForbiddenForAgents(req: Request): boolean {
+  const p = req.path;
+  if (/^\/(ai-agents|modules)(\/|$)/.test(p)) return true;
+  if (/^\/auth(\/|$)/.test(p) && req.method !== "GET") return true;
+  if (/^\/guest(\/|$)/.test(p)) return true;
+  // All user administration (create/update/delete/merge/block/reset-password/
+  // guest-links) is credential management. Reads stay available for user fields.
+  if (/^\/users(\/|$)/.test(p) && req.method !== "GET") return true;
+  return false;
+}
+
+/**
  * Hard method-level guard for the agent's capability mask. This NARROWS the
  * role: RBAC still applies on top. Never widens.
  */
 export function isAllowedByMask(req: Request, mask: AiAgentMask): boolean {
+  if (isForbiddenForAgents(req)) return false;
   if (mask === "full" || mask === "read_edit_create_delete") return true;
   if (isReadRequest(req)) return true;
   if (mask === "read") return false;
   // Endpoints that destroy data through POST must count as "delete".
   if (req.method === "POST" && /\/records\/merge$/.test(req.path)) return false;
+  if (req.method === "POST" && /\/purge(-all)?$/.test(req.path)) return false;
   if (req.method === "POST" && /\/records\/bulk$/.test(req.path)) {
     const action = (req.body as { action?: unknown } | undefined)?.action;
     if (action === "delete") return false;
