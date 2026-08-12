@@ -29,6 +29,30 @@ const ML = {
   properties: { ru: { type: "string" }, en: { type: "string" }, he: { type: "string" } },
 } as const;
 
+/**
+ * Shape of a record as the API actually returns it (entity_records row after
+ * presentRecord: hidden fields stripped, system created_at fields injected
+ * into valuesJson). valuesJson keys are dynamic (per-entity fieldKeys), which
+ * OpenAPI expresses via additionalProperties.
+ */
+const RECORD = {
+  type: "object",
+  properties: {
+    id: { type: "integer" },
+    entityId: { type: "integer" },
+    statusId: { type: ["integer", "null"], description: "Workflow status id (see /entities/{entityId}/statuses)." },
+    valuesJson: {
+      type: "object",
+      description: "Field values keyed by fieldKey (see /entities/{entityId}/fields). Values may be strings, numbers, booleans, arrays or file objects.",
+      additionalProperties: true,
+    },
+    archivedAt: { type: ["string", "null"], description: "ISO timestamp if the record is archived, else null." },
+    statusChangedAt: { type: ["string", "null"] },
+    createdAt: { type: "string" },
+    updatedAt: { type: "string" },
+  },
+} as const;
+
 function buildAgentSchema(req: Request): Record<string, unknown> {
   return {
     openapi: "3.1.0",
@@ -43,7 +67,10 @@ function buildAgentSchema(req: Request): Record<string, unknown> {
         "6) download files referenced in record file-field values. A file value is an object or array of objects like {\"kind\":\"server\",\"path\":\"/local/...\",\"name\":\"drawing.pdf\"} " +
         "or {\"kind\":\"gdrive\",\"fileId\":\"...\",\"name\":\"...\"} or {\"kind\":\"link\",\"url\":\"https://...\"}. " +
         "For kind=server (or legacy values with only a path) download via GET /storage/local/{path-after-/local/} or GET /storage/objects/{path-after-/objects/}; " +
-        "for kind=gdrive via GET /google-drive/files/{fileId}/content; for kind=link just give the url to the user.",
+        "for kind=gdrive via GET /google-drive/files/{fileId}/content; for kind=link just give the url to the user. " +
+        "Query details (queryRecords): filter operators are eq, neq, contains, gt, gte, lt, lte, is_empty, is_not_empty; `filterConjunction` is and|or; " +
+        "for 'about 2 years ago' use a gte/lte range on a date field or on `__created_at__`; `sorts` items are {field, direction: asc|desc}; " +
+        "the response is {data: Record[], total} where each record has id, statusId, createdAt and valuesJson keyed by fieldKey.",
     },
     servers: [{ url: baseUrl(req) }],
     security: [{ bearerAuth: [] }],
@@ -85,10 +112,8 @@ function buildAgentSchema(req: Request): Record<string, unknown> {
           operationId: "queryRecords",
           summary: "Search records (text search, filters, sort, pagination)",
           description:
-            "Main search endpoint. `search` does a fuzzy text search over text/select fields. `filters` is an array of {field: fieldKey, operator, value}; " +
-            "operators include eq, neq, contains, gt, gte, lt, lte, is_empty, is_not_empty. Dates are ISO strings — for 'about 2 years ago' use a gte/lte range on a date field " +
-            "or on the reserved key `__created_at__`. `sorts`: [{field, direction: asc|desc}] (reserved sort key `__created_at__` sorts by creation time). " +
-            "`statusIds`: restrict by workflow status. Pagination: page (1-based), pageSize (max 100). Response contains rows with id, statusId, createdAt and valuesJson keyed by fieldKey.",
+            "Main search endpoint: text `search`, `filters` [{field: fieldKey, operator, value}], `statusIds`, `sorts`, pagination (page 1-based, pageSize max 100). " +
+            "Dates are ISO strings; reserved key `__created_at__` filters/sorts by creation time. See the API description for details.",
           parameters: [{ name: "entityId", in: "path", required: true, schema: { type: "integer" } }],
           requestBody: {
             required: true,
@@ -120,7 +145,22 @@ function buildAgentSchema(req: Request): Record<string, unknown> {
               },
             },
           },
-          responses: { "200": { description: "Matching records", content: { "application/json": { schema: { type: "object" } } } } },
+          responses: {
+            "200": {
+              description: "Matching records",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      data: { type: "array", items: RECORD },
+                      total: { type: "integer", description: "Total number of matching records (across all pages)." },
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       },
       "/records/{id}": {
@@ -128,7 +168,7 @@ function buildAgentSchema(req: Request): Record<string, unknown> {
           operationId: "getRecord",
           summary: "Get one record with all values",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
-          responses: { "200": { description: "Record", content: { "application/json": { schema: { type: "object" } } } } },
+          responses: { "200": { description: "Record", content: { "application/json": { schema: RECORD } } } },
         },
       },
       "/records/{id}/audit": {
