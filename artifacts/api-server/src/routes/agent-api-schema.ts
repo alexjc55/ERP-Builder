@@ -73,7 +73,7 @@ function buildAgentSchema(req: Request): Record<string, unknown> {
         "the response is {data: Record[], total} where each record has id, statusId, createdAt and valuesJson keyed by fieldKey. " +
         "IMPORTANT — linked records: relations between records (e.g. project ↔ its orders/items) are NOT stored in valuesJson and cannot be found by text search on the other entity. " +
         "After finding a record's id, call GET /records/{id}/links?direction=both to get ALL records linked to it (its orders, items, etc.) with their full valuesJson, then filter/read them locally. " +
-        "Archive: archived records are EXCLUDED from queryRecords by default; if something is not found, retry with \"archived\": true — closed/old orders are often archived, not absent. " +
+        "Archive: archived records are EXCLUDED from queryRecords by default; if something is not found, retry with \"archived\": \"all\" (values: active | archived | all) — closed/old orders are often archived, not absent. " +
         "Page-local fields: some pages add their OWN extra fields to records (stored separately from entity fields). To get the complete picture of a record, also check GET /pages, then " +
         "GET /pages/{pageId}/fields and GET /pages/{pageId}/record-values for pages of that entity, and merge those values with the record's valuesJson by recordId.",
     },
@@ -142,9 +142,9 @@ function buildAgentSchema(req: Request): Record<string, unknown> {
                       type: "array",
                       items: { type: "object", properties: { field: { type: "string" }, direction: { type: "string", enum: ["asc", "desc"] } } },
                     },
-                    archived: { type: "boolean", description: "true = search archived records too" },
+                    archived: { type: "string", enum: ["active", "archived", "all"], description: "Default active. Use 'all' or 'archived' to search archived records too." },
                     page: { type: "integer" },
-                    pageSize: { type: "integer" },
+                    pageSize: { type: "integer", maximum: 500 },
                   },
                 },
               },
