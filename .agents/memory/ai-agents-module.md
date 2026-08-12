@@ -18,3 +18,10 @@ The user's employees connect EXTERNAL LLM agents (ChatGPT Actions etc.) to the E
 
 ## Agent-facing OpenAPI
 `GET /agent-api/schema` (public, shape only) serves a hand-written TRIMMED spec (~9 ops: entities/fields/statuses, records query, record, audit incl. `__status__` history, 3 file-download routes) because GPT Actions caps at ~30 operations. It is maintained by hand in the api-server — new agent-relevant endpoints must be added there deliberately, with LLM-oriented descriptions (file-value shapes, reserved sort keys, ISO dates).
+
+## Act-as-user link (Aug 2026)
+Agent may optionally act under a real user's identity (`acts_as_user_id`): payload userId/roleId = that user, so full role set, own-scope and audit attribution flow as that user. Boundary rules:
+- Linked user must be active, human (not agent-backed) and NON-privileged (no superAdmin/admin cap in FULL role set: primary + user_roles). Validated at create/update AND re-checked at every key resolution — promoting the user to admin revokes the key instead of escalating it.
+- Linked user missing/blocked ⇒ key DENIED (no silent fallback to backing account — that would quietly change visible data).
+- users.ts invalidates the agent cache on PUT/block/unblock/delete/merge so identity changes apply immediately, not after the 60s TTL.
+- Candidates endpoint (/ai-agents/acts-as-candidates?roleId=) lists active, non-agent, non-privileged users having the role in their full set.
