@@ -19,6 +19,7 @@ import {
 } from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth, invalidateUserAliveCache } from "../middlewares/auth";
+import { invalidateAgentCache } from "../lib/aiAgentAuth";
 import { requireAdmin, requireSuperAdmin, getPermissions, effectiveRecordPerm, isPrivilegedRole } from "../middlewares/permissions";
 import { emitEvent, EVENT_USER_CREATED } from "../lib/events";
 import {
@@ -519,6 +520,10 @@ router.put("/users/:id", requireAuth, requireAdmin("users"), async (req, res): P
     }
   });
 
+  // Role changes may affect an agent's act-as identity (privileged-role check
+  // at key resolution); drop the agent cache so it takes effect immediately.
+  invalidateAgentCache();
+
   const user = await getUserWithRole(params.data.id);
   res.json(user);
 });
@@ -773,6 +778,7 @@ router.post("/users/merge", requireAuth, requireSuperAdmin(), async (req, res): 
   // Any still-valid JWTs of the deleted accounts die at the auth layer: drop
   // their cached "alive" verdicts so the next request re-checks the DB.
   for (const id of sourceIds) invalidateUserAliveCache(id);
+  invalidateAgentCache();
 
   req.log.info(
     { targetUserId, sourceIds, updatedRecordValues, updatedPageValues, mergedRoles },
@@ -804,6 +810,7 @@ router.delete("/users/:id", requireAuth, requireAdmin("users"), async (req, res)
   }
 
   invalidateUserAliveCache(deleted.id);
+  invalidateAgentCache();
   res.json({ success: true, message: "User deleted" });
 });
 
@@ -820,6 +827,7 @@ router.post("/users/:id/block", requireAuth, requireAdmin("users"), async (req, 
     .where(eq(usersTable.id, params.data.id));
 
   invalidateUserAliveCache(params.data.id);
+  invalidateAgentCache();
 
   const user = await getUserWithRole(params.data.id);
   if (!user) { res.status(404).json({ error: "User not found" }); return; }
@@ -839,6 +847,7 @@ router.post("/users/:id/unblock", requireAuth, requireAdmin("users"), async (req
     .where(eq(usersTable.id, params.data.id));
 
   invalidateUserAliveCache(params.data.id);
+  invalidateAgentCache();
 
   const user = await getUserWithRole(params.data.id);
   if (!user) { res.status(404).json({ error: "User not found" }); return; }

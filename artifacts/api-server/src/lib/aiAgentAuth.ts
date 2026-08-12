@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "crypto";
 import type { Request } from "express";
-import { db, aiAgentsTable, usersTable, modulesTable, type AiAgentMask } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, aiAgentsTable, usersTable, userRolesTable, rolesTable, modulesTable, type AiAgentMask, type RolePermissions } from "@workspace/db";
+import { eq, inArray } from "drizzle-orm";
 import type { JwtPayload } from "./jwt";
 
 /** AI-agent API keys are opaque bearer tokens with this prefix (never JWTs). */
@@ -91,7 +91,7 @@ export async function resolveAgentKey(plainKey: string): Promise<{ payload: JwtP
           .from(usersTable)
           .where(eq(usersTable.id, row.actsAsUserId))
           .limit(1);
-        if (actsAs && actsAs.isActive) {
+        if (actsAs && actsAs.isActive && !(await hasPrivilegedRole(actsAs.id, actsAs.roleId))) {
           effectiveUserId = actsAs.id;
           effectiveRoleId = actsAs.roleId;
         } else {
@@ -113,6 +113,29 @@ export async function resolveAgentKey(plainKey: string): Promise<{ payload: JwtP
 
   agentCache.set(tokenHash, { payload, mask, ts: now });
   return payload ? { payload, mask } : null;
+}
+
+/**
+ * True when the user's FULL role set (primary + additional) contains a
+ * privileged role (superAdmin or any admin capability). Re-checked at every
+ * key resolution — not only at link time — so promoting a linked user to
+ * admin (or making their role privileged) revokes the agent's act-as access
+ * within the cache TTL instead of silently escalating the machine key.
+ */
+async function hasPrivilegedRole(userId: number, primaryRoleId: number): Promise<boolean> {
+  const extra = await db
+    .select({ roleId: userRolesTable.roleId })
+    .from(userRolesTable)
+    .where(eq(userRolesTable.userId, userId));
+  const roleIds = [...new Set([primaryRoleId, ...extra.map((r) => r.roleId)])];
+  const roles = await db
+    .select({ permissionsJson: rolesTable.permissionsJson })
+    .from(rolesTable)
+    .where(inArray(rolesTable.id, roleIds));
+  return roles.some((r) => {
+    const p = r.permissionsJson as RolePermissions;
+    return p.superAdmin === true || Object.values(p.admin ?? {}).some(Boolean);
+  });
 }
 
 /** Any GET, or the POST records-query read (same read shape as the guest guard). */
