@@ -295,6 +295,28 @@ async function validatePageRefConfig(
 }
 
 /**
+ * Load a page_ref field's SOURCE page field, re-validating eligibility at read
+ * time (active + value-backed type): a source later deactivated or retyped to
+ * an unsupported kind must stop resolving, even though the reference row still
+ * exists — defense in depth against stale configs.
+ */
+async function loadPageRefSource(cfg: PageRefFieldConfig): Promise<PageField | null> {
+  if (cfg.sourcePageId == null || !cfg.sourceFieldKey) return null;
+  const [src] = await db
+    .select()
+    .from(pageFieldsTable)
+    .where(
+      and(
+        eq(pageFieldsTable.pageId, cfg.sourcePageId),
+        eq(pageFieldsTable.fieldKey, cfg.sourceFieldKey),
+        eq(pageFieldsTable.isActive, true),
+      ),
+    );
+  if (!src || !PAGE_REF_SOURCE_TYPES.has(src.fieldType)) return null;
+  return src;
+}
+
+/**
  * Delete every `page_ref` field (on any page) that points at the given source
  * page — optionally narrowed to one source field key. Called when the source
  * field or the whole source page is deleted, so no dangling references remain.
@@ -512,26 +534,17 @@ router.get("/pages/:pageId/fields", requireAuth, async (req, res): Promise<void>
   const perms = await getPermissions(req);
   // page_ref fields carry response-only resolved metadata (the source field's
   // current type/options) so clients can render values without extra requests.
+  // The source field's OWN per-role permissions are collected too — they are a
+  // boundary for non-admin viewers below.
+  const srcPermsByFieldId = new Map<number, FieldPermissions | null>();
   const enriched = await Promise.all(
     fields.map(async (f) => {
       if (f.fieldType !== "page_ref") return f;
       const cfg = (f.pageRefConfigJson ?? {}) as PageRefFieldConfig;
       if (cfg.sourcePageId == null || !cfg.sourceFieldKey) return f;
-      const [src] = await db
-        .select({
-          fieldType: pageFieldsTable.fieldType,
-          optionsJson: pageFieldsTable.optionsJson,
-          percentConfigJson: pageFieldsTable.percentConfigJson,
-        })
-        .from(pageFieldsTable)
-        .where(
-          and(
-            eq(pageFieldsTable.pageId, cfg.sourcePageId),
-            eq(pageFieldsTable.fieldKey, cfg.sourceFieldKey),
-            eq(pageFieldsTable.isActive, true),
-          ),
-        );
+      const src = await loadPageRefSource(cfg);
       if (!src) return f;
+      srcPermsByFieldId.set(f.id, src.permissionsJson as FieldPermissions | null);
       return {
         ...f,
         pageRefConfigJson: {
@@ -553,14 +566,20 @@ router.get("/pages/:pageId/fields", requireAuth, async (req, res): Promise<void>
       mostPermissiveFieldPerm(f.permissionsJson as FieldPermissions | null, roleIds, "view", perms, eff.entityId ?? undefined, params.data.pageId) !==
       "hidden",
   );
-  // The source PAGE's per-role access is a boundary too: without access to the
-  // source page a viewer must not see its data re-surfaced here — drop the
-  // whole column (admins keep it for setup).
+  // The SOURCE side is a boundary too: without access to the source page — or
+  // when the source FIELD itself is hidden for the viewer's roles — its data
+  // must not be re-surfaced here; drop the whole column (admins keep it for
+  // setup). A stale/ineligible source (no resolved metadata) is dropped too.
   res.json(
     visible.filter((f) => {
       if (f.fieldType !== "page_ref") return true;
-      const spid = (f.pageRefConfigJson as PageRefFieldConfig)?.sourcePageId;
-      return spid == null || perms.pageIds.includes(spid);
+      const cfg = (f.pageRefConfigJson ?? {}) as PageRefFieldConfig;
+      if (cfg.sourcePageId == null || !perms.pageIds.includes(cfg.sourcePageId)) return false;
+      if (cfg.resolvedFieldType == null) return false;
+      return (
+        mostPermissiveFieldPerm(srcPermsByFieldId.get(f.id) ?? null, roleIds, "view", perms, eff.entityId ?? undefined, cfg.sourcePageId) !==
+        "hidden"
+      );
     }),
   );
 });
@@ -837,6 +856,28 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
       .set(updateData)
       .where(eq(pageFieldsTable.id, params.data.id))
       .returning();
+    // Keep page_ref references consistent with SOURCE-side edits:
+    //  - key rename → rewrite referencing configs to the new key;
+    //  - type change to an ineligible kind → cascade-delete the references
+    //    (same rule the user approved for source deletion).
+    const keyRenamed = typeof updateData.fieldKey === "string" && updateData.fieldKey !== current.fieldKey;
+    const becameIneligible = current.fieldType !== nextType && !PAGE_REF_SOURCE_TYPES.has(nextType);
+    if (becameIneligible) {
+      await cascadeDeletePageRefFields(current.pageId, current.fieldKey);
+    } else if (keyRenamed) {
+      await db
+        .update(pageFieldsTable)
+        .set({
+          pageRefConfigJson: sql`jsonb_set(${pageFieldsTable.pageRefConfigJson}, '{sourceFieldKey}', to_jsonb(${updateData.fieldKey as string}::text))`,
+        })
+        .where(
+          and(
+            eq(pageFieldsTable.fieldType, "page_ref"),
+            sql`(${pageFieldsTable.pageRefConfigJson} ->> 'sourcePageId')::int = ${current.pageId}`,
+            sql`${pageFieldsTable.pageRefConfigJson} ->> 'sourceFieldKey' = ${current.fieldKey}`,
+          ),
+        );
+    }
     res.json(field);
   } catch (err) {
     if (isUniqueViolation(err)) {
@@ -907,24 +948,47 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
     .where(and(...where));
 
   // page_ref fields: merge the SOURCE page's values (same records) under this
-  // page's field keys, gated by the viewer's access to the source page.
-  const refFields = (
-    await db
-      .select()
-      .from(pageFieldsTable)
-      .where(
-        and(
-          eq(pageFieldsTable.pageId, params.data.pageId),
-          eq(pageFieldsTable.fieldType, "page_ref"),
-          eq(pageFieldsTable.isActive, true),
-        ),
-      )
-  ).filter((f) => {
+  // page's field keys, gated by the viewer's access to the source page AND the
+  // source field's own per-role visibility (this endpoint stays authoritative
+  // even if the client never fetched the column metadata).
+  const refCandidates = await db
+    .select()
+    .from(pageFieldsTable)
+    .where(
+      and(
+        eq(pageFieldsTable.pageId, params.data.pageId),
+        eq(pageFieldsTable.fieldType, "page_ref"),
+        eq(pageFieldsTable.isActive, true),
+      ),
+    );
+  const isSetupAdmin = perms.superAdmin || perms.admin.pages;
+  const viewerRoleIds = isSetupAdmin ? [] : await getUserRoleIds(req);
+  const refFields: PageField[] = [];
+  for (const f of refCandidates) {
     const cfg = (f.pageRefConfigJson ?? {}) as PageRefFieldConfig;
-    if (cfg.sourcePageId == null || !cfg.sourceFieldKey) return false;
-    // Source-page access boundary (superAdmin/pages-admin always pass).
-    return perms.superAdmin || perms.admin.pages || perms.pageIds.includes(cfg.sourcePageId);
-  });
+    if (cfg.sourcePageId == null || !cfg.sourceFieldKey) continue;
+    // Stale/ineligible source (deleted, deactivated, retyped) never resolves.
+    const src = await loadPageRefSource(cfg);
+    if (!src) continue;
+    if (!isSetupAdmin) {
+      // Source-page access boundary.
+      if (!perms.pageIds.includes(cfg.sourcePageId)) continue;
+      // The page_ref column's own per-role visibility.
+      if (
+        mostPermissiveFieldPerm(f.permissionsJson as FieldPermissions | null, viewerRoleIds, "view", perms, entityId, params.data.pageId) ===
+        "hidden"
+      )
+        continue;
+      // The SOURCE field's per-role visibility — a field hidden on page A must
+      // not leak through a page_ref on page B.
+      if (
+        mostPermissiveFieldPerm(src.permissionsJson as FieldPermissions | null, viewerRoleIds, "view", perms, entityId, cfg.sourcePageId) ===
+        "hidden"
+      )
+        continue;
+    }
+    refFields.push(f);
+  }
   if (refFields.length === 0) {
     res.json(rows);
     return;
