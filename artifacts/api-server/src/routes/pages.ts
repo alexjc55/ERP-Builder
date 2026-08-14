@@ -12,6 +12,7 @@ import { eq, isNull, asc, and, inArray, type SQL } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin, getPermissions } from "../middlewares/permissions";
 import { buildRelationMeta } from "./own-scope";
+import { cascadeDeletePageRefFields } from "./page-fields";
 import { computePivot, type PivotConfigInput } from "./pivot-compute";
 import { buildRecordQuery, type RecordQuerySpec, type FilterCondition } from "./record-query";
 import {
@@ -561,6 +562,10 @@ router.delete("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res)
     res.status(404).json({ error: "Page not found" });
     return;
   }
+
+  // Deleting a page also removes any page_ref fields on OTHER pages that used
+  // it as their source (user-approved cascade; page's own fields go via FK).
+  await cascadeDeletePageRefFields(deleted.id);
 
   res.json({ success: true, message: "Page deleted" });
 });

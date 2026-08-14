@@ -4,6 +4,11 @@ import {
   useUpdatePageField,
   useDeletePageField,
   useListPageFields,
+  getListPageFieldsQueryKey,
+  useListPages,
+  getListPagesQueryKey,
+  useListEntities,
+  getListEntitiesQueryKey,
   useGetPageRelationOptions,
   getGetPageRelationOptionsQueryKey,
   useListRoles,
@@ -104,7 +109,25 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "function", label: "Формула (вычисляемое)" },
   { value: "relation", label: "Связанное поле" },
   { value: "lookup", label: "Поле подстановки" },
+  { value: "page_ref", label: "Поле другой страницы" },
 ];
+
+// Source-field types a page_ref may display. MUST stay in lockstep with
+// PAGE_REF_SOURCE_TYPES in api-server/src/routes/page-fields.ts.
+const PAGE_REF_SOURCE_TYPES = new Set<FieldType>([
+  "text",
+  "textarea",
+  "number",
+  "percent",
+  "boolean",
+  "date",
+  "datetime",
+  "select",
+  "email",
+  "url",
+  "phone",
+  "user",
+]);
 
 const FIELD_ACCESS_OPTIONS: { value: FieldAccess; label: string }[] = [
   { value: "edit", label: "Редактирование" },
@@ -209,6 +232,9 @@ export function PageFieldConfigDialog({
   // linked record instead of one of its entity fields (value read-only; a
   // relation field's link itself stays assignable).
   const [relatedPageId, setRelatedPageId] = useState<number | null>(null);
+  // page_ref: another mirror page of the SAME entity + its page-local field.
+  const [refSourcePageId, setRefSourcePageId] = useState<number | null>(null);
+  const [refSourceFieldKey, setRefSourceFieldKey] = useState("");
   const [permissions, setPermissions] = useState<FieldPermissions>({});
   const [allowedSources, setAllowedSources] = useState<FileSource[]>(["server"]);
   const [driveFolderId, setDriveFolderId] = useState<string>("");
@@ -252,6 +278,8 @@ export function PageFieldConfigDialog({
       setRelationId(field.relationConfigJson?.relationId ?? null);
       setRelatedFieldKey(field.relationConfigJson?.relatedFieldKey ?? "");
       setRelatedPageId(field.relationConfigJson?.relatedPageId ?? null);
+      setRefSourcePageId(field.pageRefConfigJson?.sourcePageId ?? null);
+      setRefSourceFieldKey(field.pageRefConfigJson?.sourceFieldKey ?? "");
       setPermissions(field.permissionsJson ? { ...field.permissionsJson } : {});
       const src = field.fileConfigJson?.allowedSources;
       setAllowedSources(Array.isArray(src) && src.length > 0 ? (src as FileSource[]) : ["server"]);
@@ -284,6 +312,8 @@ export function PageFieldConfigDialog({
       setRelationId(null);
       setRelatedFieldKey("");
       setRelatedPageId(null);
+      setRefSourcePageId(null);
+      setRefSourceFieldKey("");
       setPermissions({});
       setAllowedSources(["server"]);
       setDriveFolderId("");
@@ -381,6 +411,24 @@ export function PageFieldConfigDialog({
     return [...pageRefs, ...sourceFields.filter((r) => !seen.has(r.key))];
   })();
 
+  // page_ref: candidate source pages = OTHER pages showing the same records —
+  // mirror pages of this entity plus the entity's own bound page.
+  const { data: allPages = [] } = useListPages({ query: { enabled: open, queryKey: getListPagesQueryKey() } });
+  const { data: allEntities = [] } = useListEntities({ query: { enabled: open, queryKey: getListEntitiesQueryKey() } });
+  const boundPageId = allEntities.find((e) => e.id === entityId)?.pageId ?? null;
+  const pageRefSourcePages = allPages.filter(
+    (p) => p.id !== pageId && (p.mirrorEntityId === entityId || p.id === boundPageId),
+  );
+  const { data: refSourceFieldsRaw = [] } = useListPageFields(refSourcePageId ?? 0, {
+    query: {
+      enabled: open && refSourcePageId != null,
+      queryKey: getListPageFieldsQueryKey(refSourcePageId ?? 0),
+    },
+  });
+  const refSourceFields = refSourceFieldsRaw.filter(
+    (f) => f.isActive && PAGE_REF_SOURCE_TYPES.has(f.fieldType),
+  );
+
   const selectedRelation = relationOptions.find((o) => o.relationId === relationId);
   // Pages of the related entity whose page-local fields a relation/lookup can project.
   const relatedPages = selectedRelation?.pages ?? [];
@@ -474,16 +522,24 @@ export function PageFieldConfigDialog({
             }
           : {},
     };
-    if (field) updateMutation.mutate({ id: field.id, data: payload });
-    else createMutation.mutate({ pageId, data: payload });
+    const withPageRef = {
+      ...payload,
+      pageRefConfigJson:
+        fieldType === "page_ref" && refSourcePageId != null && refSourceFieldKey
+          ? { sourcePageId: refSourcePageId, sourceFieldKey: refSourceFieldKey }
+          : {},
+    };
+    if (field) updateMutation.mutate({ id: field.id, data: withPageRef });
+    else createMutation.mutate({ pageId, data: withPageRef });
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
   const relationIncomplete =
     (fieldType === "relation" || fieldType === "lookup") && (relationId == null || !relatedFieldKey);
+  const pageRefIncomplete = fieldType === "page_ref" && (refSourcePageId == null || !refSourceFieldKey);
   const hasName = Object.values(nameJson).some((v) => typeof v === "string" && v.trim() !== "");
   const canSubmit =
-    !isPending && hasName && FIELD_KEY_RE.test(effectiveKey) && !manualKeyTaken && !keyFormatInvalid && !relationIncomplete;
+    !isPending && hasName && FIELD_KEY_RE.test(effectiveKey) && !manualKeyTaken && !keyFormatInvalid && !relationIncomplete && !pageRefIncomplete;
 
   return (
     <>
@@ -808,7 +864,63 @@ export function PageFieldConfigDialog({
                 )}
               </div>
             )}
-            {fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup" && (
+            {fieldType === "page_ref" && (
+              <div className="space-y-3 rounded-md border border-slate-200 p-3">
+                <p className="text-xs text-slate-500">
+                  {t(
+                    "pageFields.pageRefHint",
+                    "Колонка (только чтение) показывает для той же записи значение поля другой страницы этой сущности.",
+                  )}
+                </p>
+                <div className="space-y-1.5">
+                  <Label>{t("pageFields.pageRefSourcePage", "Страница-источник")}</Label>
+                  <Select
+                    value={refSourcePageId != null ? String(refSourcePageId) : ""}
+                    onValueChange={(v) => {
+                      setRefSourcePageId(Number(v));
+                      setRefSourceFieldKey("");
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder={t("pageFields.pageRefSourcePagePlaceholder", "Выберите страницу")} /></SelectTrigger>
+                    <SelectContent>
+                      {pageRefSourcePages.length === 0 ? (
+                        <div className="px-2 py-1.5 text-xs text-slate-400">
+                          {t("pageFields.pageRefNoPages", "Нет других страниц с теми же записями.")}
+                        </div>
+                      ) : (
+                        pageRefSourcePages.map((p) => (
+                          <SelectItem key={p.id} value={String(p.id)}>
+                            {pageLabel(p.id, ml(p.nameJson))}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {refSourcePageId != null && (
+                  <div className="space-y-1.5">
+                    <Label>{t("pageFields.pageRefSourceField", "Поле страницы-источника")}</Label>
+                    <Select value={refSourceFieldKey} onValueChange={setRefSourceFieldKey}>
+                      <SelectTrigger><SelectValue placeholder={t("pageFields.relatedFieldPlaceholder", "Выберите поле")} /></SelectTrigger>
+                      <SelectContent>
+                        {refSourceFields.length === 0 ? (
+                          <div className="px-2 py-1.5 text-xs text-slate-400">
+                            {t("pageFields.pageRefNoFields", "На этой странице нет подходящих полей.")}
+                          </div>
+                        ) : (
+                          refSourceFields.map((f) => (
+                            <SelectItem key={f.fieldKey} value={f.fieldKey}>
+                              {ml(f.nameJson) || f.fieldKey}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            )}
+            {fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup" && fieldType !== "page_ref" && (
               <div className="space-y-1.5">
                 <Label>{t("fields.defaultValue", "Значение по умолчанию")}</Label>
                 {/* Type-aware editor: the default is stored as the RAW value (a

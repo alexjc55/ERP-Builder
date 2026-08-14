@@ -2317,6 +2317,7 @@ export const FieldType = {
   lookup: 'lookup',
   percent: 'percent',
   created_at: 'created_at',
+  page_ref: 'page_ref',
 } as const;
 
 export type FormatOperator = typeof FormatOperator[keyof typeof FormatOperator];
@@ -2761,6 +2762,17 @@ export interface PageRelationOptions {
   options: PageRelationOption[];
 }
 
+/**
+ * Config for a page_ref page field: read-only display of another mirror page's page-local field for the same record. resolved* properties are response-only enrichment of the source field's current type/options.
+ */
+export interface PageRefFieldConfig {
+  sourcePageId?: number;
+  sourceFieldKey?: string;
+  resolvedFieldType?: string;
+  resolvedOptionsJson?: unknown[];
+  resolvedPercentConfigJson?: PercentFieldConfig;
+}
+
 export interface PageField {
   id: number;
   pageId: number;
@@ -2779,6 +2791,7 @@ export interface PageField {
   percentConfigJson?: PercentFieldConfig;
   relationConfigJson?: RelationFieldConfig;
   fileConfigJson?: FileFieldConfig;
+  pageRefConfigJson?: PageRefFieldConfig;
   permissionsJson?: FieldPermissions;
   showInTable?: boolean;
   isPinned?: boolean;
@@ -2812,6 +2825,7 @@ export interface PageFieldInput {
   percentConfigJson?: PercentFieldConfig;
   relationConfigJson?: RelationFieldConfig;
   fileConfigJson?: FileFieldConfig;
+  pageRefConfigJson?: PageRefFieldConfig;
   permissionsJson?: FieldPermissions;
   showInTable?: boolean;
   isPinned?: boolean;
@@ -2843,6 +2857,7 @@ export interface PageFieldUpdate {
   percentConfigJson?: PercentFieldConfig;
   relationConfigJson?: RelationFieldConfig;
   fileConfigJson?: FileFieldConfig;
+  pageRefConfigJson?: PageRefFieldConfig;
   permissionsJson?: FieldPermissions;
   showInTable?: boolean;
   isPinned?: boolean;

@@ -2769,7 +2769,7 @@ export const ListEntityFieldsResponseItem = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at', 'page_ref']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "defaultToToday": zod.boolean().optional(),
@@ -2904,7 +2904,7 @@ export const CreateEntityFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at', 'page_ref']),
   "isRequired": zod.boolean().default(createEntityFieldBodyIsRequiredDefault),
   "defaultValue": zod.string().nullish(),
   "defaultToToday": zod.boolean().default(createEntityFieldBodyDefaultToTodayDefault),
@@ -3020,7 +3020,7 @@ export const GetFieldResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at', 'page_ref']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "defaultToToday": zod.boolean().optional(),
@@ -3144,7 +3144,7 @@ export const UpdateFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at']).optional(),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at', 'page_ref']).optional(),
   "isRequired": zod.boolean().optional(),
   "defaultValue": zod.string().nullish(),
   "defaultToToday": zod.boolean().optional(),
@@ -3252,7 +3252,7 @@ export const UpdateFieldResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at', 'page_ref']),
   "isRequired": zod.boolean(),
   "defaultValue": zod.string().nullish(),
   "defaultToToday": zod.boolean().optional(),
@@ -3392,6 +3392,9 @@ export const listPageFieldsResponseFormulaConfigJsonDecimalsMax = 10;
 export const listPageFieldsResponsePercentConfigJsonDecimalsMin = 0;
 export const listPageFieldsResponsePercentConfigJsonDecimalsMax = 10;
 
+export const listPageFieldsResponsePageRefConfigJsonResolvedPercentConfigJsonDecimalsMin = 0;
+export const listPageFieldsResponsePageRefConfigJsonResolvedPercentConfigJsonDecimalsMax = 10;
+
 
 
 export const ListPageFieldsResponseItem = zod.object({
@@ -3408,7 +3411,7 @@ export const ListPageFieldsResponseItem = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at', 'page_ref']),
   "isRequired": zod.boolean(),
   "isFilterable": zod.boolean().optional(),
   "pivotEnabled": zod.boolean().optional(),
@@ -3458,6 +3461,16 @@ export const ListPageFieldsResponseItem = zod.object({
 })).optional().describe('Fallback field keys (fields of other entities\/pages feeding the same folder); the first candidate with a non-empty value wins.')
 })).nullish().describe('Per-field Drive file-name template. Non-empty takes priority over the target folder\'s template; empty\/unset falls back to the folder.')
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
+  "pageRefConfigJson": zod.object({
+  "sourcePageId": zod.number().optional(),
+  "sourceFieldKey": zod.string().optional(),
+  "resolvedFieldType": zod.string().optional(),
+  "resolvedOptionsJson": zod.array(zod.unknown()).optional(),
+  "resolvedPercentConfigJson": zod.object({
+  "mode": zod.enum(['list', 'value']).nullish(),
+  "decimals": zod.number().min(listPageFieldsResponsePageRefConfigJsonResolvedPercentConfigJsonDecimalsMin).max(listPageFieldsResponsePageRefConfigJsonResolvedPercentConfigJsonDecimalsMax).nullish()
+}).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.')
+}).optional().describe('Config for a page_ref page field: read-only display of another mirror page\'s page-local field for the same record. resolved\* properties are response-only enrichment of the source field\'s current type\/options.'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
@@ -3490,6 +3503,9 @@ export const createPageFieldBodyFormulaConfigJsonDecimalsMax = 10;
 export const createPageFieldBodyPercentConfigJsonDecimalsMin = 0;
 export const createPageFieldBodyPercentConfigJsonDecimalsMax = 10;
 
+export const createPageFieldBodyPageRefConfigJsonResolvedPercentConfigJsonDecimalsMin = 0;
+export const createPageFieldBodyPageRefConfigJsonResolvedPercentConfigJsonDecimalsMax = 10;
+
 export const createPageFieldBodyShowInTableDefault = true;
 export const createPageFieldBodyIsPinnedDefault = false;
 export const createPageFieldBodyWrapTextDefault = false;
@@ -3507,7 +3523,7 @@ export const CreatePageFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at', 'page_ref']),
   "isRequired": zod.boolean().default(createPageFieldBodyIsRequiredDefault),
   "isFilterable": zod.boolean().default(createPageFieldBodyIsFilterableDefault),
   "pivotEnabled": zod.boolean().default(createPageFieldBodyPivotEnabledDefault),
@@ -3557,6 +3573,16 @@ export const CreatePageFieldBody = zod.object({
 })).optional().describe('Fallback field keys (fields of other entities\/pages feeding the same folder); the first candidate with a non-empty value wins.')
 })).nullish().describe('Per-field Drive file-name template. Non-empty takes priority over the target folder\'s template; empty\/unset falls back to the folder.')
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
+  "pageRefConfigJson": zod.object({
+  "sourcePageId": zod.number().optional(),
+  "sourceFieldKey": zod.string().optional(),
+  "resolvedFieldType": zod.string().optional(),
+  "resolvedOptionsJson": zod.array(zod.unknown()).optional(),
+  "resolvedPercentConfigJson": zod.object({
+  "mode": zod.enum(['list', 'value']).nullish(),
+  "decimals": zod.number().min(createPageFieldBodyPageRefConfigJsonResolvedPercentConfigJsonDecimalsMin).max(createPageFieldBodyPageRefConfigJsonResolvedPercentConfigJsonDecimalsMax).nullish()
+}).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.')
+}).optional().describe('Config for a page_ref page field: read-only display of another mirror page\'s page-local field for the same record. resolved\* properties are response-only enrichment of the source field\'s current type\/options.'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().default(createPageFieldBodyShowInTableDefault),
   "isPinned": zod.boolean().default(createPageFieldBodyIsPinnedDefault),
@@ -3583,6 +3609,9 @@ export const updatePageFieldBodyFormulaConfigJsonDecimalsMax = 10;
 export const updatePageFieldBodyPercentConfigJsonDecimalsMin = 0;
 export const updatePageFieldBodyPercentConfigJsonDecimalsMax = 10;
 
+export const updatePageFieldBodyPageRefConfigJsonResolvedPercentConfigJsonDecimalsMin = 0;
+export const updatePageFieldBodyPageRefConfigJsonResolvedPercentConfigJsonDecimalsMax = 10;
+
 
 
 export const UpdatePageFieldBody = zod.object({
@@ -3597,7 +3626,7 @@ export const UpdatePageFieldBody = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at']).optional(),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at', 'page_ref']).optional(),
   "isRequired": zod.boolean().optional(),
   "isFilterable": zod.boolean().optional(),
   "pivotEnabled": zod.boolean().optional(),
@@ -3647,6 +3676,16 @@ export const UpdatePageFieldBody = zod.object({
 })).optional().describe('Fallback field keys (fields of other entities\/pages feeding the same folder); the first candidate with a non-empty value wins.')
 })).nullish().describe('Per-field Drive file-name template. Non-empty takes priority over the target folder\'s template; empty\/unset falls back to the folder.')
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
+  "pageRefConfigJson": zod.object({
+  "sourcePageId": zod.number().optional(),
+  "sourceFieldKey": zod.string().optional(),
+  "resolvedFieldType": zod.string().optional(),
+  "resolvedOptionsJson": zod.array(zod.unknown()).optional(),
+  "resolvedPercentConfigJson": zod.object({
+  "mode": zod.enum(['list', 'value']).nullish(),
+  "decimals": zod.number().min(updatePageFieldBodyPageRefConfigJsonResolvedPercentConfigJsonDecimalsMin).max(updatePageFieldBodyPageRefConfigJsonResolvedPercentConfigJsonDecimalsMax).nullish()
+}).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.')
+}).optional().describe('Config for a page_ref page field: read-only display of another mirror page\'s page-local field for the same record. resolved\* properties are response-only enrichment of the source field\'s current type\/options.'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
@@ -3665,6 +3704,9 @@ export const updatePageFieldResponseFormulaConfigJsonDecimalsMax = 10;
 export const updatePageFieldResponsePercentConfigJsonDecimalsMin = 0;
 export const updatePageFieldResponsePercentConfigJsonDecimalsMax = 10;
 
+export const updatePageFieldResponsePageRefConfigJsonResolvedPercentConfigJsonDecimalsMin = 0;
+export const updatePageFieldResponsePageRefConfigJsonResolvedPercentConfigJsonDecimalsMax = 10;
+
 
 
 export const UpdatePageFieldResponse = zod.object({
@@ -3681,7 +3723,7 @@ export const UpdatePageFieldResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }).optional(),
-  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at']),
+  "fieldType": zod.enum(['text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'email', 'url', 'phone', 'user', 'file', 'function', 'relation', 'lookup', 'percent', 'created_at', 'page_ref']),
   "isRequired": zod.boolean(),
   "isFilterable": zod.boolean().optional(),
   "pivotEnabled": zod.boolean().optional(),
@@ -3731,6 +3773,16 @@ export const UpdatePageFieldResponse = zod.object({
 })).optional().describe('Fallback field keys (fields of other entities\/pages feeding the same folder); the first candidate with a non-empty value wins.')
 })).nullish().describe('Per-field Drive file-name template. Non-empty takes priority over the target folder\'s template; empty\/unset falls back to the folder.')
 }).optional().describe('Per-field configuration for a `file`-type field. `allowedSources` lists which fill-time sources are offered\/accepted. Empty or unset means the legacy default (server upload only).'),
+  "pageRefConfigJson": zod.object({
+  "sourcePageId": zod.number().optional(),
+  "sourceFieldKey": zod.string().optional(),
+  "resolvedFieldType": zod.string().optional(),
+  "resolvedOptionsJson": zod.array(zod.unknown()).optional(),
+  "resolvedPercentConfigJson": zod.object({
+  "mode": zod.enum(['list', 'value']).nullish(),
+  "decimals": zod.number().min(updatePageFieldResponsePageRefConfigJsonResolvedPercentConfigJsonDecimalsMin).max(updatePageFieldResponsePageRefConfigJsonResolvedPercentConfigJsonDecimalsMax).nullish()
+}).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.')
+}).optional().describe('Config for a page_ref page field: read-only display of another mirror page\'s page-local field for the same record. resolved\* properties are response-only enrichment of the source field\'s current type\/options.'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),

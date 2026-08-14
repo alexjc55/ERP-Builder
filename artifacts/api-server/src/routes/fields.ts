@@ -303,6 +303,12 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
     }
   }
 
+  // page_ref is a PAGE-field-only type (displays another mirror page's local
+  // field); it has no meaning on an entity field.
+  if (parsed.data.fieldType === "page_ref") {
+    res.status(400).json({ error: "Тип «Поле другой страницы» доступен только для полей страницы" });
+    return;
+  }
   // isKey enforces uniqueness over a stored scalar value, so it is meaningless
   // for file (object), function (computed) and relation (derived) fields.
   if (
@@ -529,6 +535,10 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   // touch the flag, so an unrelated update (e.g. toggling pivotEnabled) on an
   // already-locked relation field must NOT trip this guard — hence relation is
   // excluded from the lockAfterCreate check.
+  if (nextType === "page_ref") {
+    res.status(400).json({ error: "Тип «Поле другой страницы» доступен только для полей страницы" });
+    return;
+  }
   const nextIsKey = body.isKey ?? current.isKey;
   const nextLock = body.lockAfterCreate ?? current.lockAfterCreate;
   if (

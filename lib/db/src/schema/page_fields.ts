@@ -11,6 +11,20 @@ import type { FieldFormatRule, FormulaFieldConfig, FieldPermissions, RelationFie
  * `page_record_values`, keyed by (pageId, recordId), keeping them isolated from
  * the mirrored entity's own data.
  */
+/**
+ * Config for a `page_ref` page field: a read-only column that displays, for the
+ * SAME record, the value of a page-local field defined on ANOTHER mirror page
+ * of the same entity. `resolved*` metadata is response-only enrichment (never
+ * stored): the source field's current type/options so the client can render.
+ */
+export interface PageRefFieldConfig {
+  sourcePageId?: number;
+  sourceFieldKey?: string;
+  resolvedFieldType?: string;
+  resolvedOptionsJson?: unknown[];
+  resolvedPercentConfigJson?: PercentFieldConfig;
+}
+
 export const pageFieldsTable = pgTable(
   "page_fields",
   {
@@ -33,6 +47,7 @@ export const pageFieldsTable = pgTable(
     percentConfigJson: jsonb("percent_config_json").$type<PercentFieldConfig>().notNull().default({}),
     relationConfigJson: jsonb("relation_config_json").$type<RelationFieldConfig>().notNull().default({}),
     fileConfigJson: jsonb("file_config_json").$type<FileFieldConfig>().notNull().default({}),
+    pageRefConfigJson: jsonb("page_ref_config_json").$type<PageRefFieldConfig>().notNull().default({}),
     permissionsJson: jsonb("permissions_json").$type<FieldPermissions>().notNull().default({}),
     showInTable: boolean("show_in_table").notNull().default(true),
     isPinned: boolean("is_pinned").notNull().default(false),

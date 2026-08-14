@@ -18,6 +18,7 @@ import {
   type FieldPermissions,
   type EntityField,
   type FileFieldConfig,
+  type PageRefFieldConfig,
 } from "@workspace/db";
 import { eq, asc, desc, and, ne, inArray, or, sql, type SQL } from "drizzle-orm";
 import { replaceSingleRelationLink, emitLinkChangedEvents } from "../lib/record-links";
@@ -230,6 +231,86 @@ async function validateRelatedPageSource(
 }
 
 /**
+ * Page-field types a `page_ref` field may point at: scalar, value-backed types
+ * whose values live in page_record_values and render without extra resolution.
+ * Derived types (function/relation/lookup/page_ref itself) and files are out.
+ */
+const PAGE_REF_SOURCE_TYPES = new Set([
+  "text",
+  "textarea",
+  "number",
+  "percent",
+  "boolean",
+  "date",
+  "datetime",
+  "select",
+  "email",
+  "url",
+  "phone",
+  "user",
+]);
+
+/**
+ * Validate a `page_ref` field config: the source must be ANOTHER page with the
+ * SAME effective entity (so "this record" is well-defined on both pages), and
+ * the source field must be an active, value-backed page field there.
+ */
+async function validatePageRefConfig(
+  pageId: number,
+  cfg: PageRefFieldConfig | null | undefined,
+): Promise<{ cleaned: PageRefFieldConfig } | { error: string }> {
+  const sourcePageId = cfg?.sourcePageId;
+  const sourceFieldKey = cfg?.sourceFieldKey?.trim();
+  if (sourcePageId == null || !sourceFieldKey) {
+    return { error: "Укажите страницу-источник и её поле" };
+  }
+  if (sourcePageId === pageId) {
+    return { error: "Страница-источник должна быть другой страницей" };
+  }
+  const [own, src] = await Promise.all([
+    effectiveEntityForPage(pageId),
+    effectiveEntityForPage(sourcePageId),
+  ]);
+  if (!own.found || own.entityId == null) return { error: "Page not found" };
+  if (!src.found || src.entityId == null) return { error: "Страница-источник не найдена" };
+  if (own.entityId !== src.entityId) {
+    return { error: "Страница-источник должна показывать те же записи (та же сущность)" };
+  }
+  const [srcField] = await db
+    .select({ fieldType: pageFieldsTable.fieldType })
+    .from(pageFieldsTable)
+    .where(
+      and(
+        eq(pageFieldsTable.pageId, sourcePageId),
+        eq(pageFieldsTable.fieldKey, sourceFieldKey),
+        eq(pageFieldsTable.isActive, true),
+      ),
+    );
+  if (!srcField) return { error: "Поле на странице-источнике не найдено" };
+  if (!PAGE_REF_SOURCE_TYPES.has(srcField.fieldType)) {
+    return { error: "Этот тип поля нельзя отображать через «Поле другой страницы»" };
+  }
+  // Store ONLY the reference; resolved metadata is response-time enrichment.
+  return { cleaned: { sourcePageId, sourceFieldKey } };
+}
+
+/**
+ * Delete every `page_ref` field (on any page) that points at the given source
+ * page — optionally narrowed to one source field key. Called when the source
+ * field or the whole source page is deleted, so no dangling references remain.
+ */
+export async function cascadeDeletePageRefFields(sourcePageId: number, sourceFieldKey?: string): Promise<void> {
+  const conds: SQL[] = [
+    eq(pageFieldsTable.fieldType, "page_ref"),
+    sql`(${pageFieldsTable.pageRefConfigJson} ->> 'sourcePageId')::int = ${sourcePageId}`,
+  ];
+  if (sourceFieldKey != null) {
+    conds.push(sql`${pageFieldsTable.pageRefConfigJson} ->> 'sourceFieldKey' = ${sourceFieldKey}`);
+  }
+  await db.delete(pageFieldsTable).where(and(...conds));
+}
+
+/**
  * Load an entity's active fields. Needed to classify a role's `scopeFieldKeys`
  * (own-row owner fields) as native vs relation/lookup so the shared relation-
  * aware {@link ownScopeWhere}/{@link isRecordOwned} helpers can resolve ownership
@@ -316,7 +397,9 @@ export function validatePageValues(
     if (
       field.fieldType === "function" ||
       field.fieldType === "relation" ||
-      field.fieldType === "lookup"
+      field.fieldType === "lookup" ||
+      // page_ref displays ANOTHER page's value — never stored on this page.
+      field.fieldType === "page_ref"
     )
       continue;
     const raw = values[field.fieldKey];
@@ -427,17 +510,59 @@ router.get("/pages/:pageId/fields", requireAuth, async (req, res): Promise<void>
   // (not even its metadata/label/config). Admins who can edit pages still receive
   // every field so the column setup mode can configure hidden columns.
   const perms = await getPermissions(req);
+  // page_ref fields carry response-only resolved metadata (the source field's
+  // current type/options) so clients can render values without extra requests.
+  const enriched = await Promise.all(
+    fields.map(async (f) => {
+      if (f.fieldType !== "page_ref") return f;
+      const cfg = (f.pageRefConfigJson ?? {}) as PageRefFieldConfig;
+      if (cfg.sourcePageId == null || !cfg.sourceFieldKey) return f;
+      const [src] = await db
+        .select({
+          fieldType: pageFieldsTable.fieldType,
+          optionsJson: pageFieldsTable.optionsJson,
+          percentConfigJson: pageFieldsTable.percentConfigJson,
+        })
+        .from(pageFieldsTable)
+        .where(
+          and(
+            eq(pageFieldsTable.pageId, cfg.sourcePageId),
+            eq(pageFieldsTable.fieldKey, cfg.sourceFieldKey),
+            eq(pageFieldsTable.isActive, true),
+          ),
+        );
+      if (!src) return f;
+      return {
+        ...f,
+        pageRefConfigJson: {
+          ...cfg,
+          resolvedFieldType: src.fieldType,
+          resolvedOptionsJson: normalizeOptions(src.optionsJson),
+          resolvedPercentConfigJson: src.percentConfigJson ?? {},
+        },
+      };
+    }),
+  );
   if (perms.superAdmin || perms.admin.pages) {
-    res.json(fields);
+    res.json(enriched);
     return;
   }
   const roleIds = await getUserRoleIds(req);
-  const visible = fields.filter(
+  const visible = enriched.filter(
     (f) =>
       mostPermissiveFieldPerm(f.permissionsJson as FieldPermissions | null, roleIds, "view", perms, eff.entityId ?? undefined, params.data.pageId) !==
       "hidden",
   );
-  res.json(visible);
+  // The source PAGE's per-role access is a boundary too: without access to the
+  // source page a viewer must not see its data re-surfaced here — drop the
+  // whole column (admins keep it for setup).
+  res.json(
+    visible.filter((f) => {
+      if (f.fieldType !== "page_ref") return true;
+      const spid = (f.pageRefConfigJson as PageRefFieldConfig)?.sourcePageId;
+      return spid == null || perms.pageIds.includes(spid);
+    }),
+  );
 });
 
 router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (req, res): Promise<void> => {
@@ -498,6 +623,15 @@ router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (
     }
     relationConfigToInsert = check.cleaned;
   }
+  let pageRefConfigToInsert: PageRefFieldConfig = {};
+  if (parsed.data.fieldType === "page_ref") {
+    const check = await validatePageRefConfig(params.data.pageId, parsed.data.pageRefConfigJson);
+    if ("error" in check) {
+      res.status(400).json({ error: check.error });
+      return;
+    }
+    pageRefConfigToInsert = check.cleaned;
+  }
   if (await pageFieldKeyTaken(params.data.pageId, key, null)) {
     res.status(409).json({ error: "A page field with this key already exists on this page" });
     return;
@@ -512,6 +646,7 @@ router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (
         percentConfigJson: clampFormulaDecimals(parsed.data.percentConfigJson),
         relationConfigJson: relationConfigToInsert ?? {},
         fileConfigJson: (parsed.data.fileConfigJson ?? {}) as FileFieldConfig,
+        pageRefConfigJson: pageRefConfigToInsert,
         fieldKey: key,
         pageId: params.data.pageId,
       })
@@ -640,6 +775,22 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
     // Switching away from relation/lookup: clear any stored relation config.
     relationConfigToPersist = null;
   }
+  let pageRefConfigToPersist: PageRefFieldConfig | undefined;
+  if (nextType === "page_ref") {
+    const nextCfg =
+      "pageRefConfigJson" in body
+        ? (body.pageRefConfigJson as PageRefFieldConfig | null)
+        : (current.pageRefConfigJson as PageRefFieldConfig | null);
+    const check = await validatePageRefConfig(current.pageId, nextCfg);
+    if ("error" in check) {
+      res.status(400).json({ error: check.error });
+      return;
+    }
+    pageRefConfigToPersist = check.cleaned;
+  } else if (body.fieldType != null || "pageRefConfigJson" in body) {
+    // Switching away from page_ref (or explicitly clearing): drop the config.
+    pageRefConfigToPersist = {};
+  }
   if (body.nameJson != null) {
     if (!Object.values(body.nameJson).some((v) => typeof v === "string" && v.trim() !== "")) {
       res.status(400).json({ error: "Укажите название хотя бы на одном языке" });
@@ -675,6 +826,7 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
   if ("totalTextColor" in body) updateData.totalTextColor = body.totalTextColor ?? null;
   if ("columnGroupId" in body) updateData.columnGroupId = body.columnGroupId ?? null;
   if (body.fileConfigJson != null) updateData.fileConfigJson = body.fileConfigJson as FileFieldConfig;
+  if (pageRefConfigToPersist !== undefined) updateData.pageRefConfigJson = pageRefConfigToPersist;
   if (Object.keys(updateData).length === 0) {
     res.status(400).json({ error: "No fields to update" });
     return;
@@ -704,11 +856,14 @@ router.delete("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req
   const [deleted] = await db
     .delete(pageFieldsTable)
     .where(eq(pageFieldsTable.id, params.data.id))
-    .returning({ id: pageFieldsTable.id });
+    .returning({ id: pageFieldsTable.id, pageId: pageFieldsTable.pageId, fieldKey: pageFieldsTable.fieldKey });
   if (!deleted) {
     res.status(404).json({ error: "Page field not found" });
     return;
   }
+  // A deleted field may be the SOURCE of page_ref fields on other pages —
+  // remove those too so no dangling references remain (user-approved cascade).
+  await cascadeDeletePageRefFields(deleted.pageId, deleted.fieldKey);
   res.json({ success: true, message: "Page field deleted" });
 });
 
@@ -750,7 +905,64 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
     .from(pageRecordValuesTable)
     .innerJoin(entityRecordsTable, eq(entityRecordsTable.id, pageRecordValuesTable.recordId))
     .where(and(...where));
-  res.json(rows);
+
+  // page_ref fields: merge the SOURCE page's values (same records) under this
+  // page's field keys, gated by the viewer's access to the source page.
+  const refFields = (
+    await db
+      .select()
+      .from(pageFieldsTable)
+      .where(
+        and(
+          eq(pageFieldsTable.pageId, params.data.pageId),
+          eq(pageFieldsTable.fieldType, "page_ref"),
+          eq(pageFieldsTable.isActive, true),
+        ),
+      )
+  ).filter((f) => {
+    const cfg = (f.pageRefConfigJson ?? {}) as PageRefFieldConfig;
+    if (cfg.sourcePageId == null || !cfg.sourceFieldKey) return false;
+    // Source-page access boundary (superAdmin/pages-admin always pass).
+    return perms.superAdmin || perms.admin.pages || perms.pageIds.includes(cfg.sourcePageId);
+  });
+  if (refFields.length === 0) {
+    res.json(rows);
+    return;
+  }
+  const byRecord = new Map<number, Record<string, unknown>>();
+  for (const r of rows) byRecord.set(r.recordId, { ...((r.valuesJson as Record<string, unknown>) ?? {}) });
+  const sourcePageIds = [...new Set(refFields.map((f) => (f.pageRefConfigJson as PageRefFieldConfig).sourcePageId!))];
+  for (const spid of sourcePageIds) {
+    // Same viewer boundary as the base query (entity rows + own scope +
+    // hidden-row statuses), only the pageId differs.
+    const srcWhere: SQL[] = [
+      eq(pageRecordValuesTable.pageId, spid),
+      eq(entityRecordsTable.entityId, entityId),
+    ];
+    if (scope === "own") {
+      const entityFields = await loadActiveEntityFields(entityId);
+      srcWhere.push(await ownScopeWhere(entityId, scopeFieldKeys, req.user!.userId, entityFields));
+    }
+    if (rvHiddenRowWhere) srcWhere.push(rvHiddenRowWhere);
+    const srcRows = await db
+      .select({ recordId: pageRecordValuesTable.recordId, valuesJson: pageRecordValuesTable.valuesJson })
+      .from(pageRecordValuesTable)
+      .innerJoin(entityRecordsTable, eq(entityRecordsTable.id, pageRecordValuesTable.recordId))
+      .where(and(...srcWhere));
+    const pageRefs = refFields.filter((f) => (f.pageRefConfigJson as PageRefFieldConfig).sourcePageId === spid);
+    for (const sr of srcRows) {
+      const srcValues = (sr.valuesJson as Record<string, unknown>) ?? {};
+      for (const f of pageRefs) {
+        const key = (f.pageRefConfigJson as PageRefFieldConfig).sourceFieldKey!;
+        const v = srcValues[key];
+        if (v === undefined || v === null) continue;
+        const target = byRecord.get(sr.recordId) ?? {};
+        target[f.fieldKey] = v;
+        byRecord.set(sr.recordId, target);
+      }
+    }
+  }
+  res.json([...byRecord.entries()].map(([recordId, valuesJson]) => ({ recordId, valuesJson })));
 });
 
 router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, res): Promise<void> => {

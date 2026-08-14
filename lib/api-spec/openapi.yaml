@@ -5924,6 +5924,7 @@ components:
         - lookup
         - percent
         - created_at
+        - page_ref
 
     FormatOperator:
       type: string
@@ -6682,6 +6683,25 @@ components:
             projected value itself stays read-only; ignored for relation fields
             and for page-source lookups (when relatedPageId is set).
 
+    PageRefFieldConfig:
+      type: object
+      description: >-
+        Config for a page_ref page field: read-only display of another mirror
+        page's page-local field for the same record. resolved* properties are
+        response-only enrichment of the source field's current type/options.
+      properties:
+        sourcePageId:
+          type: integer
+        sourceFieldKey:
+          type: string
+        resolvedFieldType:
+          type: string
+        resolvedOptionsJson:
+          type: array
+          items: {}
+        resolvedPercentConfigJson:
+          $ref: "#/components/schemas/PercentFieldConfig"
+
     PageField:
       type: object
       required: [id, pageId, fieldKey, nameJson, fieldType, isRequired, optionsJson, sortOrder, isActive, createdAt, updatedAt]
@@ -6722,6 +6742,8 @@ components:
           $ref: "#/components/schemas/RelationFieldConfig"
         fileConfigJson:
           $ref: "#/components/schemas/FileFieldConfig"
+        pageRefConfigJson:
+          $ref: "#/components/schemas/PageRefFieldConfig"
         permissionsJson:
           $ref: "#/components/schemas/FieldPermissions"
         showInTable:
@@ -6788,6 +6810,8 @@ components:
           $ref: "#/components/schemas/RelationFieldConfig"
         fileConfigJson:
           $ref: "#/components/schemas/FileFieldConfig"
+        pageRefConfigJson:
+          $ref: "#/components/schemas/PageRefFieldConfig"
         permissionsJson:
           $ref: "#/components/schemas/FieldPermissions"
         showInTable:
@@ -6848,6 +6872,8 @@ components:
           $ref: "#/components/schemas/RelationFieldConfig"
         fileConfigJson:
           $ref: "#/components/schemas/FileFieldConfig"
+        pageRefConfigJson:
+          $ref: "#/components/schemas/PageRefFieldConfig"
         permissionsJson:
           $ref: "#/components/schemas/FieldPermissions"
         showInTable:

@@ -219,6 +219,7 @@ export * from './pageRecordValue';
 export * from './pageRecordValueInput';
 export * from './pageRecordValueInputValuesJson';
 export * from './pageRecordValueValuesJson';
+export * from './pageRefFieldConfig';
 export * from './pageRelatedCandidate';
 export * from './pageRelatedCandidates';
 export * from './pageRelatedCandidatesInput';

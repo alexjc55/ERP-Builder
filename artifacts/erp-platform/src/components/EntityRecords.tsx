@@ -1837,7 +1837,11 @@ export function EntityRecords({
     () =>
       pageFields.filter(
         (pf: PageField) =>
-          pf.fieldType !== "function" && pf.fieldType !== "relation" && pf.fieldType !== "lookup",
+          pf.fieldType !== "function" &&
+          pf.fieldType !== "relation" &&
+          pf.fieldType !== "lookup" &&
+          // page_ref displays ANOTHER page's value — never stored/edited here.
+          pf.fieldType !== "page_ref",
       ),
     [pageFields],
   );
@@ -3865,7 +3869,7 @@ export function EntityRecords({
     const pageValuesJson: Record<string, unknown> = {};
     if (hasPage && pageId != null) {
       for (const pf of pageFields) {
-        if (pf.fieldType === "function" || pf.fieldType === "relation" || pf.fieldType === "lookup") continue;
+        if (pf.fieldType === "function" || pf.fieldType === "relation" || pf.fieldType === "lookup" || pf.fieldType === "page_ref") continue;
         const val = cellValueForPayload({ ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field, newPageRow[pf.fieldKey] as CellValue);
         if (val !== "" && val !== undefined && val !== null) pageValuesJson[pf.fieldKey] = val;
       }
@@ -6247,6 +6251,34 @@ export function EntityRecords({
                             return (
                               <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
                                 <div className={pf.wrapText ? "whitespace-normal break-words" : "truncate"}>{display}</div>
+                              </td>
+                            );
+                          }
+                          if (pf.fieldType === "page_ref") {
+                            // Read-only display of ANOTHER page's page-local value for the
+                            // same record (merged into pageValues by the server). Rendered
+                            // with the SOURCE field's resolved type/options.
+                            const cfg = (pf.pageRefConfigJson ?? {}) as {
+                              resolvedFieldType?: string;
+                              resolvedOptionsJson?: unknown[];
+                              resolvedPercentConfigJson?: Record<string, unknown>;
+                            };
+                            const refField = {
+                              ...pf,
+                              fieldType: (cfg.resolvedFieldType ?? "text") as Field["fieldType"],
+                              optionsJson: cfg.resolvedOptionsJson ?? [],
+                              percentConfigJson: cfg.resolvedPercentConfigJson ?? {},
+                              permissionsJson: {},
+                              entityId: 0,
+                            } as unknown as Field;
+                            const v = pageValues[pf.fieldKey];
+                            return (
+                              <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                                {v == null || v === "" ? (
+                                  <span className="text-slate-300">—</span>
+                                ) : (
+                                  renderCellValue(refField, v, t, userNames, cellText, ml)
+                                )}
                               </td>
                             );
                           }

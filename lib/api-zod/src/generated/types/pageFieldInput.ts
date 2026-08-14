@@ -11,6 +11,7 @@ import type { FieldType } from './fieldType';
 import type { FileFieldConfig } from './fileFieldConfig';
 import type { FormulaFieldConfig } from './formulaFieldConfig';
 import type { MultilingualText } from './multilingualText';
+import type { PageRefFieldConfig } from './pageRefFieldConfig';
 import type { PercentFieldConfig } from './percentFieldConfig';
 import type { RelationFieldConfig } from './relationFieldConfig';
 import type { SelectOption } from './selectOption';
@@ -31,6 +32,7 @@ export interface PageFieldInput {
   percentConfigJson?: PercentFieldConfig;
   relationConfigJson?: RelationFieldConfig;
   fileConfigJson?: FileFieldConfig;
+  pageRefConfigJson?: PageRefFieldConfig;
   permissionsJson?: FieldPermissions;
   showInTable?: boolean;
   isPinned?: boolean;
