@@ -330,18 +330,27 @@ function formatTotalValue(
     fieldType: string;
     formulaConfigJson?: { decimals?: number | null } | null;
     percentConfigJson?: { decimals?: number | null } | null;
+    pageRefConfigJson?: { resolvedFieldType?: string; resolvedPercentConfigJson?: { decimals?: number | null } } | null;
   },
   n: number,
 ): string {
+  // page_ref totals aggregate the SOURCE field's values — format by its
+  // resolved type/decimals, not the page_ref shell.
+  const effType =
+    field.fieldType === "page_ref"
+      ? (field.pageRefConfigJson?.resolvedFieldType ?? "number")
+      : field.fieldType;
   const d =
-    field.fieldType === "percent"
-      ? field.percentConfigJson?.decimals
+    effType === "percent"
+      ? field.fieldType === "page_ref"
+        ? field.pageRefConfigJson?.resolvedPercentConfigJson?.decimals
+        : field.percentConfigJson?.decimals
       : field.formulaConfigJson?.decimals;
   const s =
     d != null
       ? n.toLocaleString("ru-RU", { minimumFractionDigits: d, maximumFractionDigits: d })
       : n.toLocaleString("ru-RU");
-  return field.fieldType === "percent" ? `${s}%` : s;
+  return effType === "percent" ? `${s}%` : s;
 }
 
 /** Build the payload values object from form state, dropping empty optional values. */
@@ -2019,13 +2028,35 @@ export function EntityRecords({
   // page-local filter as a hard boundary, so never offer one the server would 400 on.
   const filterablePageFields = useMemo(
     () =>
-      pageFields.filter(
-        (pf: PageField) =>
-          pf.isFilterable &&
-          PAGE_LOCAL_FILTERABLE_TYPES.has(pf.fieldType) &&
-          (userRoleIds.length === 0 ||
-            userRoleIds.some((rid) => pf.permissionsJson?.[String(rid)] !== "hidden")),
-      ),
+      pageFields
+        .filter(
+          (pf: PageField) =>
+            pf.isFilterable &&
+            (PAGE_LOCAL_FILTERABLE_TYPES.has(pf.fieldType) ||
+              // page_ref filters by the SOURCE field's values; the server only
+              // accepts it when the resolved source type is filterable (and
+              // enrichment already applied the source-side access boundary).
+              (pf.fieldType === "page_ref" &&
+                PAGE_LOCAL_FILTERABLE_TYPES.has(
+                  String((pf.pageRefConfigJson as { resolvedFieldType?: string } | undefined)?.resolvedFieldType ?? ""),
+                ))) &&
+            (userRoleIds.length === 0 ||
+              userRoleIds.some((rid) => pf.permissionsJson?.[String(rid)] !== "hidden")),
+        )
+        .map((pf: PageField) => {
+          if (pf.fieldType !== "page_ref") return pf;
+          // Present the filter widget as the SOURCE type (same fieldKey — the
+          // server resolves it back to the source page/key).
+          const cfg = pf.pageRefConfigJson as
+            | { resolvedFieldType?: string; resolvedOptionsJson?: unknown[]; resolvedPercentConfigJson?: Record<string, unknown> }
+            | undefined;
+          return {
+            ...pf,
+            fieldType: (cfg?.resolvedFieldType ?? "text") as PageField["fieldType"],
+            optionsJson: (cfg?.resolvedOptionsJson ?? []) as PageField["optionsJson"],
+            percentConfigJson: (cfg?.resolvedPercentConfigJson ?? {}) as PageField["percentConfigJson"],
+          };
+        }),
     [pageFields, userRoleIds],
   );
   const statusById = new Map(statuses.map((s: Status) => [s.id, s]));
@@ -4274,6 +4305,23 @@ export function EntityRecords({
                 optionsJson: meta?.optionsJson ?? [],
               } as unknown as Field;
               renderValue = relVal;
+            } else if (col.kind !== "entity" && (col.field as PageField).fieldType === "page_ref") {
+              // page_ref group-common values come from the SOURCE field — render
+              // them with its resolved type/options (like the body cells do).
+              const cfg = ((col.field as PageField).pageRefConfigJson ?? {}) as {
+                resolvedFieldType?: string;
+                resolvedOptionsJson?: unknown[];
+              };
+              let v: unknown = common;
+              if (cfg.resolvedFieldType === "boolean" && typeof v === "string") v = v === "true";
+              renderField = {
+                ...col.field,
+                fieldType: (cfg.resolvedFieldType ?? "text") as Field["fieldType"],
+                optionsJson: cfg.resolvedOptionsJson ?? [],
+                permissionsJson: {},
+                entityId: 0,
+              } as unknown as Field;
+              renderValue = v;
             } else {
               renderField =
                 col.kind === "entity"

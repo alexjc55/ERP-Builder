@@ -37,6 +37,7 @@ import {
   mostPermissiveFieldPerm,
 } from "../middlewares/permissions";
 import { ownScopeWhere, isRecordOwned } from "./own-scope";
+import { PAGE_REF_SOURCE_TYPES, loadPageRefSource } from "./record-query";
 import { validateFileValue, trashRemovedPageServerFiles } from "./records";
 import { isGoogleDriveModuleEnabled } from "../lib/googleDrive";
 import { emitEvent, EVENT_PAGE_FIELD_SAVED } from "../lib/events";
@@ -231,26 +232,6 @@ async function validateRelatedPageSource(
 }
 
 /**
- * Page-field types a `page_ref` field may point at: scalar, value-backed types
- * whose values live in page_record_values and render without extra resolution.
- * Derived types (function/relation/lookup/page_ref itself) and files are out.
- */
-const PAGE_REF_SOURCE_TYPES = new Set([
-  "text",
-  "textarea",
-  "number",
-  "percent",
-  "boolean",
-  "date",
-  "datetime",
-  "select",
-  "email",
-  "url",
-  "phone",
-  "user",
-]);
-
-/**
  * Validate a `page_ref` field config: the source must be ANOTHER page with the
  * SAME effective entity (so "this record" is well-defined on both pages), and
  * the source field must be an active, value-backed page field there.
@@ -292,28 +273,6 @@ async function validatePageRefConfig(
   }
   // Store ONLY the reference; resolved metadata is response-time enrichment.
   return { cleaned: { sourcePageId, sourceFieldKey } };
-}
-
-/**
- * Load a page_ref field's SOURCE page field, re-validating eligibility at read
- * time (active + value-backed type): a source later deactivated or retyped to
- * an unsupported kind must stop resolving, even though the reference row still
- * exists — defense in depth against stale configs.
- */
-async function loadPageRefSource(cfg: PageRefFieldConfig): Promise<PageField | null> {
-  if (cfg.sourcePageId == null || !cfg.sourceFieldKey) return null;
-  const [src] = await db
-    .select()
-    .from(pageFieldsTable)
-    .where(
-      and(
-        eq(pageFieldsTable.pageId, cfg.sourcePageId),
-        eq(pageFieldsTable.fieldKey, cfg.sourceFieldKey),
-        eq(pageFieldsTable.isActive, true),
-      ),
-    );
-  if (!src || !PAGE_REF_SOURCE_TYPES.has(src.fieldType)) return null;
-  return src;
 }
 
 /**

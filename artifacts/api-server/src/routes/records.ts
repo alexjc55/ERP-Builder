@@ -60,7 +60,9 @@ import {
   type RecordQuerySpec,
   type FilterCondition,
   type RelationFilterMeta,
+  loadPageRefSource,
 } from "./record-query";
+import type { PageField, PageRefFieldConfig } from "@workspace/db";
 import { buildRelationMeta, ownScopeWhere, isRecordOwned } from "./own-scope";
 import { applyPageFieldDefaults } from "../lib/page-field-defaults";
 import { computePivot } from "./pivot-compute";
@@ -101,6 +103,38 @@ const PAGE_LOCAL_FILTERABLE_TYPES = new Set([
   "datetime",
   "user",
 ]);
+
+/**
+ * Resolve a page-local field into the (pageId, key, type) triple its VALUE
+ * actually lives under, enforcing the filter boundary. For ordinary page fields
+ * that's the field itself; for `page_ref` it's the SOURCE page's field, gated
+ * by the same double boundary as value merging (source-page access + source
+ * field per-role visibility; setup admins pass) plus read-time eligibility.
+ * Returns null when the field must not be filterable for this viewer.
+ */
+async function resolvePageLocalFilterTarget(
+  pf: PageField,
+  roleIds: number[],
+  perms: Awaited<ReturnType<typeof getPermissions>>,
+  entityId: number,
+  pageId: number,
+): Promise<{ effType: string; exprPageId: number; exprKey: string } | null> {
+  if (!pf.isFilterable) return null;
+  if (mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view", perms, entityId, pageId) === "hidden") return null;
+  if (pf.fieldType === "page_ref") {
+    const cfg = (pf.pageRefConfigJson ?? {}) as PageRefFieldConfig;
+    const src = await loadPageRefSource(cfg);
+    if (!src || !PAGE_LOCAL_FILTERABLE_TYPES.has(src.fieldType)) return null;
+    if (!(perms.superAdmin || perms.admin.pages)) {
+      if (!perms.pageIds.includes(cfg.sourcePageId!)) return null;
+      if (mostPermissiveFieldPerm(src.permissionsJson, roleIds, "view", perms, entityId, cfg.sourcePageId!) === "hidden")
+        return null;
+    }
+    return { effType: src.fieldType, exprPageId: cfg.sourcePageId!, exprKey: cfg.sourceFieldKey! };
+  }
+  if (!PAGE_LOCAL_FILTERABLE_TYPES.has(pf.fieldType)) return null;
+  return { effType: pf.fieldType, exprPageId: pageId, exprKey: pf.fieldKey };
+}
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^[+0-9().\s-]{3,}$/;
@@ -900,23 +934,15 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       .select()
       .from(pageFieldsTable)
       .where(and(eq(pageFieldsTable.pageId, plPageId), eq(pageFieldsTable.isActive, true)));
-    const plByKey = new Map(
-      plRows
-        .filter(
-          (pf) =>
-            pf.isFilterable &&
-            PAGE_LOCAL_FILTERABLE_TYPES.has(pf.fieldType) &&
-            mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view", perms, entityId, plPageId) !== "hidden",
-        )
-        .map((pf) => [pf.fieldKey, pf] as const),
-    );
+    const plByKey = new Map(plRows.map((pf) => [pf.fieldKey, pf] as const));
     for (const cond of pageLocalFilters) {
       const pf = plByKey.get(cond.field);
-      if (!pf) {
+      const target = pf ? await resolvePageLocalFilterTarget(pf, roleIds, perms, entityId, plPageId) : null;
+      if (!target) {
         res.status(400).json({ error: `Unknown or non-filterable page field "${cond.field}"` });
         return;
       }
-      const r = buildPageLocalCondition(cond, pf.fieldType, plPageId);
+      const r = buildPageLocalCondition({ ...cond, field: target.exprKey }, target.effType, target.exprPageId);
       if ("error" in r) {
         res.status(400).json({ error: r.error });
         return;
@@ -1280,7 +1306,33 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         pf.fieldType === "percent" &&
         mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view", perms, entityId, totalsPageId) !== "hidden",
     );
-    if (pageTotalFields.length > 0 || pagePercentFields.length > 0) {
+    // page_ref columns flagged showColumnTotal whose SOURCE is numeric: totals
+    // read the source page's values, so the same double boundary as value
+    // merging applies (source-page access + source field visibility; setup
+    // admins pass). number sums, percent averages — matching the source type.
+    const pageRefTotalTargets: { pf: PageField; srcPageId: number; srcKey: string; srcType: string; srcPercentDecimals: number | null | undefined }[] = [];
+    {
+      const totalsSetupAdmin = perms.superAdmin || perms.admin.pages;
+      for (const pf of pageFieldRows) {
+        if (pf.fieldType !== "page_ref") continue;
+        if (mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view", perms, entityId, totalsPageId) === "hidden") continue;
+        const cfg = (pf.pageRefConfigJson ?? {}) as PageRefFieldConfig;
+        const src = await loadPageRefSource(cfg);
+        if (!src || (src.fieldType !== "number" && src.fieldType !== "percent")) continue;
+        if (!totalsSetupAdmin) {
+          if (!perms.pageIds.includes(cfg.sourcePageId!)) continue;
+          if (mostPermissiveFieldPerm(src.permissionsJson, roleIds, "view", perms, entityId, cfg.sourcePageId!) === "hidden") continue;
+        }
+        pageRefTotalTargets.push({
+          pf,
+          srcPageId: cfg.sourcePageId!,
+          srcKey: cfg.sourceFieldKey!,
+          srcType: src.fieldType,
+          srcPercentDecimals: src.percentConfigJson?.decimals,
+        });
+      }
+    }
+    if (pageTotalFields.length > 0 || pagePercentFields.length > 0 || pageRefTotalTargets.length > 0) {
       const recRows = await db
         .select({ id: entityRecordsTable.id, values: entityRecordsTable.valuesJson })
         .from(entityRecordsTable)
@@ -1295,6 +1347,19 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           : [];
       const pvByRecord = new Map<number, Record<string, unknown>>();
       for (const r of pvRows) pvByRecord.set(r.recordId, (r.values as Record<string, unknown> | null) ?? {});
+      // page_ref totals read the SOURCE page's values — one map per source page.
+      const srcPvByPage = new Map<number, Map<number, Record<string, unknown>>>();
+      if (ids.length > 0) {
+        for (const spid of [...new Set(pageRefTotalTargets.map((t) => t.srcPageId))]) {
+          const rows = await db
+            .select({ recordId: pageRecordValuesTable.recordId, values: pageRecordValuesTable.valuesJson })
+            .from(pageRecordValuesTable)
+            .where(and(eq(pageRecordValuesTable.pageId, spid), inArray(pageRecordValuesTable.recordId, ids)));
+          const m = new Map<number, Record<string, unknown>>();
+          for (const r of rows) m.set(r.recordId, (r.values as Record<string, unknown> | null) ?? {});
+          srcPvByPage.set(spid, m);
+        }
+      }
       numericTotals = numericTotals ?? {};
       // Page-local formulas evaluate over {entity ∪ page} values and may reference
       // either entity or page formula fields by key.
@@ -1352,6 +1417,39 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         if (count > 0) {
           const avg = sum / count;
           numericTotals[totalKey] = d != null ? Number(avg.toFixed(d)) : cleanFpNoise(avg);
+        }
+      }
+      // page_ref totals: aggregate the SOURCE page's values under this page's
+      // column key — number sources sum, percent sources average filled rows.
+      for (const t of pageRefTotalTargets) {
+        const totalKey = `pf:${t.pf.id}`;
+        const m = srcPvByPage.get(t.srcPageId) ?? new Map<number, Record<string, unknown>>();
+        if (t.srcType === "number") {
+          let sum = 0;
+          for (const r of recRows) {
+            const raw = (m.get(r.id) ?? {})[t.srcKey];
+            if (typeof raw === "number" && Number.isFinite(raw)) sum += raw;
+            else if (typeof raw === "string" && raw.trim() !== "" && Number.isFinite(Number(raw))) sum += Number(raw);
+          }
+          numericTotals[totalKey] = sum;
+        } else {
+          const d = normalizeDecimals(t.srcPercentDecimals);
+          let sum = 0;
+          let count = 0;
+          for (const r of recRows) {
+            const raw = (m.get(r.id) ?? {})[t.srcKey];
+            let n: number | null = null;
+            if (typeof raw === "number" && Number.isFinite(raw)) n = raw;
+            else if (typeof raw === "string" && raw.trim() !== "" && Number.isFinite(Number(raw))) n = Number(raw);
+            if (n != null) {
+              sum += n;
+              count += 1;
+            }
+          }
+          if (count > 0) {
+            const avg = sum / count;
+            numericTotals[totalKey] = d != null ? Number(avg.toFixed(d)) : cleanFpNoise(avg);
+          }
         }
       }
     }
@@ -1476,7 +1574,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     // Value-backed page-local fields for the common-value pass (relation/lookup
     // page fields resolve via record links, file values are objects — skip both;
     // percent goes through the average pass, not the common-value pass).
-    const PF_COMMON_SKIP = new Set(["relation", "lookup", "file"]);
+    const PF_COMMON_SKIP = new Set(["relation", "lookup", "file", "page_ref"]);
     const gPfScalarCommon = gPfVisible.filter(
       (pf) =>
         !gPfSumIds.has(pf.id) &&
@@ -1485,12 +1583,61 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         !PF_COMMON_SKIP.has(pf.fieldType),
     );
     const gPfFormulaCommon = gPfVisible.filter((pf) => !gPfSumIds.has(pf.id) && pf.fieldType === "function");
+    // page_ref columns in groups: numeric sources sum/average like their source
+    // type (sum gated by showColumnTotal, percent always averaged — matching the
+    // ordinary page-field rules); everything else joins the common-value pass.
+    // Same double boundary as value merging (source page + source field perms).
+    const gPfRefTargets: { pf: PageField; srcPageId: number; srcKey: string; srcType: string; srcPercentDecimals: number | null | undefined }[] = [];
+    {
+      const gSetupAdmin = perms.superAdmin || perms.admin.pages;
+      for (const pf of gPfVisible) {
+        if (pf.fieldType !== "page_ref") continue;
+        const cfg = (pf.pageRefConfigJson ?? {}) as PageRefFieldConfig;
+        const src = await loadPageRefSource(cfg);
+        if (!src) continue;
+        if (!gSetupAdmin) {
+          if (!perms.pageIds.includes(cfg.sourcePageId!)) continue;
+          if (mostPermissiveFieldPerm(src.permissionsJson, gCommonRoleIds, "view", perms, entityId, cfg.sourcePageId!) === "hidden") continue;
+        }
+        gPfRefTargets.push({
+          pf,
+          srcPageId: cfg.sourcePageId!,
+          srcKey: cfg.sourceFieldKey!,
+          srcType: src.fieldType,
+          srcPercentDecimals: src.percentConfigJson?.decimals,
+        });
+      }
+    }
+    const gPfRefSum = gPfRefTargets.filter((t) => t.srcType === "number" && t.pf.showColumnTotal);
+    const gPfRefPercent = gPfRefTargets.filter((t) => t.srcType === "percent");
+    const gPfRefCommon = gPfRefTargets.filter((t) => t.srcType !== "number" && t.srcType !== "percent");
     // Cross-formula resolution scope for the grouped page: entity formulas ∪ this
     // page's formula fields (page formulas evaluate over {entity ∪ page} values).
     const gPfScopeFormulaDefs = [
       ...entityFormulaDefs,
       ...gPfRows.filter((pf) => pf.fieldType === "function").map(toFormulaDef),
     ];
+    // Source-page value maps for page_ref group columns (one per source page).
+    const gSrcPvByPage = new Map<number, Map<number, Record<string, unknown>>>();
+    if (gPfRefTargets.length > 0 && gRows.length > 0) {
+      for (const spid of [...new Set(gPfRefTargets.map((t) => t.srcPageId))]) {
+        const rows = await db
+          .select({ recordId: pageRecordValuesTable.recordId, values: pageRecordValuesTable.valuesJson })
+          .from(pageRecordValuesTable)
+          .where(
+            and(
+              eq(pageRecordValuesTable.pageId, spid),
+              inArray(
+                pageRecordValuesTable.recordId,
+                gRows.map((r) => r.id),
+              ),
+            ),
+          );
+        const m = new Map<number, Record<string, unknown>>();
+        for (const r of rows) m.set(r.recordId, (r.values as Record<string, unknown> | null) ?? {});
+        gSrcPvByPage.set(spid, m);
+      }
+    }
     const gPvByRec = new Map<number, Record<string, unknown>>();
     if (
       (gPfSumFields.length > 0 ||
@@ -1652,6 +1799,22 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           }
         }
       }
+      // page_ref group columns read the SOURCE page's value for this record.
+      for (const t of gPfRefSum) {
+        const k = `pf:${t.pf.id}`;
+        b.sums[k] = (b.sums[k] ?? 0) + numVal((gSrcPvByPage.get(t.srcPageId)?.get(r.id) ?? {})[t.srcKey]);
+      }
+      for (const t of gPfRefPercent) {
+        const k = `pf:${t.pf.id}`;
+        const n = numOrNull((gSrcPvByPage.get(t.srcPageId)?.get(r.id) ?? {})[t.srcKey]);
+        if (n !== null) {
+          b.pctSum[k] = (b.pctSum[k] ?? 0) + n;
+          b.pctCnt[k] = (b.pctCnt[k] ?? 0) + 1;
+        }
+      }
+      for (const t of gPfRefCommon) {
+        trackCommon(b, `pf:${t.pf.id}`, (gSrcPvByPage.get(t.srcPageId)?.get(r.id) ?? {})[t.srcKey], firstRow);
+      }
       // Percent averages: accumulate sum + filled-count per group (entity + page-local).
       for (const f of percentFields) {
         const n = numOrNull(vals[f.fieldKey]);
@@ -1718,6 +1881,15 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         const cnt = b.pctCnt[k] ?? 0;
         if (cnt > 0) {
           const d = normalizeDecimals(pf.percentConfigJson?.decimals);
+          const avg = b.pctSum[k]! / cnt;
+          b.sums[k] = d != null ? Number(avg.toFixed(d)) : cleanFpNoise(avg);
+        }
+      }
+      for (const t of gPfRefPercent) {
+        const k = `pf:${t.pf.id}`;
+        const cnt = b.pctCnt[k] ?? 0;
+        if (cnt > 0) {
+          const d = normalizeDecimals(t.srcPercentDecimals);
           const avg = b.pctSum[k]! / cnt;
           b.sums[k] = d != null ? Number(avg.toFixed(d)) : cleanFpNoise(avg);
         }
@@ -1924,18 +2096,15 @@ router.post(
         res.status(400).json({ error: "pageLocalFilters require pageId" });
         return;
       }
-      const plFilterByKey = new Map(
-        visiblePl
-          .filter((pf) => pf.isFilterable && PAGE_LOCAL_FILTERABLE_TYPES.has(pf.fieldType))
-          .map((pf) => [pf.fieldKey, pf] as const),
-      );
+      const plFilterByKey = new Map(visiblePl.map((pf) => [pf.fieldKey, pf] as const));
       for (const cond of pageLocalFilters) {
         const pf = plFilterByKey.get(cond.field);
-        if (!pf) {
+        const target = pf ? await resolvePageLocalFilterTarget(pf, roleIds, plPerms, entityId, pageId) : null;
+        if (!target) {
           res.status(400).json({ error: `Unknown or non-filterable page field "${cond.field}"` });
           return;
         }
-        const r = buildPageLocalCondition(cond, pf.fieldType, pageId);
+        const r = buildPageLocalCondition({ ...cond, field: target.exprKey }, target.effType, target.exprPageId);
         if ("error" in r) {
           res.status(400).json({ error: r.error });
           return;
@@ -2175,17 +2344,18 @@ router.post(
       .select()
       .from(pageFieldsTable)
       .where(and(eq(pageFieldsTable.pageId, pageId), eq(pageFieldsTable.isActive, true)));
-    const target = plRows.find(
-      (pf) =>
-        pf.fieldKey === body.data.field &&
-        pf.isFilterable &&
-        PAGE_LOCAL_FILTERABLE_TYPES.has(pf.fieldType) &&
-        mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view", fvPerms, entityId, pageId) !== "hidden",
-    );
-    if (!target) {
+    const targetPf = plRows.find((pf) => pf.fieldKey === body.data.field);
+    const resolved = targetPf
+      ? await resolvePageLocalFilterTarget(targetPf, roleIds, fvPerms, entityId, pageId)
+      : null;
+    if (!resolved) {
       res.status(400).json({ error: `Field is not a filterable page field: ${body.data.field}` });
       return;
     }
+    // For page_ref the VALUE lives on the source page under the source key —
+    // all value reads below go through the resolved (pageId, key) pair.
+    const valPageId = resolved.exprPageId;
+    const valKey = resolved.exprKey;
 
     const fields = await loadActiveFields(entityId);
     const perms = await getPermissions(req);
@@ -2195,7 +2365,7 @@ router.post(
 
     // Value lives in page_record_values keyed by (pageId, recordId). INNER JOIN so
     // only records that actually carry a page value contribute (= "in the table").
-    const valueExpr = sql<string | null>`(${pageRecordValuesTable.valuesJson} ->> ${target.fieldKey})`;
+    const valueExpr = sql<string | null>`(${pageRecordValuesTable.valuesJson} ->> ${valKey})`;
     const clauses: SQL[] = [eq(entityRecordsTable.entityId, entityId)];
     const archWhere = archivedWhere(archived);
     if (archWhere) clauses.push(archWhere);
@@ -2217,7 +2387,7 @@ router.post(
       .from(entityRecordsTable)
       .innerJoin(
         pageRecordValuesTable,
-        and(eq(pageRecordValuesTable.pageId, pageId), eq(pageRecordValuesTable.recordId, entityRecordsTable.id)),
+        and(eq(pageRecordValuesTable.pageId, valPageId), eq(pageRecordValuesTable.recordId, entityRecordsTable.id)),
       )
       .where(where)
       .orderBy(sql`1`)
@@ -2228,7 +2398,7 @@ router.post(
     // field (no page_record_values row at all, or NULL/'' under the key). Uses
     // the same correlated subquery as the page-local `in` filter so semantics match.
     if (!pfValueSearch) {
-      const pfExpr = pageLocalValueExpr(pageId, target.fieldKey);
+      const pfExpr = pageLocalValueExpr(valPageId, valKey);
       const [emptyRow] = await db
         .select({ one: sql<number>`1` })
         .from(entityRecordsTable)

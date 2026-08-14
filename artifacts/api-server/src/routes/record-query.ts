@@ -1,6 +1,49 @@
-import { sql, and, or, asc, desc, inArray, type SQL } from "drizzle-orm";
-import { entityRecordsTable, recordLinksTable, pageRecordValuesTable } from "@workspace/db";
-import type { EntityField } from "@workspace/db";
+import { sql, and, or, asc, desc, inArray, eq, type SQL } from "drizzle-orm";
+import { db, entityRecordsTable, recordLinksTable, pageRecordValuesTable, pageFieldsTable } from "@workspace/db";
+import type { EntityField, PageField, PageRefFieldConfig } from "@workspace/db";
+
+/**
+ * Page-field types a `page_ref` field may point at: scalar, value-backed types
+ * whose values live in page_record_values and render without extra resolution.
+ * Derived types (function/relation/lookup/page_ref itself) and files are out.
+ * Kept in lockstep with the client copy in PageFieldConfigDialog.
+ */
+export const PAGE_REF_SOURCE_TYPES = new Set([
+  "text",
+  "textarea",
+  "number",
+  "percent",
+  "boolean",
+  "date",
+  "datetime",
+  "select",
+  "email",
+  "url",
+  "phone",
+  "user",
+]);
+
+/**
+ * Load a page_ref field's SOURCE page field, re-validating eligibility at read
+ * time (active + value-backed type): a source later deactivated or retyped to
+ * an unsupported kind must stop resolving, even though the reference row still
+ * exists — defense in depth against stale configs.
+ */
+export async function loadPageRefSource(cfg: PageRefFieldConfig | null | undefined): Promise<PageField | null> {
+  if (cfg?.sourcePageId == null || !cfg.sourceFieldKey) return null;
+  const [src] = await db
+    .select()
+    .from(pageFieldsTable)
+    .where(
+      and(
+        eq(pageFieldsTable.pageId, cfg.sourcePageId),
+        eq(pageFieldsTable.fieldKey, cfg.sourceFieldKey),
+        eq(pageFieldsTable.isActive, true),
+      ),
+    );
+  if (!src || !PAGE_REF_SOURCE_TYPES.has(src.fieldType)) return null;
+  return src;
+}
 
 export type FilterOperator =
   | "eq"

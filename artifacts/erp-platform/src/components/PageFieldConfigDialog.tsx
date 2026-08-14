@@ -428,6 +428,22 @@ export function PageFieldConfigDialog({
   const refSourceFields = refSourceFieldsRaw.filter(
     (f) => f.isActive && PAGE_REF_SOURCE_TYPES.has(f.fieldType),
   );
+  // Effective SOURCE type of the selected page_ref target — drives which
+  // filter/total toggles make sense (they aggregate the source's values).
+  const refSrcType: FieldType | undefined =
+    fieldType === "page_ref"
+      ? (refSourceFields.find((f) => f.fieldKey === refSourceFieldKey)?.fieldType ??
+        (field?.pageRefConfigJson as { resolvedFieldType?: FieldType } | undefined)?.resolvedFieldType)
+      : undefined;
+  const canFilter =
+    PAGE_FILTERABLE_TYPES.has(fieldType) ||
+    (fieldType === "page_ref" && refSrcType != null && PAGE_FILTERABLE_TYPES.has(refSrcType));
+  const canTotal =
+    fieldType === "number" ||
+    fieldType === "function" ||
+    fieldType === "percent" ||
+    (fieldType === "page_ref" && (refSrcType === "number" || refSrcType === "percent"));
+  const totalIsAvg = fieldType === "percent" || (fieldType === "page_ref" && refSrcType === "percent");
 
   const selectedRelation = relationOptions.find((o) => o.relationId === relationId);
   // Pages of the related entity whose page-local fields a relation/lookup can project.
@@ -456,22 +472,18 @@ export function PageFieldConfigDialog({
       descriptionJson: descJson as MultilingualText,
       fieldType,
       isRequired,
-      isFilterable: PAGE_FILTERABLE_TYPES.has(fieldType) ? isFilterable : false,
+      isFilterable: canFilter ? isFilterable : false,
       defaultValue: defaultValue.trim() ? defaultValue.trim() : null,
       optionsJson: options,
       sortOrder,
       isActive,
       showInTable,
       isPinned,
-      showColumnTotal:
-        fieldType === "number" || fieldType === "function" || fieldType === "percent" ? showColumnTotal : false,
+      showColumnTotal: canTotal ? showColumnTotal : false,
       wrapText,
-      totalFillColor:
-        (fieldType === "number" || fieldType === "function" || fieldType === "percent") && showColumnTotal && totalFillColor
-          ? totalFillColor
-          : null,
+      totalFillColor: canTotal && showColumnTotal && totalFillColor ? totalFillColor : null,
       totalTextColor:
-        (fieldType === "number" || fieldType === "function" || fieldType === "percent") && showColumnTotal && totalTextColor
+        canTotal && showColumnTotal && totalTextColor
           ? totalTextColor
           : null,
       formatRulesJson: formatRules,
@@ -965,7 +977,7 @@ export function PageFieldConfigDialog({
                 <Switch checked={isActive} onCheckedChange={setIsActive} id="pfcd-active" />
                 <Label htmlFor="pfcd-active">{t("fields.active", "Активно")}</Label>
               </div>
-              {PAGE_FILTERABLE_TYPES.has(fieldType) && (
+              {canFilter && (
                 <div className="flex items-center gap-2">
                   <Switch checked={isFilterable} onCheckedChange={setIsFilterable} id="pfcd-filterable" />
                   <Label htmlFor="pfcd-filterable">{t("fields.filterable", "Участвует в фильтре")}</Label>
@@ -983,11 +995,11 @@ export function PageFieldConfigDialog({
                 <Switch checked={wrapText} onCheckedChange={setWrapText} id="pfcd-wrap-text" />
                 <Label htmlFor="pfcd-wrap-text">{t("fields.wrapText", "Переносить текст в столбце на новую строку")}</Label>
               </div>
-              {(fieldType === "number" || fieldType === "function" || fieldType === "percent") && (
+              {canTotal && (
                 <div className="flex items-center gap-2">
                   <Switch checked={showColumnTotal} onCheckedChange={setShowColumnTotal} id="pfcd-show-column-total" />
                   <Label htmlFor="pfcd-show-column-total">
-                    {fieldType === "percent"
+                    {totalIsAvg
                       ? t("fields.showColumnAvg", "Показывать среднее по колонке")
                       : t("fields.showColumnTotal", "Показывать сумму столбца")}
                   </Label>
@@ -995,7 +1007,7 @@ export function PageFieldConfigDialog({
               )}
             </div>
 
-            {(fieldType === "number" || fieldType === "function" || fieldType === "percent") && showColumnTotal && (
+            {canTotal && showColumnTotal && (
               <div className="rounded-md border border-slate-100 bg-slate-50/50 p-3 space-y-2">
                 <p className="text-xs text-slate-500">
                   {t("fields.totalColorsHint", "Цвета ячейки итога столбца (необязательно)")}
