@@ -8044,6 +8044,12 @@ function RecordFormBody({
               ) : (
                 roBox(<span className="text-slate-300">—</span>)
               )
+            ) : field.fieldType === "user" && readOnly ? (
+              // A disabled UserCombobox may fall back to the raw numeric id when
+              // its option list is still loading. Read-only user fields are
+              // presentation-only, so render them through the same id→name map
+              // used by table cells instead of showing an implementation id.
+              roBox(renderCellValue(field, form[field.fieldKey], t, userNames, undefined, ml))
             ) : field.fieldType === "created_at" ? (
               // Системная дата создания записи — read-only. On edit it shows the
               // server-injected timestamp; on create the value doesn't exist yet.

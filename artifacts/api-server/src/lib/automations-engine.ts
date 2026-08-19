@@ -181,12 +181,14 @@ async function loadRelationValues(
   entityId: number,
   recordIds: number[],
   fields: EntityField[],
+  onlyFieldKeys?: ReadonlySet<string>,
 ): Promise<Map<number, Record<string, string[]>>> {
   const out = new Map<number, Record<string, string[]>>();
   if (recordIds.length === 0) return out;
   const relFields = fields.filter(
     (f) =>
       (f.fieldType === "relation" || f.fieldType === "lookup") &&
+      (!onlyFieldKeys || onlyFieldKeys.has(f.fieldKey)) &&
       f.relationConfigJson?.relationId != null &&
       !!f.relationConfigJson?.relatedFieldKey &&
       f.relationConfigJson?.relatedPageId == null,
@@ -1027,10 +1029,11 @@ async function runActions(
     pageContexts: Map<number, PageContext>;
   },
   log: Log,
-): Promise<{ type: string; ok: boolean }[]> {
-  const summary: { type: string; ok: boolean }[] = [];
+): Promise<{ type: string; ok: boolean; matched?: number }[]> {
+  const summary: { type: string; ok: boolean; matched?: number }[] = [];
   for (const action of actions) {
     let ok = false;
+    let matched: number | undefined;
     switch (action.type) {
       case "set_field":
         // A set_field can target a page-local field of the triggering record
@@ -1079,6 +1082,7 @@ async function runActions(
         const recordIdConds = (action.match ?? []).filter((c) => c.fieldKey === CONDITION_RECORD_ID_KEY);
         const fieldConds = (action.match ?? []).filter((c) => c.fieldKey !== CONDITION_RECORD_ID_KEY);
         let allOk = true;
+        matched = 0;
         for (const row of rows) {
           const selfOk = recordIdConds.every((c) =>
             c.operator === "eq" ? row.id === ctx.recordId : c.operator === "neq" ? row.id !== ctx.recordId : false,
@@ -1089,6 +1093,7 @@ async function runActions(
           // page context — page operands are rejected there server-side and fail
           // closed here.
           if (!evalConditions(fieldConds, rv, row.statusId ?? null, fieldByKey, "and", ctx.values)) continue;
+          matched += 1;
           if (hasEntityValues) {
             const updated = await systemUpdateRecord(row.id, mappedValues, undefined, ctx.actorUserId, log);
             if (!updated) allOk = false;
@@ -1109,7 +1114,7 @@ async function runActions(
         break;
       }
     }
-    summary.push({ type: action.type, ok });
+    summary.push({ type: action.type, ok, ...(matched != null ? { matched } : {}) });
   }
   return summary;
 }
@@ -1131,6 +1136,57 @@ function safeConditions(raw: unknown): AutomationCondition[] {
 function safeActions(raw: unknown): AutomationAction[] {
   const parsed = automationActionSchema.array().safeParse(raw);
   return parsed.success ? parsed.data : [];
+}
+
+/**
+ * Relation/lookup projections from the triggering entity that this automation
+ * needs to read. Create-form relation links are written just after the base
+ * record, so record_created waits briefly for only these referenced values.
+ */
+function createRelationReadKeys(
+  conditions: AutomationCondition[],
+  actions: AutomationAction[],
+  fieldByKey: Map<string, EntityField>,
+): string[] {
+  const keys = new Set<string>();
+  const addIfRelation = (key: string | undefined) => {
+    if (!key) return;
+    const type = fieldByKey.get(key)?.fieldType;
+    if (type === "relation" || type === "lookup") keys.add(key);
+  };
+
+  for (const condition of conditions) {
+    if (condition.fieldSource !== "page") addIfRelation(condition.fieldKey);
+    if (condition.valueSource === "field") addIfRelation(condition.valueFieldKey);
+  }
+
+  for (const action of actions) {
+    if (action.type === "update_records_where") {
+      for (const condition of action.match ?? []) {
+        // The left operand belongs to the candidate target row. Only a dynamic
+        // right operand reads from the newly created triggering record.
+        if (condition.valueSource === "field") addIfRelation(condition.valueFieldKey);
+      }
+    }
+    if (action.type === "create_record" || action.type === "update_records_where") {
+      for (const mapping of action.mapping ?? []) {
+        if (mapping.sourceType === "field" && mapping.sourceFieldSource !== "page") {
+          addIfRelation(mapping.sourceFieldKey);
+        }
+        if (mapping.sourceType === "combined" && typeof mapping.value === "string") {
+          for (const match of mapping.value.matchAll(/\{([^{}]+)\}/g)) {
+            addIfRelation(match[1]?.trim());
+          }
+        }
+      }
+    }
+    // A full-record webhook explicitly asks for every readable projection.
+    if (action.type === "webhook" && action.includeRecord) {
+      for (const field of fieldByKey.values()) addIfRelation(field.fieldKey);
+    }
+  }
+
+  return [...keys];
 }
 
 type EventKind = "record.created" | "record.updated" | "status.changed" | "page_field.saved";
@@ -1257,12 +1313,51 @@ async function runOne(
     if (!record) return;
     const fields = await loadActiveFields(entityId);
     const fieldByKey = new Map(fields.map((f) => [f.fieldKey, f]));
-    const relValues = await loadRelationValues(entityId, [recordId], fields);
-    const values = { ...((record.valuesJson as Record<string, unknown>) ?? {}), ...(relValues.get(recordId) ?? {}) };
-
     const conditions = safeConditions(automation.conditionsJson);
     const actions = safeActions(automation.actionsJson);
     const conjunction = automation.conditionConjunction === "or" ? "or" : "and";
+    const baseValues = (record.valuesJson as Record<string, unknown>) ?? {};
+    const relValues = await loadRelationValues(entityId, [recordId], fields);
+    let values = { ...baseValues, ...(relValues.get(recordId) ?? {}) };
+
+    // Relation selections from the create form arrive in a follow-up link
+    // request. Wait only inside a record_created run that consumes one of those
+    // projections, then continue the same create event exactly once. Later
+    // edits (date, driver, etc.) remain record.updated and cannot enter here.
+    const pendingRelationKeys =
+      trigger.type === "record_created"
+        ? createRelationReadKeys(conditions, actions, fieldByKey)
+        : [];
+    const pendingRelationKeySet = new Set(pendingRelationKeys);
+    for (
+      let attempt = 0;
+      attempt < 50 &&
+      pendingRelationKeys.some(
+        (key) => !Array.isArray(values[key]) || (values[key] as unknown[]).length === 0,
+      );
+      attempt++
+    ) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 40));
+      const refreshed = await loadRelationValues(
+        entityId,
+        [recordId],
+        fields,
+        pendingRelationKeySet,
+      );
+      values = { ...values, ...(refreshed.get(recordId) ?? {}) };
+    }
+    const missingRelationKeys = pendingRelationKeys.filter(
+      (key) => !Array.isArray(values[key]) || (values[key] as unknown[]).length === 0,
+    );
+    const readinessDetail =
+      missingRelationKeys.length > 0
+        ? {
+            relationReadiness: {
+              timedOut: true,
+              fieldKeys: missingRelationKeys,
+            },
+          }
+        : {};
 
     // Pre-load the page-local contexts of the TRIGGERING record for every page
     // this automation references (trigger/condition/mapping/target), so page
@@ -1273,7 +1368,15 @@ async function runOne(
     );
 
     if (!evalConditions(conditions, values, record.statusId ?? null, fieldByKey, conjunction, values, pageContexts)) {
-      await writeRun({ automationId: automation.id, entityId, recordId, status: "skipped", triggerName, detail: { reason: "conditions not met" }, dedupeKey }, log);
+      await writeRun({
+        automationId: automation.id,
+        entityId,
+        recordId,
+        status: "skipped",
+        triggerName,
+        detail: { reason: "conditions not met", ...readinessDetail },
+        dedupeKey,
+      }, log);
       return;
     }
 
@@ -1289,7 +1392,7 @@ async function runOne(
       recordId,
       status: allOk ? "success" : "error",
       triggerName,
-      detail: { actions: summary },
+      detail: { actions: summary, ...readinessDetail },
       dedupeKey,
     }, log);
   } catch (err) {

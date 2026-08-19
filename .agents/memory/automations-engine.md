@@ -91,6 +91,25 @@ signal). In the records table, invalidate BOTH entity-record data and current-pa
 record-values because an automation may write either storage channel. Never let a
 rapid second edit cancel the first edit's remaining refresh opportunity.
 
+## Create-event ordering with relation links
+
+Entity relation selections from the record-create UI are persisted after the base
+record exists, through the related-link endpoint. Therefore `record_created` fires
+before those links exist; a create automation that reads a relation/lookup as a
+dynamic condition or match value sees it as empty and may report a successful
+no-op.
+
+**Why:** A Delivery→Orders rule matched Orders.order_number against the new
+Delivery record's relation projection. The automation ran about 140 ms before the
+record link was inserted, so it matched zero target rows while logging `ok:true`.
+
+**How to apply:** Keep create-only business rules on `record_created`; do not
+substitute `record_updated`, because unrelated later edits would retrigger them.
+The creation flow must give relation-dependent rules the creation-time relationship
+state while preserving exactly one create-event execution. Ordinary link or field
+updates must not substitute for creation. Action diagnostics should include the
+matched-row count so a zero-match no-op is visible.
+
 ## Page-TARGET mappings (update_records_where → sibling page-field propagation)
 
 A mapping can also WRITE to a page-local field (`targetFieldSource:"page"` +
