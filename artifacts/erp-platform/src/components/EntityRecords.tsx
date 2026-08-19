@@ -1820,6 +1820,36 @@ export function EntityRecords({
   // buckets/totals) to re-run. Declared here (above the page-values mutation)
   // so the page-local edit path can trigger a group-header refresh too.
   const [refreshTick, setRefreshTick] = useState(0);
+  // Automations are dispatched asynchronously after a record/page-value write
+  // responds. An immediate refetch can race them and return the pre-automation
+  // value. Revalidate both storage channels after short bounded delays so an
+  // automation may update either an entity field or a page-local field.
+  const automationRefreshTimersRef = useRef<number[]>([]);
+  useEffect(
+    () => () => {
+      for (const timerId of automationRefreshTimersRef.current) window.clearTimeout(timerId);
+      automationRefreshTimersRef.current = [];
+    },
+    [entityId, pageId],
+  );
+  const refreshAutomationResults = () => {
+    queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/records`] });
+    if (pageId != null) {
+      queryClient.invalidateQueries({ queryKey: [`/api/pages/${pageId}/record-values`] });
+    }
+    setRefreshTick((x) => x + 1);
+  };
+  const scheduleAutomationRefresh = () => {
+    // Keep each write's refresh pair independent. A second rapid edit must not
+    // cancel the first edit's chance to observe its own automation result.
+    for (const delay of [400, 1_200]) {
+      const timerId = window.setTimeout(() => {
+        automationRefreshTimersRef.current = automationRefreshTimersRef.current.filter((id) => id !== timerId);
+        refreshAutomationResults();
+      }, delay);
+      automationRefreshTimersRef.current.push(timerId);
+    }
+  };
   const setPageValuesMutation = useSetPageRecordValues({
     mutation: {
       onSuccess: () => {
@@ -1831,6 +1861,9 @@ export function EntityRecords({
         // re-run the main records query — otherwise the header stays stale until
         // the group is collapsed. Mirrors the entity-field path's invalidate().
         setRefreshTick((x) => x + 1);
+        // A page-local edit can trigger page_field_changed automations (including
+        // an action that writes another page-local field on this same row).
+        scheduleAutomationRefresh();
       },
       onError: () =>
         toast({ title: t("records.saveError", "Не удалось сохранить значение"), variant: "destructive" }),
@@ -3520,6 +3553,22 @@ export function EntityRecords({
       onError: (err) => { setEditingCell(null); toast({ title: t("records.updateError", "Ошибка обновления"), description: extractError(err), variant: "destructive" }); },
     },
   });
+  // Status changes can trigger background automations that write additional
+  // fields. Keep their mutation separate so ordinary inline edits do not incur
+  // the delayed refetches needed to observe those automation results.
+  const statusUpdateMutation = useUpdateRecord({
+    mutation: {
+      onSuccess: () => {
+        setEditingCell(null);
+        invalidate();
+        scheduleAutomationRefresh();
+      },
+      onError: (err) => {
+        setEditingCell(null);
+        toast({ title: t("records.updateError", "Ошибка обновления"), description: extractError(err), variant: "destructive" });
+      },
+    },
+  });
   const updateMutation = useUpdateRecord({
     mutation: {
       onSuccess: () => { toast({ title: t("records.updated", "Запись обновлена") }); setDialogOpen(false); invalidate(); },
@@ -3759,7 +3808,7 @@ export function EntityRecords({
   const commitStatus = (record: EntityRecord, value: string) => {
     const next = value === NO_STATUS ? null : Number(value);
     if (next === (record.statusId ?? null)) { setEditingCell(null); return; }
-    cellUpdateMutation.mutate({ id: record.id, data: { statusId: next, pageId: permPageId } });
+    statusUpdateMutation.mutate({ id: record.id, data: { statusId: next, pageId: permPageId } });
   };
 
   // Inline commit for a page-local field value. Page values are stored as a

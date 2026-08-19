@@ -73,6 +73,24 @@ deleted) after the automation was saved; save-time validation in `validateSpec` 
 not enough. Same principle applies to any future system write that resolves a
 metadata ref captured earlier.
 
+## Writer-side freshness after event automations
+
+Event automations are dispatched asynchronously after the initiating HTTP write
+has already responded. A client refetch performed only in the mutation's immediate
+success handler can therefore race the automation and render the old value until
+another action or a full reload.
+
+**Why:** This was visible on a mirror page where changing one page-local select
+triggered a same-record automation that populated another page-local number: the
+first refetch completed before the automation write, so the following edit appeared
+to reveal the previous row's result.
+
+**How to apply:** A writer UI that must show automation side effects should keep its
+immediate refresh, then perform bounded delayed refreshes (or use a completion/realtime
+signal). In the records table, invalidate BOTH entity-record data and current-page
+record-values because an automation may write either storage channel. Never let a
+rapid second edit cancel the first edit's remaining refresh opportunity.
+
 ## Page-TARGET mappings (update_records_where → sibling page-field propagation)
 
 A mapping can also WRITE to a page-local field (`targetFieldSource:"page"` +
