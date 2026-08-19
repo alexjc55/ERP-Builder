@@ -81,8 +81,9 @@ status quick-filter, which AND on top of `baseFilters` in the records query.
 - **Authoring UI** (setup mode, `canAdmin("pages")`): exclusion values come from
   the field's CONFIGURED select `optionsJson` + the FULL status list — authored,
   not sampled from existing rows (so you can pre-exclude a value with no rows yet).
-  Active stored-scalar entity/page fields can also be marked "hide when empty".
-  Drafts sync from the stored default on seed; one Save writes the whole
+  Each selectable entity/page field also has a regular **"Пусто"** chip beside
+  its configured values; it stores the separate empty-exclusion key internally,
+  never a fake select option. Drafts sync from the stored default on seed; one Save writes the whole
   `defaultQuickFilterJson` (inclusion from the bar + exclusion drafts).
 - **Exclusion is SOFT/cosmetic, never a security boundary.** The real boundary
   (view hard filter, own-row scope, hidden-row statuses, hidden fields) is enforced

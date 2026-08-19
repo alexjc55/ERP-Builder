@@ -2372,7 +2372,8 @@ export function EntityRecords({
   const [excludeFieldDraft, setExcludeFieldDraft] = useState<Record<string, string[]>>({});
   const [excludeEmptyFieldDraft, setExcludeEmptyFieldDraft] = useState<string[]>([]);
   const [excludeStatusDraft, setExcludeStatusDraft] = useState<number[]>([]);
-  // Same exclusion draft for PAGE-LOCAL select fields (mirror pages).
+  // Same exclusion draft for PAGE-LOCAL select fields (mirror pages). Empty
+  // selections are stored separately so they never become a fake select value.
   const [excludePageFieldDraft, setExcludePageFieldDraft] = useState<Record<string, string[]>>({});
   const [excludeEmptyPageFieldDraft, setExcludeEmptyPageFieldDraft] = useState<string[]>([]);
   // Page-local field filters (separate from entity-field filters: their keys live in
@@ -3262,26 +3263,12 @@ export function EntityRecords({
       ),
     [allFields],
   );
-  const emptyExcludableFields = useMemo(
-    () =>
-      allFields.filter(
-        (f: Field) => f.isActive && EMPTY_EXCLUDABLE_FIELD_TYPES.has(f.fieldType),
-      ),
-    [allFields],
-  );
   // Same for PAGE-LOCAL select fields (mirror pages): authored from the page
   // field's configured options.
   const excludablePageSelectFields = useMemo(
     () =>
       pageFields.filter(
-        (pf: PageField) => pf.fieldType === "select" && normalizeSelectOptions(pf.optionsJson).length > 0,
-      ),
-    [pageFields],
-  );
-  const emptyExcludablePageFields = useMemo(
-    () =>
-      pageFields.filter(
-        (pf: PageField) => pf.isActive && EMPTY_EXCLUDABLE_FIELD_TYPES.has(pf.fieldType),
+        (pf: PageField) => pf.isActive && pf.fieldType === "select" && normalizeSelectOptions(pf.optionsJson).length > 0,
       ),
     [pageFields],
   );
@@ -3326,13 +3313,13 @@ export function EntityRecords({
     );
   }, []);
   const cleanExcludeEmptyFieldDraft = useMemo(() => {
-    const known = new Set(emptyExcludableFields.map((f: Field) => f.fieldKey));
+    const known = new Set(excludableSelectFields.map((f: Field) => f.fieldKey));
     return [...new Set(excludeEmptyFieldDraft.filter((key) => known.has(key)))];
-  }, [excludeEmptyFieldDraft, emptyExcludableFields]);
+  }, [excludeEmptyFieldDraft, excludableSelectFields]);
   const cleanExcludeEmptyPageFieldDraft = useMemo(() => {
-    const known = new Set(emptyExcludablePageFields.map((pf: PageField) => pf.fieldKey));
+    const known = new Set(excludablePageSelectFields.map((pf: PageField) => pf.fieldKey));
     return [...new Set(excludeEmptyPageFieldDraft.filter((key) => known.has(key)))];
-  }, [excludeEmptyPageFieldDraft, emptyExcludablePageFields]);
+  }, [excludeEmptyPageFieldDraft, excludablePageSelectFields]);
   const hasExclusionDraft =
     Object.keys(cleanExcludeFieldDraft).length > 0 ||
     cleanExcludeEmptyFieldDraft.length > 0 ||
@@ -5035,58 +5022,6 @@ export function EntityRecords({
                     "Отметьте значения, строки с которыми нужно скрыть при открытии страницы. Пользователь сможет показать их галочкой «Показать скрытые». Скрытие не может показать строки, запрещённые фильтром вида.",
                   )}
                 </p>
-                {(emptyExcludableFields.length > 0 || emptyExcludablePageFields.length > 0) && (
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium text-slate-400">
-                      {t("records.pageExcludeEmptyTitle", "Скрывать, если поле пустое")}
-                    </div>
-                    <div className="max-h-40 overflow-y-auto rounded-md border border-slate-200 bg-white p-2">
-                      <div className="flex flex-wrap gap-1.5">
-                        {emptyExcludableFields.map((f: Field) => {
-                          const on = excludeEmptyFieldDraft.includes(f.fieldKey);
-                          return (
-                            <button
-                              key={`empty-e-${f.id}`}
-                              type="button"
-                              onClick={() => toggleExcludeEmptyField(f.fieldKey)}
-                              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors ${
-                                on
-                                  ? "border-rose-300 bg-rose-50 text-rose-700"
-                                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                              }`}
-                            >
-                              {on && <Check className="w-3 h-3" />}
-                              <span className="truncate max-w-[12rem]">
-                                {(fieldLabelOverrides?.[f.fieldKey] && ml(fieldLabelOverrides[f.fieldKey])) || ml(f.nameJson)}
-                              </span>
-                            </button>
-                          );
-                        })}
-                        {emptyExcludablePageFields.map((pf: PageField) => {
-                          const on = excludeEmptyPageFieldDraft.includes(pf.fieldKey);
-                          return (
-                            <button
-                              key={`empty-p-${pf.id}`}
-                              type="button"
-                              onClick={() => toggleExcludeEmptyPageField(pf.fieldKey)}
-                              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors ${
-                                on
-                                  ? "border-rose-300 bg-rose-50 text-rose-700"
-                                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                              }`}
-                            >
-                              {on && <Check className="w-3 h-3" />}
-                              <span className="truncate max-w-[12rem]">{ml(pf.nameJson)}</span>
-                              <span className="text-slate-400">
-                                · {t("records.pageLocalFieldTag", "поле страницы")}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                )}
                 {statuses.length > 0 && (
                   <div className="space-y-1">
                     <div className="text-xs font-medium text-slate-400">{t("records.status", "Статус")}</div>
@@ -5115,10 +5050,22 @@ export function EntityRecords({
                 {excludableSelectFields.map((f: Field) => {
                   const opts = normalizeSelectOptions(f.optionsJson);
                   const picked = excludeFieldDraft[f.fieldKey] ?? [];
+                  const emptyOn = excludeEmptyFieldDraft.includes(f.fieldKey);
                   return (
                     <div key={f.fieldKey} className="space-y-1">
                       <div className="text-xs font-medium text-slate-400">{ml(f.nameJson)}</div>
                       <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => toggleExcludeEmptyField(f.fieldKey)}
+                          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                            emptyOn
+                              ? "border-rose-300 bg-rose-50 text-rose-700"
+                              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                          }`}
+                        >
+                          {t("records.filterEmptyValue", "(Пусто)")}
+                        </button>
                         {opts.map((o) => {
                           const on = picked.includes(o.value);
                           return (
@@ -5143,6 +5090,7 @@ export function EntityRecords({
                 {excludablePageSelectFields.map((pf: PageField) => {
                   const opts = normalizeSelectOptions(pf.optionsJson);
                   const picked = excludePageFieldDraft[pf.fieldKey] ?? [];
+                  const emptyOn = excludeEmptyPageFieldDraft.includes(pf.fieldKey);
                   return (
                     <div key={`pf-${pf.id}`} className="space-y-1">
                       <div className="text-xs font-medium text-slate-400">
@@ -5150,6 +5098,17 @@ export function EntityRecords({
                         <span className="text-slate-300">· {t("records.pageLocalFieldTag", "поле страницы")}</span>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => toggleExcludeEmptyPageField(pf.fieldKey)}
+                          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                            emptyOn
+                              ? "border-rose-300 bg-rose-50 text-rose-700"
+                              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                          }`}
+                        >
+                          {t("records.filterEmptyValue", "(Пусто)")}
+                        </button>
                         {opts.map((o) => {
                           const on = picked.includes(o.value);
                           return (
