@@ -1083,6 +1083,7 @@ export default function EntityAutomationsPage() {
                   ValueControl={ValueControl}
                   ConditionsEditor={ConditionsEditor}
                   mirrorPages={mirrorPages}
+                  allPages={allPages as Page[]}
                   onChange={(patch) => setAction(i, patch)}
                   onRemove={() => removeAction(i)}
                   onMove={(dir) => moveAction(i, dir)}
@@ -1308,6 +1309,7 @@ function ActionCard({
   ValueControl,
   ConditionsEditor,
   mirrorPages,
+  allPages,
   onChange,
   onRemove,
   onMove,
@@ -1326,6 +1328,7 @@ function ActionCard({
   ValueControl: ValueControlComp;
   ConditionsEditor: ConditionsEditorComp;
   mirrorPages: Page[];
+  allPages: Page[];
   onChange: (patch: Partial<ActionDraft>) => void;
   onRemove: () => void;
   onMove: (dir: -1 | 1) => void;
@@ -1338,6 +1341,7 @@ function ActionCard({
   const { data: targetStatuses = [] } = useListEntityStatuses(targetId, { query: { enabled: draft.type === "create_record" && targetId > 0, queryKey: getListEntityStatusesQueryKey(targetId) } });
   const targetFields = [...targetFieldsRaw].filter((f: Field) => f.isActive).sort((a: Field, b: Field) => a.sortOrder - b.sortOrder);
   const targetFieldByKey = new Map(targetFields.map((f: Field) => [f.fieldKey, f]));
+  const targetMirrorPages = allPages.filter((p) => p.mirrorEntityId === targetId);
   const targetFieldsKey = targetFields.map((f: Field) => `${f.fieldKey}:${f.fieldType}`).join(",");
 
   useEffect(() => {
@@ -1455,12 +1459,17 @@ function ActionCard({
             <div className="space-y-1.5">
               <Label className="text-xs text-slate-500">{t("auto.fieldMapping", "Значения полей")}</Label>
               {draft.mapping.map((m, i) => {
-                // A page-target mapping writes a page-local field of a mirror page.
-                // Only offered when the action targets THIS automation's own entity,
-                // so `mirrorPages` (pages mirroring currentEntityId) are exactly the
-                // target entity's mirror pages. The server validates regardless.
-                const allowPageTarget = draft.type === "update_records_where" && targetId === currentEntityId && mirrorPages.length > 0;
-                const toPage = allowPageTarget && m.targetFieldSource === "page";
+                // Page-target mappings belong to mirror pages of the ACTION's
+                // target entity, which may differ from the automation entity.
+                // Existing page-target configurations remain visible even if
+                // their page was later removed, so the editor never renders a
+                // page field as a blank entity-field dropdown.
+                const allowPageTarget =
+                  draft.type === "update_records_where" &&
+                  targetMirrorPages.length > 0;
+                const toPage =
+                  draft.type === "update_records_where" &&
+                  m.targetFieldSource === "page";
                 return (
                 <div key={i} className="flex flex-col gap-1.5">
                   <div className="flex items-center gap-1.5">
@@ -1477,7 +1486,7 @@ function ActionCard({
                       <>
                         <Select value={m.targetPageId ?? ""} onValueChange={(v) => updMapping(i, { targetPageId: v, targetFieldKey: "" })}>
                           <SelectTrigger className="w-36 shrink-0"><SelectValue placeholder={t("auto.page", "Страница")} /></SelectTrigger>
-                          <SelectContent>{mirrorPages.map((p) => (<SelectItem key={p.id} value={String(p.id)}>{pageLabel(p)}</SelectItem>))}</SelectContent>
+                          <SelectContent>{targetMirrorPages.map((p) => (<SelectItem key={p.id} value={String(p.id)}>{pageLabel(p)}</SelectItem>))}</SelectContent>
                         </Select>
                         {m.targetPageId && (
                           <PageFieldSelect pageId={Number(m.targetPageId)} value={m.targetFieldKey} onChange={(v) => updMapping(i, { targetFieldKey: v })} ml={ml} t={t} className="w-40" storableOnly placeholder={t("auto.targetField", "Поле")} />
@@ -1533,6 +1542,15 @@ function ActionCard({
                       )
                     ) : m.sourceType === "combined" ? (
                       <span className="flex-1 min-w-0 truncate text-xs text-slate-400">{t("auto.combinedTemplateBelow", "Шаблон ниже")}</span>
+                    ) : toPage && m.targetPageId ? (
+                      <PageValueControl
+                        pageId={Number(m.targetPageId)}
+                        fieldKey={m.targetFieldKey}
+                        value={m.value}
+                        onChange={(v) => updMapping(i, { value: v })}
+                        ml={ml}
+                        t={t}
+                      />
                     ) : (
                       <ValueControl fieldKey={m.targetFieldKey} raw={m.value} onChange={(v) => updMapping(i, { value: v })} fmap={targetFieldByKey} sts={targetStatuses} statusKey={false} ownerEntityId={targetId} />
                     )}

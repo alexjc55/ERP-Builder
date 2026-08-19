@@ -137,11 +137,10 @@ no re-trigger), plus the existing ALS depth/chain guards.
 `targetKeys.has(targetFieldKey)` check — the target key is a page-field key, not an
 entity field, so the entity check would wrongly reject it.
 
-**Frontend restriction:** the UI only offers the page-target toggle when
-`update_records_where && targetId === currentEntityId` (so the automation-entity
-`mirrorPages` list is exactly the target entity's mirror pages). Cross-entity page
-targets are valid server-side but not surfaced in the UI (would need loading the
-target entity's mirror pages).
+**Frontend boundary:** page-target options must be derived from the ACTION's target
+entity, not from the automation entity. Cross-entity page targets are valid and
+must remain visibly editable; while page metadata loads, never reinterpret an
+existing page-target mapping as an entity-field mapping.
 
 **Orphan-key fail-close (metadata drift):** `systemSetPageValue` merges the new
 value onto the stored page-values map and re-validates the WHOLE map with
