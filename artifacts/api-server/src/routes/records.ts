@@ -136,6 +136,25 @@ async function resolvePageLocalFilterTarget(
   return { effType: pf.fieldType, exprPageId: pageId, exprKey: pf.fieldKey };
 }
 
+/**
+ * Resolve a SOFT page-local exclusion without requiring `isFilterable` (page
+ * admins may author exclusions independently of the viewer's live filter bar),
+ * while still enforcing the viewer's field-visibility boundary. Returning null
+ * intentionally ignores stale/deactivated/retyped/hidden defaults instead of
+ * breaking the entire page or exposing protected values through row counts.
+ */
+function resolvePageLocalExclusionTarget(
+  pf: PageField,
+  roleIds: number[],
+  perms: Awaited<ReturnType<typeof getPermissions>>,
+  entityId: number,
+  pageId: number,
+): { exprPageId: number; exprKey: string } | null {
+  if (!pf.isActive || !PAGE_LOCAL_FILTERABLE_TYPES.has(pf.fieldType)) return null;
+  if (mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view", perms, entityId, pageId) === "hidden") return null;
+  return { exprPageId: pageId, exprKey: pf.fieldKey };
+}
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^[+0-9().\s-]{3,}$/;
 
@@ -953,12 +972,17 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
 
   // SOFT exclusions on PAGE-LOCAL fields (page default filter, "show hidden"
   // off). Same semantics as entity excludeFilters: always AND-combined (never
-  // routed through the view conjunction, so they can only NARROW) and NULL-safe
-  // (a row with no stored page value is kept). Validated against the page's
+  // routed through the view conjunction, so they can only NARROW). Selected-value
+  // exclusions are NULL-safe; excludeEmpty explicitly hides missing/blank values.
+  // Validated against the page's
   // ACTIVE value-backed fields — no isFilterable/visibility gate, matching the
   // entity exclusion path (exclusions are authored by a pages admin and only
   // ever hide rows, so they cannot leak values).
-  const excludePageLocal = (body.data.excludePageLocalFilters ?? []) as { field: string; values?: string[] }[];
+  const excludePageLocal = (body.data.excludePageLocalFilters ?? []) as {
+    field: string;
+    values?: string[];
+    excludeEmpty?: boolean;
+  }[];
   if (excludePageLocal.length > 0) {
     const eplPageId = body.data.pageId;
     if (eplPageId == null) {
@@ -969,20 +993,26 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       .select()
       .from(pageFieldsTable)
       .where(and(eq(pageFieldsTable.pageId, eplPageId), eq(pageFieldsTable.isActive, true)));
-    const eplByKey = new Map(
-      eplRows.filter((pf) => PAGE_LOCAL_FILTERABLE_TYPES.has(pf.fieldType)).map((pf) => [pf.fieldKey, pf] as const),
-    );
+    const eplByKey = new Map(eplRows.map((pf) => [pf.fieldKey, pf] as const));
+    const eplRoleIds = await getUserRoleIds(req);
     for (const ex of excludePageLocal) {
       const pf = eplByKey.get(ex.field);
-      if (!pf) {
-        res.status(400).json({ error: `Unknown exclude page field "${ex.field}"` });
-        return;
-      }
+      const target = pf
+        ? resolvePageLocalExclusionTarget(pf, eplRoleIds, perms, entityId, eplPageId)
+        : null;
+      // SOFT page defaults are metadata that may become stale after a field is
+      // removed, deactivated, retyped, or hidden for this viewer. Ignore that
+      // condition rather than 400ing the whole records page.
+      if (!target) continue;
       const vals = (ex.values ?? []).filter((v) => v != null && v !== "").map((v) => String(v));
-      if (vals.length === 0) continue;
-      const expr = pageLocalValueExpr(eplPageId, ex.field);
-      const parts = vals.map((v) => sql`${v}`);
-      clauses.push(sql`(${expr} IS NULL OR ${expr} NOT IN (${sql.join(parts, sql`, `)}))`);
+      const expr = pageLocalValueExpr(target.exprPageId, target.exprKey);
+      if (ex.excludeEmpty === true) {
+        clauses.push(sql`NULLIF(BTRIM(${expr}), '') IS NOT NULL`);
+      }
+      if (vals.length > 0) {
+        const parts = vals.map((v) => sql`${v}`);
+        clauses.push(sql`(${expr} IS NULL OR ${expr} NOT IN (${sql.join(parts, sql`, `)}))`);
+      }
     }
   }
 
@@ -2202,7 +2232,11 @@ router.post(
       // co-occur with the visible rows. The exclusion ON the target field itself
       // is skipped, so the target's own dropdown still lists every selectable
       // value (mirrors how ad-hoc `filters` self-exclude the target above).
-      excludeFilters: ((body.data.excludeFilters ?? []) as { field: string; values: string[] }[]).filter(
+      excludeFilters: ((body.data.excludeFilters ?? []) as {
+        field: string;
+        values?: string[];
+        excludeEmpty?: boolean;
+      }[]).filter(
         (ex) => ex.field !== body.data.field,
       ),
       excludeStatusIds: body.data.excludeStatusIds ?? undefined,

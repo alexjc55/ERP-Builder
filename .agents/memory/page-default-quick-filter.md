@@ -55,19 +55,22 @@ status quick-filter, which AND on top of `baseFilters` in the records query.
 
 ## Per-page SOFT EXCLUSION default + "show hidden"
 
-`defaultQuickFilterJson` also carries `excludeFieldFilters?: Record<key,string[]>`
-and `excludeStatusIds?: number[]` — a SOFT "show all EXCEPT …" default that hides
-matching rows until the viewer flips a "Показать скрытые" checkbox.
+`defaultQuickFilterJson` also carries `excludeFieldFilters?: Record<key,string[]>`,
+`excludeEmptyFieldKeys?: string[]`, and `excludeStatusIds?: number[]` — a SOFT
+"show all EXCEPT …" default that hides matching rows until the viewer flips a
+"Показать скрытые" checkbox.
 
 - **Exclusion is a SEPARATE query concept from inclusion filters.** In
   `buildRecordQuery` the exclusion chunks are appended as their own top-level AND
   terms — NEVER routed through the view's `filterConjunction`. **Why:** a view with
   OR logic must not be able to turn an exclusion into a widening. It only ever
   NARROWS, so it can never reveal rows the view's hard filter hides.
-- **Must be NULL-safe** (excluding value B hides only rows that ARE B; empty/null
-  rows are kept): scalar → `(expr IS NULL OR expr NOT IN (...))`; relation →
+- **Selected-value exclusions stay NULL-safe** (excluding value B hides only rows
+  that ARE B; empty/null rows are kept): scalar → `(expr IS NULL OR expr NOT IN (...))`; relation →
   `NOT relationValueExists(... IN ...)` (the NOT EXISTS keeps unlinked rows);
-  status → `(statusId IS NULL OR statusId NOT IN (...))`.
+  status → `(statusId IS NULL OR statusId NOT IN (...))`. An explicit
+  `excludeEmpty` condition instead requires `NULLIF(BTRIM(expr), '') IS NOT NULL`,
+  so NULL, empty, and whitespace-only values are hidden without a magic sentinel.
 - **filter-values skips the TARGET field's own exclusion** (`ex.field !== target`)
   so its dropdown still lists every selectable value, but applies all OTHER
   exclusions so co-occurring option lists stay consistent with the visible rows.
@@ -78,6 +81,7 @@ matching rows until the viewer flips a "Показать скрытые" checkbo
 - **Authoring UI** (setup mode, `canAdmin("pages")`): exclusion values come from
   the field's CONFIGURED select `optionsJson` + the FULL status list — authored,
   not sampled from existing rows (so you can pre-exclude a value with no rows yet).
+  Active stored-scalar entity/page fields can also be marked "hide when empty".
   Drafts sync from the stored default on seed; one Save writes the whole
   `defaultQuickFilterJson` (inclusion from the bar + exclusion drafts).
 - **Exclusion is SOFT/cosmetic, never a security boundary.** The real boundary
@@ -96,13 +100,17 @@ matching rows until the viewer flips a "Показать скрытые" checkbo
 ## Page-local fields in the SOFT default + exclusions (added 2026-08)
 
 `defaultQuickFilterJson` also carries `pageFieldFilters` and
-`excludePageFieldFilters` (Record<fieldKey,string[]>) for PAGE-LOCAL fields.
+`excludePageFieldFilters` (Record<fieldKey,string[]>) and
+`excludeEmptyPageFieldKeys` for PAGE-LOCAL fields.
 Inclusions ride the existing `pageLocalFilters` query channel; exclusions ride a
-dedicated `RecordQuery.excludePageLocalFilters` (NULL-safe `expr IS NULL OR NOT IN`
-over `pageLocalValueExpr`, always AND — never widens). Exclusions stay table-only
+dedicated `RecordQuery.excludePageLocalFilters` (selected values use NULL-safe
+`expr IS NULL OR NOT IN`; empty exclusion requires a nonblank scalar; always AND
+— never widens). Exclusions stay table-only
 (pivot/calendar excluded, same v1 rule as entity exclusions) and are validated
-server-side against ACTIVE value-backed page fields (no isFilterable/visibility
-gate — parity with entity exclusions, which only narrow).
+server-side against ACTIVE value-backed page fields plus the viewer's field-
+visibility boundary (no `isFilterable` gate — authoring is independent of the live
+filter bar). Stale/deactivated/retyped/hidden soft exclusions are ignored rather
+than breaking the whole page or exposing protected values through row counts.
 
 **Client rule:** every outgoing page-local inclusion condition must be pruned
 against the current `filterablePageFields` set (deleted/deactivated/hidden/type-

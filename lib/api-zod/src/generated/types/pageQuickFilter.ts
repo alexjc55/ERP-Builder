@@ -18,10 +18,14 @@ export interface PageQuickFilter {
   statusIds?: number[];
   /** SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles "show hidden". Values may be drawn from the field's configured options even if not yet present in the data. Never widens beyond the view's hard filter. */
   excludeFieldFilters?: PageQuickFilterExcludeFieldFilters;
+  /** Entity value-backed field keys whose empty/unset rows are hidden until the viewer toggles "show hidden". */
+  excludeEmptyFieldKeys?: string[];
   /** SOFT status exclusions: hide rows with these statuses by default, revealable via "show hidden". Authored from the full status list. */
   excludeStatusIds?: number[];
   /** SOFT default filter on PAGE-LOCAL fields (mirror pages), keyed by page-field fieldKey. Seeds the page-local filter dropdowns exactly like fieldFilters seeds the entity ones. */
   pageFieldFilters?: PageQuickFilterPageFieldFilters;
   /** SOFT exclusions authored per PAGE-LOCAL select field: hide rows whose page-local value is one of the listed values until the viewer toggles "show hidden". Same semantics as excludeFieldFilters. */
   excludePageFieldFilters?: PageQuickFilterExcludePageFieldFilters;
+  /** PAGE-LOCAL value-backed field keys whose empty/unset rows are hidden until the viewer toggles "show hidden". */
+  excludeEmptyPageFieldKeys?: string[];
 }

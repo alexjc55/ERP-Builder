@@ -21,11 +21,11 @@ export interface RecordQuery {
   customFilters?: CustomFilterPick[];
   filterConjunction?: RecordQueryFilterConjunction;
   statusIds?: number[];
-  /** SOFT per-field exclusions (from the page default filter, when the viewer has NOT toggled "show hidden"). Hides rows whose field value is one of the listed values. Always AND-combined and NULL-safe. */
+  /** SOFT per-field exclusions (from the page default filter, when the viewer has NOT toggled "show hidden"). Hides rows whose field value is one of the listed values and/or is empty. Always AND-combined. */
   excludeFilters?: ExcludeFilter[];
   /** SOFT status exclusions (from the page default filter, unless the viewer toggled "show hidden"): hide rows whose statusId is in this list. AND-combined; never widens beyond the view's hard filter. */
   excludeStatusIds?: number[];
-  /** SOFT exclusions on PAGE-LOCAL fields (values in page_record_values; requires pageId). NULL-safe like excludeFilters: rows with no stored value are kept. Always AND-combined; never widens. */
+  /** SOFT exclusions on PAGE-LOCAL fields (values in page_record_values; requires pageId). Can hide selected values and/or empty/unset values. Always AND-combined; never widens. */
   excludePageLocalFilters?: ExcludeFilter[];
   sorts?: SortSpec[];
   search?: string;

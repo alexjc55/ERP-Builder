@@ -263,6 +263,10 @@ const PAGE_LOCAL_FILTERABLE_TYPES = new Set<string>([
   "datetime",
   "user",
 ]);
+// Stored scalar types for which page setup can hide rows with no value. Entity
+// fields use the same set so the client never offers computed/relation/file
+// fields whose "empty" semantics are ambiguous.
+const EMPTY_EXCLUDABLE_FIELD_TYPES = PAGE_LOCAL_FILTERABLE_TYPES;
 
 function extractError(err: unknown): string | undefined {
   if (err && typeof err === "object") {
@@ -1420,8 +1424,10 @@ export function EntityRecords({
     statusIds?: number[];
     pageFieldFilters?: Record<string, string[]>;
     excludeFieldFilters?: Record<string, string[]>;
+    excludeEmptyFieldKeys?: string[];
     excludeStatusIds?: number[];
     excludePageFieldFilters?: Record<string, string[]>;
+    excludeEmptyPageFieldKeys?: string[];
   } | null;
   /**
    * Per-page default sort (from `page.defaultSortJson`). When non-empty it
@@ -2364,9 +2370,11 @@ export function EntityRecords({
   // Setup-mode exclusion editor drafts (admins only). Synced from the page's
   // stored default; saved together with the inclusion filters from the bar.
   const [excludeFieldDraft, setExcludeFieldDraft] = useState<Record<string, string[]>>({});
+  const [excludeEmptyFieldDraft, setExcludeEmptyFieldDraft] = useState<string[]>([]);
   const [excludeStatusDraft, setExcludeStatusDraft] = useState<number[]>([]);
   // Same exclusion draft for PAGE-LOCAL select fields (mirror pages).
   const [excludePageFieldDraft, setExcludePageFieldDraft] = useState<Record<string, string[]>>({});
+  const [excludeEmptyPageFieldDraft, setExcludeEmptyPageFieldDraft] = useState<string[]>([]);
   // Page-local field filters (separate from entity-field filters: their keys live in
   // page_record_values, not the record's own valuesJson, so they ride a dedicated
   // pageLocalFilters channel on the query).
@@ -2696,10 +2704,26 @@ export function EntityRecords({
   const excludeFieldFilters = useMemo(() => {
     const raw = defaultQuickFilter?.excludeFieldFilters ?? {};
     const known = new Set(allFields.filter((f: Field) => f.isActive).map((f: Field) => f.fieldKey));
-    return Object.entries(raw)
-      .filter(([field, vals]) => known.has(field) && Array.isArray(vals) && vals.length > 0)
-      .map(([field, vals]) => ({ field, values: vals }));
-  }, [defaultQuickFilter?.excludeFieldFilters, allFields]);
+    const emptyEligible = new Set(
+      allFields
+        .filter((f: Field) => f.isActive && EMPTY_EXCLUDABLE_FIELD_TYPES.has(f.fieldType))
+        .map((f: Field) => f.fieldKey),
+    );
+    const empty = new Set(
+      (defaultQuickFilter?.excludeEmptyFieldKeys ?? []).filter((field) => emptyEligible.has(field)),
+    );
+    const keys = new Set([
+      ...Object.entries(raw)
+        .filter(([field, vals]) => known.has(field) && Array.isArray(vals) && vals.length > 0)
+        .map(([field]) => field),
+      ...empty,
+    ]);
+    return [...keys].map((field) => ({
+      field,
+      values: Array.isArray(raw[field]) && raw[field].length > 0 ? raw[field] : undefined,
+      excludeEmpty: empty.has(field) || undefined,
+    }));
+  }, [defaultQuickFilter?.excludeFieldFilters, defaultQuickFilter?.excludeEmptyFieldKeys, allFields]);
   const excludeStatusIds = useMemo(
     () => (defaultQuickFilter?.excludeStatusIds ?? []).filter((n) => Number.isInteger(n)),
     [defaultQuickFilter?.excludeStatusIds],
@@ -2710,13 +2734,28 @@ export function EntityRecords({
     const raw = defaultQuickFilter?.excludePageFieldFilters ?? {};
     const known = new Set(
       pageFields
-        .filter((pf: PageField) => PAGE_LOCAL_FILTERABLE_TYPES.has(pf.fieldType))
+        .filter((pf: PageField) => pf.isActive && PAGE_LOCAL_FILTERABLE_TYPES.has(pf.fieldType))
         .map((pf: PageField) => pf.fieldKey),
     );
-    return Object.entries(raw)
-      .filter(([field, vals]) => known.has(field) && Array.isArray(vals) && vals.length > 0)
-      .map(([field, vals]) => ({ field, values: vals }));
-  }, [defaultQuickFilter?.excludePageFieldFilters, pageFields]);
+    const empty = new Set(
+      (defaultQuickFilter?.excludeEmptyPageFieldKeys ?? []).filter((field) => known.has(field)),
+    );
+    const keys = new Set([
+      ...Object.entries(raw)
+        .filter(([field, vals]) => known.has(field) && Array.isArray(vals) && vals.length > 0)
+        .map(([field]) => field),
+      ...empty,
+    ]);
+    return [...keys].map((field) => ({
+      field,
+      values: Array.isArray(raw[field]) && raw[field].length > 0 ? raw[field] : undefined,
+      excludeEmpty: empty.has(field) || undefined,
+    }));
+  }, [
+    defaultQuickFilter?.excludePageFieldFilters,
+    defaultQuickFilter?.excludeEmptyPageFieldKeys,
+    pageFields,
+  ]);
   const hasExclusion =
     excludeFieldFilters.length > 0 || excludeStatusIds.length > 0 || excludePageFieldFilters.length > 0;
   // Only send exclusions when they exist AND the viewer hasn't asked to see
@@ -3085,8 +3124,10 @@ export function EntityRecords({
     // Sync the setup-mode exclusion editor drafts from the stored default so an
     // admin opening setup mode sees (and can amend) the current exclusion.
     setExcludeFieldDraft(dq?.excludeFieldFilters ? { ...dq.excludeFieldFilters } : {});
+    setExcludeEmptyFieldDraft(dq?.excludeEmptyFieldKeys ? [...dq.excludeEmptyFieldKeys] : []);
     setExcludeStatusDraft(dq?.excludeStatusIds ? [...dq.excludeStatusIds] : []);
     setExcludePageFieldDraft(dq?.excludePageFieldFilters ? { ...dq.excludePageFieldFilters } : {});
+    setExcludeEmptyPageFieldDraft(dq?.excludeEmptyPageFieldKeys ? [...dq.excludeEmptyPageFieldKeys] : []);
     setPage(1);
     setQuickFilterSeeded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3221,12 +3262,26 @@ export function EntityRecords({
       ),
     [allFields],
   );
+  const emptyExcludableFields = useMemo(
+    () =>
+      allFields.filter(
+        (f: Field) => f.isActive && EMPTY_EXCLUDABLE_FIELD_TYPES.has(f.fieldType),
+      ),
+    [allFields],
+  );
   // Same for PAGE-LOCAL select fields (mirror pages): authored from the page
   // field's configured options.
   const excludablePageSelectFields = useMemo(
     () =>
       pageFields.filter(
         (pf: PageField) => pf.fieldType === "select" && normalizeSelectOptions(pf.optionsJson).length > 0,
+      ),
+    [pageFields],
+  );
+  const emptyExcludablePageFields = useMemo(
+    () =>
+      pageFields.filter(
+        (pf: PageField) => pf.isActive && EMPTY_EXCLUDABLE_FIELD_TYPES.has(pf.fieldType),
       ),
     [pageFields],
   );
@@ -3260,10 +3315,30 @@ export function EntityRecords({
       return out;
     });
   }, []);
+  const toggleExcludeEmptyField = useCallback((fieldKey: string) => {
+    setExcludeEmptyFieldDraft((prev) =>
+      prev.includes(fieldKey) ? prev.filter((key) => key !== fieldKey) : [...prev, fieldKey],
+    );
+  }, []);
+  const toggleExcludeEmptyPageField = useCallback((fieldKey: string) => {
+    setExcludeEmptyPageFieldDraft((prev) =>
+      prev.includes(fieldKey) ? prev.filter((key) => key !== fieldKey) : [...prev, fieldKey],
+    );
+  }, []);
+  const cleanExcludeEmptyFieldDraft = useMemo(() => {
+    const known = new Set(emptyExcludableFields.map((f: Field) => f.fieldKey));
+    return [...new Set(excludeEmptyFieldDraft.filter((key) => known.has(key)))];
+  }, [excludeEmptyFieldDraft, emptyExcludableFields]);
+  const cleanExcludeEmptyPageFieldDraft = useMemo(() => {
+    const known = new Set(emptyExcludablePageFields.map((pf: PageField) => pf.fieldKey));
+    return [...new Set(excludeEmptyPageFieldDraft.filter((key) => known.has(key)))];
+  }, [excludeEmptyPageFieldDraft, emptyExcludablePageFields]);
   const hasExclusionDraft =
     Object.keys(cleanExcludeFieldDraft).length > 0 ||
+    cleanExcludeEmptyFieldDraft.length > 0 ||
     excludeStatusDraft.length > 0 ||
-    Object.keys(cleanExcludePageFieldDraft).length > 0;
+    Object.keys(cleanExcludePageFieldDraft).length > 0 ||
+    cleanExcludeEmptyPageFieldDraft.length > 0;
   const saveDefaultQuickFilter = useCallback(() => {
     if (pageId == null) return;
     const hasExcludeFields = Object.keys(cleanExcludeFieldDraft).length > 0;
@@ -3277,14 +3352,18 @@ export function EntityRecords({
             statusIds: statusFilter.length > 0 ? statusFilter : undefined,
             pageFieldFilters: Object.keys(pageFieldFilters).length > 0 ? pageFieldFilters : undefined,
             excludeFieldFilters: hasExcludeFields ? cleanExcludeFieldDraft : undefined,
+            excludeEmptyFieldKeys:
+              cleanExcludeEmptyFieldDraft.length > 0 ? cleanExcludeEmptyFieldDraft : undefined,
             excludeStatusIds: excludeStatusDraft.length > 0 ? excludeStatusDraft : undefined,
             excludePageFieldFilters: hasExcludePageFields ? cleanExcludePageFieldDraft : undefined,
+            excludeEmptyPageFieldKeys:
+              cleanExcludeEmptyPageFieldDraft.length > 0 ? cleanExcludeEmptyPageFieldDraft : undefined,
           },
         },
       },
       { onSuccess: () => toast({ title: t("records.pageDefaultFilterSaved", "Фильтр по умолчанию сохранён") }) },
     );
-  }, [pageId, fieldFilters, statusFilter, pageFieldFilters, cleanExcludeFieldDraft, excludeStatusDraft, cleanExcludePageFieldDraft, savePageDefaultFilterMutation, toast, t]);
+  }, [pageId, fieldFilters, statusFilter, pageFieldFilters, cleanExcludeFieldDraft, cleanExcludeEmptyFieldDraft, excludeStatusDraft, cleanExcludePageFieldDraft, cleanExcludeEmptyPageFieldDraft, savePageDefaultFilterMutation, toast, t]);
   const clearDefaultQuickFilter = useCallback(() => {
     if (pageId == null) return;
     savePageDefaultFilterMutation.mutate(
@@ -3316,9 +3395,12 @@ export function EntityRecords({
       (defaultQuickFilter?.statusIds && defaultQuickFilter.statusIds.length > 0) ||
       (defaultQuickFilter?.pageFieldFilters && Object.keys(defaultQuickFilter.pageFieldFilters).length > 0) ||
       (defaultQuickFilter?.excludeFieldFilters && Object.keys(defaultQuickFilter.excludeFieldFilters).length > 0) ||
+      (defaultQuickFilter?.excludeEmptyFieldKeys && defaultQuickFilter.excludeEmptyFieldKeys.length > 0) ||
       (defaultQuickFilter?.excludeStatusIds && defaultQuickFilter.excludeStatusIds.length > 0) ||
       (defaultQuickFilter?.excludePageFieldFilters &&
-        Object.keys(defaultQuickFilter.excludePageFieldFilters).length > 0),
+        Object.keys(defaultQuickFilter.excludePageFieldFilters).length > 0) ||
+      (defaultQuickFilter?.excludeEmptyPageFieldKeys &&
+        defaultQuickFilter.excludeEmptyPageFieldKeys.length > 0),
   );
   // Human-readable labels for the field filters that WOULD be saved (status is
   // summarized separately). Values are omitted on purpose — user/relation values
@@ -4953,6 +5035,58 @@ export function EntityRecords({
                     "Отметьте значения, строки с которыми нужно скрыть при открытии страницы. Пользователь сможет показать их галочкой «Показать скрытые». Скрытие не может показать строки, запрещённые фильтром вида.",
                   )}
                 </p>
+                {(emptyExcludableFields.length > 0 || emptyExcludablePageFields.length > 0) && (
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-slate-400">
+                      {t("records.pageExcludeEmptyTitle", "Скрывать, если поле пустое")}
+                    </div>
+                    <div className="max-h-40 overflow-y-auto rounded-md border border-slate-200 bg-white p-2">
+                      <div className="flex flex-wrap gap-1.5">
+                        {emptyExcludableFields.map((f: Field) => {
+                          const on = excludeEmptyFieldDraft.includes(f.fieldKey);
+                          return (
+                            <button
+                              key={`empty-e-${f.id}`}
+                              type="button"
+                              onClick={() => toggleExcludeEmptyField(f.fieldKey)}
+                              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                                on
+                                  ? "border-rose-300 bg-rose-50 text-rose-700"
+                                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                              }`}
+                            >
+                              {on && <Check className="w-3 h-3" />}
+                              <span className="truncate max-w-[12rem]">
+                                {(fieldLabelOverrides?.[f.fieldKey] && ml(fieldLabelOverrides[f.fieldKey])) || ml(f.nameJson)}
+                              </span>
+                            </button>
+                          );
+                        })}
+                        {emptyExcludablePageFields.map((pf: PageField) => {
+                          const on = excludeEmptyPageFieldDraft.includes(pf.fieldKey);
+                          return (
+                            <button
+                              key={`empty-p-${pf.id}`}
+                              type="button"
+                              onClick={() => toggleExcludeEmptyPageField(pf.fieldKey)}
+                              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                                on
+                                  ? "border-rose-300 bg-rose-50 text-rose-700"
+                                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                              }`}
+                            >
+                              {on && <Check className="w-3 h-3" />}
+                              <span className="truncate max-w-[12rem]">{ml(pf.nameJson)}</span>
+                              <span className="text-slate-400">
+                                · {t("records.pageLocalFieldTag", "поле страницы")}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {statuses.length > 0 && (
                   <div className="space-y-1">
                     <div className="text-xs font-medium text-slate-400">{t("records.status", "Статус")}</div>
@@ -5042,6 +5176,8 @@ export function EntityRecords({
                     {t("records.pageExcludeSelected", "Будет скрыто значений")}:{" "}
                     {Object.values(cleanExcludeFieldDraft).reduce((n, v) => n + v.length, 0) +
                       Object.values(cleanExcludePageFieldDraft).reduce((n, v) => n + v.length, 0) +
+                      cleanExcludeEmptyFieldDraft.length +
+                      cleanExcludeEmptyPageFieldDraft.length +
                       excludeStatusDraft.length}
                   </div>
                 )}

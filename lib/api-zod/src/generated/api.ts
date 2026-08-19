@@ -1340,9 +1340,11 @@ export const ListPagesResponseItem = zod.object({
   "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
   "statusIds": zod.array(zod.number()).optional(),
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
+  "excludeEmptyFieldKeys": zod.array(zod.string()).optional().describe('Entity value-backed field keys whose empty\/unset rows are hidden until the viewer toggles \"show hidden\".'),
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.'),
   "pageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT default filter on PAGE-LOCAL fields (mirror pages), keyed by page-field fieldKey. Seeds the page-local filter dropdowns exactly like fieldFilters seeds the entity ones.'),
-  "excludePageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per PAGE-LOCAL select field: hide rows whose page-local value is one of the listed values until the viewer toggles \"show hidden\". Same semantics as excludeFieldFilters.')
+  "excludePageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per PAGE-LOCAL select field: hide rows whose page-local value is one of the listed values until the viewer toggles \"show hidden\". Same semantics as excludeFieldFilters.'),
+  "excludeEmptyPageFieldKeys": zod.array(zod.string()).optional().describe('PAGE-LOCAL value-backed field keys whose empty\/unset rows are hidden until the viewer toggles \"show hidden\".')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "defaultSortJson": zod.union([zod.array(zod.object({
   "field": zod.string(),
@@ -1466,9 +1468,11 @@ export const CreatePageBody = zod.object({
   "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
   "statusIds": zod.array(zod.number()).optional(),
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
+  "excludeEmptyFieldKeys": zod.array(zod.string()).optional().describe('Entity value-backed field keys whose empty\/unset rows are hidden until the viewer toggles \"show hidden\".'),
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.'),
   "pageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT default filter on PAGE-LOCAL fields (mirror pages), keyed by page-field fieldKey. Seeds the page-local filter dropdowns exactly like fieldFilters seeds the entity ones.'),
-  "excludePageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per PAGE-LOCAL select field: hide rows whose page-local value is one of the listed values until the viewer toggles \"show hidden\". Same semantics as excludeFieldFilters.')
+  "excludePageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per PAGE-LOCAL select field: hide rows whose page-local value is one of the listed values until the viewer toggles \"show hidden\". Same semantics as excludeFieldFilters.'),
+  "excludeEmptyPageFieldKeys": zod.array(zod.string()).optional().describe('PAGE-LOCAL value-backed field keys whose empty\/unset rows are hidden until the viewer toggles \"show hidden\".')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "defaultSortJson": zod.union([zod.array(zod.object({
   "field": zod.string(),
@@ -1588,9 +1592,11 @@ export const GetPageResponse = zod.object({
   "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
   "statusIds": zod.array(zod.number()).optional(),
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
+  "excludeEmptyFieldKeys": zod.array(zod.string()).optional().describe('Entity value-backed field keys whose empty\/unset rows are hidden until the viewer toggles \"show hidden\".'),
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.'),
   "pageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT default filter on PAGE-LOCAL fields (mirror pages), keyed by page-field fieldKey. Seeds the page-local filter dropdowns exactly like fieldFilters seeds the entity ones.'),
-  "excludePageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per PAGE-LOCAL select field: hide rows whose page-local value is one of the listed values until the viewer toggles \"show hidden\". Same semantics as excludeFieldFilters.')
+  "excludePageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per PAGE-LOCAL select field: hide rows whose page-local value is one of the listed values until the viewer toggles \"show hidden\". Same semantics as excludeFieldFilters.'),
+  "excludeEmptyPageFieldKeys": zod.array(zod.string()).optional().describe('PAGE-LOCAL value-backed field keys whose empty\/unset rows are hidden until the viewer toggles \"show hidden\".')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "defaultSortJson": zod.union([zod.array(zod.object({
   "field": zod.string(),
@@ -1712,9 +1718,11 @@ export const UpdatePageBody = zod.object({
   "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
   "statusIds": zod.array(zod.number()).optional(),
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
+  "excludeEmptyFieldKeys": zod.array(zod.string()).optional().describe('Entity value-backed field keys whose empty\/unset rows are hidden until the viewer toggles \"show hidden\".'),
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.'),
   "pageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT default filter on PAGE-LOCAL fields (mirror pages), keyed by page-field fieldKey. Seeds the page-local filter dropdowns exactly like fieldFilters seeds the entity ones.'),
-  "excludePageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per PAGE-LOCAL select field: hide rows whose page-local value is one of the listed values until the viewer toggles \"show hidden\". Same semantics as excludeFieldFilters.')
+  "excludePageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per PAGE-LOCAL select field: hide rows whose page-local value is one of the listed values until the viewer toggles \"show hidden\". Same semantics as excludeFieldFilters.'),
+  "excludeEmptyPageFieldKeys": zod.array(zod.string()).optional().describe('PAGE-LOCAL value-backed field keys whose empty\/unset rows are hidden until the viewer toggles \"show hidden\".')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "defaultSortJson": zod.union([zod.array(zod.object({
   "field": zod.string(),
@@ -1826,9 +1834,11 @@ export const UpdatePageResponse = zod.object({
   "fieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional(),
   "statusIds": zod.array(zod.number()).optional(),
   "excludeFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles \"show hidden\". Values may be drawn from the field\'s configured options even if not yet present in the data. Never widens beyond the view\'s hard filter.'),
+  "excludeEmptyFieldKeys": zod.array(zod.string()).optional().describe('Entity value-backed field keys whose empty\/unset rows are hidden until the viewer toggles \"show hidden\".'),
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions: hide rows with these statuses by default, revealable via \"show hidden\". Authored from the full status list.'),
   "pageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT default filter on PAGE-LOCAL fields (mirror pages), keyed by page-field fieldKey. Seeds the page-local filter dropdowns exactly like fieldFilters seeds the entity ones.'),
-  "excludePageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per PAGE-LOCAL select field: hide rows whose page-local value is one of the listed values until the viewer toggles \"show hidden\". Same semantics as excludeFieldFilters.')
+  "excludePageFieldFilters": zod.record(zod.string(), zod.array(zod.string())).optional().describe('SOFT exclusions authored per PAGE-LOCAL select field: hide rows whose page-local value is one of the listed values until the viewer toggles \"show hidden\". Same semantics as excludeFieldFilters.'),
+  "excludeEmptyPageFieldKeys": zod.array(zod.string()).optional().describe('PAGE-LOCAL value-backed field keys whose empty\/unset rows are hidden until the viewer toggles \"show hidden\".')
 }).describe('A page\'s SOFT default quick-filter that pre-fills the records filter bar on open. Seeds only the user-adjustable ad-hoc filters (field dropdowns + status quick-filter); it never overrides the view\'s hard filter boundary.'),zod.null()]).optional().describe('Per-page soft default quick-filter that pre-fills the records filter bar on open (never overrides the view\'s hard filter).'),
   "defaultSortJson": zod.union([zod.array(zod.object({
   "field": zod.string(),
@@ -5679,6 +5689,8 @@ export const QueryEntityRecordsParams = zod.object({
 })
 
 export const queryEntityRecordsBodyFilterConjunctionDefault = `and`;
+export const queryEntityRecordsBodyExcludeFiltersItemExcludeEmptyDefault = false;
+export const queryEntityRecordsBodyExcludePageLocalFiltersItemExcludeEmptyDefault = false;
 export const queryEntityRecordsBodySortsItemDirectionDefault = `asc`;
 export const queryEntityRecordsBodyArchivedDefault = `active`;
 export const queryEntityRecordsBodyPageDefault = 1;
@@ -5711,13 +5723,15 @@ export const QueryEntityRecordsBody = zod.object({
   "statusIds": zod.array(zod.number()).optional(),
   "excludeFilters": zod.array(zod.object({
   "field": zod.string(),
-  "values": zod.array(zod.string())
-}).describe('A SOFT exclusion: hide rows whose `field` value is one of `values`. Always AND-combined with the rest of the query independently of the view\'s filterConjunction, and NULL-safe (rows with an empty value are kept). Only narrows the result — it can never reveal rows the view\'s hard filter hides. Driven by a page\'s default filter and toggled off by the viewer via \"show hidden\".')).optional().describe('SOFT per-field exclusions (from the page default filter, when the viewer has NOT toggled \"show hidden\"). Hides rows whose field value is one of the listed values. Always AND-combined and NULL-safe.'),
+  "values": zod.array(zod.string()).optional(),
+  "excludeEmpty": zod.boolean().default(queryEntityRecordsBodyExcludeFiltersItemExcludeEmptyDefault)
+}).describe('A SOFT exclusion: hide rows whose `field` value is one of `values` and\/or is empty when `excludeEmpty` is true. Always AND-combined with the rest of the query independently of the view\'s filterConjunction. Value exclusions are NULL-safe unless `excludeEmpty` is enabled. Only narrows the result — it can never reveal rows the view\'s hard filter hides. Driven by a page\'s default filter and toggled off by the viewer via \"show hidden\".')).optional().describe('SOFT per-field exclusions (from the page default filter, when the viewer has NOT toggled \"show hidden\"). Hides rows whose field value is one of the listed values and\/or is empty. Always AND-combined.'),
   "excludeStatusIds": zod.array(zod.number()).optional().describe('SOFT status exclusions (from the page default filter, unless the viewer toggled \"show hidden\"): hide rows whose statusId is in this list. AND-combined; never widens beyond the view\'s hard filter.'),
   "excludePageLocalFilters": zod.array(zod.object({
   "field": zod.string(),
-  "values": zod.array(zod.string())
-}).describe('A SOFT exclusion: hide rows whose `field` value is one of `values`. Always AND-combined with the rest of the query independently of the view\'s filterConjunction, and NULL-safe (rows with an empty value are kept). Only narrows the result — it can never reveal rows the view\'s hard filter hides. Driven by a page\'s default filter and toggled off by the viewer via \"show hidden\".')).optional().describe('SOFT exclusions on PAGE-LOCAL fields (values in page_record_values; requires pageId). NULL-safe like excludeFilters: rows with no stored value are kept. Always AND-combined; never widens.'),
+  "values": zod.array(zod.string()).optional(),
+  "excludeEmpty": zod.boolean().default(queryEntityRecordsBodyExcludePageLocalFiltersItemExcludeEmptyDefault)
+}).describe('A SOFT exclusion: hide rows whose `field` value is one of `values` and\/or is empty when `excludeEmpty` is true. Always AND-combined with the rest of the query independently of the view\'s filterConjunction. Value exclusions are NULL-safe unless `excludeEmpty` is enabled. Only narrows the result — it can never reveal rows the view\'s hard filter hides. Driven by a page\'s default filter and toggled off by the viewer via \"show hidden\".')).optional().describe('SOFT exclusions on PAGE-LOCAL fields (values in page_record_values; requires pageId). Can hide selected values and\/or empty\/unset values. Always AND-combined; never widens.'),
   "sorts": zod.array(zod.object({
   "field": zod.string(),
   "direction": zod.enum(['asc', 'desc']).default(queryEntityRecordsBodySortsItemDirectionDefault)
@@ -5877,6 +5891,7 @@ export const GetEntityFilterValuesParams = zod.object({
 })
 
 export const getEntityFilterValuesBodyFilterConjunctionDefault = `and`;
+export const getEntityFilterValuesBodyExcludeFiltersItemExcludeEmptyDefault = false;
 export const getEntityFilterValuesBodyArchivedDefault = `active`;
 
 export const GetEntityFilterValuesBody = zod.object({
@@ -5896,8 +5911,9 @@ export const GetEntityFilterValuesBody = zod.object({
   "statusIds": zod.array(zod.number()).optional(),
   "excludeFilters": zod.array(zod.object({
   "field": zod.string(),
-  "values": zod.array(zod.string())
-}).describe('A SOFT exclusion: hide rows whose `field` value is one of `values`. Always AND-combined with the rest of the query independently of the view\'s filterConjunction, and NULL-safe (rows with an empty value are kept). Only narrows the result — it can never reveal rows the view\'s hard filter hides. Driven by a page\'s default filter and toggled off by the viewer via \"show hidden\".')).optional().describe('SOFT per-field exclusions from the page default (when \"show hidden\" is off). Applied to the option list too so co-occurring values stay consistent with the visible rows. The exclusion matching the target field is skipped by the server so the target\'s own dropdown still lists all its selectable values.'),
+  "values": zod.array(zod.string()).optional(),
+  "excludeEmpty": zod.boolean().default(getEntityFilterValuesBodyExcludeFiltersItemExcludeEmptyDefault)
+}).describe('A SOFT exclusion: hide rows whose `field` value is one of `values` and\/or is empty when `excludeEmpty` is true. Always AND-combined with the rest of the query independently of the view\'s filterConjunction. Value exclusions are NULL-safe unless `excludeEmpty` is enabled. Only narrows the result — it can never reveal rows the view\'s hard filter hides. Driven by a page\'s default filter and toggled off by the viewer via \"show hidden\".')).optional().describe('SOFT per-field exclusions from the page default (when \"show hidden\" is off). Applied to the option list too so co-occurring values stay consistent with the visible rows. The exclusion matching the target field is skipped by the server so the target\'s own dropdown still lists all its selectable values.'),
   "excludeStatusIds": zod.array(zod.number()).optional(),
   "search": zod.string().optional(),
   "valueSearch": zod.string().optional().describe('Substring search over the OPTION VALUES themselves (the picker\'s search box), applied server-side BEFORE the 500-row limit so a value outside the first 500 distinct values can still be found.'),

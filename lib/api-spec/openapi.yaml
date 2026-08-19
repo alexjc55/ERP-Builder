@@ -7803,14 +7803,15 @@ components:
 
     ExcludeFilter:
       type: object
-      required: [field, values]
+      required: [field]
       description: >-
-        A SOFT exclusion: hide rows whose `field` value is one of `values`.
+        A SOFT exclusion: hide rows whose `field` value is one of `values`
+        and/or is empty when `excludeEmpty` is true.
         Always AND-combined with the rest of the query independently of the
-        view's filterConjunction, and NULL-safe (rows with an empty value are
-        kept). Only narrows the result — it can never reveal rows the view's hard
-        filter hides. Driven by a page's default filter and toggled off by the
-        viewer via "show hidden".
+        view's filterConjunction. Value exclusions are NULL-safe unless
+        `excludeEmpty` is enabled. Only narrows the result — it can never reveal
+        rows the view's hard filter hides. Driven by a page's default filter and
+        toggled off by the viewer via "show hidden".
       properties:
         field:
           type: string
@@ -7818,6 +7819,9 @@ components:
           type: array
           items:
             type: string
+        excludeEmpty:
+          type: boolean
+          default: false
 
     SortSpec:
       type: object
@@ -8279,7 +8283,7 @@ components:
           description: >-
             SOFT per-field exclusions (from the page default filter, when the
             viewer has NOT toggled "show hidden"). Hides rows whose field value
-            is one of the listed values. Always AND-combined and NULL-safe.
+            is one of the listed values and/or is empty. Always AND-combined.
           items:
             $ref: "#/components/schemas/ExcludeFilter"
         excludeStatusIds:
@@ -8294,8 +8298,8 @@ components:
           type: array
           description: >-
             SOFT exclusions on PAGE-LOCAL fields (values in page_record_values;
-            requires pageId). NULL-safe like excludeFilters: rows with no stored
-            value are kept. Always AND-combined; never widens.
+            requires pageId). Can hide selected values and/or empty/unset values.
+            Always AND-combined; never widens.
           items:
             $ref: "#/components/schemas/ExcludeFilter"
         sorts:
@@ -8499,6 +8503,13 @@ components:
             type: array
             items:
               type: string
+        excludeEmptyFieldKeys:
+          type: array
+          description: >-
+            Entity value-backed field keys whose empty/unset rows are hidden
+            until the viewer toggles "show hidden".
+          items:
+            type: string
         excludeStatusIds:
           type: array
           description: >-
@@ -8526,6 +8537,13 @@ components:
             type: array
             items:
               type: string
+        excludeEmptyPageFieldKeys:
+          type: array
+          description: >-
+            PAGE-LOCAL value-backed field keys whose empty/unset rows are hidden
+            until the viewer toggles "show hidden".
+          items:
+            type: string
 
     PageFilterValuesQuery:
       type: object

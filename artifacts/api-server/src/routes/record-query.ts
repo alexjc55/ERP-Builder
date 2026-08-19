@@ -89,11 +89,11 @@ export interface RecordQuerySpec {
   /**
    * SOFT per-field exclusions (from a page's default filter, when the viewer has
    * not toggled "show hidden"). Each hides rows whose field value is one of
-   * `values`. Always AND-combined into the top-level WHERE — independent of
-   * `filterConjunction` — and NULL-safe, so they only ever NARROW the result and
-   * can never reveal rows a view's hard `filters` hides.
+   * `values` and/or is empty when `excludeEmpty` is true. Always AND-combined
+   * into the top-level WHERE — independent of `filterConjunction` — so they only
+   * ever NARROW the result and can never reveal rows a view's hard `filters` hides.
    */
-  excludeFilters?: { field: string; values: string[] }[];
+  excludeFilters?: { field: string; values?: string[]; excludeEmpty?: boolean }[];
   /** SOFT status exclusions: hide rows whose statusId is in this list. AND-combined. */
   excludeStatusIds?: number[];
   sorts?: SortSpec[];
@@ -117,6 +117,22 @@ export function createdAtTextExpr(): SQL {
 }
 // Field types whose values are free text we can run a substring search against.
 const TEXT_SEARCH_TYPES = new Set(["text", "textarea", "email", "url", "phone", "select"]);
+// Stored scalar types with unambiguous NULL/blank semantics. Keep in sync with
+// EntityRecords EMPTY_EXCLUDABLE_FIELD_TYPES and the page-local allowlist.
+const EMPTY_EXCLUDABLE_FIELD_TYPES = new Set([
+  "text",
+  "textarea",
+  "email",
+  "url",
+  "phone",
+  "select",
+  "number",
+  "percent",
+  "boolean",
+  "date",
+  "datetime",
+  "user",
+]);
 
 /** Text expression for a JSONB field value: (values_json ->> 'key'). Key is a bound param. */
 function textExpr(key: string): SQL {
@@ -526,27 +542,41 @@ export function buildRecordQuery(
 
   // SOFT exclusions (page default filter, "show hidden" off). These ALWAYS
   // AND with everything — never OR — so a view configured with OR logic can't
-  // turn an exclusion into a widening. They are NULL-safe: a row whose value is
-  // empty is kept (an exclusion of value B hides only rows that ARE B).
+  // turn an exclusion into a widening. Value exclusions stay NULL-safe unless
+  // the same field explicitly opts into excluding empty/unset values.
   const excludeChunks: SQL[] = [];
   for (const ex of spec.excludeFilters ?? []) {
     const field = fieldByKey.get(ex.field);
     if (!field) return { error: `Unknown exclude field: ${ex.field}` };
     const vals = (ex.values ?? []).filter((v) => v != null && v !== "");
-    if (vals.length === 0) continue;
-    const parts = vals.map((v) => sql`${String(v)}`);
     const relMeta = relationMeta.get(ex.field);
-    if (relMeta) {
-      // Keep rows whose linked projected value is NOT among vals (or that have no
-      // link at all — the EXISTS is false, so NOT(...) keeps them).
-      const inCond = relationValueExists(
-        relMeta,
-        (v) => sql`${v} IN (${sql.join(parts, sql`, `)})`,
-      );
-      excludeChunks.push(sql`NOT ${inCond}`);
-    } else {
-      const expr = field.fieldType === SYSTEM_DATE_FIELD_TYPE ? createdAtTextExpr() : textExpr(ex.field);
-      excludeChunks.push(sql`(${expr} IS NULL OR ${expr} NOT IN (${sql.join(parts, sql`, `)}))`);
+    const expr = field.fieldType === SYSTEM_DATE_FIELD_TYPE ? createdAtTextExpr() : textExpr(ex.field);
+    // A stale page default can outlive a field retype. Ignore only its
+    // empty-exclusion flag when the new type has ambiguous/no stored scalar
+    // semantics; selected-value exclusions remain independently compatible.
+    if (ex.excludeEmpty === true && EMPTY_EXCLUDABLE_FIELD_TYPES.has(field.fieldType)) {
+      if (relMeta) {
+        // A relation/lookup is non-empty when at least one linked projection has
+        // a non-blank value. Requiring that EXISTS hides both unlinked rows and
+        // links whose projected value is blank.
+        excludeChunks.push(relationValueExists(relMeta, (v) => sql`NULLIF(BTRIM(${v}), '') IS NOT NULL`));
+      } else {
+        excludeChunks.push(sql`NULLIF(BTRIM(${expr}), '') IS NOT NULL`);
+      }
+    }
+    if (vals.length > 0) {
+      const parts = vals.map((v) => sql`${String(v)}`);
+      if (relMeta) {
+        // Keep rows whose linked projected value is NOT among vals (or that have
+        // no link at all — unless excludeEmpty above also requires one).
+        const inCond = relationValueExists(
+          relMeta,
+          (v) => sql`${v} IN (${sql.join(parts, sql`, `)})`,
+        );
+        excludeChunks.push(sql`NOT ${inCond}`);
+      } else {
+        excludeChunks.push(sql`(${expr} IS NULL OR ${expr} NOT IN (${sql.join(parts, sql`, `)}))`);
+      }
     }
   }
   let excludeStatusWhere: SQL | undefined;

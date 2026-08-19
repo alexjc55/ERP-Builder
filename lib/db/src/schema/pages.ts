@@ -122,9 +122,13 @@ export const pagesTable = pgTable("pages", {
     pageFieldFilters?: Record<string, string[]>;
     /** SOFT exclusions on entity select fields ("hide rows with these values until 'show hidden'"). */
     excludeFieldFilters?: Record<string, string[]>;
+    /** Entity value-backed fields whose empty/unset rows are hidden until "show hidden". */
+    excludeEmptyFieldKeys?: string[];
     excludeStatusIds?: number[];
     /** SOFT exclusions on PAGE-LOCAL select fields, keyed by page-field fieldKey. */
     excludePageFieldFilters?: Record<string, string[]>;
+    /** PAGE-LOCAL value-backed fields whose empty/unset rows are hidden until "show hidden". */
+    excludeEmptyPageFieldKeys?: string[];
   }>(),
   // Per-page default sort (display-only). Overrides the entity/view default
   // sort for THIS page's records table, independently of the entity's views

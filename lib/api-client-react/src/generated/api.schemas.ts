@@ -1248,12 +1248,16 @@ export interface PageQuickFilter {
   statusIds?: number[];
   /** SOFT exclusions authored per select-field: hide rows whose field value is one of the listed values UNTIL the viewer toggles "show hidden". Values may be drawn from the field's configured options even if not yet present in the data. Never widens beyond the view's hard filter. */
   excludeFieldFilters?: PageQuickFilterExcludeFieldFilters;
+  /** Entity value-backed field keys whose empty/unset rows are hidden until the viewer toggles "show hidden". */
+  excludeEmptyFieldKeys?: string[];
   /** SOFT status exclusions: hide rows with these statuses by default, revealable via "show hidden". Authored from the full status list. */
   excludeStatusIds?: number[];
   /** SOFT default filter on PAGE-LOCAL fields (mirror pages), keyed by page-field fieldKey. Seeds the page-local filter dropdowns exactly like fieldFilters seeds the entity ones. */
   pageFieldFilters?: PageQuickFilterPageFieldFilters;
   /** SOFT exclusions authored per PAGE-LOCAL select field: hide rows whose page-local value is one of the listed values until the viewer toggles "show hidden". Same semantics as excludeFieldFilters. */
   excludePageFieldFilters?: PageQuickFilterExcludePageFieldFilters;
+  /** PAGE-LOCAL value-backed field keys whose empty/unset rows are hidden until the viewer toggles "show hidden". */
+  excludeEmptyPageFieldKeys?: string[];
 }
 
 export type SortSpecDirection = typeof SortSpecDirection[keyof typeof SortSpecDirection];
@@ -3548,11 +3552,12 @@ export interface CustomFilterPick {
 }
 
 /**
- * A SOFT exclusion: hide rows whose `field` value is one of `values`. Always AND-combined with the rest of the query independently of the view's filterConjunction, and NULL-safe (rows with an empty value are kept). Only narrows the result — it can never reveal rows the view's hard filter hides. Driven by a page's default filter and toggled off by the viewer via "show hidden".
+ * A SOFT exclusion: hide rows whose `field` value is one of `values` and/or is empty when `excludeEmpty` is true. Always AND-combined with the rest of the query independently of the view's filterConjunction. Value exclusions are NULL-safe unless `excludeEmpty` is enabled. Only narrows the result — it can never reveal rows the view's hard filter hides. Driven by a page's default filter and toggled off by the viewer via "show hidden".
  */
 export interface ExcludeFilter {
   field: string;
-  values: string[];
+  values?: string[];
+  excludeEmpty?: boolean;
 }
 
 export type ViewConfigFilterConjunction = typeof ViewConfigFilterConjunction[keyof typeof ViewConfigFilterConjunction];
@@ -3757,11 +3762,11 @@ export interface RecordQuery {
   customFilters?: CustomFilterPick[];
   filterConjunction?: RecordQueryFilterConjunction;
   statusIds?: number[];
-  /** SOFT per-field exclusions (from the page default filter, when the viewer has NOT toggled "show hidden"). Hides rows whose field value is one of the listed values. Always AND-combined and NULL-safe. */
+  /** SOFT per-field exclusions (from the page default filter, when the viewer has NOT toggled "show hidden"). Hides rows whose field value is one of the listed values and/or is empty. Always AND-combined. */
   excludeFilters?: ExcludeFilter[];
   /** SOFT status exclusions (from the page default filter, unless the viewer toggled "show hidden"): hide rows whose statusId is in this list. AND-combined; never widens beyond the view's hard filter. */
   excludeStatusIds?: number[];
-  /** SOFT exclusions on PAGE-LOCAL fields (values in page_record_values; requires pageId). NULL-safe like excludeFilters: rows with no stored value are kept. Always AND-combined; never widens. */
+  /** SOFT exclusions on PAGE-LOCAL fields (values in page_record_values; requires pageId). Can hide selected values and/or empty/unset values. Always AND-combined; never widens. */
   excludePageLocalFilters?: ExcludeFilter[];
   sorts?: SortSpec[];
   search?: string;

@@ -7,9 +7,10 @@
  */
 
 /**
- * A SOFT exclusion: hide rows whose `field` value is one of `values`. Always AND-combined with the rest of the query independently of the view's filterConjunction, and NULL-safe (rows with an empty value are kept). Only narrows the result — it can never reveal rows the view's hard filter hides. Driven by a page's default filter and toggled off by the viewer via "show hidden".
+ * A SOFT exclusion: hide rows whose `field` value is one of `values` and/or is empty when `excludeEmpty` is true. Always AND-combined with the rest of the query independently of the view's filterConjunction. Value exclusions are NULL-safe unless `excludeEmpty` is enabled. Only narrows the result — it can never reveal rows the view's hard filter hides. Driven by a page's default filter and toggled off by the viewer via "show hidden".
  */
 export interface ExcludeFilter {
   field: string;
-  values: string[];
+  values?: string[];
+  excludeEmpty?: boolean;
 }
