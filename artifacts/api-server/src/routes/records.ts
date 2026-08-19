@@ -57,6 +57,7 @@ import {
   relationLinkFilter,
   relationLinkedIdScalar,
   relationValueScalar,
+  SYSTEM_SORT_CREATED_AT,
   type RecordQuerySpec,
   type FilterCondition,
   type RelationFilterMeta,
@@ -1148,20 +1149,42 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         : sql`(${entityRecordsTable.valuesJson} ->> ${groupField.fieldKey})`
       : null;
   // Expand-all group ordering: the client interleaves headers following the ROW
-  // order, so the rows' group-clustering expression must honor the caller's sort
-  // when it targets the group field itself (label, numeric-aware, direction).
-  // Otherwise groups cluster by label A→Z (stable default). Empty group last.
+  // order, so the rows' group-clustering expression must honor the caller's sort.
+  // A __created_at__ sort orders groups by their newest/oldest member first;
+  // otherwise the group field itself controls label order, with A→Z as fallback.
+  // Empty group stays last.
+  const groupRequestedSorts = (body.data.sorts ?? []) as { field: string; direction?: "asc" | "desc" }[];
+  // `__created_at__` is only a whole-group ordering when it is the primary row
+  // sort. A later date tie-break must not unexpectedly take over group ordering.
+  const primaryCreatedAtGroupSort =
+    groupRequestedSorts[0]?.field === SYSTEM_SORT_CREATED_AT ? groupRequestedSorts[0] : undefined;
   let rowGroupOrder: SQL[] = [];
   if (rowGroupKeyExpr && groupField) {
     const gLbl = groupRelMeta ? relationValueScalar(groupRelMeta) : rowGroupKeyExpr;
-    const s0 = ((body.data.sorts ?? []) as { field: string; direction?: string }[])[0];
-    const gRowDir = s0?.field === groupField.fieldKey && s0.direction === "desc" ? sql`DESC` : sql`ASC`;
+    const s0 = groupRequestedSorts[0];
     const gNum = sql`(CASE WHEN ${gLbl} ~ '^-?[0-9]+(\.[0-9]+)?$' THEN (${gLbl})::numeric END)`;
-    rowGroupOrder = [
-      sql`${gNum} ${gRowDir} NULLS LAST`,
-      sql`${gLbl} ${gRowDir} NULLS LAST`,
-      sql`${rowGroupKeyExpr} ASC NULLS LAST`,
-    ];
+    if (s0?.field === SYSTEM_SORT_CREATED_AT) {
+      const gDateDir = s0.direction === "desc" ? sql`DESC` : sql`ASC`;
+      const groupDate =
+        s0.direction === "desc"
+          ? sql`MAX(${entityRecordsTable.createdAt}) OVER (PARTITION BY NULLIF(${rowGroupKeyExpr}, ''))`
+          : sql`MIN(${entityRecordsTable.createdAt}) OVER (PARTITION BY NULLIF(${rowGroupKeyExpr}, ''))`;
+      rowGroupOrder = [
+        sql`CASE WHEN NULLIF(${rowGroupKeyExpr}, '') IS NULL THEN 1 ELSE 0 END ASC`,
+        sql`${groupDate} ${gDateDir}`,
+        sql`${gNum} ASC NULLS LAST`,
+        sql`${gLbl} ASC NULLS LAST`,
+        sql`${rowGroupKeyExpr} ASC NULLS LAST`,
+      ];
+    } else {
+      const gRowDir = s0?.field === groupField.fieldKey && s0.direction === "desc" ? sql`DESC` : sql`ASC`;
+      rowGroupOrder = [
+        sql`CASE WHEN NULLIF(${rowGroupKeyExpr}, '') IS NULL THEN 1 ELSE 0 END ASC`,
+        sql`${gNum} ${gRowDir} NULLS LAST`,
+        sql`${gLbl} ${gRowDir} NULLS LAST`,
+        sql`${rowGroupKeyExpr} ASC NULLS LAST`,
+      ];
+    }
   }
 
   const [countRow] = await db
@@ -1726,6 +1749,8 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       label: string | null;
       count: number;
       sums: Record<string, number>;
+      newestCreatedAtMs: number;
+      oldestCreatedAtMs: number;
       // Percent columns aggregate as an average: accumulate the running sum and
       // the count of FILLED rows, then divide once at the end into `sums`.
       pctSum: Record<string, number>;
@@ -1781,6 +1806,8 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           label: rawKey === null ? null : groupRelMeta ? (r.glabel ?? null) : rawKey,
           count: 0,
           sums: {},
+          newestCreatedAtMs: Number.NEGATIVE_INFINITY,
+          oldestCreatedAtMs: Number.POSITIVE_INFINITY,
           pctSum: {},
           pctCnt: {},
           common: new Map(),
@@ -1790,6 +1817,12 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         firstRow = true;
       }
       b.count += 1;
+      const createdAtMs =
+        r.createdAt instanceof Date ? r.createdAt.getTime() : Date.parse(String(r.createdAt));
+      if (Number.isFinite(createdAtMs)) {
+        b.newestCreatedAtMs = Math.max(b.newestCreatedAtMs, createdAtMs);
+        b.oldestCreatedAtMs = Math.min(b.oldestCreatedAtMs, createdAtMs);
+      }
       const vals = { ...((r.values as Record<string, unknown> | null) ?? {}) };
       // created_at fields carry no stored value — inject the system timestamp so
       // the common-value pass sees it like any other scalar column.
@@ -1926,22 +1959,28 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       }
     }
     // Group-list ordering: honor the caller's first sort that is applicable to
-    // a GROUP — the group field itself (label), a summed column, or a column
-    // with a group-common value. Anything else (e.g. __created_at__) falls back
-    // to the label A→Z, matching the old fixed behavior. The empty-key group
-    // always sorts last regardless of direction.
-    const gSpecSorts = (body.data.sorts ?? []) as { field: string; direction?: "asc" | "desc" }[];
+    // a GROUP — __created_at__ (the group's newest row), the group field itself
+    // (label), a summed column, or a column with a group-common value. Anything
+    // else falls back to label A→Z. The empty-key group always sorts last.
+    const gSpecSorts = groupRequestedSorts;
     const allBuckets = [...buckets.values()];
-    const gSortSpec = gSpecSorts.find(
-      (s) =>
-        s.field === groupField.fieldKey ||
-        allBuckets.some((b) => b.sums[s.field] !== undefined || b.common.has(s.field)),
-    );
+    const gSortSpec =
+      primaryCreatedAtGroupSort ??
+      gSpecSorts.find(
+        (s) =>
+          s.field !== SYSTEM_SORT_CREATED_AT &&
+          (s.field === groupField.fieldKey ||
+            allBuckets.some((b) => b.sums[s.field] !== undefined || b.common.has(s.field))),
+      );
     const gDir = gSortSpec?.direction === "desc" ? -1 : 1;
     const cmpLabel = (a: GroupBucket, b: GroupBucket) =>
       (a.label ?? a.key ?? "").localeCompare(b.label ?? b.key ?? "", "ru", { numeric: true, sensitivity: "base" });
     const groupSortVal = (b: GroupBucket): unknown =>
-      !gSortSpec || gSortSpec.field === groupField.fieldKey
+      gSortSpec?.field === SYSTEM_SORT_CREATED_AT
+        ? gSortSpec.direction === "desc"
+          ? b.newestCreatedAtMs
+          : b.oldestCreatedAtMs
+        : !gSortSpec || gSortSpec.field === groupField.fieldKey
         ? (b.label ?? b.key)
         : b.sums[gSortSpec.field] !== undefined
           ? b.sums[gSortSpec.field]
