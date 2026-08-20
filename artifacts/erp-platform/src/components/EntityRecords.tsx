@@ -4358,10 +4358,15 @@ export function EntityRecords({
   const lastPinnedKey = pinnedOrder[pinnedOrder.length - 1];
   const pinHeaderRefs = useRef<Record<string, HTMLTableCellElement | null>>({});
   const [pinnedLeft, setPinnedLeft] = useState<Record<string, number>>({});
-  // Bulk selection mode is only offered where the actions column itself is
-  // visible (hiding the actions column for a role hides bulk actions too) and
-  // the viewer can actually update (archive) or delete records.
-  const bulkAvailable = !setupMode && !showPivot && showActionsColumn && (canUpdate || canDelete);
+  // Field editing is deliberately independent from destructive bulk actions:
+  // a user who can update records and has at least one editable field can
+  // select rows for the atomic "Edit fields" operation even when the role hides
+  // the actions column. Archive/delete/merge retain their existing gate.
+  const bulkFieldEditAvailable =
+    !setupMode && !showPivot && canUpdate && bulkEditableFields.length > 0;
+  const bulkRecordActionsAvailable =
+    !setupMode && !showPivot && showActionsColumn && (canUpdate || canDelete);
+  const bulkAvailable = bulkFieldEditAvailable || bulkRecordActionsAvailable;
   const showBulk = bulkMode && bulkAvailable;
   const BULK_COL_W = 40;
   // Sticky style for the checkbox column: pinned to the inline start (left in
@@ -4833,7 +4838,7 @@ export function EntityRecords({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
-                 {canUpdate && bulkEditableFields.length > 0 && (
+                 {bulkFieldEditAvailable && (
                    <DropdownMenuItem
                      onClick={() => {
                        setBulkEditFieldToken("");
@@ -4846,25 +4851,25 @@ export function EntityRecords({
                      {t("records.bulkEditFields", "Изменить поля")}
                    </DropdownMenuItem>
                  )}
-                {canUpdate && (
+                {bulkRecordActionsAvailable && canUpdate && (
                   <DropdownMenuItem onClick={() => setBulkConfirm("archive")}>
                     <Archive className="w-3.5 h-3.5 mr-2" />
                     {t("records.toArchive", "В архив")}
                   </DropdownMenuItem>
                 )}
-                {canUpdate && archived !== "active" && (
+                {bulkRecordActionsAvailable && canUpdate && archived !== "active" && (
                   <DropdownMenuItem onClick={() => setBulkConfirm("unarchive")}>
                     <ArchiveRestore className="w-3.5 h-3.5 mr-2" />
                     {t("records.restoreFromArchive", "Восстановить из архива")}
                   </DropdownMenuItem>
                 )}
-                {canDelete && (
+                {bulkRecordActionsAvailable && canDelete && (
                   <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => setBulkConfirm("delete")}>
                     <Trash2 className="w-3.5 h-3.5 mr-2" />
                     {t("records.delete", "Удалить")}
                   </DropdownMenuItem>
                 )}
-                {isSuperAdmin && (
+                {bulkRecordActionsAvailable && isSuperAdmin && (
                   <DropdownMenuItem
                     disabled={selectedIds.size < 2}
                     onClick={() => {
