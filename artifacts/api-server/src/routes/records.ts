@@ -43,6 +43,7 @@ import {
   PivotEntityRecordsParams,
   PivotEntityRecordsBody,
   BulkRecordsActionBody,
+  BulkUpdateRecordFieldBody,
   MergeRecordsBody,
 } from "@workspace/api-zod";
 import type { EntityField, InsertAuditLog, FileSource, FileFieldConfig, FieldValidationRule } from "@workspace/db";
@@ -689,6 +690,23 @@ export async function checkDependentValues(
     }
   }
   return null;
+}
+
+/** Clear every dependent field whose parent chain includes `changedKey`. */
+function clearDependentDescendantValues(
+  values: Record<string, unknown>,
+  changedKey: string,
+  fields: EntityField[],
+): Record<string, unknown> {
+  let next = values;
+  for (const field of fields) {
+    if (!field.dependencyConfigJson?.dependsOnFieldKey) continue;
+    if (!dependencyAncestorKeys(field, fields).includes(changedKey)) continue;
+    if (!(field.fieldKey in next) || isEmpty(next[field.fieldKey])) continue;
+    if (next === values) next = { ...values };
+    delete next[field.fieldKey];
+  }
+  return next;
 }
 
 /** Arbitrary advisory-lock namespace for serializing unique-key checks per entity. */
@@ -3582,6 +3600,186 @@ router.post("/records/:id/unarchive", requireAuth, async (req, res): Promise<voi
     return;
   }
   await setArchived(req, res, params.data.id, false);
+});
+
+class BulkFieldUpdateError extends Error {
+  constructor(
+    readonly status: number,
+    readonly recordId: number | null,
+    message: string,
+  ) {
+    super(recordId == null ? message : `Запись ${recordId}: ${message}`);
+  }
+}
+
+/**
+ * Atomically set ONE entity field to ONE value across selected records.
+ *
+ * Unlike the intentionally partial archive/delete endpoint below, this endpoint
+ * locks and validates every selected row in one transaction. A failure on any
+ * row rolls the whole batch back. Parent-field changes clear dependent
+ * descendants before the same validation/immutability/fill-rule pipeline used
+ * by the single-record update.
+ */
+router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> => {
+  const body = BulkUpdateRecordFieldBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  const { entityId, fieldKey, value, pageId } = body.data;
+  const recordIds = [...new Set(body.data.recordIds)].sort((a, b) => a - b);
+  if (!(await assertRecord(req, res, entityId, "update", pageId))) return;
+
+  const [perms, fields] = await Promise.all([getPermissions(req), loadActiveFields(entityId)]);
+  const field = fields.find((candidate) => candidate.fieldKey === fieldKey);
+  if (!field) {
+    res.status(400).json({ error: `Unknown field: ${fieldKey}` });
+    return;
+  }
+  if (
+    field.fieldType === "function" ||
+    field.fieldType === "relation" ||
+    field.fieldType === "lookup" ||
+    field.fieldType === "created_at" ||
+    field.fieldType === "file"
+  ) {
+    res.status(400).json({ error: `Field "${fieldKey}" cannot be changed in bulk` });
+    return;
+  }
+  if (field.lockAfterCreate) {
+    res.status(422).json({ error: `Поле «${fieldRuName(field)}» нельзя изменять массово` });
+    return;
+  }
+  // A dependent field's valid option set can differ from row to row according
+  // to its parent chain, so one shared picker/value is not a safe bulk contract.
+  if (field.dependencyConfigJson?.dependsOnFieldKey) {
+    res.status(400).json({ error: `Dependent field "${fieldKey}" cannot be changed in bulk` });
+    return;
+  }
+
+  const { editable } = await fieldAccessContext(req, entityId, fields, pageId);
+  if (!editable.has(fieldKey)) {
+    res.status(403).json({ error: `Field "${fieldKey}" is read-only for your role` });
+    return;
+  }
+  const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, entityId, pageId);
+  const gdriveModuleEnabled = await isGoogleDriveModuleEnabled();
+  const keyFields = fields.filter((candidate) => candidate.isKey);
+  const userId = req.user!.userId;
+
+  type ChangedRow = {
+    id: number;
+    before: Record<string, unknown>;
+    after: Record<string, unknown>;
+  };
+  let changedRows: ChangedRow[] = [];
+  try {
+    changedRows = await db.transaction(async (tx) => {
+      const rows = await tx
+        .select()
+        .from(entityRecordsTable)
+        .where(and(eq(entityRecordsTable.entityId, entityId), inArray(entityRecordsTable.id, recordIds)))
+        .orderBy(asc(entityRecordsTable.id))
+        .for("update");
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      for (const recordId of recordIds) {
+        const row = byId.get(recordId);
+        if (!row) throw new BulkFieldUpdateError(404, recordId, "запись не найдена");
+        if (
+          scope === "own" &&
+          !(await isRecordOwned(entityId, row, scopeFieldKeys, userId, fields))
+        ) {
+          throw new BulkFieldUpdateError(404, recordId, "запись недоступна");
+        }
+      }
+
+      if (keyFields.length > 0) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${UNIQUE_KEY_LOCK_NS}, ${entityId})`);
+      }
+
+      const changed: ChangedRow[] = [];
+      for (const recordId of recordIds) {
+        const row = byId.get(recordId)!;
+        const before = (row.valuesJson as Record<string, unknown>) ?? {};
+        let candidate = { ...before, [fieldKey]: isEmpty(value) ? undefined : value };
+        let validated = validateValues(fields, candidate, gdriveModuleEnabled, before);
+        if ("error" in validated) {
+          throw new BulkFieldUpdateError(400, recordId, validated.error);
+        }
+        // Clear descendants only when the target's CANONICAL value actually
+        // changes. Reapplying an already-stored parent value is a no-op and must
+        // never erase its dependent children.
+        const targetChanged =
+          JSON.stringify(before[fieldKey] ?? null) !==
+          JSON.stringify(validated.values[fieldKey] ?? null);
+        if (targetChanged) {
+          candidate = clearDependentDescendantValues(validated.values, fieldKey, fields);
+          validated = validateValues(fields, candidate, gdriveModuleEnabled, before);
+          if ("error" in validated) {
+            throw new BulkFieldUpdateError(400, recordId, validated.error);
+          }
+        }
+        const userRefError = await validateUserRefs(fields, validated.values);
+        if (userRefError) throw new BulkFieldUpdateError(400, recordId, userRefError);
+        const dependentError = await checkDependentValues(
+          entityId,
+          fields,
+          validated.values,
+          recordId,
+          tx,
+        );
+        if (dependentError) throw new BulkFieldUpdateError(400, recordId, dependentError);
+        const immutableError = checkImmutableFields(fields, validated.values, before);
+        if (immutableError) throw new BulkFieldUpdateError(422, recordId, immutableError);
+        const fillError = checkValidationRules(fields, validated.values);
+        if (fillError) throw new BulkFieldUpdateError(422, recordId, fillError);
+        if (keyFields.length > 0) {
+          const duplicate = await checkUniqueKeys(tx, entityId, keyFields, validated.values, recordId);
+          if (duplicate) throw new BulkFieldUpdateError(409, recordId, duplicate);
+        }
+
+        const diffs = diffValues(before, validated.values, fields.map((candidateField) => candidateField.fieldKey));
+        if (diffs.length === 0) continue;
+        const [updated] = await tx
+          .update(entityRecordsTable)
+          .set({ valuesJson: validated.values })
+          .where(eq(entityRecordsTable.id, recordId))
+          .returning({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson });
+        changed.push({
+          id: updated.id,
+          before,
+          after: updated.valuesJson as Record<string, unknown>,
+        });
+      }
+      return changed;
+    });
+  } catch (err) {
+    if (err instanceof BulkFieldUpdateError) {
+      res.status(err.status).json({ error: err.message, recordId: err.recordId });
+      return;
+    }
+    throw err;
+  }
+
+  const auditEntries: InsertAuditLog[] = [];
+  const events: Parameters<typeof emitEvent>[0] = [];
+  for (const row of changedRows) {
+    const changedFields = diffValues(row.before, row.after, fields.map((candidate) => candidate.fieldKey));
+    for (const change of changedFields) {
+      auditEntries.push({ entityId, recordId: row.id, ...change, userId });
+    }
+    events.push({
+      eventName: EVENT_RECORD_UPDATED,
+      entityId,
+      recordId: row.id,
+      payload: { actorUserId: userId, changedFields: changedFields.map((change) => change.fieldKey) },
+    });
+  }
+  if (auditEntries.length > 0) await writeAudit(auditEntries, req.log);
+  if (events.length > 0) await emitEvent(events, req.log);
+
+  res.json({ updatedIds: recordIds });
 });
 
 /**

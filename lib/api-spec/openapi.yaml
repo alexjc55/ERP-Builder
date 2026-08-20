@@ -1366,6 +1366,34 @@ paths:
               schema:
                 $ref: "#/components/schemas/PageRecordValue"
 
+  /pages/{pageId}/records/bulk-field-values:
+    post:
+      operationId: bulkSetPageRecordFieldValues
+      tags: [pageFields]
+      summary: >-
+        Atomically set one editable page-local field (including page_ref
+        write-through) to one value for selected records. Every record and
+        field boundary is checked before the transaction commits.
+      parameters:
+        - name: pageId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkPageRecordFieldUpdate"
+      responses:
+        "200":
+          description: Updated record ids
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkFieldUpdateResult"
+
   /pages/{pageId}/related-values:
     post:
       operationId: getPageRelatedValues
@@ -2238,6 +2266,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BulkRecordsResult"
+
+  /records/bulk-field:
+    post:
+      operationId: bulkUpdateRecordField
+      tags: [records]
+      summary: >-
+        Atomically set one editable entity field to one value for selected
+        records. Every record is checked against the same validation, scope,
+        immutability, dependent-field, cross-field and uniqueness boundaries as
+        a single-record update.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkRecordFieldUpdate"
+      responses:
+        "200":
+          description: Updated record ids
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkFieldUpdateResult"
 
   /records/merge:
     post:
@@ -6936,6 +6987,20 @@ components:
           type: object
           additionalProperties: true
 
+    BulkPageRecordFieldUpdate:
+      type: object
+      required: [fieldKey, value, recordIds]
+      properties:
+        fieldKey:
+          type: string
+        value: {}
+        recordIds:
+          type: array
+          items:
+            type: integer
+          minItems: 1
+          maxItems: 500
+
     Status:
       type: object
       required: [id, entityId, statusKey, nameJson, color, isDefault, isFinal, isArchiveTrigger, archiveAfterDays, sortOrder, isActive, createdAt, updatedAt]
@@ -7515,6 +7580,36 @@ components:
           items:
             type: integer
         failedIds:
+          type: array
+          items:
+            type: integer
+
+    BulkRecordFieldUpdate:
+      type: object
+      required: [entityId, fieldKey, value, recordIds]
+      properties:
+        entityId:
+          type: integer
+        fieldKey:
+          type: string
+        value: {}
+        recordIds:
+          type: array
+          items:
+            type: integer
+          minItems: 1
+          maxItems: 500
+        pageId:
+          type: integer
+          description: >-
+            Optional mirror-page context: applies that page's record-rights and
+            field-access overrides.
+
+    BulkFieldUpdateResult:
+      type: object
+      required: [updatedIds]
+      properties:
+        updatedIds:
           type: array
           items:
             type: integer

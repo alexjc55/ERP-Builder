@@ -9780,6 +9780,84 @@
     "he": "פעולות"
   },
   {
+    "key": "records.bulkEditFields",
+    "ru": "Изменить поля",
+    "en": "Edit fields",
+    "he": "עריכת שדות"
+  },
+  {
+    "key": "records.bulkFieldUpdateSuccess",
+    "ru": "Поле обновлено в {n} записях",
+    "en": "Field updated in {n} records",
+    "he": "השדה עודכן ב-{n} רשומות"
+  },
+  {
+    "key": "records.bulkFieldRequired",
+    "ru": "Выберите поле",
+    "en": "Select a field",
+    "he": "בחר שדה"
+  },
+  {
+    "key": "records.bulkFieldUnsupported",
+    "ru": "Этот тип поля нельзя изменить массово",
+    "en": "This field type cannot be edited in bulk",
+    "he": "לא ניתן לערוך סוג שדה זה באופן קבוצתי"
+  },
+  {
+    "key": "records.bulkFieldEditCount",
+    "ru": "Изменить поле в {n} записях",
+    "en": "Edit a field in {n} records",
+    "he": "עריכת שדה ב-{n} רשומות"
+  },
+  {
+    "key": "records.bulkFieldSelect",
+    "ru": "Поле",
+    "en": "Field",
+    "he": "שדה"
+  },
+  {
+    "key": "records.bulkFieldPlaceholder",
+    "ru": "Выберите поле",
+    "en": "Select a field",
+    "he": "בחר שדה"
+  },
+  {
+    "key": "records.bulkFieldNoEligible",
+    "ru": "Нет доступных полей для массового изменения.",
+    "en": "No fields are available for bulk editing.",
+    "he": "אין שדות זמינים לעריכה קבוצתית."
+  },
+  {
+    "key": "records.bulkFieldClear",
+    "ru": "Очистить значение",
+    "en": "Clear value",
+    "he": "נקה ערך"
+  },
+  {
+    "key": "records.bulkFieldClearHint",
+    "ru": "Значение будет удалено у всех выбранных записей.",
+    "en": "The value will be removed from all selected records.",
+    "he": "הערך יוסר מכל הרשומות שנבחרו."
+  },
+  {
+    "key": "records.bulkFieldNewValue",
+    "ru": "Новое значение",
+    "en": "New value",
+    "he": "ערך חדש"
+  },
+  {
+    "key": "records.bulkFieldUseClear",
+    "ru": "Выберите значение или включите «Очистить значение»",
+    "en": "Select a value or enable “Clear value”",
+    "he": "בחר ערך או הפעל „נקה ערך”"
+  },
+  {
+    "key": "records.bulkFieldSubmit",
+    "ru": "Применить",
+    "en": "Apply",
+    "he": "החל"
+  },
+  {
     "key": "records.bulkSelectAll",
     "ru": "Выбрать все",
     "en": "Select all",

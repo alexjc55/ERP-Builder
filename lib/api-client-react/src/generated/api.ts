@@ -36,6 +36,9 @@ import type {
   AutomationsReorderInput,
   BatchImportRequest,
   BatchImportResult,
+  BulkFieldUpdateResult,
+  BulkPageRecordFieldUpdate,
+  BulkRecordFieldUpdate,
   BulkRecordsAction,
   BulkRecordsResult,
   ChangePasswordInput,
@@ -4492,6 +4495,78 @@ export const useSetPageRecordValues = <TError = ErrorType<unknown>,
       return useMutation(getSetPageRecordValuesMutationOptions(options));
     }
 
+export const getBulkSetPageRecordFieldValuesUrl = (pageId: number,) => {
+
+
+
+
+  return `/api/pages/${pageId}/records/bulk-field-values`
+}
+
+/**
+ * @summary Atomically set one editable page-local field (including page_ref write-through) to one value for selected records. Every record and field boundary is checked before the transaction commits.
+ */
+export const bulkSetPageRecordFieldValues = async (pageId: number,
+    bulkPageRecordFieldUpdate: BulkPageRecordFieldUpdate, options?: RequestInit): Promise<BulkFieldUpdateResult> => {
+
+  return customFetch<BulkFieldUpdateResult>(getBulkSetPageRecordFieldValuesUrl(pageId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      bulkPageRecordFieldUpdate,)
+  }
+);}
+
+
+
+
+export const getBulkSetPageRecordFieldValuesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkSetPageRecordFieldValues>>, TError,{pageId: number;data: BodyType<BulkPageRecordFieldUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bulkSetPageRecordFieldValues>>, TError,{pageId: number;data: BodyType<BulkPageRecordFieldUpdate>}, TContext> => {
+
+const mutationKey = ['bulkSetPageRecordFieldValues'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkSetPageRecordFieldValues>>, {pageId: number;data: BodyType<BulkPageRecordFieldUpdate>}> = (props) => {
+          const {pageId,data} = props ?? {};
+
+          return  bulkSetPageRecordFieldValues(pageId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BulkSetPageRecordFieldValuesMutationResult = NonNullable<Awaited<ReturnType<typeof bulkSetPageRecordFieldValues>>>
+    export type BulkSetPageRecordFieldValuesMutationBody = BodyType<BulkPageRecordFieldUpdate>
+    export type BulkSetPageRecordFieldValuesMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Atomically set one editable page-local field (including page_ref write-through) to one value for selected records. Every record and field boundary is checked before the transaction commits.
+ */
+export const useBulkSetPageRecordFieldValues = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkSetPageRecordFieldValues>>, TError,{pageId: number;data: BodyType<BulkPageRecordFieldUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof bulkSetPageRecordFieldValues>>,
+        TError,
+        {pageId: number;data: BodyType<BulkPageRecordFieldUpdate>},
+        TContext
+      > => {
+      return useMutation(getBulkSetPageRecordFieldValuesMutationOptions(options));
+    }
+
 export const getGetPageRelatedValuesUrl = (pageId: number,) => {
 
 
@@ -7490,6 +7565,77 @@ export const useBulkRecordsAction = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getBulkRecordsActionMutationOptions(options));
+    }
+
+export const getBulkUpdateRecordFieldUrl = () => {
+
+
+
+
+  return `/api/records/bulk-field`
+}
+
+/**
+ * @summary Atomically set one editable entity field to one value for selected records. Every record is checked against the same validation, scope, immutability, dependent-field, cross-field and uniqueness boundaries as a single-record update.
+ */
+export const bulkUpdateRecordField = async (bulkRecordFieldUpdate: BulkRecordFieldUpdate, options?: RequestInit): Promise<BulkFieldUpdateResult> => {
+
+  return customFetch<BulkFieldUpdateResult>(getBulkUpdateRecordFieldUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      bulkRecordFieldUpdate,)
+  }
+);}
+
+
+
+
+export const getBulkUpdateRecordFieldMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkUpdateRecordField>>, TError,{data: BodyType<BulkRecordFieldUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bulkUpdateRecordField>>, TError,{data: BodyType<BulkRecordFieldUpdate>}, TContext> => {
+
+const mutationKey = ['bulkUpdateRecordField'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkUpdateRecordField>>, {data: BodyType<BulkRecordFieldUpdate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  bulkUpdateRecordField(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BulkUpdateRecordFieldMutationResult = NonNullable<Awaited<ReturnType<typeof bulkUpdateRecordField>>>
+    export type BulkUpdateRecordFieldMutationBody = BodyType<BulkRecordFieldUpdate>
+    export type BulkUpdateRecordFieldMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Atomically set one editable entity field to one value for selected records. Every record is checked against the same validation, scope, immutability, dependent-field, cross-field and uniqueness boundaries as a single-record update.
+ */
+export const useBulkUpdateRecordField = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkUpdateRecordField>>, TError,{data: BodyType<BulkRecordFieldUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof bulkUpdateRecordField>>,
+        TError,
+        {data: BodyType<BulkRecordFieldUpdate>},
+        TContext
+      > => {
+      return useMutation(getBulkUpdateRecordFieldMutationOptions(options));
     }
 
 export const getMergeRecordsUrl = () => {

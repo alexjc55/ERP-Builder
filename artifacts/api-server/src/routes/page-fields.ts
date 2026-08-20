@@ -53,6 +53,8 @@ import {
   ListPageRecordValuesParams,
   SetPageRecordValuesParams,
   SetPageRecordValuesBody,
+  BulkSetPageRecordFieldValuesParams,
+  BulkSetPageRecordFieldValuesBody,
   GetPageRelatedValuesParams,
   GetPageRelatedValuesBody,
   GetPageRelatedCandidatesParams,
@@ -444,6 +446,14 @@ export function validatePageValues(
         cleaned[field.fieldKey] = num;
         break;
       }
+      case "user": {
+        const num = typeof raw === "number" ? raw : Number(raw);
+        if (!Number.isInteger(num) || num <= 0) {
+          return { error: `Field "${field.fieldKey}" must be a valid user id` };
+        }
+        cleaned[field.fieldKey] = num;
+        break;
+      }
       case "date":
       case "datetime": {
         if (typeof raw !== "string" || Number.isNaN(Date.parse(raw))) return { error: `Field "${field.fieldKey}" must be a valid date` };
@@ -465,6 +475,26 @@ export function validatePageValues(
     }
   }
   return { values: cleaned };
+}
+
+/** Verify that every page-local `user` value references an existing user. */
+async function validatePageUserRefs(
+  fields: PageField[],
+  values: Record<string, unknown>,
+): Promise<string | null> {
+  const ids = fields
+    .filter((field) => field.fieldType === "user")
+    .map((field) => values[field.fieldKey])
+    .filter((value): value is number => typeof value === "number");
+  const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length === 0) return null;
+  const rows = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(inArray(usersTable.id, uniqueIds));
+  const found = new Set(rows.map((row) => row.id));
+  const missing = uniqueIds.find((id) => !found.has(id));
+  return missing == null ? null : `Referenced user ${missing} does not exist`;
 }
 
 router.get("/pages/:pageId/fields", requireAuth, async (req, res): Promise<void> => {
@@ -1299,6 +1329,11 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
     res.status(400).json({ error: result.error });
     return;
   }
+  const targetUserRefError = await validatePageUserRefs(fields, result.values);
+  if (targetUserRefError) {
+    res.status(400).json({ error: targetUserRefError });
+    return;
+  }
   for (const sourceState of sourceStates.values()) {
     if (sourceState.changedKeys.size === 0) continue;
     const sourcePatch = Object.fromEntries(
@@ -1317,6 +1352,11 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
     );
     if ("error" in sourceResult) {
       res.status(400).json({ error: sourceResult.error });
+      return;
+    }
+    const sourceUserRefError = await validatePageUserRefs(sourceState.fields, sourceResult.values);
+    if (sourceUserRefError) {
+      res.status(400).json({ error: sourceUserRefError });
       return;
     }
   }
@@ -1381,6 +1421,10 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
         if ("error" in lockedTargetResult) {
           throw new LockedPageValidationError(lockedTargetResult.error);
         }
+        const lockedTargetUserRefError = await validatePageUserRefs(fields, lockedTargetResult.values);
+        if (lockedTargetUserRefError) {
+          throw new LockedPageValidationError(lockedTargetUserRefError);
+        }
         writtenTargetValues = lockedTargetResult.values;
         await tx
           .insert(pageRecordValuesTable)
@@ -1429,6 +1473,13 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
         );
         if ("error" in lockedResult) {
           throw new LockedPageValidationError(lockedResult.error);
+        }
+        const lockedSourceUserRefError = await validatePageUserRefs(
+          sourceState.fields,
+          lockedResult.values,
+        );
+        if (lockedSourceUserRefError) {
+          throw new LockedPageValidationError(lockedSourceUserRefError);
         }
         // Validation normalizes the changed scalar values but intentionally
         // returns only active known fields. A page_ref write is a key-level
@@ -1521,6 +1572,322 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
     );
   }
   res.json({ recordId, valuesJson: writtenTargetValues });
+});
+
+class BulkPageFieldUpdateError extends Error {
+  constructor(
+    readonly status: number,
+    readonly recordId: number | null,
+    message: string,
+  ) {
+    super(recordId == null ? message : `Запись ${recordId}: ${message}`);
+  }
+}
+
+/**
+ * Atomically set ONE page-local field to ONE value across selected records.
+ * Direct fields patch this page's value map; page_ref aliases patch only their
+ * source page/key. Every record is locked and re-checked, and a same-key change
+ * observed between the initial snapshot and lock acquisition returns 409 rather
+ * than silently overwriting it.
+ */
+router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req, res): Promise<void> => {
+  const params = BulkSetPageRecordFieldValuesParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const body = BulkSetPageRecordFieldValuesBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  const { pageId } = params.data;
+  const { fieldKey, value } = body.data;
+  const recordIds = [...new Set(body.data.recordIds)].sort((a, b) => a - b);
+  const eff = await effectiveEntityForPage(pageId);
+  if (!eff.found) {
+    res.status(404).json({ error: "Page not found" });
+    return;
+  }
+  if (eff.entityId == null) {
+    res.status(400).json({ error: "Page has no entity" });
+    return;
+  }
+  const entityId = eff.entityId;
+  if (!(await assertRecord(req, res, entityId, "update", pageId))) return;
+
+  const [perms, roleIds, fields, entityFields] = await Promise.all([
+    getPermissions(req),
+    getUserRoleIds(req),
+    db
+      .select()
+      .from(pageFieldsTable)
+      .where(and(eq(pageFieldsTable.pageId, pageId), eq(pageFieldsTable.isActive, true))),
+    loadActiveEntityFields(entityId),
+  ]);
+  const field = fields.find((candidate) => candidate.fieldKey === fieldKey);
+  if (!field) {
+    res.status(400).json({ error: `Unknown page field: ${fieldKey}` });
+    return;
+  }
+  if (
+    field.fieldType === "function" ||
+    field.fieldType === "relation" ||
+    field.fieldType === "lookup" ||
+    field.fieldType === "created_at" ||
+    field.fieldType === "file"
+  ) {
+    res.status(400).json({ error: `Page field "${fieldKey}" cannot be changed in bulk` });
+    return;
+  }
+  const targetFieldPerm = perms.superAdmin
+    ? "edit"
+    : mostPermissiveFieldPerm(
+        field.permissionsJson as FieldPermissions | null,
+        roleIds,
+        "edit",
+        perms,
+        entityId,
+        pageId,
+      );
+  if (targetFieldPerm !== "edit") {
+    res.status(403).json({ error: `Field "${fieldKey}" is read-only for your role` });
+    return;
+  }
+
+  const requested = isEmpty(value) ? undefined : value;
+  const targetScope = await effectiveScopeFor(req, perms, entityId, pageId);
+  let writePageId = pageId;
+  let writeField = field;
+  let writeFields = fields;
+  let sourceScope: Awaited<ReturnType<typeof effectiveScopeFor>> | null = null;
+
+  if (field.fieldType === "page_ref") {
+    const cfg = (field.pageRefConfigJson ?? {}) as PageRefFieldConfig;
+    if (cfg.sourcePageId == null || !cfg.sourceFieldKey) {
+      res.status(400).json({ error: `Field "${fieldKey}" has no valid source` });
+      return;
+    }
+    const [sourceField, sourceEff, sourceFields, sourceRecordPerm] = await Promise.all([
+      loadPageRefSource(cfg),
+      effectiveEntityForPage(cfg.sourcePageId),
+      db
+        .select()
+        .from(pageFieldsTable)
+        .where(and(eq(pageFieldsTable.pageId, cfg.sourcePageId), eq(pageFieldsTable.isActive, true))),
+      effectiveRecordPerm(req, perms, entityId, cfg.sourcePageId),
+    ]);
+    if (!sourceField || !sourceEff.found || sourceEff.entityId !== entityId) {
+      res.status(400).json({ error: `Source for field "${fieldKey}" is unavailable` });
+      return;
+    }
+    const pageAccessAllowed =
+      perms.superAdmin || (perms.pageIds.includes(pageId) && perms.pageIds.includes(cfg.sourcePageId));
+    if (!pageAccessAllowed) {
+      res.status(403).json({ error: `No access to the source page for field "${fieldKey}"` });
+      return;
+    }
+    const sourceFieldPerm = perms.superAdmin
+      ? "edit"
+      : mostPermissiveFieldPerm(
+          sourceField.permissionsJson as FieldPermissions | null,
+          roleIds,
+          "edit",
+          perms,
+          entityId,
+          cfg.sourcePageId,
+        );
+    if (sourceFieldPerm !== "edit") {
+      res.status(403).json({ error: `Source field "${cfg.sourceFieldKey}" is read-only for your role` });
+      return;
+    }
+    if (!perms.superAdmin && sourceRecordPerm?.update !== true) {
+      res.status(403).json({ error: "You cannot update records through the source page" });
+      return;
+    }
+    writePageId = cfg.sourcePageId;
+    writeField = sourceField;
+    writeFields = sourceFields;
+    sourceScope = await effectiveScopeFor(req, perms, entityId, cfg.sourcePageId);
+  }
+
+  // Unlike the historical incremental full-map endpoint, a deliberate bulk
+  // clear is rejected for required page fields. For page_ref, enforce both the
+  // alias metadata and the authoritative source field.
+  if (requested === undefined && (field.isRequired || writeField.isRequired)) {
+    res.status(422).json({ error: `Field "${fieldKey}" is required and cannot be cleared` });
+    return;
+  }
+
+  const snapshotRows = await db
+    .select({ recordId: pageRecordValuesTable.recordId, valuesJson: pageRecordValuesTable.valuesJson })
+    .from(pageRecordValuesTable)
+    .where(
+      and(
+        eq(pageRecordValuesTable.pageId, writePageId),
+        inArray(pageRecordValuesTable.recordId, recordIds),
+      ),
+    );
+  const snapshotByRecord = new Map(
+    snapshotRows.map((row) => [
+      row.recordId,
+      (row.valuesJson as Record<string, unknown> | undefined) ?? {},
+    ]),
+  );
+  const gdriveEnabled = await isGoogleDriveModuleEnabled();
+  const hiddenSourceStatuses =
+    field.fieldType === "page_ref" && !perms.superAdmin
+      ? new Set(effectiveStatusVisibility(perms, entityId).hiddenRowStatusIds)
+      : new Set<number>();
+  type ChangedPageRow = {
+    recordId: number;
+    before: Record<string, unknown>;
+    after: Record<string, unknown>;
+  };
+  let changedRows: ChangedPageRow[] = [];
+
+  try {
+    changedRows = await db.transaction(async (tx) => {
+      const records = await tx
+        .select()
+        .from(entityRecordsTable)
+        .where(and(eq(entityRecordsTable.entityId, entityId), inArray(entityRecordsTable.id, recordIds)))
+        .orderBy(asc(entityRecordsTable.id))
+        .for("update");
+      const recordsById = new Map(records.map((record) => [record.id, record]));
+      for (const recordId of recordIds) {
+        const record = recordsById.get(recordId);
+        if (!record) throw new BulkPageFieldUpdateError(404, recordId, "запись не найдена");
+        if (
+          targetScope.scope === "own" &&
+          !(await isRecordOwned(
+            entityId,
+            record,
+            targetScope.scopeFieldKeys,
+            req.user!.userId,
+            entityFields,
+          ))
+        ) {
+          throw new BulkPageFieldUpdateError(404, recordId, "запись недоступна");
+        }
+        if (
+          sourceScope?.scope === "own" &&
+          !(await isRecordOwned(
+            entityId,
+            record,
+            sourceScope.scopeFieldKeys,
+            req.user!.userId,
+            entityFields,
+          ))
+        ) {
+          throw new BulkPageFieldUpdateError(404, recordId, "запись недоступна через source page");
+        }
+        if (record.statusId != null && hiddenSourceStatuses.has(record.statusId)) {
+          throw new BulkPageFieldUpdateError(404, recordId, "запись недоступна через source page");
+        }
+      }
+
+      // One write page is touched by this single-field contract. Record IDs are
+      // sorted, so all concurrent bulk writers acquire pair locks identically.
+      for (const recordId of recordIds) {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock((${writePageId}::bigint << 32) | ${recordId}::bigint)`,
+        );
+      }
+      const lockedValueRows = await tx
+        .select({ recordId: pageRecordValuesTable.recordId, valuesJson: pageRecordValuesTable.valuesJson })
+        .from(pageRecordValuesTable)
+        .where(
+          and(
+            eq(pageRecordValuesTable.pageId, writePageId),
+            inArray(pageRecordValuesTable.recordId, recordIds),
+          ),
+        )
+        .orderBy(asc(pageRecordValuesTable.recordId))
+        .for("update");
+      const lockedByRecord = new Map(
+        lockedValueRows.map((row) => [
+          row.recordId,
+          (row.valuesJson as Record<string, unknown> | undefined) ?? {},
+        ]),
+      );
+
+      const changed: ChangedPageRow[] = [];
+      for (const recordId of recordIds) {
+        const snapshot = snapshotByRecord.get(recordId) ?? {};
+        const locked = lockedByRecord.get(recordId) ?? {};
+        if (
+          JSON.stringify(snapshot[writeField.fieldKey] ?? null) !==
+          JSON.stringify(locked[writeField.fieldKey] ?? null)
+        ) {
+          throw new BulkPageFieldUpdateError(
+            409,
+            recordId,
+            `поле "${fieldKey}" изменилось во время массового сохранения`,
+          );
+        }
+
+        const scalarInput =
+          requested === undefined ? {} : { [writeField.fieldKey]: requested };
+        const scalarPrev = Object.prototype.hasOwnProperty.call(locked, writeField.fieldKey)
+          ? { [writeField.fieldKey]: locked[writeField.fieldKey] }
+          : {};
+        const validated = validatePageValues(
+          [writeField],
+          scalarInput,
+          gdriveEnabled,
+          scalarPrev,
+        );
+        if ("error" in validated) {
+          throw new BulkPageFieldUpdateError(400, recordId, validated.error);
+        }
+        const userRefError = await validatePageUserRefs([writeField], validated.values);
+        if (userRefError) {
+          throw new BulkPageFieldUpdateError(400, recordId, userRefError);
+        }
+        const finalValues = { ...locked };
+        if (Object.prototype.hasOwnProperty.call(validated.values, writeField.fieldKey)) {
+          finalValues[writeField.fieldKey] = validated.values[writeField.fieldKey];
+        } else {
+          delete finalValues[writeField.fieldKey];
+        }
+        if (diffChangedKeys(locked, finalValues).length === 0) continue;
+        await tx
+          .insert(pageRecordValuesTable)
+          .values({ pageId: writePageId, recordId, valuesJson: finalValues })
+          .onConflictDoUpdate({
+            target: [pageRecordValuesTable.pageId, pageRecordValuesTable.recordId],
+            set: { valuesJson: finalValues },
+          });
+        changed.push({ recordId, before: locked, after: finalValues });
+      }
+      return changed;
+    });
+  } catch (err) {
+    if (err instanceof BulkPageFieldUpdateError) {
+      res.status(err.status).json({ error: err.message, recordId: err.recordId });
+      return;
+    }
+    throw err;
+  }
+
+  for (const row of changedRows) {
+    await emitEvent(
+      {
+        eventName: EVENT_PAGE_FIELD_SAVED,
+        entityId,
+        recordId: row.recordId,
+        payload: {
+          pageId: writePageId,
+          changedPageFieldKeys: diffChangedKeys(row.before, row.after),
+          actorUserId: req.user!.userId,
+        },
+      },
+      req.log,
+    );
+  }
+  res.json({ updatedIds: recordIds });
 });
 
 /**

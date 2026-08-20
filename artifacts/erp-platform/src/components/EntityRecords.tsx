@@ -21,6 +21,8 @@ import {
   useArchiveRecord,
   useUnarchiveRecord,
   useBulkRecordsAction,
+  useBulkUpdateRecordField,
+  useBulkSetPageRecordFieldValues,
   useMergeRecords,
   useListUserOptions,
   useListRecordAuditLogs,
@@ -280,6 +282,24 @@ function extractError(err: unknown): string | undefined {
 
 type CellValue = string | number | boolean | FileValue;
 type FormState = Record<string, CellValue>;
+type BulkEditableField = {
+  token: string;
+  kind: "entity" | "page";
+  field: Field;
+  pageField?: PageField;
+};
+
+function supportsBulkFieldValue(field: Field): boolean {
+  return (
+    field.fieldType !== "function" &&
+    field.fieldType !== "relation" &&
+    field.fieldType !== "lookup" &&
+    field.fieldType !== "created_at" &&
+    field.fieldType !== "file" &&
+    !field.lockAfterCreate &&
+    !field.dependencyConfigJson?.dependsOnFieldKey
+  );
+}
 
 function emptyForField(field: Field): CellValue {
   if (field.fieldType === "boolean") return false;
@@ -2048,6 +2068,38 @@ export function EntityRecords({
     pf.fieldType === "page_ref" &&
     pf.pageRefConfigJson?.resolvedEditable === true &&
     !pageFieldReadOnly(pf);
+  const pageFieldAsInputField = (pf: PageField): Field =>
+    pf.fieldType === "page_ref"
+      ? pageRefAsField(pf)
+      : ({ ...pf, entityId: 0 } as unknown as Field);
+  const bulkEditableFields: BulkEditableField[] = [
+    ...fields
+      .filter((field: Field) => effFieldAccess(field) === "edit")
+      .filter(roleDisplayVisible)
+      .filter(supportsBulkFieldValue)
+      .map((field: Field) => ({
+        token: `entity:${field.fieldKey}`,
+        kind: "entity" as const,
+        field,
+      })),
+    ...pageFields
+      .map((pageField: PageField) => ({
+        pageField,
+        field: pageFieldAsInputField(pageField),
+      }))
+      .filter(({ pageField, field }) =>
+        supportsBulkFieldValue(field) &&
+        (pageField.fieldType === "page_ref"
+          ? pageRefEditable(pageField)
+          : !pageFieldReadOnly(pageField)),
+      )
+      .map(({ pageField, field }) => ({
+        token: `page:${pageField.fieldKey}`,
+        kind: "page" as const,
+        field,
+        pageField,
+      })),
+  ];
   // Map relationId → the relation FIELD key that carries the chosen linked record.
   // A lookup field projects from the SAME relation, so during a CREATE flow (no
   // base record yet) we resolve which linked record id was picked to preview its
@@ -2192,6 +2244,10 @@ export function EntityRecords({
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkConfirm, setBulkConfirm] = useState<null | "archive" | "unarchive" | "delete">(null);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkEditFieldToken, setBulkEditFieldToken] = useState("");
+  const [bulkEditValue, setBulkEditValue] = useState<CellValue>("");
+  const [bulkEditClear, setBulkEditClear] = useState(false);
   // Merge duplicates (superAdmin): pick the surviving record among the selected.
   const [mergeOpen, setMergeOpen] = useState(false);
   const [mergeTargetId, setMergeTargetId] = useState<number | null>(null);
@@ -3720,6 +3776,43 @@ export function EntityRecords({
       },
     },
   });
+  const finishBulkFieldUpdate = (updatedCount: number) => {
+    toast({
+      title: t("records.bulkFieldUpdated", "Поле изменено"),
+      description: `${t("records.bulkDone", "Обработано записей")}: ${updatedCount}`,
+    });
+    setBulkEditOpen(false);
+    setBulkEditFieldToken("");
+    setBulkEditValue("");
+    setBulkEditClear(false);
+    setSelectedIds(new Set());
+    invalidate();
+    if (pageId != null) {
+      queryClient.invalidateQueries({ queryKey: [`/api/pages/${pageId}/record-values`] });
+    }
+    for (const sourcePageId of pageRefSourcePageIds) {
+      queryClient.invalidateQueries({ queryKey: [`/api/pages/${sourcePageId}/record-values`] });
+    }
+    scheduleAutomationRefresh();
+  };
+  const bulkFieldError = (err: unknown) =>
+    toast({
+      title: t("records.bulkFieldError", "Не удалось изменить выбранные записи"),
+      description: extractError(err),
+      variant: "destructive",
+    });
+  const bulkEntityFieldMutation = useBulkUpdateRecordField({
+    mutation: {
+      onSuccess: (resp) => finishBulkFieldUpdate(resp.updatedIds.length),
+      onError: bulkFieldError,
+    },
+  });
+  const bulkPageFieldMutation = useBulkSetPageRecordFieldValues({
+    mutation: {
+      onSuccess: (resp) => finishBulkFieldUpdate(resp.updatedIds.length),
+      onError: bulkFieldError,
+    },
+  });
   const mergeMutation = useMergeRecords({
     mutation: {
       onSuccess: (resp) => {
@@ -3892,6 +3985,40 @@ export function EntityRecords({
     if (field.fieldType === "number") return Number(raw);
     if (field.fieldType === "user") return Number(raw);
     return raw;
+  };
+  const selectedBulkEditableField =
+    bulkEditableFields.find((candidate) => candidate.token === bulkEditFieldToken) ?? null;
+  const bulkFieldMutationPending =
+    bulkEntityFieldMutation.isPending || bulkPageFieldMutation.isPending;
+  const bulkFieldValueMissing =
+    !bulkEditClear &&
+    (bulkEditValue === "" || bulkEditValue === undefined || bulkEditValue === null);
+  const submitBulkFieldUpdate = () => {
+    if (!selectedBulkEditableField || selectedIds.size === 0 || bulkFieldValueMissing) return;
+    const nextValue = bulkEditClear
+      ? null
+      : cellValueForPayload(selectedBulkEditableField.field, bulkEditValue);
+    if (selectedBulkEditableField.kind === "entity") {
+      bulkEntityFieldMutation.mutate({
+        data: {
+          entityId,
+          fieldKey: selectedBulkEditableField.field.fieldKey,
+          value: nextValue,
+          recordIds: [...selectedIds],
+          ...(permPageId != null ? { pageId: permPageId } : {}),
+        },
+      });
+      return;
+    }
+    if (pageId == null) return;
+    bulkPageFieldMutation.mutate({
+      pageId,
+      data: {
+        fieldKey: selectedBulkEditableField.pageField?.fieldKey ?? selectedBulkEditableField.field.fieldKey,
+        value: nextValue,
+        recordIds: [...selectedIds],
+      },
+    });
   };
 
   const commitCell = (record: EntityRecord, field: Field, raw: CellValue) => {
@@ -4698,7 +4825,7 @@ export function EntityRecords({
                   size="sm"
                   variant="outline"
                   className="h-9 gap-1.5 text-xs w-full sm:w-auto border-blue-300 text-blue-700"
-                  disabled={selectedIds.size === 0 || bulkMutation.isPending}
+                   disabled={selectedIds.size === 0 || bulkMutation.isPending || bulkFieldMutationPending}
                 >
                   {t("records.bulkActions", "Действия")}
                   <Badge variant="secondary" className="px-1.5">{selectedIds.size}</Badge>
@@ -4706,6 +4833,19 @@ export function EntityRecords({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
+                 {canUpdate && bulkEditableFields.length > 0 && (
+                   <DropdownMenuItem
+                     onClick={() => {
+                       setBulkEditFieldToken("");
+                       setBulkEditValue("");
+                       setBulkEditClear(false);
+                       setBulkEditOpen(true);
+                     }}
+                   >
+                     <Pencil className="w-3.5 h-3.5 mr-2" />
+                     {t("records.bulkEditFields", "Изменить поля")}
+                   </DropdownMenuItem>
+                 )}
                 {canUpdate && (
                   <DropdownMenuItem onClick={() => setBulkConfirm("archive")}>
                     <Archive className="w-3.5 h-3.5 mr-2" />
@@ -6884,6 +7024,118 @@ export function EntityRecords({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog
+        open={bulkEditOpen}
+        onOpenChange={(open) => {
+          if (bulkFieldMutationPending) return;
+          setBulkEditOpen(open);
+          if (!open) {
+            setBulkEditFieldToken("");
+            setBulkEditValue("");
+            setBulkEditClear(false);
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("records.bulkEditTitle", "Изменить поле выбранных записей")}</DialogTitle>
+            <DialogDescription>
+              {t(
+                "records.bulkEditDescription",
+                "Одно новое значение будет применено ко всем выбранным записям атомарно.",
+              )}{" "}
+              {`${t("records.selectedCount", "Выбрано")}: ${selectedIds.size}.`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <div className="space-y-1.5">
+              <Label>{t("records.bulkEditField", "Поле")}</Label>
+              <Select
+                value={bulkEditFieldToken}
+                onValueChange={(token) => {
+                  const target = bulkEditableFields.find((candidate) => candidate.token === token);
+                  setBulkEditFieldToken(token);
+                  setBulkEditValue(target?.field.fieldType === "boolean" ? false : "");
+                  setBulkEditClear(false);
+                }}
+                disabled={bulkFieldMutationPending}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t("records.bulkEditChooseField", "Выберите поле")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {bulkEditableFields.map((candidate) => (
+                    <SelectItem key={candidate.token} value={candidate.token}>
+                      {candidate.kind === "page"
+                        ? `${t("records.pageFieldPrefix", "Поле страницы")} · `
+                        : ""}
+                      {ml(candidate.field.nameJson) || candidate.field.fieldKey}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {selectedBulkEditableField && (
+              <>
+                <div className="space-y-1.5">
+                  <Label>{t("records.bulkEditValue", "Новое значение")}</Label>
+                  <FieldInput
+                    field={selectedBulkEditableField.field}
+                    value={bulkEditValue}
+                    onChange={(next) => {
+                      setBulkEditValue(next);
+                      setBulkEditClear(false);
+                    }}
+                    disabled={bulkEditClear || bulkFieldMutationPending}
+                    userOptions={userOptions}
+                    entityId={entityId}
+                    pageId={permPageId}
+                  />
+                </div>
+                {!selectedBulkEditableField.field.isRequired && (
+                  <label className="flex cursor-pointer items-start gap-2 rounded-md border border-slate-200 px-3 py-2.5">
+                    <Checkbox
+                      checked={bulkEditClear}
+                      onCheckedChange={(checked) => setBulkEditClear(checked === true)}
+                      disabled={bulkFieldMutationPending}
+                    />
+                    <span className="text-sm leading-4">
+                      {t("records.bulkEditClear", "Очистить значение во всех выбранных записях")}
+                    </span>
+                  </label>
+                )}
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setBulkEditOpen(false)}
+              disabled={bulkFieldMutationPending}
+            >
+              {t("records.cancel", "Отмена")}
+            </Button>
+            <Button
+              onClick={submitBulkFieldUpdate}
+              disabled={
+                !selectedBulkEditableField ||
+                bulkFieldValueMissing ||
+                bulkFieldMutationPending ||
+                selectedIds.size === 0
+              }
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {bulkFieldMutationPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                t("records.apply", "Применить")
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={!!bulkConfirm} onOpenChange={(o) => !o && setBulkConfirm(null)}>
         <AlertDialogContent>

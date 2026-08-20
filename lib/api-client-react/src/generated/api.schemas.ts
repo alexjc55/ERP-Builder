@@ -2905,6 +2905,16 @@ export interface PageRecordValueInput {
   valuesJson: PageRecordValueInputValuesJson;
 }
 
+export interface BulkPageRecordFieldUpdate {
+  fieldKey: string;
+  value: unknown;
+  /**
+     * @minItems 1
+     * @maxItems 500
+     */
+  recordIds: number[];
+}
+
 export interface Status {
   id: number;
   entityId: number;
@@ -3334,6 +3344,23 @@ export interface BulkRecordsAction {
 export interface BulkRecordsResult {
   successIds: number[];
   failedIds: number[];
+}
+
+export interface BulkRecordFieldUpdate {
+  entityId: number;
+  fieldKey: string;
+  value: unknown;
+  /**
+     * @minItems 1
+     * @maxItems 500
+     */
+  recordIds: number[];
+  /** Optional mirror-page context: applies that page's record-rights and field-access overrides. */
+  pageId?: number;
+}
+
+export interface BulkFieldUpdateResult {
+  updatedIds: number[];
 }
 
 export interface MergeRecords {

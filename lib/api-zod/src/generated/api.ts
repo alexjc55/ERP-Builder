@@ -3875,6 +3875,28 @@ export const SetPageRecordValuesResponse = zod.object({
 
 
 /**
+ * @summary Atomically set one editable page-local field (including page_ref write-through) to one value for selected records. Every record and field boundary is checked before the transaction commits.
+ */
+export const BulkSetPageRecordFieldValuesParams = zod.object({
+  "pageId": zod.coerce.number()
+})
+
+export const bulkSetPageRecordFieldValuesBodyRecordIdsMax = 500;
+
+
+
+export const BulkSetPageRecordFieldValuesBody = zod.object({
+  "fieldKey": zod.string(),
+  "value": zod.unknown(),
+  "recordIds": zod.array(zod.number()).min(1).max(bulkSetPageRecordFieldValuesBodyRecordIdsMax)
+})
+
+export const BulkSetPageRecordFieldValuesResponse = zod.object({
+  "updatedIds": zod.array(zod.number())
+})
+
+
+/**
  * @summary Resolve relation-type page-field values (derived from linked records) for the given records
  */
 export const GetPageRelatedValuesParams = zod.object({
@@ -5285,6 +5307,26 @@ export const BulkRecordsActionBody = zod.object({
 export const BulkRecordsActionResponse = zod.object({
   "successIds": zod.array(zod.number()),
   "failedIds": zod.array(zod.number())
+})
+
+
+/**
+ * @summary Atomically set one editable entity field to one value for selected records. Every record is checked against the same validation, scope, immutability, dependent-field, cross-field and uniqueness boundaries as a single-record update.
+ */
+export const bulkUpdateRecordFieldBodyRecordIdsMax = 500;
+
+
+
+export const BulkUpdateRecordFieldBody = zod.object({
+  "entityId": zod.number(),
+  "fieldKey": zod.string(),
+  "value": zod.unknown(),
+  "recordIds": zod.array(zod.number()).min(1).max(bulkUpdateRecordFieldBodyRecordIdsMax),
+  "pageId": zod.number().optional().describe('Optional mirror-page context: applies that page\'s record-rights and field-access overrides.')
+})
+
+export const BulkUpdateRecordFieldResponse = zod.object({
+  "updatedIds": zod.array(zod.number())
 })
 
 
