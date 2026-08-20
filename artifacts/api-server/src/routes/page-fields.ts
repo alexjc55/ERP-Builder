@@ -30,6 +30,7 @@ import {
   canRecord,
   getPermissions,
   getUserRoleIds,
+  effectiveRecordPerm,
   effectiveScope,
   effectiveScopeFor,
   effectiveStatusVisibility,
@@ -491,6 +492,7 @@ router.get("/pages/:pageId/fields", requireAuth, async (req, res): Promise<void>
   // (not even its metadata/label/config). Admins who can edit pages still receive
   // every field so the column setup mode can configure hidden columns.
   const perms = await getPermissions(req);
+  const viewerRoleIds = perms.superAdmin ? [] : await getUserRoleIds(req);
   // page_ref fields carry response-only resolved metadata (the source field's
   // current type/options) so clients can render values without extra requests.
   // The source field's OWN per-role permissions are collected too — they are a
@@ -501,9 +503,36 @@ router.get("/pages/:pageId/fields", requireAuth, async (req, res): Promise<void>
       if (f.fieldType !== "page_ref") return f;
       const cfg = (f.pageRefConfigJson ?? {}) as PageRefFieldConfig;
       if (cfg.sourcePageId == null || !cfg.sourceFieldKey) return f;
-      const src = await loadPageRefSource(cfg);
-      if (!src) return f;
+      const [src, srcEff] = await Promise.all([
+        loadPageRefSource(cfg),
+        effectiveEntityForPage(cfg.sourcePageId),
+      ]);
+      if (!src || !srcEff.found || srcEff.entityId == null || srcEff.entityId !== eff.entityId) return f;
       srcPermsByFieldId.set(f.id, src.permissionsJson as FieldPermissions | null);
+      const pageAccessAllowed =
+        perms.superAdmin ||
+        (perms.pageIds.includes(params.data.pageId) && perms.pageIds.includes(cfg.sourcePageId));
+      const targetFieldEditable =
+        perms.superAdmin ||
+        mostPermissiveFieldPerm(
+          f.permissionsJson as FieldPermissions | null,
+          viewerRoleIds,
+          "edit",
+          perms,
+          eff.entityId ?? undefined,
+          params.data.pageId,
+        ) === "edit";
+      const sourceFieldEditable =
+        perms.superAdmin ||
+        mostPermissiveFieldPerm(
+          src.permissionsJson as FieldPermissions | null,
+          viewerRoleIds,
+          "edit",
+          perms,
+          srcEff.entityId,
+          cfg.sourcePageId,
+        ) === "edit";
+      const sourceRecordPerm = await effectiveRecordPerm(req, perms, srcEff.entityId, cfg.sourcePageId);
       return {
         ...f,
         pageRefConfigJson: {
@@ -511,6 +540,11 @@ router.get("/pages/:pageId/fields", requireAuth, async (req, res): Promise<void>
           resolvedFieldType: src.fieldType,
           resolvedOptionsJson: normalizeOptions(src.optionsJson),
           resolvedPercentConfigJson: src.percentConfigJson ?? {},
+          resolvedEditable:
+            pageAccessAllowed &&
+            targetFieldEditable &&
+            sourceFieldEditable &&
+            (perms.superAdmin || sourceRecordPerm?.update === true),
         },
       };
     }),
@@ -519,10 +553,9 @@ router.get("/pages/:pageId/fields", requireAuth, async (req, res): Promise<void>
     res.json(enriched);
     return;
   }
-  const roleIds = await getUserRoleIds(req);
   const visible = enriched.filter(
     (f) =>
-      mostPermissiveFieldPerm(f.permissionsJson as FieldPermissions | null, roleIds, "view", perms, eff.entityId ?? undefined, params.data.pageId) !==
+      mostPermissiveFieldPerm(f.permissionsJson as FieldPermissions | null, viewerRoleIds, "view", perms, eff.entityId ?? undefined, params.data.pageId) !==
       "hidden",
   );
   // The SOURCE side is a boundary too: without access to the source page — or
@@ -536,7 +569,7 @@ router.get("/pages/:pageId/fields", requireAuth, async (req, res): Promise<void>
       if (cfg.sourcePageId == null || !perms.pageIds.includes(cfg.sourcePageId)) return false;
       if (cfg.resolvedFieldType == null) return false;
       return (
-        mostPermissiveFieldPerm(srcPermsByFieldId.get(f.id) ?? null, roleIds, "view", perms, eff.entityId ?? undefined, cfg.sourcePageId) !==
+        mostPermissiveFieldPerm(srcPermsByFieldId.get(f.id) ?? null, viewerRoleIds, "view", perms, eff.entityId ?? undefined, cfg.sourcePageId) !==
         "hidden"
       );
     }),
@@ -1011,7 +1044,12 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
   }
   const entityId = eff.entityId;
   const [record] = await db
-    .select({ id: entityRecordsTable.id, entityId: entityRecordsTable.entityId, valuesJson: entityRecordsTable.valuesJson })
+    .select({
+      id: entityRecordsTable.id,
+      entityId: entityRecordsTable.entityId,
+      statusId: entityRecordsTable.statusId,
+      valuesJson: entityRecordsTable.valuesJson,
+    })
     .from(entityRecordsTable)
     .where(eq(entityRecordsTable.id, recordId));
   if (!record) {
@@ -1046,20 +1084,28 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
     .select()
     .from(pageFieldsTable)
     .where(and(eq(pageFieldsTable.pageId, pageId), eq(pageFieldsTable.isActive, true)));
-  const incoming = (parsed.data.valuesJson ?? {}) as Record<string, unknown>;
+  const incoming = { ...((parsed.data.valuesJson ?? {}) as Record<string, unknown>) };
   const [existing] = await db
     .select({ id: pageRecordValuesTable.id, valuesJson: pageRecordValuesTable.valuesJson })
     .from(pageRecordValuesTable)
     .where(and(eq(pageRecordValuesTable.pageId, pageId), eq(pageRecordValuesTable.recordId, recordId)));
   const prevValues = (existing?.valuesJson as Record<string, unknown> | undefined) ?? {};
+  const roleIds = perms.superAdmin ? [] : await getUserRoleIds(req);
+  const pageRefKeys = new Set(fields.filter((f) => f.fieldType === "page_ref").map((f) => f.fieldKey));
+  const hasIncomingRefAlias = Object.keys(incoming).some((key) => pageRefKeys.has(key));
+  const hasIncomingTargetField = Object.keys(incoming).some((key) =>
+    fields.some((f) => f.fieldType !== "page_ref" && f.fieldKey === key),
+  );
   // Per-field permission boundary (hard, server-side): the PUT replaces the
   // WHOLE map, so for fields the caller may not edit we (a) preserve the stored
   // value when it is missing/unchanged — a viewer resaving the row must not
   // wipe values it cannot touch (hidden ones it never even received) — and
   // (b) reject an actual change to a view-only/hidden field.
   if (!perms.superAdmin) {
-    const roleIds = await getUserRoleIds(req);
     for (const f of fields) {
+      // page_ref aliases are compared against and authorized on their SOURCE
+      // value below; they never have a stored value in this page's own map.
+      if (f.fieldType === "page_ref") continue;
       const p = mostPermissiveFieldPerm(f.permissionsJson as FieldPermissions | null, roleIds, "edit", perms, entityId, pageId);
       if (p === "edit") continue;
       const prev = prevValues[f.fieldKey];
@@ -1077,31 +1123,372 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
       return;
     }
   }
-  const result = validatePageValues(fields, incoming, await isGoogleDriveModuleEnabled(), prevValues);
+
+  type SourceWriteState = {
+    pageId: number;
+    fields: PageField[];
+    prevValues: Record<string, unknown>;
+    changedKeys: Set<string>;
+    requestedValues: Map<string, unknown>;
+    writtenPrevValues?: Record<string, unknown>;
+    validatedValues?: Record<string, unknown>;
+    rowBoundaryChecked: boolean;
+  };
+  const sourceStates = new Map<number, SourceWriteState>();
+  const pendingSourceValues = new Map<string, unknown>();
+  const getSourceState = async (sourcePageId: number): Promise<SourceWriteState> => {
+    const cached = sourceStates.get(sourcePageId);
+    if (cached) return cached;
+    const [sourceFields, sourceExistingRows] = await Promise.all([
+      db
+        .select()
+        .from(pageFieldsTable)
+        .where(and(eq(pageFieldsTable.pageId, sourcePageId), eq(pageFieldsTable.isActive, true))),
+      db
+        .select({ id: pageRecordValuesTable.id, valuesJson: pageRecordValuesTable.valuesJson })
+        .from(pageRecordValuesTable)
+        .where(and(eq(pageRecordValuesTable.pageId, sourcePageId), eq(pageRecordValuesTable.recordId, recordId))),
+    ]);
+    const sourceExisting = sourceExistingRows[0];
+    const sourcePrev = (sourceExisting?.valuesJson as Record<string, unknown> | undefined) ?? {};
+    const state: SourceWriteState = {
+      pageId: sourcePageId,
+      fields: sourceFields,
+      prevValues: sourcePrev,
+      changedKeys: new Set(),
+      requestedValues: new Map(),
+      rowBoundaryChecked: false,
+    };
+    sourceStates.set(sourcePageId, state);
+    return state;
+  };
+
+  for (const refField of fields.filter((f) => f.fieldType === "page_ref")) {
+    const hasIncomingAlias = Object.prototype.hasOwnProperty.call(incoming, refField.fieldKey);
+    const requestedRaw = hasIncomingAlias ? incoming[refField.fieldKey] : undefined;
+    // The alias is response-only. Remove it before validating/storing this
+    // page's own values, regardless of whether it represents a real change.
+    delete incoming[refField.fieldKey];
+    // page_ref aliases are PATCH-like even though this endpoint historically
+    // replaces the target page's full map: omission always means "leave the
+    // source unchanged". An explicit empty/null value is the clear operation.
+    if (!hasIncomingAlias) continue;
+
+    const cfg = (refField.pageRefConfigJson ?? {}) as PageRefFieldConfig;
+    if (cfg.sourcePageId == null || !cfg.sourceFieldKey) {
+      if (hasIncomingAlias) {
+        res.status(400).json({ error: `Field "${refField.fieldKey}" has no valid source` });
+        return;
+      }
+      continue;
+    }
+    const [sourceField, sourceEff] = await Promise.all([
+      loadPageRefSource(cfg),
+      effectiveEntityForPage(cfg.sourcePageId),
+    ]);
+    if (!sourceField || !sourceEff.found || sourceEff.entityId == null || sourceEff.entityId !== entityId) {
+      if (hasIncomingAlias) {
+        res.status(400).json({ error: `Source for field "${refField.fieldKey}" is unavailable` });
+        return;
+      }
+      continue;
+    }
+
+    const sourceState = await getSourceState(cfg.sourcePageId);
+    const sourcePrev = sourceState.prevValues[cfg.sourceFieldKey];
+    const targetFieldPerm = perms.superAdmin
+      ? "edit"
+      : mostPermissiveFieldPerm(
+          refField.permissionsJson as FieldPermissions | null,
+          roleIds,
+          "edit",
+          perms,
+          entityId,
+          pageId,
+        );
+    const sourceFieldPerm = perms.superAdmin
+      ? "edit"
+      : mostPermissiveFieldPerm(
+          sourceField.permissionsJson as FieldPermissions | null,
+          roleIds,
+          "edit",
+          perms,
+          entityId,
+          cfg.sourcePageId,
+        );
+    const sourceRecordPerm = await effectiveRecordPerm(req, perms, entityId, cfg.sourcePageId);
+    const pageAccessAllowed =
+      perms.superAdmin || (perms.pageIds.includes(pageId) && perms.pageIds.includes(cfg.sourcePageId));
+    const refWritable =
+      perms.superAdmin ||
+      (pageAccessAllowed &&
+        targetFieldPerm === "edit" &&
+        sourceFieldPerm === "edit" &&
+        sourceRecordPerm?.update === true);
+    const requested = isEmpty(requestedRaw) ? undefined : requestedRaw;
+    const changed = JSON.stringify(sourcePrev ?? null) !== JSON.stringify(requested ?? null);
+    if (!changed) continue;
+
+    if (!refWritable) {
+      if (!pageAccessAllowed) {
+        res.status(403).json({ error: `No access to the source page for field "${refField.fieldKey}"` });
+        return;
+      }
+      if (targetFieldPerm !== "edit") {
+        res.status(403).json({ error: `Field "${refField.fieldKey}" is read-only for your role` });
+        return;
+      }
+      if (sourceFieldPerm !== "edit") {
+        res.status(403).json({ error: `Source field "${cfg.sourceFieldKey}" is read-only for your role` });
+        return;
+      }
+      if (sourceRecordPerm?.update !== true) {
+        res.status(403).json({ error: "You cannot update records through the source page" });
+        return;
+      }
+    }
+    if (!perms.superAdmin) {
+      if (!sourceState.rowBoundaryChecked) {
+        const sourceScope = await effectiveScopeFor(req, perms, entityId, cfg.sourcePageId);
+        if (
+          sourceScope.scope === "own" &&
+          !(await isRecordOwned(
+            entityId,
+            { id: record.id, valuesJson: record.valuesJson },
+            sourceScope.scopeFieldKeys,
+            req.user!.userId,
+            await loadActiveEntityFields(entityId),
+          ))
+        ) {
+          res.status(404).json({ error: "Record not found" });
+          return;
+        }
+        if (
+          record.statusId != null &&
+          effectiveStatusVisibility(perms, entityId).hiddenRowStatusIds.includes(record.statusId)
+        ) {
+          res.status(404).json({ error: "Record not found" });
+          return;
+        }
+        sourceState.rowBoundaryChecked = true;
+      }
+    }
+
+    const sourceIdentity = `${cfg.sourcePageId}\u0000${cfg.sourceFieldKey}`;
+    if (pendingSourceValues.has(sourceIdentity)) {
+      const alreadyRequested = pendingSourceValues.get(sourceIdentity);
+      if (JSON.stringify(alreadyRequested ?? null) !== JSON.stringify(requested ?? null)) {
+        res.status(400).json({ error: `Conflicting values for source field "${cfg.sourceFieldKey}"` });
+        return;
+      }
+    } else {
+      pendingSourceValues.set(sourceIdentity, requested);
+    }
+    sourceState.changedKeys.add(cfg.sourceFieldKey);
+    sourceState.requestedValues.set(cfg.sourceFieldKey, requested);
+  }
+
+  const gdriveEnabled = await isGoogleDriveModuleEnabled();
+  // The endpoint's historical contract is full-map replacement for this
+  // page's own fields. A request containing only page_ref aliases is different:
+  // those aliases belong to source pages, so page B's map must be preserved.
+  const aliasOnlyWrite = hasIncomingRefAlias && !hasIncomingTargetField;
+  const targetInput = aliasOnlyWrite ? prevValues : incoming;
+  const result = validatePageValues(fields, targetInput, gdriveEnabled, prevValues);
   if ("error" in result) {
     res.status(400).json({ error: result.error });
     return;
   }
-  if (existing) {
-    await db
-      .update(pageRecordValuesTable)
-      .set({ valuesJson: result.values })
-      .where(eq(pageRecordValuesTable.id, existing.id));
-  } else {
-    await db.insert(pageRecordValuesTable).values({ pageId, recordId, valuesJson: result.values });
+  for (const sourceState of sourceStates.values()) {
+    if (sourceState.changedKeys.size === 0) continue;
+    const sourcePatch = Object.fromEntries(
+      [...sourceState.requestedValues].filter(([, value]) => value !== undefined),
+    );
+    const sourcePrevPatch = Object.fromEntries(
+      [...sourceState.requestedValues.keys()]
+        .filter((fieldKey) => Object.prototype.hasOwnProperty.call(sourceState.prevValues, fieldKey))
+        .map((fieldKey) => [fieldKey, sourceState.prevValues[fieldKey]]),
+    );
+    const sourceResult = validatePageValues(
+      sourceState.fields,
+      sourcePatch,
+      gdriveEnabled,
+      sourcePrevPatch,
+    );
+    if ("error" in sourceResult) {
+      res.status(400).json({ error: sourceResult.error });
+      return;
+    }
+  }
+  const preliminaryTargetChangedKeys = diffChangedKeys(prevValues, result.values);
+  const shouldWriteTarget = !aliasOnlyWrite && preliminaryTargetChangedKeys.length > 0;
+  let writtenTargetPrevValues = prevValues;
+  let writtenTargetValues = result.values;
+
+  class LockedPageValidationError extends Error {}
+  class LockedPageConflictError extends Error {}
+  try {
+    await db.transaction(async (tx) => {
+      const touchedSourceStates = [...sourceStates.values()]
+        .filter((state) => state.changedKeys.size > 0)
+        .sort((a, b) => a.pageId - b.pageId);
+      // Every writer through this endpoint takes the same per-(page,record)
+      // advisory lock. Sorting prevents deadlocks when one request touches page
+      // B plus several source pages. This also serializes missing-row inserts.
+      const lockPageIds = [
+        ...new Set([
+          ...(shouldWriteTarget ? [pageId] : []),
+          ...touchedSourceStates.map((state) => state.pageId),
+        ]),
+      ].sort((a, b) => a - b);
+      for (const lockPageId of lockPageIds) {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock((${lockPageId}::bigint << 32) | ${recordId}::bigint)`,
+        );
+      }
+
+      if (shouldWriteTarget) {
+        const [lockedTarget] = await tx
+          .select({ valuesJson: pageRecordValuesTable.valuesJson })
+          .from(pageRecordValuesTable)
+          .where(and(eq(pageRecordValuesTable.pageId, pageId), eq(pageRecordValuesTable.recordId, recordId)))
+          .for("update");
+        writtenTargetPrevValues =
+          (lockedTarget?.valuesJson as Record<string, unknown> | undefined) ?? {};
+        for (const fieldKey of preliminaryTargetChangedKeys) {
+          const beforeLock = prevValues[fieldKey];
+          const afterLock = writtenTargetPrevValues[fieldKey];
+          if (JSON.stringify(beforeLock ?? null) !== JSON.stringify(afterLock ?? null)) {
+            throw new LockedPageConflictError(
+              `Page field "${fieldKey}" changed while this value was being saved`,
+            );
+          }
+        }
+        const rebasedTargetValues = { ...writtenTargetPrevValues };
+        for (const fieldKey of preliminaryTargetChangedKeys) {
+          if (Object.prototype.hasOwnProperty.call(result.values, fieldKey)) {
+            rebasedTargetValues[fieldKey] = result.values[fieldKey];
+          } else {
+            delete rebasedTargetValues[fieldKey];
+          }
+        }
+        const lockedTargetResult = validatePageValues(
+          fields,
+          rebasedTargetValues,
+          gdriveEnabled,
+          writtenTargetPrevValues,
+        );
+        if ("error" in lockedTargetResult) {
+          throw new LockedPageValidationError(lockedTargetResult.error);
+        }
+        writtenTargetValues = lockedTargetResult.values;
+        await tx
+          .insert(pageRecordValuesTable)
+          .values({ pageId, recordId, valuesJson: writtenTargetValues })
+          .onConflictDoUpdate({
+            target: [pageRecordValuesTable.pageId, pageRecordValuesTable.recordId],
+            set: { valuesJson: writtenTargetValues },
+          });
+      }
+
+      for (const sourceState of touchedSourceStates) {
+        const [lockedSource] = await tx
+          .select({ valuesJson: pageRecordValuesTable.valuesJson })
+          .from(pageRecordValuesTable)
+          .where(
+            and(
+              eq(pageRecordValuesTable.pageId, sourceState.pageId),
+              eq(pageRecordValuesTable.recordId, recordId),
+            ),
+          )
+          .for("update");
+        const lockedPrev =
+          (lockedSource?.valuesJson as Record<string, unknown> | undefined) ?? {};
+        for (const fieldKey of sourceState.requestedValues.keys()) {
+          const beforeLock = sourceState.prevValues[fieldKey];
+          const afterLock = lockedPrev[fieldKey];
+          if (JSON.stringify(beforeLock ?? null) !== JSON.stringify(afterLock ?? null)) {
+            throw new LockedPageConflictError(
+              `Source field "${fieldKey}" changed while this value was being saved`,
+            );
+          }
+        }
+        const sourcePatch: Record<string, unknown> = {};
+        const sourcePrevPatch: Record<string, unknown> = {};
+        for (const [fieldKey, requested] of sourceState.requestedValues) {
+          if (requested !== undefined) sourcePatch[fieldKey] = requested;
+          if (Object.prototype.hasOwnProperty.call(lockedPrev, fieldKey)) {
+            sourcePrevPatch[fieldKey] = lockedPrev[fieldKey];
+          }
+        }
+        const lockedResult = validatePageValues(
+          sourceState.fields,
+          sourcePatch,
+          gdriveEnabled,
+          sourcePrevPatch,
+        );
+        if ("error" in lockedResult) {
+          throw new LockedPageValidationError(lockedResult.error);
+        }
+        // Validation normalizes the changed scalar values but intentionally
+        // returns only active known fields. A page_ref write is a key-level
+        // patch, so preserve every unrelated stored key (including values of
+        // currently inactive fields) instead of rebuilding the whole source map.
+        const finalSourceValues = { ...lockedPrev };
+        for (const fieldKey of sourceState.requestedValues.keys()) {
+          if (Object.prototype.hasOwnProperty.call(lockedResult.values, fieldKey)) {
+            finalSourceValues[fieldKey] = lockedResult.values[fieldKey];
+          } else {
+            delete finalSourceValues[fieldKey];
+          }
+        }
+        sourceState.writtenPrevValues = lockedPrev;
+        sourceState.validatedValues = finalSourceValues;
+        if (diffChangedKeys(lockedPrev, finalSourceValues).length === 0) continue;
+        await tx
+          .insert(pageRecordValuesTable)
+          .values({
+            pageId: sourceState.pageId,
+            recordId,
+            valuesJson: finalSourceValues,
+          })
+          .onConflictDoUpdate({
+            target: [pageRecordValuesTable.pageId, pageRecordValuesTable.recordId],
+            set: { valuesJson: finalSourceValues },
+          });
+      }
+    });
+  } catch (err) {
+    if (err instanceof LockedPageConflictError) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
+    if (err instanceof LockedPageValidationError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    throw err;
   }
   // Local files removed from page-local file fields go to the file trash
   // (best-effort, never blocks the write) — same recovery path as entity fields.
-  await trashRemovedPageServerFiles(req, entityId, pageId, recordId, prevValues, result.values);
+  if (shouldWriteTarget) {
+    await trashRemovedPageServerFiles(
+      req,
+      entityId,
+      pageId,
+      recordId,
+      writtenTargetPrevValues,
+      writtenTargetValues,
+    );
+  }
   // Emit a best-effort event for any page-field whose value actually changed,
   // so automations with a `page_field_changed` trigger can react. The event
   // carries the page's effective entity so the engine can find that entity's
   // automations. Never let a failed emit break the write.
-  const changedPageFieldKeys = diffChangedKeys(
-    (existing?.valuesJson as Record<string, unknown> | undefined) ?? {},
-    result.values,
-  );
-  if (changedPageFieldKeys.length > 0) {
+  const changedPageFieldKeys = shouldWriteTarget
+    ? diffChangedKeys(writtenTargetPrevValues, writtenTargetValues)
+    : [];
+  if (shouldWriteTarget && changedPageFieldKeys.length > 0) {
     await emitEvent(
       {
         eventName: EVENT_PAGE_FIELD_SAVED,
@@ -1112,7 +1499,28 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
       req.log,
     );
   }
-  res.json({ recordId, valuesJson: result.values });
+  for (const sourceState of sourceStates.values()) {
+    if (!sourceState.writtenPrevValues || !sourceState.validatedValues) continue;
+    const sourceChangedKeys = diffChangedKeys(
+      sourceState.writtenPrevValues,
+      sourceState.validatedValues,
+    );
+    if (sourceChangedKeys.length === 0) continue;
+    await emitEvent(
+      {
+        eventName: EVENT_PAGE_FIELD_SAVED,
+        entityId,
+        recordId,
+        payload: {
+          pageId: sourceState.pageId,
+          changedPageFieldKeys: sourceChangedKeys,
+          actorUserId: req.user!.userId,
+        },
+      },
+      req.log,
+    );
+  }
+  res.json({ recordId, valuesJson: writtenTargetValues });
 });
 
 /**

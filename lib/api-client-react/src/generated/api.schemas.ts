@@ -2767,7 +2767,7 @@ export interface PageRelationOptions {
 }
 
 /**
- * Config for a page_ref page field: read-only display of another mirror page's page-local field for the same record. resolved* properties are response-only enrichment of the source field's current type/options.
+ * Config for a page_ref page field: display of another mirror page's page-local field for the same record, with permission-gated write-through. resolved* properties are response-only enrichment of the source field.
  */
 export interface PageRefFieldConfig {
   sourcePageId?: number;
@@ -2775,6 +2775,8 @@ export interface PageRefFieldConfig {
   resolvedFieldType?: string;
   resolvedOptionsJson?: unknown[];
   resolvedPercentConfigJson?: PercentFieldConfig;
+  /** Response-only. True when the current viewer has page, record and field-level permission to write this value through to its source. */
+  resolvedEditable?: boolean;
 }
 
 export interface PageField {

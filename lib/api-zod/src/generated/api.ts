@@ -3479,8 +3479,9 @@ export const ListPageFieldsResponseItem = zod.object({
   "resolvedPercentConfigJson": zod.object({
   "mode": zod.enum(['list', 'value']).nullish(),
   "decimals": zod.number().min(listPageFieldsResponsePageRefConfigJsonResolvedPercentConfigJsonDecimalsMin).max(listPageFieldsResponsePageRefConfigJsonResolvedPercentConfigJsonDecimalsMax).nullish()
-}).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.')
-}).optional().describe('Config for a page_ref page field: read-only display of another mirror page\'s page-local field for the same record. resolved\* properties are response-only enrichment of the source field\'s current type\/options.'),
+}).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
+  "resolvedEditable": zod.boolean().optional().describe('Response-only. True when the current viewer has page, record and field-level permission to write this value through to its source.')
+}).optional().describe('Config for a page_ref page field: display of another mirror page\'s page-local field for the same record, with permission-gated write-through. resolved\* properties are response-only enrichment of the source field.'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
@@ -3591,8 +3592,9 @@ export const CreatePageFieldBody = zod.object({
   "resolvedPercentConfigJson": zod.object({
   "mode": zod.enum(['list', 'value']).nullish(),
   "decimals": zod.number().min(createPageFieldBodyPageRefConfigJsonResolvedPercentConfigJsonDecimalsMin).max(createPageFieldBodyPageRefConfigJsonResolvedPercentConfigJsonDecimalsMax).nullish()
-}).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.')
-}).optional().describe('Config for a page_ref page field: read-only display of another mirror page\'s page-local field for the same record. resolved\* properties are response-only enrichment of the source field\'s current type\/options.'),
+}).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
+  "resolvedEditable": zod.boolean().optional().describe('Response-only. True when the current viewer has page, record and field-level permission to write this value through to its source.')
+}).optional().describe('Config for a page_ref page field: display of another mirror page\'s page-local field for the same record, with permission-gated write-through. resolved\* properties are response-only enrichment of the source field.'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().default(createPageFieldBodyShowInTableDefault),
   "isPinned": zod.boolean().default(createPageFieldBodyIsPinnedDefault),
@@ -3694,8 +3696,9 @@ export const UpdatePageFieldBody = zod.object({
   "resolvedPercentConfigJson": zod.object({
   "mode": zod.enum(['list', 'value']).nullish(),
   "decimals": zod.number().min(updatePageFieldBodyPageRefConfigJsonResolvedPercentConfigJsonDecimalsMin).max(updatePageFieldBodyPageRefConfigJsonResolvedPercentConfigJsonDecimalsMax).nullish()
-}).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.')
-}).optional().describe('Config for a page_ref page field: read-only display of another mirror page\'s page-local field for the same record. resolved\* properties are response-only enrichment of the source field\'s current type\/options.'),
+}).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
+  "resolvedEditable": zod.boolean().optional().describe('Response-only. True when the current viewer has page, record and field-level permission to write this value through to its source.')
+}).optional().describe('Config for a page_ref page field: display of another mirror page\'s page-local field for the same record, with permission-gated write-through. resolved\* properties are response-only enrichment of the source field.'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
@@ -3791,8 +3794,9 @@ export const UpdatePageFieldResponse = zod.object({
   "resolvedPercentConfigJson": zod.object({
   "mode": zod.enum(['list', 'value']).nullish(),
   "decimals": zod.number().min(updatePageFieldResponsePageRefConfigJsonResolvedPercentConfigJsonDecimalsMin).max(updatePageFieldResponsePageRefConfigJsonResolvedPercentConfigJsonDecimalsMax).nullish()
-}).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.')
-}).optional().describe('Config for a page_ref page field: read-only display of another mirror page\'s page-local field for the same record. resolved\* properties are response-only enrichment of the source field\'s current type\/options.'),
+}).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
+  "resolvedEditable": zod.boolean().optional().describe('Response-only. True when the current viewer has page, record and field-level permission to write this value through to its source.')
+}).optional().describe('Config for a page_ref page field: display of another mirror page\'s page-local field for the same record, with permission-gated write-through. resolved\* properties are response-only enrichment of the source field.'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),

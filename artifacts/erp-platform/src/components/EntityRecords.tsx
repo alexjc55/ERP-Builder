@@ -1761,6 +1761,18 @@ export function EntityRecords({
         .sort((a: PageField, b: PageField) => a.sortOrder - b.sortOrder),
     [allPageFields],
   );
+  const pageRefSourcePageIds = useMemo(
+    () =>
+      [
+        ...new Set(
+          pageFields
+            .filter((pf: PageField) => pf.fieldType === "page_ref")
+            .map((pf: PageField) => pf.pageRefConfigJson?.sourcePageId)
+            .filter((id): id is number => typeof id === "number"),
+        ),
+      ],
+    [pageFields],
+  );
 
   // Keys of all `user`-type fields (entity + page). A formula that references a
   // user field should show the user's NAME, not the raw stored id, so we
@@ -1843,6 +1855,9 @@ export function EntityRecords({
     if (pageId != null) {
       queryClient.invalidateQueries({ queryKey: [`/api/pages/${pageId}/record-values`] });
     }
+    for (const sourcePageId of pageRefSourcePageIds) {
+      queryClient.invalidateQueries({ queryKey: [`/api/pages/${sourcePageId}/record-values`] });
+    }
     setRefreshTick((x) => x + 1);
   };
   const scheduleAutomationRefresh = () => {
@@ -1862,6 +1877,9 @@ export function EntityRecords({
         if (pageId != null) {
           queryClient.invalidateQueries({ queryKey: [`/api/pages/${pageId}/record-values`] });
         }
+        for (const sourcePageId of pageRefSourcePageIds) {
+          queryClient.invalidateQueries({ queryKey: [`/api/pages/${sourcePageId}/record-values`] });
+        }
         // A page-local edit also changes what the grouped-mirror header shows
         // for that column (its server-computed group-common value / totals), so
         // re-run the main records query — otherwise the header stays stale until
@@ -1871,8 +1889,11 @@ export function EntityRecords({
         // an action that writes another page-local field on this same row).
         scheduleAutomationRefresh();
       },
-      onError: () =>
-        toast({ title: t("records.saveError", "Не удалось сохранить значение"), variant: "destructive" }),
+      onError: (err) =>
+        toast({
+          title: extractError(err) ?? t("records.saveError", "Не удалось сохранить значение"),
+          variant: "destructive",
+        }),
     },
   });
 
@@ -1888,7 +1909,8 @@ export function EntityRecords({
           pf.fieldType !== "function" &&
           pf.fieldType !== "relation" &&
           pf.fieldType !== "lookup" &&
-          // page_ref displays ANOTHER page's value — never stored/edited here.
+          // page_ref writes through to ANOTHER page and is never stored in this
+          // page's own map, so it is not a direct required/default field here.
           pf.fieldType !== "page_ref",
       ),
     [pageFields],
@@ -2011,6 +2033,21 @@ export function EntityRecords({
       const e = (pf.permissionsJson as Record<string, string> | null | undefined)?.[String(rid)];
       return e === "view" || e === "hidden";
     });
+  const pageRefAsField = (pf: PageField): Field => {
+    const cfg = pf.pageRefConfigJson;
+    return {
+      ...pf,
+      fieldType: (cfg?.resolvedFieldType ?? "text") as Field["fieldType"],
+      optionsJson: cfg?.resolvedOptionsJson ?? [],
+      percentConfigJson: cfg?.resolvedPercentConfigJson ?? {},
+      permissionsJson: {},
+      entityId: 0,
+    } as unknown as Field;
+  };
+  const pageRefEditable = (pf: PageField) =>
+    pf.fieldType === "page_ref" &&
+    pf.pageRefConfigJson?.resolvedEditable === true &&
+    !pageFieldReadOnly(pf);
   // Map relationId → the relation FIELD key that carries the chosen linked record.
   // A lookup field projects from the SAME relation, so during a CREATE flow (no
   // base record yet) we resolve which linked record id was picked to preview its
@@ -3880,17 +3917,29 @@ export function EntityRecords({
     statusUpdateMutation.mutate({ id: record.id, data: { statusId: next, pageId: permPageId } });
   };
 
-  // Inline commit for a page-local field value. Page values are stored as a
-  // whole JSONB map per (page, record), so we merge the existing values with the
-  // single edited key before writing.
+  // Inline commit for a page-local field value. Direct page values merge into
+  // the page map; page_ref uses an explicit single-alias source patch.
   const commitPageCell = (record: EntityRecord, field: PageField, raw: CellValue) => {
     if (pageId == null) { setEditingCell(null); return; }
     const existing = pageValuesByRecord.get(record.id) ?? {};
     const stored = existing[field.fieldKey];
-    const next = cellValueForPayload(field as unknown as Field, raw);
+    const effectiveField = field.fieldType === "page_ref" ? pageRefAsField(field) : field as unknown as Field;
+    const next = cellValueForPayload(effectiveField, raw);
     const normalizedStored =
-      field.fieldType === "boolean" ? Boolean(stored) : stored === undefined || stored === null ? "" : stored;
+      effectiveField.fieldType === "boolean" ? Boolean(stored) : stored === undefined || stored === null ? "" : stored;
     if (next === normalizedStored) { setEditingCell(null); return; }
+    // A page_ref edits exactly one source alias. Sending the complete merged
+    // map would resubmit unrelated aliases from a potentially stale render.
+    // Keep the key present for clears because omission means "no change".
+    if (field.fieldType === "page_ref") {
+      setEditingCell(null);
+      setPageValuesMutation.mutate({
+        pageId,
+        recordId: record.id,
+        data: { valuesJson: { [field.fieldKey]: next === "" ? null : next } },
+      });
+      return;
+    }
     const merged: Record<string, unknown> = { ...existing };
     if (next === "" || next === undefined || next === null) delete merged[field.fieldKey];
     else merged[field.fieldKey] = next;
@@ -3991,7 +4040,10 @@ export function EntityRecords({
     const pageInitial: FormState = {};
     for (const pf of pageFields) {
       if (pf.fieldType === "relation" || pf.fieldType === "lookup") continue;
-      pageInitial[pf.fieldKey] = initialForField({ ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field);
+      const inputField = pf.fieldType === "page_ref"
+        ? pageRefAsField(pf)
+        : { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
+      pageInitial[pf.fieldKey] = initialForField(inputField);
     }
     setNewPageRow(pageInitial);
     // Preselect the default status — but if it is hidden from this role's picker,
@@ -4018,8 +4070,12 @@ export function EntityRecords({
     const pageValuesJson: Record<string, unknown> = {};
     if (hasPage && pageId != null) {
       for (const pf of pageFields) {
-        if (pf.fieldType === "function" || pf.fieldType === "relation" || pf.fieldType === "lookup" || pf.fieldType === "page_ref") continue;
-        const val = cellValueForPayload({ ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field, newPageRow[pf.fieldKey] as CellValue);
+        if (pf.fieldType === "function" || pf.fieldType === "relation" || pf.fieldType === "lookup") continue;
+        if (pf.fieldType === "page_ref" && !pageRefEditable(pf)) continue;
+        const inputField = pf.fieldType === "page_ref"
+          ? pageRefAsField(pf)
+          : { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
+        const val = cellValueForPayload(inputField, newPageRow[pf.fieldKey] as CellValue);
         if (val !== "" && val !== undefined && val !== null) pageValuesJson[pf.fieldKey] = val;
       }
     }
@@ -5948,12 +6004,15 @@ export function EntityRecords({
                       {orderedColumns.map((col) => {
                         if (col.kind === "page") {
                           const pf = col.field;
-                          const pageFieldAsField = { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
+                          const pageFieldAsField = pf.fieldType === "page_ref"
+                            ? pageRefAsField(pf)
+                            : { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
                           const editable =
                             pf.fieldType !== "function" &&
                             pf.fieldType !== "relation" &&
                             pf.fieldType !== "lookup" &&
-                            !pageFieldReadOnly(pf);
+                            !pageFieldReadOnly(pf) &&
+                            (pf.fieldType !== "page_ref" || pageRefEditable(pf));
                           return (
                             <td key={col.pinKey} className="px-2 py-1.5 align-top max-w-[260px]" style={{ ...pinStyle(col.pinKey, "#eff6ff"), ...colWidthStyle(col.pinKey) }}>
                               {editable ? (
@@ -6447,25 +6506,45 @@ export function EntityRecords({
                             );
                           }
                           if (pf.fieldType === "page_ref") {
-                            // Read-only display of ANOTHER page's page-local value for the
-                            // same record (merged into pageValues by the server). Rendered
-                            // with the SOURCE field's resolved type/options.
-                            const cfg = (pf.pageRefConfigJson ?? {}) as {
-                              resolvedFieldType?: string;
-                              resolvedOptionsJson?: unknown[];
-                              resolvedPercentConfigJson?: Record<string, unknown>;
-                            };
-                            const refField = {
-                              ...pf,
-                              fieldType: (cfg.resolvedFieldType ?? "text") as Field["fieldType"],
-                              optionsJson: cfg.resolvedOptionsJson ?? [],
-                              percentConfigJson: cfg.resolvedPercentConfigJson ?? {},
-                              permissionsJson: {},
-                              entityId: 0,
-                            } as unknown as Field;
+                            // Live alias of ANOTHER page's page-local value for this
+                            // record. The source's resolved type drives both rendering
+                            // and editing; the server-provided flag is only a cosmetic
+                            // hint — the write route re-checks every boundary.
+                            const refField = pageRefAsField(pf);
                             const v = pageValues[pf.fieldKey];
+                            const refEditable = inlineEditEnabled && pageRefEditable(pf);
+                            if (isEditingThis) {
+                              return (
+                                <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...colWidthStyle(`pf:${pf.id}`) }}>
+                                  <InlineCellEditor
+                                    field={refField}
+                                    initial={valueToForm(refField, v)}
+                                    userOptions={userOptions}
+                                    rowValues={{ ...values, ...pageValues }}
+                                    onCommit={(raw) => commitPageCell(record, pf, raw)}
+                                    onCancel={() => setEditingCell(null)}
+                                  />
+                                </td>
+                              );
+                            }
+                            if (refField.fieldType === "boolean" && refEditable) {
+                              return (
+                                <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                                  <Switch
+                                    checked={v === true}
+                                    onCheckedChange={(next) => commitPageCell(record, pf, next)}
+                                  />
+                                </td>
+                              );
+                            }
                             return (
-                              <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                              <td
+                                key={`pf-${pf.id}`}
+                                onClick={refEditable ? () => setEditingCell({ recordId: record.id, fieldKey: pfKey }) : undefined}
+                                className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"} ${refEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
+                                style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}
+                                title={refEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
+                              >
                                 {v == null || v === "" ? (
                                   <span className="text-slate-300">—</span>
                                 ) : (

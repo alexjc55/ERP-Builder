@@ -1,17 +1,16 @@
 ---
 name: page_ref page fields
-description: page-field type that read-only displays another mirror page's page-local field for the same record
+description: live page-field alias that reads and permission-gated writes another mirror page's local field for the same record
 ---
-A `page_ref` page field on mirror page B displays (READ-ONLY) the value of a page-local field from another page A with the SAME effective entity — same record, no relation/link involved (lookup can't do this: no link exists between two mirrors of one entity).
+A `page_ref` page field on mirror page B is a live alias of a page-local field from another page A with the SAME effective entity — same record, no relation/link involved. Its value may be edited from B, but A remains the only storage authority.
 
 Rules that must stay consistent:
-- Config = {sourcePageId, sourceFieldKey} in page_fields.pageRefConfigJson; `resolved*` metadata (source type/options/percent) is RESPONSE-ONLY enrichment in GET /pages/:id/fields — never stored.
-- Values are merged server-side into GET /pages/:id/record-values under the page_ref key (client renders from pageValues as usual). Writes to page_ref keys are silently dropped (like function/relation/lookup) — source of truth stays on page A.
-- Read boundary (BOTH fields metadata and value merge, independently): viewer boundary of the base query (entity view + own scope + hidden row statuses) AND source-page access (perms.pageIds) AND the source FIELD's own per-role visibility AND the page_ref column's own visibility. superAdmin/pages-admin bypass the page/field gates for setup.
-- Source eligibility (active + value-backed type from PAGE_REF_SOURCE_TYPES, in lockstep client PageFieldConfigDialog ↔ server page-fields.ts) is re-validated AT READ TIME — stale refs resolve to nothing, never to raw JSON.
-- Integrity (user-approved cascade): deleting the source field or source page cascade-deletes referencing page_ref fields; renaming the source key REWRITES referencing configs; retyping to an ineligible type cascade-deletes.
-- page_ref is page-field-only; entity fields routes reject the type.
-- Filters/totals: a page_ref column CAN filter and total — `resolvePageLocalFilterTarget` (records.ts) resolves the cond to the SOURCE (pageId,key,type) triple after the FULL double boundary + eligibility, used by records/query, pivot and page-filter-values (incl. the empty probe); flat totals + group sums/averages/common values read source-page value maps under `pf:<id>` keys (number=SUM gated by showColumnTotal, percent=AVERAGE with source decimals). The filter UI presents the resolved source type/options (same fieldKey; server maps back). Still NO sort, no excludePageLocalFilters, no custom-filter support — feature limits, not boundaries.
-- `loadPageRefSource` + `PAGE_REF_SOURCE_TYPES` live in record-query.ts (page-fields.ts imports from records.ts, so the reverse import would be circular).
+- The source must be another page over the same effective entity and an active supported value-backed field.
+- Reads expose the source value under B's alias. Only an explicitly supplied alias may write or clear the source; omission is always a no-op. B never stores an alias copy.
+- Both sides are independent permission boundaries. Writing requires target-page/alias edit access plus source-page/source-field/record/row access; stale sources remain read-only and direct requests are rejected.
+- A write changes only the authoritative source key and preserves unrelated values under concurrency. Multiple aliases to one source may agree; conflicting edits are rejected.
+- Source rename/delete/retype integrity must keep aliases valid or remove them safely. Filters and aggregates use the same authoritative source value and boundaries.
 
-**Why:** the "show page A's field on page B" ask is natural for mirror pages; hanging it on relations would require fake self-links. The double independent permission check exists because record-values must stay authoritative even when the client skips the fields call.
+**Why:** users need one value to stay synchronized across mirror pages without fake self-relations or duplicated storage. The double boundary prevents B from becoming a permission bypass into A.
+
+**How to apply:** treat `page_ref` as a typed alias and explicit source-key patch, never as a second stored value or as a full-map field.

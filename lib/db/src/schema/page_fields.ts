@@ -12,10 +12,10 @@ import type { FieldFormatRule, FormulaFieldConfig, FieldPermissions, RelationFie
  * the mirrored entity's own data.
  */
 /**
- * Config for a `page_ref` page field: a read-only column that displays, for the
- * SAME record, the value of a page-local field defined on ANOTHER mirror page
- * of the same entity. `resolved*` metadata is response-only enrichment (never
- * stored): the source field's current type/options so the client can render.
+ * Config for a `page_ref` page field: a column that displays, for the SAME
+ * record, the value of a page-local field defined on ANOTHER mirror page of the
+ * same entity. `resolved*` metadata is response-only enrichment (never stored):
+ * source rendering metadata plus whether the current viewer may write through.
  */
 export interface PageRefFieldConfig {
   sourcePageId?: number;
@@ -23,6 +23,7 @@ export interface PageRefFieldConfig {
   resolvedFieldType?: string;
   resolvedOptionsJson?: unknown[];
   resolvedPercentConfigJson?: PercentFieldConfig;
+  resolvedEditable?: boolean;
 }
 
 export const pageFieldsTable = pgTable(
