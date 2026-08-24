@@ -2581,6 +2581,12 @@ export function EntityRecords({
   const [pageFieldFilters, setPageFieldFilters] = useState<Record<string, string[]>>({});
   const [pageDateFilters, setPageDateFilters] = useState<Record<string, DateRangeFilter>>({});
   const [page, setPage] = useState(1);
+  // The table body is its own persistent scroll container. React replaces its
+  // rows on pagination but reuses the container, so without an explicit reset
+  // the next page opens at the previous page's bottom position.
+  useLayoutEffect(() => {
+    if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
+  }, [page]);
   const [records, setRecords] = useState<EntityRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [numericTotals, setNumericTotals] = useState<Record<string, number>>({});
