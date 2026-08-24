@@ -1662,6 +1662,30 @@
     "he": "מספר התווים בטקסט."
   },
   {
+    "key": "fields.fnToday",
+    "ru": "Текущая системная дата.",
+    "en": "The current system date.",
+    "he": "תאריך המערכת הנוכחי."
+  },
+  {
+    "key": "fields.fnDaysBetween",
+    "ru": "Количество календарных дней между двумя датами.",
+    "en": "The number of calendar days between two dates.",
+    "he": "מספר הימים הקלנדריים בין שני תאריכים."
+  },
+  {
+    "key": "fields.fnDaysSince",
+    "ru": "Количество календарных дней от указанной даты до сегодня.",
+    "en": "The number of calendar days from the specified date until today.",
+    "he": "מספר הימים הקלנדריים מהתאריך שצוין ועד היום."
+  },
+  {
+    "key": "fields.fnDaysUntil",
+    "ru": "Количество календарных дней от сегодня до указанной даты.",
+    "en": "The number of calendar days from today until the specified date.",
+    "he": "מספר הימים הקלנדריים מהיום ועד לתאריך שצוין."
+  },
+  {
     "key": "fields.fnSigIf",
     "ru": "if(условие, если_да, если_нет)",
     "en": "if(condition, if_true, if_false)",
@@ -1726,6 +1750,30 @@
     "ru": "len(текст)",
     "en": "len(text)",
     "he": "len(טקסט)"
+  },
+  {
+    "key": "fields.fnSigToday",
+    "ru": "today()",
+    "en": "today()",
+    "he": "today()"
+  },
+  {
+    "key": "fields.fnSigDaysBetween",
+    "ru": "daysBetween(дата_начала, дата_окончания)",
+    "en": "daysBetween(start_date, end_date)",
+    "he": "daysBetween(תאריך_התחלה, תאריך_סיום)"
+  },
+  {
+    "key": "fields.fnSigDaysSince",
+    "ru": "daysSince(дата_начала)",
+    "en": "daysSince(start_date)",
+    "he": "daysSince(תאריך_התחלה)"
+  },
+  {
+    "key": "fields.fnSigDaysUntil",
+    "ru": "daysUntil(дата_окончания)",
+    "en": "daysUntil(end_date)",
+    "he": "daysUntil(תאריך_סיום)"
   },
   {
     "key": "records.openInDrive",
@@ -1999,9 +2047,9 @@
   },
   {
     "key": "fields.formulaHint",
-    "ru": "Ссылайтесь на другие поля этой записи через {ключ_поля}. Операторы: + - * / %, сравнения, && || !, тернарный ?:. Функции: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce. Вычисляется при показе и не хранится.",
-    "en": "Reference other fields of this record via {field_key}. Operators: + - * / %, comparisons, && || !, ternary ?:. Functions: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce. Computed on display and not stored.",
-    "he": "הפנו לשדות אחרים של רשומה זו באמצעות {field_key}. אופרטורים: + - * / %, השוואות, && || !, תנאי ?:. פונקציות: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce. מחושב בעת התצוגה ואינו נשמר."
+    "ru": "Ссылайтесь на другие поля этой записи через {ключ_поля}. Операторы: + - * / %, сравнения, && || !, тернарный ?:. Функции: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce, today, daysBetween, daysSince, daysUntil. Вычисляется при показе и не хранится.",
+    "en": "Reference other fields of this record via {field_key}. Operators: + - * / %, comparisons, && || !, ternary ?:. Functions: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce, today, daysBetween, daysSince, daysUntil. Computed on display and not stored.",
+    "he": "הפנו לשדות אחרים של רשומה זו באמצעות {field_key}. אופרטורים: + - * / %, השוואות, && || !, תנאי ?:. פונקציות: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce, today, daysBetween, daysSince, daysUntil. מחושב בעת התצוגה ואינו נשמר."
   },
   {
     "key": "fields.formulaInsertField",

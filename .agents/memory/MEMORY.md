@@ -52,6 +52,7 @@
 - [Formula FP-noise policy](formula-fp-noise.md) — no-decimals formula results must be cleaned to 12 sig digits per row before summing, everywhere.
 - [Percent field type](percent-field.md) — numeric field (list/value); stored as NUMBER; aggregates as AVERAGE — flat totals gated by showColumnTotal, group rows ALWAYS; list-mode validation compares by numeric equivalence (optionNumbers), not String(num).
 - [Formula cross-references](formula-cross-reference.md) — a formula field can reference another formula's result via buildFormulaScope (Proxy, lazy+memoized+cycle-guarded); wire it at EVERY eval site; scope must include ALL formula fields, not just visible/total-enabled ones.
+- [Formula date functions](formula-date-functions.md) — date differences use strict ISO calendar dates and UTC `today()` so browser/server results stay identical.
 - [External FastPanel deploy](external-fastpanel-deploy.md) — prod runs on an external Debian/FastPanel server; FastPanel regenerates the nginx conf (restore from backup + reload); npmmirror registry, PM2, static build via nginx.
 - [Drizzle select-fragment qualification](drizzle-select-fragment-qualification.md) — raw SQL fragments as selected fields render columns UNQUALIFIED; correlated subqueries silently return NULL; wrap in sql``.
 - [Excel data consolidation](excel-data-consolidation.md) — staged import of user's Excel into LOCAL DB (prod frozen, dump handover); confirmed mapping before every load; validated mechanics + open items.

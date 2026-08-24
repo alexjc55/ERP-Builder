@@ -108,6 +108,38 @@ const FORMULA_FUNCS: {
     descKey: "fields.fnLen",
     descFallback: "Количество символов в тексте.",
   },
+  {
+    name: "today",
+    sig: "today()",
+    sigKey: "fields.fnSigToday",
+    example: "today()",
+    descKey: "fields.fnToday",
+    descFallback: "Текущая системная дата.",
+  },
+  {
+    name: "daysBetween",
+    sig: "daysBetween(дата_начала, дата_окончания)",
+    sigKey: "fields.fnSigDaysBetween",
+    example: "daysBetween({project_start}, {project_end})",
+    descKey: "fields.fnDaysBetween",
+    descFallback: "Количество календарных дней между двумя датами.",
+  },
+  {
+    name: "daysSince",
+    sig: "daysSince(дата_начала)",
+    sigKey: "fields.fnSigDaysSince",
+    example: "daysSince({project_start})",
+    descKey: "fields.fnDaysSince",
+    descFallback: "Количество календарных дней от указанной даты до сегодня.",
+  },
+  {
+    name: "daysUntil",
+    sig: "daysUntil(дата_окончания)",
+    sigKey: "fields.fnSigDaysUntil",
+    example: "daysUntil({project_end})",
+    descKey: "fields.fnDaysUntil",
+    descFallback: "Количество календарных дней от сегодня до указанной даты.",
+  },
 ];
 
 /**
@@ -198,7 +230,7 @@ export function FormulaEditor({
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  onClick={() => insert(`${fn.name}()`, 1)}
+                  onClick={() => insert(`${fn.name}()`, fn.name === "today" ? 0 : 1)}
                   className="px-2 py-0.5 rounded border border-slate-200 bg-white hover:bg-slate-100 hover:border-slate-300 font-mono text-xs text-slate-600 transition-colors"
                 >
                   {fn.name}
@@ -220,7 +252,7 @@ export function FormulaEditor({
         {hint ??
           t(
             "fields.formulaHint",
-            "Ссылайтесь на другие поля этой записи через {ключ_поля}. Операторы: + - * / %, сравнения, && || !, тернарный ?:. Функции: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce. Вычисляется при показе и не хранится.",
+            "Ссылайтесь на другие поля этой записи через {ключ_поля}. Операторы: + - * / %, сравнения, && || !, тернарный ?:. Функции: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce, today, daysBetween, daysSince, daysUntil. Вычисляется при показе и не хранится.",
           )}
       </p>
     </div>

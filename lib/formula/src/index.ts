@@ -14,12 +14,55 @@
  *   - ternary: cond ? a : b
  *   - parentheses
  *   - functions: if, round, floor, ceil, abs, min, max, sum, concat, upper,
- *     lower, len, coalesce
+ *     lower, len, coalesce, today, daysBetween, daysSince, daysUntil
  *
  * `+` adds when both operands are numbers, otherwise concatenates as text.
  */
 
 export type FormulaValue = number | string | boolean | null;
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const ISO_DATE_OR_DATETIME_RE =
+  /^(\d{4})-(\d{2})-(\d{2})(?:T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,9})?)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)?)?$/;
+
+/**
+ * Convert a date/date-time scalar to a UTC calendar-day ordinal. Stored date
+ * fields use YYYY-MM-DD and datetime fields use ISO strings, so reading the
+ * leading calendar part avoids fractional results and DST differences.
+ */
+function toCalendarDay(value: FormulaValue): number | null {
+  if (typeof value !== "string" || value.trim() === "") return null;
+  const match = ISO_DATE_OR_DATETIME_RE.exec(value.trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(0);
+  date.setUTCHours(0, 0, 0, 0);
+  date.setUTCFullYear(year, month - 1, day);
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return Math.trunc(date.getTime() / MS_PER_DAY);
+}
+
+function todayUtc(): string {
+  const now = new Date();
+  const year = String(now.getUTCFullYear()).padStart(4, "0");
+  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(now.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function daysBetweenValues(start: FormulaValue, end: FormulaValue): number | null {
+  const startDay = toCalendarDay(start);
+  const endDay = toCalendarDay(end);
+  return startDay == null || endDay == null ? null : endDay - startDay;
+}
 
 type Tok =
   | { t: "num"; v: number }
@@ -348,6 +391,14 @@ function evalNode(node: Node, vars: Record<string, unknown>): FormulaValue {
           return toStr(a[0]).length;
         case "coalesce":
           return a.find((v) => v != null && v !== "") ?? null;
+        case "today":
+          return todayUtc();
+        case "daysbetween":
+          return daysBetweenValues(a[0] ?? null, a[1] ?? null);
+        case "dayssince":
+          return daysBetweenValues(a[0] ?? null, todayUtc());
+        case "daysuntil":
+          return daysBetweenValues(todayUtc(), a[0] ?? null);
         default:
           throw new Error(`Неизвестная функция '${node.name}'`);
       }
