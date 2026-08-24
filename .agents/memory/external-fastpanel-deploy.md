@@ -32,6 +32,14 @@ pm2 restart erp-davidov --update-env
 ```
 If `.env` changed or DB schema changed, source env first: `set -a; source .env; set +a;` then `pm2 restart erp-davidov --update-env` / `pnpm --filter @workspace/db run push`.
 
+## Verify Git synchronization before building
+- The production checkout can retain local modifications to tracked package/workspace files. Preserve them deliberately, but never treat a completed build as proof that Git synchronized: an old checkout can build successfully.
+- Before building, run `git fetch origin`, fast-forward with `git pull --ff-only origin main`, and verify `git rev-parse HEAD` equals `git rev-parse origin/main`. Also verify any newly added critical source file exists.
+
+**Why:** A formula fix existed on `origin/main` while the production checkout remained on an older `main`; the old source still compiled, so install/build/restart produced a healthy but stale application.
+
+**How to apply:** Make commit equality a release gate. If tracked server-only package files complicate pulls, stash only those files, pull, then reapply them; keep uploads and `.env` outside Git.
+
 ## Delivering DB changes as SQL files
 - Schema/translation changes for prod are delivered as an idempotent .sql file (plus a .txt copy — the chat asset viewer rejects .sql) that the USER runs on the remote Postgres; NEVER run them against the Replit DB.
 - File conventions: `ADD COLUMN IF NOT EXISTS`, translations via `INSERT ... ON CONFLICT (translation_key) DO UPDATE SET translations_json = EXCLUDED.translations_json, updated_at = now()`, Russian comments, "повторный запуск безопасен".
