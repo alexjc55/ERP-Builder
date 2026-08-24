@@ -16,6 +16,7 @@ import { relationDirection, ownRelationExists, relationValueExists, pageLocalVal
 export async function buildRelationMeta(
   entityId: number,
   fields: EntityField[],
+  executor: Pick<typeof db, "select"> = db,
 ): Promise<Map<string, RelationFilterMeta>> {
   const meta = new Map<string, RelationFilterMeta>();
   const relFields = fields.filter(
@@ -26,7 +27,7 @@ export async function buildRelationMeta(
   );
   if (relFields.length === 0) return meta;
   const relIds = [...new Set(relFields.map((f) => f.relationConfigJson!.relationId as number))];
-  const relRows = await db.select().from(relationsTable).where(inArray(relationsTable.id, relIds));
+  const relRows = await executor.select().from(relationsTable).where(inArray(relationsTable.id, relIds));
   const relById = new Map(relRows.map((r) => [r.id, r]));
   for (const f of relFields) {
     const cfg = f.relationConfigJson!;
@@ -224,6 +225,7 @@ export async function isRecordOwned(
   scopeFieldKeys: string[],
   userId: number,
   fields: EntityField[],
+  executor: Pick<typeof db, "select"> = db,
 ): Promise<boolean> {
   if (scopeFieldKeys.length === 0) return false;
   const { native, relation, filters } = partitionOwnerFields(scopeFieldKeys, fields);
@@ -241,7 +243,7 @@ export async function isRecordOwned(
     if (v != null && String(v) === String(userId)) return true;
   }
   if (relation.length === 0 && relationFilters.length === 0 && pageFilters.length === 0) return false;
-  const meta = await buildRelationMeta(entityId, [...relation, ...relationFilters.map((rf) => rf.field)]);
+  const meta = await buildRelationMeta(entityId, [...relation, ...relationFilters.map((rf) => rf.field)], executor);
   const relClauses: SQL[] = [];
   for (const f of relation) {
     const m = meta.get(f.fieldKey);
@@ -259,7 +261,7 @@ export async function isRecordOwned(
     if (c) relClauses.push(c);
   }
   if (relClauses.length === 0) return false;
-  const [row] = await db
+  const [row] = await executor
     .select({ id: entityRecordsTable.id })
     .from(entityRecordsTable)
     .where(and(eq(entityRecordsTable.id, record.id), or(...relClauses)!))

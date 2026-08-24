@@ -5,8 +5,16 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { PageRecordValueInputExpectedVersions } from './pageRecordValueInputExpectedVersions';
 import type { PageRecordValueInputValuesJson } from './pageRecordValueInputValuesJson';
 
 export interface PageRecordValueInput {
   valuesJson: PageRecordValueInputValuesJson;
+  /**
+     * Legacy single-row CAS. Allowed only when the request touches exactly one distinct page_record_values row. A missing row has baseline 1.
+     * @minimum 1
+     */
+  expectedVersion?: number;
+  /** Per-row CAS versions keyed by stringified pageId. Supply every touched existing row: the target page for local fields and each source page for page_ref aliases. Missing rows use baseline 1. */
+  expectedVersions?: PageRecordValueInputExpectedVersions;
 }

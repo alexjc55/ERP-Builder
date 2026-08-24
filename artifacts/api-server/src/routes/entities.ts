@@ -1,6 +1,8 @@
 import { Router, type IRouter } from "express";
-import { db, entitiesTable, pagesTable } from "@workspace/db";
-import { eq, asc, and, ne } from "drizzle-orm";
+import { db, entitiesTable, entityRecordsTable, pagesTable, relationsTable, recordLinksTable } from "@workspace/db";
+import { eq, asc, and, ne, or, inArray } from "drizzle-orm";
+import { lockRecordsStable, touchLockedRecords } from "../lib/record-links";
+import { emitEvent, EVENT_RECORD_UPDATED } from "../lib/events";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
 import {
@@ -223,15 +225,43 @@ router.delete("/entities/:id", requireAuth, requireAdmin("entities"), async (req
     return;
   }
 
-  const [deleted] = await db
-    .delete(entitiesTable)
-    .where(eq(entitiesTable.id, params.data.id))
-    .returning({ id: entitiesTable.id });
+  const result = await db.transaction(async (tx) => {
+    const [entity] = await tx.select().from(entitiesTable).where(eq(entitiesTable.id, params.data.id)).for("update");
+    if (!entity) return null;
+    const relations = await tx.select().from(relationsTable)
+      .where(or(eq(relationsTable.sourceEntityId, entity.id), eq(relationsTable.targetEntityId, entity.id)))
+      .orderBy(asc(relationsTable.id)).for("update");
+    const relationIds = relations.map((relation) => relation.id);
+    const deletingRecords = await tx.select({ id: entityRecordsTable.id }).from(entityRecordsTable)
+      .where(eq(entityRecordsTable.entityId, entity.id));
+    const deletingIds = new Set(deletingRecords.map((record) => record.id));
+    const links = relationIds.length === 0 ? [] : await tx.select().from(recordLinksTable)
+      .where(inArray(recordLinksTable.relationId, relationIds)).orderBy(asc(recordLinksTable.id)).for("update");
+    const survivorIds = [...new Set(links.flatMap((link) => [link.sourceRecordId, link.targetRecordId])
+      .filter((recordId) => !deletingIds.has(recordId)))];
+    await lockRecordsStable(tx, survivorIds);
+    await tx.delete(entitiesTable).where(eq(entitiesTable.id, entity.id));
+    const versions = await touchLockedRecords(tx, survivorIds);
+    const survivors = survivorIds.map((recordId) => {
+      const relation = relations.find((candidate) => links.some((link) =>
+        link.relationId === candidate.id && (link.sourceRecordId === recordId || link.targetRecordId === recordId)));
+      const entityId = relation?.sourceEntityId === entity.id ? relation.targetEntityId : relation?.sourceEntityId;
+      return { recordId, entityId, version: versions[String(recordId)] };
+    }).filter((row): row is { recordId: number; entityId: number; version: number } =>
+      row.entityId != null && row.version != null);
+    return { survivors };
+  });
 
-  if (!deleted) {
+  if (!result) {
     res.status(404).json({ error: "Entity not found" });
     return;
   }
+  await emitEvent(result.survivors.map((row) => ({
+    eventName: EVENT_RECORD_UPDATED,
+    entityId: row.entityId,
+    recordId: row.recordId,
+    payload: { actorUserId: req.user!.userId, changedFields: [], version: row.version },
+  })), req.log);
 
   res.json({ success: true, message: "Entity deleted" });
 });

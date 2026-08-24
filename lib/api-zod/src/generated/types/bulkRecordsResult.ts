@@ -5,8 +5,11 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { BulkRecordsResultVersions } from './bulkRecordsResultVersions';
 
 export interface BulkRecordsResult {
   successIds: number[];
   failedIds: number[];
+  /** Updated versions keyed by successful archive/unarchive record id; omitted for deletes. */
+  versions?: BulkRecordsResultVersions;
 }

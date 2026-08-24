@@ -9,6 +9,44 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Subscribe to authorized page presence and compact record invalidations via SSE
+ */
+export const StreamCollaborationPageEventsParams = zod.object({
+  "pageId": zod.coerce.number()
+})
+
+export const streamCollaborationPageEventsQueryClientIdMax = 128;
+
+
+
+export const StreamCollaborationPageEventsQueryParams = zod.object({
+  "clientId": zod.coerce.string().max(streamCollaborationPageEventsQueryClientIdMax)
+})
+
+
+/**
+ * @summary Publish this authenticated user's transient editing location
+ */
+export const UpdatePagePresenceParams = zod.object({
+  "pageId": zod.coerce.number()
+})
+
+export const updatePagePresenceBodyClientIdMax = 128;
+
+
+
+export const UpdatePagePresenceBody = zod.object({
+  "clientId": zod.string().max(updatePagePresenceBodyClientIdMax),
+  "editing": zod.union([zod.null(),zod.object({
+  "entityId": zod.number(),
+  "recordId": zod.number(),
+  "fieldKey": zod.string(),
+  "source": zod.enum(['entity', 'page'])
+})]).optional()
+})
+
+
+/**
  * Returns a presigned GCS URL for direct upload. The client sends JSON
 metadata here, then uploads the file directly to the returned URL.
 
@@ -3854,9 +3892,14 @@ export const ListPageRecordValuesParams = zod.object({
   "pageId": zod.coerce.number()
 })
 
+
+
+
 export const ListPageRecordValuesResponseItem = zod.object({
   "recordId": zod.number(),
-  "valuesJson": zod.record(zod.string(), zod.unknown())
+  "valuesJson": zod.record(zod.string(), zod.unknown()),
+  "version": zod.number().describe('Version of this page\'s own page_record_values row; 1 for a synthesized missing row.'),
+  "fieldVersions": zod.record(zod.string(), zod.number().min(1)).optional().describe('Optional per-visible-field CAS versions keyed by the page field key. Ordinary page-local fields use the base row version. A page_ref field uses the version of its actual source page_record_values row.')
 }).describe('Page-local field values for one mirrored record.')
 export const ListPageRecordValuesResponse = zod.array(ListPageRecordValuesResponseItem)
 
@@ -3869,13 +3912,24 @@ export const SetPageRecordValuesParams = zod.object({
   "recordId": zod.coerce.number()
 })
 
+
+
+
+
 export const SetPageRecordValuesBody = zod.object({
-  "valuesJson": zod.record(zod.string(), zod.unknown())
+  "valuesJson": zod.record(zod.string(), zod.unknown()),
+  "expectedVersion": zod.number().min(1).optional().describe('Legacy single-row CAS. Allowed only when the request touches exactly one distinct page_record_values row. A missing row has baseline 1.'),
+  "expectedVersions": zod.record(zod.string(), zod.number().min(1)).optional().describe('Per-row CAS versions keyed by stringified pageId. Supply every touched existing row: the target page for local fields and each source page for page_ref aliases. Missing rows use baseline 1.')
 })
+
+
+
 
 export const SetPageRecordValuesResponse = zod.object({
   "recordId": zod.number(),
-  "valuesJson": zod.record(zod.string(), zod.unknown())
+  "valuesJson": zod.record(zod.string(), zod.unknown()),
+  "version": zod.number().describe('Version of this page\'s own page_record_values row; 1 for a synthesized missing row.'),
+  "fieldVersions": zod.record(zod.string(), zod.number().min(1)).optional().describe('Optional per-visible-field CAS versions keyed by the page field key. Ordinary page-local fields use the base row version. A page_ref field uses the version of its actual source page_record_values row.')
 }).describe('Page-local field values for one mirrored record.')
 
 
@@ -3890,14 +3944,17 @@ export const bulkSetPageRecordFieldValuesBodyRecordIdsMax = 500;
 
 
 
+
 export const BulkSetPageRecordFieldValuesBody = zod.object({
   "fieldKey": zod.string(),
   "value": zod.unknown(),
-  "recordIds": zod.array(zod.number()).min(1).max(bulkSetPageRecordFieldValuesBodyRecordIdsMax)
+  "recordIds": zod.array(zod.number()).min(1).max(bulkSetPageRecordFieldValuesBodyRecordIdsMax),
+  "expectedVersions": zod.record(zod.string(), zod.number().min(1)).optional().describe('Expected versions keyed by record id. For page_ref, each value is the actual source page_record_values version from fieldVersions[fieldKey]; otherwise it is the base page row version.')
 })
 
 export const BulkSetPageRecordFieldValuesResponse = zod.object({
-  "updatedIds": zod.array(zod.number())
+  "updatedIds": zod.array(zod.number()),
+  "versions": zod.record(zod.string(), zod.number()).optional()
 })
 
 
@@ -3973,15 +4030,20 @@ export const SetPageRelatedLinkParams = zod.object({
   "pageId": zod.coerce.number()
 })
 
+
+
+
 export const SetPageRelatedLinkBody = zod.object({
   "fieldKey": zod.string().describe('The relation page-field\'s own key.'),
   "recordId": zod.number().describe('The base (page) record whose link is being set.'),
-  "linkedRecordId": zod.number().nullish().describe('The related record to link to, or null to clear the existing link.')
+  "linkedRecordId": zod.number().nullish().describe('The related record to link to, or null to clear the existing link.'),
+  "expectedVersion": zod.number().min(1).optional().describe('Expected entity_records.version of the base record.')
 })
 
 export const SetPageRelatedLinkResponse = zod.object({
   "linkedRecordId": zod.number().nullable().describe('The linked record id after the change (null if cleared).'),
-  "value": zod.unknown().optional().describe('The related field value after the change (null if cleared or hidden).')
+  "value": zod.unknown().optional().describe('The related field value after the change (null if cleared or hidden).'),
+  "version": zod.number().describe('Current base record version, incremented once when the link actually changed.')
 })
 
 
@@ -4161,15 +4223,20 @@ export const SetEntityRelatedLinkParams = zod.object({
   "entityId": zod.coerce.number()
 })
 
+
+
+
 export const SetEntityRelatedLinkBody = zod.object({
   "fieldKey": zod.string().describe('The relation page-field\'s own key.'),
   "recordId": zod.number().describe('The base (page) record whose link is being set.'),
-  "linkedRecordId": zod.number().nullish().describe('The related record to link to, or null to clear the existing link.')
+  "linkedRecordId": zod.number().nullish().describe('The related record to link to, or null to clear the existing link.'),
+  "expectedVersion": zod.number().min(1).optional().describe('Expected entity_records.version of the base record.')
 })
 
 export const SetEntityRelatedLinkResponse = zod.object({
   "linkedRecordId": zod.number().nullable().describe('The linked record id after the change (null if cleared).'),
-  "value": zod.unknown().optional().describe('The related field value after the change (null if cleared or hidden).')
+  "value": zod.unknown().optional().describe('The related field value after the change (null if cleared or hidden).'),
+  "version": zod.number().describe('Current base record version, incremented once when the link actually changed.')
 })
 
 
@@ -5176,6 +5243,7 @@ export const ListEntityRecordsResponseItem = zod.object({
   "statusId": zod.number().nullable(),
   "archivedAt": zod.coerce.date().nullable(),
   "statusChangedAt": zod.coerce.date().nullable(),
+  "version": zod.number(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -5210,6 +5278,7 @@ export const GetRecordResponse = zod.object({
   "statusId": zod.number().nullable(),
   "archivedAt": zod.coerce.date().nullable(),
   "statusChangedAt": zod.coerce.date().nullable(),
+  "version": zod.number(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -5222,10 +5291,14 @@ export const UpdateRecordParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
+
+
 export const UpdateRecordBody = zod.object({
   "valuesJson": zod.record(zod.string(), zod.unknown()).optional(),
   "statusId": zod.number().nullish(),
-  "pageId": zod.number().optional().describe('Optional mirror-page context (see RecordInput.pageId): applies the mirror page\'s update-rights override when editing through it.')
+  "pageId": zod.number().optional().describe('Optional mirror-page context (see RecordInput.pageId): applies the mirror page\'s update-rights override when editing through it.'),
+  "expectedVersion": zod.number().min(1).optional()
 })
 
 export const UpdateRecordResponse = zod.object({
@@ -5235,6 +5308,7 @@ export const UpdateRecordResponse = zod.object({
   "statusId": zod.number().nullable(),
   "archivedAt": zod.coerce.date().nullable(),
   "statusChangedAt": zod.coerce.date().nullable(),
+  "version": zod.number(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -5247,8 +5321,12 @@ export const DeleteRecordParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
+
+
 export const DeleteRecordBody = zod.object({
-  "pageId": zod.number().optional().describe('Optional mirror-page context (see RecordInput.pageId): applies the mirror page\'s delete-rights override when deleting through it.')
+  "pageId": zod.number().optional().describe('Optional mirror-page context (see RecordInput.pageId): applies the mirror page\'s delete-rights override when deleting through it.'),
+  "expectedVersion": zod.number().min(1).optional()
 })
 
 export const DeleteRecordResponse = zod.object({
@@ -5264,6 +5342,13 @@ export const ArchiveRecordParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
+
+
+export const ArchiveRecordBody = zod.object({
+  "expectedVersion": zod.number().min(1).optional()
+})
+
 export const ArchiveRecordResponse = zod.object({
   "id": zod.number(),
   "entityId": zod.number(),
@@ -5271,6 +5356,7 @@ export const ArchiveRecordResponse = zod.object({
   "statusId": zod.number().nullable(),
   "archivedAt": zod.coerce.date().nullable(),
   "statusChangedAt": zod.coerce.date().nullable(),
+  "version": zod.number(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -5283,6 +5369,13 @@ export const UnarchiveRecordParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
+
+
+export const UnarchiveRecordBody = zod.object({
+  "expectedVersion": zod.number().min(1).optional()
+})
+
 export const UnarchiveRecordResponse = zod.object({
   "id": zod.number(),
   "entityId": zod.number(),
@@ -5290,6 +5383,7 @@ export const UnarchiveRecordResponse = zod.object({
   "statusId": zod.number().nullable(),
   "archivedAt": zod.coerce.date().nullable(),
   "statusChangedAt": zod.coerce.date().nullable(),
+  "version": zod.number(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -5302,16 +5396,19 @@ export const bulkRecordsActionBodyRecordIdsMax = 500;
 
 
 
+
 export const BulkRecordsActionBody = zod.object({
   "entityId": zod.number(),
   "action": zod.enum(['archive', 'unarchive', 'delete']),
   "recordIds": zod.array(zod.number()).min(1).max(bulkRecordsActionBodyRecordIdsMax),
-  "pageId": zod.number().optional().describe('Optional mirror-page context (see RecordInput.pageId): applies the mirror page\'s rights override when acting through it.')
+  "pageId": zod.number().optional().describe('Optional mirror-page context (see RecordInput.pageId): applies the mirror page\'s rights override when acting through it.'),
+  "expectedVersions": zod.record(zod.string(), zod.number().min(1)).optional().describe('Optional entity_records.version values keyed by record id. Processing remains partial: a stale record is added to failedIds and is not mutated, while other records continue independently.')
 })
 
 export const BulkRecordsActionResponse = zod.object({
   "successIds": zod.array(zod.number()),
-  "failedIds": zod.array(zod.number())
+  "failedIds": zod.array(zod.number()),
+  "versions": zod.record(zod.string(), zod.number()).optional().describe('Updated versions keyed by successful archive\/unarchive record id; omitted for deletes.')
 })
 
 
@@ -5322,16 +5419,19 @@ export const bulkUpdateRecordFieldBodyRecordIdsMax = 500;
 
 
 
+
 export const BulkUpdateRecordFieldBody = zod.object({
   "entityId": zod.number(),
   "fieldKey": zod.string(),
   "value": zod.unknown(),
   "recordIds": zod.array(zod.number()).min(1).max(bulkUpdateRecordFieldBodyRecordIdsMax),
-  "pageId": zod.number().optional().describe('Optional mirror-page context: applies that page\'s record-rights and field-access overrides.')
+  "pageId": zod.number().optional().describe('Optional mirror-page context: applies that page\'s record-rights and field-access overrides.'),
+  "expectedVersions": zod.record(zod.string(), zod.number().min(1)).optional().describe('Expected entity_records.version keyed by record id.')
 })
 
 export const BulkUpdateRecordFieldResponse = zod.object({
-  "updatedIds": zod.array(zod.number())
+  "updatedIds": zod.array(zod.number()),
+  "versions": zod.record(zod.string(), zod.number()).optional()
 })
 
 
@@ -5807,6 +5907,7 @@ export const QueryEntityRecordsResponse = zod.object({
   "statusId": zod.number().nullable(),
   "archivedAt": zod.coerce.date().nullable(),
   "statusChangedAt": zod.coerce.date().nullable(),
+  "version": zod.number(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })),
@@ -6294,6 +6395,7 @@ export const ListRecordLinksResponseItem = zod.object({
   "statusId": zod.number().nullable(),
   "archivedAt": zod.coerce.date().nullable(),
   "statusChangedAt": zod.coerce.date().nullable(),
+  "version": zod.number(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -6308,9 +6410,13 @@ export const CreateRecordLinkParams = zod.object({
   "recordId": zod.coerce.number()
 })
 
+
+
+
 export const CreateRecordLinkBody = zod.object({
   "relationId": zod.number(),
-  "targetRecordId": zod.number()
+  "targetRecordId": zod.number(),
+  "expectedVersion": zod.number().min(1).optional().describe('Optional expected source entity_records.version.')
 })
 
 
@@ -6321,9 +6427,19 @@ export const DeleteRecordLinkParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
+
+
+export const DeleteRecordLinkBody = zod.object({
+  "expectedVersion": zod.number().min(1).optional().describe('Optional expected source entity_records.version.')
+})
+
+
+
+
 export const DeleteRecordLinkResponse = zod.object({
   "success": zod.boolean(),
-  "message": zod.string().optional()
+  "version": zod.number().min(1).describe('Source record version after deleting the link.')
 })
 
 

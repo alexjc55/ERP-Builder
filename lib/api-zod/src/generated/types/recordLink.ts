@@ -12,4 +12,9 @@ export interface RecordLink {
   sourceRecordId: number;
   targetRecordId: number;
   createdAt: Date;
+  /**
+     * Source record version after creating the link.
+     * @minimum 1
+     */
+  version: number;
 }

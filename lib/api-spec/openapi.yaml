@@ -32,6 +32,45 @@ tags:
     description: Recycle bin for local files removed from records (superAdmin)
 
 paths:
+  /collaboration/pages/{pageId}/stream:
+    get:
+      operationId: streamCollaborationPageEvents
+      tags: [pages]
+      summary: Subscribe to authorized page presence and compact record invalidations via SSE
+      parameters:
+        - name: pageId
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/CollaborationPageId" }
+        - name: clientId
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/CollaborationClientId" }
+      responses:
+        "200":
+          description: text/event-stream snapshot, presence and invalidation events
+          content:
+            text/event-stream:
+              schema: { type: string }
+  /collaboration/pages/{pageId}/presence:
+    put:
+      operationId: updatePagePresence
+      tags: [pages]
+      summary: Publish this authenticated user's transient editing location
+      parameters:
+        - name: pageId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CollaborationPresenceInput"
+      responses:
+        "204": { description: Presence accepted }
+        "403": { description: Guests and unauthorized users cannot publish presence }
   /storage/uploads/request-url:
     post:
       tags: [Storage]
@@ -1365,6 +1404,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PageRecordValue"
+        "400":
+          description: Invalid or ambiguous page-row version contract
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: A touched page_record_values row has a stale version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionConflictResponse"
 
   /pages/{pageId}/records/bulk-field-values:
     post:
@@ -1468,6 +1519,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PageRelatedLinkResult"
+        "409":
+          description: Base record version is stale, or relation cardinality conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionConflictResponse"
 
   /pages/{pageId}/relation-options:
     get:
@@ -1581,6 +1638,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PageRelatedLinkResult"
+        "409":
+          description: Base record version is stale, or relation cardinality conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionConflictResponse"
 
   # STATUSES
   /entities/{entityId}/statuses:
@@ -2216,6 +2279,12 @@ paths:
           required: true
           schema:
             type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordArchive"
       responses:
         "200":
           description: Record archived
@@ -2235,6 +2304,12 @@ paths:
           required: true
           schema:
             type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordArchive"
       responses:
         "200":
           description: Record restored
@@ -3025,6 +3100,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RecordLink"
+        "409":
+          description: Source record version is stale, or relation cardinality conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionConflictResponse"
 
   /links/{id}:
     delete:
@@ -3037,13 +3118,25 @@ paths:
           required: true
           schema:
             type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteRecordLinkInput"
       responses:
         "200":
           description: Deleted
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/DeleteRecordLinkResult"
+        "409":
+          description: Source record version is stale
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionConflictResponse"
 
   # VIEWS
   /entities/{entityId}/views:
@@ -3752,6 +3845,34 @@ paths:
 
 components:
   schemas:
+    CollaborationPageId:
+      type: integer
+    CollaborationClientId:
+      type: string
+      maxLength: 128
+    CollaborationEditingLocation:
+      type: object
+      required: [entityId, recordId, fieldKey, source]
+      properties:
+        entityId: { type: integer }
+        recordId: { type: integer }
+        fieldKey: { type: string }
+        source: { type: string, enum: [entity, page] }
+    CollaborationPresenceInput:
+      type: object
+      required: [clientId]
+      properties:
+        clientId:
+          $ref: "#/components/schemas/CollaborationClientId"
+        editing:
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/CollaborationEditingLocation"
+    CollaborationTableChangedEvent:
+      type: object
+      description: Opaque page-table invalidation. It intentionally contains no record, entity, field, or value metadata.
+      additionalProperties: false
+
     DeletedFile:
       type: object
       required: [id, fieldKey, fileName, filePath, reason, deletedAt]
@@ -4012,6 +4133,20 @@ components:
           type: string
       required:
         - error
+
+    VersionConflictResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        recordId:
+          type: integer
+        pageId:
+          type: integer
+        currentVersion:
+          type: integer
+          minimum: 1
 
     UploadUrlRequest:
       type: object
@@ -6633,16 +6768,23 @@ components:
         linkedRecordId:
           type: ["integer", "null"]
           description: The related record to link to, or null to clear the existing link.
+        expectedVersion:
+          type: integer
+          minimum: 1
+          description: Expected entity_records.version of the base record.
 
     PageRelatedLinkResult:
       type: object
-      required: [linkedRecordId]
+      required: [linkedRecordId, version]
       properties:
         linkedRecordId:
           type: ["integer", "null"]
           description: The linked record id after the change (null if cleared).
         value:
           description: The related field value after the change (null if cleared or hidden).
+        version:
+          type: integer
+          description: Current base record version, incremented once when the link actually changed.
 
     PageRelationOptionField:
       type: object
@@ -6976,7 +7118,7 @@ components:
 
     PageRecordValue:
       type: object
-      required: [recordId, valuesJson]
+      required: [recordId, valuesJson, version]
       description: Page-local field values for one mirrored record.
       properties:
         recordId:
@@ -6984,6 +7126,21 @@ components:
         valuesJson:
           type: object
           additionalProperties: true
+        version:
+          type: integer
+          description: Version of this page's own page_record_values row; 1 for a synthesized missing row.
+        fieldVersions:
+          $ref: "#/components/schemas/PageRecordValueFieldVersions"
+
+    PageRecordValueFieldVersions:
+      type: object
+      description: >-
+        Optional per-visible-field CAS versions keyed by the page field key.
+        Ordinary page-local fields use the base row version. A page_ref field
+        uses the version of its actual source page_record_values row.
+      additionalProperties:
+        type: integer
+        minimum: 1
 
     PageRecordValueInput:
       type: object
@@ -6992,6 +7149,21 @@ components:
         valuesJson:
           type: object
           additionalProperties: true
+        expectedVersion:
+          type: integer
+          minimum: 1
+          description: >-
+            Legacy single-row CAS. Allowed only when the request touches exactly
+            one distinct page_record_values row. A missing row has baseline 1.
+        expectedVersions:
+          type: object
+          description: >-
+            Per-row CAS versions keyed by stringified pageId. Supply every
+            touched existing row: the target page for local fields and each
+            source page for page_ref aliases. Missing rows use baseline 1.
+          additionalProperties:
+            type: integer
+            minimum: 1
 
     BulkPageRecordFieldUpdate:
       type: object
@@ -7006,6 +7178,15 @@ components:
             type: integer
           minItems: 1
           maxItems: 500
+        expectedVersions:
+          type: object
+          description: >-
+            Expected versions keyed by record id. For page_ref, each value is the
+            actual source page_record_values version from fieldVersions[fieldKey];
+            otherwise it is the base page row version.
+          additionalProperties:
+            type: integer
+            minimum: 1
 
     Status:
       type: object
@@ -7510,7 +7691,7 @@ components:
     # RECORDS
     EntityRecord:
       type: object
-      required: [id, entityId, valuesJson, statusId, archivedAt, statusChangedAt, createdAt, updatedAt]
+      required: [id, entityId, valuesJson, statusId, archivedAt, statusChangedAt, version, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -7527,6 +7708,8 @@ components:
         statusChangedAt:
           type: ["string", "null"]
           format: date-time
+        version:
+          type: integer
         createdAt:
           type: string
           format: date-time
@@ -7576,6 +7759,15 @@ components:
           description: >-
             Optional mirror-page context (see RecordInput.pageId): applies the
             mirror page's rights override when acting through it.
+        expectedVersions:
+          type: object
+          description: >-
+            Optional entity_records.version values keyed by record id. Processing
+            remains partial: a stale record is added to failedIds and is not
+            mutated, while other records continue independently.
+          additionalProperties:
+            type: integer
+            minimum: 1
 
     BulkRecordsResult:
       type: object
@@ -7588,6 +7780,11 @@ components:
         failedIds:
           type: array
           items:
+            type: integer
+        versions:
+          type: object
+          description: Updated versions keyed by successful archive/unarchive record id; omitted for deletes.
+          additionalProperties:
             type: integer
 
     BulkRecordFieldUpdate:
@@ -7610,6 +7807,12 @@ components:
           description: >-
             Optional mirror-page context: applies that page's record-rights and
             field-access overrides.
+        expectedVersions:
+          type: object
+          description: Expected entity_records.version keyed by record id.
+          additionalProperties:
+            type: integer
+            minimum: 1
 
     BulkFieldUpdateResult:
       type: object
@@ -7618,6 +7821,10 @@ components:
         updatedIds:
           type: array
           items:
+            type: integer
+        versions:
+          type: object
+          additionalProperties:
             type: integer
 
     MergeRecords:
@@ -7693,6 +7900,16 @@ components:
           description: >-
             Optional mirror-page context (see RecordInput.pageId): applies the
             mirror page's delete-rights override when deleting through it.
+        expectedVersion:
+          type: integer
+          minimum: 1
+
+    RecordArchive:
+      type: object
+      properties:
+        expectedVersion:
+          type: integer
+          minimum: 1
 
     RecordUpdate:
       type: object
@@ -7707,6 +7924,9 @@ components:
           description: >-
             Optional mirror-page context (see RecordInput.pageId): applies the
             mirror page's update-rights override when editing through it.
+        expectedVersion:
+          type: integer
+          minimum: 1
 
     # VIEWS
     FilterOperator:
@@ -8793,7 +9013,7 @@ components:
 
     RecordLink:
       type: object
-      required: [id, relationId, sourceRecordId, targetRecordId, createdAt]
+      required: [id, relationId, sourceRecordId, targetRecordId, createdAt, version]
       properties:
         id:
           type: integer
@@ -8806,6 +9026,10 @@ components:
         createdAt:
           type: string
           format: date-time
+        version:
+          type: integer
+          minimum: 1
+          description: Source record version after creating the link.
 
     LinkedRecord:
       type: object
@@ -8826,6 +9050,29 @@ components:
           type: integer
         targetRecordId:
           type: integer
+        expectedVersion:
+          type: integer
+          minimum: 1
+          description: Optional expected source entity_records.version.
+
+    DeleteRecordLinkInput:
+      type: object
+      properties:
+        expectedVersion:
+          type: integer
+          minimum: 1
+          description: Optional expected source entity_records.version.
+
+    DeleteRecordLinkResult:
+      type: object
+      required: [success, version]
+      properties:
+        success:
+          type: boolean
+        version:
+          type: integer
+          minimum: 1
+          description: Source record version after deleting the link.
 
     # TRANSLATIONS
     Translation:

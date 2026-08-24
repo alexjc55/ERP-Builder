@@ -5,7 +5,9 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { BulkFieldUpdateResultVersions } from './bulkFieldUpdateResultVersions';
 
 export interface BulkFieldUpdateResult {
   updatedIds: number[];
+  versions?: BulkFieldUpdateResultVersions;
 }

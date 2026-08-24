@@ -12,7 +12,14 @@ import {
   pageRecordValuesTable,
 } from "@workspace/db";
 import type { EntityField, EntityStatus, PageField } from "@workspace/db";
-import { eq, and, sql, asc } from "drizzle-orm";
+import { eq, and, sql, asc, inArray } from "drizzle-orm";
+import { lockRecordsStable, touchLockedRecords } from "../lib/record-links";
+import {
+  emitEvent,
+  EVENT_PAGE_FIELD_SAVED,
+  EVENT_RECORD_CREATED,
+  EVENT_RECORD_UPDATED,
+} from "../lib/events";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
 import { isGoogleDriveModuleEnabled } from "../lib/googleDrive";
@@ -30,6 +37,11 @@ import {
   type DbExecutor,
 } from "./records";
 import { validatePageValues, effectiveEntityForPage } from "./page-fields";
+import {
+  lockAndValidateUserReferences,
+  referencedUserIds,
+  UserReferenceBusyError,
+} from "../lib/user-reference-barrier";
 import { PreviewImportBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -221,7 +233,38 @@ type RowInput = {
 };
 
 type RowStatus = "created" | "updated" | "skipped" | "error";
-type RowOutcome = { status: RowStatus; message?: string };
+type ImportRecordUpdate = {
+  recordId: number;
+  entityId: number;
+  version: number;
+  changedFields: string[];
+  statusId?: number | null;
+};
+type ImportRecordCreate = {
+  recordId: number;
+  entityId: number;
+  version: number;
+  statusId: number | null;
+  changedFields: string[];
+};
+type ImportPageUpdate = {
+  entityId: number;
+  pageId: number;
+  recordId: number;
+  version: number;
+  changedPageFieldKeys: string[];
+};
+type RowOutcome = {
+  status: RowStatus;
+  message?: string;
+  updates?: ImportRecordUpdate[];
+  creates?: ImportRecordCreate[];
+  pageUpdates?: ImportPageUpdate[];
+};
+type LockedImportRelations = {
+  oldLinks: (typeof recordLinksTable.$inferSelect)[];
+  lockedRecords: (typeof entityRecordsTable.$inferSelect)[];
+};
 
 interface EntityCtx {
   kind: "entity";
@@ -277,8 +320,36 @@ async function applyRelations(
   tx: DbExecutor,
   sourceRecordId: number,
   assignments: RelAssignment[],
-): Promise<void> {
-  for (const a of assignments) {
+  touchSource: boolean,
+  prepared?: LockedImportRelations,
+): Promise<ImportRecordUpdate[]> {
+  const ordered = [...assignments].sort((a, b) => a.relationId - b.relationId);
+  if (ordered.length === 0) return [];
+  const relationIds = [...new Set(ordered.map((assignment) => assignment.relationId))];
+  let oldLinks: (typeof recordLinksTable.$inferSelect)[];
+  let lockedRecords: (typeof entityRecordsTable.$inferSelect)[];
+  if (prepared) {
+    ({ oldLinks, lockedRecords } = prepared);
+  } else {
+    await tx.select({ id: relationsTable.id }).from(relationsTable)
+      .where(inArray(relationsTable.id, relationIds)).orderBy(asc(relationsTable.id)).for("update");
+    const observedOldLinks = await tx.select().from(recordLinksTable)
+      .where(and(inArray(recordLinksTable.relationId, relationIds), eq(recordLinksTable.sourceRecordId, sourceRecordId)))
+      .orderBy(asc(recordLinksTable.id));
+    const oldTargets = observedOldLinks.map((link) => link.targetRecordId);
+    const newTargets = ordered.flatMap((assignment) => assignment.targetIds);
+    lockedRecords = await lockRecordsStable(tx, [sourceRecordId, ...oldTargets, ...newTargets]);
+    oldLinks = await tx.select().from(recordLinksTable)
+      .where(and(inArray(recordLinksTable.relationId, relationIds), eq(recordLinksTable.sourceRecordId, sourceRecordId)))
+      .orderBy(asc(recordLinksTable.id)).for("update");
+  }
+  const changedEndpoints = new Set<number>();
+  for (const a of ordered) {
+    const before = oldLinks.filter((link) => link.relationId === a.relationId).map((link) => link.targetRecordId).sort((x, y) => x - y);
+    const after = [...new Set(a.targetIds)].sort((x, y) => x - y);
+    if (before.length === after.length && before.every((id, index) => id === after[index])) continue;
+    before.forEach((id) => changedEndpoints.add(id));
+    after.forEach((id) => changedEndpoints.add(id));
     // Replace semantics: a re-import of the same source row resets its links for
     // this relation, then re-creates them — keeping re-runs idempotent.
     await tx
@@ -293,6 +364,40 @@ async function applyRelations(
       });
     }
   }
+  const affected = [...changedEndpoints].filter((recordId) => recordId !== sourceRecordId);
+  if (changedEndpoints.size > 0 && touchSource) affected.push(sourceRecordId);
+  const versions = await touchLockedRecords(tx, affected);
+  const entityById = new Map(lockedRecords.map((record) => [record.id, record.entityId]));
+  return affected.flatMap((recordId) => {
+    const entityId = entityById.get(recordId);
+    const version = versions[String(recordId)];
+    return entityId == null || version == null ? [] : [{ recordId, entityId, version, changedFields: [] }];
+  });
+}
+
+async function lockImportRelationEndpoints(
+  tx: DbExecutor,
+  sourceRecordId: number,
+  assignments: RelAssignment[],
+): Promise<LockedImportRelations> {
+  const relationIds = [...new Set(assignments.map((assignment) => assignment.relationId))].sort((a, b) => a - b);
+  if (relationIds.length === 0) {
+    return { oldLinks: [], lockedRecords: await lockRecordsStable(tx, [sourceRecordId]) };
+  }
+  await tx.select({ id: relationsTable.id }).from(relationsTable)
+    .where(inArray(relationsTable.id, relationIds)).orderBy(asc(relationsTable.id)).for("update");
+  const observedOldLinks = await tx.select().from(recordLinksTable)
+    .where(and(inArray(recordLinksTable.relationId, relationIds), eq(recordLinksTable.sourceRecordId, sourceRecordId)))
+    .orderBy(asc(recordLinksTable.id));
+  const lockedRecords = await lockRecordsStable(tx, [
+    sourceRecordId,
+    ...observedOldLinks.map((link) => link.targetRecordId),
+    ...assignments.flatMap((assignment) => assignment.targetIds),
+  ]);
+  const oldLinks = await tx.select().from(recordLinksTable)
+    .where(and(inArray(recordLinksTable.relationId, relationIds), eq(recordLinksTable.sourceRecordId, sourceRecordId)))
+    .orderBy(asc(recordLinksTable.id)).for("update");
+  return { oldLinks, lockedRecords };
 }
 
 async function processEntityRow(tx: DbExecutor, row: RowInput, ctx: EntityCtx): Promise<RowOutcome> {
@@ -310,7 +415,6 @@ async function processEntityRow(tx: DbExecutor, row: RowInput, ctx: EntityCtx): 
   // existing record by the chosen key BEFORE validation so the boundary runs on
   // the FINAL merged state, exactly like PUT /records/:id.
   let existingId: number | null = null;
-  let existingValues: Record<string, unknown> = {};
   if (ctx.keyField) {
     const kv = incoming[ctx.keyField.fieldKey];
     if (!isEmpty(kv)) {
@@ -328,37 +432,42 @@ async function processEntityRow(tx: DbExecutor, row: RowInput, ctx: EntityCtx): 
         .limit(1);
       if (hit) {
         existingId = hit.id;
-        existingValues = (hit.valuesJson as Record<string, unknown>) ?? {};
       }
     }
   }
 
-  // 3. The exact integrity boundary the normal record-write path enforces, run on
-  // the FINAL state (UPDATE: existing ⊕ incoming composed from ACTIVE fields;
-  // INSERT: the incoming values directly).
-  let candidate: Record<string, unknown>;
-  if (existingId != null) {
-    candidate = {};
+  const validateFinalValues = async (
+    executor: DbExecutor,
+    currentValues: Record<string, unknown>,
+    currentId?: number,
+  ): Promise<Record<string, unknown>> => {
+    const candidate: Record<string, unknown> = {};
     for (const f of ctx.fields) {
       const key = f.fieldKey;
-      candidate[key] = key in incoming ? incoming[key] : existingValues[key];
+      candidate[key] = key in incoming ? incoming[key] : currentValues[key];
     }
-  } else {
-    candidate = incoming;
-  }
-  const result = validateValues(ctx.fields, candidate, ctx.gdrive, existingValues);
-  if ("error" in result) return { status: "error", message: result.error };
-  const values = result.values;
-  const userErr = await validateUserRefs(ctx.fields, values);
-  if (userErr) return { status: "error", message: userErr };
-  const depErr = await checkDependentValues(ctx.entityId, ctx.fields, values, existingId ?? undefined, tx);
-  if (depErr) return { status: "error", message: depErr };
-  const ruleErr = checkValidationRules(ctx.fields, values);
-  if (ruleErr) return { status: "error", message: ruleErr };
-  if (existingId != null) {
-    const immErr = checkImmutableFields(ctx.fields, values, existingValues);
-    if (immErr) return { status: "error", message: immErr };
-  }
+    const result = validateValues(ctx.fields, candidate, ctx.gdrive, currentValues);
+    if ("error" in result) throw new Error(result.error);
+    const finalValues = { ...currentValues };
+    for (const field of ctx.fields) {
+      if (Object.prototype.hasOwnProperty.call(result.values, field.fieldKey)) {
+        finalValues[field.fieldKey] = result.values[field.fieldKey];
+      } else {
+        delete finalValues[field.fieldKey];
+      }
+    }
+    const userErr = await validateUserRefs(ctx.fields, finalValues, executor);
+    if (userErr) throw new Error(userErr);
+    const depErr = await checkDependentValues(ctx.entityId, ctx.fields, finalValues, currentId, executor);
+    if (depErr) throw new Error(depErr);
+    const ruleErr = checkValidationRules(ctx.fields, finalValues);
+    if (ruleErr) throw new Error(ruleErr);
+    if (currentId != null) {
+      const immErr = checkImmutableFields(ctx.fields, finalValues, currentValues);
+      if (immErr) throw new Error(immErr);
+    }
+    return finalValues;
+  };
 
   // 4. Status: explicit column value or the entity default.
   const st = resolveStatusId(ctx.statuses, row.statusName);
@@ -389,35 +498,104 @@ async function processEntityRow(tx: DbExecutor, row: RowInput, ctx: EntityCtx): 
   // this row (letting the batch collect every error) while the advisory lock held
   // on the outer transaction still serializes unique-key checks. `values` is the
   // full merged+validated map, so it replaces valuesJson wholesale (matching PUT).
+  let updates: ImportRecordUpdate[] = [];
+  let creates: ImportRecordCreate[] = [];
   try {
     await tx.transaction(async (sp) => {
       if (ctx.keyFields.length > 0) {
-        const dup = await checkUniqueKeys(sp, ctx.entityId, ctx.keyFields, values, existingId ?? undefined);
-        if (dup) throw new Error(dup);
+        // Checked again below from the locked/rebased final value map.
       }
       if (existingId != null) {
+        const preparedRelations = await lockImportRelationEndpoints(sp, existingId, relAssignments);
+        const lockedSource = preparedRelations.lockedRecords.find((record) => record.id === existingId);
+        if (!lockedSource || lockedSource.entityId !== ctx.entityId || lockedSource.archivedAt != null) {
+          throw new Error("Сопоставленная запись больше недоступна");
+        }
+        if (ctx.keyField) {
+          const requestedKey = incoming[ctx.keyField.fieldKey];
+          const lockedKey = (lockedSource.valuesJson as Record<string, unknown>)[ctx.keyField.fieldKey];
+          if (!isEmpty(requestedKey) && norm(String(requestedKey)) !== norm(String(lockedKey ?? ""))) {
+            throw new Error("Ключ сопоставленной записи изменился; повторите импорт");
+          }
+        }
+        const lockedValues = (lockedSource.valuesJson as Record<string, unknown>) ?? {};
+        const values = await validateFinalValues(sp, lockedValues, existingId);
+        if (ctx.keyFields.length > 0) {
+          const dup = await checkUniqueKeys(sp, ctx.entityId, ctx.keyFields, values, existingId);
+          if (dup) throw new Error(dup);
+        }
         const setData: { valuesJson: Record<string, unknown>; statusId?: number | null; statusChangedAt?: Date } = {
           valuesJson: values,
         };
-        if (row.statusName != null && row.statusName.trim() !== "") {
+        const scalarChangedFields = Object.keys(incoming).filter((key) =>
+          JSON.stringify(lockedValues[key]) !== JSON.stringify(values[key]));
+        const explicitStatus = row.statusName != null && row.statusName.trim() !== "";
+        const statusChanged = explicitStatus && lockedSource.statusId !== statusId;
+        if (statusChanged) {
           setData.statusId = statusId;
           setData.statusChangedAt = new Date();
         }
-        await sp.update(entityRecordsTable).set(setData).where(eq(entityRecordsTable.id, existingId!));
-        await applyRelations(sp, existingId!, relAssignments);
+        const relationUpdates = await applyRelations(sp, existingId, relAssignments, false, preparedRelations);
+        const relationChanged = relationUpdates.length > 0;
+        const changedFields = [...scalarChangedFields];
+        if (statusChanged) changedFields.push("__status__");
+        const shouldUpdateSource = scalarChangedFields.length > 0 || statusChanged || relationChanged;
+        const [updatedSource] = shouldUpdateSource
+          ? await sp.update(entityRecordsTable).set({
+              ...setData,
+              ...(relationChanged && scalarChangedFields.length === 0 && !statusChanged ? { updatedAt: new Date() } : {}),
+            })
+            .where(eq(entityRecordsTable.id, existingId))
+            .returning({
+              id: entityRecordsTable.id,
+              entityId: entityRecordsTable.entityId,
+              statusId: entityRecordsTable.statusId,
+              version: entityRecordsTable.version,
+            })
+          : [];
+        updates = [
+          ...relationUpdates,
+          ...(updatedSource ? [{
+            recordId: updatedSource.id,
+            entityId: updatedSource.entityId,
+            version: updatedSource.version,
+            changedFields,
+              statusId: updatedSource.statusId,
+          }] : []),
+        ];
       } else {
+        const values = await validateFinalValues(sp, {}, undefined);
+        if (ctx.keyFields.length > 0) {
+          const dup = await checkUniqueKeys(sp, ctx.entityId, ctx.keyFields, values, undefined);
+          if (dup) throw new Error(dup);
+        }
         const [rec] = await sp
           .insert(entityRecordsTable)
           .values({ entityId: ctx.entityId, valuesJson: values, statusId, statusChangedAt: new Date() })
-          .returning({ id: entityRecordsTable.id });
+          .returning({
+            id: entityRecordsTable.id,
+            entityId: entityRecordsTable.entityId,
+            statusId: entityRecordsTable.statusId,
+            version: entityRecordsTable.version,
+          });
         if (!rec) throw new Error("Не удалось создать запись");
-        await applyRelations(sp, rec.id, relAssignments);
+        const relationUpdates = await applyRelations(sp, rec.id, relAssignments, true);
+        const sourceTouch = relationUpdates.find((update) => update.recordId === rec.id);
+        updates = relationUpdates.filter((update) => update.recordId !== rec.id);
+        creates = [{
+          recordId: rec.id,
+          entityId: rec.entityId,
+          statusId: rec.statusId,
+          version: sourceTouch?.version ?? rec.version,
+          changedFields: Object.keys(values),
+        }];
       }
     });
   } catch (err) {
+    if (err instanceof UserReferenceBusyError) throw err;
     return { status: "error", message: err instanceof Error ? err.message : "Ошибка импорта строки" };
   }
-  return { status: existingId != null ? "updated" : "created" };
+  return { status: existingId != null ? "updated" : "created", updates, creates };
 }
 
 async function processPageRow(tx: DbExecutor, row: RowInput, ctx: PageCtx): Promise<RowOutcome> {
@@ -451,31 +629,70 @@ async function processPageRow(tx: DbExecutor, row: RowInput, ctx: PageCtx): Prom
     if ("error" in c) return { status: "error", message: c.error };
     if (c.value !== undefined) incoming[k] = c.value;
   }
-  const validated = validatePageValues(ctx.pageFields, incoming);
-  if ("error" in validated) return { status: "error", message: validated.error };
-  const cleaned = validated.values;
-  if (Object.keys(cleaned).length === 0) return { status: "skipped" };
+  if (Object.keys(incoming).length === 0) return { status: "skipped" };
 
   // MERGE existing ⊕ cleaned into page_record_values (unique pageId,recordId),
   // inside a savepoint for per-row error isolation.
   try {
     let created = false;
+    let changedPageFieldKeys: string[] = [];
+    let version: number | undefined;
     await tx.transaction(async (sp) => {
+      await sp.execute(
+        sql`SELECT pg_advisory_xact_lock((${ctx.pageId}::bigint << 32) | ${recordId}::bigint)`,
+      );
       const [existing] = await sp
         .select({ id: pageRecordValuesTable.id, valuesJson: pageRecordValuesTable.valuesJson })
         .from(pageRecordValuesTable)
         .where(and(eq(pageRecordValuesTable.pageId, ctx.pageId), eq(pageRecordValuesTable.recordId, recordId)))
-        .limit(1);
+        .limit(1)
+        .for("update");
+      const previous = (existing?.valuesJson as Record<string, unknown> | undefined) ?? {};
+      const mergedInput = { ...previous, ...incoming };
+      const validated = validatePageValues(ctx.pageFields, mergedInput, false, previous);
+      if ("error" in validated) throw new Error(validated.error);
+      // Keep unrelated/inactive stored keys while applying the normalized
+      // imported keys from the locked current row.
+      const cleaned = { ...previous };
+      for (const key of Object.keys(incoming)) {
+        if (Object.prototype.hasOwnProperty.call(validated.values, key)) cleaned[key] = validated.values[key];
+        else delete cleaned[key];
+      }
+      changedPageFieldKeys = Object.keys(incoming).filter((key) =>
+        JSON.stringify(previous[key] ?? null) !== JSON.stringify(cleaned[key] ?? null));
+      if (changedPageFieldKeys.length === 0) return;
+      const userRefError = await lockAndValidateUserReferences(
+        sp,
+        referencedUserIds(ctx.pageFields, cleaned),
+      );
+      if (userRefError) throw new Error(userRefError);
       if (existing) {
-        const merged = { ...((existing.valuesJson as Record<string, unknown>) ?? {}), ...cleaned };
-        await sp.update(pageRecordValuesTable).set({ valuesJson: merged }).where(eq(pageRecordValuesTable.id, existing.id));
+        const [written] = await sp.update(pageRecordValuesTable)
+          .set({ valuesJson: cleaned })
+          .where(eq(pageRecordValuesTable.id, existing.id))
+          .returning({ version: pageRecordValuesTable.version });
+        version = written?.version;
       } else {
-        await sp.insert(pageRecordValuesTable).values({ pageId: ctx.pageId, recordId, valuesJson: cleaned });
+        const [written] = await sp.insert(pageRecordValuesTable)
+          .values({ pageId: ctx.pageId, recordId, valuesJson: cleaned })
+          .returning({ version: pageRecordValuesTable.version });
+        version = written?.version;
         created = true;
       }
     });
-    return { status: created ? "created" : "updated" };
+    if (version == null || changedPageFieldKeys.length === 0) return { status: "skipped" };
+    return {
+      status: created ? "created" : "updated",
+      pageUpdates: [{
+        entityId: ctx.mirrorEntityId,
+        pageId: ctx.pageId,
+        recordId,
+        version,
+        changedPageFieldKeys,
+      }],
+    };
   } catch (err) {
+    if (err instanceof UserReferenceBusyError) throw err;
     return { status: "error", message: err instanceof Error ? err.message : "Ошибка сохранения значений страницы" };
   }
 }
@@ -684,6 +901,10 @@ async function runBatch(req: Request, res: Response, dryRun: boolean): Promise<v
   ].sort((a, b) => a - b);
 
   class Rollback extends Error {}
+  const pendingUpdates = new Map<number, ImportRecordUpdate>();
+  const pendingCreates = new Map<number, ImportRecordCreate>();
+  const pendingPageUpdates = new Map<string, ImportPageUpdate>();
+  let committed = false;
   try {
     await db.transaction(async (tx) => {
       // Acquire per-entity advisory locks up front (sorted → deadlock-free) so
@@ -709,6 +930,48 @@ async function runBatch(req: Request, res: Response, dryRun: boolean): Promise<v
         for (const row of p.rows) {
           const outcome =
             p.kind === "entity" ? await processEntityRow(tx, row, p.ctx) : await processPageRow(tx, row, p.ctx);
+          for (const update of outcome.updates ?? []) {
+            const created = pendingCreates.get(update.recordId);
+            if (created) {
+              pendingCreates.set(update.recordId, {
+                ...created,
+                version: update.version,
+                statusId: update.statusId !== undefined ? update.statusId : created.statusId,
+                changedFields: [...new Set([...created.changedFields, ...update.changedFields])],
+              });
+              continue;
+            }
+            const previous = pendingUpdates.get(update.recordId);
+            pendingUpdates.set(update.recordId, {
+              ...update,
+              changedFields: [...new Set([...(previous?.changedFields ?? []), ...update.changedFields])],
+            });
+          }
+          for (const created of outcome.creates ?? []) {
+            const previous = pendingCreates.get(created.recordId);
+            pendingCreates.set(created.recordId, {
+              ...created,
+              changedFields: [
+                ...new Set([...(previous?.changedFields ?? []), ...created.changedFields]),
+              ],
+            });
+            // A newly-created source has exactly one semantic create event. Its
+            // relation touch must never leak into the update-event collector.
+            pendingUpdates.delete(created.recordId);
+          }
+          for (const update of outcome.pageUpdates ?? []) {
+            const key = `${update.pageId}:${update.recordId}`;
+            const previous = pendingPageUpdates.get(key);
+            pendingPageUpdates.set(key, {
+              ...update,
+              changedPageFieldKeys: [
+                ...new Set([
+                  ...(previous?.changedPageFieldKeys ?? []),
+                  ...update.changedPageFieldKeys,
+                ]),
+              ],
+            });
+          }
           fr.rows.push({ index: row.index, status: outcome.status, message: outcome.message ?? null });
           if (outcome.status === "created") fr.created++;
           else if (outcome.status === "updated") fr.updated++;
@@ -721,12 +984,54 @@ async function runBatch(req: Request, res: Response, dryRun: boolean): Promise<v
       // Preview: always roll back (rehearsal). Commit: roll back if anything failed.
       if (dryRun || anyError) throw new Rollback();
     });
+    committed = true;
   } catch (e) {
+    if (e instanceof UserReferenceBusyError) {
+      res.status(409).json({ error: e.message });
+      return;
+    }
     if (!(e instanceof Rollback)) {
       req.log?.error({ err: e }, "batch import failed");
       res.status(500).json({ error: e instanceof Error ? e.message : "Ошибка импорта" });
       return;
     }
+  }
+
+  if (committed && (pendingCreates.size > 0 || pendingUpdates.size > 0 || pendingPageUpdates.size > 0)) {
+    await emitEvent([
+      ...[...pendingCreates.values()].map((created) => ({
+        eventName: EVENT_RECORD_CREATED,
+        entityId: created.entityId,
+        recordId: created.recordId,
+        payload: {
+          actorUserId: req.user!.userId,
+          statusId: created.statusId,
+          changedFields: created.changedFields,
+          version: created.version,
+        },
+      })),
+      ...[...pendingUpdates.values()].map((update) => ({
+        eventName: EVENT_RECORD_UPDATED,
+        entityId: update.entityId,
+        recordId: update.recordId,
+        payload: {
+          actorUserId: req.user!.userId,
+          changedFields: update.changedFields,
+          version: update.version,
+        },
+      })),
+      ...[...pendingPageUpdates.values()].map((update) => ({
+        eventName: EVENT_PAGE_FIELD_SAVED,
+        entityId: update.entityId,
+        recordId: update.recordId,
+        payload: {
+          actorUserId: req.user!.userId,
+          pageId: update.pageId,
+          changedPageFieldKeys: update.changedPageFieldKeys,
+          version: update.version,
+        },
+      })),
+    ], req.log);
   }
 
   res.json({ ok: !anyError, files: fileResults });

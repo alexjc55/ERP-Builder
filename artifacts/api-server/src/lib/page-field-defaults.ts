@@ -1,6 +1,7 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, pagesTable, pageFieldsTable, pageRecordValuesTable } from "@workspace/db";
 import type { Logger } from "pino";
+import { emitEvent, EVENT_PAGE_FIELD_SAVED } from "./events";
 
 /**
  * Page-field types whose default is a stored scalar. function/relation/lookup
@@ -65,32 +66,54 @@ export async function applyPageFieldDefaults(entityId: number, recordId: number,
     }
     if (defaultsByPage.size === 0) return;
 
-    for (const [pageId, defaults] of defaultsByPage) {
-      const [existing] = await db
-        .select({ id: pageRecordValuesTable.id, valuesJson: pageRecordValuesTable.valuesJson })
-        .from(pageRecordValuesTable)
-        .where(and(eq(pageRecordValuesTable.pageId, pageId), eq(pageRecordValuesTable.recordId, recordId)));
-      if (existing) {
-        // Explicit values win; only fill keys with no stored value.
-        const stored = (existing.valuesJson as Record<string, unknown>) ?? {};
+    const changed = await db.transaction(async (tx) => {
+      const results: { pageId: number; version: number; changedPageFieldKeys: string[] }[] = [];
+      for (const [pageId, defaults] of [...defaultsByPage.entries()].sort((a, b) => a[0] - b[0])) {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock((${pageId}::bigint << 32) | ${recordId}::bigint)`,
+        );
+        const [existing] = await tx
+          .select({ id: pageRecordValuesTable.id, valuesJson: pageRecordValuesTable.valuesJson })
+          .from(pageRecordValuesTable)
+          .where(and(
+            eq(pageRecordValuesTable.pageId, pageId),
+            eq(pageRecordValuesTable.recordId, recordId),
+          ))
+          .for("update");
+        const stored = (existing?.valuesJson as Record<string, unknown> | undefined) ?? {};
         const merged = { ...stored };
-        let changed = false;
-        for (const [k, v] of Object.entries(defaults)) {
-          const cur = merged[k];
-          if (cur === undefined || cur === null || cur === "") {
-            merged[k] = v;
-            changed = true;
+        const changedPageFieldKeys: string[] = [];
+        for (const [fieldKey, value] of Object.entries(defaults)) {
+          const current = merged[fieldKey];
+          if (current === undefined || current === null || current === "") {
+            merged[fieldKey] = value;
+            changedPageFieldKeys.push(fieldKey);
           }
         }
-        if (changed) {
-          await db
-            .update(pageRecordValuesTable)
+        if (changedPageFieldKeys.length === 0) continue;
+        const [written] = existing
+          ? await tx.update(pageRecordValuesTable)
             .set({ valuesJson: merged })
-            .where(eq(pageRecordValuesTable.id, existing.id));
-        }
-      } else {
-        await db.insert(pageRecordValuesTable).values({ pageId, recordId, valuesJson: defaults });
+            .where(eq(pageRecordValuesTable.id, existing.id))
+            .returning({ version: pageRecordValuesTable.version })
+          : await tx.insert(pageRecordValuesTable)
+            .values({ pageId, recordId, valuesJson: merged })
+            .returning({ version: pageRecordValuesTable.version });
+        if (written) results.push({ pageId, version: written.version, changedPageFieldKeys });
       }
+      return results;
+    });
+    for (const result of changed) {
+      await emitEvent({
+        eventName: EVENT_PAGE_FIELD_SAVED,
+        entityId,
+        recordId,
+        payload: {
+          pageId: result.pageId,
+          changedPageFieldKeys: result.changedPageFieldKeys,
+          version: result.version,
+        },
+      }, log);
     }
   } catch (err) {
     log.error({ entityId, recordId, err }, "applyPageFieldDefaults failed (record creation unaffected)");

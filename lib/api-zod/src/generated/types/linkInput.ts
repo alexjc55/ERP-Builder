@@ -9,4 +9,9 @@
 export interface LinkInput {
   relationId: number;
   targetRecordId: number;
+  /**
+     * Optional expected source entity_records.version.
+     * @minimum 1
+     */
+  expectedVersion?: number;
 }

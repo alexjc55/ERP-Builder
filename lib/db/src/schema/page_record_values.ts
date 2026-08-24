@@ -21,6 +21,8 @@ export const pageRecordValuesTable = pgTable(
       .notNull()
       .references(() => entityRecordsTable.id, { onDelete: "cascade" }),
     valuesJson: jsonb("values_json").notNull().default({}),
+    // See entity_records.version: JSON API versions must remain JS-safe.
+    version: integer("version").notNull().default(1),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
   },

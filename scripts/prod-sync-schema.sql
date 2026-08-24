@@ -202,6 +202,7 @@ ALTER TABLE entity_records ADD COLUMN IF NOT EXISTS updated_at timestamp with ti
 ALTER TABLE entity_records ADD COLUMN IF NOT EXISTS archived_at timestamp with time zone;
 ALTER TABLE entity_records ADD COLUMN IF NOT EXISTS status_changed_at timestamp with time zone;
 ALTER TABLE entity_records ADD COLUMN IF NOT EXISTS archive_exempt boolean DEFAULT false NOT NULL;
+ALTER TABLE entity_records ADD COLUMN IF NOT EXISTS version integer DEFAULT 1 NOT NULL;
 ALTER TABLE entity_statuses ADD COLUMN IF NOT EXISTS id integer DEFAULT nextval('entity_statuses_id_seq'::regclass) NOT NULL;
 ALTER TABLE entity_statuses ADD COLUMN IF NOT EXISTS entity_id integer;
 ALTER TABLE entity_statuses ADD COLUMN IF NOT EXISTS status_key text;
@@ -308,6 +309,7 @@ ALTER TABLE page_record_values ADD COLUMN IF NOT EXISTS record_id integer;
 ALTER TABLE page_record_values ADD COLUMN IF NOT EXISTS values_json jsonb DEFAULT '{}'::jsonb NOT NULL;
 ALTER TABLE page_record_values ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now() NOT NULL;
 ALTER TABLE page_record_values ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT now() NOT NULL;
+ALTER TABLE page_record_values ADD COLUMN IF NOT EXISTS version integer DEFAULT 1 NOT NULL;
 ALTER TABLE pages ADD COLUMN IF NOT EXISTS id integer DEFAULT nextval('pages_id_seq'::regclass) NOT NULL;
 ALTER TABLE pages ADD COLUMN IF NOT EXISTS name_json jsonb DEFAULT '{}'::jsonb NOT NULL;
 ALTER TABLE pages ADD COLUMN IF NOT EXISTS description_json jsonb DEFAULT '{}'::jsonb;
@@ -480,4 +482,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS local_folders_single_default_idx ON public.loc
 CREATE UNIQUE INDEX IF NOT EXISTS record_link_source_one ON public.record_links USING btree (relation_id, source_record_id) WHERE (relation_type = ANY (ARRAY['one_to_one'::text, 'many_to_one'::text]));
 CREATE UNIQUE INDEX IF NOT EXISTS record_link_target_one ON public.record_links USING btree (relation_id, target_record_id) WHERE (relation_type = ANY (ARRAY['one_to_one'::text, 'one_to_many'::text]));
 CREATE UNIQUE INDEX IF NOT EXISTS view_one_default ON public.views USING btree (entity_id) WHERE (is_default = true);
+CREATE OR REPLACE FUNCTION public.bump_collaboration_version() RETURNS trigger AS $$
+BEGIN
+  IF NEW.version = OLD.version THEN NEW.version := OLD.version + 1; END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS entity_records_version_bump ON public.entity_records;
+CREATE TRIGGER entity_records_version_bump BEFORE UPDATE ON public.entity_records FOR EACH ROW EXECUTE FUNCTION public.bump_collaboration_version();
+DROP TRIGGER IF EXISTS page_record_values_version_bump ON public.page_record_values;
+CREATE TRIGGER page_record_values_version_bump BEFORE UPDATE ON public.page_record_values FOR EACH ROW EXECUTE FUNCTION public.bump_collaboration_version();
 COMMIT;

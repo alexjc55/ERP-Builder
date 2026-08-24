@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { BulkRecordFieldUpdateExpectedVersions } from './bulkRecordFieldUpdateExpectedVersions';
 
 export interface BulkRecordFieldUpdate {
   entityId: number;
@@ -17,4 +18,6 @@ export interface BulkRecordFieldUpdate {
   recordIds: number[];
   /** Optional mirror-page context: applies that page's record-rights and field-access overrides. */
   pageId?: number;
+  /** Expected entity_records.version keyed by record id. */
+  expectedVersions?: BulkRecordFieldUpdateExpectedVersions;
 }

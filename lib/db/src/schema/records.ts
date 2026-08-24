@@ -17,6 +17,9 @@ export const entityRecordsTable = pgTable("entity_records", {
   // the record until its status changes again (otherwise a delay=0 trigger status
   // would immediately re-archive it). Not exposed via the API.
   archiveExempt: boolean("archive_exempt").notNull().default(false),
+  // Kept as a PostgreSQL integer deliberately: clients use JSON numbers and
+  // JavaScript cannot safely represent arbitrary bigint values.
+  version: integer("version").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

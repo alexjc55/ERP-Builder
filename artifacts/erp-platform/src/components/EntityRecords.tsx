@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, Fragment, type CSSProperties } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, Fragment, cloneElement, type CSSProperties } from "react";
 import {
   useListEntityRecords,
   useGetRecord,
@@ -54,6 +54,7 @@ import {
   type PageRelatedCandidate,
   type ArchiveFilter,
   type AuditLogEntry,
+  type BulkRecordsAction,
   useListEntityCustomFilters,
   useListEntities,
   type Entity,
@@ -165,6 +166,7 @@ import { computeRowFormatting, ruleMatches, type FormatField } from "@/lib/forma
 import type { FieldFormatRule, CustomFilterPick, CustomFilter, CustomFilterInput } from "@workspace/api-client-react";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 import { useQueryClient } from "@tanstack/react-query";
+import { useCollaboration } from "@/lib/useCollaboration";
 import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus, Zap, ChevronsUpDown, ChevronsDownUp, ArrowUp, ArrowDown, ArrowUpDown, ListChecks, Merge } from "lucide-react";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Link, useLocation, useSearch } from "wouter";
@@ -1722,6 +1724,42 @@ export function EntityRecords({
   const { data: transitions = [] } = useListEntityTransitions(entityId);
   const { data: views = [] } = useListEntityViews(entityId);
   const { data: entity } = useGetEntity(entityId);
+  const collabPageId = pageId ?? entity?.pageId;
+  const collab = useCollaboration(collabPageId);
+  const otherCollabSessions = useMemo(
+    () => collab.users.filter((u) => u.userId !== user?.id),
+    [collab.users, user?.id],
+  );
+  const activeCollabUsers = useMemo(
+    () => {
+      const byUser = new Map<number, (typeof otherCollabSessions)[number]>();
+      for (const presence of otherCollabSessions) {
+        const current = byUser.get(presence.userId);
+        if (!current || (!current.editing && presence.editing)) {
+          byUser.set(presence.userId, presence);
+        }
+      }
+      return [...byUser.values()];
+    },
+    [otherCollabSessions],
+  );
+  const visibleCollabUsers = activeCollabUsers.slice(0, activeCollabUsers.length > 4 ? 3 : 4);
+  const extraCollabUsers = Math.max(0, activeCollabUsers.length - visibleCollabUsers.length);
+
+  const getCellEditors = useCallback((recordId: number, fieldKey: string) => {
+    const byUser = new Map<number, (typeof otherCollabSessions)[number]>();
+    for (const presence of otherCollabSessions) {
+      if (presence.editing?.recordId === recordId && presence.editing.fieldKey === fieldKey) {
+        byUser.set(presence.userId, presence);
+      }
+    }
+    return [...byUser.values()];
+  }, [otherCollabSessions]);
+
+  const [realtimeTick, setRealtimeTick] = useState(0);
+  const [conflictCell, setConflictCell] = useState<{ recordId: number; fieldKey: string } | null>(null);
+  const collabWasConnectedRef = useRef(false);
+
   // Global records-table display style (cosmetic): plain | striped | striped_bold.
   const { data: appSettings } = useGetSettings();
   const formulaOptions = useMemo<FormulaEvaluationOptions>(
@@ -1858,17 +1896,30 @@ export function EntityRecords({
     [allFields, pageFields],
   );
   const pageValuesByRecord = useMemo(() => {
-    const m = new Map<number, Record<string, unknown>>();
+    const m = new Map<
+      number,
+      {
+        values: Record<string, unknown>;
+        version?: number;
+        fieldVersions: Record<string, number>;
+      }
+    >();
     for (const row of pageRecordValues) {
-      m.set(row.recordId, (row.valuesJson ?? {}) as Record<string, unknown>);
+      m.set(row.recordId, {
+        values: (row.valuesJson ?? {}) as Record<string, unknown>,
+        version: row.version,
+        fieldVersions: row.fieldVersions ?? {},
+      });
     }
     return m;
   }, [pageRecordValues]);
-
-  // Bumped after any write to force the main records query (records + group
   // buckets/totals) to re-run. Declared here (above the page-values mutation)
   // so the page-local edit path can trigger a group-header refresh too.
   const [refreshTick, setRefreshTick] = useState(0);
+  // Inline editors guard against duplicate blur/Enter submits. A version
+  // conflict releases that one-shot guard without remounting the editor, so its
+  // local draft remains intact and can be retried against the refreshed version.
+  const [inlineCommitResetKey, setInlineCommitResetKey] = useState(0);
   // Automations are dispatched asynchronously after a record/page-value write
   // responds. An immediate refetch can race them and return the pre-automation
   // value. Revalidate both storage channels after short bounded delays so an
@@ -1892,6 +1943,10 @@ export function EntityRecords({
     setRefreshTick((x) => x + 1);
   };
   const scheduleAutomationRefresh = () => {
+    // When realtime is healthy, automation writes arrive through SSE. Keep the
+    // legacy delayed refresh only as a disconnect fallback to avoid redundant
+    // full-table queries after every local edit.
+    if (collab.connected) return;
     // Keep each write's refresh pair independent. A second rapid edit must not
     // cancel the first edit's chance to observe its own automation result.
     for (const delay of [400, 1_200]) {
@@ -1920,11 +1975,22 @@ export function EntityRecords({
         // an action that writes another page-local field on this same row).
         scheduleAutomationRefresh();
       },
-      onError: (err) =>
+      onError: (err) => {
+        if ((err as { status?: number })?.status === 409) {
+          // Refresh the server version while the inline editor stays mounted;
+          // its local input state is intentionally not reset by new props.
+          queryClient.invalidateQueries({ queryKey: [`/api/pages/${pageId}/record-values`] });
+          setRefreshTick((tick) => tick + 1);
+          setInlineCommitResetKey((key) => key + 1);
+        }
         toast({
-          title: extractError(err) ?? t("records.saveError", "Не удалось сохранить значение"),
+          title: (err as { status?: number })?.status === 409
+            ? t("collaboration.conflict", "Данные изменились на сервере")
+            : t("records.saveError", "Не удалось сохранить значение"),
+          description: extractError(err),
           variant: "destructive",
-        }),
+        });
+      },
     },
   });
 
@@ -1956,6 +2022,7 @@ export function EntityRecords({
   const [pageRequiredDialog, setPageRequiredDialog] = useState<{
     recordId: number;
     form: FormState;
+    expectedVersion?: number;
   } | null>(null);
 
   // Relation page-fields surface one field of a single linked record. Their
@@ -2273,6 +2340,11 @@ export function EntityRecords({
 
   // Google-Sheets-style inline editing: which cell is currently being edited.
   const [editingCell, setEditingCell] = useState<{ recordId: number; fieldKey: string | "__status__" } | null>(null);
+  const collaborationFieldKey = (fieldKey: string) =>
+    fieldKey.startsWith("pf:") ? fieldKey.slice(3) : fieldKey;
+  const editingCellRef = useRef(editingCell);
+  const activeCellDirtyRef = useRef(false);
+  const deferredRemoteRefreshRef = useRef(false);
   // Write-through lookup: the linked record (in the related entity) currently open
   // for full editing from a lookup cell.
   const [writeThroughEdit, setWriteThroughEdit] = useState<{ entityId: number; recordId: number } | null>(null);
@@ -3513,6 +3585,24 @@ export function EntityRecords({
   }, [fieldFilters, pageFieldFilters, allFields, pageFields, fieldLabelOverrides, ml]);
 
   const queryKey = JSON.stringify(recordQuery);
+
+  useEffect(() => {
+    if (!realtimeTick) return;
+    const t = setTimeout(() => {
+      setRefreshTick((t) => t + 1);
+    }, 500);
+    return () => clearTimeout(t);
+  }, [realtimeTick]);
+
+  useEffect(() => {
+    if (collab.connected && !collabWasConnectedRef.current) {
+      // SSE is not a durable replay log. Re-read once after every connection or
+      // reconnect so changes made during a network gap cannot remain invisible.
+      setRealtimeTick((tick) => tick + 1);
+    }
+    collabWasConnectedRef.current = collab.connected;
+  }, [collab.connected]);
+
   useEffect(() => {
     if (!canView) {
       setRecordsLoading(false);
@@ -3723,7 +3813,21 @@ export function EntityRecords({
   const cellUpdateMutation = useUpdateRecord({
     mutation: {
       onSuccess: () => { setEditingCell(null); invalidate(); },
-      onError: (err) => { setEditingCell(null); toast({ title: t("records.updateError", "Ошибка обновления"), description: extractError(err), variant: "destructive" }); },
+      onError: (err) => {
+        const conflict = (err as { status?: number })?.status === 409;
+        if (conflict) {
+          invalidate();
+          setInlineCommitResetKey((key) => key + 1);
+        }
+        else setEditingCell(null);
+        toast({
+          title: conflict
+            ? t("collaboration.conflict", "Данные изменились на сервере")
+            : t("records.updateError", "Ошибка обновления"),
+          description: extractError(err),
+          variant: "destructive",
+        });
+      },
     },
   });
   // Status changes can trigger background automations that write additional
@@ -3737,33 +3841,65 @@ export function EntityRecords({
         scheduleAutomationRefresh();
       },
       onError: (err) => {
-        setEditingCell(null);
-        toast({ title: t("records.updateError", "Ошибка обновления"), description: extractError(err), variant: "destructive" });
+        const conflict = (err as { status?: number })?.status === 409;
+        if (conflict) invalidate();
+        else setEditingCell(null);
+        toast({
+          title: conflict
+            ? t("collaboration.conflict", "Данные изменились на сервере")
+            : t("records.updateError", "Ошибка обновления"),
+          description: extractError(err),
+          variant: "destructive",
+        });
       },
     },
   });
   const updateMutation = useUpdateRecord({
     mutation: {
       onSuccess: () => { toast({ title: t("records.updated", "Запись обновлена") }); setDialogOpen(false); invalidate(); },
-      onError: (err) => toast({ title: t("records.updateError", "Ошибка обновления"), description: extractError(err), variant: "destructive" }),
+      onError: (err) => toast({
+        title: (err as { status?: number })?.status === 409
+          ? t("collaboration.conflict", "Данные изменились на сервере")
+          : t("records.updateError", "Ошибка обновления"),
+        description: extractError(err),
+        variant: "destructive",
+      }),
     },
   });
   const deleteMutation = useDeleteRecord({
     mutation: {
       onSuccess: () => { toast({ title: t("records.deleted", "Запись удалена") }); setToDelete(null); invalidate(); },
-      onError: () => toast({ title: t("records.deleteError", "Ошибка удаления записи"), variant: "destructive" }),
+      onError: (err) => toast({
+        title: (err as { status?: number })?.status === 409
+          ? t("collaboration.conflict", "Данные изменились на сервере")
+          : t("records.deleteError", "Ошибка удаления записи"),
+        description: extractError(err),
+        variant: "destructive",
+      }),
     },
   });
   const archiveMutation = useArchiveRecord({
     mutation: {
       onSuccess: () => { toast({ title: t("records.archived", "Запись отправлена в архив") }); invalidate(); },
-      onError: (err) => toast({ title: t("records.archiveError", "Ошибка архивации"), description: extractError(err), variant: "destructive" }),
+      onError: (err) => toast({
+        title: (err as { status?: number })?.status === 409
+          ? t("collaboration.conflict", "Данные изменились на сервере")
+          : t("records.archiveError", "Ошибка архивации"),
+        description: extractError(err),
+        variant: "destructive",
+      }),
     },
   });
   const unarchiveMutation = useUnarchiveRecord({
     mutation: {
       onSuccess: () => { toast({ title: t("records.unarchived", "Запись восстановлена из архива") }); invalidate(); },
-      onError: (err) => toast({ title: t("records.unarchiveError", "Ошибка восстановления"), description: extractError(err), variant: "destructive" }),
+      onError: (err) => toast({
+        title: (err as { status?: number })?.status === 409
+          ? t("collaboration.conflict", "Данные изменились на сервере")
+          : t("records.unarchiveError", "Ошибка восстановления"),
+        description: extractError(err),
+        variant: "destructive",
+      }),
     },
   });
   const bulkMutation = useBulkRecordsAction({
@@ -3783,7 +3919,13 @@ export function EntityRecords({
       },
       onError: (err) => {
         setBulkConfirm(null);
-        toast({ title: t("records.bulkError", "Ошибка массового действия"), description: extractError(err), variant: "destructive" });
+        toast({
+          title: (err as { status?: number })?.status === 409
+            ? t("collaboration.conflict", "Данные изменились на сервере")
+            : t("records.bulkError", "Ошибка массового действия"),
+          description: extractError(err),
+          variant: "destructive",
+        });
       },
     },
   });
@@ -3808,7 +3950,9 @@ export function EntityRecords({
   };
   const bulkFieldError = (err: unknown) =>
     toast({
-      title: t("records.bulkFieldError", "Не удалось изменить выбранные записи"),
+      title: (err as { status?: number })?.status === 409
+        ? t("collaboration.conflict", "Данные изменились на сервере")
+        : t("records.bulkFieldError", "Не удалось изменить выбранные записи"),
       description: extractError(err),
       variant: "destructive",
     });
@@ -3963,7 +4107,10 @@ export function EntityRecords({
     if (editing) {
       void (async () => {
         try {
-          await updateMutation.mutateAsync({ id: editing.id, data: { valuesJson, statusId: statusValue, pageId: permPageId } });
+          await updateMutation.mutateAsync({
+            id: editing.id,
+            data: { valuesJson, statusId: statusValue, pageId: permPageId, expectedVersion: editing.version },
+          });
           // Re-check Drive file names against the FINAL saved values (best-effort).
           if (await maybeRenameDriveFiles({ recordId: editing.id, fields, values: valuesJson, uploaderEmail: user?.email, pageId: permPageId })) invalidate();
         } catch {
@@ -4005,7 +4152,7 @@ export function EntityRecords({
     !bulkEditClear &&
     (bulkEditValue === "" || bulkEditValue === undefined || bulkEditValue === null);
   const submitBulkFieldUpdate = () => {
-    if (!selectedBulkEditableField || selectedIds.size === 0 || bulkFieldValueMissing) return;
+    if (!selectedBulkEditableField) return;
     const nextValue = bulkEditClear
       ? null
       : cellValueForPayload(selectedBulkEditableField.field, bulkEditValue);
@@ -4017,6 +4164,9 @@ export function EntityRecords({
           value: nextValue,
           recordIds: [...selectedIds],
           ...(permPageId != null ? { pageId: permPageId } : {}),
+          expectedVersions: Object.fromEntries(
+            records.filter((record) => selectedIds.has(record.id)).map((record) => [record.id, record.version]),
+          ),
         },
       });
       return;
@@ -4028,6 +4178,19 @@ export function EntityRecords({
         fieldKey: selectedBulkEditableField.pageField?.fieldKey ?? selectedBulkEditableField.field.fieldKey,
         value: nextValue,
         recordIds: [...selectedIds],
+        expectedVersions: Object.fromEntries(
+          [...selectedIds].flatMap((recordId) => {
+            const pageState = pageValuesByRecord.get(recordId);
+            const fieldKey =
+              selectedBulkEditableField.pageField?.fieldKey ??
+              selectedBulkEditableField.field.fieldKey;
+            const version =
+              selectedBulkEditableField.pageField?.fieldType === "page_ref"
+                ? pageState?.fieldVersions[fieldKey]
+                : pageState?.version;
+            return version == null ? [] : [[recordId, version]];
+          }),
+        ),
       },
     });
   };
@@ -4038,28 +4201,37 @@ export function EntityRecords({
     const normalizedStored =
       field.fieldType === "boolean" ? Boolean(stored) : stored === undefined || stored === null ? "" : stored;
     if (next === normalizedStored) { setEditingCell(null); return; }
-    // Changing a parent field invalidates its dependent children: clear them in
-    // the same write so stale child values don't persist (mirrors add-row/dialog).
     const current = (record.valuesJson ?? {}) as Record<string, unknown>;
     const cleared = clearDependentDescendants({ ...current, [field.fieldKey]: next }, field.fieldKey, fields);
     const payload: Record<string, unknown> = { [field.fieldKey]: next };
     for (const f of fields) {
       if (isDependentField(f) && current[f.fieldKey] !== cleared[f.fieldKey]) payload[f.fieldKey] = "";
     }
-    cellUpdateMutation.mutate({ id: record.id, data: { valuesJson: payload, pageId: permPageId } });
+    cellUpdateMutation.mutate({
+      id: record.id,
+      data: { valuesJson: payload, pageId: permPageId, expectedVersion: record.version },
+    });
   };
 
   const commitStatus = (record: EntityRecord, value: string) => {
     const next = value === NO_STATUS ? null : Number(value);
     if (next === (record.statusId ?? null)) { setEditingCell(null); return; }
-    statusUpdateMutation.mutate({ id: record.id, data: { statusId: next, pageId: permPageId } });
+    statusUpdateMutation.mutate({
+      id: record.id,
+      data: { statusId: next, pageId: permPageId, expectedVersion: record.version },
+    });
   };
 
   // Inline commit for a page-local field value. Direct page values merge into
   // the page map; page_ref uses an explicit single-alias source patch.
   const commitPageCell = (record: EntityRecord, field: PageField, raw: CellValue) => {
     if (pageId == null) { setEditingCell(null); return; }
-    const existing = pageValuesByRecord.get(record.id) ?? {};
+    const pageState = pageValuesByRecord.get(record.id);
+    const existingVersion =
+      field.fieldType === "page_ref"
+        ? pageState?.fieldVersions[field.fieldKey]
+        : pageState?.version;
+    const existing = pageState?.values ?? {};
     const stored = existing[field.fieldKey];
     const effectiveField = field.fieldType === "page_ref" ? pageRefAsField(field) : field as unknown as Field;
     const next = cellValueForPayload(effectiveField, raw);
@@ -4070,18 +4242,31 @@ export function EntityRecords({
     // map would resubmit unrelated aliases from a potentially stale render.
     // Keep the key present for clears because omission means "no change".
     if (field.fieldType === "page_ref") {
-      setEditingCell(null);
+      const sourcePageId = (field.pageRefConfigJson as { sourcePageId?: number } | undefined)?.sourcePageId;
       setPageValuesMutation.mutate({
         pageId,
         recordId: record.id,
-        data: { valuesJson: { [field.fieldKey]: next === "" ? null : next } },
+        data: {
+          valuesJson: { [field.fieldKey]: next === "" ? null : next },
+          expectedVersions:
+            sourcePageId != null && existingVersion != null ? { [String(sourcePageId)]: existingVersion } : undefined,
+        },
+      }, {
+        onSuccess: () => setEditingCell(null),
+        onError: (err) => {
+          if ((err as { status?: number })?.status !== 409) setEditingCell(null);
+        },
       });
       return;
     }
-    const merged: Record<string, unknown> = { ...existing };
+    // Local saves must not resubmit page_ref aliases: each alias belongs to a
+    // different source row with its own CAS version.
+    const merged: Record<string, unknown> = Object.fromEntries(
+      Object.entries(existing).filter(([key]) =>
+        !pageFields.some((candidate) => candidate.fieldKey === key && candidate.fieldType === "page_ref")),
+    );
     if (next === "" || next === undefined || next === null) delete merged[field.fieldKey];
     else merged[field.fieldKey] = next;
-    setEditingCell(null);
     // Auto-substitute the configured default for any empty REQUIRED page field so
     // a field with a "value by default" is pre-filled (the user can still change it
     // in the dialog below). Defaults are coerced to the field's payload type.
@@ -4101,10 +4286,26 @@ export function EntityRecords({
       for (const pf of storablePageFields) {
         form[pf.fieldKey] = valueToForm(pf as unknown as Field, merged[pf.fieldKey]);
       }
-      setPageRequiredDialog({ recordId: record.id, form });
+      setEditingCell(null);
+      setPageRequiredDialog({ recordId: record.id, form, expectedVersion: existingVersion });
       return;
     }
-    setPageValuesMutation.mutate({ pageId, recordId: record.id, data: { valuesJson: merged } });
+    setPageValuesMutation.mutate(
+      {
+        pageId,
+        recordId: record.id,
+        data: {
+          valuesJson: merged,
+          expectedVersions: existingVersion != null ? { [String(pageId)]: existingVersion } : undefined,
+        },
+      },
+      {
+        onSuccess: () => setEditingCell(null),
+        onError: (err) => {
+          if ((err as { status?: number })?.status !== 409) setEditingCell(null);
+        },
+      },
+    );
   };
 
   // Commit the "fill all required page fields" dialog: rebuild the full page-value
@@ -4112,7 +4313,7 @@ export function EntityRecords({
   // empty). Save is only reachable when every required field is filled.
   const commitPageRequiredDialog = () => {
     if (pageId == null || pageRequiredDialog == null) return;
-    const { recordId, form } = pageRequiredDialog;
+    const { recordId, form, expectedVersion } = pageRequiredDialog;
     const valuesJson: Record<string, unknown> = {};
     for (const pf of storablePageFields) {
       const val = cellValueForPayload(pf as unknown as Field, form[pf.fieldKey]);
@@ -4120,8 +4321,17 @@ export function EntityRecords({
       valuesJson[pf.fieldKey] = val;
     }
     setPageValuesMutation.mutate(
-      { pageId, recordId, data: { valuesJson } },
-      { onSuccess: () => setPageRequiredDialog(null) },
+      {
+        pageId,
+        recordId,
+        data: {
+          valuesJson,
+          expectedVersions: expectedVersion != null ? { [String(pageId)]: expectedVersion } : undefined,
+        },
+      },
+      {
+        onSuccess: () => setPageRequiredDialog(null),
+      },
     );
   };
 
@@ -4248,7 +4458,7 @@ export function EntityRecords({
   // fields (entity- or page-defined) can reference either set by field key.
   const allValuesFor = (record: EntityRecord): Record<string, unknown> => ({
     ...((record.valuesJson ?? {}) as Record<string, unknown>),
-    ...(pageValuesByRecord.get(record.id) ?? {}),
+    ...(pageValuesByRecord.get(record.id)?.values ?? {}),
   });
   // Raw value of a field for one record: evaluated for formula fields, stored
   // otherwise. Used both for rendering and for conditional-format matching.
@@ -4295,6 +4505,61 @@ export function EntityRecords({
     ? pageFields
     : pageFields.filter((f: PageField) => f.showInTable !== false);
   const extraColCount = displayedPageFields.length;
+
+  useEffect(() => {
+    editingCellRef.current = editingCell;
+    activeCellDirtyRef.current = false;
+    if (!editingCell && deferredRemoteRefreshRef.current) {
+      deferredRemoteRefreshRef.current = false;
+      setRealtimeTick((tick) => tick + 1);
+    }
+  }, [editingCell]);
+
+  useEffect(() => {
+    const msg = collab.lastMessage;
+    if (!msg || msg.type === "snapshot" || msg.type === "presence") return;
+    if (msg.type === "table_changed") {
+      setRealtimeTick((tick) => tick + 1);
+      return;
+    }
+    const activeCell = editingCellRef.current;
+    const overlaps =
+      activeCell != null &&
+      activeCellDirtyRef.current &&
+      activeCell.recordId === msg.recordId &&
+      (msg.type === "delete" ||
+        ((msg.type === "record_changed" || msg.type === "page_changed") &&
+          (msg.changedFieldKeys?.includes(collaborationFieldKey(activeCell.fieldKey)) ?? false)));
+    if (overlaps && activeCell) {
+      deferredRemoteRefreshRef.current = true;
+      setConflictCell({
+        recordId: activeCell.recordId,
+        fieldKey: collaborationFieldKey(activeCell.fieldKey),
+      });
+      return;
+    }
+    setRealtimeTick((tick) => tick + 1);
+  }, [collab.lastMessage]);
+
+  useEffect(() => {
+    if (editingCell) {
+      if (editingCell.fieldKey === "__status__") {
+        collab.publishPresence({ recordId: editingCell.recordId, fieldKey: "__status__", source: "entity", entityId });
+      } else {
+        const isPage = editingCell.fieldKey.startsWith("pf:");
+        collab.publishPresence({
+          recordId: editingCell.recordId,
+          fieldKey: collaborationFieldKey(editingCell.fieldKey),
+          source: isPage ? "page" : "entity",
+          entityId,
+        });
+      }
+    } else {
+      collab.publishPresence(null);
+      setConflictCell(null);
+    }
+  }, [editingCell, collab.publishPresence, entityId, pageFields]);
+
   // ── Unified column model ───────────────────────────────────────────────────
   // The table renders ONE ordered list of columns mixing source-entity fields and
   // page-local fields. On a regular page (or a mirror page with no saved order)
@@ -4897,6 +5162,50 @@ export function EntityRecords({
           )}
         </div>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+          {activeCollabUsers.length > 0 && (
+            <div className="flex items-center mr-2 relative" style={{ height: "28px" }}>
+              {visibleCollabUsers.map((u, i) => (
+                <HoverCard key={`${u.userId}:${u.clientId ?? i}`} openDelay={200}>
+                  <HoverCardTrigger asChild>
+                    <div
+                      className="w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white relative shadow-sm cursor-default"
+                      style={{
+                        backgroundColor: u.color,
+                        marginLeft: i > 0 ? "-8px" : "0",
+                        zIndex: visibleCollabUsers.length - i
+                      }}
+                    >
+                      {u.name.substring(0, 2).toUpperCase()}
+                    </div>
+                  </HoverCardTrigger>
+                  <HoverCardContent className="w-auto py-1.5 px-2.5 text-xs z-50">
+                    <div className="font-medium text-slate-800">{u.name}</div>
+                    <div className="text-slate-500 mt-0.5">{u.editing ? t("collaboration.statusEditing", "Редактирует...") : t("collaboration.statusViewing", "Просматривает")}</div>
+                  </HoverCardContent>
+                </HoverCard>
+              ))}
+              {extraCollabUsers > 0 && (
+                <HoverCard openDelay={200}>
+                  <HoverCardTrigger asChild>
+                    <div
+                      className="w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-slate-600 bg-slate-100 shadow-sm relative cursor-default"
+                      style={{ marginLeft: "-8px", zIndex: 0 }}
+                    >
+                      +{extraCollabUsers}
+                    </div>
+                  </HoverCardTrigger>
+                  <HoverCardContent className="w-auto py-1.5 px-2.5 text-xs z-50">
+                    {activeCollabUsers.slice(visibleCollabUsers.length).map((u, i) => (
+                      <div key={`${u.userId}:${u.clientId ?? i}`} className="flex items-center gap-2 py-0.5">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: u.color }} />
+                        <span>{u.name}</span>
+                      </div>
+                    ))}
+                  </HoverCardContent>
+                </HoverCard>
+              )}
+            </div>
+          )}
           {pivotAvailable && !setupMode && (
             <div className="flex items-center justify-center w-full sm:w-auto rounded-md border border-slate-200 p-0.5 bg-white">
               {([
@@ -6339,7 +6648,7 @@ export function EntityRecords({
                   )}
                   {(!showGroups || expandedGroupIndex >= 0 || expandAll) && groupRowsReady && records.map((record: EntityRecord, rowIndex: number) => {
                     const values = (record.valuesJson ?? {}) as Record<string, unknown>;
-                    const pageValues = pageValuesByRecord.get(record.id) ?? {};
+                    const pageValues = pageValuesByRecord.get(record.id)?.values ?? {};
                     const allValues = { ...values, ...pageValues };
                     const formulaValues = buildFormulaScope(resolveFormulaValues(allValues), formulaFieldDefs, formulaOptions);
                     const status = record.statusId != null ? statusById.get(record.statusId) : undefined;
@@ -6402,6 +6711,38 @@ export function EntityRecords({
                       const prevGk = gkOf(records[rowIndex - 1]);
                       if (curGk !== undefined && curGk !== prevGk) interleavedHeader = groupByKey.get(curGk);
                     }
+
+                    const withCollab = (td: React.ReactElement<any>, fieldKey: string) => {
+                      if (!td) return td;
+                      const editors = getCellEditors(record.id, fieldKey);
+                      const isConflict = conflictCell?.recordId === record.id && conflictCell?.fieldKey === fieldKey;
+                      if (editors.length === 0 && !isConflict) return td;
+                      const names = editors.map(e => e.name).join(", ");
+                      const outlineColor = isConflict ? "#f59e0b" : (editors[0]?.color ?? "#3b82f6");
+                      return cloneElement(td, {
+                        className: cn(td.props.className, "relative group"),
+                        children: (
+                          <HoverCard openDelay={200}>
+                            <HoverCardTrigger asChild>
+                              <div className="relative w-full h-full min-h-[20px] flex items-center cursor-text">
+                                <div className="absolute inset-y-[-6px] inset-x-[-8px] pointer-events-none rounded-[4px] border-[2px] z-10" style={{ borderColor: outlineColor }} />
+                                <div className="relative z-0 w-full">{td.props.children}</div>
+                              </div>
+                            </HoverCardTrigger>
+                            <HoverCardContent className="w-auto p-2 text-xs z-50" side="top" align="center">
+                              {isConflict && <div className="text-amber-600 font-bold mb-1">{t("collaboration.conflict", "Данные изменились на сервере")}</div>}
+                              {editors.length > 0 && (
+                                <div className="flex items-center gap-1.5">
+                                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: editors[0].color }} />
+                                  <span><span className="font-bold">{names}</span> {t("collaboration.isEditing", "редактирует")}</span>
+                                </div>
+                              )}
+                            </HoverCardContent>
+                          </HoverCard>
+                        )
+                      });
+                    };
+
                     return (
                       <Fragment key={record.id}>
                       {interleavedHeader && renderGroupRow(interleavedHeader)}
@@ -6426,6 +6767,7 @@ export function EntityRecords({
                           </td>
                         )}
                         {orderedColumns.map((col) => {
+                          const cellNode = (() => {
                           if (col.kind === "entity") {
                           const f = col.field;
                           const access = effFieldAccess(f);
@@ -6490,9 +6832,13 @@ export function EntityRecords({
                                     entityId={entityId}
                                     fieldKey={f.fieldKey}
                                     recordId={record.id}
+                                    expectedVersion={record.version}
                                     currentLinkedId={rel?.linkedRecordId ?? null}
                                     display={display}
                                     onChanged={() => setRefreshTick((x) => x + 1)}
+                                    onEditingChange={(open) =>
+                                      setEditingCell(open ? { recordId: record.id, fieldKey: f.fieldKey } : null)
+                                    }
                                     dependent={relIsDependent}
                                     parentValue={relParentValue}
                                     relatedFilterFieldKey={relDep?.relatedFilterFieldKey ?? null}
@@ -6557,6 +6903,8 @@ export function EntityRecords({
                                   field={f}
                                   initial={valueToForm(f, values[f.fieldKey])}
                                   userOptions={userOptions}
+                                  commitResetKey={inlineCommitResetKey}
+                                   onDirty={() => { activeCellDirtyRef.current = true; }}
                                   onCommit={(raw) => commitCell(record, f, raw)}
                                   onCancel={() => setEditingCell(null)}
                                   allFields={fields}
@@ -6634,9 +6982,13 @@ export function EntityRecords({
                                     pageId={pageId}
                                     fieldKey={pf.fieldKey}
                                     recordId={record.id}
+                                    expectedVersion={record.version}
                                     currentLinkedId={rel?.linkedRecordId ?? null}
                                     display={display}
                                     onChanged={() => setRefreshTick((x) => x + 1)}
+                                    onEditingChange={(open) =>
+                                      setEditingCell(open ? { recordId: record.id, fieldKey: pfKey } : null)
+                                    }
                                   />
                                 ) : (
                                   <div className={pf.wrapText ? "whitespace-normal break-words" : "truncate"}>{display}</div>
@@ -6678,6 +7030,8 @@ export function EntityRecords({
                                     field={refField}
                                     initial={valueToForm(refField, v)}
                                     userOptions={userOptions}
+                                    commitResetKey={inlineCommitResetKey}
+                                     onDirty={() => { activeCellDirtyRef.current = true; }}
                                     rowValues={{ ...values, ...pageValues }}
                                     onCommit={(raw) => commitPageCell(record, pf, raw)}
                                     onCancel={() => setEditingCell(null)}
@@ -6720,6 +7074,8 @@ export function EntityRecords({
                                   field={pageFieldAsField}
                                   initial={valueToForm(pageFieldAsField, pageValues[pf.fieldKey])}
                                   userOptions={userOptions}
+                                  commitResetKey={inlineCommitResetKey}
+                                   onDirty={() => { activeCellDirtyRef.current = true; }}
                                   rowValues={{ ...values, ...pageValues }}
                                   onCommit={(raw) => commitPageCell(record, pf, raw)}
                                   onCancel={() => setEditingCell(null)}
@@ -6762,8 +7118,12 @@ export function EntityRecords({
                               {renderCellValue(pageFieldAsField, pageValues[pf.fieldKey], t, userNames, cellText, ml)}
                             </td>
                           );
+                          })();
+                          if (!cellNode) return null;
+                          const key = col.kind === "entity" ? col.field.fieldKey : (col.kind === "page" ? col.field.fieldKey : null);
+                          return key ? withCollab(cellNode as React.ReactElement, key) : cellNode;
                         })}
-                        {showStatusColumn && (
+                        {showStatusColumn && withCollab((
                           <td
                             className="px-4 py-3"
                             style={{
@@ -6815,7 +7175,7 @@ export function EntityRecords({
                             </div>
                             )}
                           </td>
-                        )}
+                        ), "__status__")}
                         {showActionsColumn && (
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
@@ -6841,7 +7201,10 @@ export function EntityRecords({
                                   className="h-8 w-8 text-indigo-500"
                                   title={t("records.restoreFromArchive", "Восстановить из архива")}
                                   disabled={unarchiveMutation.isPending}
-                                  onClick={() => unarchiveMutation.mutate({ id: record.id })}
+                                  onClick={() => unarchiveMutation.mutate({
+                                    id: record.id,
+                                    data: { expectedVersion: record.version },
+                                  })}
                                 >
                                   <ArchiveRestore className="w-3.5 h-3.5" />
                                 </Button>
@@ -6852,7 +7215,10 @@ export function EntityRecords({
                                   className="h-8 w-8 text-slate-500"
                                   title={t("records.toArchive", "В архив")}
                                   disabled={archiveMutation.isPending}
-                                  onClick={() => archiveMutation.mutate({ id: record.id })}
+                                  onClick={() => archiveMutation.mutate({
+                                    id: record.id,
+                                    data: { expectedVersion: record.version },
+                                  })}
                                 >
                                   <Archive className="w-3.5 h-3.5" />
                                 </Button>
@@ -6952,13 +7318,21 @@ export function EntityRecords({
               pageId={permPageId}
               mode={editing ? "edit" : "create"}
               recordId={editing?.id ?? null}
+              expectedVersion={editing?.version}
               allFields={fields}
               formFields={visibleFormFields}
               form={form}
               setForm={setForm}
               userOptions={userOptions}
               formulaOptions={formulaOptions}
-              onRelationChanged={() => setRefreshTick((x) => x + 1)}
+              onRelationChanged={(version) => {
+                if (version != null) {
+                  setEditing((current) =>
+                    current ? { ...current, version } : current,
+                  );
+                }
+                setRefreshTick((x) => x + 1);
+              }}
             />
 
             {statuses.length > 0 && (
@@ -7036,7 +7410,10 @@ export function EntityRecords({
             <AlertDialogCancel>{t("records.cancel", "Отмена")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700"
-              onClick={() => toDelete && deleteMutation.mutate({ id: toDelete.id, data: { pageId: permPageId } })}
+              onClick={() => toDelete && deleteMutation.mutate({
+                id: toDelete.id,
+                data: { pageId: permPageId, expectedVersion: toDelete.version },
+              })}
             >
               {t("records.delete", "Удалить")}
             </AlertDialogAction>
@@ -7188,7 +7565,12 @@ export function EntityRecords({
                     action: bulkConfirm,
                     recordIds: [...selectedIds],
                     ...(permPageId != null ? { pageId: permPageId } : {}),
-                  },
+                    expectedVersions: Object.fromEntries(
+                      records
+                        .filter((record) => selectedIds.has(record.id))
+                        .map((record) => [record.id, record.version]),
+                    ),
+                  } as BulkRecordsAction & { expectedVersions: Record<string, number> },
                 })
               }
             >
@@ -7599,16 +7981,20 @@ function RelationLinkPicker({
   pageId,
   fieldKey,
   recordId,
+  expectedVersion,
   currentLinkedId,
   display,
   onChanged,
+  onEditingChange,
 }: {
   pageId: number;
   fieldKey: string;
   recordId: number;
+  expectedVersion?: number;
   currentLinkedId: number | null;
   display: React.ReactNode;
-  onChanged: () => void;
+  onChanged: (version?: number) => void;
+  onEditingChange: (open: boolean) => void;
 }) {
   const t = useT();
   const { toast } = useToast();
@@ -7638,14 +8024,20 @@ function RelationLinkPicker({
 
   const choose = async (linkedRecordId: number | null) => {
     try {
-      await linkMutation.mutateAsync({ pageId, data: { fieldKey, recordId, linkedRecordId } });
+      const result = await linkMutation.mutateAsync({
+        pageId,
+        data: { fieldKey, recordId, linkedRecordId, expectedVersion },
+      });
       setOpen(false);
       setSearch("");
-      onChanged();
+      onEditingChange(false);
+      onChanged(result.version);
     } catch (e) {
       toast({
         variant: "destructive",
-        title: t("records.linkFailed", "Не удалось изменить связь"),
+        title: (e as { status?: number })?.status === 409
+          ? t("collaboration.conflict", "Данные изменились на сервере")
+          : t("records.linkFailed", "Не удалось изменить связь"),
         description: e instanceof Error ? e.message : undefined,
       });
     }
@@ -7656,6 +8048,7 @@ function RelationLinkPicker({
       open={open}
       onOpenChange={(o) => {
         setOpen(o);
+        onEditingChange(o);
         if (!o) setSearch("");
       }}
     >
@@ -7713,9 +8106,11 @@ function EntityRelationLinkPicker({
   entityId,
   fieldKey,
   recordId,
+  expectedVersion,
   currentLinkedId,
   display,
   onChanged,
+  onEditingChange,
   dependent = false,
   parentValue = null,
   relatedFilterFieldKey = null,
@@ -7726,9 +8121,11 @@ function EntityRelationLinkPicker({
   entityId: number;
   fieldKey: string;
   recordId: number;
+  expectedVersion?: number;
   currentLinkedId: number | null;
   display: React.ReactNode;
-  onChanged: () => void;
+  onChanged: (version?: number) => void;
+  onEditingChange: (open: boolean) => void;
   /** True when this relation field is a dependent (cascading) field. */
   dependent?: boolean;
   /** The parent field's value used to narrow candidates (scalar, or a linked
@@ -7801,14 +8198,20 @@ function EntityRelationLinkPicker({
 
   const choose = async (linkedRecordId: number | null) => {
     try {
-      await linkMutation.mutateAsync({ entityId, data: { fieldKey, recordId, linkedRecordId } });
+      const result = await linkMutation.mutateAsync({
+        entityId,
+        data: { fieldKey, recordId, linkedRecordId, expectedVersion },
+      });
       setOpen(false);
       setSearch("");
-      onChanged();
+      onEditingChange(false);
+      onChanged(result.version);
     } catch (e) {
       toast({
         variant: "destructive",
-        title: t("records.linkFailed", "Не удалось изменить связь"),
+        title: (e as { status?: number })?.status === 409
+          ? t("collaboration.conflict", "Данные изменились на сервере")
+          : t("records.linkFailed", "Не удалось изменить связь"),
         description: e instanceof Error ? e.message : undefined,
       });
     }
@@ -7820,6 +8223,7 @@ function EntityRelationLinkPicker({
       onOpenChange={(o) => {
         if (!allowOpen) return;
         setOpen(o);
+        onEditingChange(o);
         if (!o) setSearch("");
       }}
     >
@@ -8116,6 +8520,7 @@ function RecordFormBody({
   pageId,
   mode,
   recordId,
+  expectedVersion,
   allFields,
   formFields,
   form,
@@ -8129,6 +8534,7 @@ function RecordFormBody({
   pageId?: number;
   mode: "create" | "edit";
   recordId: number | null;
+  expectedVersion?: number;
   /** Full field list — needed for dependency-chain resolution. */
   allFields: Field[];
   /** The fields actually rendered (caller applies its own visibility filter). */
@@ -8137,7 +8543,7 @@ function RecordFormBody({
   setForm: React.Dispatch<React.SetStateAction<FormState>>;
   userOptions: UserOption[];
   /** Bubbled when a relation link changes, so the parent table can refresh. */
-  onRelationChanged?: () => void;
+  onRelationChanged?: (version?: number) => void;
   /** Field keys forced read-only by the caller (e.g. the quick-create dialog's
    * prefilled dependency-filter field). Values still submit; inputs are locked. */
   lockedFieldKeys?: ReadonlySet<string>;
@@ -8419,9 +8825,11 @@ function RecordFormBody({
                     entityId={entityId}
                     fieldKey={field.fieldKey}
                     recordId={recordId}
+                    expectedVersion={expectedVersion}
                     currentLinkedId={relVal?.linkedRecordId ?? null}
                     display={relDisplayFor(field)}
                     onChanged={handleRelationChanged}
+                    onEditingChange={() => {}}
                     dependent={dep.dependent}
                     parentValue={dep.parentValue}
                     relatedFilterFieldKey={dep.relatedFilterFieldKey}
@@ -8600,6 +9008,7 @@ function RecordEditModal({
   const updateMutation = useUpdateRecord();
   const [form, setForm] = useState<FormState>({});
   const [statusId, setStatusId] = useState<string>(NO_STATUS);
+  const [draftVersion, setDraftVersion] = useState<number | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
 
   // User options for `user` field selects; without them a `user` field's dropdown
@@ -8633,6 +9042,7 @@ function RecordEditModal({
     for (const f of fields) initial[f.fieldKey] = valueToForm(f, values[f.fieldKey]);
     setForm(initial);
     setStatusId(record.statusId != null ? String(record.statusId) : NO_STATUS);
+    setDraftVersion(record.version);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, record?.id, fields.length]);
 
@@ -8644,7 +9054,11 @@ function RecordEditModal({
     );
     const statusValue = statusId === NO_STATUS ? null : Number(statusId);
     try {
-      await updateMutation.mutateAsync({ id: recordId, data: { valuesJson, statusId: statusValue } });
+      if (!record) return;
+      await updateMutation.mutateAsync({
+        id: recordId,
+        data: { valuesJson, statusId: statusValue, expectedVersion: draftVersion ?? record.version },
+      });
       await maybeRenameDriveFiles({ recordId, fields, values: valuesJson, uploaderEmail: user?.email });
       setSubmitting(false);
       toast({ title: t("records.updated", "Запись обновлена") });
@@ -8654,7 +9068,9 @@ function RecordEditModal({
       setSubmitting(false);
       toast({
         variant: "destructive",
-        title: t("records.updateError", "Ошибка обновления"),
+        title: (e as { status?: number })?.status === 409
+          ? t("collaboration.conflict", "Данные изменились на сервере")
+          : t("records.updateError", "Ошибка обновления"),
         description: e instanceof Error ? e.message : undefined,
       });
     }
@@ -8679,11 +9095,15 @@ function RecordEditModal({
               entityId={entityId}
               mode="edit"
               recordId={recordId}
+              expectedVersion={draftVersion ?? record?.version}
               allFields={fields}
               formFields={visibleFields}
               form={form}
               setForm={setForm}
               userOptions={userOptions}
+              onRelationChanged={(version) => {
+                if (version != null) setDraftVersion(version);
+              }}
             />
             {statuses.length > 0 && (
               <div className="space-y-1.5">
@@ -9079,6 +9499,7 @@ function DependentFieldCombobox({
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameText, setRenameText] = useState("");
   const committedRef = useRef(false);
+
   const depValues = useGetFieldDependentValues();
   const renameMutation = useRenameFieldValue();
 
@@ -9440,6 +9861,8 @@ function InlineCellEditor({
   field,
   initial,
   userOptions,
+  commitResetKey,
+  onDirty,
   onCommit,
   onCancel,
   allFields,
@@ -9450,6 +9873,8 @@ function InlineCellEditor({
   field: Field;
   initial: CellValue;
   userOptions: UserOption[];
+  commitResetKey: number;
+  onDirty: () => void;
   onCommit: (raw: CellValue) => void;
   onCancel: () => void;
   allFields?: Field[];
@@ -9462,6 +9887,14 @@ function InlineCellEditor({
   const [draft, setDraft] = useState<CellValue>(initial);
   const cancelRef = useRef(false);
   const committedRef = useRef(false);
+
+  useEffect(() => {
+    committedRef.current = false;
+  }, [commitResetKey]);
+
+  useEffect(() => {
+    if (draft !== initial) onDirty();
+  }, [draft, initial, onDirty]);
 
   const commitOnce = (raw: CellValue) => {
     if (committedRef.current) return;

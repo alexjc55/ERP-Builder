@@ -42,6 +42,8 @@ import type {
   BulkRecordsAction,
   BulkRecordsResult,
   ChangePasswordInput,
+  CollaborationPageId,
+  CollaborationPresenceInput,
   ColumnGroup,
   ColumnGroupInput,
   ColumnGroupUpdate,
@@ -55,6 +57,8 @@ import type {
   DashboardWidget,
   DashboardWidgetData,
   DashboardWidgetInput,
+  DeleteRecordLinkInput,
+  DeleteRecordLinkResult,
   DeletedFile,
   DependentValuesQuery,
   DriveFolder,
@@ -117,6 +121,7 @@ import type {
   PageUpdate,
   PivotQuery,
   PivotResult,
+  RecordArchive,
   RecordDelete,
   RecordInput,
   RecordLink,
@@ -139,6 +144,7 @@ import type {
   StatusInput,
   StatusUpdate,
   StatusesReorderInput,
+  StreamCollaborationPageEventsParams,
   SuccessResponse,
   SystemEventList,
   Transition,
@@ -158,6 +164,7 @@ import type {
   UserOption,
   UserProfile,
   UserUpdate,
+  VersionConflictResponse,
   View,
   ViewInput,
   ViewUpdate,
@@ -175,6 +182,167 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
+
+export const getStreamCollaborationPageEventsUrl = (pageId: CollaborationPageId,
+    params: StreamCollaborationPageEventsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/collaboration/pages/${pageId}/stream?${stringifiedParams}` : `/api/collaboration/pages/${pageId}/stream`
+}
+
+/**
+ * @summary Subscribe to authorized page presence and compact record invalidations via SSE
+ */
+export const streamCollaborationPageEvents = async (pageId: CollaborationPageId,
+    params: StreamCollaborationPageEventsParams, options?: RequestInit): Promise<string> => {
+
+  return customFetch<string>(getStreamCollaborationPageEventsUrl(pageId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getStreamCollaborationPageEventsQueryKey = (pageId: CollaborationPageId,
+    params?: StreamCollaborationPageEventsParams,) => {
+    return [
+    `/api/collaboration/pages/${pageId}/stream`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getStreamCollaborationPageEventsQueryOptions = <TData = Awaited<ReturnType<typeof streamCollaborationPageEvents>>, TError = ErrorType<unknown>>(pageId: CollaborationPageId,
+    params: StreamCollaborationPageEventsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof streamCollaborationPageEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getStreamCollaborationPageEventsQueryKey(pageId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof streamCollaborationPageEvents>>> = ({ signal }) => streamCollaborationPageEvents(pageId,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(pageId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof streamCollaborationPageEvents>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type StreamCollaborationPageEventsQueryResult = NonNullable<Awaited<ReturnType<typeof streamCollaborationPageEvents>>>
+export type StreamCollaborationPageEventsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Subscribe to authorized page presence and compact record invalidations via SSE
+ */
+
+export function useStreamCollaborationPageEvents<TData = Awaited<ReturnType<typeof streamCollaborationPageEvents>>, TError = ErrorType<unknown>>(
+ pageId: CollaborationPageId,
+    params: StreamCollaborationPageEventsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof streamCollaborationPageEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getStreamCollaborationPageEventsQueryOptions(pageId,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdatePagePresenceUrl = (pageId: number,) => {
+
+
+
+
+  return `/api/collaboration/pages/${pageId}/presence`
+}
+
+/**
+ * @summary Publish this authenticated user's transient editing location
+ */
+export const updatePagePresence = async (pageId: number,
+    collaborationPresenceInput: CollaborationPresenceInput, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getUpdatePagePresenceUrl(pageId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      collaborationPresenceInput,)
+  }
+);}
+
+
+
+
+export const getUpdatePagePresenceMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePagePresence>>, TError,{pageId: number;data: BodyType<CollaborationPresenceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updatePagePresence>>, TError,{pageId: number;data: BodyType<CollaborationPresenceInput>}, TContext> => {
+
+const mutationKey = ['updatePagePresence'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePagePresence>>, {pageId: number;data: BodyType<CollaborationPresenceInput>}> = (props) => {
+          const {pageId,data} = props ?? {};
+
+          return  updatePagePresence(pageId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdatePagePresenceMutationResult = NonNullable<Awaited<ReturnType<typeof updatePagePresence>>>
+    export type UpdatePagePresenceMutationBody = BodyType<CollaborationPresenceInput>
+    export type UpdatePagePresenceMutationError = ErrorType<void>
+
+    /**
+ * @summary Publish this authenticated user's transient editing location
+ */
+export const useUpdatePagePresence = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePagePresence>>, TError,{pageId: number;data: BodyType<CollaborationPresenceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updatePagePresence>>,
+        TError,
+        {pageId: number;data: BodyType<CollaborationPresenceInput>},
+        TContext
+      > => {
+      return useMutation(getUpdatePagePresenceMutationOptions(options));
+    }
 
 export const getRequestUploadUrlUrl = () => {
 
@@ -4450,7 +4618,7 @@ export const setPageRecordValues = async (pageId: number,
 
 
 
-export const getSetPageRecordValuesMutationOptions = <TError = ErrorType<unknown>,
+export const getSetPageRecordValuesMutationOptions = <TError = ErrorType<ErrorResponse | VersionConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setPageRecordValues>>, TError,{pageId: number;recordId: number;data: BodyType<PageRecordValueInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof setPageRecordValues>>, TError,{pageId: number;recordId: number;data: BodyType<PageRecordValueInput>}, TContext> => {
 
@@ -4479,12 +4647,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type SetPageRecordValuesMutationResult = NonNullable<Awaited<ReturnType<typeof setPageRecordValues>>>
     export type SetPageRecordValuesMutationBody = BodyType<PageRecordValueInput>
-    export type SetPageRecordValuesMutationError = ErrorType<unknown>
+    export type SetPageRecordValuesMutationError = ErrorType<ErrorResponse | VersionConflictResponse>
 
     /**
  * @summary Upsert page-local field values for one record
  */
-export const useSetPageRecordValues = <TError = ErrorType<unknown>,
+export const useSetPageRecordValues = <TError = ErrorType<ErrorResponse | VersionConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setPageRecordValues>>, TError,{pageId: number;recordId: number;data: BodyType<PageRecordValueInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof setPageRecordValues>>,
@@ -4738,7 +4906,7 @@ export const setPageRelatedLink = async (pageId: number,
 
 
 
-export const getSetPageRelatedLinkMutationOptions = <TError = ErrorType<unknown>,
+export const getSetPageRelatedLinkMutationOptions = <TError = ErrorType<VersionConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setPageRelatedLink>>, TError,{pageId: number;data: BodyType<PageRelatedLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof setPageRelatedLink>>, TError,{pageId: number;data: BodyType<PageRelatedLinkInput>}, TContext> => {
 
@@ -4767,12 +4935,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type SetPageRelatedLinkMutationResult = NonNullable<Awaited<ReturnType<typeof setPageRelatedLink>>>
     export type SetPageRelatedLinkMutationBody = BodyType<PageRelatedLinkInput>
-    export type SetPageRelatedLinkMutationError = ErrorType<unknown>
+    export type SetPageRelatedLinkMutationError = ErrorType<VersionConflictResponse>
 
     /**
  * @summary Assign, change, or clear the single link backing a relation page-field cell
  */
-export const useSetPageRelatedLink = <TError = ErrorType<unknown>,
+export const useSetPageRelatedLink = <TError = ErrorType<VersionConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setPageRelatedLink>>, TError,{pageId: number;data: BodyType<PageRelatedLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof setPageRelatedLink>>,
@@ -5108,7 +5276,7 @@ export const setEntityRelatedLink = async (entityId: number,
 
 
 
-export const getSetEntityRelatedLinkMutationOptions = <TError = ErrorType<unknown>,
+export const getSetEntityRelatedLinkMutationOptions = <TError = ErrorType<VersionConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setEntityRelatedLink>>, TError,{entityId: number;data: BodyType<PageRelatedLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof setEntityRelatedLink>>, TError,{entityId: number;data: BodyType<PageRelatedLinkInput>}, TContext> => {
 
@@ -5137,12 +5305,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type SetEntityRelatedLinkMutationResult = NonNullable<Awaited<ReturnType<typeof setEntityRelatedLink>>>
     export type SetEntityRelatedLinkMutationBody = BodyType<PageRelatedLinkInput>
-    export type SetEntityRelatedLinkMutationError = ErrorType<unknown>
+    export type SetEntityRelatedLinkMutationError = ErrorType<VersionConflictResponse>
 
     /**
  * @summary Assign, change, or clear the single link backing a relation field cell
  */
-export const useSetEntityRelatedLink = <TError = ErrorType<unknown>,
+export const useSetEntityRelatedLink = <TError = ErrorType<VersionConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setEntityRelatedLink>>, TError,{entityId: number;data: BodyType<PageRelatedLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof setEntityRelatedLink>>,
@@ -7367,14 +7535,16 @@ export const getArchiveRecordUrl = (id: number,) => {
 /**
  * @summary Archive a record (manual archival)
  */
-export const archiveRecord = async (id: number, options?: RequestInit): Promise<EntityRecord> => {
+export const archiveRecord = async (id: number,
+    recordArchive?: RecordArchive, options?: RequestInit): Promise<EntityRecord> => {
 
   return customFetch<EntityRecord>(getArchiveRecordUrl(id),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      recordArchive,)
   }
 );}
 
@@ -7382,8 +7552,8 @@ export const archiveRecord = async (id: number, options?: RequestInit): Promise<
 
 
 export const getArchiveRecordMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveRecord>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof archiveRecord>>, TError,{id: number}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveRecord>>, TError,{id: number;data?: BodyType<RecordArchive>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof archiveRecord>>, TError,{id: number;data?: BodyType<RecordArchive>}, TContext> => {
 
 const mutationKey = ['archiveRecord'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -7395,10 +7565,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof archiveRecord>>, {id: number}> = (props) => {
-          const {id} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof archiveRecord>>, {id: number;data?: BodyType<RecordArchive>}> = (props) => {
+          const {id,data} = props ?? {};
 
-          return  archiveRecord(id,requestOptions)
+          return  archiveRecord(id,data,requestOptions)
         }
 
 
@@ -7409,18 +7579,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type ArchiveRecordMutationResult = NonNullable<Awaited<ReturnType<typeof archiveRecord>>>
-
+    export type ArchiveRecordMutationBody = BodyType<RecordArchive> | undefined
     export type ArchiveRecordMutationError = ErrorType<unknown>
 
     /**
  * @summary Archive a record (manual archival)
  */
 export const useArchiveRecord = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveRecord>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveRecord>>, TError,{id: number;data?: BodyType<RecordArchive>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof archiveRecord>>,
         TError,
-        {id: number},
+        {id: number;data?: BodyType<RecordArchive>},
         TContext
       > => {
       return useMutation(getArchiveRecordMutationOptions(options));
@@ -7437,14 +7607,16 @@ export const getUnarchiveRecordUrl = (id: number,) => {
 /**
  * @summary Restore a record from the archive
  */
-export const unarchiveRecord = async (id: number, options?: RequestInit): Promise<EntityRecord> => {
+export const unarchiveRecord = async (id: number,
+    recordArchive?: RecordArchive, options?: RequestInit): Promise<EntityRecord> => {
 
   return customFetch<EntityRecord>(getUnarchiveRecordUrl(id),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      recordArchive,)
   }
 );}
 
@@ -7452,8 +7624,8 @@ export const unarchiveRecord = async (id: number, options?: RequestInit): Promis
 
 
 export const getUnarchiveRecordMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unarchiveRecord>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof unarchiveRecord>>, TError,{id: number}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unarchiveRecord>>, TError,{id: number;data?: BodyType<RecordArchive>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unarchiveRecord>>, TError,{id: number;data?: BodyType<RecordArchive>}, TContext> => {
 
 const mutationKey = ['unarchiveRecord'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -7465,10 +7637,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unarchiveRecord>>, {id: number}> = (props) => {
-          const {id} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unarchiveRecord>>, {id: number;data?: BodyType<RecordArchive>}> = (props) => {
+          const {id,data} = props ?? {};
 
-          return  unarchiveRecord(id,requestOptions)
+          return  unarchiveRecord(id,data,requestOptions)
         }
 
 
@@ -7479,18 +7651,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type UnarchiveRecordMutationResult = NonNullable<Awaited<ReturnType<typeof unarchiveRecord>>>
-
+    export type UnarchiveRecordMutationBody = BodyType<RecordArchive> | undefined
     export type UnarchiveRecordMutationError = ErrorType<unknown>
 
     /**
  * @summary Restore a record from the archive
  */
 export const useUnarchiveRecord = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unarchiveRecord>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unarchiveRecord>>, TError,{id: number;data?: BodyType<RecordArchive>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof unarchiveRecord>>,
         TError,
-        {id: number},
+        {id: number;data?: BodyType<RecordArchive>},
         TContext
       > => {
       return useMutation(getUnarchiveRecordMutationOptions(options));
@@ -10098,7 +10270,7 @@ export const createRecordLink = async (recordId: number,
 
 
 
-export const getCreateRecordLinkMutationOptions = <TError = ErrorType<unknown>,
+export const getCreateRecordLinkMutationOptions = <TError = ErrorType<VersionConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createRecordLink>>, TError,{recordId: number;data: BodyType<LinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createRecordLink>>, TError,{recordId: number;data: BodyType<LinkInput>}, TContext> => {
 
@@ -10127,12 +10299,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CreateRecordLinkMutationResult = NonNullable<Awaited<ReturnType<typeof createRecordLink>>>
     export type CreateRecordLinkMutationBody = BodyType<LinkInput>
-    export type CreateRecordLinkMutationError = ErrorType<unknown>
+    export type CreateRecordLinkMutationError = ErrorType<VersionConflictResponse>
 
     /**
  * @summary Link a target record to a source record
  */
-export const useCreateRecordLink = <TError = ErrorType<unknown>,
+export const useCreateRecordLink = <TError = ErrorType<VersionConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createRecordLink>>, TError,{recordId: number;data: BodyType<LinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof createRecordLink>>,
@@ -10154,23 +10326,25 @@ export const getDeleteRecordLinkUrl = (id: number,) => {
 /**
  * @summary Delete a record link
  */
-export const deleteRecordLink = async (id: number, options?: RequestInit): Promise<SuccessResponse> => {
+export const deleteRecordLink = async (id: number,
+    deleteRecordLinkInput?: DeleteRecordLinkInput, options?: RequestInit): Promise<DeleteRecordLinkResult> => {
 
-  return customFetch<SuccessResponse>(getDeleteRecordLinkUrl(id),
+  return customFetch<DeleteRecordLinkResult>(getDeleteRecordLinkUrl(id),
   {
     ...options,
-    method: 'DELETE'
-
-
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      deleteRecordLinkInput,)
   }
 );}
 
 
 
 
-export const getDeleteRecordLinkMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteRecordLink>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteRecordLink>>, TError,{id: number}, TContext> => {
+export const getDeleteRecordLinkMutationOptions = <TError = ErrorType<VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteRecordLink>>, TError,{id: number;data?: BodyType<DeleteRecordLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteRecordLink>>, TError,{id: number;data?: BodyType<DeleteRecordLinkInput>}, TContext> => {
 
 const mutationKey = ['deleteRecordLink'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -10182,10 +10356,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteRecordLink>>, {id: number}> = (props) => {
-          const {id} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteRecordLink>>, {id: number;data?: BodyType<DeleteRecordLinkInput>}> = (props) => {
+          const {id,data} = props ?? {};
 
-          return  deleteRecordLink(id,requestOptions)
+          return  deleteRecordLink(id,data,requestOptions)
         }
 
 
@@ -10196,18 +10370,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type DeleteRecordLinkMutationResult = NonNullable<Awaited<ReturnType<typeof deleteRecordLink>>>
-
-    export type DeleteRecordLinkMutationError = ErrorType<unknown>
+    export type DeleteRecordLinkMutationBody = BodyType<DeleteRecordLinkInput> | undefined
+    export type DeleteRecordLinkMutationError = ErrorType<VersionConflictResponse>
 
     /**
  * @summary Delete a record link
  */
-export const useDeleteRecordLink = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteRecordLink>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useDeleteRecordLink = <TError = ErrorType<VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteRecordLink>>, TError,{id: number;data?: BodyType<DeleteRecordLinkInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof deleteRecordLink>>,
         TError,
-        {id: number},
+        {id: number;data?: BodyType<DeleteRecordLinkInput>},
         TContext
       > => {
       return useMutation(getDeleteRecordLinkMutationOptions(options));

@@ -10450,5 +10450,29 @@
     "ru": "Кастомные фильтры",
     "en": "Custom filters",
     "he": "מסננים מותאמים"
+  },
+  {
+    "key": "collaboration.statusEditing",
+    "ru": "Редактирует...",
+    "en": "Editing...",
+    "he": "עורך..."
+  },
+  {
+    "key": "collaboration.statusViewing",
+    "ru": "Просматривает",
+    "en": "Viewing",
+    "he": "צופה"
+  },
+  {
+    "key": "collaboration.conflict",
+    "ru": "Данные изменились на сервере",
+    "en": "Data changed on server",
+    "he": "הנתונים השתנו בשרת"
+  },
+  {
+    "key": "collaboration.isEditing",
+    "ru": "редактирует",
+    "en": "is editing",
+    "he": "עורך"
   }
 ]

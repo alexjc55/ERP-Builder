@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { PageRecordValueFieldVersions } from './pageRecordValueFieldVersions';
 import type { PageRecordValueValuesJson } from './pageRecordValueValuesJson';
 
 /**
@@ -13,4 +14,7 @@ import type { PageRecordValueValuesJson } from './pageRecordValueValuesJson';
 export interface PageRecordValue {
   recordId: number;
   valuesJson: PageRecordValueValuesJson;
+  /** Version of this page's own page_record_values row; 1 for a synthesized missing row. */
+  version: number;
+  fieldVersions?: PageRecordValueFieldVersions;
 }

@@ -67,3 +67,4 @@
 - [AI agents module](ai-agents-module.md) — external-LLM API keys: agent = passwordless backing user + role + method-level mask (never widens); hand-maintained trimmed agent OpenAPI.
 - [Dialog outside-click policy](dialog-outside-click.md) — modals never close on outside click (dropdown+overlay clicks lost form input); close only via X/Cancel/Escape; fixed in base ui/dialog.
 - [page_ref fields](page-ref-fields.md) — live cross-page alias of another mirror page's local field; permission-gated writes update only the source page under a double boundary.
+- [Collaborative table editing](collaborative-table-editing.md) — authenticated SSE presence + opaque invalidations; every effective record mutation participates in one-version CAS.

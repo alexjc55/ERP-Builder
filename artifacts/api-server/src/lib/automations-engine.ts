@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { lockAndValidateUserReferences, referencedUserIds } from "./user-reference-barrier";
 import { isIP } from "node:net";
 import { lookup } from "node:dns/promises";
 import {
@@ -486,6 +487,8 @@ export async function systemCreateRecord(
 
     const keyFields = fields.filter((f) => f.isKey);
     const record = await db.transaction(async (tx) => {
+      const lockedUserRefErr = await validateUserRefs(fields, result.values, tx);
+      if (lockedUserRefErr) throw new Error(lockedUserRefErr);
       if (keyFields.length > 0) {
         await tx.execute(sql`SELECT pg_advisory_xact_lock(${UNIQUE_KEY_LOCK_NS}, ${entityId})`);
         const dup = await checkUniqueKeys(tx, entityId, keyFields, result.values);
@@ -539,7 +542,7 @@ export async function systemUpdateRecord(
   log: Log,
 ): Promise<boolean> {
   try {
-    const [existing] = await db
+    let [existing] = await db
       .select()
       .from(entityRecordsTable)
       .where(eq(entityRecordsTable.id, recordId))
@@ -547,7 +550,7 @@ export async function systemUpdateRecord(
     if (!existing) return false;
     const entityId = existing.entityId;
     const fields = await loadActiveFields(entityId);
-    const existingValues = (existing.valuesJson as Record<string, unknown>) ?? {};
+    let existingValues = (existing.valuesJson as Record<string, unknown>) ?? {};
 
     const update: { valuesJson?: Record<string, unknown>; statusId?: number | null; statusChangedAt?: Date; archiveExempt?: boolean } = {};
 
@@ -589,7 +592,7 @@ export async function systemUpdateRecord(
       update.valuesJson = result.values;
     }
 
-    const statusChanging = statusIdInput !== undefined && (statusIdInput ?? null) !== (existing.statusId ?? null);
+    let statusChanging = statusIdInput !== undefined && (statusIdInput ?? null) !== (existing.statusId ?? null);
     if (statusIdInput !== undefined) {
       if (statusIdInput === null) {
         update.statusId = null;
@@ -609,12 +612,51 @@ export async function systemUpdateRecord(
 
     const keyFields = fields.filter((f) => f.isKey);
     const record = await db.transaction(async (tx) => {
+      // The automation must merge over the row it is about to write, not a
+      // snapshot read while an interactive editor was saving. Lock first, then
+      // repeat the value-dependent checks against that locked state. This is a
+      // rebase (unrelated user cells survive), not a CAS rejection/retry.
+      const [locked] = await tx
+        .select()
+        .from(entityRecordsTable)
+        .where(eq(entityRecordsTable.id, recordId))
+        .for("update");
+      if (!locked) return undefined;
+      existing = locked;
+      const lockedValues = (locked.valuesJson as Record<string, unknown>) ?? {};
+      existingValues = lockedValues;
+      if (hasValues) {
+        const candidate: Record<string, unknown> = {};
+        for (const f of fields) {
+          candidate[f.fieldKey] = f.fieldKey in partialValues! ? partialValues![f.fieldKey] : lockedValues[f.fieldKey];
+        }
+        const result = validateValues(fields, candidate, await isGoogleDriveModuleEnabled(), lockedValues, new Set(Object.keys(partialValues!)));
+        if ("error" in result) throw new Error(`Automation set_field validation failed: ${result.error}`);
+        const userRefErr = await validateUserRefs(fields, result.values, tx);
+        if (userRefErr) throw new Error(`Automation set_field user-ref invalid: ${userRefErr}`);
+        const depErr = await checkDependentValues(entityId, fields, result.values, recordId, tx);
+        if (depErr) throw new Error(`Automation set_field dependent-value invalid: ${depErr}`);
+        const validationErr = checkValidationRules(fields, result.values);
+        if (validationErr) throw new Error(`Automation set_field validation-rule violation: ${validationErr}`);
+        const immErr = checkImmutableFields(fields, result.values, lockedValues);
+        if (immErr) throw new Error(`Automation set_field immutable-field violation: ${immErr}`);
+        update.valuesJson = result.values;
+      }
+      statusChanging = statusIdInput !== undefined && (statusIdInput ?? null) !== (locked.statusId ?? null);
+      if (statusChanging) {
+        update.statusChangedAt = new Date();
+        update.archiveExempt = false;
+      } else {
+        delete update.statusChangedAt;
+        delete update.archiveExempt;
+      }
       if (keyFields.length > 0 && update.valuesJson !== undefined) {
         await tx.execute(sql`SELECT pg_advisory_xact_lock(${UNIQUE_KEY_LOCK_NS}, ${entityId})`);
         const dup = await checkUniqueKeys(tx, entityId, keyFields, update.valuesJson, recordId);
         if (dup) throw new UniqueKeyError(dup);
       }
-      const [rec] = await tx.update(entityRecordsTable).set(update).where(eq(entityRecordsTable.id, recordId)).returning();
+      const [rec] = await tx.update(entityRecordsTable).set(update)
+        .where(eq(entityRecordsTable.id, recordId)).returning();
       return rec;
     });
     if (!record) return false;
@@ -641,14 +683,14 @@ export async function systemUpdateRecord(
     await writeAudit(entries, logger);
 
     const events: EventInput[] = [
-      { eventName: EVENT_RECORD_UPDATED, entityId, recordId: record.id, payload: { actorUserId, changedFields } },
+      { eventName: EVENT_RECORD_UPDATED, entityId, recordId: record.id, payload: { actorUserId, changedFields, version: record.version } },
     ];
     if (statusChanging) {
       events.push({
         eventName: EVENT_STATUS_CHANGED,
         entityId,
         recordId: record.id,
-        payload: { actorUserId, from: existing.statusId ?? null, to: record.statusId ?? null },
+        payload: { actorUserId, from: existing.statusId ?? null, to: record.statusId ?? null, version: record.version },
       });
     }
     await emitEvent(events, logger);
@@ -966,10 +1008,6 @@ async function systemSetPageValue(
       log.error({ pageId, fieldKey }, "systemSetPageValue: unknown or inactive page field");
       return false;
     }
-    const [existing] = await db
-      .select({ id: pageRecordValuesTable.id, valuesJson: pageRecordValuesTable.valuesJson })
-      .from(pageRecordValuesTable)
-      .where(and(eq(pageRecordValuesTable.pageId, pageId), eq(pageRecordValuesTable.recordId, recordId)));
     // Restrict the stored map to CURRENTLY-active page fields before merging and
     // re-validating. Metadata is mutable: a page field can be deleted or renamed
     // after values were stored, leaving orphan keys behind. validatePageValues
@@ -977,23 +1015,31 @@ async function systemSetPageValue(
     // closed on any sibling record that still carries a stale key it isn't even
     // touching. Orphans self-heal — they are dropped on the next system write.
     const activeKeys = new Set(pageFields.map((f) => f.fieldKey));
-    const stored = (existing?.valuesJson as Record<string, unknown> | undefined) ?? {};
-    const current: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(stored)) if (activeKeys.has(k)) current[k] = v;
-    const merged = { ...current, [fieldKey]: value };
-    const result = validatePageValues(pageFields, merged, await isGoogleDriveModuleEnabled(), current);
-    if ("error" in result) {
-      log.error({ pageId, fieldKey, error: result.error }, "systemSetPageValue: validation failed");
-      return false;
-    }
-    if (existing) {
-      await db
-        .update(pageRecordValuesTable)
-        .set({ valuesJson: result.values })
-        .where(eq(pageRecordValuesTable.id, existing.id));
-    } else {
-      await db.insert(pageRecordValuesTable).values({ pageId, recordId, valuesJson: result.values });
-    }
+    // The merge happens only after locking the current row.  Reading before this
+    // transaction would let an automation replace a user's unrelated cell edit.
+    const write = await db.transaction(async (tx) => {
+      // A missing (pageId, recordId) row cannot be protected by FOR UPDATE.
+      // Serialize that case with the same pair lock used by the interactive
+      // page-value writer so two writers cannot both merge an empty map.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock((${pageId}::bigint << 32) | ${recordId}::bigint)`);
+      const [existing] = await tx.select({ id: pageRecordValuesTable.id, valuesJson: pageRecordValuesTable.valuesJson })
+        .from(pageRecordValuesTable)
+        .where(and(eq(pageRecordValuesTable.pageId, pageId), eq(pageRecordValuesTable.recordId, recordId))).for("update");
+      const stored = (existing?.valuesJson as Record<string, unknown> | undefined) ?? {};
+      const current: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(stored)) if (activeKeys.has(k)) current[k] = v;
+      const result = validatePageValues(pageFields, { ...current, [fieldKey]: value }, await isGoogleDriveModuleEnabled(), current);
+      if ("error" in result) throw new Error(result.error);
+      const userRefError = await lockAndValidateUserReferences(
+        tx,
+        referencedUserIds(pageFields, result.values),
+      );
+      if (userRefError) throw new Error(userRefError);
+      const [row] = existing
+        ? await tx.update(pageRecordValuesTable).set({ valuesJson: result.values }).where(eq(pageRecordValuesTable.id, existing.id)).returning()
+        : await tx.insert(pageRecordValuesTable).values({ pageId, recordId, valuesJson: result.values }).returning();
+      return { current, values: result.values, version: row!.version };
+    });
     // Same recovery guarantee as the user PUT path: a page-local server file
     // replaced/cleared by an automation lands in the file trash (best-effort).
     await trashRemovedPageServerFiles(
@@ -1001,18 +1047,18 @@ async function systemSetPageValue(
       entityId,
       pageId,
       recordId,
-      current,
-      result.values,
+      write.current,
+      write.values,
     );
     const changed =
-      JSON.stringify(current[fieldKey] ?? null) !== JSON.stringify(result.values[fieldKey] ?? null);
+      JSON.stringify(write.current[fieldKey] ?? null) !== JSON.stringify(write.values[fieldKey] ?? null);
     if (changed) {
       await emitEvent(
         {
           eventName: EVENT_PAGE_FIELD_SAVED,
           entityId,
           recordId,
-          payload: { pageId, changedPageFieldKeys: [fieldKey], actorUserId },
+          payload: { pageId, changedPageFieldKeys: [fieldKey], actorUserId, version: write.version },
         },
         log,
       );

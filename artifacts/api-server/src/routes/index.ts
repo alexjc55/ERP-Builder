@@ -29,6 +29,7 @@ import localFoldersRouter from "./local-folders";
 import importRouter from "./import";
 import aiAgentsRouter from "./ai-agents";
 import agentApiSchemaRouter from "./agent-api-schema";
+import collaborationRouter from "./collaboration";
 
 const router: IRouter = Router();
 
@@ -62,5 +63,6 @@ router.use(localFoldersRouter);
 router.use(importRouter);
 router.use(aiAgentsRouter);
 router.use(agentApiSchemaRouter);
+router.use(collaborationRouter);
 
 export default router;

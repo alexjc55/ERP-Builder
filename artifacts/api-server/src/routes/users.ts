@@ -21,7 +21,13 @@ import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth, invalidateUserAliveCache } from "../middlewares/auth";
 import { invalidateAgentCache } from "../lib/aiAgentAuth";
 import { requireAdmin, requireSuperAdmin, getPermissions, effectiveRecordPerm, isPrivilegedRole } from "../middlewares/permissions";
-import { emitEvent, EVENT_USER_CREATED } from "../lib/events";
+import {
+  emitEvent,
+  EVENT_PAGE_FIELD_SAVED,
+  EVENT_RECORD_UPDATED,
+  EVENT_USER_CREATED,
+} from "../lib/events";
+import { USER_REFERENCE_LOCK_NS } from "../lib/user-reference-barrier";
 import {
   CreateUserBody,
   UpdateUserBody,
@@ -615,6 +621,12 @@ router.post("/users/merge", requireAuth, requireSuperAdmin(), async (req, res): 
   let updatedRecordValues = 0;
   let updatedPageValues = 0;
   let mergedRoles = 0;
+  const changedRecords = new Map<number, {
+    entityId: number; recordId: number; version: number; changedFields: Set<string>;
+  }>();
+  const changedPageRows = new Map<string, {
+    entityId: number; pageId: number; recordId: number; version: number; changedPageFieldKeys: Set<string>;
+  }>();
 
   // SQL prefilter: only rows whose JSON text contains one of the source ids as
   // a standalone number can possibly reference them — avoids loading every
@@ -622,6 +634,11 @@ router.post("/users/merge", requireAuth, requireSuperAdmin(), async (req, res): 
   const idsRegex = `\\m(${sourceIds.join("|")})\\M`;
 
   await db.transaction(async (tx) => {
+    // Exclusive source-user barriers precede candidate discovery and all
+    // page/entity locks. Later shared writers fail fast instead of phantoming.
+    for (const sourceUserId of [...sourceIds].sort((a, b) => a - b)) {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${USER_REFERENCE_LOCK_NS}, ${sourceUserId})`);
+    }
     // ---- 1. User-type entity fields: rewrite values_json --------------
     const userFields = await tx
       .select({ entityId: entityFieldsTable.entityId, fieldKey: entityFieldsTable.fieldKey })
@@ -633,36 +650,16 @@ router.post("/users/merge", requireAuth, requireSuperAdmin(), async (req, res): 
       arr.push(f.fieldKey);
       keysByEntity.set(f.entityId, arr);
     }
-    if (keysByEntity.size > 0) {
-      const recs = await tx
-        .select({ id: entityRecordsTable.id, entityId: entityRecordsTable.entityId, valuesJson: entityRecordsTable.valuesJson })
+    const entityCandidates = keysByEntity.size === 0
+      ? []
+      : await tx
+        .select({ id: entityRecordsTable.id, entityId: entityRecordsTable.entityId })
         .from(entityRecordsTable)
-        .where(
-          and(
-            inArray(entityRecordsTable.entityId, [...keysByEntity.keys()]),
-            sql`${entityRecordsTable.valuesJson}::text ~ ${idsRegex}`,
-          )!,
-        );
-      for (const rec of recs) {
-        const keys = keysByEntity.get(rec.entityId)!;
-        const values = { ...(rec.valuesJson as Record<string, unknown>) };
-        let changed = false;
-        for (const k of keys) {
-          if (!(k in values)) continue;
-          const next = rewriteValue(values[k]);
-          if (next !== undefined) {
-            values[k] = next;
-            changed = true;
-          }
-        }
-        if (changed) {
-          await tx.update(entityRecordsTable).set({ valuesJson: values }).where(eq(entityRecordsTable.id, rec.id));
-          updatedRecordValues += 1;
-        }
-      }
-    }
+        .where(and(
+          inArray(entityRecordsTable.entityId, [...keysByEntity.keys()]),
+          sql`${entityRecordsTable.valuesJson}::text ~ ${idsRegex}`,
+        )!);
 
-    // ---- 2. User-type page-local fields: rewrite page values ----------
     const pageUserFields = await tx
       .select({ pageId: pageFieldsTable.pageId, fieldKey: pageFieldsTable.fieldKey })
       .from(pageFieldsTable)
@@ -673,30 +670,118 @@ router.post("/users/merge", requireAuth, requireSuperAdmin(), async (req, res): 
       arr.push(f.fieldKey);
       keysByPage.set(f.pageId, arr);
     }
-    if (keysByPage.size > 0) {
-      const rows = await tx
-        .select({ id: pageRecordValuesTable.id, pageId: pageRecordValuesTable.pageId, valuesJson: pageRecordValuesTable.valuesJson })
+    const candidateRows = keysByPage.size === 0
+      ? []
+      : await tx
+        .select({
+          id: pageRecordValuesTable.id,
+          pageId: pageRecordValuesTable.pageId,
+          recordId: pageRecordValuesTable.recordId,
+          entityId: entityRecordsTable.entityId,
+        })
         .from(pageRecordValuesTable)
-        .where(
-          and(
-            inArray(pageRecordValuesTable.pageId, [...keysByPage.keys()]),
-            sql`${pageRecordValuesTable.valuesJson}::text ~ ${idsRegex}`,
-          )!,
-        );
-      for (const row of rows) {
-        const keys = keysByPage.get(row.pageId)!;
-        const values = { ...(row.valuesJson as Record<string, unknown>) };
-        let changed = false;
+        .innerJoin(entityRecordsTable, eq(entityRecordsTable.id, pageRecordValuesTable.recordId))
+        .where(and(
+          inArray(pageRecordValuesTable.pageId, [...keysByPage.keys()]),
+          sql`${pageRecordValuesTable.valuesJson}::text ~ ${idsRegex}`,
+        )!);
+
+    // Global merge order: page advisory pairs first, then every affected entity
+    // row, then page-value rows. Candidate reads above are discovery only.
+    for (const row of [...candidateRows].sort(
+      (a, b) => a.pageId - b.pageId || a.recordId - b.recordId,
+    )) {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock((${row.pageId}::bigint << 32) | ${row.recordId}::bigint)`,
+      );
+    }
+    const entityLockIds = [...new Set([
+      ...entityCandidates.map((row) => row.id),
+      ...candidateRows.map((row) => row.recordId),
+    ])].sort((a, b) => a - b);
+    const lockedEntityRows = entityLockIds.length === 0
+      ? []
+      : await tx.select().from(entityRecordsTable)
+        .where(inArray(entityRecordsTable.id, entityLockIds))
+        .orderBy(entityRecordsTable.id)
+        .for("update");
+    const lockedEntityById = new Map(lockedEntityRows.map((row) => [row.id, row]));
+
+    if (keysByEntity.size > 0) {
+      const recs = entityCandidates
+        .map((candidate) => lockedEntityById.get(candidate.id))
+        .filter((row): row is NonNullable<typeof row> => row != null);
+      for (const rec of recs) {
+        const keys = keysByEntity.get(rec.entityId)!;
+        const values = { ...(rec.valuesJson as Record<string, unknown>) };
+        const changedKeys: string[] = [];
         for (const k of keys) {
           if (!(k in values)) continue;
           const next = rewriteValue(values[k]);
           if (next !== undefined) {
             values[k] = next;
-            changed = true;
+            changedKeys.push(k);
           }
         }
-        if (changed) {
-          await tx.update(pageRecordValuesTable).set({ valuesJson: values }).where(eq(pageRecordValuesTable.id, row.id));
+        if (changedKeys.length > 0) {
+          const [updated] = await tx.update(entityRecordsTable).set({ valuesJson: values })
+            .where(eq(entityRecordsTable.id, rec.id))
+            .returning({ version: entityRecordsTable.version });
+          if (!updated) continue;
+          const prior = changedRecords.get(rec.id);
+          changedRecords.set(rec.id, {
+            entityId: rec.entityId,
+            recordId: rec.id,
+            version: updated.version,
+            changedFields: new Set([...(prior?.changedFields ?? []), ...changedKeys]),
+          });
+          updatedRecordValues += 1;
+        }
+      }
+    }
+
+    // ---- 2. User-type page-local fields: rewrite page values ----------
+    if (keysByPage.size > 0) {
+      const candidateById = new Map(candidateRows.map((row) => [row.id, row]));
+      const rows = candidateRows.length === 0
+        ? []
+        : await tx
+          .select({
+            id: pageRecordValuesTable.id,
+            pageId: pageRecordValuesTable.pageId,
+            recordId: pageRecordValuesTable.recordId,
+            valuesJson: pageRecordValuesTable.valuesJson,
+          })
+          .from(pageRecordValuesTable)
+          .where(inArray(pageRecordValuesTable.id, candidateRows.map((row) => row.id)))
+          .orderBy(pageRecordValuesTable.pageId, pageRecordValuesTable.recordId)
+          .for("update");
+      for (const row of rows) {
+        const keys = keysByPage.get(row.pageId)!;
+        const values = { ...(row.valuesJson as Record<string, unknown>) };
+        const changedKeys: string[] = [];
+        for (const k of keys) {
+          if (!(k in values)) continue;
+          const next = rewriteValue(values[k]);
+          if (next !== undefined) {
+            values[k] = next;
+            changedKeys.push(k);
+          }
+        }
+        if (changedKeys.length > 0) {
+          const [updated] = await tx.update(pageRecordValuesTable).set({ valuesJson: values })
+            .where(eq(pageRecordValuesTable.id, row.id))
+            .returning({ version: pageRecordValuesTable.version });
+          if (!updated) continue;
+          const eventKey = `${row.pageId}:${row.recordId}`;
+          const prior = changedPageRows.get(eventKey);
+          changedPageRows.set(eventKey, {
+            entityId: candidateById.get(row.id)!.entityId,
+            pageId: row.pageId,
+            recordId: row.recordId,
+            version: updated.version,
+            changedPageFieldKeys: new Set([...(prior?.changedPageFieldKeys ?? []), ...changedKeys]),
+          });
           updatedPageValues += 1;
         }
       }
@@ -774,6 +859,30 @@ router.post("/users/merge", requireAuth, requireSuperAdmin(), async (req, res): 
     // ---- 5. Delete the duplicates (cascade: user_roles, guest_links) --
     await tx.delete(usersTable).where(inArray(usersTable.id, sourceIds));
   });
+
+  await emitEvent([
+    ...[...changedRecords.values()].map((changed) => ({
+      eventName: EVENT_RECORD_UPDATED,
+      entityId: changed.entityId,
+      recordId: changed.recordId,
+      payload: {
+        actorUserId: req.user!.userId,
+        changedFields: [...changed.changedFields],
+        version: changed.version,
+      },
+    })),
+    ...[...changedPageRows.values()].map((changed) => ({
+      eventName: EVENT_PAGE_FIELD_SAVED,
+      entityId: changed.entityId,
+      recordId: changed.recordId,
+      payload: {
+        actorUserId: req.user!.userId,
+        pageId: changed.pageId,
+        changedPageFieldKeys: [...changed.changedPageFieldKeys],
+        version: changed.version,
+      },
+    })),
+  ], req.log);
 
   // Any still-valid JWTs of the deleted accounts die at the auth layer: drop
   // their cached "alive" verdicts so the next request re-checks the DB.

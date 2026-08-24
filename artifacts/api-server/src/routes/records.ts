@@ -39,6 +39,7 @@ import {
   RenameFieldValueParams,
   RenameFieldValueBody,
   ArchiveRecordParams,
+  ArchiveRecordBody,
   UnarchiveRecordParams,
   PivotEntityRecordsParams,
   PivotEntityRecordsBody,
@@ -84,7 +85,13 @@ import {
   EVENT_RECORD_UPDATED,
   EVENT_RECORD_DELETED,
   EVENT_STATUS_CHANGED,
+  EVENT_PAGE_FIELD_SAVED,
 } from "../lib/events";
+import {
+  lockAndValidateUserReferences,
+  referencedUserIds,
+  UserReferenceBusyError,
+} from "../lib/user-reference-barrier";
 
 const router: IRouter = Router();
 
@@ -448,13 +455,14 @@ export async function loadActiveFields(entityId: number): Promise<EntityField[]>
 }
 
 /** Verify that every value for a `user`-type field references an existing user. */
-export async function validateUserRefs(fields: EntityField[], values: Record<string, unknown>): Promise<string | null> {
-  const userKeys = fields.filter((f) => f.fieldType === "user").map((f) => f.fieldKey);
-  const ids = userKeys
-    .map((k) => values[k])
-    .filter((v): v is number => typeof v === "number");
-  const unique = [...new Set(ids)];
+export async function validateUserRefs(
+  fields: EntityField[],
+  values: Record<string, unknown>,
+  tx?: DbExecutor,
+): Promise<string | null> {
+  const unique = referencedUserIds(fields, values);
   if (unique.length === 0) return null;
+  if (tx) return lockAndValidateUserReferences(tx, unique);
   const rows = await db.select({ id: usersTable.id }).from(usersTable).where(inArray(usersTable.id, unique));
   const found = new Set(rows.map((r) => r.id));
   const missing = unique.find((id) => !found.has(id));
@@ -724,6 +732,7 @@ export const UNIQUE_KEY_LOCK_NS = 415943;
 
 /** Thrown inside a write transaction when an isKey value collides; mapped to 409. */
 export class UniqueKeyError extends Error {}
+class UserReferenceValidationError extends Error {}
 
 /** A db handle that works for both the pool and a transaction. */
 export type DbExecutor = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -826,6 +835,7 @@ function hiddenRowStatusWhere(hiddenRowStatusIds: number[]): SQL | undefined {
     sql`, `,
   )}))`;
 }
+const ARCHIVED_CHANGED_FIELD = "__archived__";
 
 /**
  * Auto-archive (metadata-driven): any record sitting in an archive-trigger status
@@ -842,7 +852,7 @@ async function runAutoArchiveSweep(entityId: number): Promise<void> {
   if (triggers.length === 0) return;
   for (const t of triggers) {
     const days = Math.max(0, t.days ?? 0);
-    await db
+    const archived = await db
       .update(entityRecordsTable)
       .set({ archivedAt: sql`now()` })
       .where(
@@ -853,7 +863,16 @@ async function runAutoArchiveSweep(entityId: number): Promise<void> {
           eq(entityRecordsTable.archiveExempt, false),
           sql`COALESCE(${entityRecordsTable.statusChangedAt}, ${entityRecordsTable.createdAt}) + (${days} * interval '1 day') <= now()`,
         ),
-      );
+      )
+      .returning({ id: entityRecordsTable.id, version: entityRecordsTable.version });
+    if (archived.length > 0) {
+      await emitEvent(archived.map((record) => ({
+        eventName: EVENT_RECORD_UPDATED,
+        entityId,
+        recordId: record.id,
+        payload: { changedFields: [ARCHIVED_CHANGED_FIELD], version: record.version },
+      })));
+    }
   }
 }
 
@@ -2711,34 +2730,60 @@ router.post(
       return;
     }
 
-    // Renaming the value writes it straight into valuesJson, so re-apply the
-    // cross-field validation boundary on each resulting row before mutating —
-    // reject the whole rename if any row would violate a fill rule (no partial
-    // writes), the same hard boundary the normal records update path enforces.
-    for (const m of matches) {
-      const candidate = { ...((m.valuesJson as Record<string, unknown>) ?? {}), [target.fieldKey]: newValue };
-      const validationError = checkValidationRules(fields, candidate);
-      if (validationError) {
-        res.status(422).json({ error: validationError });
+    type RenamedRow = { id: number; version: number; changedFields: string[] };
+    class RenameValidationError extends Error {}
+    let renamedRows: RenamedRow[];
+    try {
+      renamedRows = await db.transaction(async (tx) => {
+        // Candidate discovery is intentionally outside the transaction, but all
+        // decisions and full-map writes are derived from these stable locked
+        // rows. Reapply the scope/value predicate so rows changed out of the
+        // candidate set before locking become no-ops.
+        const locked = await tx
+          .select()
+          .from(entityRecordsTable)
+          .where(and(where, inArray(entityRecordsTable.id, matches.map((match) => match.id)))!)
+          .orderBy(asc(entityRecordsTable.id))
+          .for("update");
+        const changed: RenamedRow[] = [];
+        for (const row of locked) {
+          const before = (row.valuesJson as Record<string, unknown>) ?? {};
+          let next = { ...before, [target.fieldKey]: newValue };
+          if (JSON.stringify(before[target.fieldKey] ?? null) !== JSON.stringify(newValue)) {
+            next = clearDependentDescendantValues(next, target.fieldKey, fields);
+          }
+          const validationError = checkValidationRules(fields, next);
+          if (validationError) throw new RenameValidationError(validationError);
+          const userRefError = await validateUserRefs(fields, next, tx);
+          if (userRefError) throw new RenameValidationError(userRefError);
+          const changedFields = diffValues(before, next, fields.map((field) => field.fieldKey))
+            .map((change) => change.fieldKey);
+          if (changedFields.length === 0) continue;
+          const [updated] = await tx.update(entityRecordsTable)
+            .set({ valuesJson: next })
+            .where(eq(entityRecordsTable.id, row.id))
+            .returning({ version: entityRecordsTable.version });
+          if (updated) changed.push({ id: row.id, version: updated.version, changedFields });
+        }
+        return changed;
+      });
+    } catch (err) {
+      if (err instanceof RenameValidationError) {
+        res.status(422).json({ error: err.message });
         return;
       }
-    }
-
-    await db.transaction(async (tx) => {
-      for (const m of matches) {
-        const next = { ...((m.valuesJson as Record<string, unknown>) ?? {}), [target.fieldKey]: newValue };
-        await tx
-          .update(entityRecordsTable)
-          .set({ valuesJson: next })
-          .where(eq(entityRecordsTable.id, m.id));
+      if (err instanceof UserReferenceBusyError) {
+        res.status(409).json({ error: err.message });
+        return;
       }
-    });
+      throw err;
+    }
 
     const userId = req.user!.userId;
     await writeAudit(
-      matches.map((m) => ({
+      renamedRows.map((row) => ({
         entityId,
-        recordId: m.id,
+        recordId: row.id,
         userId,
         fieldKey: target.fieldKey,
         oldValue: auditStr(oldValue),
@@ -2746,8 +2791,20 @@ router.post(
       })),
       req.log,
     );
+    if (renamedRows.length > 0) {
+      await emitEvent(renamedRows.map((row) => ({
+        eventName: EVENT_RECORD_UPDATED,
+        entityId,
+        recordId: row.id,
+        payload: {
+          actorUserId: userId,
+          changedFields: row.changedFields,
+          version: row.version,
+        },
+      })), req.log);
+    }
 
-    res.json({ updated: matches.length });
+    res.json({ updated: renamedRows.length });
   },
 );
 
@@ -2847,6 +2904,8 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
   let record: typeof entityRecordsTable.$inferSelect;
   try {
     record = await db.transaction(async (tx) => {
+      const lockedUserRefError = await validateUserRefs(fields, result.values, tx);
+      if (lockedUserRefError) throw new UserReferenceValidationError(lockedUserRefError);
       if (keyFields.length > 0) {
         await tx.execute(sql`SELECT pg_advisory_xact_lock(${UNIQUE_KEY_LOCK_NS}, ${entityId})`);
         const dup = await checkUniqueKeys(tx, entityId, keyFields, result.values);
@@ -2862,6 +2921,14 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
   } catch (err) {
     if (err instanceof UniqueKeyError) {
       res.status(409).json({ error: err.message });
+      return;
+    }
+    if (err instanceof UserReferenceBusyError) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
+    if (err instanceof UserReferenceValidationError) {
+      res.status(400).json({ error: err.message });
       return;
     }
     throw err;
@@ -3109,29 +3176,32 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: body.error.message });
     return;
   }
+  const recordId = params.data.id;
+  const input = body.data;
 
   const [existing] = await db
     .select()
     .from(entityRecordsTable)
-    .where(eq(entityRecordsTable.id, params.data.id))
+    .where(eq(entityRecordsTable.id, recordId))
     .limit(1);
   if (!existing) {
     res.status(404).json({ error: "Record not found" });
     return;
   }
-  if (!(await assertRecord(req, res, existing.entityId, "update", body.data.pageId))) return;
+  if (!(await assertRecord(req, res, existing.entityId, "update", input.pageId))) return;
 
   const perms = await getPermissions(req);
   const fields = await loadActiveFields(existing.entityId);
-  const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, existing.entityId, body.data.pageId);
-  const existingValues = (existing.valuesJson as Record<string, unknown>) ?? {};
+  const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, existing.entityId, input.pageId);
+  let authoritativeExisting = existing;
+  let existingValues = (existing.valuesJson as Record<string, unknown>) ?? {};
   if (scope === "own" && !(await isRecordOwned(existing.entityId, existing, scopeFieldKeys, req.user!.userId, fields))) {
     res.status(404).json({ error: "Record not found" });
     return;
   }
 
-  const hasValues = body.data.valuesJson !== undefined;
-  const hasStatus = body.data.statusId !== undefined;
+  const hasValues = input.valuesJson !== undefined;
+  const hasStatus = input.statusId !== undefined;
   if (!hasValues && !hasStatus) {
     res.status(400).json({ error: "No fields to update" });
     return;
@@ -3145,56 +3215,29 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
     archiveExempt?: boolean;
   } = {};
 
-  const { editable, hidden } = await fieldAccessContext(req, existing.entityId, fields, body.data.pageId);
+  const { editable, hidden } = await fieldAccessContext(req, existing.entityId, fields, input.pageId);
 
   if (hasValues) {
-    const activeKeys = new Set(fields.map((f) => f.fieldKey));
-    const rawValues = body.data.valuesJson as Record<string, unknown>;
-    for (const k of Object.keys(rawValues)) {
-      if (!activeKeys.has(k)) {
-        res.status(400).json({ error: `Unknown field: ${k}` });
+    const activeKeys = new Set(fields.map((field) => field.fieldKey));
+    for (const key of Object.keys(input.valuesJson as Record<string, unknown>)) {
+      if (!activeKeys.has(key)) {
+        res.status(400).json({ error: `Unknown field: ${key}` });
         return;
       }
     }
-    // Merge-on-write: only editable fields are taken from the request; all other
-    // fields (view-only, hidden, or unchanged editable) keep their stored value.
-    const candidate: Record<string, unknown> = {};
-    for (const f of fields) {
-      const key = f.fieldKey;
-      if (editable.has(key)) {
-        candidate[key] = key in rawValues ? rawValues[key] : existingValues[key];
-      } else {
-        candidate[key] = existingValues[key];
-      }
-    }
-    const gdriveModuleEnabled = await isGoogleDriveModuleEnabled();
-    const result = validateValues(fields, candidate, gdriveModuleEnabled, existingValues);
-    if ("error" in result) {
-      res.status(400).json({ error: result.error });
-      return;
-    }
-    const userRefError = await validateUserRefs(fields, result.values);
-    if (userRefError) {
-      res.status(400).json({ error: userRefError });
-      return;
-    }
-    const depError = await checkDependentValues(existing.entityId, fields, result.values, params.data.id);
-    if (depError) {
-      res.status(400).json({ error: depError });
-      return;
-    }
-    update.valuesJson = result.values;
   }
+  // Final value derivation and validation are intentionally deferred until the
+  // authoritative row is locked inside the mutation transaction.
 
   if (hasStatus) {
-    if (body.data.statusId === null) {
+    if (input.statusId === null) {
       update.statusId = null;
     } else {
-      if (!(await statusBelongsToEntity(body.data.statusId as number, existing.entityId))) {
+      if (!(await statusBelongsToEntity(input.statusId as number, existing.entityId))) {
         res.status(400).json({ error: "Status does not belong to this entity" });
         return;
       }
-      update.statusId = body.data.statusId as number;
+      update.statusId = input.statusId as number;
     }
   }
 
@@ -3208,8 +3251,7 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
   // When a workflow transition is enforced, the final UPDATE is guarded on the
   // record's status still being the one we validated against (compare-and-set),
   // so concurrent status-changing writes cannot bypass the transition graph.
-  let guardFromStatusId: number | null = null;
-  const statusChanging = hasStatus && (update.statusId ?? null) !== (existing.statusId ?? null);
+  let statusChanging = hasStatus && (update.statusId ?? null) !== (existing.statusId ?? null);
   // Hard boundary: the role may not move a record INTO a status hidden from its
   // picker. A record already sitting in a hidden status (status unchanged) is left
   // alone so unrelated value edits never break.
@@ -3220,116 +3262,132 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
       return;
     }
   }
-  if (statusChanging && existing.statusId != null && !perms.superAdmin) {
-    const transitions = await db
-      .select()
-      .from(entityTransitionsTable)
-      .where(eq(entityTransitionsTable.entityId, existing.entityId));
-    if (transitions.length > 0) {
-      guardFromStatusId = existing.statusId;
-      // A specific from→to transition takes precedence; otherwise fall back to a
-      // wildcard (fromStatusId === null, "from any status") into the target.
-      const match =
-        transitions.find(
-          (t) => t.fromStatusId === existing.statusId && t.toStatusId === update.statusId,
-        ) ?? transitions.find((t) => t.fromStatusId === null && t.toStatusId === update.statusId);
-      if (!match) {
-        res.status(422).json({ error: "This status change is not an allowed transition" });
-        return;
-      }
-      const allowedRoleIds = (match.allowedRoleIds as number[]) ?? [];
-      const userRoleIds = await getUserRoleIds(req);
-      if (allowedRoleIds.length > 0 && !allowedRoleIds.some((id) => userRoleIds.includes(id))) {
-        res.status(403).json({ error: "Your role is not allowed to perform this transition" });
-        return;
-      }
-      const actions = (match.actionsJson as { type: string; fieldKey: string; value?: unknown }[]) ?? [];
-      const requiredKeys = (match.requiredFieldKeys as string[]) ?? [];
-      if (actions.length > 0 || requiredKeys.length > 0) {
-        const base: Record<string, unknown> =
-          update.valuesJson !== undefined ? { ...update.valuesJson } : { ...existingValues };
-        for (const a of actions) {
-          if (a.type === "set_field") base[a.fieldKey] = a.value;
-        }
-        if (actions.length > 0) {
-          const gdriveModuleEnabled = await isGoogleDriveModuleEnabled();
-          const result = validateValues(fields, base, gdriveModuleEnabled, existingValues);
-          if ("error" in result) {
-            res.status(400).json({ error: result.error });
-            return;
-          }
-          const userRefError = await validateUserRefs(fields, result.values);
-          if (userRefError) {
-            res.status(400).json({ error: userRefError });
-            return;
-          }
-          update.valuesJson = result.values;
-        }
-        const finalValues = update.valuesJson ?? base;
-        const missing = requiredKeys.filter((k) => isEmpty(finalValues[k]));
-        if (missing.length > 0) {
-          res.status(422).json({ error: `Fields required for this transition: ${missing.join(", ")}` });
-          return;
-        }
-      }
-    }
-  }
-
-  // When the status actually changes, reset the auto-archive baseline and clear any
-  // manual-unarchive exemption (a new status dwell re-enables auto-archival). If the
-  // new status is an archive-trigger with zero delay, archive immediately; otherwise
-  // the lazy sweep on reads will pick it up once the N-day threshold passes.
-  if (statusChanging) {
-    update.statusChangedAt = new Date();
-    update.archiveExempt = false;
-    if (update.statusId != null) {
-      const info = await statusArchiveInfo(update.statusId);
-      if (info?.isArchiveTrigger && (info.archiveAfterDays ?? 0) === 0) {
-        update.archivedAt = new Date();
-      }
-    }
-  }
-
-  // Immutability (lockAfterCreate) is enforced on the FINAL values — after any
-  // workflow set_field actions have been applied to update.valuesJson — so a
-  // transition action can no more bypass the lock than a direct edit can.
-  if (update.valuesJson !== undefined) {
-    const immErr = checkImmutableFields(fields, update.valuesJson, existingValues);
-    if (immErr) {
-      res.status(422).json({ error: immErr });
-      return;
-    }
-    // Cross-field validation (fill) rules on the FINAL values — after any
-    // workflow set_field actions — so a transition cannot bypass them.
-    const validationError = checkValidationRules(fields, update.valuesJson);
-    if (validationError) {
-      res.status(422).json({ error: validationError });
-      return;
-    }
-  }
-
-  const whereClause =
-    guardFromStatusId != null
-      ? and(
-          eq(entityRecordsTable.id, params.data.id),
-          eq(entityRecordsTable.statusId, guardFromStatusId),
-        )
-      : eq(entityRecordsTable.id, params.data.id);
   // isKey uniqueness is verified inside the write transaction under an advisory lock
   // (per entity), excluding this record, so concurrent edits can't both pass.
   const keyFields = fields.filter((f) => f.isKey);
   let record: typeof entityRecordsTable.$inferSelect | undefined;
+  class LockedUpdateError extends Error {
+    constructor(readonly status: number, message: string) { super(message); }
+  }
   try {
     record = await db.transaction(async (tx) => {
+      const [locked] = await tx.select().from(entityRecordsTable)
+        .where(eq(entityRecordsTable.id, recordId)).for("update");
+      if (!locked) throw new LockedUpdateError(404, "Record not found");
+      if (input.expectedVersion != null && locked.version !== input.expectedVersion) return undefined;
+      if (locked.entityId !== existing.entityId) throw new LockedUpdateError(404, "Record not found");
+      if (
+        scope === "own" &&
+        !(await isRecordOwned(locked.entityId, locked, scopeFieldKeys, req.user!.userId, fields, tx))
+      ) {
+        throw new LockedUpdateError(404, "Record not found");
+      }
+      const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, locked.entityId);
+      if (locked.statusId != null && hiddenRowStatusIds.includes(locked.statusId)) {
+        throw new LockedUpdateError(404, "Record not found");
+      }
+      authoritativeExisting = locked;
+      existingValues = (locked.valuesJson as Record<string, unknown>) ?? {};
+
+      // Rebuild the complete value map from the locked current row. The earlier
+      // request checks are only a fast-fail boundary and are never write input.
+      if (hasValues) {
+        const rawValues = input.valuesJson as Record<string, unknown>;
+        const candidate: Record<string, unknown> = {};
+        for (const field of fields) {
+          candidate[field.fieldKey] = editable.has(field.fieldKey) && field.fieldKey in rawValues
+            ? rawValues[field.fieldKey]
+            : existingValues[field.fieldKey];
+        }
+        let validated = validateValues(fields, candidate, await isGoogleDriveModuleEnabled(), existingValues);
+        if ("error" in validated) throw new LockedUpdateError(400, validated.error);
+        let finalValues = validated.values;
+        for (const field of fields) {
+          if (
+            field.fieldKey in rawValues &&
+            JSON.stringify(existingValues[field.fieldKey] ?? null) !==
+              JSON.stringify(finalValues[field.fieldKey] ?? null)
+          ) {
+            finalValues = clearDependentDescendantValues(finalValues, field.fieldKey, fields);
+          }
+        }
+        validated = validateValues(fields, finalValues, await isGoogleDriveModuleEnabled(), existingValues);
+        if ("error" in validated) throw new LockedUpdateError(400, validated.error);
+        update.valuesJson = validated.values;
+      } else {
+        delete update.valuesJson;
+      }
+
+      statusChanging = hasStatus && (update.statusId ?? null) !== (locked.statusId ?? null);
+      delete update.statusChangedAt;
+      delete update.archivedAt;
+      delete update.archiveExempt;
+      if (statusChanging && locked.statusId != null && !perms.superAdmin) {
+        const transitions = await tx.select().from(entityTransitionsTable)
+          .where(eq(entityTransitionsTable.entityId, locked.entityId));
+        if (transitions.length > 0) {
+          const match = transitions.find((transition) =>
+            transition.fromStatusId === locked.statusId && transition.toStatusId === update.statusId)
+            ?? transitions.find((transition) =>
+              transition.fromStatusId === null && transition.toStatusId === update.statusId);
+          if (!match) throw new LockedUpdateError(422, "This status change is not an allowed transition");
+          const allowedRoleIds = (match.allowedRoleIds as number[]) ?? [];
+          const userRoleIds = await getUserRoleIds(req);
+          if (allowedRoleIds.length > 0 && !allowedRoleIds.some((id) => userRoleIds.includes(id))) {
+            throw new LockedUpdateError(403, "Your role is not allowed to perform this transition");
+          }
+          const base = update.valuesJson !== undefined ? { ...update.valuesJson } : { ...existingValues };
+          for (const action of (match.actionsJson as { type: string; fieldKey: string; value?: unknown }[]) ?? []) {
+            if (action.type === "set_field") base[action.fieldKey] = action.value;
+          }
+          const validated = validateValues(fields, base, await isGoogleDriveModuleEnabled(), existingValues);
+          if ("error" in validated) throw new LockedUpdateError(400, validated.error);
+          update.valuesJson = validated.values;
+          const missing = ((match.requiredFieldKeys as string[]) ?? [])
+            .filter((fieldKey) => isEmpty(update.valuesJson![fieldKey]));
+          if (missing.length > 0) {
+            throw new LockedUpdateError(422, `Fields required for this transition: ${missing.join(", ")}`);
+          }
+        }
+      }
+      if (update.valuesJson !== undefined) {
+        const preservedValues = { ...existingValues };
+        for (const field of fields) {
+          if (Object.prototype.hasOwnProperty.call(update.valuesJson, field.fieldKey)) {
+            preservedValues[field.fieldKey] = update.valuesJson[field.fieldKey];
+          } else {
+            delete preservedValues[field.fieldKey];
+          }
+        }
+        update.valuesJson = preservedValues;
+        const userRefError = await validateUserRefs(fields, update.valuesJson, tx);
+        if (userRefError) throw new LockedUpdateError(400, userRefError);
+        const dependentError = await checkDependentValues(
+          locked.entityId, fields, update.valuesJson, locked.id, tx,
+        );
+        if (dependentError) throw new LockedUpdateError(400, dependentError);
+        const immutableError = checkImmutableFields(fields, update.valuesJson, existingValues);
+        if (immutableError) throw new LockedUpdateError(422, immutableError);
+        const validationError = checkValidationRules(fields, update.valuesJson);
+        if (validationError) throw new LockedUpdateError(422, validationError);
+      }
+      if (statusChanging) {
+        update.statusChangedAt = new Date();
+        update.archiveExempt = false;
+        if (update.statusId != null) {
+          const info = await statusArchiveInfo(update.statusId);
+          if (info?.isArchiveTrigger && (info.archiveAfterDays ?? 0) === 0) update.archivedAt = new Date();
+        }
+      }
       if (keyFields.length > 0 && update.valuesJson !== undefined) {
         await tx.execute(sql`SELECT pg_advisory_xact_lock(${UNIQUE_KEY_LOCK_NS}, ${existing.entityId})`);
-        const dup = await checkUniqueKeys(tx, existing.entityId, keyFields, update.valuesJson, params.data.id);
+        const dup = await checkUniqueKeys(tx, existing.entityId, keyFields, update.valuesJson, recordId);
         if (dup) throw new UniqueKeyError(dup);
       }
       const [rec] = await tx
         .update(entityRecordsTable)
         .set(update)
-        .where(whereClause)
+        .where(eq(entityRecordsTable.id, recordId))
         .returning();
       return rec;
     });
@@ -3338,10 +3396,19 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
       res.status(409).json({ error: err.message });
       return;
     }
+    if (err instanceof LockedUpdateError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    if (err instanceof UserReferenceBusyError) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
     throw err;
   }
   if (!record) {
-    res.status(409).json({ error: "Record status changed concurrently; please retry" });
+    const [current] = await db.select({ version: entityRecordsTable.version }).from(entityRecordsTable).where(eq(entityRecordsTable.id, recordId));
+    res.status(409).json({ error: "Record changed concurrently; please retry", currentVersion: current?.version ?? null });
     return;
   }
 
@@ -3353,21 +3420,21 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
   if (update.valuesJson !== undefined) {
     const after = record.valuesJson as Record<string, unknown>;
     for (const c of diffValues(existingValues, after, fields.map((f) => f.fieldKey))) {
-      updateEntries.push({ entityId: existing.entityId, recordId: record.id, ...c, userId });
+      updateEntries.push({ entityId: authoritativeExisting.entityId, recordId: record.id, ...c, userId });
     }
   }
   if (statusChanging) {
     updateEntries.push({
-      entityId: existing.entityId,
+      entityId: authoritativeExisting.entityId,
       recordId: record.id,
       fieldKey: AUDIT_STATUS,
-      oldValue: existing.statusId != null ? String(existing.statusId) : null,
+      oldValue: authoritativeExisting.statusId != null ? String(authoritativeExisting.statusId) : null,
       newValue: record.statusId != null ? String(record.statusId) : null,
       userId,
     });
     // A delay=0 archive-trigger status archives immediately as a side effect.
-    if (existing.archivedAt == null && record.archivedAt != null) {
-      updateEntries.push({ entityId: existing.entityId, recordId: record.id, fieldKey: AUDIT_ARCHIVED, oldValue: "false", newValue: "true", userId });
+    if (authoritativeExisting.archivedAt == null && record.archivedAt != null) {
+      updateEntries.push({ entityId: authoritativeExisting.entityId, recordId: record.id, fieldKey: AUDIT_ARCHIVED, oldValue: "false", newValue: "true", userId });
     }
   }
   await writeAudit(updateEntries, req.log);
@@ -3377,7 +3444,7 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
   if (update.valuesJson !== undefined) {
     await trashRemovedServerFiles(
       req,
-      existing.entityId,
+      authoritativeExisting.entityId,
       record.id,
       existingValues,
       record.valuesJson as Record<string, unknown>,
@@ -3390,12 +3457,15 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
     update.valuesJson !== undefined
       ? diffValues(existingValues, record.valuesJson as Record<string, unknown>, fields.map((f) => f.fieldKey)).map((c) => c.fieldKey)
       : [];
+  if ((existing.archivedAt != null) !== (record.archivedAt != null)) {
+    changedFields.push(ARCHIVED_CHANGED_FIELD);
+  }
   const events: Parameters<typeof emitEvent>[0] = [
     {
       eventName: EVENT_RECORD_UPDATED,
-      entityId: existing.entityId,
+        entityId: authoritativeExisting.entityId,
       recordId: record.id,
-      payload: { actorUserId: userId, changedFields },
+      payload: { actorUserId: userId, changedFields, version: record.version },
     },
   ];
   if (statusChanging) {
@@ -3407,6 +3477,7 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
         actorUserId: userId,
         from: existing.statusId ?? null,
         to: record.statusId ?? null,
+        version: record.version,
       },
     });
   }
@@ -3427,7 +3498,7 @@ router.delete("/records/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const [existing] = await db
-    .select({ id: entityRecordsTable.id, entityId: entityRecordsTable.entityId, valuesJson: entityRecordsTable.valuesJson })
+    .select({ id: entityRecordsTable.id, entityId: entityRecordsTable.entityId, valuesJson: entityRecordsTable.valuesJson, version: entityRecordsTable.version })
     .from(entityRecordsTable)
     .where(eq(entityRecordsTable.id, params.data.id))
     .limit(1);
@@ -3440,13 +3511,17 @@ router.delete("/records/:id", requireAuth, async (req, res): Promise<void> => {
   const perms = await getPermissions(req);
   const fields = await loadActiveFields(existing.entityId);
   const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, existing.entityId, body.data.pageId);
-  const values = (existing.valuesJson as Record<string, unknown>) ?? {};
   if (scope === "own" && !(await isRecordOwned(existing.entityId, existing, scopeFieldKeys, req.user!.userId, fields))) {
     res.status(404).json({ error: "Record not found" });
     return;
   }
 
-  await performRecordDelete(req, existing.entityId, params.data.id, values);
+  const deleted = await performRecordDelete(req, existing.entityId, params.data.id, body.data.expectedVersion);
+  if (!deleted) {
+    const [current] = await db.select({ version: entityRecordsTable.version }).from(entityRecordsTable).where(eq(entityRecordsTable.id, params.data.id)).limit(1);
+    res.status(409).json({ error: "Stale record version", recordId: params.data.id, currentVersion: current?.version });
+    return;
+  }
 
   res.json({ success: true });
 });
@@ -3461,25 +3536,63 @@ async function performRecordDelete(
   req: import("express").Request,
   entityId: number,
   recordId: number,
-  values: Record<string, unknown>,
-): Promise<void> {
-  // Snapshot page-local values BEFORE the delete — the FK cascade wipes
-  // page_record_values together with the record, and any server files stored in
-  // page-local file fields must land in the trash too.
-  let pageFileEntries: { pageId: number; valuesJson: Record<string, unknown> }[] = [];
-  try {
-    pageFileEntries = (
-      await db
-        .select({ pageId: pageRecordValuesTable.pageId, valuesJson: pageRecordValuesTable.valuesJson })
-        .from(pageRecordValuesTable)
-        .where(eq(pageRecordValuesTable.recordId, recordId))
-    ).map((r) => ({ pageId: r.pageId, valuesJson: (r.valuesJson as Record<string, unknown>) ?? {} }));
-  } catch (err) {
-    req.log.error({ err }, "Failed to snapshot page-local values before record delete");
+  expectedVersion?: number,
+): Promise<typeof entityRecordsTable.$inferSelect | undefined> {
+  const result = await db.transaction(async (tx) => {
+    await tx.select({ id: relationsTable.id }).from(relationsTable)
+      .where(or(eq(relationsTable.sourceEntityId, entityId), eq(relationsTable.targetEntityId, entityId)))
+      .orderBy(asc(relationsTable.id)).for("update");
+    const links = await tx.select().from(recordLinksTable)
+      .where(or(eq(recordLinksTable.sourceRecordId, recordId), eq(recordLinksTable.targetRecordId, recordId)))
+      .orderBy(asc(recordLinksTable.id)).for("update");
+    const counterpartIds = [...new Set(links.map((link) =>
+      link.sourceRecordId === recordId ? link.targetRecordId : link.sourceRecordId))];
+    const locked = await tx.select().from(entityRecordsTable)
+      .where(inArray(entityRecordsTable.id, [recordId, ...counterpartIds].sort((a, b) => a - b)))
+      .orderBy(asc(entityRecordsTable.id)).for("update");
+    const deleting = locked.find((record) => record.id === recordId && record.entityId === entityId);
+    if (!deleting || (expectedVersion != null && deleting.version !== expectedVersion)) return null;
+    const pageFileEntries = (await tx
+      .select({ pageId: pageRecordValuesTable.pageId, valuesJson: pageRecordValuesTable.valuesJson })
+      .from(pageRecordValuesTable)
+      .where(eq(pageRecordValuesTable.recordId, recordId))
+      .for("update"))
+      .map((row) => ({ pageId: row.pageId, valuesJson: (row.valuesJson as Record<string, unknown>) ?? {} }));
+    await tx.delete(entityRecordsTable).where(eq(entityRecordsTable.id, recordId));
+    const touched = counterpartIds.length === 0 ? [] : await tx.update(entityRecordsTable)
+      .set({ updatedAt: new Date() })
+      .where(inArray(entityRecordsTable.id, counterpartIds))
+      .returning({ id: entityRecordsTable.id, entityId: entityRecordsTable.entityId, version: entityRecordsTable.version });
+    return { pageFileEntries, touched, deleting };
+  });
+  if (!result) return undefined;
+
+  await finalizeRecordDelete(
+    req,
+    entityId,
+    recordId,
+    (result.deleting.valuesJson as Record<string, unknown>) ?? {},
+    result.pageFileEntries,
+  );
+  if (result.touched.length > 0) {
+    await emitEvent(result.touched.map((row) => ({
+      eventName: EVENT_RECORD_UPDATED,
+      entityId: row.entityId,
+      recordId: row.id,
+      payload: { actorUserId: req.user!.userId, changedFields: [], version: row.version },
+    })), req.log);
   }
+  return result.deleting;
+}
 
-  await db.delete(entityRecordsTable).where(eq(entityRecordsTable.id, recordId));
-
+/** Post-delete bookkeeping shared with transactional multi-record operations. */
+async function finalizeRecordDelete(
+  req: import("express").Request,
+  entityId: number,
+  recordId: number,
+  values: Record<string, unknown>,
+  pageFileEntries: { pageId: number; valuesJson: Record<string, unknown> }[],
+): Promise<void> {
   // Move the record's local files into the file trash so a mistaken delete is
   // recoverable (Drive/link values untouched). Best-effort; does not block.
   await trashRemovedServerFiles(req, entityId, recordId, values, null);
@@ -3522,6 +3635,7 @@ async function setArchived(
   res: import("express").Response,
   recordId: number,
   archived: boolean,
+  expectedVersion?: number,
 ): Promise<void> {
   const [existing] = await db
     .select()
@@ -3542,7 +3656,16 @@ async function setArchived(
     return;
   }
 
-  const record = await applyArchiveFlag(req, existing.entityId, existing.id, existing.archivedAt != null, archived);
+  if (expectedVersion != null && existing.version !== expectedVersion) {
+    res.status(409).json({ error: "Stale record version", recordId, currentVersion: existing.version });
+    return;
+  }
+  const record = await applyArchiveFlag(req, existing.entityId, existing.id, archived, expectedVersion);
+  if (!record) {
+    const [current] = await db.select({ version: entityRecordsTable.version }).from(entityRecordsTable).where(eq(entityRecordsTable.id, recordId)).limit(1);
+    res.status(409).json({ error: "Stale record version", recordId, currentVersion: current?.version });
+    return;
+  }
 
   const { hidden } = await fieldAccessContext(req, existing.entityId, fields);
   res.json(presentRecord(record, hidden, fields));
@@ -3564,39 +3687,47 @@ async function applyArchiveFlag(
   req: import("express").Request,
   entityId: number,
   recordId: number,
-  wasArchived: boolean,
   archived: boolean,
-): Promise<typeof entityRecordsTable.$inferSelect> {
-  const set: { archivedAt: Date | null; archiveExempt?: boolean } = {
-    archivedAt: archived ? new Date() : null,
-  };
-  if (archived) {
-    set.archiveExempt = false;
-  } else if (wasArchived) {
-    set.archiveExempt = true;
-  }
-  const [record] = await db
-    .update(entityRecordsTable)
-    .set(set)
-    .where(eq(entityRecordsTable.id, recordId))
-    .returning();
+  expectedVersion?: number,
+): Promise<typeof entityRecordsTable.$inferSelect | undefined> {
+  const result = await db.transaction(async (tx) => {
+    const [current] = await tx.select().from(entityRecordsTable)
+      .where(and(eq(entityRecordsTable.id, recordId), eq(entityRecordsTable.entityId, entityId)))
+      .for("update");
+    if (!current || (expectedVersion != null && current.version !== expectedVersion)) return undefined;
+    const currentlyArchived = current.archivedAt != null;
+    if (currentlyArchived === archived) return { record: current, changed: false };
+    const [record] = await tx.update(entityRecordsTable)
+      .set({
+        archivedAt: archived ? new Date() : null,
+        archiveExempt: archived ? false : true,
+      })
+      .where(and(eq(entityRecordsTable.id, recordId), eq(entityRecordsTable.version, current.version)))
+      .returning();
+    return record ? { record, changed: true, wasArchived: currentlyArchived } : undefined;
+  });
+  if (!result) return undefined;
+  if (!result.changed) return result.record;
 
-  // Audit: log the archival flip only when it actually changed state.
-  if (wasArchived !== archived) {
-    await writeAudit(
-      [{
-        entityId,
-        recordId,
-        fieldKey: AUDIT_ARCHIVED,
-        oldValue: String(wasArchived),
-        newValue: String(archived),
-        userId: req.user!.userId,
-      }],
-      req.log,
-    );
-  }
-
-  return record;
+  await writeAudit([{
+    entityId,
+    recordId,
+    fieldKey: AUDIT_ARCHIVED,
+    oldValue: String(result.wasArchived),
+    newValue: String(archived),
+    userId: req.user!.userId,
+  }], req.log);
+  await emitEvent({
+    eventName: EVENT_RECORD_UPDATED,
+    entityId,
+    recordId,
+    payload: {
+      actorUserId: req.user!.userId,
+      changedFields: [ARCHIVED_CHANGED_FIELD],
+      version: result.record.version,
+    },
+  }, req.log);
+  return result.record;
 }
 
 router.post("/records/:id/archive", requireAuth, async (req, res): Promise<void> => {
@@ -3605,7 +3736,12 @@ router.post("/records/:id/archive", requireAuth, async (req, res): Promise<void>
     res.status(400).json({ error: params.error.message });
     return;
   }
-  await setArchived(req, res, params.data.id, true);
+  const body = ArchiveRecordBody.safeParse(req.body ?? {});
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  await setArchived(req, res, params.data.id, true, body.data.expectedVersion);
 });
 
 router.post("/records/:id/unarchive", requireAuth, async (req, res): Promise<void> => {
@@ -3614,7 +3750,12 @@ router.post("/records/:id/unarchive", requireAuth, async (req, res): Promise<voi
     res.status(400).json({ error: params.error.message });
     return;
   }
-  await setArchived(req, res, params.data.id, false);
+  const body = ArchiveRecordBody.safeParse(req.body ?? {});
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  await setArchived(req, res, params.data.id, false, body.data.expectedVersion);
 });
 
 class BulkFieldUpdateError extends Error {
@@ -3642,7 +3783,7 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
     res.status(400).json({ error: body.error.message });
     return;
   }
-  const { entityId, fieldKey, value, pageId } = body.data;
+  const { entityId, fieldKey, value, pageId, expectedVersions } = body.data;
   const recordIds = [...new Set(body.data.recordIds)].sort((a, b) => a - b);
   if (!(await assertRecord(req, res, entityId, "update", pageId))) return;
 
@@ -3687,6 +3828,7 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
     id: number;
     before: Record<string, unknown>;
     after: Record<string, unknown>;
+    version: number;
   };
   let changedRows: ChangedRow[] = [];
   try {
@@ -3701,6 +3843,10 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
       for (const recordId of recordIds) {
         const row = byId.get(recordId);
         if (!row) throw new BulkFieldUpdateError(404, recordId, "запись не найдена");
+        const expectedVersion = expectedVersions?.[String(recordId)];
+        if (expectedVersion != null && row.version !== expectedVersion) {
+          throw new BulkFieldUpdateError(409, recordId, `устаревшая версия (текущая ${row.version})`);
+        }
         if (
           scope === "own" &&
           !(await isRecordOwned(entityId, row, scopeFieldKeys, userId, fields))
@@ -3735,7 +3881,7 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
             throw new BulkFieldUpdateError(400, recordId, validated.error);
           }
         }
-        const userRefError = await validateUserRefs(fields, validated.values);
+        const userRefError = await validateUserRefs(fields, validated.values, tx);
         if (userRefError) throw new BulkFieldUpdateError(400, recordId, userRefError);
         const dependentError = await checkDependentValues(
           entityId,
@@ -3760,18 +3906,27 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
           .update(entityRecordsTable)
           .set({ valuesJson: validated.values })
           .where(eq(entityRecordsTable.id, recordId))
-          .returning({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson });
+          .returning({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson, version: entityRecordsTable.version });
         changed.push({
           id: updated.id,
           before,
           after: updated.valuesJson as Record<string, unknown>,
+          version: updated.version,
         });
       }
       return changed;
     });
   } catch (err) {
     if (err instanceof BulkFieldUpdateError) {
-      res.status(err.status).json({ error: err.message, recordId: err.recordId });
+      const current =
+        err.status === 409 && err.recordId != null
+          ? await db.select({ version: entityRecordsTable.version }).from(entityRecordsTable).where(eq(entityRecordsTable.id, err.recordId)).limit(1)
+          : [];
+      res.status(err.status).json({ error: err.message, recordId: err.recordId, ...(err.status === 409 ? { currentVersion: current[0]?.version } : {}) });
+      return;
+    }
+    if (err instanceof UserReferenceBusyError) {
+      res.status(409).json({ error: err.message });
       return;
     }
     throw err;
@@ -3788,13 +3943,13 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
       eventName: EVENT_RECORD_UPDATED,
       entityId,
       recordId: row.id,
-      payload: { actorUserId: userId, changedFields: changedFields.map((change) => change.fieldKey) },
+      payload: { actorUserId: userId, changedFields: changedFields.map((change) => change.fieldKey), version: row.version },
     });
   }
   if (auditEntries.length > 0) await writeAudit(auditEntries, req.log);
   if (events.length > 0) await emitEvent(events, req.log);
 
-  res.json({ updatedIds: recordIds });
+  res.json({ updatedIds: recordIds, versions: Object.fromEntries(changedRows.map((row) => [row.id, row.version])) });
 });
 
 /**
@@ -3812,7 +3967,7 @@ router.post("/records/bulk", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: body.error.message });
     return;
   }
-  const { entityId, action, recordIds, pageId } = body.data;
+  const { entityId, action, recordIds, pageId, expectedVersions } = body.data;
   const isDelete = action === "delete";
   if (!(await assertRecord(req, res, entityId, isDelete ? "delete" : "update", isDelete ? pageId : undefined))) return;
 
@@ -3833,6 +3988,7 @@ router.post("/records/bulk", requireAuth, async (req, res): Promise<void> => {
 
   const successIds: number[] = [];
   const failedIds: number[] = [];
+  const versions: Record<string, number> = {};
   for (const id of uniqueIds) {
     const existing = byId.get(id);
     if (!existing) {
@@ -3844,10 +4000,31 @@ router.post("/records/bulk", requireAuth, async (req, res): Promise<void> => {
       continue;
     }
     try {
+      const expectedVersion = expectedVersions?.[String(id)];
       if (isDelete) {
-        await performRecordDelete(req, entityId, id, (existing.valuesJson as Record<string, unknown>) ?? {});
+        const deleted = await performRecordDelete(
+          req,
+          entityId,
+          id,
+          expectedVersion,
+        );
+        if (!deleted) {
+          failedIds.push(id);
+          continue;
+        }
       } else {
-        await applyArchiveFlag(req, entityId, id, existing.archivedAt != null, action === "archive");
+        const updated = await applyArchiveFlag(
+          req,
+          entityId,
+          id,
+          action === "archive",
+          expectedVersion,
+        );
+        if (!updated) {
+          failedIds.push(id);
+          continue;
+        }
+        versions[String(id)] = updated.version;
       }
       successIds.push(id);
     } catch (err) {
@@ -3856,7 +4033,7 @@ router.post("/records/bulk", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
-  res.json({ successIds, failedIds });
+  res.json({ successIds, failedIds, ...(Object.keys(versions).length > 0 ? { versions } : {}) });
 });
 
 /** True when a stored field value counts as "empty" for merge fill-in. */
@@ -3865,6 +4042,7 @@ function mergeValueEmpty(v: unknown): boolean {
   if (Array.isArray(v) && v.length === 0) return true;
   return false;
 }
+class MergeRecordNotFoundError extends Error {}
 
 /**
  * Merge duplicate records into one (superAdmin only).
@@ -3874,10 +4052,10 @@ function mergeValueEmpty(v: unknown): boolean {
  * link on a unique side always wins; a link that would connect the target to
  * itself is dropped); the target's EMPTY fields are filled from the sources
  * (first source with a value wins; the target's own values are never
- * overwritten); page-local values are merged the same way. After the commit
- * the source records are deleted via the shared delete core (file trash +
- * audit snapshot + delete event) — file values inherited by the target are
- * excluded from trashing so the surviving record's files stay downloadable.
+ * overwritten); page-local values are merged the same way. Source rows are
+ * deleted in that transaction; after commit the shared delete bookkeeping
+ * performs file trash + audit snapshot + delete event. File values inherited
+ * by the target are excluded from trashing so surviving files stay downloadable.
  */
 router.post("/records/merge", requireAuth, requireSuperAdmin(), async (req, res): Promise<void> => {
   const body = MergeRecordsBody.safeParse(req.body);
@@ -3892,17 +4070,6 @@ router.post("/records/merge", requireAuth, requireSuperAdmin(), async (req, res)
     return;
   }
 
-  const rows = await db
-    .select()
-    .from(entityRecordsTable)
-    .where(and(eq(entityRecordsTable.entityId, entityId), inArray(entityRecordsTable.id, [targetRecordId, ...sourceIds])));
-  const byId = new Map(rows.map((r) => [r.id, r]));
-  const target = byId.get(targetRecordId);
-  if (!target || sourceIds.some((id) => !byId.get(id))) {
-    res.status(404).json({ error: "Record not found in this entity" });
-    return;
-  }
-
   const fields = await loadActiveFields(entityId);
   const sourceIdSet = new Set(sourceIds);
   // Fields whose value the target inherits from a source (fill-empty). Tracked
@@ -3911,46 +4078,85 @@ router.post("/records/merge", requireAuth, requireSuperAdmin(), async (req, res)
 
   let movedLinks = 0;
   let filledFields = 0;
+  let targetLinkStateChanged = false;
+  let mergedTargetVersion: number | undefined;
+  const linkedSurvivorVersions = new Map<number, { entityId: number; version: number }>();
+  const changedTargetPageRows = new Map<number, { version: number; changedPageFieldKeys: Set<string> }>();
 
   const filledFieldKeys: string[] = [];
+  const deletedSnapshots = new Map<number, {
+    values: Record<string, unknown>;
+    pageFileEntries: { pageId: number; valuesJson: Record<string, unknown> }[];
+  }>();
 
   try {
   await db.transaction(async (tx) => {
-    // ---- 1. Repoint relation links ------------------------------------
-    const links = await tx
+    const participantIds = [targetRecordId, ...sourceIds].sort((a, b) => a - b);
+    // Global lock order shared with generic link writes:
+    // relation rows (ascending), page advisory keys (page,record), entity records
+    // (ascending), then link/page rows.
+    // Lock every relation that can involve this entity, not merely relations in
+    // a pre-lock link snapshot, so a new source link cannot appear unnoticed.
+    await tx
+      .select()
+      .from(relationsTable)
+      .where(or(eq(relationsTable.sourceEntityId, entityId), eq(relationsTable.targetEntityId, entityId)))
+      .orderBy(asc(relationsTable.id))
+      .for("update");
+
+    const protectedLinkSnapshot = await tx
       .select()
       .from(recordLinksTable)
-      .where(or(inArray(recordLinksTable.sourceRecordId, sourceIds), inArray(recordLinksTable.targetRecordId, sourceIds)))
+      .where(or(inArray(recordLinksTable.sourceRecordId, participantIds), inArray(recordLinksTable.targetRecordId, participantIds)))
       .orderBy(asc(recordLinksTable.id));
+    const allLockedRecordIds = [
+      ...new Set([
+        ...participantIds,
+        ...protectedLinkSnapshot.flatMap((link) => [link.sourceRecordId, link.targetRecordId]),
+      ]),
+    ].sort((a, b) => a - b);
 
-    // Serialize against concurrent link writes / relation type changes: the
-    // shared link core locks the relation row FOR UPDATE, so locking the same
-    // rows here means no link can move under us mid-merge.
-    const lockRelationIds = [...new Set(links.map((l) => l.relationId))];
-    if (lockRelationIds.length > 0) {
-      await tx
-        .select({ id: relationsTable.id })
-        .from(relationsTable)
-        .where(inArray(relationsTable.id, lockRelationIds))
-        .for("update");
+    // Advisory locks precede record locks because a missing-row page insert
+    // takes the advisory lock before its FK check touches entity_records.
+    const pageIds = (await tx.select({ id: pagesTable.id }).from(pagesTable).orderBy(asc(pagesTable.id))).map((page) => page.id);
+    for (const pageId of pageIds) {
+      for (const recordId of participantIds) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock((${pageId}::bigint << 32) | ${recordId}::bigint)`);
+      }
     }
+
+    const lockedRows = await tx
+      .select()
+      .from(entityRecordsTable)
+      .where(inArray(entityRecordsTable.id, allLockedRecordIds))
+      .orderBy(asc(entityRecordsTable.id))
+      .for("update");
+    const byId = new Map(lockedRows.map((row) => [row.id, row]));
+    const target = byId.get(targetRecordId);
+    if (!target || sourceIds.some((id) => byId.get(id)?.entityId !== entityId) || target.entityId !== entityId) {
+      throw new MergeRecordNotFoundError();
+    }
+    // ---- 1. Repoint relation links ------------------------------------
+    // Re-read only after relation+record locks. All normal link create/delete
+    // paths must first obtain one of those relation locks, so this is protected
+    // against phantoms for every currently-defined relation.
+    const participantLinks = await tx
+      .select()
+      .from(recordLinksTable)
+      .where(or(inArray(recordLinksTable.sourceRecordId, participantIds), inArray(recordLinksTable.targetRecordId, participantIds)))
+      .orderBy(asc(recordLinksTable.id))
+      .for("update");
+    const links = participantLinks.filter((link) =>
+      sourceIdSet.has(link.sourceRecordId) || sourceIdSet.has(link.targetRecordId));
+    const changedLinkedSurvivors = new Set<number>();
 
     // The target's CURRENT links per relation, to enforce dedupe + the partial
     // unique indexes (source unique for one_to_one/many_to_one, target unique
     // for one_to_one/one_to_many) in application order.
-    const relationIds = [...new Set(links.map((l) => l.relationId))];
-    const targetLinks =
-      relationIds.length === 0
-        ? []
-        : await tx
-            .select()
-            .from(recordLinksTable)
-            .where(
-              and(
-                inArray(recordLinksTable.relationId, relationIds),
-                or(eq(recordLinksTable.sourceRecordId, targetRecordId), eq(recordLinksTable.targetRecordId, targetRecordId)),
-              ),
-            );
+    const relationIds = new Set(links.map((link) => link.relationId));
+    const targetLinks = participantLinks.filter((link) =>
+      relationIds.has(link.relationId) &&
+      (link.sourceRecordId === targetRecordId || link.targetRecordId === targetRecordId));
     const pairKey = (relationId: number, s: number, t: number) => `${relationId}:${s}:${t}`;
     const existingPairs = new Set(targetLinks.map((l) => pairKey(l.relationId, l.sourceRecordId, l.targetRecordId)));
     const sourceSideTaken = new Set(
@@ -3972,6 +4178,15 @@ router.post("/records/merge", requireAuth, requireSuperAdmin(), async (req, res)
         (targetUnique && newTarget === targetRecordId && link.targetRecordId !== targetRecordId && targetSideTaken.has(link.relationId));
       if (drop) {
         await tx.delete(recordLinksTable).where(eq(recordLinksTable.id, link.id));
+        // A dropped link changes the surviving target only when the target was
+        // already one endpoint. Duplicate/cardinality drops of source-only
+        // links leave the target's effective relation set unchanged.
+        if (link.sourceRecordId === targetRecordId || link.targetRecordId === targetRecordId) {
+          targetLinkStateChanged = true;
+        }
+        for (const id of [link.sourceRecordId, link.targetRecordId]) {
+          if (!sourceIdSet.has(id) && id !== targetRecordId) changedLinkedSurvivors.add(id);
+        }
         continue;
       }
       await tx
@@ -3979,6 +4194,10 @@ router.post("/records/merge", requireAuth, requireSuperAdmin(), async (req, res)
         .set({ sourceRecordId: newSource, targetRecordId: newTarget })
         .where(eq(recordLinksTable.id, link.id));
       movedLinks += 1;
+      targetLinkStateChanged = true;
+      for (const id of [link.sourceRecordId, link.targetRecordId, newSource, newTarget]) {
+        if (!sourceIdSet.has(id) && id !== targetRecordId) changedLinkedSurvivors.add(id);
+      }
       existingPairs.add(pairKey(link.relationId, newSource, newTarget));
       if (newSource === targetRecordId) sourceSideTaken.add(link.relationId);
       if (newTarget === targetRecordId) targetSideTaken.add(link.relationId);
@@ -4035,14 +4254,35 @@ router.post("/records/merge", requireAuth, requireSuperAdmin(), async (req, res)
           if (hit) throw new UniqueKeyError(`Поле «${fieldRuName(f)}»: значение «${v}» уже используется в другой записи`);
         }
       }
-      await tx.update(entityRecordsTable).set({ valuesJson: targetValues }).where(eq(entityRecordsTable.id, targetRecordId));
+    }
+    if (filledFields > 0 || targetLinkStateChanged) {
+      // One physical target update covers both scalar fill and relation-state
+      // invalidation, so the version trigger advances exactly once.
+      const mergedUserRefError = await validateUserRefs(fields, targetValues, tx);
+      if (mergedUserRefError) throw new Error(mergedUserRefError);
+      const [updatedTarget] = await tx
+        .update(entityRecordsTable)
+        .set({ valuesJson: targetValues, updatedAt: new Date() })
+        .where(eq(entityRecordsTable.id, targetRecordId))
+        .returning({ version: entityRecordsTable.version });
+      mergedTargetVersion = updatedTarget!.version;
+    }
+    if (changedLinkedSurvivors.size > 0) {
+      const touched = await tx.update(entityRecordsTable).set({ updatedAt: new Date() })
+        .where(inArray(entityRecordsTable.id, [...changedLinkedSurvivors]))
+        .returning({ id: entityRecordsTable.id, entityId: entityRecordsTable.entityId, version: entityRecordsTable.version });
+      for (const row of touched) linkedSurvivorVersions.set(row.id, { entityId: row.entityId, version: row.version });
     }
 
     // ---- 3. Merge page-local values (fill-empty, per page) -------------
+    // Page writers use the advisory keys acquired above. Re-read FOR UPDATE so
+    // both existing-row updates and missing-row inserts are observed.
     const pageRows = await tx
       .select()
       .from(pageRecordValuesTable)
-      .where(inArray(pageRecordValuesTable.recordId, [targetRecordId, ...sourceIds]));
+      .where(inArray(pageRecordValuesTable.recordId, participantIds))
+      .orderBy(asc(pageRecordValuesTable.pageId), asc(pageRecordValuesTable.recordId))
+      .for("update");
     const targetPageRows = new Map(pageRows.filter((r) => r.recordId === targetRecordId).map((r) => [r.pageId, r]));
     const sourcePageRows = pageRows.filter((r) => sourceIdSet.has(r.recordId));
     const mergedByPage = new Map<number, Record<string, unknown>>();
@@ -4058,23 +4298,69 @@ router.post("/records/merge", requireAuth, requireSuperAdmin(), async (req, res)
     for (const [pageId, srcVals] of mergedByPage.entries()) {
       const existing = targetPageRows.get(pageId);
       const current = { ...(((existing?.valuesJson as Record<string, unknown>) ?? {}) as Record<string, unknown>) };
-      let changed = false;
+      const changedPageFieldKeys: string[] = [];
       for (const [k, v] of Object.entries(srcVals)) {
         if (!mergeValueEmpty(current[k])) continue;
         current[k] = v;
-        changed = true;
+        changedPageFieldKeys.push(k);
       }
-      if (!changed) continue;
+      if (changedPageFieldKeys.length === 0) continue;
+      let written: { version: number } | undefined;
       if (existing) {
-        await tx.update(pageRecordValuesTable).set({ valuesJson: current }).where(eq(pageRecordValuesTable.id, existing.id));
+        [written] = await tx.update(pageRecordValuesTable)
+          .set({ valuesJson: current })
+          .where(eq(pageRecordValuesTable.id, existing.id))
+          .returning({ version: pageRecordValuesTable.version });
       } else {
-        await tx.insert(pageRecordValuesTable).values({ pageId, recordId: targetRecordId, valuesJson: current });
+        [written] = await tx.insert(pageRecordValuesTable)
+          .values({ pageId, recordId: targetRecordId, valuesJson: current })
+          .returning({ version: pageRecordValuesTable.version });
+      }
+      if (written) {
+        const prior = changedTargetPageRows.get(pageId);
+        changedTargetPageRows.set(pageId, {
+          version: written.version,
+          changedPageFieldKeys: new Set([
+            ...(prior?.changedPageFieldKeys ?? []),
+            ...changedPageFieldKeys,
+          ]),
+        });
       }
     }
 
     if (auditEntries.length > 0) await writeAudit(auditEntries, req.log);
+
+    // Delete while the relation and source-record locks are still held. A link
+    // writer that started concurrently either committed before our locks (and
+    // was included above) or waits and then observes the source no longer exists.
+    for (const srcId of sourceIds) {
+      const src = byId.get(srcId)!;
+      const values = { ...((src.valuesJson as Record<string, unknown>) ?? {}) };
+      for (const key of inheritedFileKeys) delete values[key];
+      deletedSnapshots.set(srcId, {
+        values,
+        pageFileEntries: pageRows
+          .filter((row) => row.recordId === srcId)
+          .map((row) => ({
+            pageId: row.pageId,
+            valuesJson: (row.valuesJson as Record<string, unknown>) ?? {},
+          })),
+      });
+      const deleted = await tx.delete(entityRecordsTable)
+        .where(and(eq(entityRecordsTable.id, srcId), eq(entityRecordsTable.version, src.version)))
+        .returning({ id: entityRecordsTable.id });
+      if (deleted.length !== 1) throw new Error("Locked merge source disappeared");
+    }
   });
   } catch (err) {
+    if (err instanceof MergeRecordNotFoundError) {
+      res.status(404).json({ error: "Record not found in this entity" });
+      return;
+    }
+    if (err instanceof UserReferenceBusyError) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
     if (err instanceof UniqueKeyError) {
       res.status(409).json({ error: err.message });
       return;
@@ -4082,18 +4368,14 @@ router.post("/records/merge", requireAuth, requireSuperAdmin(), async (req, res)
     throw err;
   }
 
-  // ---- 4. Delete the source records (shared core: trash + audit + event).
-  // Outside the transaction (the core is non-transactional by design, like the
-  // bulk endpoint); the merge itself is already committed, so a failed delete
-  // leaves a harmless empty duplicate that can be removed manually.
+  // ---- 4. Post-commit source-delete bookkeeping ------------------------
+  // Physical deletion happened atomically above; retain the shared core's
+  // trash, audit and event behavior without reopening a link-create race.
   const deletedRecordIds: number[] = [];
   for (const srcId of sourceIds) {
-    const values = { ...((byId.get(srcId)!.valuesJson as Record<string, unknown>) ?? {}) };
-    // Files inherited by the target must survive: keep them OUT of the trash
-    // snapshot (the value now lives on the target and points at the same path).
-    for (const k of inheritedFileKeys) delete values[k];
+    const snapshot = deletedSnapshots.get(srcId)!;
     try {
-      await performRecordDelete(req, entityId, srcId, values);
+      await finalizeRecordDelete(req, entityId, srcId, snapshot.values, snapshot.pageFileEntries);
       deletedRecordIds.push(srcId);
     } catch (err) {
       req.log.error({ err, recordId: srcId }, "merge: source record delete failed");
@@ -4101,12 +4383,31 @@ router.post("/records/merge", requireAuth, requireSuperAdmin(), async (req, res)
   }
 
   await emitEvent(
-    {
-      eventName: EVENT_RECORD_UPDATED,
-      entityId,
-      recordId: targetRecordId,
-      payload: { actorUserId: req.user!.userId, changedFields: filledFieldKeys },
-    },
+    [
+      ...(mergedTargetVersion != null && (filledFields > 0 || targetLinkStateChanged) ? [{
+        eventName: EVENT_RECORD_UPDATED,
+        entityId,
+        recordId: targetRecordId,
+        payload: { actorUserId: req.user!.userId, changedFields: filledFieldKeys, version: mergedTargetVersion },
+      }] : []),
+      ...[...linkedSurvivorVersions.entries()].map(([recordId, state]) => ({
+        eventName: EVENT_RECORD_UPDATED,
+        entityId: state.entityId,
+        recordId,
+        payload: { actorUserId: req.user!.userId, changedFields: [], version: state.version },
+      })),
+      ...[...changedTargetPageRows.entries()].map(([pageId, state]) => ({
+        eventName: EVENT_PAGE_FIELD_SAVED,
+        entityId,
+        recordId: targetRecordId,
+        payload: {
+          actorUserId: req.user!.userId,
+          pageId,
+          changedPageFieldKeys: [...state.changedPageFieldKeys],
+          version: state.version,
+        },
+      })),
+    ],
     req.log,
   );
 

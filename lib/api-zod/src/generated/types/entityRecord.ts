@@ -17,6 +17,7 @@ export interface EntityRecord {
   archivedAt: Date | null;
   /** @nullable */
   statusChangedAt: Date | null;
+  version: number;
   createdAt: Date;
   updatedAt: Date;
 }

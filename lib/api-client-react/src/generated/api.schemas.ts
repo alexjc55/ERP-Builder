@@ -5,6 +5,38 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+export type CollaborationPageId = number;
+
+/**
+ * @maxLength 128
+ */
+export type CollaborationClientId = string;
+
+export type CollaborationEditingLocationSource = typeof CollaborationEditingLocationSource[keyof typeof CollaborationEditingLocationSource];
+
+
+export const CollaborationEditingLocationSource = {
+  entity: 'entity',
+  page: 'page',
+} as const;
+
+export interface CollaborationEditingLocation {
+  entityId: number;
+  recordId: number;
+  fieldKey: string;
+  source: CollaborationEditingLocationSource;
+}
+
+export interface CollaborationPresenceInput {
+  clientId: CollaborationClientId;
+  editing?: null | CollaborationEditingLocation;
+}
+
+/**
+ * Opaque page-table invalidation. It intentionally contains no record, entity, field, or value metadata.
+ */
+export interface CollaborationTableChangedEvent { [key: string]: unknown }
+
 /**
  * Multilingual name snapshot of the source entity.
  * @nullable
@@ -212,6 +244,14 @@ export interface HealthStatus {
 
 export interface ErrorResponse {
   error: string;
+}
+
+export interface VersionConflictResponse {
+  error: string;
+  recordId?: number;
+  pageId?: number;
+  /** @minimum 1 */
+  currentVersion?: number;
 }
 
 export interface UploadUrlRequest {
@@ -2716,6 +2756,11 @@ export interface PageRelatedLinkInput {
      * @nullable
      */
   linkedRecordId?: number | null;
+  /**
+     * Expected entity_records.version of the base record.
+     * @minimum 1
+     */
+  expectedVersion?: number;
 }
 
 export interface PageRelatedLinkResult {
@@ -2726,6 +2771,8 @@ export interface PageRelatedLinkResult {
   linkedRecordId: number | null;
   /** The related field value after the change (null if cleared or hidden). */
   value?: unknown;
+  /** Current base record version, incremented once when the link actually changed. */
+  version: number;
 }
 
 export interface PageRelationOptionField {
@@ -2896,18 +2943,43 @@ export interface PageFieldsReorderInput {
 export type PageRecordValueValuesJson = { [key: string]: unknown };
 
 /**
+ * Optional per-visible-field CAS versions keyed by the page field key. Ordinary page-local fields use the base row version. A page_ref field uses the version of its actual source page_record_values row.
+ */
+export interface PageRecordValueFieldVersions {[key: string]: number}
+
+/**
  * Page-local field values for one mirrored record.
  */
 export interface PageRecordValue {
   recordId: number;
   valuesJson: PageRecordValueValuesJson;
+  /** Version of this page's own page_record_values row; 1 for a synthesized missing row. */
+  version: number;
+  fieldVersions?: PageRecordValueFieldVersions;
 }
 
 export type PageRecordValueInputValuesJson = { [key: string]: unknown };
 
+/**
+ * Per-row CAS versions keyed by stringified pageId. Supply every touched existing row: the target page for local fields and each source page for page_ref aliases. Missing rows use baseline 1.
+ */
+export type PageRecordValueInputExpectedVersions = {[key: string]: number};
+
 export interface PageRecordValueInput {
   valuesJson: PageRecordValueInputValuesJson;
+  /**
+     * Legacy single-row CAS. Allowed only when the request touches exactly one distinct page_record_values row. A missing row has baseline 1.
+     * @minimum 1
+     */
+  expectedVersion?: number;
+  /** Per-row CAS versions keyed by stringified pageId. Supply every touched existing row: the target page for local fields and each source page for page_ref aliases. Missing rows use baseline 1. */
+  expectedVersions?: PageRecordValueInputExpectedVersions;
 }
+
+/**
+ * Expected versions keyed by record id. For page_ref, each value is the actual source page_record_values version from fieldVersions[fieldKey]; otherwise it is the base page row version.
+ */
+export type BulkPageRecordFieldUpdateExpectedVersions = {[key: string]: number};
 
 export interface BulkPageRecordFieldUpdate {
   fieldKey: string;
@@ -2917,6 +2989,8 @@ export interface BulkPageRecordFieldUpdate {
      * @maxItems 500
      */
   recordIds: number[];
+  /** Expected versions keyed by record id. For page_ref, each value is the actual source page_record_values version from fieldVersions[fieldKey]; otherwise it is the base page row version. */
+  expectedVersions?: BulkPageRecordFieldUpdateExpectedVersions;
 }
 
 export interface Status {
@@ -3301,6 +3375,7 @@ export interface EntityRecord {
   archivedAt: string | null;
   /** @nullable */
   statusChangedAt: string | null;
+  version: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -3333,6 +3408,11 @@ export const BulkRecordsActionAction = {
   delete: 'delete',
 } as const;
 
+/**
+ * Optional entity_records.version values keyed by record id. Processing remains partial: a stale record is added to failedIds and is not mutated, while other records continue independently.
+ */
+export type BulkRecordsActionExpectedVersions = {[key: string]: number};
+
 export interface BulkRecordsAction {
   entityId: number;
   action: BulkRecordsActionAction;
@@ -3343,12 +3423,26 @@ export interface BulkRecordsAction {
   recordIds: number[];
   /** Optional mirror-page context (see RecordInput.pageId): applies the mirror page's rights override when acting through it. */
   pageId?: number;
+  /** Optional entity_records.version values keyed by record id. Processing remains partial: a stale record is added to failedIds and is not mutated, while other records continue independently. */
+  expectedVersions?: BulkRecordsActionExpectedVersions;
 }
+
+/**
+ * Updated versions keyed by successful archive/unarchive record id; omitted for deletes.
+ */
+export type BulkRecordsResultVersions = {[key: string]: number};
 
 export interface BulkRecordsResult {
   successIds: number[];
   failedIds: number[];
+  /** Updated versions keyed by successful archive/unarchive record id; omitted for deletes. */
+  versions?: BulkRecordsResultVersions;
 }
+
+/**
+ * Expected entity_records.version keyed by record id.
+ */
+export type BulkRecordFieldUpdateExpectedVersions = {[key: string]: number};
 
 export interface BulkRecordFieldUpdate {
   entityId: number;
@@ -3361,10 +3455,15 @@ export interface BulkRecordFieldUpdate {
   recordIds: number[];
   /** Optional mirror-page context: applies that page's record-rights and field-access overrides. */
   pageId?: number;
+  /** Expected entity_records.version keyed by record id. */
+  expectedVersions?: BulkRecordFieldUpdateExpectedVersions;
 }
+
+export type BulkFieldUpdateResultVersions = {[key: string]: number};
 
 export interface BulkFieldUpdateResult {
   updatedIds: number[];
+  versions?: BulkFieldUpdateResultVersions;
 }
 
 export interface MergeRecords {
@@ -3411,6 +3510,13 @@ export interface MergeUsersResult {
 export interface RecordDelete {
   /** Optional mirror-page context (see RecordInput.pageId): applies the mirror page's delete-rights override when deleting through it. */
   pageId?: number;
+  /** @minimum 1 */
+  expectedVersion?: number;
+}
+
+export interface RecordArchive {
+  /** @minimum 1 */
+  expectedVersion?: number;
 }
 
 export type RecordUpdateValuesJson = { [key: string]: unknown };
@@ -3421,6 +3527,8 @@ export interface RecordUpdate {
   statusId?: number | null;
   /** Optional mirror-page context (see RecordInput.pageId): applies the mirror page's update-rights override when editing through it. */
   pageId?: number;
+  /** @minimum 1 */
+  expectedVersion?: number;
 }
 
 export type CustomFilterOperator = typeof CustomFilterOperator[keyof typeof CustomFilterOperator];
@@ -3987,6 +4095,11 @@ export interface RecordLink {
   sourceRecordId: number;
   targetRecordId: number;
   createdAt: string;
+  /**
+     * Source record version after creating the link.
+     * @minimum 1
+     */
+  version: number;
 }
 
 export interface LinkedRecord {
@@ -3998,6 +4111,28 @@ export interface LinkedRecord {
 export interface LinkInput {
   relationId: number;
   targetRecordId: number;
+  /**
+     * Optional expected source entity_records.version.
+     * @minimum 1
+     */
+  expectedVersion?: number;
+}
+
+export interface DeleteRecordLinkInput {
+  /**
+     * Optional expected source entity_records.version.
+     * @minimum 1
+     */
+  expectedVersion?: number;
+}
+
+export interface DeleteRecordLinkResult {
+  success: boolean;
+  /**
+     * Source record version after deleting the link.
+     * @minimum 1
+     */
+  version: number;
 }
 
 export interface Translation {
@@ -4025,6 +4160,10 @@ export interface DashboardStats {
   totalPages: number;
   recentLogins?: number;
 }
+
+export type StreamCollaborationPageEventsParams = {
+clientId: CollaborationClientId;
+};
 
 export type ListUsersParams = {
 search?: string;

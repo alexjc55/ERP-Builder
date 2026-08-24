@@ -16,4 +16,9 @@ export interface PageRelatedLinkInput {
      * @nullable
      */
   linkedRecordId?: number | null;
+  /**
+     * Expected entity_records.version of the base record.
+     * @minimum 1
+     */
+  expectedVersion?: number;
 }

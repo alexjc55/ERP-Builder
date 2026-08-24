@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BulkRecordsActionAction } from './bulkRecordsActionAction';
+import type { BulkRecordsActionExpectedVersions } from './bulkRecordsActionExpectedVersions';
 
 export interface BulkRecordsAction {
   entityId: number;
@@ -17,4 +18,6 @@ export interface BulkRecordsAction {
   recordIds: number[];
   /** Optional mirror-page context (see RecordInput.pageId): applies the mirror page's rights override when acting through it. */
   pageId?: number;
+  /** Optional entity_records.version values keyed by record id. Processing remains partial: a stale record is added to failedIds and is not mutated, while other records continue independently. */
+  expectedVersions?: BulkRecordsActionExpectedVersions;
 }

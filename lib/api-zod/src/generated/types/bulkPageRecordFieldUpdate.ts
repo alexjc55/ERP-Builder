@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { BulkPageRecordFieldUpdateExpectedVersions } from './bulkPageRecordFieldUpdateExpectedVersions';
 
 export interface BulkPageRecordFieldUpdate {
   fieldKey: string;
@@ -14,4 +15,6 @@ export interface BulkPageRecordFieldUpdate {
      * @maxItems 500
      */
   recordIds: number[];
+  /** Expected versions keyed by record id. For page_ref, each value is the actual source page_record_values version from fieldVersions[fieldKey]; otherwise it is the base page row version. */
+  expectedVersions?: BulkPageRecordFieldUpdateExpectedVersions;
 }

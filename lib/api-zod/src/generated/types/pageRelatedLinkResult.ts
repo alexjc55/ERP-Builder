@@ -14,4 +14,6 @@ export interface PageRelatedLinkResult {
   linkedRecordId: number | null;
   /** The related field value after the change (null if cleared or hidden). */
   value?: unknown;
+  /** Current base record version, incremented once when the link actually changed. */
+  version: number;
 }

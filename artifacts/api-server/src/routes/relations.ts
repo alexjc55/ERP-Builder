@@ -4,13 +4,15 @@ import {
   relationsTable,
   recordLinksTable,
   entitiesTable,
+  entityFieldsTable,
   entityRecordsTable,
   RELATION_TYPES,
   type RelationType,
 } from "@workspace/db";
 import { eq, and, or, ne, asc, desc, inArray, sql } from "drizzle-orm";
 import { relationLinkLockViolation } from "../lib/relation-lock";
-import { emitLinkChangedEvents } from "../lib/record-links";
+import { emitLinkChangedEvents, lockRecordsStable, touchLockedRecords } from "../lib/record-links";
+import { emitEvent, EVENT_RECORD_UPDATED } from "../lib/events";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin, getPermissions, canRecord, effectiveScope, effectiveStatusVisibility } from "../middlewares/permissions";
 import { isRecordOwned } from "./own-scope";
@@ -27,6 +29,7 @@ import {
   CreateRecordLinkParams,
   CreateRecordLinkBody,
   DeleteRecordLinkParams,
+  DeleteRecordLinkBody,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -65,15 +68,6 @@ function fkViolationConstraint(err: unknown): string | null {
 async function entityExists(entityId: number): Promise<boolean> {
   const [row] = await db.select({ id: entitiesTable.id }).from(entitiesTable).where(eq(entitiesTable.id, entityId)).limit(1);
   return Boolean(row);
-}
-
-async function recordEntityId(recordId: number): Promise<number | null> {
-  const [row] = await db
-    .select({ entityId: entityRecordsTable.entityId })
-    .from(entityRecordsTable)
-    .where(eq(entityRecordsTable.id, recordId))
-    .limit(1);
-  return row ? row.entityId : null;
 }
 
 // ---- Relations metadata ----
@@ -302,11 +296,36 @@ router.delete("/relations/:id", requireAuth, requireAdmin("entities"), async (re
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [deleted] = await db.delete(relationsTable).where(eq(relationsTable.id, params.data.id)).returning({ id: relationsTable.id });
-  if (!deleted) {
+  const result = await db.transaction(async (tx) => {
+    const [relation] = await tx.select().from(relationsTable)
+      .where(eq(relationsTable.id, params.data.id)).for("update");
+    if (!relation) return null;
+    const links = await tx.select().from(recordLinksTable)
+      .where(eq(recordLinksTable.relationId, params.data.id)).orderBy(asc(recordLinksTable.id)).for("update");
+    const endpointIds = links.flatMap((link) => [link.sourceRecordId, link.targetRecordId]);
+    await lockRecordsStable(tx, endpointIds);
+    await tx.delete(relationsTable).where(eq(relationsTable.id, params.data.id));
+    const versions = await touchLockedRecords(tx, endpointIds);
+    return { relation, links, versions };
+  });
+  if (!result) {
     res.status(404).json({ error: "Relation not found" });
     return;
   }
+  const entityByRecord = new Map<number, number>();
+  for (const link of result.links) {
+    entityByRecord.set(link.sourceRecordId, result.relation.sourceEntityId);
+    entityByRecord.set(link.targetRecordId, result.relation.targetEntityId);
+  }
+  await emitEvent(
+    [...entityByRecord].map(([recordId, entityId]) => ({
+      eventName: EVENT_RECORD_UPDATED,
+      entityId,
+      recordId,
+      payload: { actorUserId: req.user!.userId, changedFields: [], version: result.versions[String(recordId)] },
+    })),
+    req.log,
+  );
   res.json({ success: true });
 });
 
@@ -432,23 +451,9 @@ router.post("/records/:recordId/links", requireAuth, async (req, res): Promise<v
     return;
   }
   const sourceRecordId = params.data.recordId;
-  const { relationId, targetRecordId } = body.data;
+  const { relationId, targetRecordId, expectedVersion } = body.data;
 
-  const srcEntity = await recordEntityId(sourceRecordId);
-  if (srcEntity === null) {
-    res.status(404).json({ error: "Source record not found" });
-    return;
-  }
   const perms = await getPermissions(req);
-  if (!canRecord(perms, srcEntity, "update")) {
-    res.status(403).json({ error: "Forbidden" });
-    return;
-  }
-  const tgtEntity = await recordEntityId(targetRecordId);
-  if (tgtEntity === null) {
-    res.status(400).json({ error: "Target record not found" });
-    return;
-  }
 
   try {
     // Lock the relation row before reading its type and inserting the link. This
@@ -463,44 +468,88 @@ router.post("/records/:recordId/links", requireAuth, async (req, res): Promise<v
         .limit(1)
         .for("update");
       if (!relation) return { status: 400 as const, error: "Relation not found" };
-      if (srcEntity !== relation.sourceEntityId) {
+      const lockedRecords = await lockRecordsStable(tx, [sourceRecordId, targetRecordId]);
+      const sourceRecord = lockedRecords.find((record) => record.id === sourceRecordId);
+      if (!sourceRecord) return { status: 404 as const, error: "Source record not found" };
+      if (!canRecord(perms, sourceRecord.entityId, "update")) {
+        return { status: 404 as const, error: "Source record not found" };
+      }
+      const sourceFields = await tx.select().from(entityFieldsTable)
+        .where(and(eq(entityFieldsTable.entityId, sourceRecord.entityId), eq(entityFieldsTable.isActive, true)));
+      const sourceScope = effectiveScope(perms, sourceRecord.entityId);
+      const sourceHiddenStatuses = effectiveStatusVisibility(perms, sourceRecord.entityId).hiddenRowStatusIds;
+      if ((sourceRecord.statusId != null && sourceHiddenStatuses.includes(sourceRecord.statusId)) ||
+        (sourceScope.scope === "own" &&
+          !(await isRecordOwned(sourceRecord.entityId, sourceRecord, sourceScope.scopeFieldKeys, req.user!.userId, sourceFields, tx)))) {
+        return { status: 404 as const, error: "Source record not found" };
+      }
+      if (sourceRecord.entityId !== relation.sourceEntityId) {
         return { status: 400 as const, error: "Source record does not belong to the relation's source entity" };
       }
-      if (tgtEntity !== relation.targetEntityId) {
+      const targetRecord = lockedRecords.find((record) => record.id === targetRecordId);
+      if (!targetRecord || !canRecord(perms, targetRecord.entityId, "view")) {
+        return { status: 400 as const, error: "Target record not found" };
+      }
+      const targetFields = await tx.select().from(entityFieldsTable)
+        .where(and(eq(entityFieldsTable.entityId, targetRecord.entityId), eq(entityFieldsTable.isActive, true)));
+      const targetScope = effectiveScope(perms, targetRecord.entityId);
+      const targetHiddenStatuses = effectiveStatusVisibility(perms, targetRecord.entityId).hiddenRowStatusIds;
+      if ((targetRecord.statusId != null && targetHiddenStatuses.includes(targetRecord.statusId)) ||
+        (targetScope.scope === "own" &&
+          !(await isRecordOwned(targetRecord.entityId, targetRecord, targetScope.scopeFieldKeys, req.user!.userId, targetFields, tx)))) {
+        return { status: 400 as const, error: "Target record not found" };
+      }
+      if (targetRecord.entityId !== relation.targetEntityId) {
         return { status: 400 as const, error: "Target record does not belong to the relation's target entity" };
+      }
+      if (expectedVersion != null && sourceRecord.version !== expectedVersion) {
+        return { status: 409 as const, error: "Record version conflict", currentVersion: sourceRecord.version };
       }
       // Immutability boundary for lockAfterCreate relation fields, checked under
       // the relation row lock (TOCTOU-free). A relation field can sit on either
       // side of the relation, so guard both the source and target ends.
       const srcViolation = await relationLinkLockViolation(
-        tx, srcEntity, relationId, sourceRecordId, "source", targetRecordId,
+        tx, sourceRecord.entityId, relationId, sourceRecordId, "source", targetRecordId,
       );
       if (srcViolation) return { status: 400 as const, error: srcViolation };
       const tgtViolation = await relationLinkLockViolation(
-        tx, tgtEntity, relationId, targetRecordId, "target", sourceRecordId,
+        tx, targetRecord.entityId, relationId, targetRecordId, "target", sourceRecordId,
       );
       if (tgtViolation) return { status: 400 as const, error: tgtViolation };
       const [link] = await tx
         .insert(recordLinksTable)
         .values({ relationId, relationType: relation.relationType, sourceRecordId, targetRecordId })
         .returning();
-      return { status: 201 as const, link };
+      const versions = await touchLockedRecords(tx, [sourceRecordId, targetRecordId]);
+      return {
+        status: 201 as const,
+        link,
+        version: versions[String(sourceRecordId)]!,
+        versions,
+        sourceEntityId: sourceRecord.entityId,
+        targetEntityId: targetRecord.entityId,
+      };
     });
     if (result.status === 201) {
       // A link change alters the record's effective relation value even though
       // values_json is untouched — notify both ends so automations can react.
       await emitLinkChangedEvents({
-        entityId: srcEntity,
+        entityId: result.sourceEntityId,
         baseRecordId: sourceRecordId,
-        relatedEntityId: tgtEntity,
+        relatedEntityId: result.targetEntityId,
         affectedLinkedIds: [targetRecordId],
         actorUserId: req.user?.userId,
+        version: result.version,
+        versions: result.versions,
         log: req.log,
       });
-      res.status(201).json(result.link);
+      res.status(201).json({ ...result.link, version: result.version });
       return;
     }
-    res.status(result.status).json({ error: result.error });
+    res.status(result.status).json({
+      error: result.error,
+      ...("currentVersion" in result ? { recordId: sourceRecordId, currentVersion: result.currentVersion } : {}),
+    });
   } catch (err) {
     const constraint = uniqueViolationConstraint(err);
     if (constraint === "record_link_unique") {
@@ -544,6 +593,11 @@ router.delete("/links/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
+  const body = DeleteRecordLinkBody.safeParse(req.body ?? {});
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
   const [link] = await db
     .select({
       id: recordLinksTable.id,
@@ -558,53 +612,89 @@ router.delete("/links/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(404).json({ error: "Link not found" });
     return;
   }
-  const srcEntity = await recordEntityId(link.sourceRecordId);
   const perms = await getPermissions(req);
-  if (srcEntity === null || !canRecord(perms, srcEntity, "update")) {
-    res.status(403).json({ error: "Forbidden" });
-    return;
-  }
   // Deleting a link clears the value of any relation field backing it. If that
   // field is lockAfterCreate, clearing is forbidden — guard both ends (the
   // locked field can sit on either side of the relation). The guard + delete run
   // under the relation FOR UPDATE lock, matching the other write paths, so a
   // concurrent set/delete cannot slip past the immutability boundary.
-  const tgtEntity = await recordEntityId(link.targetRecordId);
   const delError = await db.transaction(async (tx) => {
-    await tx
-      .select({ id: relationsTable.id })
+    const [relation] = await tx
+      .select()
       .from(relationsTable)
       .where(eq(relationsTable.id, link.relationId))
       .limit(1)
       .for("update");
-    const srcViolation = await relationLinkLockViolation(
-      tx, srcEntity, link.relationId, link.sourceRecordId, "source", null,
-    );
-    if (srcViolation) return srcViolation;
-    if (tgtEntity !== null) {
-      const tgtViolation = await relationLinkLockViolation(
-        tx, tgtEntity, link.relationId, link.targetRecordId, "target", null,
-      );
-      if (tgtViolation) return tgtViolation;
+    if (!relation) return { status: 404 as const, error: "Link not found", version: undefined };
+    const [lockedLink] = await tx
+      .select()
+      .from(recordLinksTable)
+      .where(eq(recordLinksTable.id, params.data.id))
+      .limit(1)
+      .for("update");
+    if (!lockedLink) return { status: 404 as const, error: "Link not found", version: undefined };
+    const lockedRecords = await lockRecordsStable(tx, [lockedLink.sourceRecordId, lockedLink.targetRecordId]);
+    const sourceRecord = lockedRecords.find((record) => record.id === lockedLink.sourceRecordId);
+    if (!sourceRecord || !canRecord(perms, sourceRecord.entityId, "update")) {
+      return { status: 404 as const, error: "Link not found", version: undefined };
     }
-    await tx.delete(recordLinksTable).where(eq(recordLinksTable.id, params.data.id));
-    return null;
+    if (sourceRecord.entityId !== relation.sourceEntityId) {
+      return { status: 404 as const, error: "Link not found", version: undefined };
+    }
+    const sourceFields = await tx.select().from(entityFieldsTable)
+      .where(and(eq(entityFieldsTable.entityId, sourceRecord.entityId), eq(entityFieldsTable.isActive, true)));
+    const sourceScope = effectiveScope(perms, sourceRecord.entityId);
+    const sourceHiddenStatuses = effectiveStatusVisibility(perms, sourceRecord.entityId).hiddenRowStatusIds;
+    if ((sourceRecord.statusId != null && sourceHiddenStatuses.includes(sourceRecord.statusId)) ||
+      (sourceScope.scope === "own" &&
+        !(await isRecordOwned(sourceRecord.entityId, sourceRecord, sourceScope.scopeFieldKeys, req.user!.userId, sourceFields, tx)))) {
+      return { status: 404 as const, error: "Link not found", version: undefined };
+    }
+    if (body.data.expectedVersion != null && sourceRecord.version !== body.data.expectedVersion) {
+      return { status: 409 as const, error: "Record version conflict", version: sourceRecord.version };
+    }
+    const srcViolation = await relationLinkLockViolation(
+      tx, sourceRecord.entityId, lockedLink.relationId, lockedLink.sourceRecordId, "source", null,
+    );
+    if (srcViolation) return { status: 400 as const, error: srcViolation, version: undefined };
+    const tgtViolation = await relationLinkLockViolation(
+      tx, relation.targetEntityId, lockedLink.relationId, lockedLink.targetRecordId, "target", null,
+    );
+    if (tgtViolation) return { status: 400 as const, error: tgtViolation, version: undefined };
+    const removed = await tx.delete(recordLinksTable).where(eq(recordLinksTable.id, params.data.id)).returning({ id: recordLinksTable.id });
+    if (removed.length === 0) return { status: 404 as const, error: "Link not found", version: undefined };
+    const versions = await touchLockedRecords(tx, [lockedLink.sourceRecordId, lockedLink.targetRecordId]);
+    return {
+      status: 200 as const,
+      error: null,
+      version: versions[String(lockedLink.sourceRecordId)]!,
+      versions,
+      sourceEntityId: sourceRecord.entityId,
+      targetEntityId: relation.targetEntityId,
+      sourceRecordId: lockedLink.sourceRecordId,
+      targetRecordId: lockedLink.targetRecordId,
+    };
   });
-  if (delError) {
-    res.status(400).json({ error: delError });
+  if (delError.status !== 200) {
+    res.status(delError.status).json({
+      error: delError.error,
+      ...(delError.status === 409 ? { recordId: link.sourceRecordId, currentVersion: delError.version } : {}),
+    });
     return;
   }
   // Mirror the link-create path: a removed link changes the effective relation
   // value of both records, so let automations re-sync.
   await emitLinkChangedEvents({
-    entityId: srcEntity,
-    baseRecordId: link.sourceRecordId,
-    relatedEntityId: tgtEntity ?? srcEntity,
-    affectedLinkedIds: tgtEntity !== null ? [link.targetRecordId] : [],
+    entityId: delError.sourceEntityId,
+    baseRecordId: delError.sourceRecordId,
+    relatedEntityId: delError.targetEntityId,
+    affectedLinkedIds: [delError.targetRecordId],
     actorUserId: req.user?.userId,
+    version: delError.version,
+    versions: delError.versions,
     log: req.log,
   });
-  res.json({ success: true });
+  res.json({ success: true, version: delError.version });
 });
 
 export default router;

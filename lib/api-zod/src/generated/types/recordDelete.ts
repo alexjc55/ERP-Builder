@@ -9,4 +9,6 @@
 export interface RecordDelete {
   /** Optional mirror-page context (see RecordInput.pageId): applies the mirror page's delete-rights override when deleting through it. */
   pageId?: number;
+  /** @minimum 1 */
+  expectedVersion?: number;
 }

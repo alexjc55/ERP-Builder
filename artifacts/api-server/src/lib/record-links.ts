@@ -1,5 +1,5 @@
-import { db, relationsTable, recordLinksTable } from "@workspace/db";
-import { and, eq } from "drizzle-orm";
+import { db, relationsTable, recordLinksTable, entityRecordsTable } from "@workspace/db";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { relationLinkLockViolation } from "./relation-lock";
 import { emitEvent, EVENT_RECORD_UPDATED } from "./events";
 
@@ -42,8 +42,26 @@ export function recordLinkUniqueMessage(err: unknown): string | null {
 }
 
 export type ReplaceLinkResult =
-  | { ok: true; previousLinkedIds: number[] }
-  | { ok: false; status: 400 | 409; error: string };
+  | { ok: true; previousLinkedIds: number[]; version: number; changed: boolean; versions: Record<string, number> }
+  | { ok: false; status: 400 | 409; error: string; currentVersion?: number };
+
+type LinkTx = Pick<typeof db, "select" | "update">;
+
+export async function lockRecordsStable(tx: LinkTx, recordIds: number[]) {
+  const ids = [...new Set(recordIds)].sort((a, b) => a - b);
+  if (ids.length === 0) return [];
+  return tx.select().from(entityRecordsTable).where(inArray(entityRecordsTable.id, ids))
+    .orderBy(asc(entityRecordsTable.id)).for("update");
+}
+
+export async function touchLockedRecords(tx: LinkTx, recordIds: number[]): Promise<Record<string, number>> {
+  const ids = [...new Set(recordIds)].sort((a, b) => a - b);
+  if (ids.length === 0) return {};
+  const touched = await tx.update(entityRecordsTable).set({ updatedAt: new Date() })
+    .where(inArray(entityRecordsTable.id, ids))
+    .returning({ id: entityRecordsTable.id, version: entityRecordsTable.version });
+  return Object.fromEntries(touched.map((row) => [String(row.id), row.version]));
+}
 
 /**
  * Replace the single link on `baseRecordId`'s side of `relationId` with
@@ -60,9 +78,13 @@ export async function replaceSingleRelationLink(opts: {
   baseRecordId: number;
   direction: "source" | "target";
   linkedRecordId: number | null;
+  expectedVersion?: number;
 }): Promise<ReplaceLinkResult> {
-  const { relationId, entityId, baseRecordId, direction, linkedRecordId } = opts;
+  const { relationId, entityId, baseRecordId, direction, linkedRecordId, expectedVersion } = opts;
   let previousLinkedIds: number[] = [];
+  let version = 1;
+  let changed = false;
+  let versions: Record<string, number> = {};
   try {
     const lockMsg = await db.transaction(async (tx) => {
       const [locked] = await tx
@@ -85,6 +107,29 @@ export async function replaceSingleRelationLink(opts: {
       // the new one (or leave it cleared when linkedRecordId is null).
       const baseCol = direction === "source" ? recordLinksTable.sourceRecordId : recordLinksTable.targetRecordId;
       const otherCol = direction === "source" ? recordLinksTable.targetRecordId : recordLinksTable.sourceRecordId;
+      const existing = await tx
+        .select({ other: otherCol })
+        .from(recordLinksTable)
+        .where(and(eq(recordLinksTable.relationId, relationId), eq(baseCol, baseRecordId)));
+      previousLinkedIds = existing.map((row) => row.other);
+      const affectedIds = [
+        baseRecordId,
+        ...previousLinkedIds,
+        ...(linkedRecordId == null ? [] : [linkedRecordId]),
+      ];
+      const lockedRecords = await lockRecordsStable(tx, affectedIds);
+      const base = lockedRecords.find((record) => record.id === baseRecordId && record.entityId === entityId);
+      if (!base) throw new Error("base_record_gone");
+      version = base.version;
+      if (expectedVersion != null && base.version !== expectedVersion) {
+        return { conflict: true as const, currentVersion: base.version };
+      }
+      if (
+        previousLinkedIds.length === (linkedRecordId == null ? 0 : 1) &&
+        (linkedRecordId == null || previousLinkedIds[0] === linkedRecordId)
+      ) {
+        return null;
+      }
       const removed = await tx
         .delete(recordLinksTable)
         .where(and(eq(recordLinksTable.relationId, relationId), eq(baseCol, baseRecordId)))
@@ -98,15 +143,21 @@ export async function replaceSingleRelationLink(opts: {
           targetRecordId: direction === "source" ? linkedRecordId : baseRecordId,
         });
       }
+      versions = await touchLockedRecords(tx, affectedIds);
+      version = versions[String(baseRecordId)]!;
+      changed = true;
       return null;
     });
+    if (lockMsg && typeof lockMsg === "object" && "conflict" in lockMsg) {
+      return { ok: false, status: 409, error: "Stale record version", currentVersion: lockMsg.currentVersion };
+    }
     if (lockMsg) return { ok: false, status: 400, error: lockMsg };
   } catch (err) {
     const msg = recordLinkUniqueMessage(err);
     if (msg) return { ok: false, status: 409, error: msg };
     throw err;
   }
-  return { ok: true, previousLinkedIds };
+  return { ok: true, previousLinkedIds, version, changed, versions };
 }
 
 /**
@@ -123,6 +174,9 @@ export async function emitLinkChangedEvents(opts: {
   /** Previously linked + newly linked record ids (duplicates fine). */
   affectedLinkedIds: number[];
   actorUserId: number | undefined;
+  changedFields?: string[];
+  version?: number;
+  versions?: Record<string, number>;
   log?: { error: (obj: unknown, msg?: string) => void };
 }): Promise<void> {
   const affected = [...new Set(opts.affectedLinkedIds)];
@@ -132,13 +186,23 @@ export async function emitLinkChangedEvents(opts: {
         eventName: EVENT_RECORD_UPDATED,
         entityId: opts.entityId,
         recordId: opts.baseRecordId,
-        payload: { actorUserId: opts.actorUserId, changedFields: [] },
+        payload: {
+          actorUserId: opts.actorUserId,
+          changedFields: opts.changedFields ?? [],
+          ...(opts.versions?.[String(opts.baseRecordId)] ?? opts.version) != null
+            ? { version: opts.versions?.[String(opts.baseRecordId)] ?? opts.version }
+            : {},
+        },
       },
       ...affected.map((rid) => ({
         eventName: EVENT_RECORD_UPDATED,
         entityId: opts.relatedEntityId,
         recordId: rid,
-        payload: { actorUserId: opts.actorUserId, changedFields: [] },
+        payload: {
+          actorUserId: opts.actorUserId,
+          changedFields: [],
+          ...(opts.versions?.[String(rid)] != null ? { version: opts.versions[String(rid)] } : {}),
+        },
       })),
     ],
     opts.log,

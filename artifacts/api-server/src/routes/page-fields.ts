@@ -39,9 +39,14 @@ import {
 } from "../middlewares/permissions";
 import { ownScopeWhere, isRecordOwned } from "./own-scope";
 import { PAGE_REF_SOURCE_TYPES, loadPageRefSource } from "./record-query";
-import { validateFileValue, trashRemovedPageServerFiles } from "./records";
+import { validateFileValue, trashRemovedPageServerFiles, type DbExecutor } from "./records";
 import { isGoogleDriveModuleEnabled } from "../lib/googleDrive";
 import { emitEvent, EVENT_PAGE_FIELD_SAVED } from "../lib/events";
+import {
+  lockAndValidateUserReferences,
+  referencedUserIds,
+  UserReferenceBusyError,
+} from "../lib/user-reference-barrier";
 import {
   ListPageFieldsParams,
   CreatePageFieldParams,
@@ -481,13 +486,11 @@ export function validatePageValues(
 async function validatePageUserRefs(
   fields: PageField[],
   values: Record<string, unknown>,
+  tx?: DbExecutor,
 ): Promise<string | null> {
-  const ids = fields
-    .filter((field) => field.fieldType === "user")
-    .map((field) => values[field.fieldKey])
-    .filter((value): value is number => typeof value === "number");
-  const uniqueIds = [...new Set(ids)];
+  const uniqueIds = referencedUserIds(fields, values);
   if (uniqueIds.length === 0) return null;
+  if (tx) return lockAndValidateUserReferences(tx, uniqueIds);
   const rows = await db
     .select({ id: usersTable.id })
     .from(usersTable)
@@ -964,7 +967,11 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
   const rvHiddenRowWhere = hiddenRowStatusWhere(effectiveStatusVisibility(perms, entityId).hiddenRowStatusIds);
   if (rvHiddenRowWhere) where.push(rvHiddenRowWhere);
   const rows = await db
-    .select({ recordId: pageRecordValuesTable.recordId, valuesJson: pageRecordValuesTable.valuesJson })
+    .select({
+      recordId: pageRecordValuesTable.recordId,
+      valuesJson: pageRecordValuesTable.valuesJson,
+      version: pageRecordValuesTable.version,
+    })
     .from(pageRecordValuesTable)
     .innerJoin(entityRecordsTable, eq(entityRecordsTable.id, pageRecordValuesTable.recordId))
     .where(and(...where));
@@ -973,16 +980,16 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
   // page's field keys, gated by the viewer's access to the source page AND the
   // source field's own per-role visibility (this endpoint stays authoritative
   // even if the client never fetched the column metadata).
-  const refCandidates = await db
+  const pageFieldCandidates = await db
     .select()
     .from(pageFieldsTable)
     .where(
       and(
         eq(pageFieldsTable.pageId, params.data.pageId),
-        eq(pageFieldsTable.fieldType, "page_ref"),
         eq(pageFieldsTable.isActive, true),
       ),
     );
+  const refCandidates = pageFieldCandidates.filter((field) => field.fieldType === "page_ref");
   const isSetupAdmin = perms.superAdmin || perms.admin.pages;
   const viewerRoleIds = isSetupAdmin ? [] : await getUserRoleIds(req);
   const refFields: PageField[] = [];
@@ -1011,13 +1018,57 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
     }
     refFields.push(f);
   }
+  const visibleLocalFieldKeys = pageFieldCandidates
+    .filter(
+      (field) =>
+        field.fieldType !== "page_ref" &&
+        field.fieldType !== "function" &&
+        field.fieldType !== "relation" &&
+        field.fieldType !== "lookup" &&
+        field.fieldType !== "created_at",
+    )
+    .filter(
+      (field) =>
+        isSetupAdmin ||
+        mostPermissiveFieldPerm(
+          field.permissionsJson as FieldPermissions | null,
+          viewerRoleIds,
+          "view",
+          perms,
+          entityId,
+          params.data.pageId,
+        ) !== "hidden",
+    )
+    .map((field) => field.fieldKey);
+  const enrichedByRecord = new Map<
+    number,
+    {
+      valuesJson: Record<string, unknown>;
+      version: number;
+      fieldVersions: Record<string, number>;
+    }
+  >();
+  for (const row of rows) {
+    enrichedByRecord.set(row.recordId, {
+      valuesJson: { ...((row.valuesJson as Record<string, unknown>) ?? {}) },
+      version: row.version,
+      fieldVersions: Object.fromEntries(visibleLocalFieldKeys.map((fieldKey) => [fieldKey, row.version])),
+    });
+  }
   if (refFields.length === 0) {
-    res.json(rows);
+    res.json(
+      [...enrichedByRecord.entries()].map(([recordId, value]) => ({
+        recordId,
+        ...value,
+      })),
+    );
     return;
   }
-  const byRecord = new Map<number, Record<string, unknown>>();
-  for (const r of rows) byRecord.set(r.recordId, { ...((r.valuesJson as Record<string, unknown>) ?? {}) });
   const sourcePageIds = [...new Set(refFields.map((f) => (f.pageRefConfigJson as PageRefFieldConfig).sourcePageId!))];
+  const sourceRowsByPage = new Map<
+    number,
+    Map<number, { valuesJson: Record<string, unknown>; version: number }>
+  >();
   for (const spid of sourcePageIds) {
     // Same viewer boundary as the base query (entity rows + own scope +
     // hidden-row statuses), only the pageId differs.
@@ -1031,24 +1082,50 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
     }
     if (rvHiddenRowWhere) srcWhere.push(rvHiddenRowWhere);
     const srcRows = await db
-      .select({ recordId: pageRecordValuesTable.recordId, valuesJson: pageRecordValuesTable.valuesJson })
+      .select({
+        recordId: pageRecordValuesTable.recordId,
+        valuesJson: pageRecordValuesTable.valuesJson,
+        version: pageRecordValuesTable.version,
+      })
       .from(pageRecordValuesTable)
       .innerJoin(entityRecordsTable, eq(entityRecordsTable.id, pageRecordValuesTable.recordId))
       .where(and(...srcWhere));
-    const pageRefs = refFields.filter((f) => (f.pageRefConfigJson as PageRefFieldConfig).sourcePageId === spid);
     for (const sr of srcRows) {
-      const srcValues = (sr.valuesJson as Record<string, unknown>) ?? {};
-      for (const f of pageRefs) {
-        const key = (f.pageRefConfigJson as PageRefFieldConfig).sourceFieldKey!;
-        const v = srcValues[key];
-        if (v === undefined || v === null) continue;
-        const target = byRecord.get(sr.recordId) ?? {};
-        target[f.fieldKey] = v;
-        byRecord.set(sr.recordId, target);
+      const pageRows = sourceRowsByPage.get(spid) ?? new Map();
+      pageRows.set(sr.recordId, {
+        valuesJson: (sr.valuesJson as Record<string, unknown>) ?? {},
+        version: sr.version,
+      });
+      sourceRowsByPage.set(spid, pageRows);
+      // A source row can make a page_ref visible even when this page has no
+      // base value row. Synthesize that base row with the documented version 1.
+      if (!enrichedByRecord.has(sr.recordId)) {
+        enrichedByRecord.set(sr.recordId, {
+          valuesJson: {},
+          version: 1,
+          fieldVersions: Object.fromEntries(visibleLocalFieldKeys.map((fieldKey) => [fieldKey, 1])),
+        });
       }
     }
   }
-  res.json([...byRecord.entries()].map(([recordId, valuesJson]) => ({ recordId, valuesJson })));
+  for (const [recordId, target] of enrichedByRecord) {
+    for (const field of refFields) {
+      const cfg = field.pageRefConfigJson as PageRefFieldConfig;
+      const source = sourceRowsByPage.get(cfg.sourcePageId!)?.get(recordId);
+      // A missing source row has the same insert-CAS baseline as a missing base
+      // row. Crucially, this version is keyed by the visible alias field so a
+      // client never confuses it with another page_ref's independent source row.
+      target.fieldVersions[field.fieldKey] = source?.version ?? 1;
+      const value = source?.valuesJson[cfg.sourceFieldKey!];
+      if (value !== undefined && value !== null) target.valuesJson[field.fieldKey] = value;
+    }
+  }
+  res.json(
+    [...enrichedByRecord.entries()].map(([recordId, value]) => ({
+      recordId,
+      ...value,
+    })),
+  );
 });
 
 router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, res): Promise<void> => {
@@ -1116,7 +1193,7 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
     .where(and(eq(pageFieldsTable.pageId, pageId), eq(pageFieldsTable.isActive, true)));
   const incoming = { ...((parsed.data.valuesJson ?? {}) as Record<string, unknown>) };
   const [existing] = await db
-    .select({ id: pageRecordValuesTable.id, valuesJson: pageRecordValuesTable.valuesJson })
+    .select({ id: pageRecordValuesTable.id, valuesJson: pageRecordValuesTable.valuesJson, version: pageRecordValuesTable.version })
     .from(pageRecordValuesTable)
     .where(and(eq(pageRecordValuesTable.pageId, pageId), eq(pageRecordValuesTable.recordId, recordId)));
   const prevValues = (existing?.valuesJson as Record<string, unknown> | undefined) ?? {};
@@ -1160,8 +1237,10 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
     prevValues: Record<string, unknown>;
     changedKeys: Set<string>;
     requestedValues: Map<string, unknown>;
+    aliasFieldKeys: Set<string>;
     writtenPrevValues?: Record<string, unknown>;
     validatedValues?: Record<string, unknown>;
+    writtenVersion?: number;
     rowBoundaryChecked: boolean;
   };
   const sourceStates = new Map<number, SourceWriteState>();
@@ -1187,6 +1266,7 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
       prevValues: sourcePrev,
       changedKeys: new Set(),
       requestedValues: new Map(),
+      aliasFieldKeys: new Set(),
       rowBoundaryChecked: false,
     };
     sourceStates.set(sourcePageId, state);
@@ -1225,6 +1305,7 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
     }
 
     const sourceState = await getSourceState(cfg.sourcePageId);
+    sourceState.aliasFieldKeys.add(refField.fieldKey);
     const sourcePrev = sourceState.prevValues[cfg.sourceFieldKey];
     const targetFieldPerm = perms.superAdmin
       ? "edit"
@@ -1364,35 +1445,72 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
   const shouldWriteTarget = !aliasOnlyWrite && preliminaryTargetChangedKeys.length > 0;
   let writtenTargetPrevValues = prevValues;
   let writtenTargetValues = result.values;
+  let writtenTargetVersion = existing?.version ?? 1;
 
   class LockedPageValidationError extends Error {}
-  class LockedPageConflictError extends Error {}
+  class LockedPageConflictError extends Error {
+    constructor(message: string, readonly pageId: number, readonly currentVersion: number) {
+      super(message);
+    }
+  }
   try {
     await db.transaction(async (tx) => {
       const touchedSourceStates = [...sourceStates.values()]
         .filter((state) => state.changedKeys.size > 0)
         .sort((a, b) => a.pageId - b.pageId);
-      // Every writer through this endpoint takes the same per-(page,record)
-      // advisory lock. Sorting prevents deadlocks when one request touches page
-      // B plus several source pages. This also serializes missing-row inserts.
       const lockPageIds = [
         ...new Set([
           ...(shouldWriteTarget ? [pageId] : []),
           ...touchedSourceStates.map((state) => state.pageId),
         ]),
       ].sort((a, b) => a - b);
+      if (parsed.data.expectedVersion != null && lockPageIds.length !== 1) {
+        throw new LockedPageValidationError(
+          "expectedVersion is ambiguous when one request touches multiple page value rows; use expectedVersions",
+        );
+      }
+      const expectedVersions = parsed.data.expectedVersions ?? {};
+      for (const key of Object.keys(expectedVersions)) {
+        const expectedPageId = Number(key);
+        if (!Number.isInteger(expectedPageId) || !lockPageIds.includes(expectedPageId)) {
+          throw new LockedPageValidationError(`expectedVersions contains untouched pageId "${key}"`);
+        }
+      }
+      // Every writer through this endpoint takes the same per-(page,record)
+      // advisory lock. Sorting prevents deadlocks when one request touches page
+      // B plus several source pages. This also serializes missing-row inserts.
       for (const lockPageId of lockPageIds) {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock((${lockPageId}::bigint << 32) | ${recordId}::bigint)`,
         );
       }
+      const lockedRowsByPage = new Map<number, { valuesJson: unknown; version: number } | undefined>();
+      for (const lockPageId of lockPageIds) {
+        const [lockedRow] = await tx
+          .select({ valuesJson: pageRecordValuesTable.valuesJson, version: pageRecordValuesTable.version })
+          .from(pageRecordValuesTable)
+          .where(and(eq(pageRecordValuesTable.pageId, lockPageId), eq(pageRecordValuesTable.recordId, recordId)))
+          .for("update");
+        lockedRowsByPage.set(lockPageId, lockedRow);
+      }
+      // Validate every row CAS before any INSERT/UPDATE. Missing rows use the
+      // established baseline 1 and are serialized by the advisory lock above.
+      for (const lockPageId of lockPageIds) {
+        const lockedVersion = lockedRowsByPage.get(lockPageId)?.version ?? 1;
+        const expected =
+          expectedVersions[String(lockPageId)] ??
+          (parsed.data.expectedVersion != null && lockPageIds.length === 1 ? parsed.data.expectedVersion : undefined);
+        if (expected != null && lockedVersion !== expected) {
+          throw new LockedPageConflictError(
+            `Stale page values for page ${lockPageId} (current version ${lockedVersion})`,
+            lockPageId,
+            lockedVersion,
+          );
+        }
+      }
 
       if (shouldWriteTarget) {
-        const [lockedTarget] = await tx
-          .select({ valuesJson: pageRecordValuesTable.valuesJson })
-          .from(pageRecordValuesTable)
-          .where(and(eq(pageRecordValuesTable.pageId, pageId), eq(pageRecordValuesTable.recordId, recordId)))
-          .for("update");
+        const lockedTarget = lockedRowsByPage.get(pageId);
         writtenTargetPrevValues =
           (lockedTarget?.valuesJson as Record<string, unknown> | undefined) ?? {};
         for (const fieldKey of preliminaryTargetChangedKeys) {
@@ -1401,6 +1519,8 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
           if (JSON.stringify(beforeLock ?? null) !== JSON.stringify(afterLock ?? null)) {
             throw new LockedPageConflictError(
               `Page field "${fieldKey}" changed while this value was being saved`,
+              pageId,
+              lockedTarget?.version ?? 1,
             );
           }
         }
@@ -1421,31 +1541,23 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
         if ("error" in lockedTargetResult) {
           throw new LockedPageValidationError(lockedTargetResult.error);
         }
-        const lockedTargetUserRefError = await validatePageUserRefs(fields, lockedTargetResult.values);
+        const lockedTargetUserRefError = await validatePageUserRefs(fields, lockedTargetResult.values, tx);
         if (lockedTargetUserRefError) {
           throw new LockedPageValidationError(lockedTargetUserRefError);
         }
         writtenTargetValues = lockedTargetResult.values;
-        await tx
+        const [written] = await tx
           .insert(pageRecordValuesTable)
           .values({ pageId, recordId, valuesJson: writtenTargetValues })
           .onConflictDoUpdate({
             target: [pageRecordValuesTable.pageId, pageRecordValuesTable.recordId],
             set: { valuesJson: writtenTargetValues },
-          });
+          }).returning({ version: pageRecordValuesTable.version });
+        writtenTargetVersion = written!.version;
       }
 
       for (const sourceState of touchedSourceStates) {
-        const [lockedSource] = await tx
-          .select({ valuesJson: pageRecordValuesTable.valuesJson })
-          .from(pageRecordValuesTable)
-          .where(
-            and(
-              eq(pageRecordValuesTable.pageId, sourceState.pageId),
-              eq(pageRecordValuesTable.recordId, recordId),
-            ),
-          )
-          .for("update");
+        const lockedSource = lockedRowsByPage.get(sourceState.pageId);
         const lockedPrev =
           (lockedSource?.valuesJson as Record<string, unknown> | undefined) ?? {};
         for (const fieldKey of sourceState.requestedValues.keys()) {
@@ -1454,6 +1566,8 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
           if (JSON.stringify(beforeLock ?? null) !== JSON.stringify(afterLock ?? null)) {
             throw new LockedPageConflictError(
               `Source field "${fieldKey}" changed while this value was being saved`,
+              sourceState.pageId,
+              lockedSource?.version ?? 1,
             );
           }
         }
@@ -1477,6 +1591,7 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
         const lockedSourceUserRefError = await validatePageUserRefs(
           sourceState.fields,
           lockedResult.values,
+          tx,
         );
         if (lockedSourceUserRefError) {
           throw new LockedPageValidationError(lockedSourceUserRefError);
@@ -1496,7 +1611,7 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
         sourceState.writtenPrevValues = lockedPrev;
         sourceState.validatedValues = finalSourceValues;
         if (diffChangedKeys(lockedPrev, finalSourceValues).length === 0) continue;
-        await tx
+        const [written] = await tx
           .insert(pageRecordValuesTable)
           .values({
             pageId: sourceState.pageId,
@@ -1506,12 +1621,23 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
           .onConflictDoUpdate({
             target: [pageRecordValuesTable.pageId, pageRecordValuesTable.recordId],
             set: { valuesJson: finalSourceValues },
-          });
+          })
+          .returning({ version: pageRecordValuesTable.version });
+        sourceState.writtenVersion = written!.version;
       }
     });
   } catch (err) {
-    if (err instanceof LockedPageConflictError) {
+    if (err instanceof UserReferenceBusyError) {
       res.status(409).json({ error: err.message });
+      return;
+    }
+    if (err instanceof LockedPageConflictError) {
+      res.status(409).json({
+        error: err.message,
+        recordId,
+        pageId: err.pageId,
+        currentVersion: err.currentVersion,
+      });
       return;
     }
     if (err instanceof LockedPageValidationError) {
@@ -1545,7 +1671,12 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
         eventName: EVENT_PAGE_FIELD_SAVED,
         entityId,
         recordId,
-        payload: { pageId, changedPageFieldKeys, actorUserId: req.user!.userId },
+        payload: {
+          pageId,
+          changedPageFieldKeys,
+          actorUserId: req.user!.userId,
+          version: writtenTargetVersion,
+        },
       },
       req.log,
     );
@@ -1566,12 +1697,44 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
           pageId: sourceState.pageId,
           changedPageFieldKeys: sourceChangedKeys,
           actorUserId: req.user!.userId,
+          version: sourceState.writtenVersion,
         },
       },
       req.log,
     );
   }
-  res.json({ recordId, valuesJson: writtenTargetValues });
+  const fieldVersions: Record<string, number> = {};
+  for (const field of fields) {
+    if (
+      field.fieldType !== "page_ref" &&
+      field.fieldType !== "function" &&
+      field.fieldType !== "relation" &&
+      field.fieldType !== "lookup" &&
+      field.fieldType !== "created_at" &&
+      (perms.superAdmin ||
+        mostPermissiveFieldPerm(
+          field.permissionsJson as FieldPermissions | null,
+          roleIds,
+          "view",
+          perms,
+          entityId,
+          pageId,
+        ) !== "hidden")
+    ) {
+      fieldVersions[field.fieldKey] = writtenTargetVersion;
+    }
+  }
+  for (const sourceState of sourceStates.values()) {
+    const version = sourceState.writtenVersion;
+    if (version == null) continue;
+    for (const aliasFieldKey of sourceState.aliasFieldKeys) fieldVersions[aliasFieldKey] = version;
+  }
+  res.json({
+    recordId,
+    valuesJson: writtenTargetValues,
+    version: writtenTargetVersion,
+    fieldVersions,
+  });
 });
 
 class BulkPageFieldUpdateError extends Error {
@@ -1603,7 +1766,7 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
     return;
   }
   const { pageId } = params.data;
-  const { fieldKey, value } = body.data;
+  const { fieldKey, value, expectedVersions } = body.data;
   const recordIds = [...new Set(body.data.recordIds)].sort((a, b) => a - b);
   const eff = await effectiveEntityForPage(pageId);
   if (!eff.found) {
@@ -1720,21 +1883,6 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
     return;
   }
 
-  const snapshotRows = await db
-    .select({ recordId: pageRecordValuesTable.recordId, valuesJson: pageRecordValuesTable.valuesJson })
-    .from(pageRecordValuesTable)
-    .where(
-      and(
-        eq(pageRecordValuesTable.pageId, writePageId),
-        inArray(pageRecordValuesTable.recordId, recordIds),
-      ),
-    );
-  const snapshotByRecord = new Map(
-    snapshotRows.map((row) => [
-      row.recordId,
-      (row.valuesJson as Record<string, unknown> | undefined) ?? {},
-    ]),
-  );
   const gdriveEnabled = await isGoogleDriveModuleEnabled();
   const hiddenSourceStatuses =
     field.fieldType === "page_ref" && !perms.superAdmin
@@ -1744,6 +1892,7 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
     recordId: number;
     before: Record<string, unknown>;
     after: Record<string, unknown>;
+    version: number;
   };
   let changedRows: ChangedPageRow[] = [];
 
@@ -1796,7 +1945,7 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
         );
       }
       const lockedValueRows = await tx
-        .select({ recordId: pageRecordValuesTable.recordId, valuesJson: pageRecordValuesTable.valuesJson })
+        .select({ recordId: pageRecordValuesTable.recordId, valuesJson: pageRecordValuesTable.valuesJson, version: pageRecordValuesTable.version })
         .from(pageRecordValuesTable)
         .where(
           and(
@@ -1809,25 +1958,28 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
       const lockedByRecord = new Map(
         lockedValueRows.map((row) => [
           row.recordId,
-          (row.valuesJson as Record<string, unknown> | undefined) ?? {},
+          { values: (row.valuesJson as Record<string, unknown> | undefined) ?? {}, version: row.version },
         ]),
       );
-
-      const changed: ChangedPageRow[] = [];
+      // Validate the complete supplied CAS set before the first write. For a
+      // page_ref `writePageId` is its source page, so these versions are
+      // explicitly versions of the source page_record_values rows.
       for (const recordId of recordIds) {
-        const snapshot = snapshotByRecord.get(recordId) ?? {};
-        const locked = lockedByRecord.get(recordId) ?? {};
-        if (
-          JSON.stringify(snapshot[writeField.fieldKey] ?? null) !==
-          JSON.stringify(locked[writeField.fieldKey] ?? null)
-        ) {
+        const expectedVersion = expectedVersions?.[String(recordId)];
+        const currentVersion = lockedByRecord.get(recordId)?.version ?? 1;
+        if (expectedVersion != null && currentVersion !== expectedVersion) {
           throw new BulkPageFieldUpdateError(
             409,
             recordId,
-            `поле "${fieldKey}" изменилось во время массового сохранения`,
+            `устаревшая версия source page (текущая ${currentVersion})`,
           );
         }
+      }
 
+      const changed: ChangedPageRow[] = [];
+      for (const recordId of recordIds) {
+        const lockedRow = lockedByRecord.get(recordId);
+        const locked = lockedRow?.values ?? {};
         const scalarInput =
           requested === undefined ? {} : { [writeField.fieldKey]: requested };
         const scalarPrev = Object.prototype.hasOwnProperty.call(locked, writeField.fieldKey)
@@ -1842,7 +1994,7 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
         if ("error" in validated) {
           throw new BulkPageFieldUpdateError(400, recordId, validated.error);
         }
-        const userRefError = await validatePageUserRefs([writeField], validated.values);
+        const userRefError = await validatePageUserRefs([writeField], validated.values, tx);
         if (userRefError) {
           throw new BulkPageFieldUpdateError(400, recordId, userRefError);
         }
@@ -1853,20 +2005,29 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
           delete finalValues[writeField.fieldKey];
         }
         if (diffChangedKeys(locked, finalValues).length === 0) continue;
-        await tx
+        const [written] = await tx
           .insert(pageRecordValuesTable)
           .values({ pageId: writePageId, recordId, valuesJson: finalValues })
           .onConflictDoUpdate({
             target: [pageRecordValuesTable.pageId, pageRecordValuesTable.recordId],
             set: { valuesJson: finalValues },
-          });
-        changed.push({ recordId, before: locked, after: finalValues });
+          }).returning({ version: pageRecordValuesTable.version });
+        changed.push({ recordId, before: locked, after: finalValues, version: written!.version });
       }
       return changed;
     });
   } catch (err) {
+    if (err instanceof UserReferenceBusyError) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
     if (err instanceof BulkPageFieldUpdateError) {
-      res.status(err.status).json({ error: err.message, recordId: err.recordId });
+      const current =
+        err.status === 409 && err.recordId != null
+          ? await db.select({ version: pageRecordValuesTable.version }).from(pageRecordValuesTable)
+            .where(and(eq(pageRecordValuesTable.pageId, writePageId), eq(pageRecordValuesTable.recordId, err.recordId))).limit(1)
+          : [];
+      res.status(err.status).json({ error: err.message, recordId: err.recordId, ...(err.status === 409 ? { currentVersion: current[0]?.version ?? 1 } : {}) });
       return;
     }
     throw err;
@@ -1881,13 +2042,13 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
         payload: {
           pageId: writePageId,
           changedPageFieldKeys: diffChangedKeys(row.before, row.after),
-          actorUserId: req.user!.userId,
+          actorUserId: req.user!.userId, version: row.version,
         },
       },
       req.log,
     );
   }
-  res.json({ updatedIds: recordIds });
+  res.json({ updatedIds: recordIds, versions: Object.fromEntries(changedRows.map((row) => [row.recordId, row.version])) });
 });
 
 /**
@@ -2808,25 +2969,34 @@ router.put("/pages/:pageId/related-link", requireAuth, async (req, res): Promise
     baseRecordId,
     direction,
     linkedRecordId,
+    expectedVersion: body.data.expectedVersion,
   });
   if (!replaced.ok) {
-    res.status(replaced.status).json({ error: replaced.error });
+    res.status(replaced.status).json({
+      error: replaced.error,
+      ...(replaced.currentVersion != null ? { recordId: baseRecordId, currentVersion: replaced.currentVersion } : {}),
+    });
     return;
   }
-  await emitLinkChangedEvents({
-    entityId,
-    baseRecordId,
-    relatedEntityId,
-    affectedLinkedIds: [...replaced.previousLinkedIds, ...(linkedRecordId != null ? [linkedRecordId] : [])],
-    actorUserId: userId,
-    log: req.log,
-  });
+  if (replaced.changed) {
+    await emitLinkChangedEvents({
+      entityId,
+      baseRecordId,
+      relatedEntityId,
+      affectedLinkedIds: [...replaced.previousLinkedIds, ...(linkedRecordId != null ? [linkedRecordId] : [])],
+      actorUserId: userId,
+      changedFields: [body.data.fieldKey],
+      version: replaced.version,
+      versions: replaced.versions,
+      log: req.log,
+    });
+  }
 
   // Report the resulting value. The related field's hidden boundary was already
   // enforced above (relatedAccess !== "hidden" is required to reach this point).
   // For page-source the value is read from the linked record's page_record_values.
   const value = await loadLinkedValue(relatedPageId, relatedFieldKey, linkedRecordId, linkedValues);
-  res.json({ linkedRecordId, value });
+  res.json({ linkedRecordId, value, version: replaced.version });
 });
 
 /**
@@ -3834,24 +4004,33 @@ router.put("/entities/:entityId/related-link", requireAuth, async (req, res): Pr
     baseRecordId,
     direction,
     linkedRecordId,
+    expectedVersion: body.data.expectedVersion,
   });
   if (!replaced.ok) {
-    res.status(replaced.status).json({ error: replaced.error });
+    res.status(replaced.status).json({
+      error: replaced.error,
+      ...(replaced.currentVersion != null ? { recordId: baseRecordId, currentVersion: replaced.currentVersion } : {}),
+    });
     return;
   }
 
-  await emitLinkChangedEvents({
-    entityId,
-    baseRecordId,
-    relatedEntityId,
-    affectedLinkedIds: [...replaced.previousLinkedIds, ...(linkedRecordId != null ? [linkedRecordId] : [])],
-    actorUserId: userId,
-    log: req.log,
-  });
+  if (replaced.changed) {
+    await emitLinkChangedEvents({
+      entityId,
+      baseRecordId,
+      relatedEntityId,
+      affectedLinkedIds: [...replaced.previousLinkedIds, ...(linkedRecordId != null ? [linkedRecordId] : [])],
+      actorUserId: userId,
+      changedFields: [body.data.fieldKey],
+      version: replaced.version,
+      versions: replaced.versions,
+      log: req.log,
+    });
+  }
 
   // For page-source the value is read from the linked record's page_record_values.
   const value = await loadLinkedValue(relatedPageId, relatedFieldKey, linkedRecordId, linkedValues);
-  res.json({ linkedRecordId, value });
+  res.json({ linkedRecordId, value, version: replaced.version });
 });
 
 export default router;
