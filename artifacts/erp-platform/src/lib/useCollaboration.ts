@@ -42,7 +42,7 @@ export function useCollaboration(pageId?: number | null) {
   const currentEditing = useRef<CollaborationEditing | null>(null);
 
   const publishPresence = useCallback((editing: CollaborationEditing | null) => {
-    if (!pageId || userId == null) return;
+    if (!pageId || userId == null || isGuest) return;
     currentEditing.current = editing;
     const token = localStorage.getItem("erp_token");
     if (!token) return;
@@ -63,7 +63,7 @@ export function useCollaboration(pageId?: number | null) {
   }, [isGuest, pageId, userId]);
 
   useEffect(() => {
-    if (!pageId || userId == null) {
+    if (!pageId || userId == null || isGuest) {
       setUsers([]);
       setConnected(false);
       return;
@@ -161,7 +161,7 @@ export function useCollaboration(pageId?: number | null) {
       window.clearInterval(heartbeatTimer);
       setConnected(false);
     };
-  }, [pageId, publishPresence, userId]);
+  }, [isGuest, pageId, publishPresence, userId]);
 
   return {
     users,

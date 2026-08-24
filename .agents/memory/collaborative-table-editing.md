@@ -19,6 +19,19 @@ and fields even when the normal read endpoints are correct.
 as an independent read surface and either be recipient-filtered under the full
 records boundary or reduced to an opaque invalidation.
 
+Global online-user presence may aggregate the existing ephemeral page sessions,
+but guests must receive neither named SSE presence nor named global presence.
+Current-page metadata is disclosed only when the viewer can access that page;
+never include editing coordinates, record IDs, query strings, or history.
+
+**Why:** An online-users widget is a new cross-page read surface. Reusing page
+presence without a separate disclosure review leaks identities and restricted
+page context, especially to passwordless guests.
+
+**How to apply:** Keep the registry TTL-only and process-local while deployment
+is single-process. Before adding API workers/replicas, move presence to a shared
+ephemeral store/pub-sub so session counts and current pages remain complete.
+
 Every write that changes a record's effective scalar, page-local, status,
 relation, archive, or merge state must participate in optimistic concurrency.
 An effective change advances the relevant version exactly once, including

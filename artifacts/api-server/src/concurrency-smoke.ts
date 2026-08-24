@@ -19,7 +19,13 @@ import {
   usersTable,
 } from "@workspace/db";
 import { asc, eq, inArray, sql } from "drizzle-orm";
-import { isUnrestrictedVisibilityProfile, presenceForViewer } from "./lib/collaboration";
+import {
+  globalPresenceSnapshot,
+  isUnrestrictedVisibilityProfile,
+  presenceForViewer,
+  putPresence,
+  removePresence,
+} from "./lib/collaboration";
 import { encodeScopeFilter } from "./lib/scope-filter";
 import { isRecordOwned } from "./routes/own-scope";
 import { USER_REFERENCE_LOCK_NS } from "./lib/user-reference-barrier";
@@ -48,6 +54,18 @@ async function main(): Promise<void> {
   assert.equal(isUnrestrictedVisibilityProfile({ ...unrestricted, hiddenRowStatusCount: 1 }), false);
   assert.equal(isUnrestrictedVisibilityProfile({ ...unrestricted, visibleEntityFieldCount: 1 }), false);
   assert.equal(isUnrestrictedVisibilityProfile({ ...unrestricted, visiblePageFieldCount: 0 }), false);
+
+  // Global presence is TTL-backed, aggregates tabs by user, and exposes only the
+  // widget-safe fields (never editing coordinates).
+  putPresence(101, "presence-smoke-a", { id: 700001, name: "Presence User" }, publicPresence.editing);
+  putPresence(102, "presence-smoke-b", { id: 700001, name: "Presence User" }, null);
+  const [globalUser] = globalPresenceSnapshot().filter((user) => user.userId === 700001);
+  assert.ok(globalUser, "Global presence omitted active user");
+  assert.equal(globalUser.sessionCount, 2, "Global presence did not aggregate browser tabs");
+  assert.equal(globalUser.currentPageId, 102, "Global presence did not retain the latest client page");
+  assert.equal("editing" in globalUser, false, "Global presence leaked editing coordinates");
+  removePresence(101, "presence-smoke-a", 700001);
+  removePresence(102, "presence-smoke-b", 700001);
 
   // Genuine two-transaction regression for the shared user-merge/record-merge
   // order: page advisory pair first, entity row second, page-value row third.

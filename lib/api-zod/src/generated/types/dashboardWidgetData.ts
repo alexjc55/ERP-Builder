@@ -12,6 +12,7 @@ import type { DashboardWidgetDataTextColor } from './dashboardWidgetDataTextColo
 import type { DashboardWidgetDataWidgetType } from './dashboardWidgetDataWidgetType';
 import type { MultilingualText } from './multilingualText';
 import type { NotesData } from './notesData';
+import type { OnlineUserData } from './onlineUserData';
 import type { PivotResult } from './pivotResult';
 import type { TableColumn } from './tableColumn';
 import type { TableRow } from './tableRow';
@@ -62,4 +63,6 @@ export interface DashboardWidgetData {
      * @nullable
      */
   canEditNotes?: boolean | null;
+  /** Present only for a persisted online_users widget visible to the viewer. Guests receive an empty array. */
+  onlineUsers?: OnlineUserData[];
 }

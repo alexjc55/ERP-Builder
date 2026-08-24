@@ -19,4 +19,5 @@ export const DashboardWidgetDataWidgetType = {
   table: 'table',
   notes: 'notes',
   pivot: 'pivot',
+  online_users: 'online_users',
 } as const;

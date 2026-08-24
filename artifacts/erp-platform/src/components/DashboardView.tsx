@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import {
   useGetDashboardData,
+  getGetDashboardDataQueryKey,
   useListDashboardWidgets,
   useCreateDashboardWidget,
   useUpdateDashboardWidget,
@@ -29,6 +30,7 @@ import {
   type DashboardWidget,
   type DashboardWidgetInput,
   type DashboardWidgetData,
+  type OnlineUserData,
   type WidgetMetric,
   type WidgetConfigFormat,
   type ChartSeriesPoint,
@@ -127,15 +129,16 @@ import StarterKit from "@tiptap/starter-kit";
 import { TextStyle, Color } from "@tiptap/extension-text-style";
 import { TextAlign } from "@tiptap/extension-text-align";
 import { useAuth } from "@/lib/auth";
-import { useML, useT } from "@/lib/i18n";
+import { useML, useT, useLang } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Settings2, Plus, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ArrowRight, Minus, X, LayoutDashboard, GripVertical, Bold, Italic, Underline as UnderlineIcon, Strikethrough, List, ListOrdered, Link2, AlignLeft, AlignCenter, AlignRight, Heading1, Heading2, Heading3, Star } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { HexColorPicker } from "react-colorful";
 import { addColorPreset, loadColorPresets, removeColorPreset } from "@/lib/colorPresets";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { usePagePathLabel } from "@/lib/pagePath";
+import { useCollaboration } from "@/lib/useCollaboration";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
@@ -823,6 +826,96 @@ function WidgetTable({
   );
 }
 
+function getRelativeTime(dateStr: string, lang: string) {
+  try {
+    const diff = new Date().getTime() - new Date(dateStr).getTime();
+    const minutes = Math.floor(diff / 60000);
+    const rtf = new Intl.RelativeTimeFormat(lang, { numeric: "auto", style: "short" });
+    if (minutes < 1) return rtf.format(0, "minute");
+    if (minutes < 60) return rtf.format(-minutes, "minute");
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return rtf.format(-hours, "hour");
+    const days = Math.floor(hours / 24);
+    return rtf.format(-days, "day");
+  } catch {
+    return "";
+  }
+}
+
+/** Render an online users widget: list of active users with their current page. */
+function OnlineUsersWidget({
+  users,
+  t,
+  ml,
+}: {
+  users: OnlineUserData[];
+  t: (key: string, fallback: string) => string;
+  ml: (v: unknown) => string;
+}) {
+  const { lang } = useLang();
+
+  if (!users || users.length === 0) {
+    return (
+      <div data-testid="online-users-empty" className="flex h-full items-center justify-center text-sm text-slate-400">
+        {t("dash.noActiveUsers", "Нет активных пользователей")}
+      </div>
+    );
+  }
+
+  const sorted = [...users].sort((a, b) => new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime());
+
+  return (
+    <div data-testid="online-users-list" className="absolute inset-0 overflow-auto">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3 pb-2">
+        {sorted.map((u) => {
+          const initials = (u.name || "?").slice(0, 2).toUpperCase();
+          const isSafePath = u.currentPagePath && u.currentPagePath.startsWith("/");
+
+          return (
+            <div key={u.userId} data-testid={`online-user-row-${u.userId}`} className="flex items-center gap-3">
+              <div
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white"
+                style={{ backgroundColor: u.color }}
+                title={u.name}
+              >
+                {initials}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-900 truncate">{u.name}</p>
+                <div className="text-xs text-slate-500 truncate flex items-center gap-1.5">
+                  {u.currentPageTitle ? (
+                    isSafePath ? (
+                      <Link
+                        href={u.currentPagePath!}
+                        data-testid={`link-online-user-page-${u.userId}`}
+                        className="hover:text-blue-600 hover:underline truncate"
+                      >
+                        {ml(u.currentPageTitle)}
+                      </Link>
+                    ) : (
+                      <span className="truncate">{ml(u.currentPageTitle)}</span>
+                    )
+                  ) : (
+                    <span className="truncate text-slate-400">—</span>
+                  )}
+                  {u.sessionCount > 1 && (
+                    <Badge data-testid={`online-user-sessions-${u.userId}`} variant="secondary" className="px-1 py-0 h-[18px] text-[10px] bg-slate-100 text-slate-500 shrink-0 font-normal">
+                      {u.sessionCount}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+              <div className="text-[10px] text-slate-400 shrink-0 tabular-nums self-start pt-0.5">
+                {getRelativeTime(u.lastActiveAt, lang)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function WidgetCard({
   w,
   ml,
@@ -923,6 +1016,20 @@ function WidgetCard({
                 {t("dash.noData", "Нет данных")}
               </div>
             )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (w.widgetType === "online_users") {
+    const users = w.onlineUsers ?? [];
+    return (
+      <Card className="h-full border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+        <CardContent className="flex h-full flex-col p-4">
+          <p className="text-sm font-medium text-slate-500 truncate">{ml(w.titleJson)}</p>
+          <div className="flex-1 min-h-0 mt-3 relative">
+            <OnlineUsersWidget users={users} t={t} ml={ml} />
           </div>
         </CardContent>
       </Card>
@@ -1054,7 +1161,9 @@ function EditWidgetCell({
   const Icon = w.icon ? getIconComponent(w.icon, LayoutDashboard) : null;
   const widgetType = w.config.widgetType;
   const summary =
-    widgetType === "chart"
+    widgetType === "online_users"
+      ? t("dash.typeOnlineUsers", "Пользователи онлайн")
+      : widgetType === "chart"
       ? `${t("dash.chartWidget", "График")} · ${w.config.chart?.type ?? ""}`
       : widgetType === "table"
         ? `${t("dash.tableWidget", "Таблица")} · ${t("dash.columnsCount", "Колонок")}: ${w.config.table?.fieldKeys?.length ?? 0}`
@@ -1155,7 +1264,20 @@ export default function DashboardView({ pageId, embedded = false }: { pageId: nu
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
 
-  const { data: widgetData = [], isLoading } = useGetDashboardData(pageId);
+  // A full dashboard has no records table to publish its presence. Embedded
+  // dashboards share the page with EntityRecords, which already owns the one
+  // collaboration stream for this browser tab; disabling the second stream
+  // avoids two hooks competing for the same clientId.
+  useCollaboration(embedded ? null : pageId);
+
+  // Global presence can change on any ERP page, not only in this page's SSE
+  // room, so refresh the ephemeral snapshot on the heartbeat cadence.
+  const { data: widgetData = [], isLoading } = useGetDashboardData(pageId, {
+    query: {
+      queryKey: getGetDashboardDataQueryKey(pageId),
+      refetchInterval: 15_000,
+    },
+  });
   const { data: editWidgets = [] } = useListDashboardWidgets(pageId, {
     query: { enabled: isEditor && editMode, queryKey: getListDashboardWidgetsQueryKey(pageId) },
   });
@@ -1522,7 +1644,7 @@ type TableDraft = {
   pageFieldKeys: string[];
 };
 
-type WidgetTypeChoice = "metric" | "formula" | "chart" | "table" | "notes" | "pivot";
+type WidgetTypeChoice = "metric" | "formula" | "chart" | "table" | "notes" | "pivot" | "online_users";
 
 // Pivot dimension draft (dashboard widget editor: entity field, page-local field
 // or record status).
@@ -1643,9 +1765,11 @@ function WidgetEditorDialog({
           ? "notes"
           : widget?.config.widgetType === "pivot"
             ? "pivot"
-            : widget?.config.widgetType === "formula"
-              ? "formula"
-              : "metric",
+            : widget?.config.widgetType === "online_users"
+              ? "online_users"
+              : widget?.config.widgetType === "formula"
+                ? "formula"
+                : "metric",
   );
   const [icon, setIcon] = useState(widget ? (widget.icon ?? "") : "");
   const [color, setColor] = useState(widget?.color || DEFAULT_COLOR);
@@ -2032,6 +2156,17 @@ function WidgetEditorDialog({
         }
       }
     }
+    if (widgetType === "online_users") {
+      return {
+        ...base,
+        config: {
+          widgetType: "online_users",
+          colorStyle,
+          textColor,
+        },
+      };
+    }
+
     return {
       ...base,
       config: {
@@ -2088,10 +2223,11 @@ function WidgetEditorDialog({
                   <SelectItem value="table">{t("dash.typeTable", "Таблица")}</SelectItem>
                   <SelectItem value="pivot">{t("dash.typePivot", "Сводная таблица")}</SelectItem>
                   <SelectItem value="notes">{t("dash.typeNotes", "Заметки")}</SelectItem>
+                  <SelectItem value="online_users">{t("dash.typeOnlineUsers", "Пользователи онлайн")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            {widgetType !== "notes" && (
+            {widgetType !== "notes" && widgetType !== "online_users" && (
               <div className="space-y-1.5">
                 <Label>{t("dash.format", "Формат")}</Label>
                 <Select value={format} onValueChange={setFormat}>
@@ -2186,7 +2322,7 @@ function WidgetEditorDialog({
             <TableEditor table={table} entities={entities} onChange={(patch) => setTable((prev) => ({ ...prev, ...patch }))} ml={ml} t={t} />
           ) : widgetType === "pivot" ? (
             <PivotEditor pivot={pivot} entities={entities} onChange={(patch) => setPivot((prev) => ({ ...prev, ...patch }))} ml={ml} t={t} />
-          ) : (
+          ) : widgetType === "online_users" ? null : (
             <>
               {widgetType === "formula" && (
                 <p className="text-xs text-slate-500">

@@ -107,6 +107,10 @@ async function visibilityProfile(
 }
 
 router.get("/collaboration/pages/:pageId/stream", requireAuth, async (req, res): Promise<void> => {
+  if (req.user!.guest) {
+    res.status(403).json({ error: "Guest collaboration streams are not available" });
+    return;
+  }
   const pageId = Number(req.params.pageId);
   const client = req.query.clientId;
   if (!Number.isInteger(pageId) || !validClientId(client)) { res.status(400).json({ error: "Invalid collaboration stream request" }); return; }
@@ -114,7 +118,7 @@ router.get("/collaboration/pages/:pageId/stream", requireAuth, async (req, res):
   if (!profile) return;
   res.status(200).set({ "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive", "X-Accel-Buffering": "no" });
   res.flushHeaders();
-  const close = addStream(pageId, client, res, profile.unrestricted);
+  const close = addStream(pageId, client, res, profile.unrestricted, req.user!.userId);
   req.on("close", close);
 });
 router.put("/collaboration/pages/:pageId/presence", requireAuth, async (req, res): Promise<void> => {

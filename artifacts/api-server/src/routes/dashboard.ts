@@ -41,6 +41,7 @@ import {
   UpdateNotesContentParams,
   UpdateNotesContentBody,
 } from "@workspace/api-zod";
+import { globalPresenceSnapshot } from "../lib/collaboration";
 
 const router: IRouter = Router();
 
@@ -163,7 +164,7 @@ interface PivotSpec {
 }
 
 interface WidgetConfigShape {
-  widgetType?: "metric" | "formula" | "chart" | "table" | "notes" | "pivot" | null;
+  widgetType?: "metric" | "formula" | "chart" | "table" | "notes" | "pivot" | "online_users" | null;
   metrics?: WidgetMetricSpec[];
   formula?: string | null;
   format?: string | null;
@@ -849,6 +850,9 @@ async function computePivotWidget(spec: PivotSpec): Promise<PivotResultShape | n
 }
 
 async function validateConfig(config: WidgetConfigShape | undefined): Promise<string | null> {
+  if (config?.widgetType === "online_users") {
+    return null;
+  }
   if (config?.widgetType === "chart") {
     return validateChartConfig(config.chart);
   }
@@ -1426,6 +1430,45 @@ function canAccessPage(perms: { superAdmin: boolean; pageIds: number[] }, pageId
 }
 
 /**
+ * Build the privacy-filtered view of transient global presence. Guests never
+ * receive named global presence. Page metadata is attached only when the viewer
+ * can access that exact page; no editing or record-level context reaches here.
+ */
+async function onlineUsersForViewer(
+  perms: { superAdmin: boolean; pageIds: number[] },
+  guest: boolean,
+) {
+  if (guest) return [];
+  const presence = globalPresenceSnapshot();
+  if (presence.length === 0) return [];
+  const accessiblePageIds = [...new Set(
+    presence.map((user) => user.currentPageId).filter((id) => canAccessPage(perms, id)),
+  )];
+  const pages = accessiblePageIds.length === 0
+    ? []
+    : await db
+        .select({ id: pagesTable.id, title: pagesTable.nameJson, path: pagesTable.path })
+        .from(pagesTable)
+        .where(and(inArray(pagesTable.id, accessiblePageIds), eq(pagesTable.isActive, true)));
+  const pagesById = new Map(pages.map((page) => [page.id, page]));
+  return presence.map((user) => {
+    const page = pagesById.get(user.currentPageId);
+    return {
+      userId: user.userId,
+      name: user.name,
+      color: user.color,
+      lastActiveAt: new Date(user.lastActiveAt).toISOString(),
+      sessionCount: user.sessionCount,
+      ...(page ? {
+        currentPageId: page.id,
+        currentPageTitle: page.title,
+        ...(page.path != null ? { currentPagePath: page.path.split(/[?#]/, 1)[0] } : {}),
+      } : {}),
+    };
+  });
+}
+
+/**
  * True if a widget is visible to the user (null/empty visibility = all roles on
  * the page). With multiple roles, visibility is granted if ANY role qualifies.
  */
@@ -1689,6 +1732,12 @@ router.get("/pages/:id/dashboard/data", requireAuth, async (req, res): Promise<v
   const visible = widgets.filter((w) =>
     widgetVisibleToRole(w.visibleRoleIdsJson ?? null, roleIds, perms.superAdmin),
   );
+  const hasOnlineUsersWidget = visible.some(
+    (w) => ((w.configJson ?? {}) as WidgetConfigShape).widgetType === "online_users",
+  );
+  const onlineUsers = hasOnlineUsersWidget
+    ? await onlineUsersForViewer(perms, req.user!.guest === true)
+    : [];
 
   const data = await Promise.all(
     visible.map(async (w) => {
@@ -1706,6 +1755,16 @@ router.get("/pages/:id/dashboard/data", requireAuth, async (req, res): Promise<v
         gridH: w.gridH,
         sortOrder: w.sortOrder,
       };
+      if (config.widgetType === "online_users") {
+        return {
+          ...base,
+          widgetType: "online_users" as const,
+          onlineUsers,
+          formula: null,
+          format: null,
+          metrics: {},
+        };
+      }
       if (config.widgetType === "chart" && config.chart) {
         const series = await computeChartSeries(config.chart);
         return {

@@ -210,6 +210,7 @@ export * from './notesContentInputCellsItem';
 export * from './notesContentInputKind';
 export * from './notesData';
 export * from './notesDataKind';
+export * from './onlineUserData';
 export * from './page';
 export * from './pageColumnGroupsJson';
 export * from './pageDefaultPageSize';

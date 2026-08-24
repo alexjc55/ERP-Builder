@@ -5711,8 +5711,8 @@ components:
       properties:
         widgetType:
           type: ["string", "null"]
-          enum: [metric, formula, chart, table, notes, pivot, null]
-          description: metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab.
+          enum: [metric, formula, chart, table, notes, pivot, online_users, null]
+          description: metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab; online_users = transient authenticated-user presence aggregated across tabs.
         metrics:
           type: array
           items:
@@ -5870,6 +5870,32 @@ components:
             items:
               $ref: "#/components/schemas/NoteCellData"
 
+    OnlineUserData:
+      type: object
+      required: [userId, name, color, lastActiveAt, sessionCount]
+      description: Safe, ephemeral global presence aggregated by user across active tabs. Current-page fields are omitted unless the viewer may access that page.
+      properties:
+        userId:
+          type: integer
+        name:
+          type: string
+        color:
+          type: string
+          description: Stable color derived from userId.
+        currentPageId:
+          type: integer
+        currentPageTitle:
+          $ref: "#/components/schemas/MultilingualText"
+        currentPagePath:
+          type: string
+          description: Page path without query parameters or fragments.
+        lastActiveAt:
+          type: string
+          format: date-time
+        sessionCount:
+          type: integer
+          minimum: 1
+
     DashboardWidgetData:
       type: object
       required: [id, titleJson, icon, color, gridW, gridH, sortOrder, metrics]
@@ -5890,7 +5916,7 @@ components:
           type: integer
         widgetType:
           type: ["string", "null"]
-          enum: [metric, formula, chart, table, notes, pivot, null]
+          enum: [metric, formula, chart, table, notes, pivot, online_users, null]
         chartType:
           type: ["string", "null"]
         showValues:
@@ -5939,6 +5965,11 @@ components:
         canEditNotes:
           type: ["boolean", "null"]
           description: For notes widgets, whether the requesting viewer may inline-edit this widget's content (page-admin or a role in editableRoleIds).
+        onlineUsers:
+          type: array
+          items:
+            $ref: "#/components/schemas/OnlineUserData"
+          description: Present only for a persisted online_users widget visible to the viewer. Guests receive an empty array.
 
     NotesContentInput:
       type: object

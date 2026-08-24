@@ -14,10 +14,32 @@ import { logger } from "./logger";
 export type Editing = { entityId: number; recordId: number; fieldKey: string; source: "entity" | "page" };
 export type PublicPresence = { userId: number; name: string; color: string; editing: Editing | null };
 type Entry = PublicPresence & { clientId: string; expiresAt: number };
+type GlobalEntry = {
+  userId: number;
+  name: string;
+  color: string;
+  clientId: string;
+  pageId: number;
+  lastActiveAt: number;
+  activityOrder: number;
+  expiresAt: number;
+};
+export type GlobalUserPresence = {
+  userId: number;
+  name: string;
+  color: string;
+  currentPageId: number;
+  lastActiveAt: number;
+  sessionCount: number;
+};
 type StreamEntry = { res: Response; canSeeEditing: boolean };
 
 export const PRESENCE_TTL_MS = 45_000;
 const rooms = new Map<number, Map<string, Entry>>();
+// Ephemeral process-local registry. A user/client pair represents one browser
+// tab and is independent of page rooms so the dashboard can aggregate globally.
+const globalPresence = new Map<string, GlobalEntry>();
+let globalActivityOrder = 0;
 const streams = new Map<number, Map<string, StreamEntry>>();
 
 export function deterministicPresenceColor(userId: number): string {
@@ -51,6 +73,47 @@ function clean(pageId: number, now = Date.now()): void {
   if (room.size === 0) rooms.delete(pageId);
 }
 
+function globalKey(userId: number, clientId: string): string {
+  return `${userId}:${clientId}`;
+}
+
+function cleanGlobal(now = Date.now()): void {
+  for (const [key, value] of globalPresence) {
+    if (value.expiresAt <= now) globalPresence.delete(key);
+  }
+}
+
+/** Safe global snapshot aggregated by user across active browser tabs. */
+export function globalPresenceSnapshot(now = Date.now()): GlobalUserPresence[] {
+  cleanGlobal(now);
+  const users = new Map<number, GlobalUserPresence & { activityOrder: number }>();
+  for (const session of globalPresence.values()) {
+    const current = users.get(session.userId);
+    if (!current) {
+      users.set(session.userId, {
+        userId: session.userId,
+        name: session.name,
+        color: session.color,
+        currentPageId: session.pageId,
+        lastActiveAt: session.lastActiveAt,
+        sessionCount: 1,
+        activityOrder: session.activityOrder,
+      });
+      continue;
+    }
+    current.sessionCount += 1;
+    if (session.activityOrder > current.activityOrder) {
+      current.name = session.name;
+      current.currentPageId = session.pageId;
+      current.lastActiveAt = session.lastActiveAt;
+      current.activityOrder = session.activityOrder;
+    }
+  }
+  return [...users.values()]
+    .sort((a, b) => b.lastActiveAt - a.lastActiveAt || b.activityOrder - a.activityOrder || a.userId - b.userId)
+    .map(({ activityOrder: _activityOrder, ...user }) => user);
+}
+
 export function presenceSnapshot(pageId: number, canSeeEditing = true): PublicPresence[] {
   clean(pageId);
   return [...(rooms.get(pageId)?.values() ?? [])]
@@ -60,15 +123,31 @@ export function presenceSnapshot(pageId: number, canSeeEditing = true): PublicPr
 
 export function putPresence(pageId: number, clientId: string, user: { id: number; name: string }, editing: Editing | null): void {
   clean(pageId);
+  cleanGlobal();
+  const now = Date.now();
   const room = rooms.get(pageId) ?? new Map<string, Entry>();
   rooms.set(pageId, room);
   room.set(clientId, {
-    clientId, userId: user.id, name: user.name, color: deterministicPresenceColor(user.id), editing, expiresAt: Date.now() + PRESENCE_TTL_MS,
+    clientId, userId: user.id, name: user.name, color: deterministicPresenceColor(user.id), editing, expiresAt: now + PRESENCE_TTL_MS,
+  });
+  globalPresence.set(globalKey(user.id, clientId), {
+    clientId,
+    userId: user.id,
+    name: user.name,
+    color: deterministicPresenceColor(user.id),
+    pageId,
+    lastActiveAt: now,
+    activityOrder: ++globalActivityOrder,
+    expiresAt: now + PRESENCE_TTL_MS,
   });
   broadcastPresence(pageId);
 }
 
-export function removePresence(pageId: number, clientId: string): void {
+export function removePresence(pageId: number, clientId: string, userId?: number): void {
+  if (userId != null) {
+    const entry = globalPresence.get(globalKey(userId, clientId));
+    if (entry?.pageId === pageId) globalPresence.delete(globalKey(userId, clientId));
+  }
   const room = rooms.get(pageId);
   if (!room || !room.delete(clientId)) return;
   if (room.size === 0) rooms.delete(pageId);
@@ -78,7 +157,7 @@ export function removePresence(pageId: number, clientId: string): void {
 function write(res: Response, event: string, data: unknown): void {
   if (!res.writableEnded) res.write(`event:${event}\ndata:${JSON.stringify(data)}\n\n`);
 }
-export function addStream(pageId: number, clientId: string, res: Response, canSeeEditing: boolean): () => void {
+export function addStream(pageId: number, clientId: string, res: Response, canSeeEditing: boolean, userId?: number): () => void {
   const room = streams.get(pageId) ?? new Map<string, StreamEntry>();
   streams.set(pageId, room);
   const previous = room.get(clientId);
@@ -94,7 +173,7 @@ export function addStream(pageId: number, clientId: string, res: Response, canSe
     if (room.get(clientId)?.res !== res) return;
     room.delete(clientId);
     if (room.size === 0) streams.delete(pageId);
-    removePresence(pageId, clientId);
+    removePresence(pageId, clientId, userId);
   };
 }
 export function broadcast(pageId: number, event: string, data: unknown): void {

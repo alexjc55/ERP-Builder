@@ -17,7 +17,7 @@ import type { WidgetPivotConfig } from './widgetPivotConfig';
 
 export interface WidgetConfig {
   /**
-     * metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab.
+     * metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab; online_users = transient authenticated-user presence aggregated across tabs.
      * @nullable
      */
   widgetType?: WidgetConfigWidgetType;

@@ -1944,7 +1944,7 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal('pivot'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal('pivot'),zod.literal('online_users'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab; online_users = transient authenticated-user presence aggregated across tabs.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -2086,7 +2086,7 @@ export const CreateDashboardWidgetBody = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal('pivot'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal('pivot'),zod.literal('online_users'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab; online_users = transient authenticated-user presence aggregated across tabs.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -2219,7 +2219,7 @@ export const CreateDashboardWidgetResponse = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal('pivot'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal('pivot'),zod.literal('online_users'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab; online_users = transient authenticated-user presence aggregated across tabs.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -2353,6 +2353,9 @@ export const GetDashboardDataParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
+
+
 export const GetDashboardDataResponseItem = zod.object({
   "id": zod.number(),
   "titleJson": zod.object({
@@ -2365,7 +2368,7 @@ export const GetDashboardDataResponseItem = zod.object({
   "gridW": zod.number(),
   "gridH": zod.number(),
   "sortOrder": zod.number(),
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal('pivot'),zod.literal(null)]).nullish(),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal('pivot'),zod.literal('online_users'),zod.literal(null)]).nullish(),
   "chartType": zod.string().nullish(),
   "showValues": zod.boolean().nullish().describe('When true, the chart widget renders numeric value labels directly on the chart'),
   "series": zod.array(zod.object({
@@ -2426,7 +2429,21 @@ export const GetDashboardDataResponseItem = zod.object({
   "format": zod.union([zod.literal('number'),zod.literal('currency'),zod.literal('percent'),zod.literal(null)]).nullish()
 }).describe('Computed view of a notes-table cell shipped to the viewer.'))).nullish()
 }).optional().describe('Computed view of a notes widget shipped to the viewer.'),
-  "canEditNotes": zod.boolean().nullish().describe('For notes widgets, whether the requesting viewer may inline-edit this widget\'s content (page-admin or a role in editableRoleIds).')
+  "canEditNotes": zod.boolean().nullish().describe('For notes widgets, whether the requesting viewer may inline-edit this widget\'s content (page-admin or a role in editableRoleIds).'),
+  "onlineUsers": zod.array(zod.object({
+  "userId": zod.number(),
+  "name": zod.string(),
+  "color": zod.string().describe('Stable color derived from userId.'),
+  "currentPageId": zod.number().optional(),
+  "currentPageTitle": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "currentPagePath": zod.string().optional().describe('Page path without query parameters or fragments.'),
+  "lastActiveAt": zod.coerce.date(),
+  "sessionCount": zod.number().min(1)
+}).describe('Safe, ephemeral global presence aggregated by user across active tabs. Current-page fields are omitted unless the viewer may access that page.')).optional().describe('Present only for a persisted online_users widget visible to the viewer. Guests receive an empty array.')
 })
 export const GetDashboardDataResponse = zod.array(GetDashboardDataResponseItem)
 
@@ -2481,7 +2498,7 @@ export const UpdateDashboardWidgetBody = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal('pivot'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal('pivot'),zod.literal('online_users'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab; online_users = transient authenticated-user presence aggregated across tabs.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),
@@ -2614,7 +2631,7 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "he": zod.string().optional()
 }),
   "config": zod.object({
-  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal('pivot'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab.'),
+  "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal('pivot'),zod.literal('online_users'),zod.literal(null)]).nullish().describe('metric (default) = number cards; formula = number card built from a formula combining field-terms across entities\/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab; online_users = transient authenticated-user presence aggregated across tabs.'),
   "metrics": zod.array(zod.object({
   "key": zod.string().describe('Identifier referenced from the widget formula as {key}'),
   "entityId": zod.number(),

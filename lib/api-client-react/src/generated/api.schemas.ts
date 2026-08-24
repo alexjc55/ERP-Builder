@@ -1917,7 +1917,7 @@ export interface NotesConfig {
 }
 
 /**
- * metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab.
+ * metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab; online_users = transient authenticated-user presence aggregated across tabs.
  * @nullable
  */
 export type WidgetConfigWidgetType = typeof WidgetConfigWidgetType[keyof typeof WidgetConfigWidgetType] | null;
@@ -1930,6 +1930,7 @@ export const WidgetConfigWidgetType = {
   table: 'table',
   notes: 'notes',
   pivot: 'pivot',
+  online_users: 'online_users',
 } as const;
 
 /**
@@ -1971,7 +1972,7 @@ export const WidgetConfigTextColor = {
 
 export interface WidgetConfig {
   /**
-     * metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab.
+     * metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab; online_users = transient authenticated-user presence aggregated across tabs.
      * @nullable
      */
   widgetType?: WidgetConfigWidgetType;
@@ -2123,6 +2124,23 @@ export interface NotesData {
 }
 
 /**
+ * Safe, ephemeral global presence aggregated by user across active tabs. Current-page fields are omitted unless the viewer may access that page.
+ */
+export interface OnlineUserData {
+  userId: number;
+  name: string;
+  /** Stable color derived from userId. */
+  color: string;
+  currentPageId?: number;
+  currentPageTitle?: MultilingualText;
+  /** Page path without query parameters or fragments. */
+  currentPagePath?: string;
+  lastActiveAt: string;
+  /** @minimum 1 */
+  sessionCount: number;
+}
+
+/**
  * @nullable
  */
 export type DashboardWidgetDataWidgetType = typeof DashboardWidgetDataWidgetType[keyof typeof DashboardWidgetDataWidgetType] | null;
@@ -2135,6 +2153,7 @@ export const DashboardWidgetDataWidgetType = {
   table: 'table',
   notes: 'notes',
   pivot: 'pivot',
+  online_users: 'online_users',
 } as const;
 
 /**
@@ -2239,6 +2258,8 @@ export interface DashboardWidgetData {
      * @nullable
      */
   canEditNotes?: boolean | null;
+  /** Present only for a persisted online_users widget visible to the viewer. Guests receive an empty array. */
+  onlineUsers?: OnlineUserData[];
 }
 
 export type NotesContentInputKind = typeof NotesContentInputKind[keyof typeof NotesContentInputKind];
