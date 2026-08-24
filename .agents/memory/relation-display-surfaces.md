@@ -21,6 +21,20 @@ and relation plaque fields silently disappeared. The fix mirrored the table's pr
 **How to apply:** when building a records-rendering view, branch on `fieldType === "relation" || "lookup"` and pull
 the value from the related-values map (keyed recordId→fieldKey), never from `valuesJson`.
 
+## Formula scope uses projected relation values
+
+Formula evaluation is also a record-value surface. Before calling
+`buildFormulaScope`, merge permission-filtered entity/page related-values
+projections into the stored entity + page-local values by `fieldKey`.
+
+**Why:** relation/lookup columns can display a valid value while a formula such
+as `daysBetween({lookup_date},{stored_date})` receives `undefined` and renders
+empty if its scope uses `valuesJson` alone.
+
+**How to apply:** use only values already returned by the related-values
+endpoints (never inject `linkedRecordId` or bypass their RBAC). Apply the same
+merge to row formulas, conditional formatting, and edit-form formula previews.
+
 ## Per-field display options apply to relation/lookup cells too
 
 The relation/lookup table-cell branch is a SEPARATE render path from plain scalar cells, so per-field display

@@ -123,6 +123,7 @@ import {
   CommandItem,
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
+import { mergeFormulaInputValues } from "@/lib/formulaInputValues";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ValueChecklistPicker } from "@/components/FilterValuePicker";
@@ -504,11 +505,16 @@ function LookupCreatePreview({
   relatedFieldKey,
   fallbackField,
   userNames,
+  projectionFieldKey,
+  onProjectedValueChange,
 }: {
   linkedRecordId: number;
   relatedFieldKey: string;
   fallbackField: Field;
   userNames: Map<number, string>;
+  /** Formula-only field key for a create-row projection; never a linked id. */
+  projectionFieldKey?: string;
+  onProjectedValueChange?: (update: { fieldKey: string; value?: unknown } | { fieldKey: string; clear: true }) => void;
 }): React.ReactNode {
   const t = useT();
   const ml = useML();
@@ -518,8 +524,19 @@ function LookupCreatePreview({
       queryKey: getGetRecordQueryKey(linkedRecordId),
     },
   });
+  const value = record
+    ? ((record.valuesJson ?? {}) as Record<string, unknown>)[relatedFieldKey]
+    : undefined;
+  // A create row has no related-values endpoint result yet. Report only the
+  // already permission-filtered GET-record projection to its formula scope.
+  // Cleanup prevents a prior lookup selection from surviving a relink, config
+  // change, or unmount. This runs in an effect, never during render.
+  useEffect(() => {
+    if (!projectionFieldKey || !onProjectedValueChange) return;
+    onProjectedValueChange({ fieldKey: projectionFieldKey, value });
+    return () => onProjectedValueChange({ fieldKey: projectionFieldKey, clear: true });
+  }, [linkedRecordId, relatedFieldKey, projectionFieldKey, onProjectedValueChange, value]);
   if (!record) return <span className="text-slate-300 text-xs">—</span>;
-  const value = ((record.valuesJson ?? {}) as Record<string, unknown>)[relatedFieldKey];
   // `fallbackField` carries the correct related field type from
   // entityRelatedColMeta, but that map is empty until the page has ≥1 saved row,
   // so on a first-record create it falls back to "text". The only field type
@@ -2359,6 +2376,11 @@ export function EntityRecords({
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
   const [newRow, setNewRow] = useState<FormState>({});
   const [newPageRow, setNewPageRow] = useState<FormState>({});
+  // Create-time lookup projections are formula-only. The draft retains raw
+  // relation ids for relation/dependency pickers.
+  const [newRowProjectedValues, setNewRowProjectedValues] = useState<
+    Map<string, { fieldKey: string; value?: unknown }>
+  >(new Map());
   const [newRowStatus, setNewRowStatus] = useState<string>(NO_STATUS);
   // Admin-only setup mode: clicking a column header configures it; "+" adds a column.
   const [setupMode, setSetupMode] = useState(false);
@@ -2377,6 +2399,7 @@ export function EntityRecords({
   useEffect(() => {
     setEditingCell(null);
     setAddingRow(false);
+    setNewRowProjectedValues(new Map());
     setSetupMode(false);
   }, [entityId]);
 
@@ -3805,7 +3828,7 @@ export function EntityRecords({
 
   const createMutation = useCreateEntityRecord({
     mutation: {
-      onSuccess: () => { toast({ title: t("records.created", "Запись создана") }); setDialogOpen(false); setAddingRow(false); invalidate(); },
+      onSuccess: () => { toast({ title: t("records.created", "Запись создана") }); setDialogOpen(false); setAddingRow(false); setNewRowProjectedValues(new Map()); invalidate(); },
       onError: (err) => toast({ title: t("records.createError", "Ошибка создания записи"), description: extractError(err), variant: "destructive" }),
     },
   });
@@ -4394,6 +4417,7 @@ export function EntityRecords({
       pageInitial[pf.fieldKey] = initialForField(inputField);
     }
     setNewPageRow(pageInitial);
+    setNewRowProjectedValues(new Map());
     // Preselect the default status — but if it is hidden from this role's picker,
     // leave it unset so the server assigns the (hidden) default itself instead of
     // rejecting an explicit forbidden statusId.
@@ -4407,7 +4431,24 @@ export function EntityRecords({
     setAddingRow(false);
     setNewRow({});
     setNewPageRow({});
+    setNewRowProjectedValues(new Map());
   };
+
+  const onNewRowLookupProjection = useCallback((
+    update: { fieldKey: string; value?: unknown } | { fieldKey: string; clear: true },
+  ) => {
+    setNewRowProjectedValues((previous) => {
+      const next = new Map(previous);
+      if ("clear" in update) {
+        if (!next.delete(update.fieldKey)) return previous;
+      } else {
+        const current = next.get(update.fieldKey);
+        if (current?.value === update.value) return previous;
+        next.set(update.fieldKey, { fieldKey: update.fieldKey, value: update.value });
+      }
+      return next;
+    });
+  }, []);
 
   const commitNewRow = () => {
     const valuesJson = formToValues(
@@ -4454,12 +4495,6 @@ export function EntityRecords({
     setPageColumnDialogOpen(true);
   };
 
-  // Merge an entity record's stored values with its page-local values so formula
-  // fields (entity- or page-defined) can reference either set by field key.
-  const allValuesFor = (record: EntityRecord): Record<string, unknown> => ({
-    ...((record.valuesJson ?? {}) as Record<string, unknown>),
-    ...(pageValuesByRecord.get(record.id)?.values ?? {}),
-  });
   // Raw value of a field for one record: evaluated for formula fields, stored
   // otherwise. Used both for rendering and for conditional-format matching.
   const fieldRawValue = (
@@ -6493,7 +6528,13 @@ export function EntityRecords({
                                 (() => {
                                   const computed = formatFormulaResult(
                                     pf.formulaConfigJson?.expression ?? "",
-                                    buildFormulaScope(resolveFormulaValues({ ...newRow, ...newPageRow }), formulaFieldDefs, formulaOptions),
+                                    buildFormulaScope(
+                                      resolveFormulaValues(
+                                        mergeFormulaInputValues(newRow, newPageRow, newRowProjectedValues),
+                                      ),
+                                      formulaFieldDefs,
+                                      formulaOptions,
+                                    ),
                                     pf.formulaConfigJson?.decimals,
                                     formulaOptions,
                                   );
@@ -6556,7 +6597,13 @@ export function EntityRecords({
                               (() => {
                                 const computed = formatFormulaResult(
                                   f.formulaConfigJson?.expression ?? "",
-                                    buildFormulaScope(resolveFormulaValues({ ...newRow, ...newPageRow }), formulaFieldDefs, formulaOptions),
+                                  buildFormulaScope(
+                                    resolveFormulaValues(
+                                      mergeFormulaInputValues(newRow, newPageRow, newRowProjectedValues),
+                                    ),
+                                    formulaFieldDefs,
+                                    formulaOptions,
+                                  ),
                                   f.formulaConfigJson?.decimals,
                                     formulaOptions,
                                 );
@@ -6585,6 +6632,8 @@ export function EntityRecords({
                                     relatedFieldKey={f.relationConfigJson?.relatedFieldKey ?? ""}
                                     fallbackField={fallbackField}
                                     userNames={userNames}
+                                    projectionFieldKey={f.fieldKey}
+                                    onProjectedValueChange={onNewRowLookupProjection}
                                   />
                                 );
                               })()
@@ -6649,7 +6698,16 @@ export function EntityRecords({
                   {(!showGroups || expandedGroupIndex >= 0 || expandAll) && groupRowsReady && records.map((record: EntityRecord, rowIndex: number) => {
                     const values = (record.valuesJson ?? {}) as Record<string, unknown>;
                     const pageValues = pageValuesByRecord.get(record.id)?.values ?? {};
-                    const allValues = { ...values, ...pageValues };
+                    // Related values are permission-filtered server projections.
+                    // Merge them before resolving formula references so entity and
+                    // page function fields (including chained formulas) see the
+                    // same relation/lookup value that the row displays.
+                    const allValues = mergeFormulaInputValues(
+                      values,
+                      pageValues,
+                      entityRelatedByRecord.get(record.id),
+                      relatedByRecord.get(record.id),
+                    );
                     const formulaValues = buildFormulaScope(resolveFormulaValues(allValues), formulaFieldDefs, formulaOptions);
                     const status = record.statusId != null ? statusById.get(record.statusId) : undefined;
                     // Conditional formatting across both entity and page columns.
@@ -8706,7 +8764,10 @@ function RecordFormBody({
     [allFields],
   );
   const formFormulaScope = useMemo(() => {
-    const vals: Record<string, unknown> = { ...formWithRelationParents };
+    // Keep formWithRelationParents intact for dependency pickers; only formula
+    // evaluation replaces raw relation ids with visible, permission-filtered
+    // related-values projections.
+    const vals = mergeFormulaInputValues(formWithRelationParents, undefined, relByField);
     for (const f of allFields) {
       if (f.fieldType !== "user") continue;
       const v = vals[f.fieldKey];
@@ -8715,7 +8776,7 @@ function RecordFormBody({
       else vals[f.fieldKey] = userNames.get(Number(v)) ?? v;
     }
     return buildFormulaScope(vals, formFormulaDefs, formulaOptions);
-  }, [formWithRelationParents, allFields, formFormulaDefs, userNames, formulaOptions]);
+  }, [formWithRelationParents, relByField, allFields, formFormulaDefs, userNames, formulaOptions]);
 
   // Read-only display node for a relation/lookup field's current value (its
   // configured display field), or an em dash when nothing is linked.
