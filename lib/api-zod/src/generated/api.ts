@@ -58,6 +58,7 @@ export const GetSettingsResponse = zod.object({
   "logoObjectPath": zod.string().nullable(),
   "currencySymbol": zod.string().describe('Free-text currency symbol\/suffix used wherever monetary values are rendered.'),
   "defaultLanguage": zod.enum(['ru', 'en', 'he']).describe('Platform-wide default UI language for users who have not picked their own.'),
+  "timeZone": zod.string().describe('IANA time-zone identifier used by formula current-date helpers.'),
   "tableStyle": zod.enum(['plain', 'striped', 'striped_bold']).describe('Global visual style of the records table (cosmetic).'),
   "tableStripeColor": zod.string().nullable().describe('Optional custom hex colour for striped rows; null = built-in default.'),
   "tableHeaderColor": zod.string().nullable().describe('Optional custom hex colour for the table header row; null = built-in default.'),
@@ -70,6 +71,8 @@ export const GetSettingsResponse = zod.object({
  * @summary Update platform branding settings (admin "settings" capability)
  */
 export const updateSettingsBodyCurrencySymbolMax = 8;
+
+export const updateSettingsBodyTimeZoneMax = 100;
 
 export const updateSettingsBodyTableStripeColorMax = 9;
 
@@ -93,6 +96,7 @@ export const UpdateSettingsBody = zod.object({
   "logoObjectPath": zod.string().nullish(),
   "currencySymbol": zod.string().max(updateSettingsBodyCurrencySymbolMax).optional(),
   "defaultLanguage": zod.enum(['ru', 'en', 'he']).optional(),
+  "timeZone": zod.string().max(updateSettingsBodyTimeZoneMax).optional(),
   "tableStyle": zod.enum(['plain', 'striped', 'striped_bold']).optional(),
   "tableStripeColor": zod.string().max(updateSettingsBodyTableStripeColorMax).nullish(),
   "tableHeaderColor": zod.string().max(updateSettingsBodyTableHeaderColorMax).nullish(),
@@ -113,6 +117,7 @@ export const UpdateSettingsResponse = zod.object({
   "logoObjectPath": zod.string().nullable(),
   "currencySymbol": zod.string().describe('Free-text currency symbol\/suffix used wherever monetary values are rendered.'),
   "defaultLanguage": zod.enum(['ru', 'en', 'he']).describe('Platform-wide default UI language for users who have not picked their own.'),
+  "timeZone": zod.string().describe('IANA time-zone identifier used by formula current-date helpers.'),
   "tableStyle": zod.enum(['plain', 'striped', 'striped_bold']).describe('Global visual style of the records table (cosmetic).'),
   "tableStripeColor": zod.string().nullable().describe('Optional custom hex colour for striped rows; null = built-in default.'),
   "tableHeaderColor": zod.string().nullable().describe('Optional custom hex colour for the table header row; null = built-in default.'),

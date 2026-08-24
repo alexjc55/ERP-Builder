@@ -19,6 +19,9 @@ export const appSettingsTable = pgTable("app_settings", {
   // Platform-wide default UI language (ru/en/he) used for users who have not yet
   // picked their own language; it is the fallback for the i18n active language.
   defaultLanguage: text("default_language").notNull().default("ru"),
+  // IANA time-zone identifier used by calendar-relative formulas such as
+  // today(), daysSince() and daysUntil().
+  timeZone: text("time_zone").notNull().default("Asia/Jerusalem"),
   // Global visual style of the records data table: "plain" (no striping, light
   // header — the original look), "striped" (alternating row colours), or
   // "striped_bold" (alternating rows + a more pronounced header). Cosmetic only.

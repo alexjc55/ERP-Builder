@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import {
   useGetDashboardData,
   useListDashboardWidgets,
@@ -120,7 +120,7 @@ import {
 import { IconPicker } from "@/components/IconPicker";
 import { getIconComponent } from "@/lib/icons";
 import { cn } from "@/lib/utils";
-import { evaluateFormula } from "@workspace/formula";
+import { DEFAULT_FORMULA_TIME_ZONE, evaluateFormula, type FormulaEvaluationOptions } from "@workspace/formula";
 import DOMPurify from "dompurify";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -250,11 +250,11 @@ function formatValue(value: number, format: string | null | undefined, currencyS
  * client-side against the server-computed metric values (referenced as {key});
  * otherwise the first metric's value is shown.
  */
-function resolveValue(w: DashboardWidgetData): number {
+function resolveValue(w: DashboardWidgetData, formulaOptions: FormulaEvaluationOptions): number {
   const metrics = w.metrics ?? {};
   if (w.formula && w.formula.trim()) {
     try {
-      const result = evaluateFormula(w.formula, metrics);
+      const result = evaluateFormula(w.formula, metrics, formulaOptions);
       return typeof result === "number" ? result : Number(result) || 0;
     } catch {
       return NaN;
@@ -270,13 +270,13 @@ function resolveValue(w: DashboardWidgetData): number {
  * against them as {key}, consistent with metric widgets. Numeric results honor
  * the cell's number/currency/percent format.
  */
-function renderNoteCellValue(cell: NoteCellData, currencySymbol: string, t: (key: string, fallback: string) => string): string {
+function renderNoteCellValue(cell: NoteCellData, currencySymbol: string, t: (key: string, fallback: string) => string, formulaOptions: FormulaEvaluationOptions): string {
   if (cell.kind === "static") return cell.text ?? "";
   const values = (cell.values ?? {}) as Record<string, unknown>;
   let result: unknown;
   if (cell.formula && cell.formula.trim()) {
     try {
-      result = evaluateFormula(cell.formula, values);
+      result = evaluateFormula(cell.formula, values, formulaOptions);
     } catch {
       return t("fields.formulaError", "Ошибка формулы");
     }
@@ -397,7 +397,7 @@ function NotesResizeGrip({ onResizeStart, onReset, t }: { onResizeStart: (e: Rea
 }
 
 /** Render a free-form notes table: each cell is static text or a computed value. */
-function NotesTable({ cells, currencySymbol, widgetId, t }: { cells: NoteCellData[][]; currencySymbol: string; widgetId: number; t: (key: string, fallback: string) => string }) {
+function NotesTable({ cells, currencySymbol, widgetId, t, formulaOptions }: { cells: NoteCellData[][]; currencySymbol: string; widgetId: number; t: (key: string, fallback: string) => string; formulaOptions: FormulaEvaluationOptions }) {
   const { widths, startResize, reset } = useNotesColResize(widgetId);
   if (!cells || cells.length === 0) {
     return <div className="flex h-full items-center justify-center text-sm text-slate-400">{t("dash.noData", "Нет данных")}</div>;
@@ -417,7 +417,7 @@ function NotesTable({ cells, currencySymbol, widgetId, t }: { cells: NoteCellDat
                     cell.kind === "dynamic" ? "font-medium text-slate-800 tabular-nums" : "text-slate-600 whitespace-pre-wrap",
                   )}
                 >
-                  {renderNoteCellValue(cell, currencySymbol, t)}
+                  {renderNoteCellValue(cell, currencySymbol, t, formulaOptions)}
                   {ri === 0 && <NotesResizeGrip onResizeStart={startResize(ci)} onReset={() => reset(ci)} t={t} />}
                 </td>
               ))}
@@ -438,6 +438,7 @@ function EditableNotesContent({
   onSave,
   saving,
   t,
+  formulaOptions,
 }: {
   notes: NotesData;
   canEdit: boolean;
@@ -446,6 +447,7 @@ function EditableNotesContent({
   onSave: (data: NotesContentInput) => void;
   saving: boolean;
   t: (key: string, fallback: string) => string;
+  formulaOptions: FormulaEvaluationOptions;
 }) {
   if (notes.kind === "table") {
     return (
@@ -456,6 +458,7 @@ function EditableNotesContent({
         widgetId={widgetId}
         onSave={onSave}
         t={t}
+        formulaOptions={formulaOptions}
       />
     );
   }
@@ -544,6 +547,7 @@ function EditableNotesTable({
   widgetId,
   onSave,
   t,
+  formulaOptions,
 }: {
   cells: NoteCellData[][];
   canEdit: boolean;
@@ -551,12 +555,13 @@ function EditableNotesTable({
   widgetId: number;
   onSave: (data: NotesContentInput) => void;
   t: (key: string, fallback: string) => string;
+  formulaOptions: FormulaEvaluationOptions;
 }) {
   const [editing, setEditing] = useState<{ ri: number; ci: number } | null>(null);
   const [draft, setDraft] = useState("");
   const { widths, startResize, reset } = useNotesColResize(widgetId);
 
-  if (!canEdit) return <NotesTable cells={cells} currencySymbol={currencySymbol} widgetId={widgetId} t={t} />;
+  if (!canEdit) return <NotesTable cells={cells} currencySymbol={currencySymbol} widgetId={widgetId} t={t} formulaOptions={formulaOptions} />;
   if (!cells || cells.length === 0) {
     return <div className="flex h-full items-center justify-center text-sm text-slate-400">{t("dash.noData", "Нет данных")}</div>;
   }
@@ -616,7 +621,7 @@ function EditableNotesTable({
                       editableCell && "cursor-text hover:bg-blue-50/40",
                     )}
                   >
-                    {renderNoteCellValue(cell, currencySymbol, t)}
+                    {renderNoteCellValue(cell, currencySymbol, t, formulaOptions)}
                     {ri === 0 && <NotesResizeGrip onResizeStart={startResize(ci)} onReset={() => reset(ci)} t={t} />}
                   </td>
                 );
@@ -827,6 +832,7 @@ function WidgetCard({
   onViewAll,
   onSaveNotesContent,
   savingNotesContent,
+  formulaOptions,
 }: {
   w: DashboardWidgetData;
   ml: (v: unknown) => string;
@@ -836,6 +842,7 @@ function WidgetCard({
   onViewAll?: () => void;
   onSaveNotesContent?: (wid: number, data: NotesContentInput) => void;
   savingNotesContent?: boolean;
+  formulaOptions: FormulaEvaluationOptions;
 }) {
   if (w.widgetType === "table") {
     return (
@@ -890,6 +897,7 @@ function WidgetCard({
                 onSave={(data) => onSaveNotesContent?.(w.id, data)}
                 saving={!!savingNotesContent}
                 t={t}
+                formulaOptions={formulaOptions}
               />
             ) : (
               <NotesRichText html="" />
@@ -922,7 +930,7 @@ function WidgetCard({
   }
 
   const Icon = w.icon ? getIconComponent(w.icon, LayoutDashboard) : null;
-  const value = resolveValue(w);
+  const value = resolveValue(w, formulaOptions);
   const colorClass = w.color || DEFAULT_COLOR;
   const colorStyle = w.colorStyle ?? "icon";
   const isFill = colorStyle === "fill";
@@ -1153,6 +1161,10 @@ export default function DashboardView({ pageId, embedded = false }: { pageId: nu
   });
   const { data: settings } = useGetSettings({ query: { queryKey: getGetSettingsQueryKey() } });
   const currencySymbol = settings?.currencySymbol || "₽";
+  const formulaOptions = useMemo<FormulaEvaluationOptions>(
+    () => ({ timeZone: settings?.timeZone ?? DEFAULT_FORMULA_TIME_ZONE }),
+    [settings?.timeZone],
+  );
 
   const [, setLocation] = useLocation();
   const { data: pages = [] } = useListPages();
@@ -1428,6 +1440,7 @@ export default function DashboardView({ pageId, embedded = false }: { pageId: nu
                   onViewAll={navPath ? () => setLocation(navPath) : undefined}
                   onSaveNotesContent={saveNotesContent}
                   savingNotesContent={notesContentMutation.isPending}
+                  formulaOptions={formulaOptions}
                 />
               </div>
             );

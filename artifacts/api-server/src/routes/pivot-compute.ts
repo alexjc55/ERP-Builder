@@ -12,13 +12,18 @@
 // so a non-pivot field can never become a dimension or measure.
 import {
   db,
+  appSettingsTable,
   entityRecordsTable,
   entityStatusesTable,
   usersTable,
   type EntityField,
 } from "@workspace/db";
 import { eq, sql, inArray, type SQL } from "drizzle-orm";
-import { evaluateFormula } from "@workspace/formula";
+import {
+  DEFAULT_FORMULA_TIME_ZONE,
+  evaluateFormula,
+  type FormulaEvaluationOptions,
+} from "@workspace/formula";
 import {
   relationValueScalar,
   pageLocalValueExpr,
@@ -119,6 +124,8 @@ export interface PivotComputeInput {
   pageId?: number;
   /** Fully-built read/scope boundary WHERE for the entity_records query. */
   where: SQL;
+  /** Optional request-scoped formula context supplied by a records route. */
+  formulaOptions?: FormulaEvaluationOptions;
 }
 
 export interface PivotResultShape {
@@ -150,6 +157,20 @@ type DimMeta =
  */
 export async function computePivot(input: PivotComputeInput): Promise<PivotComputeOutcome> {
   const { entityId, pivot, entityFields, relationMeta, pageId, where } = input;
+  // Non-records callers (dashboard/pivot pages) rely on this shared core to load
+  // the singleton setting once. Records routes pass their request-scoped context.
+  const formulaOptions =
+    input.formulaOptions ??
+    {
+      timeZone:
+        (
+          await db
+            .select({ timeZone: sql<string>`time_zone` })
+            .from(appSettingsTable)
+            .where(eq(appSettingsTable.id, 1))
+            .limit(1)
+        )[0]?.timeZone ?? DEFAULT_FORMULA_TIME_ZONE,
+    };
   const entFieldByKey = new Map(entityFields.map((f) => [f.fieldKey, f]));
   const pageFieldByKey = new Map((input.pageFields ?? []).map((pf) => [pf.fieldKey, pf] as const));
 
@@ -405,7 +426,7 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
           for (const k of p.allowedKeys) scoped[k] = srcVals[k];
           let v = 0;
           try {
-            const res = evaluateFormula(p.expr, scoped);
+            const res = evaluateFormula(p.expr, scoped, formulaOptions);
             if (typeof res === "number" && Number.isFinite(res)) v = res;
           } catch {
             v = 0;
@@ -449,7 +470,7 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
         for (const k of allowed) scoped[k] = srcVals[k];
         let v = 0;
         try {
-          const res = evaluateFormula(measure.expr, scoped);
+          const res = evaluateFormula(measure.expr, scoped, formulaOptions);
           if (typeof res === "number" && Number.isFinite(res)) v = res;
         } catch {
           v = 0;
@@ -567,7 +588,7 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
         for (const vk of valueColKeys) scoped[vk] = cellMap.get(rk + "\u0000" + vk) ?? 0;
         let v = 0;
         try {
-          const res = evaluateFormula(cp.expr, scoped);
+          const res = evaluateFormula(cp.expr, scoped, formulaOptions);
           if (typeof res === "number" && Number.isFinite(res)) v = res;
         } catch {
           v = 0;

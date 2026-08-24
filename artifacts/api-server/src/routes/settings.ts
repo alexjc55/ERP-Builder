@@ -6,6 +6,10 @@ import { UpdateSettingsBody } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
 import { saveLocalFile } from "../lib/localStorage";
+import {
+  DEFAULT_FORMULA_TIME_ZONE,
+  isValidFormulaTimeZone,
+} from "@workspace/formula";
 
 const router: IRouter = Router();
 
@@ -45,6 +49,7 @@ router.get("/settings", requireAuth, async (_req, res): Promise<void> => {
     logoObjectPath: row.logoObjectPath ?? null,
     currencySymbol: row.currencySymbol ?? "₽",
     defaultLanguage: row.defaultLanguage ?? "ru",
+    timeZone: row.timeZone ?? DEFAULT_FORMULA_TIME_ZONE,
     tableStyle: row.tableStyle ?? "plain",
     tableStripeColor: row.tableStripeColor ?? null,
     tableHeaderColor: row.tableHeaderColor ?? null,
@@ -115,6 +120,13 @@ router.put(
     if (parsed.data.logoObjectPath !== undefined) updates.logoObjectPath = parsed.data.logoObjectPath;
     if (parsed.data.currencySymbol !== undefined) updates.currencySymbol = parsed.data.currencySymbol;
     if (parsed.data.defaultLanguage !== undefined) updates.defaultLanguage = parsed.data.defaultLanguage;
+    if (parsed.data.timeZone !== undefined) {
+      if (!isValidFormulaTimeZone(parsed.data.timeZone)) {
+        res.status(400).json({ error: "Invalid IANA time zone" });
+        return;
+      }
+      updates.timeZone = parsed.data.timeZone;
+    }
     if (parsed.data.tableStyle !== undefined) updates.tableStyle = parsed.data.tableStyle;
     try {
       if (parsed.data.tableStripeColor !== undefined)
@@ -148,6 +160,7 @@ router.put(
       logoObjectPath: row.logoObjectPath ?? null,
       currencySymbol: row.currencySymbol ?? "₽",
       defaultLanguage: row.defaultLanguage ?? "ru",
+      timeZone: row.timeZone ?? DEFAULT_FORMULA_TIME_ZONE,
       tableStyle: row.tableStyle ?? "plain",
       tableStripeColor: row.tableStripeColor ?? null,
       tableHeaderColor: row.tableHeaderColor ?? null,

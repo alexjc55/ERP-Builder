@@ -27,6 +27,11 @@ The "Настройки" dropdown item opens `/settings` (auth-only ProtectedRou
 - **Why:** users were confused that toggling the default did nothing visible; the dead i18n fallback was the cause. The two surfaces above make it observable and meaningful without overriding a user's explicit per-user choice (the language switcher).
 - **How to apply:** any new singleton-settings field must be returned by BOTH the GET and PUT response objects in `settings.ts` — they are duplicated with *different indentation* (GET 4-space, PUT 6-space), so a single `replace_all` will silently miss one. Verify both.
 
+## Application time zone
+- `app_settings.timeZone` stores a validated IANA zone (default `Asia/Jerusalem`). It defines the calendar date used by `today()`, `daysSince()` and `daysUntil()` everywhere.
+- **Why:** browser/server local zones diverge around midnight; a single application zone keeps record cells, totals, filters, pivots, dashboards and automations consistent.
+- **How to apply:** load the singleton once per request/job/component and pass it as explicit formula evaluation context. Never query inside row loops and never use mutable global timezone state.
+
 Adding the `settings` cap followed the `admin-cap-stage-pattern.md` recipe (schema RoleAdminCaps + NO_ACCESS_PERMS, OpenAPI RoleAdminCaps, roles-editor label + local default-perms, but NO sidebar `/admin/*` route since settings lives at `/settings`).
 
 ## Global records-table display style + custom colors

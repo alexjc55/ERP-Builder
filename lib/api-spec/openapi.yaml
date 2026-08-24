@@ -4079,7 +4079,7 @@ components:
     # Platform branding / general settings (singleton row).
     AppSettings:
       type: object
-      required: [appNameJson, subtitleJson, logoObjectPath, currencySymbol, defaultLanguage, tableStyle, tableStripeColor, tableHeaderColor, tableBorderColor, updatedAt]
+      required: [appNameJson, subtitleJson, logoObjectPath, currencySymbol, defaultLanguage, timeZone, tableStyle, tableStripeColor, tableHeaderColor, tableBorderColor, updatedAt]
       properties:
         appNameJson:
           $ref: "#/components/schemas/MultilingualText"
@@ -4094,6 +4094,9 @@ components:
           type: string
           enum: [ru, en, he]
           description: Platform-wide default UI language for users who have not picked their own.
+        timeZone:
+          type: string
+          description: IANA time-zone identifier used by formula current-date helpers.
         tableStyle:
           type: string
           enum: [plain, striped, striped_bold]
@@ -4126,6 +4129,9 @@ components:
         defaultLanguage:
           type: string
           enum: [ru, en, he]
+        timeZone:
+          type: string
+          maxLength: 100
         tableStyle:
           type: string
           enum: [plain, striped, striped_bold]

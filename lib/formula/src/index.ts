@@ -21,9 +21,29 @@
 
 export type FormulaValue = number | string | boolean | null;
 
+export const DEFAULT_FORMULA_TIME_ZONE = "Asia/Jerusalem";
+
+export interface FormulaEvaluationOptions {
+  /** IANA time-zone identifier used by current-date helpers such as today(). */
+  timeZone?: string;
+  /** Optional clock override for deterministic tests and multi-formula batches. */
+  now?: Date;
+}
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const ISO_DATE_OR_DATETIME_RE =
   /^(\d{4})-(\d{2})-(\d{2})(?:T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,9})?)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)?)?$/;
+const dayFormatters = new Map<string, Intl.DateTimeFormat>();
+
+export function isValidFormulaTimeZone(timeZone: string): boolean {
+  if (!timeZone || timeZone.length > 100) return false;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Convert a date/date-time scalar to a UTC calendar-day ordinal. Stored date
@@ -50,11 +70,23 @@ function toCalendarDay(value: FormulaValue): number | null {
   return Math.trunc(date.getTime() / MS_PER_DAY);
 }
 
-function todayUtc(): string {
-  const now = new Date();
-  const year = String(now.getUTCFullYear()).padStart(4, "0");
-  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(now.getUTCDate()).padStart(2, "0");
+function todayInTimeZone(options?: FormulaEvaluationOptions): string {
+  const requested = options?.timeZone ?? DEFAULT_FORMULA_TIME_ZONE;
+  const timeZone = isValidFormulaTimeZone(requested) ? requested : DEFAULT_FORMULA_TIME_ZONE;
+  let formatter = dayFormatters.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    dayFormatters.set(timeZone, formatter);
+  }
+  const parts = formatter.formatToParts(options?.now ?? new Date());
+  const year = parts.find((part) => part.type === "year")?.value ?? "";
+  const month = parts.find((part) => part.type === "month")?.value ?? "";
+  const day = parts.find((part) => part.type === "day")?.value ?? "";
   return `${year}-${month}-${day}`;
 }
 
@@ -293,7 +325,11 @@ function isNumeric(v: FormulaValue): boolean {
   return typeof v === "number" || (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)));
 }
 
-function evalNode(node: Node, vars: Record<string, unknown>): FormulaValue {
+function evalNode(
+  node: Node,
+  vars: Record<string, unknown>,
+  options?: FormulaEvaluationOptions,
+): FormulaValue {
   switch (node.k) {
     case "num":
       return node.v;
@@ -308,14 +344,16 @@ function evalNode(node: Node, vars: Record<string, unknown>): FormulaValue {
       return String(raw);
     }
     case "unary": {
-      const e = evalNode(node.e, vars);
+      const e = evalNode(node.e, vars, options);
       return node.op === "-" ? -toNum(e) : !toBool(e);
     }
     case "ternary":
-      return toBool(evalNode(node.c, vars)) ? evalNode(node.a, vars) : evalNode(node.b, vars);
+      return toBool(evalNode(node.c, vars, options))
+        ? evalNode(node.a, vars, options)
+        : evalNode(node.b, vars, options);
     case "bin": {
-      const l = evalNode(node.l, vars);
-      const r = evalNode(node.r, vars);
+      const l = evalNode(node.l, vars, options);
+      const r = evalNode(node.r, vars, options);
       switch (node.op) {
         case "+": {
           // Spreadsheet semantics: an EMPTY operand (null/"") next to a numeric
@@ -360,7 +398,7 @@ function evalNode(node: Node, vars: Record<string, unknown>): FormulaValue {
       }
     }
     case "call": {
-      const a = node.args.map((arg) => evalNode(arg, vars));
+      const a = node.args.map((arg) => evalNode(arg, vars, options));
       switch (node.name) {
         case "if":
           return toBool(a[0]) ? a[1] ?? null : a[2] ?? null;
@@ -392,13 +430,13 @@ function evalNode(node: Node, vars: Record<string, unknown>): FormulaValue {
         case "coalesce":
           return a.find((v) => v != null && v !== "") ?? null;
         case "today":
-          return todayUtc();
+          return todayInTimeZone(options);
         case "daysbetween":
           return daysBetweenValues(a[0] ?? null, a[1] ?? null);
         case "dayssince":
-          return daysBetweenValues(a[0] ?? null, todayUtc());
+          return daysBetweenValues(a[0] ?? null, todayInTimeZone(options));
         case "daysuntil":
-          return daysBetweenValues(todayUtc(), a[0] ?? null);
+          return daysBetweenValues(todayInTimeZone(options), a[0] ?? null);
         default:
           throw new Error(`Неизвестная функция '${node.name}'`);
       }
@@ -411,11 +449,15 @@ function evalNode(node: Node, vars: Record<string, unknown>): FormulaValue {
  * error (callers should catch and show a fallback). An empty expression yields
  * null.
  */
-export function evaluateFormula(expression: string, values: Record<string, unknown>): FormulaValue {
+export function evaluateFormula(
+  expression: string,
+  values: Record<string, unknown>,
+  options?: FormulaEvaluationOptions,
+): FormulaValue {
   const expr = (expression ?? "").trim();
   if (!expr) return null;
   const ast = new Parser(tokenize(expr)).parse();
-  return evalNode(ast, values);
+  return evalNode(ast, values, options);
 }
 
 export interface FormulaFieldDef {
@@ -443,6 +485,7 @@ export interface FormulaFieldDef {
 export function buildFormulaScope(
   base: Record<string, unknown>,
   formulas: FormulaFieldDef[],
+  options?: FormulaEvaluationOptions,
 ): Record<string, unknown> {
   const defs = new Map<string, FormulaFieldDef>();
   for (const f of formulas) {
@@ -461,7 +504,7 @@ export function buildFormulaScope(
         inProgress.add(prop);
         let val: FormulaValue = null;
         try {
-          val = evaluateFormula(defs.get(prop)!.expression, scope);
+          val = evaluateFormula(defs.get(prop)!.expression, scope, options);
         } catch {
           val = null;
         }
@@ -516,9 +559,10 @@ export function formatFormulaResult(
   expression: string,
   values: Record<string, unknown>,
   decimals?: number | null,
+  options?: FormulaEvaluationOptions,
 ): { text: string; error: boolean; bool?: boolean } {
   try {
-    const v = evaluateFormula(expression, values);
+    const v = evaluateFormula(expression, values, options);
     if (v == null || v === "") return { text: "—", error: false };
     if (typeof v === "boolean") return { text: v ? "Да" : "Нет", error: false, bool: v };
     const d = normalizeDecimals(decimals);

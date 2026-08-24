@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
-import { db, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable, pageFieldsTable, pageRecordValuesTable, pagesTable, relationsTable, recordLinksTable, viewsTable } from "@workspace/db";
+import { db, appSettingsTable, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable, pageFieldsTable, pageRecordValuesTable, pagesTable, relationsTable, recordLinksTable, viewsTable } from "@workspace/db";
 import { eq, asc, desc, and, or, sql, inArray, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { buildFormulaScope, evaluateFormula, normalizeDecimals, cleanFpNoise, type FormulaFieldDef } from "@workspace/formula";
+import { buildFormulaScope, evaluateFormula, normalizeDecimals, cleanFpNoise, DEFAULT_FORMULA_TIME_ZONE, type FormulaEvaluationOptions, type FormulaFieldDef } from "@workspace/formula";
 import type { Request } from "express";
 import { requireAuth } from "../middlewares/auth";
 import {
@@ -87,6 +87,16 @@ import {
 } from "../lib/events";
 
 const router: IRouter = Router();
+
+/** Load the app's formula time zone once for a request-wide evaluation batch. */
+async function loadFormulaOptions(): Promise<FormulaEvaluationOptions> {
+  const [settings] = await db
+    .select({ timeZone: sql<string>`time_zone` })
+    .from(appSettingsTable)
+    .where(eq(appSettingsTable.id, 1))
+    .limit(1);
+  return { timeZone: settings?.timeZone ?? DEFAULT_FORMULA_TIME_ZONE };
+}
 
 // Page-local field types whose value lives in page_record_values and can be
 // filtered with the standard value operators. Relation/lookup/function have no
@@ -912,6 +922,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     return;
   }
 
+  const formulaOptions = await loadFormulaOptions();
   const fields = await loadActiveFields(entityId);
   const { hidden } = await fieldAccessContext(req, entityId, fields, body.data.pageId);
   // Hidden fields must not be observable, including via filter/sort/search inference.
@@ -1049,6 +1060,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       relationMeta,
       picks: (body.data.customFilters ?? []) as CustomFilterPick[],
       pageId: body.data.pageId,
+      formulaOptions,
     });
     if ("error" in cf) {
       res.status(400).json({ error: cf.error });
@@ -1307,7 +1319,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         // correctness of the total is prioritized over that aggregate confidentiality.
         const vals = (r.values as Record<string, unknown> | null) ?? {};
         try {
-          const out = evaluateFormula(expr, buildFormulaScope(vals, entityFormulaDefs));
+          const out = evaluateFormula(expr, buildFormulaScope(vals, entityFormulaDefs, formulaOptions), formulaOptions);
           if (typeof out === "number" && Number.isFinite(out)) {
             // Round EACH per-row result to the field's configured decimals before
             // summing, so the total equals the sum of the values the user actually
@@ -1457,7 +1469,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           for (const r of recRows) {
             const merged = { ...((r.values as Record<string, unknown> | null) ?? {}), ...(pvByRecord.get(r.id) ?? {}) };
             try {
-              const out = evaluateFormula(expr, buildFormulaScope(merged, pageScopeFormulaDefs));
+              const out = evaluateFormula(expr, buildFormulaScope(merged, pageScopeFormulaDefs, formulaOptions), formulaOptions);
               // Round each per-row result to the configured decimals before summing
               // so the total matches the sum of the per-row values the user sees.
               if (typeof out === "number" && Number.isFinite(out)) sum += d != null ? Number(out.toFixed(d)) : cleanFpNoise(out);
@@ -1802,7 +1814,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       const expr = (cfg?.expression ?? "").trim();
       if (!expr) return null;
       try {
-        const out = evaluateFormula(expr, scope);
+        const out = evaluateFormula(expr, scope, formulaOptions);
         if (typeof out === "number" && Number.isFinite(out)) {
           const d = normalizeDecimals(cfg?.decimals);
           return d != null ? Number(out.toFixed(d)) : cleanFpNoise(out);
@@ -1854,7 +1866,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         if (!expr) continue;
         const d = normalizeDecimals(cfg?.decimals);
         try {
-          const out = evaluateFormula(expr, buildFormulaScope(vals, entityFormulaDefs));
+          const out = evaluateFormula(expr, buildFormulaScope(vals, entityFormulaDefs, formulaOptions), formulaOptions);
           if (typeof out === "number" && Number.isFinite(out))
             b.sums[f.fieldKey] = (b.sums[f.fieldKey] ?? 0) + (d != null ? Number(out.toFixed(d)) : cleanFpNoise(out));
         } catch {
@@ -1872,7 +1884,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           if (!expr) continue;
           const d = normalizeDecimals(cfg?.decimals);
           try {
-            const out = evaluateFormula(expr, buildFormulaScope({ ...vals, ...pvVals }, gPfScopeFormulaDefs));
+            const out = evaluateFormula(expr, buildFormulaScope({ ...vals, ...pvVals }, gPfScopeFormulaDefs, formulaOptions), formulaOptions);
             if (typeof out === "number" && Number.isFinite(out))
               b.sums[totalKey] = (b.sums[totalKey] ?? 0) + (d != null ? Number(out.toFixed(d)) : cleanFpNoise(out));
           } catch {
@@ -1924,7 +1936,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       // status that reaches here is visible to the viewer.
       trackCommon(b, "__status__", r.statusId, firstRow);
       for (const f of gFormulaCommon)
-        trackCommon(b, f.fieldKey, evalFormulaVal(f, buildFormulaScope(vals, entityFormulaDefs)), firstRow);
+        trackCommon(b, f.fieldKey, evalFormulaVal(f, buildFormulaScope(vals, entityFormulaDefs, formulaOptions)), firstRow);
       for (const rc of relCommonCols) {
         trackCommon(b, rc.fieldKey, (r as Record<string, unknown>)[`relval__${rc.fieldKey}`], firstRow);
       }
@@ -1932,7 +1944,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         const pvVals = gPvByRec.get(r.id) ?? {};
         for (const pf of gPfScalarCommon) trackCommon(b, `pf:${pf.id}`, pvVals[pf.fieldKey], firstRow);
         for (const pf of gPfFormulaCommon)
-          trackCommon(b, `pf:${pf.id}`, evalFormulaVal(pf, buildFormulaScope({ ...vals, ...pvVals }, gPfScopeFormulaDefs)), firstRow);
+          trackCommon(b, `pf:${pf.id}`, evalFormulaVal(pf, buildFormulaScope({ ...vals, ...pvVals }, gPfScopeFormulaDefs, formulaOptions)), firstRow);
       }
     }
     // Final per-group rounding for formula sums (matches the flat totals).
@@ -2080,6 +2092,7 @@ router.post(
       return;
     }
 
+    const formulaOptions = await loadFormulaOptions();
     const pivot = body.data.pivot;
     const pageId = body.data.pageId ?? undefined;
 
@@ -2207,6 +2220,7 @@ router.post(
         relationMeta,
         picks: (body.data.customFilters ?? []) as CustomFilterPick[],
         pageId: pageId ?? undefined,
+        formulaOptions,
       });
       if ("error" in cf) {
         res.status(400).json({ error: cf.error });
@@ -2225,6 +2239,7 @@ router.post(
       pageFields: visiblePl,
       pageId,
       where,
+      formulaOptions,
     });
     if (!outcome.ok) {
       res.status(400).json({ error: outcome.error });

@@ -70,6 +70,7 @@ ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS table_style text DEFAULT 'plai
 ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS table_stripe_color text;
 ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS table_header_color text;
 ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS table_border_color text;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS time_zone text DEFAULT 'Asia/Jerusalem'::text NOT NULL;
 ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS id integer DEFAULT nextval('audit_log_id_seq'::regclass) NOT NULL;
 ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS entity_id integer;
 ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS record_id integer;

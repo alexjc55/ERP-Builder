@@ -289,6 +289,8 @@ export interface AppSettings {
   currencySymbol: string;
   /** Platform-wide default UI language for users who have not picked their own. */
   defaultLanguage: AppSettingsDefaultLanguage;
+  /** IANA time-zone identifier used by formula current-date helpers. */
+  timeZone: string;
   /** Global visual style of the records table (cosmetic). */
   tableStyle: AppSettingsTableStyle;
   /**
@@ -335,6 +337,8 @@ export interface AppSettingsUpdate {
   /** @maxLength 8 */
   currencySymbol?: string;
   defaultLanguage?: AppSettingsUpdateDefaultLanguage;
+  /** @maxLength 100 */
+  timeZone?: string;
   tableStyle?: AppSettingsUpdateTableStyle;
   /**
      * @maxLength 9

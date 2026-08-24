@@ -34,7 +34,7 @@ import {
   type CustomFilterInputType,
 } from "@workspace/db";
 import { and, or, eq, inArray, sql, type SQL } from "drizzle-orm";
-import { buildFormulaScope, evaluateFormula, type FormulaFieldDef } from "@workspace/formula";
+import { buildFormulaScope, evaluateFormula, type FormulaEvaluationOptions, type FormulaFieldDef } from "@workspace/formula";
 import {
   buildCondition,
   buildPageLocalCondition,
@@ -81,6 +81,8 @@ interface ApplyOpts {
   picks: CustomFilterPick[];
   /** Page context — required only when a condition targets a page-local field. */
   pageId?: number;
+  /** App-configured formula evaluation context supplied by the records route. */
+  formulaOptions?: FormulaEvaluationOptions;
 }
 
 const toFormulaDef = (f: { fieldKey: string; formulaConfigJson: unknown }): FormulaFieldDef => {
@@ -201,6 +203,7 @@ export async function resolveCustomFilterClauses(
         relationMeta,
         loadPageFields,
         pageId,
+        formulaOptions: opts.formulaOptions,
       });
       if ("error" in r) return { error: r.error };
       clauses.push(r.ids.length > 0 ? inArray(entityRecordsTable.id, r.ids) : sql`false`);
@@ -288,6 +291,7 @@ interface JsCtx {
   relationMeta: Map<string, RelationFilterMeta>;
   loadPageFields: (pid: number) => Promise<Map<string, { fieldType: string; formulaConfigJson: unknown }>>;
   pageId?: number;
+  formulaOptions?: FormulaEvaluationOptions;
 }
 
 /** Compute the set of record ids matching a (formula-referencing) filter tree. */
@@ -349,7 +353,7 @@ async function buildFormulaIdSet(
   const ids: number[] = [];
   for (const row of rows) {
     const vals = (row.vals ?? {}) as Record<string, unknown>;
-    const scope = buildFormulaScope(vals, ctx.entityFormulaDefs);
+    const scope = buildFormulaScope(vals, ctx.entityFormulaDefs, ctx.formulaOptions);
     const groupResults: boolean[] = [];
     for (const g of groups) {
       const parts: boolean[] = [];
@@ -398,7 +402,7 @@ function evalConditionJs(
     const pf = pageMetaByPage.get(pid)?.get(c.fieldKey);
     if (pf?.fieldType === "function") {
       // Page-local FORMULA: compute the value from the page-local scope.
-      const pscope = buildFormulaScope(pv, pageFormulaDefsByPage.get(pid) ?? []);
+      const pscope = buildFormulaScope(pv, pageFormulaDefsByPage.get(pid) ?? [], ctx.formulaOptions);
       cell = pscope[c.fieldKey];
       kind = typeof cell === "number" ? "numeric" : "text";
     } else {

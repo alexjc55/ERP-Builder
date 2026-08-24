@@ -5742,6 +5742,18 @@
     "he": "שפת הממשק למשתמשים חדשים ולמי שעדיין לא בחר שפה."
   },
   {
+    "key": "settings.timeZone",
+    "ru": "Часовой пояс",
+    "en": "Time zone",
+    "he": "אזור זמן"
+  },
+  {
+    "key": "settings.timeZoneHint",
+    "ru": "Используется функциями today(), daysSince() и daysUntil().",
+    "en": "Used by today(), daysSince(), and daysUntil().",
+    "he": "משמש את הפונקציות today(), daysSince() ו-daysUntil()."
+  },
+  {
     "key": "settings.currentPassword",
     "ru": "Текущий пароль",
     "en": "Current password",

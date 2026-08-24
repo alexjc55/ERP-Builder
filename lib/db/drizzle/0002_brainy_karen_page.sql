@@ -1,0 +1,1 @@
+ALTER TABLE "app_settings" ADD COLUMN "time_zone" text DEFAULT 'Asia/Jerusalem' NOT NULL;

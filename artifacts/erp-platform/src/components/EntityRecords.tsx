@@ -153,7 +153,14 @@ import { FieldConfigDialog } from "@/components/FieldConfigDialog";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { CreateUserDialog } from "@/components/CreateUserDialog";
 import { PageFieldConfigDialog } from "@/components/PageFieldConfigDialog";
-import { formatFormulaResult, evaluateFormula, buildFormulaScope, type FormulaFieldDef } from "@workspace/formula";
+import {
+  DEFAULT_FORMULA_TIME_ZONE,
+  formatFormulaResult,
+  evaluateFormula,
+  buildFormulaScope,
+  type FormulaEvaluationOptions,
+  type FormulaFieldDef,
+} from "@workspace/formula";
 import { computeRowFormatting, ruleMatches, type FormatField } from "@/lib/formatRules";
 import type { FieldFormatRule, CustomFilterPick, CustomFilter, CustomFilterInput } from "@workspace/api-client-react";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
@@ -1717,6 +1724,10 @@ export function EntityRecords({
   const { data: entity } = useGetEntity(entityId);
   // Global records-table display style (cosmetic): plain | striped | striped_bold.
   const { data: appSettings } = useGetSettings();
+  const formulaOptions = useMemo<FormulaEvaluationOptions>(
+    () => ({ timeZone: appSettings?.timeZone ?? DEFAULT_FORMULA_TIME_ZONE }),
+    [appSettings?.timeZone],
+  );
   const tableStyle = appSettings?.tableStyle ?? "plain";
   const stripedRows = tableStyle === "striped" || tableStyle === "striped_bold";
   const boldHeader = tableStyle === "striped_bold";
@@ -4246,7 +4257,7 @@ export function EntityRecords({
     allValues: Record<string, unknown>,
   ): unknown => {
     if (field.fieldType === "function") {
-      return evaluateFormula(field.formulaConfigJson?.expression ?? "", allValues);
+      return evaluateFormula(field.formulaConfigJson?.expression ?? "", allValues, formulaOptions);
     }
     return allValues[field.fieldKey];
   };
@@ -6173,8 +6184,9 @@ export function EntityRecords({
                                 (() => {
                                   const computed = formatFormulaResult(
                                     pf.formulaConfigJson?.expression ?? "",
-                                    buildFormulaScope(resolveFormulaValues({ ...newRow, ...newPageRow }), formulaFieldDefs),
+                                    buildFormulaScope(resolveFormulaValues({ ...newRow, ...newPageRow }), formulaFieldDefs, formulaOptions),
                                     pf.formulaConfigJson?.decimals,
+                                    formulaOptions,
                                   );
                                   return computed.error ? (
                                     <span className="text-red-400 text-xs">#ОШИБКА</span>
@@ -6235,8 +6247,9 @@ export function EntityRecords({
                               (() => {
                                 const computed = formatFormulaResult(
                                   f.formulaConfigJson?.expression ?? "",
-                                  buildFormulaScope(resolveFormulaValues({ ...newRow, ...newPageRow }), formulaFieldDefs),
+                                    buildFormulaScope(resolveFormulaValues({ ...newRow, ...newPageRow }), formulaFieldDefs, formulaOptions),
                                   f.formulaConfigJson?.decimals,
+                                    formulaOptions,
                                 );
                                 return computed.error ? (
                                   <span className="text-red-400 text-xs">#ОШИБКА</span>
@@ -6328,7 +6341,7 @@ export function EntityRecords({
                     const values = (record.valuesJson ?? {}) as Record<string, unknown>;
                     const pageValues = pageValuesByRecord.get(record.id) ?? {};
                     const allValues = { ...values, ...pageValues };
-                    const formulaValues = buildFormulaScope(resolveFormulaValues(allValues), formulaFieldDefs);
+                    const formulaValues = buildFormulaScope(resolveFormulaValues(allValues), formulaFieldDefs, formulaOptions);
                     const status = record.statusId != null ? statusById.get(record.statusId) : undefined;
                     // Conditional formatting across both entity and page columns.
                     const formatFields: FormatField[] = [
@@ -6565,7 +6578,7 @@ export function EntityRecords({
                             );
                           }
                           if (isFunction) {
-                            const computed = formatFormulaResult(f.formulaConfigJson?.expression ?? "", formulaValues, f.formulaConfigJson?.decimals);
+                            const computed = formatFormulaResult(f.formulaConfigJson?.expression ?? "", formulaValues, f.formulaConfigJson?.decimals, formulaOptions);
                             return (
                               <td key={f.id} className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
                                 {computed.error ? (
@@ -6725,7 +6738,7 @@ export function EntityRecords({
                             );
                           }
                           if (isFunction) {
-                            const computed = formatFormulaResult(pf.formulaConfigJson?.expression ?? "", formulaValues, pf.formulaConfigJson?.decimals);
+                            const computed = formatFormulaResult(pf.formulaConfigJson?.expression ?? "", formulaValues, pf.formulaConfigJson?.decimals, formulaOptions);
                             return (
                               <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
                                 {computed.error ? (
@@ -6944,6 +6957,7 @@ export function EntityRecords({
               form={form}
               setForm={setForm}
               userOptions={userOptions}
+              formulaOptions={formulaOptions}
               onRelationChanged={() => setRefreshTick((x) => x + 1)}
             />
 
@@ -8109,6 +8123,7 @@ function RecordFormBody({
   userOptions,
   onRelationChanged,
   lockedFieldKeys,
+  formulaOptions: providedFormulaOptions,
 }: {
   entityId: number;
   pageId?: number;
@@ -8126,10 +8141,17 @@ function RecordFormBody({
   /** Field keys forced read-only by the caller (e.g. the quick-create dialog's
    * prefilled dependency-filter field). Values still submit; inputs are locked. */
   lockedFieldKeys?: ReadonlySet<string>;
+  /** Parent-provided app time zone; standalone forms fetch the shared settings query. */
+  formulaOptions?: FormulaEvaluationOptions;
 }) {
   const t = useT();
   const ml = useML();
   const { fieldAccess, canRecord, user: formUser } = useAuth();
+  const { data: formSettings } = useGetSettings();
+  const formulaOptions = useMemo<FormulaEvaluationOptions>(
+    () => providedFormulaOptions ?? { timeZone: formSettings?.timeZone ?? DEFAULT_FORMULA_TIME_ZONE },
+    [providedFormulaOptions, formSettings?.timeZone],
+  );
   // Per-role display-only restriction (applies even to superAdmin, mirroring the
   // display-only "hidden" rule): when EVERY assigned role explicitly limits the
   // field to view/hidden, render it read-only. Server access for super unchanged.
@@ -8286,8 +8308,8 @@ function RecordFormBody({
       if (Array.isArray(v)) vals[f.fieldKey] = v.map((id) => userNames.get(Number(id)) ?? String(id)).join(", ");
       else vals[f.fieldKey] = userNames.get(Number(v)) ?? v;
     }
-    return buildFormulaScope(vals, formFormulaDefs);
-  }, [formWithRelationParents, allFields, formFormulaDefs, userNames]);
+    return buildFormulaScope(vals, formFormulaDefs, formulaOptions);
+  }, [formWithRelationParents, allFields, formFormulaDefs, userNames, formulaOptions]);
 
   // Read-only display node for a relation/lookup field's current value (its
   // configured display field), or an em dash when nothing is linked.
@@ -8500,6 +8522,7 @@ function RecordFormBody({
                     field.formulaConfigJson?.expression ?? "",
                     formFormulaScope,
                     field.formulaConfigJson?.decimals,
+                    formulaOptions,
                   );
                   return computed.error ? (
                     <span className="text-red-400">#ОШИБКА</span>

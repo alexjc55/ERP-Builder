@@ -13,6 +13,7 @@ import {
   pagesTable,
   pageFieldsTable,
   pageRecordValuesTable,
+  appSettingsTable,
   type EntityAutomation,
   type EntityField,
   type PageField,
@@ -60,7 +61,12 @@ import {
   EVENT_PAGE_FIELD_SAVED,
   type EventInput,
 } from "./events";
-import { buildFormulaScope, type FormulaFieldDef } from "@workspace/formula";
+import {
+  buildFormulaScope,
+  DEFAULT_FORMULA_TIME_ZONE,
+  type FormulaEvaluationOptions,
+  type FormulaFieldDef,
+} from "@workspace/formula";
 import { validatePageValues } from "../routes/page-fields";
 import { applyPageFieldDefaults } from "./page-field-defaults";
 import { isGoogleDriveModuleEnabled } from "./googleDrive";
@@ -798,6 +804,8 @@ type MappingCtx = {
   entityId: number;
   values: Record<string, unknown>;
   statusId: number | null;
+  /** App-configured context shared by all formula mappings in this run. */
+  formulaOptions: FormulaEvaluationOptions;
   /** Page contexts of the TRIGGERING record, for `sourceFieldSource: "page"`. */
   pageContexts?: Map<number, PageContext>;
 };
@@ -843,7 +851,7 @@ async function resolveMappingValue(
           ...formulaDefsOf(entityFields),
           ...formulaDefsOf([...ctxPage.fieldByKey.values()]),
         ];
-        const scope = buildFormulaScope({ ...ctx.values, ...ctxPage.values }, defs);
+        const scope = buildFormulaScope({ ...ctx.values, ...ctxPage.values }, defs, ctx.formulaOptions);
         return { has: true, value: scope[m.sourceFieldKey] ?? null };
       }
       if (
@@ -867,7 +875,7 @@ async function resolveMappingValue(
       const entityFields = await loadActiveFields(ctx.entityId);
       const def = entityFields.find((f) => f.fieldKey === m.sourceFieldKey);
       if (def?.fieldType === "function") {
-        const scope = buildFormulaScope({ ...ctx.values }, formulaDefsOf(entityFields));
+        const scope = buildFormulaScope({ ...ctx.values }, formulaDefsOf(entityFields), ctx.formulaOptions);
         return { has: true, value: scope[m.sourceFieldKey] ?? null };
       }
     }
@@ -1025,6 +1033,8 @@ async function runActions(
     values: Record<string, unknown>;
     statusId: number | null;
     actorUserId: number | null;
+    /** App-configured context shared by all formula mappings in this run. */
+    formulaOptions: FormulaEvaluationOptions;
     /** Page contexts of the triggering record, for page source/target refs. */
     pageContexts: Map<number, PageContext>;
   },
@@ -1051,7 +1061,13 @@ async function runActions(
         ok = await systemUpdateRecord(ctx.recordId, undefined, action.statusId, ctx.actorUserId, log);
         break;
       case "create_record": {
-        const values = await buildMappedValues(action.mapping ?? [], { entityId: ctx.entityId, values: ctx.values, statusId: ctx.statusId, pageContexts: ctx.pageContexts });
+        const values = await buildMappedValues(action.mapping ?? [], {
+          entityId: ctx.entityId,
+          values: ctx.values,
+          statusId: ctx.statusId,
+          formulaOptions: ctx.formulaOptions,
+          pageContexts: ctx.pageContexts,
+        });
         const id = await systemCreateRecord(action.targetEntityId, values, action.statusId, ctx.actorUserId, log);
         ok = id != null;
         break;
@@ -1065,7 +1081,13 @@ async function runActions(
           // Archived records are INCLUDED on purpose: an automation must keep
           // downstream data consistent even for rows already swept to archive.
           .where(eq(entityRecordsTable.entityId, action.targetEntityId));
-        const mapCtx = { entityId: ctx.entityId, values: ctx.values, statusId: ctx.statusId, pageContexts: ctx.pageContexts };
+        const mapCtx = {
+          entityId: ctx.entityId,
+          values: ctx.values,
+          statusId: ctx.statusId,
+          formulaOptions: ctx.formulaOptions,
+          pageContexts: ctx.pageContexts,
+        };
         const mappedValues = await buildMappedValues(action.mapping ?? [], mapCtx);
         // Page-target mappings write a page-local field on a mirror page of the
         // TARGET entity, per matched record, AS SYSTEM. systemSetPageValue
@@ -1311,6 +1333,16 @@ async function runOne(
   try {
     const [record] = await db.select().from(entityRecordsTable).where(eq(entityRecordsTable.id, recordId)).limit(1);
     if (!record) return;
+    // One timezone lookup per automation run keeps all formula mappings in this
+    // execution on the same application-calendar boundary.
+    const [appSettings] = await db
+      .select({ timeZone: sql<string>`time_zone` })
+      .from(appSettingsTable)
+      .where(eq(appSettingsTable.id, 1))
+      .limit(1);
+    const formulaOptions: FormulaEvaluationOptions = {
+      timeZone: appSettings?.timeZone ?? DEFAULT_FORMULA_TIME_ZONE,
+    };
     const fields = await loadActiveFields(entityId);
     const fieldByKey = new Map(fields.map((f) => [f.fieldKey, f]));
     const conditions = safeConditions(automation.conditionsJson);
@@ -1383,7 +1415,11 @@ async function runOne(
     const nextChain = new Set(chain);
     nextChain.add(key);
     const summary = await cascade.run({ depth: depth + 1, chain: nextChain }, () =>
-      runActions(actions, { entityId, recordId, values, statusId: record.statusId ?? null, actorUserId, pageContexts }, log),
+      runActions(
+        actions,
+        { entityId, recordId, values, statusId: record.statusId ?? null, actorUserId, formulaOptions, pageContexts },
+        log,
+      ),
     );
     const allOk = summary.every((s) => s.ok);
     await writeRun({

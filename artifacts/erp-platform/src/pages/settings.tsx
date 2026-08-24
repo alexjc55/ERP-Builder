@@ -33,8 +33,24 @@ import { MultilingualInput } from "@/components/MultilingualInput";
 import { ColorPickerControl } from "@/components/ColorPickerControl";
 import { useToast } from "@/hooks/use-toast";
 import { Building2, User, Lock, Image as ImageIcon, Loader2, Upload, Trash2, FolderTree } from "lucide-react";
+import { DEFAULT_FORMULA_TIME_ZONE } from "@workspace/formula";
 
 type MLValue = { ru?: string; en?: string; he?: string };
+const intlWithTimeZones = Intl as typeof Intl & {
+  supportedValuesOf?: (key: "timeZone") => string[];
+};
+const TIME_ZONE_OPTIONS = Array.from(
+  new Set([
+    DEFAULT_FORMULA_TIME_ZONE,
+    "UTC",
+    ...(intlWithTimeZones.supportedValuesOf?.("timeZone") ?? [
+      "Europe/London",
+      "Europe/Moscow",
+      "America/New_York",
+      "Asia/Dubai",
+    ]),
+  ]),
+).sort((a, b) => a.localeCompare(b));
 
 export default function SettingsPage() {
   const { user, isSuperAdmin, canAdmin } = useAuth();
@@ -105,6 +121,7 @@ export default function SettingsPage() {
   const [logoObjectPath, setLogoObjectPath] = useState<string | null>(null);
   const [currencySymbol, setCurrencySymbol] = useState<string>("₽");
   const [defaultLanguage, setDefaultLanguage] = useState<Lang>("ru");
+  const [timeZone, setTimeZone] = useState(DEFAULT_FORMULA_TIME_ZONE);
   const [tableStyle, setTableStyle] = useState<string>("plain");
   const [tableStripeColor, setTableStripeColor] = useState<string>("");
   const [tableHeaderColor, setTableHeaderColor] = useState<string>("");
@@ -123,6 +140,7 @@ export default function SettingsPage() {
     setLogoObjectPath(settings.logoObjectPath ?? null);
     setCurrencySymbol(settings.currencySymbol ?? "₽");
     setDefaultLanguage((settings.defaultLanguage as Lang) ?? "ru");
+    setTimeZone(settings.timeZone ?? DEFAULT_FORMULA_TIME_ZONE);
     setTableStyle(settings.tableStyle ?? "plain");
     setTableStripeColor(settings.tableStripeColor ?? "");
     setTableHeaderColor(settings.tableHeaderColor ?? "");
@@ -169,6 +187,7 @@ export default function SettingsPage() {
           logoObjectPath,
           currencySymbol: currencySymbol.trim() || "₽",
           defaultLanguage,
+          timeZone,
           tableStyle: tableStyle as "plain" | "striped" | "striped_bold",
           tableStripeColor: tableStripeColor || null,
           tableHeaderColor: tableHeaderColor || null,
@@ -343,6 +362,27 @@ export default function SettingsPage() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-slate-400">{t("settings.defaultLanguageHint", "Язык интерфейса для новых пользователей и тех, кто ещё не выбрал язык.")}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-slate-700">
+                {t("settings.timeZone", "Часовой пояс")}
+              </Label>
+              <Select value={timeZone} onValueChange={setTimeZone}>
+                <SelectTrigger className="max-w-[320px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIME_ZONE_OPTIONS.map((zone) => (
+                    <SelectItem key={zone} value={zone}>{zone}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-400">
+                {t(
+                  "settings.timeZoneHint",
+                  "Используется функциями today(), daysSince() и daysUntil().",
+                )}
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label className="text-sm font-medium text-slate-700">{t("settings.tableStyle", "Стиль таблицы")}</Label>

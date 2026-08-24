@@ -17,6 +17,8 @@ export interface AppSettingsUpdate {
   /** @maxLength 8 */
   currencySymbol?: string;
   defaultLanguage?: AppSettingsUpdateDefaultLanguage;
+  /** @maxLength 100 */
+  timeZone?: string;
   tableStyle?: AppSettingsUpdateTableStyle;
   /**
      * @maxLength 9
