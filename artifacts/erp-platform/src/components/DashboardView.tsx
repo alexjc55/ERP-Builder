@@ -2125,6 +2125,20 @@ function WidgetEditorDialog({
       };
     }
 
+    // Presence widgets have no metric source at all. Handle them before the
+    // shared metric/formula validation so the editor's placeholder metric does
+    // not incorrectly require an entity.
+    if (widgetType === "online_users") {
+      return {
+        ...base,
+        config: {
+          widgetType: "online_users",
+          colorStyle,
+          textColor,
+        },
+      };
+    }
+
     const keys = new Set<string>();
     for (const m of metrics) {
       if (!m.key || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(m.key)) {
@@ -2156,17 +2170,6 @@ function WidgetEditorDialog({
         }
       }
     }
-    if (widgetType === "online_users") {
-      return {
-        ...base,
-        config: {
-          widgetType: "online_users",
-          colorStyle,
-          textColor,
-        },
-      };
-    }
-
     return {
       ...base,
       config: {
