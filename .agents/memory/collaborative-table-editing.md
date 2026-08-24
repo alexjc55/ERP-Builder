@@ -34,6 +34,18 @@ surviving record once whenever its effective state changes. On a client 409,
 keep the local draft mounted, refresh the server version, and reset only the
 one-shot submit guard so the user can retry without retyping.
 
+Any presence/conflict decoration around an active cell editor must keep the same
+React wrapper tree whether collaborators are present or absent. Toggle only the
+outline/popover contents, never the wrapper that owns the editor.
+
+**Why:** Presence broadcasts can arrive while a user is typing. Swapping between
+a plain cell and a decorated cell remounts the input and silently resets its
+local draft to the last server value.
+
+**How to apply:** Render collaboration wrappers unconditionally and conditionally
+render only visual children inside them. Two-session browser coverage must type a
+draft before the remote presence/edit transition and assert it survives.
+
 A successful version-changing write must also publish its internal record/page
 event after the write (and after commit for multi-row transactions), carrying
 that record's own resulting version. Failed CAS, rollback, and true no-op paths

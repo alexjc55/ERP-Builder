@@ -7,10 +7,13 @@
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
-    "release": "pnpm run typecheck && pnpm --filter @workspace/db run generate"
+    "release": "pnpm run typecheck && pnpm --filter @workspace/db run generate",
+    "test:e2e:collaboration": "playwright test tests/e2e/collaboration.spec.ts"
   },
   "private": true,
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "bcryptjs": "^3.0.3",
     "prettier": "^3.8.3",
     "typescript": "~5.9.3"
   }

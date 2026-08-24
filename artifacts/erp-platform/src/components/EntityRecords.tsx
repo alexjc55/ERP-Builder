@@ -1774,6 +1774,7 @@ export function EntityRecords({
   }, [otherCollabSessions]);
 
   const [realtimeTick, setRealtimeTick] = useState(0);
+  const [collabReconnectRefreshes, setCollabReconnectRefreshes] = useState(0);
   const [conflictCell, setConflictCell] = useState<{ recordId: number; fieldKey: string } | null>(null);
   const collabWasConnectedRef = useRef(false);
 
@@ -3628,6 +3629,7 @@ export function EntityRecords({
       // SSE is not a durable replay log. Re-read once after every connection or
       // reconnect so changes made during a network gap cannot remain invisible.
       setRealtimeTick((tick) => tick + 1);
+      setCollabReconnectRefreshes((count) => count + 1);
     }
     collabWasConnectedRef.current = collab.connected;
   }, [collab.connected]);
@@ -5203,12 +5205,22 @@ export function EntityRecords({
           )}
         </div>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+          <span
+            className="sr-only"
+            data-testid="collab-connection-status"
+            data-state={collab.connected ? "connected" : "disconnected"}
+            data-reconnect-refreshes={collabReconnectRefreshes}
+          >
+            {collab.connected ? "connected" : "disconnected"}
+          </span>
           {activeCollabUsers.length > 0 && (
-            <div className="flex items-center mr-2 relative" style={{ height: "28px" }}>
+            <div data-testid="collab-avatar-list" className="flex items-center mr-2 relative" style={{ height: "28px" }}>
               {visibleCollabUsers.map((u, i) => (
                 <HoverCard key={`${u.userId}:${u.clientId ?? i}`} openDelay={200}>
                   <HoverCardTrigger asChild>
                     <div
+                      data-testid="collab-avatar"
+                      data-user-id={u.userId}
                       className="w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white relative shadow-sm cursor-default"
                       style={{
                         backgroundColor: u.color,
@@ -5219,7 +5231,7 @@ export function EntityRecords({
                       {u.name.substring(0, 2).toUpperCase()}
                     </div>
                   </HoverCardTrigger>
-                  <HoverCardContent className="w-auto py-1.5 px-2.5 text-xs z-50">
+                  <HoverCardContent data-testid="collab-avatar-popover" className="w-auto py-1.5 px-2.5 text-xs z-50">
                     <div className="font-medium text-slate-800">{u.name}</div>
                     <div className="text-slate-500 mt-0.5">{u.editing ? t("collaboration.statusEditing", "Редактирует...") : t("collaboration.statusViewing", "Просматривает")}</div>
                   </HoverCardContent>
@@ -5229,15 +5241,16 @@ export function EntityRecords({
                 <HoverCard openDelay={200}>
                   <HoverCardTrigger asChild>
                     <div
+                      data-testid="collab-avatar-overflow"
                       className="w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-slate-600 bg-slate-100 shadow-sm relative cursor-default"
                       style={{ marginLeft: "-8px", zIndex: 0 }}
                     >
                       +{extraCollabUsers}
                     </div>
                   </HoverCardTrigger>
-                  <HoverCardContent className="w-auto py-1.5 px-2.5 text-xs z-50">
+                  <HoverCardContent data-testid="collab-avatar-overflow-list" className="w-auto py-1.5 px-2.5 text-xs z-50">
                     {activeCollabUsers.slice(visibleCollabUsers.length).map((u, i) => (
-                      <div key={`${u.userId}:${u.clientId ?? i}`} className="flex items-center gap-2 py-0.5">
+                      <div data-testid="collab-avatar-overflow-user" data-user-id={u.userId} key={`${u.userId}:${u.clientId ?? i}`} className="flex items-center gap-2 py-0.5">
                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: u.color }} />
                         <span>{u.name}</span>
                       </div>
@@ -6780,28 +6793,45 @@ export function EntityRecords({
                       if (!td) return td;
                       const editors = getCellEditors(record.id, fieldKey);
                       const isConflict = conflictCell?.recordId === record.id && conflictCell?.fieldKey === fieldKey;
-                      if (editors.length === 0 && !isConflict) return td;
+                      const testProps = {
+                        "data-testid": "record-cell",
+                        "data-record-id": record.id,
+                        "data-field-key": fieldKey,
+                      };
+                      const hasCollabState = editors.length > 0 || isConflict;
                       const names = editors.map(e => e.name).join(", ");
                       const outlineColor = isConflict ? "#f59e0b" : (editors[0]?.color ?? "#3b82f6");
                       return cloneElement(td, {
-                        className: cn(td.props.className, "relative group"),
+                        ...testProps,
+                        className: cn(td.props.className, "relative", hasCollabState && "group"),
                         children: (
                           <HoverCard openDelay={200}>
                             <HoverCardTrigger asChild>
                               <div className="relative w-full h-full min-h-[20px] flex items-center cursor-text">
-                                <div className="absolute inset-y-[-6px] inset-x-[-8px] pointer-events-none rounded-[4px] border-[2px] z-10" style={{ borderColor: outlineColor }} />
+                                {hasCollabState && (
+                                  <div
+                                    data-testid="cell-collab-outline"
+                                    data-record-id={record.id}
+                                    data-field-key={fieldKey}
+                                    data-state={isConflict ? "conflict" : "editing"}
+                                    className="absolute inset-y-[-6px] inset-x-[-8px] pointer-events-none rounded-[4px] border-[2px] z-10"
+                                    style={{ borderColor: outlineColor }}
+                                  />
+                                )}
                                 <div className="relative z-0 w-full">{td.props.children}</div>
                               </div>
                             </HoverCardTrigger>
-                            <HoverCardContent className="w-auto p-2 text-xs z-50" side="top" align="center">
-                              {isConflict && <div className="text-amber-600 font-bold mb-1">{t("collaboration.conflict", "Данные изменились на сервере")}</div>}
-                              {editors.length > 0 && (
-                                <div className="flex items-center gap-1.5">
-                                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: editors[0].color }} />
-                                  <span><span className="font-bold">{names}</span> {t("collaboration.isEditing", "редактирует")}</span>
-                                </div>
-                              )}
-                            </HoverCardContent>
+                            {hasCollabState && (
+                              <HoverCardContent data-testid="cell-collab-popover" className="w-auto p-2 text-xs z-50" side="top" align="center">
+                                {isConflict && <div data-testid="cell-conflict" className="text-amber-600 font-bold mb-1">{t("collaboration.conflict", "Данные изменились на сервере")}</div>}
+                                {editors.length > 0 && (
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: editors[0].color }} />
+                                    <span><span className="font-bold">{names}</span> {t("collaboration.isEditing", "редактирует")}</span>
+                                  </div>
+                                )}
+                              </HoverCardContent>
+                            )}
                           </HoverCard>
                         )
                       });
@@ -6962,7 +6992,7 @@ export function EntityRecords({
                             editingCell?.recordId === record.id && editingCell?.fieldKey === f.fieldKey;
                           if (isEditingThis) {
                             return (
-                              <td key={f.id} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...colWidthStyle(`f:${f.id}`) }}>
+                              <td data-testid="record-cell" data-record-id={record.id} data-field-key={f.fieldKey} key={f.id} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...colWidthStyle(`f:${f.id}`) }}>
                                 <InlineCellEditor
                                   field={f}
                                   initial={valueToForm(f, values[f.fieldKey])}
@@ -10042,6 +10072,7 @@ function InlineCellEditor({
   if (field.fieldType === "textarea") {
     return (
       <Textarea
+        data-testid="cell-editor-input"
         autoFocus
         rows={2}
         className="min-h-0 w-full resize-none rounded-sm border-0 bg-transparent p-0 text-sm leading-snug shadow-none focus-visible:ring-1 focus-visible:ring-blue-400"
@@ -10079,6 +10110,7 @@ function InlineCellEditor({
     );
     return (
       <Input
+        data-testid="cell-editor-input"
         autoFocus
         type="text"
         inputMode="decimal"
@@ -10112,6 +10144,7 @@ function InlineCellEditor({
 
   return (
     <Input
+      data-testid="cell-editor-input"
       autoFocus
       type={inputType}
       className="h-auto w-full rounded-sm border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-1 focus-visible:ring-blue-400"
@@ -10651,4 +10684,3 @@ function recordLabel(record: EntityRecord): string {
   }
   return `#${record.id}`;
 }
-
