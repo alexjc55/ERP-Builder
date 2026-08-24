@@ -1280,7 +1280,13 @@ function PageFieldSelect({
   const NON_STORABLE = new Set(["relation", "lookup", "function"]);
   const NON_READABLE = new Set(["relation", "lookup"]);
   const pageFields = (pageFieldsRaw as PageField[])
-    .filter((f) => f.isActive && (!storableOnly || !NON_STORABLE.has(f.fieldType)) && (!readableOnly || !NON_READABLE.has(f.fieldType)))
+    .filter(
+      (f) =>
+        f.isActive &&
+        f.fieldKey.trim() !== "" &&
+        (!storableOnly || !NON_STORABLE.has(f.fieldType)) &&
+        (!readableOnly || !NON_READABLE.has(f.fieldType)),
+    )
     .sort((a, b) => a.sortOrder - b.sortOrder);
   return (
     <Select value={value} onValueChange={onChange}>

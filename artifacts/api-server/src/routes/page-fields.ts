@@ -3071,7 +3071,11 @@ async function pageSourcesForEntity(entityId: number): Promise<RelationOptionPag
       .where(and(eq(pageFieldsTable.pageId, page.id), eq(pageFieldsTable.isActive, true)))
       .orderBy(asc(pageFieldsTable.sortOrder));
     const valueBacked = fields.filter(
-      (f) => f.fieldType !== "function" && f.fieldType !== "relation" && f.fieldType !== "lookup",
+      (f) =>
+        f.fieldKey.trim() !== "" &&
+        f.fieldType !== "function" &&
+        f.fieldType !== "relation" &&
+        f.fieldType !== "lookup",
     );
     if (valueBacked.length === 0) continue;
     result.push({
@@ -3113,7 +3117,12 @@ async function buildRelationOptions(entityId: number): Promise<RelationOption[]>
       direction,
       relatedEntityId,
       relatedEntityLabel: relatedEntity.nameJson,
-      fields: fields.map((f) => ({ key: f.fieldKey, label: f.nameJson, fieldType: f.fieldType })),
+      // Legacy databases can contain malformed empty field keys. They cannot be
+      // selected or projected and Radix Select rejects value="", so omit them
+      // at the API boundary instead of letting one bad row crash the editor.
+      fields: fields
+        .filter((f) => f.fieldKey.trim() !== "")
+        .map((f) => ({ key: f.fieldKey, label: f.nameJson, fieldType: f.fieldType })),
       pages: await pageSourcesForEntity(relatedEntityId),
     });
   }

@@ -450,7 +450,8 @@ export function PageFieldConfigDialog({
   const relatedPages = selectedRelation?.pages ?? [];
   const selectedPage = relatedPages.find((p) => p.pageId === relatedPageId);
   const relatedFieldOptions =
-    relatedPageId != null ? selectedPage?.fields ?? [] : selectedRelation?.fields ?? [];
+    (relatedPageId != null ? selectedPage?.fields ?? [] : selectedRelation?.fields ?? [])
+      .filter((f) => typeof f.key === "string" && f.key.trim() !== "");
 
   const setRoleAccess = (roleId: number, access: FieldAccess | "inherit") => {
     setPermissions((prev) => {
@@ -943,7 +944,11 @@ export function PageFieldConfigDialog({
                     <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">{t("fields.noDefault", "— без значения —")}</SelectItem>
-                      {options.map((o) => (
+                      {/* New option rows intentionally have value="" until the
+                          user enters a label and the server derives a stable
+                          value. Radix reserves "" for clearing the Select, so
+                          draft rows must not become SelectItems yet. */}
+                      {options.filter((o) => o.value.trim() !== "").map((o) => (
                         <SelectItem key={o.value} value={o.value}>{ml(o.labelJson) || o.value}</SelectItem>
                       ))}
                     </SelectContent>
