@@ -68,3 +68,4 @@
 - [page_ref fields](page-ref-fields.md) — live cross-page alias of another mirror page's local field; permission-gated writes update only the source page under a double boundary.
 - [Collaborative table editing](collaborative-table-editing.md) — authenticated SSE presence + opaque invalidations; every effective record mutation participates in one-version CAS.
 - [Validation concurrency](validation-concurrency.md) — serialize dependency-install and collaboration E2E; clean-install I/O destabilizes the timing-sensitive conflict test.
+- [Numeric display affixes](numeric-display-affixes.md) — affixes are display-only for number/numeric formula values; semantic before/after mirrors via inherited RTL direction.

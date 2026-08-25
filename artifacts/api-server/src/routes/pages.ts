@@ -327,7 +327,7 @@ router.get("/pages/:id/pivot/data", requireAuth, async (req, res): Promise<void>
   // re-check at compute time that the context page still belongs to this entity
   // (bound page or mirror page); on mismatch skip it — a config that references
   // page fields then degrades to the empty result inside computePivot.
-  let pageFields: { fieldKey: string; pivotEnabled: boolean | null; fieldType: string; nameJson: unknown }[] = [];
+  let pageFields: { fieldKey: string; pivotEnabled: boolean | null; fieldType: string; nameJson: unknown; formulaConfigJson: typeof pageFieldsTable.$inferSelect.formulaConfigJson }[] = [];
   let ctxPageId: number | undefined;
   if (cfg.source === "custom" && cfg.pageId != null) {
     const [ctxPage] = await db
@@ -345,6 +345,7 @@ router.get("/pages/:id/pivot/data", requireAuth, async (req, res): Promise<void>
           pivotEnabled: pageFieldsTable.pivotEnabled,
           fieldType: pageFieldsTable.fieldType,
           nameJson: pageFieldsTable.nameJson,
+          formulaConfigJson: pageFieldsTable.formulaConfigJson,
         })
         .from(pageFieldsTable)
         .where(and(eq(pageFieldsTable.pageId, cfg.pageId), eq(pageFieldsTable.isActive, true)));

@@ -5,9 +5,10 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { FormulaFieldConfigDisplayAffixPosition } from './formulaFieldConfigDisplayAffixPosition';
 
 /**
- * Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.
+ * Display and formula configuration stored in formulaConfigJson for `number` and `function` fields. `expression` is used by function fields and safely references other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display. `displayAffix` is optional plain text shown before or after the value.
  */
 export interface FormulaFieldConfig {
   expression?: string;
@@ -17,4 +18,11 @@ export interface FormulaFieldConfig {
      * @maximum 10
      */
   decimals?: number | null;
+  /**
+     * Optional plain-text label displayed next to the value. Leading and trailing whitespace is removed by the server; blank becomes null.
+     * @maxLength 100
+     */
+  displayAffix?: string | null;
+  /** Side on which displayAffix is shown. Defaults to after when an affix is present. */
+  displayAffixPosition?: FormulaFieldConfigDisplayAffixPosition;
 }

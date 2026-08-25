@@ -815,7 +815,7 @@ async function computePivotWidget(spec: PivotSpec): Promise<PivotResultShape | n
   // page still belongs to this entity (degrade to null otherwise, mirroring the
   // pivot-opt-in recheck above), then load ALL its active page-local fields —
   // admin-authoritative, like the entity field set.
-  let pageFields: { fieldKey: string; pivotEnabled: boolean | null; fieldType: string; nameJson: unknown }[] = [];
+  let pageFields: { fieldKey: string; pivotEnabled: boolean | null; fieldType: string; nameJson: unknown; formulaConfigJson: typeof pageFieldsTable.$inferSelect.formulaConfigJson }[] = [];
   let pageId: number | undefined;
   if (spec.pageId != null) {
     const pageEntityId = await resolvePageEntityId(spec.pageId);
@@ -827,6 +827,7 @@ async function computePivotWidget(spec: PivotSpec): Promise<PivotResultShape | n
         pivotEnabled: pageFieldsTable.pivotEnabled,
         fieldType: pageFieldsTable.fieldType,
         nameJson: pageFieldsTable.nameJson,
+        formulaConfigJson: pageFieldsTable.formulaConfigJson,
       })
       .from(pageFieldsTable)
       .where(and(eq(pageFieldsTable.pageId, spec.pageId), eq(pageFieldsTable.isActive, true)));

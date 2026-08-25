@@ -6,6 +6,7 @@ import {
   buildFormulaScope,
   DEFAULT_WORKING_DAYS,
   evaluateFormula,
+  formatFormulaResult,
   type FormulaEvaluationOptions,
   type FormulaFieldDef,
 } from "./index";
@@ -20,6 +21,12 @@ const workingDaysBetween = (
     { start, end },
     options,
   );
+
+test("marks only numeric formula results as numeric for display formatting", () => {
+  assert.equal(formatFormulaResult("1 / 4", {}, 2).numeric, true);
+  assert.equal(formatFormulaResult('"25"', {}, 2).numeric, undefined);
+  assert.equal(formatFormulaResult("true", {}, 2).numeric, undefined);
+});
 
 test("uses the default Sunday-through-Thursday workweek", () => {
   assert.deepEqual(DEFAULT_WORKING_DAYS, [7, 1, 2, 3, 4]);

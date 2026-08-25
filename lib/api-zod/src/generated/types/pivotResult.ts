@@ -7,6 +7,7 @@
  */
 import type { PivotAxisItem } from './pivotAxisItem';
 import type { PivotCell } from './pivotCell';
+import type { PivotMeasureDisplayAffix } from './pivotMeasureDisplayAffix';
 import type { PivotTotal } from './pivotTotal';
 
 export interface PivotResult {
@@ -19,4 +20,6 @@ export interface PivotResult {
   measureLabel: string;
   /** True when each column is a distinct measure (multi-measure mode). In that case rowTotals/grandTotal are not meaningful (heterogeneous columns) and are omitted/zero; only colTotals (per-measure totals) apply. The client hides the row-total column and grand total. */
   multiMeasure?: boolean;
+  /** Optional display-only affixes for sum measures over number/function fields. Omitted when no resolved measure has an affix. */
+  measureDisplayAffixes?: PivotMeasureDisplayAffix[];
 }

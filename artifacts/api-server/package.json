@@ -9,6 +9,7 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:settings": "tsx --test src/lib/app-settings-validation.test.ts",
+    "test:pivot-affix": "tsx --test src/routes/pivot-display-affix.test.ts",
     "smoke:concurrency": "pnpm --filter @workspace/scripts exec tsx ../artifacts/api-server/src/concurrency-smoke.ts"
   },
   "dependencies": {

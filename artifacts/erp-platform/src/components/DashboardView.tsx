@@ -60,6 +60,7 @@ import {
   type PivotResult,
 } from "@workspace/api-client-react";
 import { PivotResultTable } from "./PivotView";
+import { AffixedNumericValue, type DisplayAffixConfig } from "@/components/AffixedNumericValue";
 import {
   ResponsiveContainer,
   BarChart,
@@ -768,11 +769,13 @@ function WidgetTable({
   rows,
   onRowClick,
   t,
+  affixByFieldKey,
 }: {
   columns: TableColumn[];
   rows: TableRow[];
   onRowClick?: (id: number) => void;
   t: (key: string, fallback: string) => string;
+  affixByFieldKey?: ReadonlyMap<string, DisplayAffixConfig>;
 }) {
   if (!columns || columns.length === 0) {
     return (
@@ -813,7 +816,20 @@ function WidgetTable({
                     {c.fieldType === "status" ? (
                       <StatusCell value={(r.values ?? {})[c.fieldKey]} />
                     ) : (
-                      renderTableCell((r.values ?? {})[c.fieldKey], c.fieldType)
+                      (() => {
+                        const value = (r.values ?? {})[c.fieldKey];
+                        const isAffixable =
+                          c.fieldType === "number" ||
+                          (c.fieldType === "function" && typeof value === "number" && Number.isFinite(value));
+                        if (!isAffixable || value == null || value === "") {
+                          return renderTableCell(value, c.fieldType);
+                        }
+                        return (
+                          <AffixedNumericValue config={affixByFieldKey?.get(c.fieldKey)}>
+                            {renderTableCell(value, c.fieldType)}
+                          </AffixedNumericValue>
+                        );
+                      })()
                     )}
                   </td>
                 ))}
@@ -824,6 +840,30 @@ function WidgetTable({
       </table>
     </div>
   );
+}
+
+function WidgetTableWithFieldMetadata({
+  entityId,
+  ...props
+}: {
+  entityId?: number | null;
+  columns: TableColumn[];
+  rows: TableRow[];
+  onRowClick?: (id: number) => void;
+  t: (key: string, fallback: string) => string;
+}) {
+  const { data: fields = [] } = useListEntityFields(entityId ?? 0, {
+    query: {
+      enabled: entityId != null,
+      queryKey: getListEntityFieldsQueryKey(entityId ?? 0),
+    },
+  });
+  const affixByFieldKey = new Map<string, DisplayAffixConfig>();
+  for (const field of fields) {
+    if (field.fieldType !== "number" && field.fieldType !== "function") continue;
+    affixByFieldKey.set(field.fieldKey, field.formulaConfigJson as DisplayAffixConfig);
+  }
+  return <WidgetTable {...props} affixByFieldKey={affixByFieldKey} />;
 }
 
 function getRelativeTime(dateStr: string, lang: string) {
@@ -960,7 +1000,13 @@ function WidgetCard({
             )}
           </div>
           <div className="flex-1 min-h-0 mt-2">
-            <WidgetTable columns={w.tableColumns ?? []} rows={w.tableRows ?? []} onRowClick={onOpenRecord} t={t} />
+            <WidgetTableWithFieldMetadata
+              entityId={w.tableEntityId}
+              columns={w.tableColumns ?? []}
+              rows={w.tableRows ?? []}
+              onRowClick={onOpenRecord}
+              t={t}
+            />
           </div>
         </CardContent>
       </Card>

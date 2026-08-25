@@ -619,18 +619,18 @@ export function formatFormulaResult(
   values: Record<string, unknown>,
   decimals?: number | null,
   options?: FormulaEvaluationOptions,
-): { text: string; error: boolean; bool?: boolean } {
+): { text: string; error: boolean; bool?: boolean; numeric?: boolean } {
   try {
     const v = evaluateFormula(expression, values, options);
     if (v == null || v === "") return { text: "—", error: false };
     if (typeof v === "boolean") return { text: v ? "Да" : "Нет", error: false, bool: v };
     const d = normalizeDecimals(decimals);
     if (typeof v === "number" && d != null && Number.isFinite(v)) {
-      return { text: v.toFixed(d), error: false };
+      return { text: v.toFixed(d), error: false, numeric: true };
     }
     // No decimals configured: still never expose binary FP noise
     // (7879.299999999999) — clean to 12 significant digits before rendering.
-    if (typeof v === "number") return { text: String(cleanFpNoise(v)), error: false };
+    if (typeof v === "number") return { text: String(cleanFpNoise(v)), error: false, numeric: true };
     return { text: String(v), error: false };
   } catch {
     return { text: "Ошибка формулы", error: true };

@@ -20,6 +20,7 @@ import {
   type FieldFormatRule,
   type FieldValidationRule,
   type FormatInheritSource,
+  type FormulaFieldConfig,
 } from "@workspace/api-client-react";
 
 /** Flatten managed Drive folders into a depth-ordered list for indented display. */
@@ -217,6 +218,8 @@ export function FieldConfigDialog({
   const [validationRules, setValidationRules] = useState<FieldValidationRule[]>([]);
   const [formula, setFormula] = useState("");
   const [formulaDecimals, setFormulaDecimals] = useState("");
+  const [displayAffix, setDisplayAffix] = useState("");
+  const [displayAffixPosition, setDisplayAffixPosition] = useState<"before" | "after">("after");
   const [percentMode, setPercentMode] = useState<"list" | "value">("value");
   const [percentDecimals, setPercentDecimals] = useState("");
   const [dependsOnFieldKey, setDependsOnFieldKey] = useState("");
@@ -279,9 +282,14 @@ export function FieldConfigDialog({
       setFormatRules(Array.isArray(field.formatRulesJson) ? field.formatRulesJson : []);
       setFormatInherit(Array.isArray(field.formatInheritJson) ? [...field.formatInheritJson] : []);
       setValidationRules(Array.isArray(field.validationRulesJson) ? field.validationRulesJson : []);
-      setFormula(field.formulaConfigJson?.expression ?? "");
+      const formulaConfig = field.formulaConfigJson as FormulaFieldConfig | null | undefined;
+      setFormula(formulaConfig?.expression ?? "");
       setFormulaDecimals(
-        field.formulaConfigJson?.decimals != null ? String(field.formulaConfigJson.decimals) : "",
+        formulaConfig?.decimals != null ? String(formulaConfig.decimals) : "",
+      );
+      setDisplayAffix(formulaConfig?.displayAffix ?? "");
+      setDisplayAffixPosition(
+        formulaConfig?.displayAffix && formulaConfig.displayAffixPosition === "before" ? "before" : "after",
       );
       setPercentMode(field.percentConfigJson?.mode === "list" ? "list" : "value");
       setPercentDecimals(
@@ -325,6 +333,8 @@ export function FieldConfigDialog({
       setValidationRules([]);
       setFormula("");
       setFormulaDecimals("");
+      setDisplayAffix("");
+      setDisplayAffixPosition("after");
       setPercentMode("value");
       setPercentDecimals("");
       setDependsOnFieldKey("");
@@ -527,13 +537,21 @@ export function FieldConfigDialog({
               ...(normalizeDecimals(formulaDecimals) != null
                 ? { decimals: normalizeDecimals(formulaDecimals) as number }
                 : {}),
+              ...(displayAffix.trim()
+                ? { displayAffix: displayAffix.trim(), displayAffixPosition }
+                : {}),
             }
           : fieldType === "number"
             ? // Number fields reuse the same decimals knob (display-only rounding
               // of cell values and the column total); no expression is stored.
-              normalizeDecimals(formulaDecimals) != null
-              ? { decimals: normalizeDecimals(formulaDecimals) as number }
-              : {}
+              {
+                ...(normalizeDecimals(formulaDecimals) != null
+                  ? { decimals: normalizeDecimals(formulaDecimals) as number }
+                  : {}),
+                ...(displayAffix.trim()
+                  ? { displayAffix: displayAffix.trim(), displayAffixPosition }
+                  : {}),
+              }
             : {},
       percentConfigJson:
         fieldType === "percent"
@@ -997,21 +1015,49 @@ export function FieldConfigDialog({
             {fieldType === "function" && (
               <div className="space-y-3">
                 <FormulaEditor value={formula} onChange={setFormula} fields={formulaFields} />
-                <div className="space-y-1.5">
-                  <Label htmlFor="fcd-formula-decimals">
-                    {t("fields.formulaDecimals", "Знаков после запятой (округление)")}
-                  </Label>
-                  <Input
-                    id="fcd-formula-decimals"
-                    type="number"
-                    min={0}
-                    max={10}
-                    value={formulaDecimals}
-                    onChange={(e) => setFormulaDecimals(e.target.value)}
-                    placeholder={t("fields.formulaDecimalsNone", "Без округления")}
-                    className="w-48"
-                  />
-                  <p className="text-xs text-muted-foreground">
+                <div className="grid gap-3 sm:grid-cols-[12rem_minmax(0,1fr)_10rem]">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="fcd-formula-decimals">
+                      {t("fields.formulaDecimals", "Знаков после запятой (округление)")}
+                    </Label>
+                    <Input
+                      id="fcd-formula-decimals"
+                      type="number"
+                      min={0}
+                      max={10}
+                      value={formulaDecimals}
+                      onChange={(e) => setFormulaDecimals(e.target.value)}
+                      placeholder={t("fields.formulaDecimalsNone", "Без округления")}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="fcd-formula-affix">
+                      {t("fields.displayAffix", "Дополнительный текст")}
+                    </Label>
+                    <Input
+                      id="fcd-formula-affix"
+                      value={displayAffix}
+                      onChange={(e) => setDisplayAffix(e.target.value)}
+                      placeholder={t("fields.displayAffixPlaceholder", "Например: %, kg, pcs")}
+                      maxLength={100}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="fcd-formula-affix-position">
+                      {t("fields.displayAffixPosition", "Положение")}
+                    </Label>
+                    <Select
+                      value={displayAffixPosition}
+                      onValueChange={(value) => setDisplayAffixPosition(value as "before" | "after")}
+                    >
+                      <SelectTrigger id="fcd-formula-affix-position"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="before">{t("fields.displayAffixBefore", "Перед значением")}</SelectItem>
+                        <SelectItem value="after">{t("fields.displayAffixAfter", "После значения")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <p className="text-xs text-muted-foreground sm:col-span-3">
                     {t(
                       "fields.formulaDecimalsHint",
                       "Применяется только к числовому результату. Пусто — без округления.",
@@ -1021,21 +1067,49 @@ export function FieldConfigDialog({
               </div>
             )}
             {fieldType === "number" && (
-              <div className="space-y-1.5">
-                <Label htmlFor="fcd-number-decimals">
-                  {t("fields.formulaDecimals", "Знаков после запятой (округление)")}
-                </Label>
-                <Input
-                  id="fcd-number-decimals"
-                  type="number"
-                  min={0}
-                  max={10}
-                  value={formulaDecimals}
-                  onChange={(e) => setFormulaDecimals(e.target.value)}
-                  placeholder={t("fields.formulaDecimalsNone", "Без округления")}
-                  className="w-48"
-                />
-                <p className="text-xs text-muted-foreground">
+              <div className="grid gap-3 sm:grid-cols-[12rem_minmax(0,1fr)_10rem]">
+                <div className="space-y-1.5">
+                  <Label htmlFor="fcd-number-decimals">
+                    {t("fields.formulaDecimals", "Знаков после запятой (округление)")}
+                  </Label>
+                  <Input
+                    id="fcd-number-decimals"
+                    type="number"
+                    min={0}
+                    max={10}
+                    value={formulaDecimals}
+                    onChange={(e) => setFormulaDecimals(e.target.value)}
+                    placeholder={t("fields.formulaDecimalsNone", "Без округления")}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="fcd-number-affix">
+                    {t("fields.displayAffix", "Дополнительный текст")}
+                  </Label>
+                  <Input
+                    id="fcd-number-affix"
+                    value={displayAffix}
+                    onChange={(e) => setDisplayAffix(e.target.value)}
+                    placeholder={t("fields.displayAffixPlaceholder", "Например: %, kg, pcs")}
+                    maxLength={100}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="fcd-number-affix-position">
+                    {t("fields.displayAffixPosition", "Положение")}
+                  </Label>
+                  <Select
+                    value={displayAffixPosition}
+                    onValueChange={(value) => setDisplayAffixPosition(value as "before" | "after")}
+                  >
+                    <SelectTrigger id="fcd-number-affix-position"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="before">{t("fields.displayAffixBefore", "Перед значением")}</SelectItem>
+                      <SelectItem value="after">{t("fields.displayAffixAfter", "После значения")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-muted-foreground sm:col-span-3">
                   {t(
                     "fields.numberDecimalsHint",
                     "Округляет отображение значений и сумму по столбцу. Хранимое значение не меняется. Пусто — без округления.",

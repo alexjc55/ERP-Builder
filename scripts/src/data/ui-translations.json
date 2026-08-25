@@ -2310,6 +2310,36 @@
     "he": "חל רק על תוצאה מספרית. ריק — ללא עיגול."
   },
   {
+    "key": "fields.displayAffix",
+    "ru": "Дополнительный текст",
+    "en": "Additional text",
+    "he": "טקסט נוסף"
+  },
+  {
+    "key": "fields.displayAffixPlaceholder",
+    "ru": "Например: %, kg, pcs",
+    "en": "For example: %, kg, pcs",
+    "he": "לדוגמה: %, kg, pcs"
+  },
+  {
+    "key": "fields.displayAffixPosition",
+    "ru": "Положение",
+    "en": "Position",
+    "he": "מיקום"
+  },
+  {
+    "key": "fields.displayAffixBefore",
+    "ru": "Перед значением",
+    "en": "Before value",
+    "he": "לפני הערך"
+  },
+  {
+    "key": "fields.displayAffixAfter",
+    "ru": "После значения",
+    "en": "After value",
+    "he": "אחרי הערך"
+  },
+  {
     "key": "fields.showInTable",
     "ru": "Показывать в таблице",
     "en": "Show in table",

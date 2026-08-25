@@ -16,6 +16,7 @@ import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
 import { sanitizeOptionsInput, normalizeOptions } from "../lib/selectOptions";
 import { validateFormatInherit, withInheritedFormatRules } from "../lib/format-inherit";
+import { normalizeFormulaFieldConfig } from "../lib/formula-field-config";
 import {
   ListEntityFieldsParams,
   CreateEntityFieldParams,
@@ -353,7 +354,10 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
         // Generated API type for name-template sections is looser than the db union.
         fileConfigJson: (parsed.data.fileConfigJson ?? {}) as FileFieldConfig,
         optionsJson: createOptions,
-        formulaConfigJson: clampFormulaDecimals(parsed.data.formulaConfigJson),
+        formulaConfigJson: normalizeFormulaFieldConfig(
+          parsed.data.formulaConfigJson,
+          parsed.data.fieldType,
+        ),
         percentConfigJson: clampFormulaDecimals(parsed.data.percentConfigJson),
         relationConfigJson: relationConfig ?? {},
         fieldKey: key,
@@ -616,8 +620,17 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
     updateData.formatInheritJson = body.formatInheritJson as FormatInheritSource[];
   }
   if (body.validationRulesJson != null) updateData.validationRulesJson = body.validationRulesJson;
-  if (body.formulaConfigJson != null)
-    updateData.formulaConfigJson = clampFormulaDecimals(body.formulaConfigJson);
+  if (body.formulaConfigJson != null) {
+    updateData.formulaConfigJson = normalizeFormulaFieldConfig(body.formulaConfigJson, nextType);
+  } else if (body.fieldType != null && nextType !== "number" && nextType !== "function") {
+    // A type transition must also clean affixes from the stored config when the
+    // caller does not send formulaConfigJson. Keep expression/decimals and any
+    // unknown legacy properties intact.
+    updateData.formulaConfigJson = normalizeFormulaFieldConfig(
+      current.formulaConfigJson,
+      nextType,
+    );
+  }
   if (body.percentConfigJson != null)
     updateData.percentConfigJson = clampFormulaDecimals(body.percentConfigJson);
   if ("dependencyConfigJson" in body) updateData.dependencyConfigJson = body.dependencyConfigJson ?? {};

@@ -23,6 +23,7 @@ import {
   type FieldPermissions,
   type FieldAccess,
   type Role,
+  type FormulaFieldConfig,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -224,6 +225,8 @@ export function PageFieldConfigDialog({
   const [formatRules, setFormatRules] = useState<FieldFormatRule[]>([]);
   const [formula, setFormula] = useState("");
   const [formulaDecimals, setFormulaDecimals] = useState("");
+  const [displayAffix, setDisplayAffix] = useState("");
+  const [displayAffixPosition, setDisplayAffixPosition] = useState<"before" | "after">("after");
   const [percentMode, setPercentMode] = useState<"list" | "value">("value");
   const [percentDecimals, setPercentDecimals] = useState("");
   const [relationId, setRelationId] = useState<number | null>(null);
@@ -267,9 +270,14 @@ export function PageFieldConfigDialog({
       setTotalFillColor(field.totalFillColor ?? "");
       setTotalTextColor(field.totalTextColor ?? "");
       setFormatRules(Array.isArray(field.formatRulesJson) ? field.formatRulesJson : []);
-      setFormula(field.formulaConfigJson?.expression ?? "");
+      const formulaConfig = field.formulaConfigJson as FormulaFieldConfig | null | undefined;
+      setFormula(formulaConfig?.expression ?? "");
       setFormulaDecimals(
-        field.formulaConfigJson?.decimals != null ? String(field.formulaConfigJson.decimals) : "",
+        formulaConfig?.decimals != null ? String(formulaConfig.decimals) : "",
+      );
+      setDisplayAffix(formulaConfig?.displayAffix ?? "");
+      setDisplayAffixPosition(
+        formulaConfig?.displayAffix && formulaConfig.displayAffixPosition === "before" ? "before" : "after",
       );
       setPercentMode(field.percentConfigJson?.mode === "list" ? "list" : "value");
       setPercentDecimals(
@@ -307,6 +315,8 @@ export function PageFieldConfigDialog({
       setFormatRules([]);
       setFormula("");
       setFormulaDecimals("");
+      setDisplayAffix("");
+      setDisplayAffixPosition("after");
       setPercentMode("value");
       setPercentDecimals("");
       setRelationId(null);
@@ -495,13 +505,21 @@ export function PageFieldConfigDialog({
               ...(normalizeDecimals(formulaDecimals) != null
                 ? { decimals: normalizeDecimals(formulaDecimals) as number }
                 : {}),
+              ...(displayAffix.trim()
+                ? { displayAffix: displayAffix.trim(), displayAffixPosition }
+                : {}),
             }
           : fieldType === "number"
             ? // Number fields reuse the same decimals knob (display-only rounding
               // of cell values and the column total); no expression is stored.
-              normalizeDecimals(formulaDecimals) != null
-              ? { decimals: normalizeDecimals(formulaDecimals) as number }
-              : {}
+              {
+                ...(normalizeDecimals(formulaDecimals) != null
+                  ? { decimals: normalizeDecimals(formulaDecimals) as number }
+                  : {}),
+                ...(displayAffix.trim()
+                  ? { displayAffix: displayAffix.trim(), displayAffixPosition }
+                  : {}),
+              }
             : {},
       percentConfigJson:
         fieldType === "percent"
@@ -747,21 +765,49 @@ export function PageFieldConfigDialog({
               </div>
             )}
             {fieldType === "number" && (
-              <div className="space-y-1.5">
-                <Label htmlFor="pfcd-number-decimals">
-                  {t("fields.formulaDecimals", "Знаков после запятой (округление)")}
-                </Label>
-                <Input
-                  id="pfcd-number-decimals"
-                  type="number"
-                  min={0}
-                  max={10}
-                  value={formulaDecimals}
-                  onChange={(e) => setFormulaDecimals(e.target.value)}
-                  placeholder={t("fields.formulaDecimalsNone", "Без округления")}
-                  className="w-48"
-                />
-                <p className="text-xs text-muted-foreground">
+              <div className="grid gap-3 sm:grid-cols-[12rem_minmax(0,1fr)_10rem]">
+                <div className="space-y-1.5">
+                  <Label htmlFor="pfcd-number-decimals">
+                    {t("fields.formulaDecimals", "Знаков после запятой (округление)")}
+                  </Label>
+                  <Input
+                    id="pfcd-number-decimals"
+                    type="number"
+                    min={0}
+                    max={10}
+                    value={formulaDecimals}
+                    onChange={(e) => setFormulaDecimals(e.target.value)}
+                    placeholder={t("fields.formulaDecimalsNone", "Без округления")}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="pfcd-number-affix">
+                    {t("fields.displayAffix", "Дополнительный текст")}
+                  </Label>
+                  <Input
+                    id="pfcd-number-affix"
+                    value={displayAffix}
+                    onChange={(e) => setDisplayAffix(e.target.value)}
+                    placeholder={t("fields.displayAffixPlaceholder", "Например: %, kg, pcs")}
+                    maxLength={100}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="pfcd-number-affix-position">
+                    {t("fields.displayAffixPosition", "Положение")}
+                  </Label>
+                  <Select
+                    value={displayAffixPosition}
+                    onValueChange={(value) => setDisplayAffixPosition(value as "before" | "after")}
+                  >
+                    <SelectTrigger id="pfcd-number-affix-position"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="before">{t("fields.displayAffixBefore", "Перед значением")}</SelectItem>
+                      <SelectItem value="after">{t("fields.displayAffixAfter", "После значения")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-muted-foreground sm:col-span-3">
                   {t(
                     "fields.numberDecimalsHint",
                     "Округляет отображение значений и сумму по столбцу. Хранимое значение не меняется. Пусто — без округления.",
@@ -772,21 +818,49 @@ export function PageFieldConfigDialog({
             {fieldType === "function" && (
               <div className="space-y-3">
                 <FormulaEditor value={formula} onChange={setFormula} fields={formulaFields} />
-                <div className="space-y-1.5">
-                  <Label htmlFor="pfcd-formula-decimals">
-                    {t("fields.formulaDecimals", "Знаков после запятой (округление)")}
-                  </Label>
-                  <Input
-                    id="pfcd-formula-decimals"
-                    type="number"
-                    min={0}
-                    max={10}
-                    value={formulaDecimals}
-                    onChange={(e) => setFormulaDecimals(e.target.value)}
-                    placeholder={t("fields.formulaDecimalsNone", "Без округления")}
-                    className="w-48"
-                  />
-                  <p className="text-xs text-muted-foreground">
+                <div className="grid gap-3 sm:grid-cols-[12rem_minmax(0,1fr)_10rem]">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="pfcd-formula-decimals">
+                      {t("fields.formulaDecimals", "Знаков после запятой (округление)")}
+                    </Label>
+                    <Input
+                      id="pfcd-formula-decimals"
+                      type="number"
+                      min={0}
+                      max={10}
+                      value={formulaDecimals}
+                      onChange={(e) => setFormulaDecimals(e.target.value)}
+                      placeholder={t("fields.formulaDecimalsNone", "Без округления")}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="pfcd-formula-affix">
+                      {t("fields.displayAffix", "Дополнительный текст")}
+                    </Label>
+                    <Input
+                      id="pfcd-formula-affix"
+                      value={displayAffix}
+                      onChange={(e) => setDisplayAffix(e.target.value)}
+                      placeholder={t("fields.displayAffixPlaceholder", "Например: %, kg, pcs")}
+                      maxLength={100}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="pfcd-formula-affix-position">
+                      {t("fields.displayAffixPosition", "Положение")}
+                    </Label>
+                    <Select
+                      value={displayAffixPosition}
+                      onValueChange={(value) => setDisplayAffixPosition(value as "before" | "after")}
+                    >
+                      <SelectTrigger id="pfcd-formula-affix-position"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="before">{t("fields.displayAffixBefore", "Перед значением")}</SelectItem>
+                        <SelectItem value="after">{t("fields.displayAffixAfter", "После значения")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <p className="text-xs text-muted-foreground sm:col-span-3">
                     {t(
                       "fields.formulaDecimalsHint",
                       "Применяется только к числовому результату. Пусто — без округления.",

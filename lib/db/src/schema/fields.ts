@@ -119,12 +119,19 @@ export type FieldValidationRule = {
 };
 
 /**
- * Per-field configuration for a `function`-type field. `expression` is a safe
- * formula referencing other fields of the same record via `{field_key}`. It is
- * evaluated at read time (never stored) by a sandboxed evaluator. `decimals`
- * rounds a numeric result on display.
+ * Display and formula configuration stored in `formulaConfigJson` for `number`
+ * and `function` fields. `expression` is used by function fields and safely
+ * references other fields of the same record via `{field_key}`. It is evaluated
+ * at read time (never stored) by a sandboxed evaluator. `decimals` rounds a
+ * numeric result on display. `displayAffix` is optional plain text rendered
+ * before or after the displayed value.
  */
-export type FormulaFieldConfig = { expression?: string; decimals?: number | null };
+export type FormulaFieldConfig = {
+  expression?: string;
+  decimals?: number | null;
+  displayAffix?: string | null;
+  displayAffixPosition?: "before" | "after" | null;
+};
 
 /**
  * Per-field configuration for a `percent`-type field. The value is stored as a

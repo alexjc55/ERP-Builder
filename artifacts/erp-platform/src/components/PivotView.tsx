@@ -6,6 +6,7 @@ import {
 } from "@workspace/api-client-react";
 import { useT } from "@/lib/i18n";
 import { Loader2, TableProperties } from "lucide-react";
+import { AffixedNumericValue } from "@/components/AffixedNumericValue";
 
 /**
  * Cross-tab (Сводная таблица) renderer for an entity's records. Receives a fully
@@ -121,6 +122,17 @@ export function PivotResultTable({
   // Multi-measure pivots have heterogeneous columns, so a per-row total and a
   // grand total are meaningless — the server omits them and we hide the column.
   const showRowTotal = !result.multiMeasure;
+  const affixByMeasureKey = new Map(
+    (result.measureDisplayAffixes ?? [])
+      .filter((item) => item.measureKey != null)
+      .map((item) => [item.measureKey as string, item]),
+  );
+  const singleAffix = (result.measureDisplayAffixes ?? []).find((item) => item.measureKey == null);
+  const withAffix = (value: number, columnKey?: string) => (
+    <AffixedNumericValue config={columnKey ? affixByMeasureKey?.get(columnKey) ?? singleAffix : singleAffix}>
+      {fmt(value)}
+    </AffixedNumericValue>
+  );
 
   return (
     <div className="relative overflow-auto rounded-lg border border-slate-200">
@@ -164,13 +176,13 @@ export function PivotResultTable({
                     key={c.key}
                     className="border-l border-slate-100 px-3 py-2 text-right tabular-nums text-slate-700"
                   >
-                    {v == null || v === 0 ? <span className="text-slate-300">—</span> : fmt(v)}
+                    {v == null || v === 0 ? <span className="text-slate-300">—</span> : withAffix(v, c.key)}
                   </td>
                 );
               })}
               {showRowTotal && (
                 <td className="border-l-2 border-slate-300 bg-slate-50 px-3 py-2 text-right font-semibold tabular-nums text-slate-800">
-                  {fmt(rowTotal.get(r.key) ?? 0)}
+                  {withAffix(rowTotal.get(r.key) ?? 0)}
                 </td>
               )}
             </tr>
@@ -186,12 +198,12 @@ export function PivotResultTable({
                 key={c.key}
                 className="border-l border-slate-200 px-3 py-2 text-right font-semibold tabular-nums text-slate-800"
               >
-                {fmt(colTotal.get(c.key) ?? 0)}
+                {withAffix(colTotal.get(c.key) ?? 0, c.key)}
               </td>
             ))}
             {showRowTotal && (
               <td className="border-l-2 border-slate-300 bg-slate-200 px-3 py-2 text-right font-bold tabular-nums text-slate-900">
-                {fmt(result.grandTotal)}
+                {withAffix(result.grandTotal)}
               </td>
             )}
           </tr>

@@ -6325,10 +6325,12 @@ components:
     FormulaFieldConfig:
       type: object
       description: >-
-        Per-field configuration for a `function`-type field. `expression` is a
-        safe formula referencing other fields of the same record via
-        {field_key}; it is computed at read time and never stored. `decimals`,
-        when set, rounds a numeric result to that many decimal places on display.
+        Display and formula configuration stored in formulaConfigJson for
+        `number` and `function` fields. `expression` is used by function fields
+        and safely references other fields of the same record via {field_key};
+        it is computed at read time and never stored. `decimals`, when set,
+        rounds a numeric result to that many decimal places on display.
+        `displayAffix` is optional plain text shown before or after the value.
       properties:
         expression:
           type: string
@@ -6341,6 +6343,22 @@ components:
             Optional. When set and the formula result is numeric, the value is
             rounded and shown with this many decimal places. Null/omitted means
             no rounding. Ignored for non-numeric (text/boolean) results.
+        displayAffix:
+          type: string
+          nullable: true
+          maxLength: 100
+          description: >-
+            Optional plain-text label displayed next to the value. Leading and
+            trailing whitespace is removed by the server; blank becomes null.
+        displayAffixPosition:
+          type: string
+          enum:
+            - before
+            - after
+          nullable: true
+          description: >-
+            Side on which displayAffix is shown. Defaults to after when an affix
+            is present.
 
     PercentFieldConfig:
       type: object
@@ -8562,6 +8580,21 @@ components:
         value:
           type: number
 
+    PivotMeasureDisplayAffix:
+      type: object
+      required: [measureKey, displayAffix, displayAffixPosition]
+      description: >-
+        Display-only affix metadata for a resolved numeric sum measure. A null
+        measureKey identifies the sole measure in single-measure mode.
+      properties:
+        measureKey:
+          type: ["string", "null"]
+        displayAffix:
+          type: string
+        displayAffixPosition:
+          type: string
+          enum: [before, after]
+
     PivotResult:
       type: object
       required: [rows, cols, cells, rowTotals, colTotals, grandTotal, measureLabel]
@@ -8597,6 +8630,13 @@ components:
             that case rowTotals/grandTotal are not meaningful (heterogeneous
             columns) and are omitted/zero; only colTotals (per-measure totals)
             apply. The client hides the row-total column and grand total.
+        measureDisplayAffixes:
+          type: array
+          description: >-
+            Optional display-only affixes for sum measures over number/function
+            fields. Omitted when no resolved measure has an affix.
+          items:
+            $ref: "#/components/schemas/PivotMeasureDisplayAffix"
 
     View:
       type: object

@@ -2222,6 +2222,24 @@ export interface PivotTotal {
   value: number;
 }
 
+export type PivotMeasureDisplayAffixDisplayAffixPosition = typeof PivotMeasureDisplayAffixDisplayAffixPosition[keyof typeof PivotMeasureDisplayAffixDisplayAffixPosition];
+
+
+export const PivotMeasureDisplayAffixDisplayAffixPosition = {
+  before: 'before',
+  after: 'after',
+} as const;
+
+/**
+ * Display-only affix metadata for a resolved numeric sum measure. A null measureKey identifies the sole measure in single-measure mode.
+ */
+export interface PivotMeasureDisplayAffix {
+  /** @nullable */
+  measureKey: string | null;
+  displayAffix: string;
+  displayAffixPosition: PivotMeasureDisplayAffixDisplayAffixPosition;
+}
+
 export interface PivotResult {
   rows: PivotAxisItem[];
   cols: PivotAxisItem[];
@@ -2232,6 +2250,8 @@ export interface PivotResult {
   measureLabel: string;
   /** True when each column is a distinct measure (multi-measure mode). In that case rowTotals/grandTotal are not meaningful (heterogeneous columns) and are omitted/zero; only colTotals (per-measure totals) apply. The client hides the row-total column and grand total. */
   multiMeasure?: boolean;
+  /** Optional display-only affixes for sum measures over number/function fields. Omitted when no resolved measure has an affix. */
+  measureDisplayAffixes?: PivotMeasureDisplayAffix[];
 }
 
 export interface DashboardWidgetData {
@@ -2487,7 +2507,18 @@ export interface FieldValidationRule {
 }
 
 /**
- * Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.
+ * Side on which displayAffix is shown. Defaults to after when an affix is present.
+ */
+export type FormulaFieldConfigDisplayAffixPosition = typeof FormulaFieldConfigDisplayAffixPosition[keyof typeof FormulaFieldConfigDisplayAffixPosition] | null;
+
+
+export const FormulaFieldConfigDisplayAffixPosition = {
+  before: 'before',
+  after: 'after',
+} as const;
+
+/**
+ * Display and formula configuration stored in formulaConfigJson for `number` and `function` fields. `expression` is used by function fields and safely references other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display. `displayAffix` is optional plain text shown before or after the value.
  */
 export interface FormulaFieldConfig {
   expression?: string;
@@ -2497,6 +2528,13 @@ export interface FormulaFieldConfig {
      * @maximum 10
      */
   decimals?: number | null;
+  /**
+     * Optional plain-text label displayed next to the value. Leading and trailing whitespace is removed by the server; blank becomes null.
+     * @maxLength 100
+     */
+  displayAffix?: string | null;
+  /** Side on which displayAffix is shown. Defaults to after when an affix is present. */
+  displayAffixPosition?: FormulaFieldConfigDisplayAffixPosition;
 }
 
 export type PercentFieldConfigMode = typeof PercentFieldConfigMode[keyof typeof PercentFieldConfigMode] | null;

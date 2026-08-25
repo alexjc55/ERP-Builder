@@ -32,6 +32,10 @@ import {
   SYSTEM_DATE_FIELD_TYPE,
   type RelationFilterMeta,
 } from "./record-query";
+import {
+  resolvePivotMeasureDisplayAffix,
+  type PivotMeasureDisplayAffix,
+} from "./pivot-display-affix";
 
 export const PIVOT_DIM_TYPES = new Set([
   "text",
@@ -111,6 +115,10 @@ export interface PivotPageField {
   pivotEnabled: boolean | null;
   fieldType: string;
   nameJson: unknown;
+  formulaConfigJson?: {
+    displayAffix?: string | null;
+    displayAffixPosition?: "before" | "after" | null;
+  } | null;
 }
 
 export interface PivotComputeInput {
@@ -139,6 +147,8 @@ export interface PivotResultShape {
   measureLabel: string;
   /** True when each column is a distinct measure (multi-measure mode). */
   multiMeasure?: boolean;
+  /** Display-only affixes for resolved sum measures; absent when none apply. */
+  measureDisplayAffixes?: PivotMeasureDisplayAffix[];
 }
 
 export type PivotComputeOutcome =
@@ -178,6 +188,7 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
     };
   const entFieldByKey = new Map(entityFields.map((f) => [f.fieldKey, f]));
   const pageFieldByKey = new Map((input.pageFields ?? []).map((pf) => [pf.fieldKey, pf] as const));
+  const measureDisplayAffixes: PivotMeasureDisplayAffix[] = [];
 
   // In multi-measure mode any sum measure may target a page-local field; in
   // single mode only `pivot.measure` matters. Check both shapes safely.
@@ -371,6 +382,13 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
       colKeysFixed = colKeysFixed ?? [];
       colKeysFixed.push(colKey);
       colLabel.set(colKey, plan.label);
+      const displayAffix = resolvePivotMeasureDisplayAffix(
+        m,
+        colKey,
+        entFieldByKey,
+        pageFieldByKey,
+      );
+      if (displayAffix) measureDisplayAffixes.push(displayAffix);
       if (plan.kind === "sql") {
         sqlPlans.push({ colKey, expr: plan.expr });
         valueColKeys.push(colKey);
@@ -449,6 +467,13 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
     const measure = resolveMeasure(pivot.measure ?? { agg: "count" }, false);
     if ("error" in measure) return { ok: false, error: measure.error };
     measureLabelSingle = measure.label;
+    const displayAffix = resolvePivotMeasureDisplayAffix(
+      pivot.measure ?? { agg: "count" },
+      null,
+      entFieldByKey,
+      pageFieldByKey,
+    );
+    if (displayAffix) measureDisplayAffixes.push(displayAffix);
     const colKeyExpr = !colMeta
       ? null
       : colMeta.kind === "status"
@@ -647,6 +672,7 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
       grandTotal: pivotRound(grandTotal),
       measureLabel: measureLabelSingle,
       multiMeasure,
+      ...(measureDisplayAffixes.length > 0 ? { measureDisplayAffixes } : {}),
     },
   };
 }

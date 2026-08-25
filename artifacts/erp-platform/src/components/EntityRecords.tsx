@@ -159,6 +159,7 @@ import { FieldConfigDialog } from "@/components/FieldConfigDialog";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { CreateUserDialog } from "@/components/CreateUserDialog";
 import { PageFieldConfigDialog } from "@/components/PageFieldConfigDialog";
+import { AffixedNumericValue } from "@/components/AffixedNumericValue";
 import {
   DEFAULT_FORMULA_TIME_ZONE,
   DEFAULT_WORKING_DAYS,
@@ -373,7 +374,7 @@ function formatTotalValue(
     pageRefConfigJson?: { resolvedFieldType?: string; resolvedPercentConfigJson?: { decimals?: number | null } } | null;
   },
   n: number,
-): string {
+): React.ReactNode {
   // page_ref totals aggregate the SOURCE field's values — format by its
   // resolved type/decimals, not the page_ref shell.
   const effType =
@@ -390,7 +391,9 @@ function formatTotalValue(
     d != null
       ? n.toLocaleString("ru-RU", { minimumFractionDigits: d, maximumFractionDigits: d })
       : n.toLocaleString("ru-RU");
-  return effType === "percent" ? `${s}%` : s;
+  if (effType === "percent") return `${s}%`;
+  if (effType !== "number" && effType !== "function") return s;
+  return <AffixedNumericValue config={field.formulaConfigJson}>{s}</AffixedNumericValue>;
 }
 
 /** Build the payload values object from form state, dropping empty optional values. */
@@ -479,7 +482,11 @@ function renderCellValue(field: Field, value: unknown, t: (key: string, def: str
     if (!Number.isFinite(num)) return <span className="text-slate-700" style={colorStyle}>{String(value)}</span>;
     const d = field.formulaConfigJson?.decimals;
     const shown = d != null ? num.toFixed(d) : String(num);
-    return <span className="text-slate-700" style={colorStyle}>{shown}</span>;
+    return (
+      <span className="text-slate-700" style={colorStyle}>
+        <AffixedNumericValue config={field.formulaConfigJson}>{shown}</AffixedNumericValue>
+      </span>
+    );
   }
   if (field.fieldType === "date" || field.fieldType === "datetime" || field.fieldType === "created_at") {
     // Stored value is ISO (yyyy-MM-dd or full ISO datetime). Display it in the
@@ -6603,7 +6610,13 @@ export function EntityRecords({
                                   ) : computed.text === "" ? (
                                     <span className="text-slate-300 text-xs">—</span>
                                   ) : (
-                                    <span className="text-sm">{computed.bool !== undefined ? (computed.bool ? "Да" : "Нет") : computed.text}</span>
+                                    <span className="text-sm">
+                                      {computed.bool !== undefined
+                                        ? (computed.bool ? "Да" : "Нет")
+                                        : computed.numeric
+                                          ? <AffixedNumericValue config={pf.formulaConfigJson}>{computed.text}</AffixedNumericValue>
+                                          : computed.text}
+                                    </span>
                                   );
                                 })()
                               ) : (
@@ -6672,7 +6685,13 @@ export function EntityRecords({
                                 ) : computed.text === "" ? (
                                   <span className="text-slate-300 text-xs">—</span>
                                 ) : (
-                                  <span className="text-sm">{computed.bool !== undefined ? (computed.bool ? "Да" : "Нет") : computed.text}</span>
+                                  <span className="text-sm">
+                                    {computed.bool !== undefined
+                                      ? (computed.bool ? "Да" : "Нет")
+                                      : computed.numeric
+                                        ? <AffixedNumericValue config={f.formulaConfigJson}>{computed.text}</AffixedNumericValue>
+                                        : computed.text}
+                                  </span>
                                 );
                               })()
                             ) : f.fieldType === "lookup" ? (
@@ -7069,7 +7088,13 @@ export function EntityRecords({
                                 ) : computed.text === "" ? (
                                   <span className="text-slate-300" style={cellText ? { color: cellText } : undefined}>—</span>
                                 ) : (
-                                  <span className="text-slate-700" style={cellText ? { color: cellText } : undefined}>{computed.bool !== undefined ? t(computed.bool ? "fields.yes" : "fields.no", computed.bool ? "Да" : "Нет") : computed.text}</span>
+                                  <span className="text-slate-700" style={cellText ? { color: cellText } : undefined}>
+                                    {computed.bool !== undefined
+                                      ? t(computed.bool ? "fields.yes" : "fields.no", computed.bool ? "Да" : "Нет")
+                                      : computed.numeric
+                                        ? <AffixedNumericValue config={f.formulaConfigJson}>{computed.text}</AffixedNumericValue>
+                                        : computed.text}
+                                  </span>
                                 )}
                               </td>
                             );
@@ -7237,7 +7262,13 @@ export function EntityRecords({
                                 ) : computed.text === "" ? (
                                   <span className="text-slate-300" style={cellText ? { color: cellText } : undefined}>—</span>
                                 ) : (
-                                  <span className="text-slate-700" style={cellText ? { color: cellText } : undefined}>{computed.bool !== undefined ? t(computed.bool ? "fields.yes" : "fields.no", computed.bool ? "Да" : "Нет") : computed.text}</span>
+                                  <span className="text-slate-700" style={cellText ? { color: cellText } : undefined}>
+                                    {computed.bool !== undefined
+                                      ? t(computed.bool ? "fields.yes" : "fields.no", computed.bool ? "Да" : "Нет")
+                                      : computed.numeric
+                                        ? <AffixedNumericValue config={pf.formulaConfigJson}>{computed.text}</AffixedNumericValue>
+                                        : computed.text}
+                                  </span>
                                 )}
                               </td>
                             );
@@ -9080,6 +9111,8 @@ function RecordFormBody({
                     <span className="text-slate-300">—</span>
                   ) : computed.bool !== undefined ? (
                     computed.bool ? "Да" : "Нет"
+                  ) : computed.numeric ? (
+                    <AffixedNumericValue config={field.formulaConfigJson}>{computed.text}</AffixedNumericValue>
                   ) : (
                     computed.text
                   );

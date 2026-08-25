@@ -41,6 +41,7 @@ import { ownScopeWhere, isRecordOwned } from "./own-scope";
 import { PAGE_REF_SOURCE_TYPES, loadPageRefSource } from "./record-query";
 import { validateFileValue, trashRemovedPageServerFiles, type DbExecutor } from "./records";
 import { isGoogleDriveModuleEnabled } from "../lib/googleDrive";
+import { normalizeFormulaFieldConfig } from "../lib/formula-field-config";
 import { emitEvent, EVENT_PAGE_FIELD_SAVED } from "../lib/events";
 import {
   lockAndValidateUserReferences,
@@ -686,7 +687,10 @@ router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (
       .values({
         ...parsed.data,
         optionsJson: createOptions,
-        formulaConfigJson: clampFormulaDecimals(parsed.data.formulaConfigJson),
+        formulaConfigJson: normalizeFormulaFieldConfig(
+          parsed.data.formulaConfigJson,
+          parsed.data.fieldType,
+        ),
         percentConfigJson: clampFormulaDecimals(parsed.data.percentConfigJson),
         relationConfigJson: relationConfigToInsert ?? {},
         fileConfigJson: (parsed.data.fileConfigJson ?? {}) as FileFieldConfig,
@@ -850,8 +854,16 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
   if ("defaultValue" in body) updateData.defaultValue = body.defaultValue ?? null;
   if (sanitizedOptions != null) updateData.optionsJson = sanitizedOptions;
   if (body.formatRulesJson != null) updateData.formatRulesJson = body.formatRulesJson;
-  if (body.formulaConfigJson != null)
-    updateData.formulaConfigJson = clampFormulaDecimals(body.formulaConfigJson);
+  if (body.formulaConfigJson != null) {
+    updateData.formulaConfigJson = normalizeFormulaFieldConfig(body.formulaConfigJson, nextType);
+  } else if (body.fieldType != null && nextType !== "number" && nextType !== "function") {
+    // Clean stale affixes on a type transition even when formulaConfigJson was
+    // omitted, without dropping expression/decimals or unknown legacy config.
+    updateData.formulaConfigJson = normalizeFormulaFieldConfig(
+      current.formulaConfigJson,
+      nextType,
+    );
+  }
   if (body.percentConfigJson != null)
     updateData.percentConfigJson = clampFormulaDecimals(body.percentConfigJson);
   if (relationConfigToPersist !== undefined) {

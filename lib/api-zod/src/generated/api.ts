@@ -2438,7 +2438,12 @@ export const GetDashboardDataResponseItem = zod.object({
 })),
   "grandTotal": zod.number(),
   "measureLabel": zod.string(),
-  "multiMeasure": zod.boolean().optional().describe('True when each column is a distinct measure (multi-measure mode). In that case rowTotals\/grandTotal are not meaningful (heterogeneous columns) and are omitted\/zero; only colTotals (per-measure totals) apply. The client hides the row-total column and grand total.')
+  "multiMeasure": zod.boolean().optional().describe('True when each column is a distinct measure (multi-measure mode). In that case rowTotals\/grandTotal are not meaningful (heterogeneous columns) and are omitted\/zero; only colTotals (per-measure totals) apply. The client hides the row-total column and grand total.'),
+  "measureDisplayAffixes": zod.array(zod.object({
+  "measureKey": zod.string().nullable(),
+  "displayAffix": zod.string(),
+  "displayAffixPosition": zod.enum(['before', 'after'])
+}).describe('Display-only affix metadata for a resolved numeric sum measure. A null measureKey identifies the sole measure in single-measure mode.')).optional().describe('Optional display-only affixes for sum measures over number\/function fields. Omitted when no resolved measure has an affix.')
 }),zod.null()]).optional().describe('Computed cross-tab for pivot widgets (admin-authoritative real totals, status-filtered). Null for other widget types.'),
   "formula": zod.string().nullish(),
   "format": zod.string().nullish(),
@@ -2508,7 +2513,12 @@ export const GetPivotPageDataResponse = zod.object({
 })),
   "grandTotal": zod.number(),
   "measureLabel": zod.string(),
-  "multiMeasure": zod.boolean().optional().describe('True when each column is a distinct measure (multi-measure mode). In that case rowTotals\/grandTotal are not meaningful (heterogeneous columns) and are omitted\/zero; only colTotals (per-measure totals) apply. The client hides the row-total column and grand total.')
+  "multiMeasure": zod.boolean().optional().describe('True when each column is a distinct measure (multi-measure mode). In that case rowTotals\/grandTotal are not meaningful (heterogeneous columns) and are omitted\/zero; only colTotals (per-measure totals) apply. The client hides the row-total column and grand total.'),
+  "measureDisplayAffixes": zod.array(zod.object({
+  "measureKey": zod.string().nullable(),
+  "displayAffix": zod.string(),
+  "displayAffixPosition": zod.enum(['before', 'after'])
+}).describe('Display-only affix metadata for a resolved numeric sum measure. A null measureKey identifies the sole measure in single-measure mode.')).optional().describe('Optional display-only affixes for sum measures over number\/function fields. Omitted when no resolved measure has an affix.')
 })
 
 
@@ -2848,6 +2858,8 @@ export const ListEntityFieldsParams = zod.object({
 export const listEntityFieldsResponseFormulaConfigJsonDecimalsMin = 0;
 export const listEntityFieldsResponseFormulaConfigJsonDecimalsMax = 10;
 
+export const listEntityFieldsResponseFormulaConfigJsonDisplayAffixMax = 100;
+
 export const listEntityFieldsResponsePercentConfigJsonDecimalsMin = 0;
 export const listEntityFieldsResponsePercentConfigJsonDecimalsMax = 10;
 
@@ -2930,8 +2942,10 @@ export const ListEntityFieldsResponseItem = zod.object({
 }).describe('One cross-field validation (\"fill\") rule. Distinct from conditional formatting (which is cosmetic): this is a HARD constraint on saving. Saving THIS field with a value (any non-empty value, or one of applyToValues when that list is non-empty) is allowed only when the field named conditionFieldKey (same entity) satisfies operator\/value (value2 is the upper bound for `between`). Otherwise the record save is rejected server-side with an auto-generated message.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
-  "decimals": zod.number().min(listEntityFieldsResponseFormulaConfigJsonDecimalsMin).max(listEntityFieldsResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
-}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
+  "decimals": zod.number().min(listEntityFieldsResponseFormulaConfigJsonDecimalsMin).max(listEntityFieldsResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.'),
+  "displayAffix": zod.string().max(listEntityFieldsResponseFormulaConfigJsonDisplayAffixMax).nullish().describe('Optional plain-text label displayed next to the value. Leading and trailing whitespace is removed by the server; blank becomes null.'),
+  "displayAffixPosition": zod.enum(['before', 'after']).nullish().describe('Side on which displayAffix is shown. Defaults to after when an affix is present.')
+}).optional().describe('Display and formula configuration stored in formulaConfigJson for `number` and `function` fields. `expression` is used by function fields and safely references other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display. `displayAffix` is optional plain text shown before or after the value.'),
   "percentConfigJson": zod.object({
   "mode": zod.enum(['list', 'value']).nullish(),
   "decimals": zod.number().min(listEntityFieldsResponsePercentConfigJsonDecimalsMin).max(listEntityFieldsResponsePercentConfigJsonDecimalsMax).nullish()
@@ -2976,6 +2990,8 @@ export const createEntityFieldBodyIsRequiredDefault = false;
 export const createEntityFieldBodyDefaultToTodayDefault = false;
 export const createEntityFieldBodyFormulaConfigJsonDecimalsMin = 0;
 export const createEntityFieldBodyFormulaConfigJsonDecimalsMax = 10;
+
+export const createEntityFieldBodyFormulaConfigJsonDisplayAffixMax = 100;
 
 export const createEntityFieldBodyPercentConfigJsonDecimalsMin = 0;
 export const createEntityFieldBodyPercentConfigJsonDecimalsMax = 10;
@@ -3057,8 +3073,10 @@ export const CreateEntityFieldBody = zod.object({
 }).describe('One cross-field validation (\"fill\") rule. Distinct from conditional formatting (which is cosmetic): this is a HARD constraint on saving. Saving THIS field with a value (any non-empty value, or one of applyToValues when that list is non-empty) is allowed only when the field named conditionFieldKey (same entity) satisfies operator\/value (value2 is the upper bound for `between`). Otherwise the record save is rejected server-side with an auto-generated message.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
-  "decimals": zod.number().min(createEntityFieldBodyFormulaConfigJsonDecimalsMin).max(createEntityFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
-}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
+  "decimals": zod.number().min(createEntityFieldBodyFormulaConfigJsonDecimalsMin).max(createEntityFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.'),
+  "displayAffix": zod.string().max(createEntityFieldBodyFormulaConfigJsonDisplayAffixMax).nullish().describe('Optional plain-text label displayed next to the value. Leading and trailing whitespace is removed by the server; blank becomes null.'),
+  "displayAffixPosition": zod.enum(['before', 'after']).nullish().describe('Side on which displayAffix is shown. Defaults to after when an affix is present.')
+}).optional().describe('Display and formula configuration stored in formulaConfigJson for `number` and `function` fields. `expression` is used by function fields and safely references other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display. `displayAffix` is optional plain text shown before or after the value.'),
   "percentConfigJson": zod.object({
   "mode": zod.enum(['list', 'value']).nullish(),
   "decimals": zod.number().min(createEntityFieldBodyPercentConfigJsonDecimalsMin).max(createEntityFieldBodyPercentConfigJsonDecimalsMax).nullish()
@@ -3098,6 +3116,8 @@ export const GetFieldParams = zod.object({
 
 export const getFieldResponseFormulaConfigJsonDecimalsMin = 0;
 export const getFieldResponseFormulaConfigJsonDecimalsMax = 10;
+
+export const getFieldResponseFormulaConfigJsonDisplayAffixMax = 100;
 
 export const getFieldResponsePercentConfigJsonDecimalsMin = 0;
 export const getFieldResponsePercentConfigJsonDecimalsMax = 10;
@@ -3181,8 +3201,10 @@ export const GetFieldResponse = zod.object({
 }).describe('One cross-field validation (\"fill\") rule. Distinct from conditional formatting (which is cosmetic): this is a HARD constraint on saving. Saving THIS field with a value (any non-empty value, or one of applyToValues when that list is non-empty) is allowed only when the field named conditionFieldKey (same entity) satisfies operator\/value (value2 is the upper bound for `between`). Otherwise the record save is rejected server-side with an auto-generated message.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
-  "decimals": zod.number().min(getFieldResponseFormulaConfigJsonDecimalsMin).max(getFieldResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
-}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
+  "decimals": zod.number().min(getFieldResponseFormulaConfigJsonDecimalsMin).max(getFieldResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.'),
+  "displayAffix": zod.string().max(getFieldResponseFormulaConfigJsonDisplayAffixMax).nullish().describe('Optional plain-text label displayed next to the value. Leading and trailing whitespace is removed by the server; blank becomes null.'),
+  "displayAffixPosition": zod.enum(['before', 'after']).nullish().describe('Side on which displayAffix is shown. Defaults to after when an affix is present.')
+}).optional().describe('Display and formula configuration stored in formulaConfigJson for `number` and `function` fields. `expression` is used by function fields and safely references other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display. `displayAffix` is optional plain text shown before or after the value.'),
   "percentConfigJson": zod.object({
   "mode": zod.enum(['list', 'value']).nullish(),
   "decimals": zod.number().min(getFieldResponsePercentConfigJsonDecimalsMin).max(getFieldResponsePercentConfigJsonDecimalsMax).nullish()
@@ -3224,6 +3246,8 @@ export const UpdateFieldParams = zod.object({
 
 export const updateFieldBodyFormulaConfigJsonDecimalsMin = 0;
 export const updateFieldBodyFormulaConfigJsonDecimalsMax = 10;
+
+export const updateFieldBodyFormulaConfigJsonDisplayAffixMax = 100;
 
 export const updateFieldBodyPercentConfigJsonDecimalsMin = 0;
 export const updateFieldBodyPercentConfigJsonDecimalsMax = 10;
@@ -3297,8 +3321,10 @@ export const UpdateFieldBody = zod.object({
 }).describe('One cross-field validation (\"fill\") rule. Distinct from conditional formatting (which is cosmetic): this is a HARD constraint on saving. Saving THIS field with a value (any non-empty value, or one of applyToValues when that list is non-empty) is allowed only when the field named conditionFieldKey (same entity) satisfies operator\/value (value2 is the upper bound for `between`). Otherwise the record save is rejected server-side with an auto-generated message.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
-  "decimals": zod.number().min(updateFieldBodyFormulaConfigJsonDecimalsMin).max(updateFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
-}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
+  "decimals": zod.number().min(updateFieldBodyFormulaConfigJsonDecimalsMin).max(updateFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.'),
+  "displayAffix": zod.string().max(updateFieldBodyFormulaConfigJsonDisplayAffixMax).nullish().describe('Optional plain-text label displayed next to the value. Leading and trailing whitespace is removed by the server; blank becomes null.'),
+  "displayAffixPosition": zod.enum(['before', 'after']).nullish().describe('Side on which displayAffix is shown. Defaults to after when an affix is present.')
+}).optional().describe('Display and formula configuration stored in formulaConfigJson for `number` and `function` fields. `expression` is used by function fields and safely references other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display. `displayAffix` is optional plain text shown before or after the value.'),
   "percentConfigJson": zod.object({
   "mode": zod.enum(['list', 'value']).nullish(),
   "decimals": zod.number().min(updateFieldBodyPercentConfigJsonDecimalsMin).max(updateFieldBodyPercentConfigJsonDecimalsMax).nullish()
@@ -3330,6 +3356,8 @@ export const UpdateFieldBody = zod.object({
 
 export const updateFieldResponseFormulaConfigJsonDecimalsMin = 0;
 export const updateFieldResponseFormulaConfigJsonDecimalsMax = 10;
+
+export const updateFieldResponseFormulaConfigJsonDisplayAffixMax = 100;
 
 export const updateFieldResponsePercentConfigJsonDecimalsMin = 0;
 export const updateFieldResponsePercentConfigJsonDecimalsMax = 10;
@@ -3413,8 +3441,10 @@ export const UpdateFieldResponse = zod.object({
 }).describe('One cross-field validation (\"fill\") rule. Distinct from conditional formatting (which is cosmetic): this is a HARD constraint on saving. Saving THIS field with a value (any non-empty value, or one of applyToValues when that list is non-empty) is allowed only when the field named conditionFieldKey (same entity) satisfies operator\/value (value2 is the upper bound for `between`). Otherwise the record save is rejected server-side with an auto-generated message.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
-  "decimals": zod.number().min(updateFieldResponseFormulaConfigJsonDecimalsMin).max(updateFieldResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
-}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
+  "decimals": zod.number().min(updateFieldResponseFormulaConfigJsonDecimalsMin).max(updateFieldResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.'),
+  "displayAffix": zod.string().max(updateFieldResponseFormulaConfigJsonDisplayAffixMax).nullish().describe('Optional plain-text label displayed next to the value. Leading and trailing whitespace is removed by the server; blank becomes null.'),
+  "displayAffixPosition": zod.enum(['before', 'after']).nullish().describe('Side on which displayAffix is shown. Defaults to after when an affix is present.')
+}).optional().describe('Display and formula configuration stored in formulaConfigJson for `number` and `function` fields. `expression` is used by function fields and safely references other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display. `displayAffix` is optional plain text shown before or after the value.'),
   "percentConfigJson": zod.object({
   "mode": zod.enum(['list', 'value']).nullish(),
   "decimals": zod.number().min(updateFieldResponsePercentConfigJsonDecimalsMin).max(updateFieldResponsePercentConfigJsonDecimalsMax).nullish()
@@ -3487,6 +3517,8 @@ export const ListPageFieldsParams = zod.object({
 export const listPageFieldsResponseFormulaConfigJsonDecimalsMin = 0;
 export const listPageFieldsResponseFormulaConfigJsonDecimalsMax = 10;
 
+export const listPageFieldsResponseFormulaConfigJsonDisplayAffixMax = 100;
+
 export const listPageFieldsResponsePercentConfigJsonDecimalsMin = 0;
 export const listPageFieldsResponsePercentConfigJsonDecimalsMax = 10;
 
@@ -3532,8 +3564,10 @@ export const ListPageFieldsResponseItem = zod.object({
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
-  "decimals": zod.number().min(listPageFieldsResponseFormulaConfigJsonDecimalsMin).max(listPageFieldsResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
-}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
+  "decimals": zod.number().min(listPageFieldsResponseFormulaConfigJsonDecimalsMin).max(listPageFieldsResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.'),
+  "displayAffix": zod.string().max(listPageFieldsResponseFormulaConfigJsonDisplayAffixMax).nullish().describe('Optional plain-text label displayed next to the value. Leading and trailing whitespace is removed by the server; blank becomes null.'),
+  "displayAffixPosition": zod.enum(['before', 'after']).nullish().describe('Side on which displayAffix is shown. Defaults to after when an affix is present.')
+}).optional().describe('Display and formula configuration stored in formulaConfigJson for `number` and `function` fields. `expression` is used by function fields and safely references other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display. `displayAffix` is optional plain text shown before or after the value.'),
   "percentConfigJson": zod.object({
   "mode": zod.enum(['list', 'value']).nullish(),
   "decimals": zod.number().min(listPageFieldsResponsePercentConfigJsonDecimalsMin).max(listPageFieldsResponsePercentConfigJsonDecimalsMax).nullish()
@@ -3599,6 +3633,8 @@ export const createPageFieldBodyPivotEnabledDefault = false;
 export const createPageFieldBodyFormulaConfigJsonDecimalsMin = 0;
 export const createPageFieldBodyFormulaConfigJsonDecimalsMax = 10;
 
+export const createPageFieldBodyFormulaConfigJsonDisplayAffixMax = 100;
+
 export const createPageFieldBodyPercentConfigJsonDecimalsMin = 0;
 export const createPageFieldBodyPercentConfigJsonDecimalsMax = 10;
 
@@ -3645,8 +3681,10 @@ export const CreatePageFieldBody = zod.object({
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
-  "decimals": zod.number().min(createPageFieldBodyFormulaConfigJsonDecimalsMin).max(createPageFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
-}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
+  "decimals": zod.number().min(createPageFieldBodyFormulaConfigJsonDecimalsMin).max(createPageFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.'),
+  "displayAffix": zod.string().max(createPageFieldBodyFormulaConfigJsonDisplayAffixMax).nullish().describe('Optional plain-text label displayed next to the value. Leading and trailing whitespace is removed by the server; blank becomes null.'),
+  "displayAffixPosition": zod.enum(['before', 'after']).nullish().describe('Side on which displayAffix is shown. Defaults to after when an affix is present.')
+}).optional().describe('Display and formula configuration stored in formulaConfigJson for `number` and `function` fields. `expression` is used by function fields and safely references other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display. `displayAffix` is optional plain text shown before or after the value.'),
   "percentConfigJson": zod.object({
   "mode": zod.enum(['list', 'value']).nullish(),
   "decimals": zod.number().min(createPageFieldBodyPercentConfigJsonDecimalsMin).max(createPageFieldBodyPercentConfigJsonDecimalsMax).nullish()
@@ -3706,6 +3744,8 @@ export const UpdatePageFieldParams = zod.object({
 export const updatePageFieldBodyFormulaConfigJsonDecimalsMin = 0;
 export const updatePageFieldBodyFormulaConfigJsonDecimalsMax = 10;
 
+export const updatePageFieldBodyFormulaConfigJsonDisplayAffixMax = 100;
+
 export const updatePageFieldBodyPercentConfigJsonDecimalsMin = 0;
 export const updatePageFieldBodyPercentConfigJsonDecimalsMax = 10;
 
@@ -3749,8 +3789,10 @@ export const UpdatePageFieldBody = zod.object({
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
-  "decimals": zod.number().min(updatePageFieldBodyFormulaConfigJsonDecimalsMin).max(updatePageFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
-}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
+  "decimals": zod.number().min(updatePageFieldBodyFormulaConfigJsonDecimalsMin).max(updatePageFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.'),
+  "displayAffix": zod.string().max(updatePageFieldBodyFormulaConfigJsonDisplayAffixMax).nullish().describe('Optional plain-text label displayed next to the value. Leading and trailing whitespace is removed by the server; blank becomes null.'),
+  "displayAffixPosition": zod.enum(['before', 'after']).nullish().describe('Side on which displayAffix is shown. Defaults to after when an affix is present.')
+}).optional().describe('Display and formula configuration stored in formulaConfigJson for `number` and `function` fields. `expression` is used by function fields and safely references other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display. `displayAffix` is optional plain text shown before or after the value.'),
   "percentConfigJson": zod.object({
   "mode": zod.enum(['list', 'value']).nullish(),
   "decimals": zod.number().min(updatePageFieldBodyPercentConfigJsonDecimalsMin).max(updatePageFieldBodyPercentConfigJsonDecimalsMax).nullish()
@@ -3802,6 +3844,8 @@ export const UpdatePageFieldBody = zod.object({
 export const updatePageFieldResponseFormulaConfigJsonDecimalsMin = 0;
 export const updatePageFieldResponseFormulaConfigJsonDecimalsMax = 10;
 
+export const updatePageFieldResponseFormulaConfigJsonDisplayAffixMax = 100;
+
 export const updatePageFieldResponsePercentConfigJsonDecimalsMin = 0;
 export const updatePageFieldResponsePercentConfigJsonDecimalsMax = 10;
 
@@ -3847,8 +3891,10 @@ export const UpdatePageFieldResponse = zod.object({
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
-  "decimals": zod.number().min(updatePageFieldResponseFormulaConfigJsonDecimalsMin).max(updatePageFieldResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.')
-}).optional().describe('Per-field configuration for a `function`-type field. `expression` is a safe formula referencing other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display.'),
+  "decimals": zod.number().min(updatePageFieldResponseFormulaConfigJsonDecimalsMin).max(updatePageFieldResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.'),
+  "displayAffix": zod.string().max(updatePageFieldResponseFormulaConfigJsonDisplayAffixMax).nullish().describe('Optional plain-text label displayed next to the value. Leading and trailing whitespace is removed by the server; blank becomes null.'),
+  "displayAffixPosition": zod.enum(['before', 'after']).nullish().describe('Side on which displayAffix is shown. Defaults to after when an affix is present.')
+}).optional().describe('Display and formula configuration stored in formulaConfigJson for `number` and `function` fields. `expression` is used by function fields and safely references other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display. `displayAffix` is optional plain text shown before or after the value.'),
   "percentConfigJson": zod.object({
   "mode": zod.enum(['list', 'value']).nullish(),
   "decimals": zod.number().min(updatePageFieldResponsePercentConfigJsonDecimalsMin).max(updatePageFieldResponsePercentConfigJsonDecimalsMax).nullish()
@@ -6077,7 +6123,12 @@ export const PivotEntityRecordsResponse = zod.object({
 })),
   "grandTotal": zod.number(),
   "measureLabel": zod.string(),
-  "multiMeasure": zod.boolean().optional().describe('True when each column is a distinct measure (multi-measure mode). In that case rowTotals\/grandTotal are not meaningful (heterogeneous columns) and are omitted\/zero; only colTotals (per-measure totals) apply. The client hides the row-total column and grand total.')
+  "multiMeasure": zod.boolean().optional().describe('True when each column is a distinct measure (multi-measure mode). In that case rowTotals\/grandTotal are not meaningful (heterogeneous columns) and are omitted\/zero; only colTotals (per-measure totals) apply. The client hides the row-total column and grand total.'),
+  "measureDisplayAffixes": zod.array(zod.object({
+  "measureKey": zod.string().nullable(),
+  "displayAffix": zod.string(),
+  "displayAffixPosition": zod.enum(['before', 'after'])
+}).describe('Display-only affix metadata for a resolved numeric sum measure. A null measureKey identifies the sole measure in single-measure mode.')).optional().describe('Optional display-only affixes for sum measures over number\/function fields. Omitted when no resolved measure has an affix.')
 })
 
 
