@@ -16,6 +16,11 @@ import {
   type PageRelatedValue,
 } from "@workspace/api-client-react";
 import { useT } from "@/lib/i18n";
+import {
+  getCalendarWeekDays,
+  normalizeFirstDayOfWeek,
+  startOfCalendarWeek,
+} from "@/lib/calendarWeek";
 import { Button } from "@/components/ui/button";
 import {
   Loader2,
@@ -59,13 +64,6 @@ function startOfDay(d: Date): Date {
 
 function addDaysLocal(d: Date, n: number): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
-}
-
-// Monday-based start of week.
-function startOfWeek(d: Date): Date {
-  const s = startOfDay(d);
-  const dow = (s.getDay() + 6) % 7; // 0 = Monday
-  return addDaysLocal(s, -dow);
 }
 
 // Parse a record's date value (date or datetime string) into a local day, or null.
@@ -115,6 +113,7 @@ export function CalendarView({
   mode,
   onModeChange,
   refreshTick = 0,
+  firstDayOfWeek,
   ml,
 }: {
   entityId: number;
@@ -135,6 +134,7 @@ export function CalendarView({
   mode: CalendarMode;
   onModeChange: (m: CalendarMode) => void;
   refreshTick?: number;
+  firstDayOfWeek: number;
   ml: (val: MultilingualText | string | undefined | null) => string;
 }) {
   const t = useT();
@@ -146,6 +146,7 @@ export function CalendarView({
   const [error, setError] = useState<string | null>(null);
   const [truncated, setTruncated] = useState(false);
   const reqIdRef = useRef(0);
+  const calendarFirstDay = normalizeFirstDayOfWeek(firstDayOfWeek);
 
   // Relation/lookup fields (title or plaque data) don't store a scalar in
   // valuesJson — their display value is projected from the linked record via the
@@ -188,7 +189,7 @@ export function CalendarView({
       return { windowStart: s, windowEnd: addDaysLocal(s, 1) };
     }
     if (mode === "week") {
-      const s = startOfWeek(anchor);
+      const s = startOfCalendarWeek(anchor, calendarFirstDay);
       return { windowStart: s, windowEnd: addDaysLocal(s, 7) };
     }
     if (mode === "agenda") {
@@ -197,9 +198,9 @@ export function CalendarView({
     }
     // month: full weeks covering the month grid.
     const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
-    const gridStart = startOfWeek(first);
+    const gridStart = startOfCalendarWeek(first, calendarFirstDay);
     return { windowStart: gridStart, windowEnd: addDaysLocal(gridStart, 42) };
-  }, [mode, anchor]);
+  }, [mode, anchor, calendarFirstDay]);
 
   const titleFieldKey =
     config.titleFieldKey ||
@@ -520,11 +521,10 @@ export function CalendarView({
   ];
 
   const weekdayLabels = useMemo(() => {
-    const base = startOfWeek(new Date());
-    return Array.from({ length: 7 }, (_, i) =>
-      addDaysLocal(base, i).toLocaleDateString(locale, { weekday: "short" }),
+    return getCalendarWeekDays(new Date(), calendarFirstDay).map((day) =>
+      day.toLocaleDateString(locale, { weekday: "short" }),
     );
-  }, [locale]);
+  }, [calendarFirstDay, locale]);
 
   const todayISO = toISODate(startOfDay(new Date()));
 

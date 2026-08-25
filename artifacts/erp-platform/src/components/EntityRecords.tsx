@@ -6061,6 +6061,7 @@ export function EntityRecords({
               mode={calendarMode}
               onModeChange={setCalendarMode}
               refreshTick={refreshTick}
+              firstDayOfWeek={appSettings?.firstDayOfWeek ?? 7}
               ml={ml}
             />
           </CardContent>
