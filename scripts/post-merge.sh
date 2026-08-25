@@ -1,4 +1,5 @@
 #!/bin/bash
 set -e
-pnpm install --frozen-lockfile
-pnpm --filter db push
+PNPM_REGISTRY="https://registry.npmjs.org/"
+corepack pnpm --config.registry="$PNPM_REGISTRY" install --frozen-lockfile
+corepack pnpm --config.registry="$PNPM_REGISTRY" --filter db push

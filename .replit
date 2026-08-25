@@ -24,12 +24,12 @@ args = "collaboration-e2e"
 name = "collaboration-e2e"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm run validate:deployment:collaboration"
-
 [workflows.workflow.metadata]
 isValidation = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "corepack pnpm run validate:deployment:collaboration"
 
 [agent]
 stack = "PNPM_WORKSPACE"

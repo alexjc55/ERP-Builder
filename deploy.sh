@@ -6,7 +6,7 @@
 #   backup DB -> git pull -> install deps -> run DB migrations -> build -> restart
 #
 # Prerequisites on the server:
-#   - git, node 24, pnpm, postgresql-client (for pg_dump)
+#   - git, node 24 with corepack, postgresql-client (for pg_dump)
 #   - DATABASE_URL exported in the environment (same var Drizzle reads)
 #   - the app already bootstrapped once (see FIRST-TIME SETUP at the bottom)
 #
@@ -26,6 +26,8 @@ BACKUP_DIR="${BACKUP_DIR:-$APP_DIR/.db-backups}"
 #   RESTART_CMD="pm2 restart api-server"
 #   RESTART_CMD="sudo systemctl restart erp-api"
 RESTART_CMD="${RESTART_CMD:-}"
+# Registry must match explicit tarball hosts committed in pnpm-lock.yaml.
+PNPM_REGISTRY="https://registry.npmjs.org/"
 # ---------------------------------------------------------------------------
 
 if [[ -z "${DATABASE_URL:-}" ]]; then
@@ -48,18 +50,18 @@ git checkout "$BRANCH"
 git pull --ff-only origin "$BRANCH"
 
 echo "==> [3/6] Installing dependencies"
-pnpm install --frozen-lockfile
+corepack pnpm --config.registry="$PNPM_REGISTRY" install --frozen-lockfile
 
 echo "==> [4/6] Applying database migrations"
 # Applies ONLY migrations not yet recorded in the __drizzle_migrations table.
-pnpm --filter @workspace/db run migrate
+corepack pnpm --config.registry="$PNPM_REGISTRY" --filter @workspace/db run migrate
 
 echo "==> [5/6] Building"
 # Build only what the server needs (the root build includes dev-only packages
 # such as mockup-sandbox that are not meant for production servers).
-pnpm --filter @workspace/api-server run build
+corepack pnpm --config.registry="$PNPM_REGISTRY" --filter @workspace/api-server run build
 PORT="${FRONTEND_PORT:-10000}" BASE_PATH="${FRONTEND_BASE_PATH:-/}" \
-  pnpm --filter @workspace/erp-platform run build
+  corepack pnpm --config.registry="$PNPM_REGISTRY" --filter @workspace/erp-platform run build
 
 echo "==> [6/6] Restarting the service"
 if [[ -n "$RESTART_CMD" ]]; then
@@ -80,10 +82,11 @@ echo "    gunzip -c \"$BACKUP_FILE\" | psql \"\$DATABASE_URL\""
 #     pg_dump --data-only --disable-triggers "$DATABASE_URL" | gzip > seed.sql.gz
 #
 # On the server (fresh, empty database):
-#     git clone <repo> && cd <repo> && pnpm install --frozen-lockfile
-#     pnpm --filter @workspace/db run migrate     # builds schema + records 0000
+#     git clone <repo> && cd <repo>
+#     corepack pnpm --config.registry=https://registry.npmjs.org/ install --frozen-lockfile
+#     corepack pnpm --config.registry=https://registry.npmjs.org/ --filter @workspace/db run migrate
 #     gunzip -c seed.sql.gz | psql "$DATABASE_URL" # loads the data
-#     pnpm run build && <start your service>
+#     corepack pnpm --config.registry=https://registry.npmjs.org/ run build && <start your service>
 #
 # After that, every future update is just: ./deploy.sh
 # =============================================================================

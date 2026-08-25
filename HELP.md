@@ -56,10 +56,10 @@ git push
 
 ```bash
 cd ~/www/erp.davidov-k.co.il
-git pull origin main
-pnpm install
-pnpm --filter @workspace/api-server run build
-PORT=10000 BASE_PATH=/ pnpm --filter @workspace/erp-platform run build
+git pull --ff-only origin main
+corepack pnpm --config.registry=https://registry.npmjs.org/ install --frozen-lockfile
+corepack pnpm --config.registry=https://registry.npmjs.org/ --filter @workspace/api-server run build
+PORT=10000 BASE_PATH=/ corepack pnpm --config.registry=https://registry.npmjs.org/ --filter @workspace/erp-platform run build
 pm2 restart erp-davidov --update-env
 ```
 
@@ -69,6 +69,10 @@ pm2 restart erp-davidov --update-env
 - Для фронтенда переменные `PORT=10000 BASE_PATH=/` перед командой обязательны.
 - Фронтенд — это статические файлы (`artifacts/erp-platform/dist/public`),
   nginx подхватывает их сразу после сборки; PM2 перезапускаем только ради бэкенда.
+- Команды запускаем именно через `corepack pnpm`: Corepack читает точную версию
+  pnpm из `package.json`, поэтому сервер не использует случайную глобальную версию
+  и не требует ручного `pnpm approve-builds`. Параметр `--config.registry` также
+  перекрывает жёсткую глобальную настройку registry на сервере.
 
 Если менялся `.env` (новые переменные):
 
@@ -82,7 +86,7 @@ pm2 restart erp-davidov --update-env
 
 ```bash
 set -a; source .env; set +a
-pnpm --filter @workspace/db run migrate
+corepack pnpm --config.registry=https://registry.npmjs.org/ --filter @workspace/db run migrate
 ```
 
 Бэкап БД перед миграцией и откат:
@@ -175,9 +179,11 @@ Google Drive и вставленные ссылки на файлы от лок�
 
 ## 8. Особенности именно этого сервера (Beget + FastPanel)
 
-- Реестр npm заблокирован — pnpm на сервере настроен на зеркало
-  `npmmirror.com` (уже сделано, трогать не нужно).
+- Проектный `.npmrc` закрепляет `registry.npmjs.org`, совместимый с URL в
+  `pnpm-lock.yaml`. Не удаляйте эту настройку; production-команды дополнительно
+  передают тот же registry явно, чтобы перекрыть даже pnpm globalconfig сервера.
 - Оперативной памяти мало — добавлен swap-файл 2 ГБ (уже в fstab).
-- Node 24 и pnpm 11 установлены через corepack.
+- Node 24 установлен на сервере; точная версия pnpm 11 закреплена в `package.json`
+  и запускается через Corepack.
 - Первичная настройка (клонирование, БД, PM2, nginx) уже выполнена —
   повторять её не нужно, для обновлений достаточно раздела 3.
