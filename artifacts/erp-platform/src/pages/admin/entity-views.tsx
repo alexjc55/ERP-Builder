@@ -294,6 +294,21 @@ export default function EntityViewsPage() {
   const { data: views = [], isLoading } = useListEntityViews(entityId);
   const { data: allPages = [] } = useListPages();
   const mirrorPages = allPages.filter((p: Page) => p.mirrorEntityId === entityId);
+  const pagePathLabel = (page?: Page): string => {
+    if (!page) return "";
+    const pageById = new Map(allPages.map((candidate: Page) => [candidate.id, candidate]));
+    const labels: string[] = [];
+    const visited = new Set<number>();
+    let current: Page | undefined = page;
+
+    while (current && !visited.has(current.id)) {
+      visited.add(current.id);
+      labels.unshift(ml(current.nameJson));
+      current = current.parentPageId != null ? pageById.get(current.parentPageId) : undefined;
+    }
+
+    return labels.join(" → ");
+  };
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<View | null>(null);
@@ -889,7 +904,7 @@ export default function EntityViewsPage() {
                         </span>
                         {view.targetPageId != null && (
                           <Badge variant="outline" className="ml-2 bg-indigo-50 text-indigo-700 border-indigo-200">
-                            {ml(mirrorPages.find((p) => p.id === view.targetPageId)?.nameJson) ||
+                            {pagePathLabel(mirrorPages.find((p) => p.id === view.targetPageId)) ||
                               t("views.badgePageScoped", "страница")}
                           </Badge>
                         )}
@@ -973,7 +988,7 @@ export default function EntityViewsPage() {
                   <SelectContent>
                     <SelectItem value="__main__">{t("views.mainEntityPage", "Основная страница сущности")}</SelectItem>
                     {mirrorPages.map((p) => (
-                      <SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson)}</SelectItem>
+                      <SelectItem key={p.id} value={String(p.id)}>{pagePathLabel(p)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
