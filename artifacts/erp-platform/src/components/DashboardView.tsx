@@ -842,7 +842,7 @@ function getRelativeTime(dateStr: string, lang: string) {
   }
 }
 
-/** Render an online users widget: list of active users with their current page. */
+/** Render an online users widget: list of active users with their current page hierarchy. */
 function OnlineUsersWidget({
   users,
   t,
@@ -853,6 +853,7 @@ function OnlineUsersWidget({
   ml: (v: unknown) => string;
 }) {
   const { lang } = useLang();
+  const pageLabel = usePagePathLabel();
 
   if (!users || users.length === 0) {
     return (
@@ -870,6 +871,10 @@ function OnlineUsersWidget({
         {sorted.map((u) => {
           const initials = (u.name || "?").slice(0, 2).toUpperCase();
           const isSafePath = u.currentPagePath && u.currentPagePath.startsWith("/");
+          const fallbackPageTitle = u.currentPageTitle ? ml(u.currentPageTitle) : "";
+          const currentPageLabel = u.currentPageId != null
+            ? pageLabel(u.currentPageId, fallbackPageTitle || undefined)
+            : fallbackPageTitle;
 
           return (
             <div key={u.userId} data-testid={`online-user-row-${u.userId}`} className="flex items-center gap-3">
@@ -883,17 +888,17 @@ function OnlineUsersWidget({
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-slate-900 truncate">{u.name}</p>
                 <div className="text-xs text-slate-500 truncate flex items-center gap-1.5">
-                  {u.currentPageTitle ? (
+                  {currentPageLabel ? (
                     isSafePath ? (
                       <Link
                         href={u.currentPagePath!}
                         data-testid={`link-online-user-page-${u.userId}`}
                         className="hover:text-blue-600 hover:underline truncate"
                       >
-                        {ml(u.currentPageTitle)}
+                        {currentPageLabel}
                       </Link>
                     ) : (
-                      <span className="truncate">{ml(u.currentPageTitle)}</span>
+                      <span className="truncate">{currentPageLabel}</span>
                     )
                   ) : (
                     <span className="truncate text-slate-400">—</span>
