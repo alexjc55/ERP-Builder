@@ -30,7 +30,7 @@ pnpm --filter @workspace/api-server run build
 PORT=10000 BASE_PATH=/ pnpm --filter @workspace/erp-platform run build
 pm2 restart erp-davidov --update-env
 ```
-If `.env` changed or DB schema changed, source env first: `set -a; source .env; set +a;` then `pm2 restart erp-davidov --update-env` / `pnpm --filter @workspace/db run push`.
+If `.env` changed, source it before restarting: `set -a; source .env; set +a;` then `pm2 restart erp-davidov --update-env`.
 
 ## Verify Git synchronization before building
 - The production checkout can retain local modifications to tracked package/workspace files. Preserve them deliberately, but never treat a completed build as proof that Git synchronized: an old checkout can build successfully.
@@ -40,14 +40,14 @@ If `.env` changed or DB schema changed, source env first: `set -a; source .env; 
 
 **How to apply:** Make commit equality a release gate. If tracked server-only package files complicate pulls, stash only those files, pull, then reapply them; keep uploads and `.env` outside Git.
 
-## Delivering DB changes as SQL files
-- Schema/translation changes for prod are delivered as an idempotent .sql file (plus a .txt copy — the chat asset viewer rejects .sql) that the USER runs on the remote Postgres; NEVER run them against the Replit DB.
-- Keep appending release changes to the existing cumulative handover `exports/collaboration-and-later-updates.sql` (and its `.txt` delivery copy) unless the user explicitly asks to start a new release file. Do not present generated `lib/db/drizzle/000N_*.sql` files as the manual server-update file; they are internal migration history. `scripts/prod-sync-schema.sql` is the full additive recovery/sync script, not the normal per-release handover.
-  **Why:** the user requires one stable place for remote schema updates; mixing migration history, recovery sync, and the handover file creates needless deployment ambiguity.
-  **How to apply:** when asked whether production DB changes are needed, name the existing cumulative handover file and append the idempotent delta there; mention Drizzle only when the chosen deployment path is the automated `migrate` command.
-- File conventions: `ADD COLUMN IF NOT EXISTS`, translations via `INSERT ... ON CONFLICT (translation_key) DO UPDATE SET translations_json = EXCLUDED.translations_json, updated_at = now()`, Russian comments, "повторный запуск безопасен".
-- User runs it on the server: `psql -U erp_davidov_usr -d erp_davidov -f file.sql` (or paste into psql); credentials are in the project `.env` on the server.
-- The user often runs these files through a web SQL GUI, not psql — do NOT include psql metacommands (`\set ON_ERROR_STOP on` etc.), they throw a syntax error there. Plain SQL + BEGIN/COMMIT only.
+## Production DB schema changes
+- Do not accumulate manual SQL handover files, root dumps, or stale full-schema sync scripts in the repository. Production is current; completed one-off SQL is removed after use.
+- Keep `lib/db/drizzle/` intact as the canonical schema history for fresh installs and future migrations.
+- Production migration 0004 was applied manually, so automatic `migrate` must not be run until its ledger state is reconciled; otherwise it may repeat already-applied DDL.
+
+**Why:** mixing generated migrations, recovery scripts, dumps, and one-off handovers created clutter and made deployment instructions ambiguous.
+
+**How to apply:** for each future schema change, generate the normal Drizzle migration. Before deploying it, verify production's migration ledger and schema; if a manual SQL handover is explicitly needed, agree on one temporary path and remove the file after production is verified.
 
 ## Build/install quirks on that server
 - npmjs registry is blocked → registry permanently set to npmmirror.com; fetch-timeout 600000, network-concurrency 3, child-concurrency 1. Lockfile tarball URLs pinned to npmjs may need sed-patching on the server (happened with npm-run-path@6.0.0).
@@ -59,4 +59,4 @@ If `.env` changed or DB schema changed, source env first: `set -a; source .env; 
 
 ## Schema drift after code-only deploy (Aug 2026)
 - Symptom set: "values disappeared" / empty admin lists / "Аккаунт —" right after a git-pull deploy = missing `db push` on prod (Drizzle selects new columns → queries 500 → UI renders empty; data is intact). Check `pm2 logs erp-api` for `column ... does not exist`.
-- Fix option besides push: `scripts/prod-sync-schema.sql` — generated idempotent ADDITIVE-only sync (IF NOT EXISTS everywhere); regenerate from dev via the psql script pattern when schema changes again.
+- Resolve drift from the canonical Drizzle schema/migration after checking the production ledger; do not recreate a persistent catch-all sync SQL.

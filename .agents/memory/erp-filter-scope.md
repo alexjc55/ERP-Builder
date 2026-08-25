@@ -21,7 +21,7 @@ A role's `RecordPermission` can set `scope: "filter"` + `scopeFilters: [{fieldKe
 Scope select gains «По значению поля»; `ScopeFilterEditor` (v1 single condition = scopeFilters[0]); select fields → option-value checkboxes (stored option VALUE, not label); lookup/relation → `ScopeFilterRelatedValues` loads related entity fields for the projected field's options; else comma-separated text. Mirror override seeding copies `scopeFilters` deep.
 
 **Why:** users abused resettable SOFT quick-filters (Эпоколь page) to see/edit other painters' orders; needed a per-role hard row boundary configurable on any field value.
-**How to apply:** any new own-scope enforcement site automatically gets filter scope for free — never special-case "filter" at call sites; keep SQL and in-memory checks in lockstep; prod translations in exports/scope-filter-translations.sql.
+**How to apply:** any new own-scope enforcement site automatically gets filter scope for free — never special-case "filter" at call sites; keep SQL and in-memory checks in lockstep.
 
 ## Page-local scope filters (pageId, added 2026-08)
 
