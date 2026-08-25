@@ -1,0 +1,4 @@
+ALTER TABLE "app_settings" ADD COLUMN "working_days" integer[] DEFAULT ARRAY[7,1,2,3,4]::integer[] NOT NULL;--> statement-breakpoint
+ALTER TABLE "app_settings" ADD COLUMN "first_day_of_week" integer DEFAULT 7 NOT NULL;--> statement-breakpoint
+ALTER TABLE "app_settings" ADD CONSTRAINT "app_settings_working_days_valid" CHECK (cardinality("app_settings"."working_days") between 1 and 7 and "app_settings"."working_days" <@ ARRAY[1,2,3,4,5,6,7]::integer[]);--> statement-breakpoint
+ALTER TABLE "app_settings" ADD CONSTRAINT "app_settings_first_day_of_week_valid" CHECK ("app_settings"."first_day_of_week" between 1 and 7);

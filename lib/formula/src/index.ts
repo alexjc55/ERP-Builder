@@ -14,7 +14,8 @@
  *   - ternary: cond ? a : b
  *   - parentheses
  *   - functions: if, round, floor, ceil, abs, min, max, sum, concat, upper,
- *     lower, len, coalesce, today, daysBetween, daysSince, daysUntil
+ *     lower, len, coalesce, today, daysBetween, workingDaysBetween, daysSince,
+ *     daysUntil
  *
  * `+` adds when both operands are numbers, otherwise concatenates as text.
  */
@@ -22,12 +23,30 @@
 export type FormulaValue = number | string | boolean | null;
 
 export const DEFAULT_FORMULA_TIME_ZONE = "Asia/Jerusalem";
+/** Default Israeli workweek, expressed as ISO weekdays (Monday = 1, Sunday = 7). */
+export const DEFAULT_WORKING_DAYS = [7, 1, 2, 3, 4] as const;
+
+export function isValidFormulaWorkingDays(workingDays: readonly number[]): boolean {
+  return (
+    workingDays.length >= 1 &&
+    workingDays.length <= 7 &&
+    workingDays.every(
+      (day, index) =>
+        Number.isInteger(day) &&
+        day >= 1 &&
+        day <= 7 &&
+        workingDays.indexOf(day) === index,
+    )
+  );
+}
 
 export interface FormulaEvaluationOptions {
   /** IANA time-zone identifier used by current-date helpers such as today(). */
   timeZone?: string;
   /** Optional clock override for deterministic tests and multi-formula batches. */
   now?: Date;
+  /** ISO weekdays considered working days (Monday = 1, Sunday = 7). */
+  workingDays?: readonly number[];
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -94,6 +113,44 @@ function daysBetweenValues(start: FormulaValue, end: FormulaValue): number | nul
   const startDay = toCalendarDay(start);
   const endDay = toCalendarDay(end);
   return startDay == null || endDay == null ? null : endDay - startDay;
+}
+
+function normalizedWorkingDays(options?: FormulaEvaluationOptions): ReadonlySet<number> {
+  const requested = options?.workingDays;
+  if (!Array.isArray(requested) || !isValidFormulaWorkingDays(requested)) {
+    return new Set(DEFAULT_WORKING_DAYS);
+  }
+  return new Set(requested);
+}
+
+function isoWeekday(calendarDay: number): number {
+  // 1970-01-01 (ordinal 0) was Thursday (ISO weekday 4).
+  return ((calendarDay + 3) % 7 + 7) % 7 + 1;
+}
+
+function workingDaysBetweenValues(
+  start: FormulaValue,
+  end: FormulaValue,
+  options?: FormulaEvaluationOptions,
+): number | null {
+  const startDay = toCalendarDay(start);
+  const endDay = toCalendarDay(end);
+  if (startDay == null || endDay == null) return null;
+  if (startDay === endDay) return 0;
+  if (endDay < startDay) {
+    const forward = workingDaysBetweenValues(end, start, options);
+    return forward == null ? null : -forward;
+  }
+
+  const workingDays = normalizedWorkingDays(options);
+  const span = endDay - startDay;
+  const wholeWeeks = Math.floor(span / 7);
+  let result = wholeWeeks * workingDays.size;
+  const remainder = span % 7;
+  for (let offset = 1; offset <= remainder; offset++) {
+    if (workingDays.has(isoWeekday(startDay + offset))) result++;
+  }
+  return result;
 }
 
 type Tok =
@@ -433,6 +490,8 @@ function evalNode(
           return todayInTimeZone(options);
         case "daysbetween":
           return daysBetweenValues(a[0] ?? null, a[1] ?? null);
+        case "workingdaysbetween":
+          return workingDaysBetweenValues(a[0] ?? null, a[1] ?? null, options);
         case "dayssince":
           return daysBetweenValues(a[0] ?? null, todayInTimeZone(options));
         case "daysuntil":

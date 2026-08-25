@@ -331,6 +331,18 @@ export interface AppSettings {
   defaultLanguage: AppSettingsDefaultLanguage;
   /** IANA time-zone identifier used by formula current-date helpers. */
   timeZone: string;
+  /**
+     * Working ISO weekdays (Monday=1 through Sunday=7) used by workingDaysBetween().
+     * @minItems 1
+     * @maxItems 7
+     */
+  workingDays: number[];
+  /**
+     * Organization-wide first ISO weekday of a calendar week.
+     * @minimum 1
+     * @maximum 7
+     */
+  firstDayOfWeek: number;
   /** Global visual style of the records table (cosmetic). */
   tableStyle: AppSettingsTableStyle;
   /**
@@ -379,6 +391,16 @@ export interface AppSettingsUpdate {
   defaultLanguage?: AppSettingsUpdateDefaultLanguage;
   /** @maxLength 100 */
   timeZone?: string;
+  /**
+     * @minItems 1
+     * @maxItems 7
+     */
+  workingDays?: number[];
+  /**
+     * @minimum 1
+     * @maximum 7
+     */
+  firstDayOfWeek?: number;
   tableStyle?: AppSettingsUpdateTableStyle;
   /**
      * @maxLength 9

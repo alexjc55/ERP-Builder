@@ -82,6 +82,14 @@ export const RequestUploadUrlResponse = zod.object({
 /**
  * @summary Get platform branding settings (any authenticated user)
  */
+export const getSettingsResponseWorkingDaysItemMax = 7;
+
+export const getSettingsResponseWorkingDaysMax = 7;
+
+export const getSettingsResponseFirstDayOfWeekMax = 7;
+
+
+
 export const GetSettingsResponse = zod.object({
   "appNameJson": zod.object({
   "ru": zod.string().optional(),
@@ -97,6 +105,8 @@ export const GetSettingsResponse = zod.object({
   "currencySymbol": zod.string().describe('Free-text currency symbol\/suffix used wherever monetary values are rendered.'),
   "defaultLanguage": zod.enum(['ru', 'en', 'he']).describe('Platform-wide default UI language for users who have not picked their own.'),
   "timeZone": zod.string().describe('IANA time-zone identifier used by formula current-date helpers.'),
+  "workingDays": zod.array(zod.number().min(1).max(getSettingsResponseWorkingDaysItemMax)).min(1).max(getSettingsResponseWorkingDaysMax).describe('Working ISO weekdays (Monday=1 through Sunday=7) used by workingDaysBetween().'),
+  "firstDayOfWeek": zod.number().min(1).max(getSettingsResponseFirstDayOfWeekMax).describe('Organization-wide first ISO weekday of a calendar week.'),
   "tableStyle": zod.enum(['plain', 'striped', 'striped_bold']).describe('Global visual style of the records table (cosmetic).'),
   "tableStripeColor": zod.string().nullable().describe('Optional custom hex colour for striped rows; null = built-in default.'),
   "tableHeaderColor": zod.string().nullable().describe('Optional custom hex colour for the table header row; null = built-in default.'),
@@ -111,6 +121,12 @@ export const GetSettingsResponse = zod.object({
 export const updateSettingsBodyCurrencySymbolMax = 8;
 
 export const updateSettingsBodyTimeZoneMax = 100;
+
+export const updateSettingsBodyWorkingDaysItemMax = 7;
+
+export const updateSettingsBodyWorkingDaysMax = 7;
+
+export const updateSettingsBodyFirstDayOfWeekMax = 7;
 
 export const updateSettingsBodyTableStripeColorMax = 9;
 
@@ -135,11 +151,21 @@ export const UpdateSettingsBody = zod.object({
   "currencySymbol": zod.string().max(updateSettingsBodyCurrencySymbolMax).optional(),
   "defaultLanguage": zod.enum(['ru', 'en', 'he']).optional(),
   "timeZone": zod.string().max(updateSettingsBodyTimeZoneMax).optional(),
+  "workingDays": zod.array(zod.number().min(1).max(updateSettingsBodyWorkingDaysItemMax)).min(1).max(updateSettingsBodyWorkingDaysMax).optional(),
+  "firstDayOfWeek": zod.number().min(1).max(updateSettingsBodyFirstDayOfWeekMax).optional(),
   "tableStyle": zod.enum(['plain', 'striped', 'striped_bold']).optional(),
   "tableStripeColor": zod.string().max(updateSettingsBodyTableStripeColorMax).nullish(),
   "tableHeaderColor": zod.string().max(updateSettingsBodyTableHeaderColorMax).nullish(),
   "tableBorderColor": zod.string().max(updateSettingsBodyTableBorderColorMax).nullish()
 })
+
+export const updateSettingsResponseWorkingDaysItemMax = 7;
+
+export const updateSettingsResponseWorkingDaysMax = 7;
+
+export const updateSettingsResponseFirstDayOfWeekMax = 7;
+
+
 
 export const UpdateSettingsResponse = zod.object({
   "appNameJson": zod.object({
@@ -156,6 +182,8 @@ export const UpdateSettingsResponse = zod.object({
   "currencySymbol": zod.string().describe('Free-text currency symbol\/suffix used wherever monetary values are rendered.'),
   "defaultLanguage": zod.enum(['ru', 'en', 'he']).describe('Platform-wide default UI language for users who have not picked their own.'),
   "timeZone": zod.string().describe('IANA time-zone identifier used by formula current-date helpers.'),
+  "workingDays": zod.array(zod.number().min(1).max(updateSettingsResponseWorkingDaysItemMax)).min(1).max(updateSettingsResponseWorkingDaysMax).describe('Working ISO weekdays (Monday=1 through Sunday=7) used by workingDaysBetween().'),
+  "firstDayOfWeek": zod.number().min(1).max(updateSettingsResponseFirstDayOfWeekMax).describe('Organization-wide first ISO weekday of a calendar week.'),
   "tableStyle": zod.enum(['plain', 'striped', 'striped_bold']).describe('Global visual style of the records table (cosmetic).'),
   "tableStripeColor": zod.string().nullable().describe('Optional custom hex colour for striped rows; null = built-in default.'),
   "tableHeaderColor": zod.string().nullable().describe('Optional custom hex colour for the table header row; null = built-in default.'),

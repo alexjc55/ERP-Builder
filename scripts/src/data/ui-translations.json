@@ -1674,6 +1674,12 @@
     "he": "מספר הימים הקלנדריים בין שני תאריכים."
   },
   {
+    "key": "fields.fnWorkingDaysBetween",
+    "ru": "Количество рабочих дней между двумя датами по настройкам сайта.",
+    "en": "The number of working days between two dates using the site settings.",
+    "he": "מספר ימי העבודה בין שני תאריכים לפי הגדרות האתר."
+  },
+  {
     "key": "fields.fnDaysSince",
     "ru": "Количество календарных дней от указанной даты до сегодня.",
     "en": "The number of calendar days from the specified date until today.",
@@ -1762,6 +1768,12 @@
     "ru": "daysBetween(дата_начала, дата_окончания)",
     "en": "daysBetween(start_date, end_date)",
     "he": "daysBetween(תאריך_התחלה, תאריך_סיום)"
+  },
+  {
+    "key": "fields.fnSigWorkingDaysBetween",
+    "ru": "workingDaysBetween(дата_начала, дата_окончания)",
+    "en": "workingDaysBetween(start_date, end_date)",
+    "he": "workingDaysBetween(תאריך_התחלה, תאריך_סיום)"
   },
   {
     "key": "fields.fnSigDaysSince",
@@ -2047,9 +2059,9 @@
   },
   {
     "key": "fields.formulaHint",
-    "ru": "Ссылайтесь на другие поля этой записи через {ключ_поля}. Операторы: + - * / %, сравнения, && || !, тернарный ?:. Функции: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce, today, daysBetween, daysSince, daysUntil. Вычисляется при показе и не хранится.",
-    "en": "Reference other fields of this record via {field_key}. Operators: + - * / %, comparisons, && || !, ternary ?:. Functions: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce, today, daysBetween, daysSince, daysUntil. Computed on display and not stored.",
-    "he": "הפנו לשדות אחרים של רשומה זו באמצעות {field_key}. אופרטורים: + - * / %, השוואות, && || !, תנאי ?:. פונקציות: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce, today, daysBetween, daysSince, daysUntil. מחושב בעת התצוגה ואינו נשמר."
+    "ru": "Ссылайтесь на другие поля этой записи через {ключ_поля}. Операторы: + - * / %, сравнения, && || !, тернарный ?:. Функции: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce, today, daysBetween, workingDaysBetween, daysSince, daysUntil. Вычисляется при показе и не хранится.",
+    "en": "Reference other fields of this record via {field_key}. Operators: + - * / %, comparisons, && || !, ternary ?:. Functions: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce, today, daysBetween, workingDaysBetween, daysSince, daysUntil. Computed on display and not stored.",
+    "he": "הפנו לשדות אחרים של רשומה זו באמצעות {field_key}. אופרטורים: + - * / %, השוואות, && || !, תנאי ?:. פונקציות: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce, today, daysBetween, workingDaysBetween, daysSince, daysUntil. מחושב בעת התצוגה ואינו נשמר."
   },
   {
     "key": "fields.formulaInsertField",
@@ -5752,6 +5764,78 @@
     "ru": "Используется функциями today(), daysSince() и daysUntil().",
     "en": "Used by today(), daysSince(), and daysUntil().",
     "he": "משמש את הפונקציות today(), daysSince() ו-daysUntil()."
+  },
+  {
+    "key": "settings.workingDays",
+    "ru": "Рабочие дни",
+    "en": "Working days",
+    "he": "ימי עבודה"
+  },
+  {
+    "key": "settings.workingDaysHint",
+    "ru": "Используются функцией workingDaysBetween() при подсчёте сроков.",
+    "en": "Used by workingDaysBetween() when calculating date ranges.",
+    "he": "משמשים את workingDaysBetween() בחישוב טווחי תאריכים."
+  },
+  {
+    "key": "settings.workingDaysRequired",
+    "ru": "Выберите хотя бы один рабочий день",
+    "en": "Select at least one working day",
+    "he": "יש לבחור לפחות יום עבודה אחד"
+  },
+  {
+    "key": "settings.firstDayOfWeek",
+    "ru": "Первый день недели",
+    "en": "First day of week",
+    "he": "היום הראשון בשבוע"
+  },
+  {
+    "key": "settings.firstDayOfWeekHint",
+    "ru": "Сохраняется как общая настройка для календарных представлений.",
+    "en": "Saved as the shared setting for calendar views.",
+    "he": "נשמר כהגדרה משותפת לתצוגות לוח שנה."
+  },
+  {
+    "key": "settings.weekdaySunday",
+    "ru": "Воскресенье",
+    "en": "Sunday",
+    "he": "יום ראשון"
+  },
+  {
+    "key": "settings.weekdayMonday",
+    "ru": "Понедельник",
+    "en": "Monday",
+    "he": "יום שני"
+  },
+  {
+    "key": "settings.weekdayTuesday",
+    "ru": "Вторник",
+    "en": "Tuesday",
+    "he": "יום שלישי"
+  },
+  {
+    "key": "settings.weekdayWednesday",
+    "ru": "Среда",
+    "en": "Wednesday",
+    "he": "יום רביעי"
+  },
+  {
+    "key": "settings.weekdayThursday",
+    "ru": "Четверг",
+    "en": "Thursday",
+    "he": "יום חמישי"
+  },
+  {
+    "key": "settings.weekdayFriday",
+    "ru": "Пятница",
+    "en": "Friday",
+    "he": "יום שישי"
+  },
+  {
+    "key": "settings.weekdaySaturday",
+    "ru": "Суббота",
+    "en": "Saturday",
+    "he": "שבת"
   },
   {
     "key": "settings.currentPassword",

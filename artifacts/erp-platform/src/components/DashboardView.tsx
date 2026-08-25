@@ -122,7 +122,7 @@ import {
 import { IconPicker } from "@/components/IconPicker";
 import { getIconComponent } from "@/lib/icons";
 import { cn } from "@/lib/utils";
-import { DEFAULT_FORMULA_TIME_ZONE, evaluateFormula, type FormulaEvaluationOptions } from "@workspace/formula";
+import { DEFAULT_FORMULA_TIME_ZONE, DEFAULT_WORKING_DAYS, evaluateFormula, type FormulaEvaluationOptions } from "@workspace/formula";
 import DOMPurify from "dompurify";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -1289,8 +1289,11 @@ export default function DashboardView({ pageId, embedded = false }: { pageId: nu
   const { data: settings } = useGetSettings({ query: { queryKey: getGetSettingsQueryKey() } });
   const currencySymbol = settings?.currencySymbol || "₽";
   const formulaOptions = useMemo<FormulaEvaluationOptions>(
-    () => ({ timeZone: settings?.timeZone ?? DEFAULT_FORMULA_TIME_ZONE }),
-    [settings?.timeZone],
+    () => ({
+      timeZone: settings?.timeZone ?? DEFAULT_FORMULA_TIME_ZONE,
+      workingDays: settings?.workingDays ?? DEFAULT_WORKING_DAYS,
+    }),
+    [settings?.timeZone, settings?.workingDays],
   );
 
   const [, setLocation] = useLocation();

@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, appSettingsTable, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable, pageFieldsTable, pageRecordValuesTable, pagesTable, relationsTable, recordLinksTable } from "@workspace/db";
 import { eq, asc, desc, and, or, sql, inArray, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { buildFormulaScope, evaluateFormula, normalizeDecimals, cleanFpNoise, DEFAULT_FORMULA_TIME_ZONE, type FormulaEvaluationOptions, type FormulaFieldDef } from "@workspace/formula";
+import { buildFormulaScope, evaluateFormula, normalizeDecimals, cleanFpNoise, DEFAULT_FORMULA_TIME_ZONE, DEFAULT_WORKING_DAYS, type FormulaEvaluationOptions, type FormulaFieldDef } from "@workspace/formula";
 import type { Request } from "express";
 import { requireAuth } from "../middlewares/auth";
 import {
@@ -99,14 +99,20 @@ import {
 
 const router: IRouter = Router();
 
-/** Load the app's formula time zone once for a request-wide evaluation batch. */
+/** Load the app's calendar settings once for a request-wide evaluation batch. */
 async function loadFormulaOptions(): Promise<FormulaEvaluationOptions> {
   const [settings] = await db
-    .select({ timeZone: sql<string>`time_zone` })
+    .select({
+      timeZone: appSettingsTable.timeZone,
+      workingDays: appSettingsTable.workingDays,
+    })
     .from(appSettingsTable)
     .where(eq(appSettingsTable.id, 1))
     .limit(1);
-  return { timeZone: settings?.timeZone ?? DEFAULT_FORMULA_TIME_ZONE };
+  return {
+    timeZone: settings?.timeZone ?? DEFAULT_FORMULA_TIME_ZONE,
+    workingDays: settings?.workingDays ?? DEFAULT_WORKING_DAYS,
+  };
 }
 
 // Page-local field types whose value lives in page_record_values and can be

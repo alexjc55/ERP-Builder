@@ -125,6 +125,14 @@ const FORMULA_FUNCS: {
     descFallback: "Количество календарных дней между двумя датами.",
   },
   {
+    name: "workingDaysBetween",
+    sig: "workingDaysBetween(дата_начала, дата_окончания)",
+    sigKey: "fields.fnSigWorkingDaysBetween",
+    example: "workingDaysBetween({project_start}, {project_end})",
+    descKey: "fields.fnWorkingDaysBetween",
+    descFallback: "Количество рабочих дней между двумя датами по настройкам сайта.",
+  },
+  {
     name: "daysSince",
     sig: "daysSince(дата_начала)",
     sigKey: "fields.fnSigDaysSince",
@@ -252,7 +260,7 @@ export function FormulaEditor({
         {hint ??
           t(
             "fields.formulaHint",
-            "Ссылайтесь на другие поля этой записи через {ключ_поля}. Операторы: + - * / %, сравнения, && || !, тернарный ?:. Функции: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce, today, daysBetween, daysSince, daysUntil. Вычисляется при показе и не хранится.",
+            "Ссылайтесь на другие поля этой записи через {ключ_поля}. Операторы: + - * / %, сравнения, && || !, тернарный ?:. Функции: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce, today, daysBetween, workingDaysBetween, daysSince, daysUntil. Вычисляется при показе и не хранится.",
           )}
       </p>
     </div>

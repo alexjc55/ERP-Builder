@@ -10,6 +10,10 @@ import {
   DEFAULT_FORMULA_TIME_ZONE,
   isValidFormulaTimeZone,
 } from "@workspace/formula";
+import {
+  normalizeAppCalendarSettings,
+  validateAppCalendarSettingsUpdate,
+} from "../lib/app-settings-validation";
 
 const router: IRouter = Router();
 
@@ -43,6 +47,7 @@ async function getOrCreateSettings() {
  */
 router.get("/settings", requireAuth, async (_req, res): Promise<void> => {
   const row = await getOrCreateSettings();
+  const calendarSettings = normalizeAppCalendarSettings(row);
   res.json({
     appNameJson: row.appNameJson ?? {},
     subtitleJson: row.subtitleJson ?? {},
@@ -50,6 +55,7 @@ router.get("/settings", requireAuth, async (_req, res): Promise<void> => {
     currencySymbol: row.currencySymbol ?? "₽",
     defaultLanguage: row.defaultLanguage ?? "ru",
     timeZone: row.timeZone ?? DEFAULT_FORMULA_TIME_ZONE,
+    ...calendarSettings,
     tableStyle: row.tableStyle ?? "plain",
     tableStripeColor: row.tableStripeColor ?? null,
     tableHeaderColor: row.tableHeaderColor ?? null,
@@ -127,6 +133,17 @@ router.put(
       }
       updates.timeZone = parsed.data.timeZone;
     }
+    const calendarError = validateAppCalendarSettingsUpdate(parsed.data);
+    if (calendarError) {
+      res.status(400).json({ error: calendarError });
+      return;
+    }
+    if (parsed.data.workingDays !== undefined) {
+      updates.workingDays = parsed.data.workingDays;
+    }
+    if (parsed.data.firstDayOfWeek !== undefined) {
+      updates.firstDayOfWeek = parsed.data.firstDayOfWeek;
+    }
     if (parsed.data.tableStyle !== undefined) updates.tableStyle = parsed.data.tableStyle;
     try {
       if (parsed.data.tableStripeColor !== undefined)
@@ -153,6 +170,7 @@ router.put(
       .select()
       .from(appSettingsTable)
       .where(eq(appSettingsTable.id, SETTINGS_ID));
+    const calendarSettings = normalizeAppCalendarSettings(row);
 
     res.json({
       appNameJson: row.appNameJson ?? {},
@@ -161,6 +179,7 @@ router.put(
       currencySymbol: row.currencySymbol ?? "₽",
       defaultLanguage: row.defaultLanguage ?? "ru",
       timeZone: row.timeZone ?? DEFAULT_FORMULA_TIME_ZONE,
+      ...calendarSettings,
       tableStyle: row.tableStyle ?? "plain",
       tableStripeColor: row.tableStripeColor ?? null,
       tableHeaderColor: row.tableHeaderColor ?? null,

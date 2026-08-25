@@ -19,6 +19,16 @@ export interface AppSettingsUpdate {
   defaultLanguage?: AppSettingsUpdateDefaultLanguage;
   /** @maxLength 100 */
   timeZone?: string;
+  /**
+     * @minItems 1
+     * @maxItems 7
+     */
+  workingDays?: number[];
+  /**
+     * @minimum 1
+     * @maximum 7
+     */
+  firstDayOfWeek?: number;
   tableStyle?: AppSettingsUpdateTableStyle;
   /**
      * @maxLength 9

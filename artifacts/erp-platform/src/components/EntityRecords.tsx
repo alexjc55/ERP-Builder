@@ -161,6 +161,7 @@ import { CreateUserDialog } from "@/components/CreateUserDialog";
 import { PageFieldConfigDialog } from "@/components/PageFieldConfigDialog";
 import {
   DEFAULT_FORMULA_TIME_ZONE,
+  DEFAULT_WORKING_DAYS,
   formatFormulaResult,
   evaluateFormula,
   buildFormulaScope,
@@ -1789,8 +1790,11 @@ export function EntityRecords({
   // Global records-table display style (cosmetic): plain | striped | striped_bold.
   const { data: appSettings } = useGetSettings();
   const formulaOptions = useMemo<FormulaEvaluationOptions>(
-    () => ({ timeZone: appSettings?.timeZone ?? DEFAULT_FORMULA_TIME_ZONE }),
-    [appSettings?.timeZone],
+    () => ({
+      timeZone: appSettings?.timeZone ?? DEFAULT_FORMULA_TIME_ZONE,
+      workingDays: appSettings?.workingDays ?? DEFAULT_WORKING_DAYS,
+    }),
+    [appSettings?.timeZone, appSettings?.workingDays],
   );
   const tableStyle = appSettings?.tableStyle ?? "plain";
   const stripedRows = tableStyle === "striped" || tableStyle === "striped_bold";
@@ -8685,8 +8689,12 @@ function RecordFormBody({
   const { fieldAccess, canRecord, user: formUser } = useAuth();
   const { data: formSettings } = useGetSettings();
   const formulaOptions = useMemo<FormulaEvaluationOptions>(
-    () => providedFormulaOptions ?? { timeZone: formSettings?.timeZone ?? DEFAULT_FORMULA_TIME_ZONE },
-    [providedFormulaOptions, formSettings?.timeZone],
+    () =>
+      providedFormulaOptions ?? {
+        timeZone: formSettings?.timeZone ?? DEFAULT_FORMULA_TIME_ZONE,
+        workingDays: formSettings?.workingDays ?? DEFAULT_WORKING_DAYS,
+      },
+    [providedFormulaOptions, formSettings?.timeZone, formSettings?.workingDays],
   );
   // Per-role display-only restriction (applies even to superAdmin, mirroring the
   // display-only "hidden" rule): when EVERY assigned role explicitly limits the

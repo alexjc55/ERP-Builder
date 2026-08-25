@@ -65,6 +65,7 @@ import {
 import {
   buildFormulaScope,
   DEFAULT_FORMULA_TIME_ZONE,
+  DEFAULT_WORKING_DAYS,
   type FormulaEvaluationOptions,
   type FormulaFieldDef,
 } from "@workspace/formula";
@@ -1379,15 +1380,19 @@ async function runOne(
   try {
     const [record] = await db.select().from(entityRecordsTable).where(eq(entityRecordsTable.id, recordId)).limit(1);
     if (!record) return;
-    // One timezone lookup per automation run keeps all formula mappings in this
-    // execution on the same application-calendar boundary.
+    // One calendar-settings lookup per automation run keeps every formula
+    // mapping in this execution on the same application boundary.
     const [appSettings] = await db
-      .select({ timeZone: sql<string>`time_zone` })
+      .select({
+        timeZone: appSettingsTable.timeZone,
+        workingDays: appSettingsTable.workingDays,
+      })
       .from(appSettingsTable)
       .where(eq(appSettingsTable.id, 1))
       .limit(1);
     const formulaOptions: FormulaEvaluationOptions = {
       timeZone: appSettings?.timeZone ?? DEFAULT_FORMULA_TIME_ZONE,
+      workingDays: appSettings?.workingDays ?? DEFAULT_WORKING_DAYS,
     };
     const fields = await loadActiveFields(entityId);
     const fieldByKey = new Map(fields.map((f) => [f.fieldKey, f]));

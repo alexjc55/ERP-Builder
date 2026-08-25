@@ -713,7 +713,14 @@ importers:
         specifier: ^0.31.10
         version: 0.31.10
 
-  lib/formula: {}
+  lib/formula:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+      tsx:
+        specifier: 'catalog:'
+        version: 4.21.0
 
   scripts:
     dependencies:

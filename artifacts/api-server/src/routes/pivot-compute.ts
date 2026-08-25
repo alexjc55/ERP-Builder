@@ -21,6 +21,7 @@ import {
 import { eq, sql, inArray, type SQL } from "drizzle-orm";
 import {
   DEFAULT_FORMULA_TIME_ZONE,
+  DEFAULT_WORKING_DAYS,
   evaluateFormula,
   type FormulaEvaluationOptions,
 } from "@workspace/formula";
@@ -159,17 +160,21 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
   const { entityId, pivot, entityFields, relationMeta, pageId, where } = input;
   // Non-records callers (dashboard/pivot pages) rely on this shared core to load
   // the singleton setting once. Records routes pass their request-scoped context.
+  const [appSettings] = input.formulaOptions
+    ? [undefined]
+    : await db
+        .select({
+          timeZone: appSettingsTable.timeZone,
+          workingDays: appSettingsTable.workingDays,
+        })
+        .from(appSettingsTable)
+        .where(eq(appSettingsTable.id, 1))
+        .limit(1);
   const formulaOptions =
     input.formulaOptions ??
     {
-      timeZone:
-        (
-          await db
-            .select({ timeZone: sql<string>`time_zone` })
-            .from(appSettingsTable)
-            .where(eq(appSettingsTable.id, 1))
-            .limit(1)
-        )[0]?.timeZone ?? DEFAULT_FORMULA_TIME_ZONE,
+      timeZone: appSettings?.timeZone ?? DEFAULT_FORMULA_TIME_ZONE,
+      workingDays: appSettings?.workingDays ?? DEFAULT_WORKING_DAYS,
     };
   const entFieldByKey = new Map(entityFields.map((f) => [f.fieldKey, f]));
   const pageFieldByKey = new Map((input.pageFields ?? []).map((pf) => [pf.fieldKey, pf] as const));

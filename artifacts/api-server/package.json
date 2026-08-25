@@ -8,6 +8,7 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:settings": "tsx --test src/lib/app-settings-validation.test.ts",
     "smoke:concurrency": "pnpm --filter @workspace/scripts exec tsx ../artifacts/api-server/src/concurrency-smoke.ts"
   },
   "dependencies": {

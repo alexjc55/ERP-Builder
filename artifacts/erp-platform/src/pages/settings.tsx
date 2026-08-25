@@ -31,9 +31,10 @@ import {
 } from "@/components/ui/select";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { ColorPickerControl } from "@/components/ColorPickerControl";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Building2, User, Lock, Image as ImageIcon, Loader2, Upload, Trash2, FolderTree } from "lucide-react";
-import { DEFAULT_FORMULA_TIME_ZONE } from "@workspace/formula";
+import { DEFAULT_FORMULA_TIME_ZONE, DEFAULT_WORKING_DAYS } from "@workspace/formula";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 const intlWithTimeZones = Intl as typeof Intl & {
@@ -51,6 +52,15 @@ const TIME_ZONE_OPTIONS = Array.from(
     ]),
   ]),
 ).sort((a, b) => a.localeCompare(b));
+const WEEKDAYS = [
+  { iso: 7, key: "settings.weekdaySunday", fallback: "Воскресенье" },
+  { iso: 1, key: "settings.weekdayMonday", fallback: "Понедельник" },
+  { iso: 2, key: "settings.weekdayTuesday", fallback: "Вторник" },
+  { iso: 3, key: "settings.weekdayWednesday", fallback: "Среда" },
+  { iso: 4, key: "settings.weekdayThursday", fallback: "Четверг" },
+  { iso: 5, key: "settings.weekdayFriday", fallback: "Пятница" },
+  { iso: 6, key: "settings.weekdaySaturday", fallback: "Суббота" },
+] as const;
 
 export default function SettingsPage() {
   const { user, isSuperAdmin, canAdmin } = useAuth();
@@ -122,6 +132,8 @@ export default function SettingsPage() {
   const [currencySymbol, setCurrencySymbol] = useState<string>("₽");
   const [defaultLanguage, setDefaultLanguage] = useState<Lang>("ru");
   const [timeZone, setTimeZone] = useState(DEFAULT_FORMULA_TIME_ZONE);
+  const [workingDays, setWorkingDays] = useState<number[]>([...DEFAULT_WORKING_DAYS]);
+  const [firstDayOfWeek, setFirstDayOfWeek] = useState(7);
   const [tableStyle, setTableStyle] = useState<string>("plain");
   const [tableStripeColor, setTableStripeColor] = useState<string>("");
   const [tableHeaderColor, setTableHeaderColor] = useState<string>("");
@@ -141,6 +153,8 @@ export default function SettingsPage() {
     setCurrencySymbol(settings.currencySymbol ?? "₽");
     setDefaultLanguage((settings.defaultLanguage as Lang) ?? "ru");
     setTimeZone(settings.timeZone ?? DEFAULT_FORMULA_TIME_ZONE);
+    setWorkingDays(settings.workingDays?.length ? [...settings.workingDays] : [...DEFAULT_WORKING_DAYS]);
+    setFirstDayOfWeek(settings.firstDayOfWeek ?? 7);
     setTableStyle(settings.tableStyle ?? "plain");
     setTableStripeColor(settings.tableStripeColor ?? "");
     setTableHeaderColor(settings.tableHeaderColor ?? "");
@@ -179,6 +193,13 @@ export default function SettingsPage() {
   };
 
   const saveBranding = async () => {
+    if (workingDays.length === 0) {
+      toast({
+        title: t("settings.workingDaysRequired", "Выберите хотя бы один рабочий день"),
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       await updateSettings.mutateAsync({
         data: {
@@ -188,6 +209,8 @@ export default function SettingsPage() {
           currencySymbol: currencySymbol.trim() || "₽",
           defaultLanguage,
           timeZone,
+          workingDays,
+          firstDayOfWeek,
           tableStyle: tableStyle as "plain" | "striped" | "striped_bold",
           tableStripeColor: tableStripeColor || null,
           tableHeaderColor: tableHeaderColor || null,
@@ -383,6 +406,73 @@ export default function SettingsPage() {
                   "Используется функциями today(), daysSince() и daysUntil().",
                 )}
               </p>
+            </div>
+            <div className="space-y-4 rounded-md border border-slate-200 bg-slate-50/50 p-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-slate-700">
+                  {t("settings.workingDays", "Рабочие дни")}
+                </Label>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {WEEKDAYS.map((day) => {
+                    const checked = workingDays.includes(day.iso);
+                    const isLastSelected = checked && workingDays.length === 1;
+                    return (
+                      <label
+                        key={day.iso}
+                        className="flex cursor-pointer items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+                      >
+                        <Checkbox
+                          checked={checked}
+                          disabled={isLastSelected}
+                          onCheckedChange={(nextChecked) => {
+                            setWorkingDays((current) => {
+                              if (nextChecked === true) {
+                                return current.includes(day.iso) ? current : [...current, day.iso];
+                              }
+                              return current.length > 1
+                                ? current.filter((value) => value !== day.iso)
+                                : current;
+                            });
+                          }}
+                        />
+                        <span>{t(day.key, day.fallback)}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-slate-400">
+                  {t(
+                    "settings.workingDaysHint",
+                    "Используются функцией workingDaysBetween() при подсчёте сроков.",
+                  )}
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium text-slate-700">
+                  {t("settings.firstDayOfWeek", "Первый день недели")}
+                </Label>
+                <Select
+                  value={String(firstDayOfWeek)}
+                  onValueChange={(value) => setFirstDayOfWeek(Number(value))}
+                >
+                  <SelectTrigger className="max-w-[260px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {WEEKDAYS.map((day) => (
+                      <SelectItem key={day.iso} value={String(day.iso)}>
+                        {t(day.key, day.fallback)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-slate-400">
+                  {t(
+                    "settings.firstDayOfWeekHint",
+                    "Сохраняется как общая настройка для календарных представлений.",
+                  )}
+                </p>
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label className="text-sm font-medium text-slate-700">{t("settings.tableStyle", "Стиль таблицы")}</Label>
