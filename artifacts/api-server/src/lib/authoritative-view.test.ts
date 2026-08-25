@@ -159,3 +159,18 @@ test("an internal authoritative OR remains grouped under top-level AND viewer fi
     /^\(\(hard_one or hard_two\) and \(viewer_role and viewer_scope\)\)$/,
   );
 });
+
+test("page-local empty availability stays inside the authoritative view boundary", () => {
+  const hardNotEmpty = sql`page_value IS NOT NULL AND page_value <> ''`;
+  const combined = combineAuthoritativeAndViewerWhere(hardNotEmpty, [
+    sql`entity_id = 7`,
+    sql`(page_value IS NULL OR page_value = '')`,
+  ]);
+  assert.ok(combined);
+
+  const query = compile(combined);
+  assert.match(
+    query.sql.replace(/\s+/g, " ").trim(),
+    /^\(page_value is not null and page_value <> '' and entity_id = 7 and \(page_value is null or page_value = ''\)\)$/,
+  );
+});

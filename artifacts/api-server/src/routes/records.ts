@@ -2557,13 +2557,18 @@ router.post(
     let values = rows.map((r) => r.v).filter((v): v is string => v != null && v !== "");
     // Offer "(empty)" when some visible record has no stored page value for the
     // field (no page_record_values row at all, or NULL/'' under the key). Uses
-    // the same correlated subquery as the page-local `in` filter so semantics match.
+    // the same correlated subquery as the page-local `in` filter so semantics
+    // match. The selected view's hard boundary stays applied even when probing
+    // the target field itself; only caller-supplied ad-hoc target filters self-exclude.
     if (!pfValueSearch) {
       const pfExpr = pageLocalValueExpr(valPageId, valKey);
       const [emptyRow] = await db
         .select({ one: sql<number>`1` })
         .from(entityRecordsTable)
-        .where(and(...pfBoundaryClauses, sql`(${pfExpr} IS NULL OR ${pfExpr} = '')`)!)
+        .where(combineAuthoritativeAndViewerWhere(
+          selectedView.hardWhere,
+          [...pfBoundaryClauses, sql`(${pfExpr} IS NULL OR ${pfExpr} = '')`],
+        )!)
         .limit(1);
       if (emptyRow) values = [EMPTY_FILTER_VALUE, ...values];
     }

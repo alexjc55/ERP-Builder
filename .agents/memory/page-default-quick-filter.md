@@ -19,7 +19,10 @@ The records `filter-values` endpoint separates three sources:
 
 **How to apply:** never send a named view's fixed filters in caller arrays; send
 `viewId`. Only no-view entity defaults use `baseFilters`. The endpoint re-applies
-exact page access plus field/row/status/archive boundaries independently.
+exact page access plus field/row/status/archive boundaries independently. Every
+distinct-values branch, including separate probes that decide whether to offer
+`(Пусто)`, must AND the authoritative `hardWhere`; only caller-supplied ad-hoc
+filters for the target field self-exclude.
 
 ## Per-page SOFT default quick-filter
 
