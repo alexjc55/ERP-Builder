@@ -21,6 +21,14 @@ Every place that gated something on a *single* role must consider the **full rol
 - `roleId` is kept in **responses** (JWT/display/impersonation/guest still key off the primary) but is deprecated/ignored on create input. On `UserUpdate` it stays an optional alias because `roleIds` is optional there (a roleId-only update changes just the primary).
 - **How to apply:** the admin UI sends `roleIds` with the chosen primary placed first (`[...new Set([primary, ...others])]`). After editing the spec, regenerate Orval/Zod.
 
+## Start-page ownership
+
+Only the primary role controls `homePageId`. Additional roles can add page/dashboard access but must never redirect the user to their own configured start page. An unset primary `homePageId` means the dashboard remains the start page even when an additional role has one.
+
+**Why:** start page is a user-navigation preference, not an additive permission. Letting the first non-null additional role win redirected primary administrators to a restricted role's work page.
+
+**How to apply:** normalize every role set primary-first, then read merged `homePageId` from index 0 only. Keep dashboard/page access itself most-permissive across all roles.
+
 ## Per-role field-access gate (perRole map)
 
 Merged permissions carry a RUNTIME-ONLY `perRole` map (roleId → that role's RolePermissions), attached by `loadMergedPermissions` when a user has >1 role; never persisted. `resolveFieldAccess` and `mostPermissiveFieldPerm` (page fields — pass perms+entityId+mirrorPageId at every call site) resolve field access PER ROLE: only roles that grant `view` on the entity (or its `mirror:<pageId>` override) contribute their explicit entry or their OWN inherited level (create||update⇒edit).

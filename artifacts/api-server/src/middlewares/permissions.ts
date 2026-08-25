@@ -122,14 +122,11 @@ export function mergePermissions(list: RolePermissions[]): RolePermissions {
   // Dashboard access: sparse, absent = allowed. Union most-permissive — any
   // role that does NOT explicitly deny keeps it visible.
   if (list.every((p) => p.dashboard === false)) merged.dashboard = false;
-  // Start page: first configured one wins; callers pass the primary role first,
-  // so the primary role's choice takes precedence.
-  for (const p of list) {
-    if (p.homePageId != null) {
-      merged.homePageId = p.homePageId;
-      break;
-    }
-  }
+  // Start page is a preference of the PRIMARY role, not an additive permission.
+  // Callers pass the primary role first. A secondary role must not redirect a
+  // primary administrator away from the dashboard merely because that
+  // secondary role has its own home page configured.
+  if (list[0]?.homePageId != null) merged.homePageId = list[0].homePageId;
   const keys = new Set<string>();
   for (const p of list) for (const k of Object.keys(p.records ?? {})) keys.add(k);
   for (const key of keys) {
@@ -195,6 +192,20 @@ export async function loadUserRoleIds(userId: number): Promise<number[]> {
 }
 
 /**
+ * Keep the primary role first while de-duplicating the full role set.
+ *
+ * Most permissions are order-independent unions, but homePageId intentionally
+ * uses the first configured role. SQL join-table reads have no stable ordering,
+ * so every user-role entry point must normalize the primary role to index 0.
+ */
+export function primaryFirstRoleIds(roleIds: number[], primaryRoleId: number): number[] {
+  return [
+    primaryRoleId,
+    ...new Set(roleIds.filter((id) => id !== primaryRoleId)),
+  ];
+}
+
+/**
  * Effective merged permissions for a user, by id. Loads ALL of the user's roles
  * (always including the primary `roleId` as a safety net for any backfill gap)
  * and merges them most-permissively. Used by auth/guest flows that build the
@@ -214,10 +225,7 @@ export async function loadRoleContext(
   userId: number,
   primaryRoleId: number,
 ): Promise<{ roleIds: number[]; permissions: RolePermissions }> {
-  let ids = await loadUserRoleIds(userId);
-  if (!ids.includes(primaryRoleId)) ids = [primaryRoleId, ...ids];
-  if (ids.length === 0) ids = [primaryRoleId];
-  ids = [...new Set(ids)];
+  const ids = primaryFirstRoleIds(await loadUserRoleIds(userId), primaryRoleId);
   return { roleIds: ids, permissions: await loadMergedPermissions(ids) };
 }
 
@@ -229,11 +237,11 @@ export async function loadRoleContext(
 export async function getUserRoleIds(req: Request): Promise<number[]> {
   if (req._roleIds) return req._roleIds;
   if (!req.user) return [];
-  let ids = await loadUserRoleIds(req.user.userId);
-  if (!ids.includes(req.user.roleId)) ids = [req.user.roleId, ...ids];
-  if (ids.length === 0) ids = [req.user.roleId];
-  req._roleIds = ids;
-  return ids;
+  req._roleIds = primaryFirstRoleIds(
+    await loadUserRoleIds(req.user.userId),
+    req.user.roleId,
+  );
+  return req._roleIds;
 }
 
 /**
