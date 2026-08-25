@@ -50,10 +50,14 @@ If `.env` changed, source it before restarting: `set -a; source .env; set +a;` t
 **How to apply:** for each future schema change, generate the normal Drizzle migration. Before deploying it, verify production's migration ledger and schema; if a manual SQL handover is explicitly needed, agree on one temporary path and remove the file after production is verified.
 
 ## Build/install quirks on that server
-- npmjs registry is blocked → registry permanently set to npmmirror.com; fetch-timeout 600000, network-concurrency 3, child-concurrency 1. Lockfile tarball URLs pinned to npmjs may need sed-patching on the server (happened with npm-run-path@6.0.0).
-- esbuild build script must be allowed (`allowBuilds` in pnpm-workspace.yaml) + `pnpm -r rebuild esbuild`; the esbuild "bin check" ELF SyntaxError is cosmetic.
+- Do not rely on the server's global npmmirror registry: pnpm 11 checks explicit lockfile tarball hosts against the active registry and rejects a mismatch. Keep one project-owned registry compatible with the committed frozen lockfile; npmjs connectivity was confirmed on this server. Never rewrite or sed-patch the lockfile on production.
+- pnpm 11 ignores legacy `onlyBuiltDependencies`; approved scripts must be committed as `allowBuilds` (at least `esbuild`) before deployment. A production-only `pnpm approve-builds` dirties `pnpm-workspace.yaml`; restoring it before later pnpm commands makes the dependency status check rerun installation and fail again.
 - Root `pnpm build` fails on mockup-sandbox — build api-server and erp-platform with `--filter` instead.
 - Low RAM: a 2G swapfile was added (fstab) after OOM kills during install/build.
+
+**Why:** A deployment required repeated manual recovery because the server used pnpm 11 with a global mirror while the repository still carried pnpm 10 build-approval settings and an npmjs tarball URL.
+
+**How to apply:** pin pnpm, registry, and `allowBuilds` in the repository; validate `pnpm install --frozen-lockfile` under that exact setup before production; keep the production checkout free of tracked local edits.
 
 - Google Drive own-keys OAuth: redirect URI is derived from the request host (x-forwarded-host/Host), no REPLIT_DOMAINS needed on the external server. The Google OAuth app must be PUBLISHED (In production, no verification needed) — Testing mode revokes refresh tokens after 7 days, so Drive drops weekly.
 
