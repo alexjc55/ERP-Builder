@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { migrateLegacyUploads, UPLOADS_ROOT } from "./lib/localStorage";
 import { ensureAiAgentsModule } from "./routes/ai-agents";
 
 const rawPort = process.env["PORT"];
@@ -16,14 +17,25 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-// Seed the system module row (idempotent); the server still starts if it fails.
-ensureAiAgentsModule().catch((err) => logger.error({ err }, "Failed to seed ai_agents module"));
-
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
+async function start(): Promise<void> {
+  try {
+    const movedFiles = await migrateLegacyUploads();
+    logger.info({ uploadsRoot: UPLOADS_ROOT, movedFiles }, "Local uploads directory ready");
+  } catch (err) {
+    logger.error({ err, uploadsRoot: UPLOADS_ROOT }, "Failed to migrate legacy local uploads");
   }
 
-  logger.info({ port }, "Server listening");
-});
+  // Seed the system module row (idempotent); the server still starts if it fails.
+  ensureAiAgentsModule().catch((err) => logger.error({ err }, "Failed to seed ai_agents module"));
+
+  app.listen(port, (err) => {
+    if (err) {
+      logger.error({ err }, "Error listening on port");
+      process.exit(1);
+    }
+
+    logger.info({ port }, "Server listening");
+  });
+}
+
+void start();

@@ -1,19 +1,39 @@
-import { createReadStream, promises as fs } from "fs";
+import { createReadStream, existsSync, promises as fs } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 import type { Response } from "express";
 
+function findWorkspaceRoot(startDir: string): string {
+  let current = path.resolve(startDir);
+
+  while (true) {
+    if (existsSync(path.join(current, "pnpm-workspace.yaml"))) return current;
+    const parent = path.dirname(current);
+    if (parent === current) return path.resolve(startDir);
+    current = parent;
+  }
+}
+
+const WORKSPACE_ROOT = findWorkspaceRoot(process.cwd());
+const configuredUploadsDir = process.env.UPLOADS_DIR?.trim() || "uploads";
+
 /**
  * Root directory on disk where locally-stored uploads live. Defaults to an
- * `uploads/` folder in the process working directory (workflows run from the
- * repo root), overridable with the `UPLOADS_DIR` env var. Everything served or
- * written by this module is confined to this root (see `resolveDiskPath`).
+ * `uploads/` folder in the workspace root, overridable with the `UPLOADS_DIR`
+ * env var. Relative configured paths are also resolved from the workspace root,
+ * so storage does not move when pnpm starts the API from its package directory.
+ * Everything served or written by this module is confined to this root (see
+ * `resolveDiskPath`).
  *
  * Layout:
  *   uploads/branding/<uuid>__<name>          branding logo/assets (git-tracked)
  *   uploads/files/<storageDir>/<uuid>__<name> file-field record data (gitignored)
  */
-export const UPLOADS_ROOT = path.resolve(process.env.UPLOADS_DIR || path.join(process.cwd(), "uploads"));
+export const UPLOADS_ROOT = path.resolve(WORKSPACE_ROOT, configuredUploadsDir);
+
+// Before this path was anchored to WORKSPACE_ROOT, relative paths were resolved
+// from process.cwd(). Keep the old location solely as a one-time migration source.
+const LEGACY_UPLOADS_ROOT = path.resolve(process.cwd(), process.env.UPLOADS_DIR?.trim() || "uploads");
 
 /** URL/stored-path prefix for local files. Maps to `${UPLOADS_ROOT}/<rel>`. */
 export const LOCAL_PREFIX = "/local/";
@@ -81,6 +101,76 @@ export async function saveLocalFile(
     contentType: contentType || "application/octet-stream",
     size: data.length,
   };
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function moveDirectoryContents(source: string, destination: string): Promise<number> {
+  let entries;
+  try {
+    entries = await fs.readdir(source, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return 0;
+    throw error;
+  }
+
+  let moved = 0;
+  await fs.mkdir(destination, { recursive: true });
+
+  for (const entry of entries) {
+    const from = path.join(source, entry.name);
+    const to = path.join(destination, entry.name);
+
+    if (entry.isDirectory()) {
+      moved += await moveDirectoryContents(from, to);
+      try {
+        await fs.rmdir(from);
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code !== "ENOENT" && code !== "ENOTEMPTY") throw error;
+      }
+      continue;
+    }
+
+    // Never overwrite a file already present at the canonical destination.
+    if (!entry.isFile() || (await pathExists(to))) continue;
+
+    await fs.mkdir(path.dirname(to), { recursive: true });
+    try {
+      await fs.rename(from, to);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error;
+      await fs.copyFile(from, to);
+      await fs.unlink(from);
+    }
+    moved += 1;
+  }
+
+  return moved;
+}
+
+/**
+ * Move files written by the old cwd-relative implementation into the canonical
+ * workspace-root uploads directory. Safe to call on every startup and never
+ * overwrites destination files.
+ */
+export async function migrateLegacyUploads(): Promise<number> {
+  if (LEGACY_UPLOADS_ROOT === UPLOADS_ROOT) return 0;
+  const moved = await moveDirectoryContents(LEGACY_UPLOADS_ROOT, UPLOADS_ROOT);
+  try {
+    await fs.rmdir(LEGACY_UPLOADS_ROOT);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== "ENOENT" && code !== "ENOTEMPTY") throw error;
+  }
+  return moved;
 }
 
 /** Ensure a folder's on-disk directory exists under uploads/files/. */
