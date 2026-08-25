@@ -2310,22 +2310,46 @@
     "he": "חל רק על תוצאה מספרית. ריק — ללא עיגול."
   },
   {
+    "key": "fields.numericDisplay",
+    "ru": "Формат отображения",
+    "en": "Display format",
+    "he": "תבנית תצוגה"
+  },
+  {
+    "key": "fields.numericDisplayHint",
+    "ru": "Эти настройки меняют только внешний вид числа. Хранимое значение и расчёты не изменяются.",
+    "en": "These settings change only how the number looks. The stored value and calculations stay unchanged.",
+    "he": "הגדרות אלה משנות רק את מראה המספר. הערך השמור והחישובים אינם משתנים."
+  },
+  {
+    "key": "fields.displayAffixSection",
+    "ru": "Текст рядом со значением",
+    "en": "Text next to the value",
+    "he": "טקסט ליד הערך"
+  },
+  {
+    "key": "fields.displayAffixHint",
+    "ru": "Добавьте знак или единицу измерения. Например: 15,23 % или $ 15,23.",
+    "en": "Add a sign or unit. For example: 15.23 % or $ 15.23.",
+    "he": "הוסיפו סימן או יחידת מידה. לדוגמה: 15.23 % או $ 15.23."
+  },
+  {
     "key": "fields.displayAffix",
-    "ru": "Дополнительный текст",
-    "en": "Additional text",
-    "he": "טקסט נוסף"
+    "ru": "Текст или знак",
+    "en": "Text or sign",
+    "he": "טקסט או סימן"
   },
   {
     "key": "fields.displayAffixPlaceholder",
-    "ru": "Например: %, kg, pcs",
+    "ru": "Например: %, кг, шт.",
     "en": "For example: %, kg, pcs",
-    "he": "לדוגמה: %, kg, pcs"
+    "he": "לדוגמה: %, ק״ג, יח׳"
   },
   {
     "key": "fields.displayAffixPosition",
-    "ru": "Положение",
-    "en": "Position",
-    "he": "מיקום"
+    "ru": "Где показывать",
+    "en": "Where to show it",
+    "he": "היכן להציג"
   },
   {
     "key": "fields.displayAffixBefore",
@@ -2338,6 +2362,12 @@
     "ru": "После значения",
     "en": "After value",
     "he": "אחרי הערך"
+  },
+  {
+    "key": "fields.displayAffixPreview",
+    "ru": "Пример:",
+    "en": "Example:",
+    "he": "דוגמה:"
   },
   {
     "key": "fields.showInTable",
