@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+repo_root="$(git rev-parse --show-toplevel)"
+validation_lock="/tmp/erp-validations-$(printf '%s' "$repo_root" | sha256sum | cut -d' ' -f1).lock"
+exec 9>"$validation_lock"
+flock 9
+
 wait_for_service() {
   local name="$1"
   local url="$2"

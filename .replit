@@ -20,6 +20,10 @@ author = "agent"
 task = "workflow.run"
 args = "collaboration-e2e"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "dependency-install"
+
 [[workflows.workflow]]
 name = "collaboration-e2e"
 author = "agent"
@@ -30,6 +34,17 @@ isValidation = true
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "corepack pnpm run validate:deployment:collaboration"
+
+[[workflows.workflow]]
+name = "dependency-install"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "bash scripts/validate-dependency-install.sh"
+
+[workflows.workflow.metadata]
+isValidation = true
 
 [agent]
 stack = "PNPM_WORKSPACE"
