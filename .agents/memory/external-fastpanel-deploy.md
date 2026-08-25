@@ -42,6 +42,9 @@ If `.env` changed or DB schema changed, source env first: `set -a; source .env; 
 
 ## Delivering DB changes as SQL files
 - Schema/translation changes for prod are delivered as an idempotent .sql file (plus a .txt copy — the chat asset viewer rejects .sql) that the USER runs on the remote Postgres; NEVER run them against the Replit DB.
+- Keep appending release changes to the existing cumulative handover `exports/collaboration-and-later-updates.sql` (and its `.txt` delivery copy) unless the user explicitly asks to start a new release file. Do not present generated `lib/db/drizzle/000N_*.sql` files as the manual server-update file; they are internal migration history. `scripts/prod-sync-schema.sql` is the full additive recovery/sync script, not the normal per-release handover.
+  **Why:** the user requires one stable place for remote schema updates; mixing migration history, recovery sync, and the handover file creates needless deployment ambiguity.
+  **How to apply:** when asked whether production DB changes are needed, name the existing cumulative handover file and append the idempotent delta there; mention Drizzle only when the chosen deployment path is the automated `migrate` command.
 - File conventions: `ADD COLUMN IF NOT EXISTS`, translations via `INSERT ... ON CONFLICT (translation_key) DO UPDATE SET translations_json = EXCLUDED.translations_json, updated_at = now()`, Russian comments, "повторный запуск безопасен".
 - User runs it on the server: `psql -U erp_davidov_usr -d erp_davidov -f file.sql` (or paste into psql); credentials are in the project `.env` on the server.
 - The user often runs these files through a web SQL GUI, not psql — do NOT include psql metacommands (`\set ON_ERROR_STOP on` etc.), they throw a syntax error there. Plain SQL + BEGIN/COMMIT only.
