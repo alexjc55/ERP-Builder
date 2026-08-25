@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { entitiesTable } from "./entities";
+import { pagesTable } from "./pages";
 
 export const viewsTable = pgTable(
   "views",
@@ -11,6 +12,10 @@ export const viewsTable = pgTable(
     entityId: integer("entity_id")
       .notNull()
       .references(() => entitiesTable.id, { onDelete: "cascade" }),
+    // Null = the entity's main records page. A concrete id scopes the view to
+    // exactly one mirror page, which also makes that page's local fields
+    // available to the view's authoritative hard filters.
+    targetPageId: integer("target_page_id").references(() => pagesTable.id, { onDelete: "cascade" }),
     viewKey: text("view_key").notNull(),
     nameJson: jsonb("name_json").notNull().default({}),
     configJson: jsonb("config_json").notNull().default({}),
@@ -28,7 +33,12 @@ export const viewsTable = pgTable(
   },
   (t) => [
     unique("view_entity_key_unique").on(t.entityId, t.viewKey),
-    uniqueIndex("view_one_default").on(t.entityId).where(sql`${t.isDefault} = true`),
+    uniqueIndex("view_one_default_entity")
+      .on(t.entityId)
+      .where(sql`${t.isDefault} = true AND ${t.targetPageId} IS NULL`),
+    uniqueIndex("view_one_default_page")
+      .on(t.entityId, t.targetPageId)
+      .where(sql`${t.isDefault} = true AND ${t.targetPageId} IS NOT NULL`),
   ],
 );
 

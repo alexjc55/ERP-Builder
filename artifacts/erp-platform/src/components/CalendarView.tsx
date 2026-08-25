@@ -32,6 +32,7 @@ export const CALENDAR_STATUS_KEY = "__status__";
 
 /** Base records-query state shared with the table (everything except the date window). */
 export type CalendarBaseQuery = {
+  viewId?: number;
   filters: FilterCondition[];
   filterConjunction: RecordQueryFilterConjunction;
   pageLocalFilters: FilterCondition[];
@@ -252,6 +253,7 @@ export function CalendarView({
         const res = await run({
           entityId,
           data: {
+            viewId: baseQuery.viewId,
             filters: [...baseQuery.filters, ...windowFilters],
             filterConjunction: baseQuery.filterConjunction,
             pageLocalFilters: baseQuery.pageLocalFilters,

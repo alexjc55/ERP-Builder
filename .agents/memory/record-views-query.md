@@ -1,6 +1,6 @@
 ---
 name: Record Views & query endpoint
-description: Why the records query endpoint is POST, how the frontend consumes it, and the per-entity bootstrap-reset rule.
+description: POST query consumption plus page-scoped, server-authoritative named views and their hard-filter boundary.
 ---
 
 # Record Views (Этап 8) — durable decisions
@@ -15,16 +15,29 @@ description: Why the records query endpoint is POST, how the frontend consumes i
 - After create/edit/delete CRUD, bump a `refreshTick` state (add it to the effect deps) instead of `queryClient.invalidateQueries` — the display no longer reads the list-query cache.
 - Guard against races with a `cancelled` flag in the effect cleanup.
 
-## Per-entity bootstrap must reset on entityId change
-A component that does one-time bootstrap (e.g. auto-selecting the entity's default view via a `viewInitialized` flag) and is keyed by a prop that can change **in place** (entityId) MUST reset that flag + dependent state (`selectedViewId`, `search`, `page`) in a `useEffect([entityId])`. Otherwise stale state leaks across entity switches when the component doesn't remount. (Architect-caught bug.)
+## View bootstrap must reset on entity AND page context
+A component that auto-selects a default/first view can remain mounted while moving between the main page and a mirror of the same entity. Reset view bootstrap/state on `(entityId,pageId)`, not entity alone, or a view from one page leaks into another scope.
+
+## Named views are page-scoped and server-authoritative
+Each named view belongs to exactly one runtime scope: `targetPageId = null` for the entity's main page, or one concrete mirror page. A page-scoped view may use that page's local fields; a main view may not.
+
+**Why:** page-local values only have meaning at one `(pageId,recordId)`, and browser-supplied copies of view filters were removable/tamperable.
+
+**How to apply:**
+- Runtime lists only exact-scope active/role-visible views. A mirror page with visible assigned views requires a valid `viewId`; no implicit “all records” bypass exists.
+- The server validates selected view entity, exact target page, active state, role visibility, and explicit page access before computing any rows, pivot, totals, or filter values.
+- Stored view filters and saved search are authoritative. Filter conditions keep their internal `AND/OR`, but the whole hard group is top-level `AND` with viewer filters, page defaults, archive/status/row scope, and RBAC.
+- Clients send `viewId`, not copied named-view filters. User-adjustable filters/search remain unchanged when switching views.
+- `is_empty`/`is_not_empty` use actual missing/JSON-null/empty-string semantics for entity and page-local values; never encode emptiness as display text.
+- Defaults are unique per scope: one main default and one per concrete mirror page. One page view auto-selects; several select default-or-first and show only that page's view choices.
 
 ## Schema naming
 FilterCondition/SortSpec use `field` + `operator`/`direction` (NOT `fieldKey`). Field keys in filters/sorts are whitelist-validated server-side against the entity's active fields (400 on unknown); values are Drizzle bound params. configJson holds `{filters, filterConjunction, sorts, search, visibleFields}`.
 
 ## Entity-level default sort + filters (no view selected)
-Row ordering AND base filters when NO view is selected (the implicit "По умолчанию") come from `entities.defaultSortJson` (`SortSpec[]`) and `entities.defaultFilterJson` (`FilterCondition[]`), configured in the same views-admin card/dialog (persisted together with the entity PUT, gated by `requireAdmin("entities")`). A selected view's own `configJson.sorts`/`filters` always take priority; default filters combine with implicit AND (no stored conjunction). Empty sort → server fallback `created_at DESC`.
+Row ordering AND base filters when NO view is selected (the implicit "По умолчанию") come from `entities.defaultSortJson` (`SortSpec[]`) and `entities.defaultFilterJson` (`FilterCondition[]`), configured in the same views-admin card/dialog (persisted together with the entity PUT, gated by `requireAdmin("entities")`). A selected view's sort config takes priority; its hard filters/search are loaded by the server from `viewId`. Entity-default filters combine with implicit AND (no stored conjunction). Empty sort → server fallback `created_at DESC`.
 **Why:** users needed default sorting/filtering without the ceremony of creating a named view; the implicit default previously had no settings at all.
-**How to apply:** client computes `baseFilters = selectedView ? viewFilters : entityDefaultFilters` and `effectiveSorts` the same way, applied uniformly to the records query, pivot query, and dependent-filter options query (key off `baseFiltersKey`). Always filter both defaults against the entity's *current* active field keys before sending — a field deleted after the default was set would otherwise trip the server whitelist and break the default table for everyone.
+**How to apply:** client computes `baseFilters = selectedView ? [] : entityDefaultFilters`; the selected named view is carried only as `viewId`. Effective sorts still come from the selected view or entity default. Always filter entity defaults against current active field keys before sending.
 
 ## Filter VALUE editor must be type-aware AND store server-comparable text
 The view/default filter value editor branches by field type: `select`→option picker, `user`→user picker (RBAC-filtered by `userConfigJson.allowedRoleIds`, matching the user's FULL role set) that stores the **user id as text**, `boolean`→yes/no storing `"true"`/`"false"`, `date`/`datetime`→native pickers, else text. Array operators ("one of") serialize as comma text → array.

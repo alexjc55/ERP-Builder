@@ -10,6 +10,8 @@ import type { ViewConfig } from './viewConfig';
 
 export interface ViewUpdate {
   viewKey?: string;
+  /** @nullable */
+  targetPageId?: number | null;
   nameJson?: MultilingualText;
   configJson?: ViewConfig;
   /** @nullable */

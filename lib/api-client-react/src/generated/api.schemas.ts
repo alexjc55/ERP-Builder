@@ -3552,6 +3552,24 @@ export interface RecordUpdate {
   expectedVersion?: number;
 }
 
+export type ViewFilterConditionSource = typeof ViewFilterConditionSource[keyof typeof ViewFilterConditionSource];
+
+
+export const ViewFilterConditionSource = {
+  entity: 'entity',
+  page: 'page',
+} as const;
+
+/**
+ * One authoritative, admin-authored hard condition of a named view. Entity conditions work on every view. Page conditions are valid only when the view targets that concrete mirror page. Missing source means entity for backward compatibility with existing saved views.
+ */
+export interface ViewFilterCondition {
+  source?: ViewFilterConditionSource;
+  field: string;
+  operator: FilterOperator;
+  value?: unknown;
+}
+
 export type CustomFilterOperator = typeof CustomFilterOperator[keyof typeof CustomFilterOperator];
 
 
@@ -3815,7 +3833,7 @@ export interface CalendarConfig {
 }
 
 export interface ViewConfig {
-  filters?: FilterCondition[];
+  filters?: ViewFilterCondition[];
   filterConjunction?: ViewConfigFilterConjunction;
   sorts?: SortSpec[];
   search?: string;
@@ -3853,6 +3871,11 @@ export interface PivotQuery {
 export interface View {
   id: number;
   entityId: number;
+  /**
+     * Null for the entity's main page; otherwise one concrete mirror page.
+     * @nullable
+     */
+  targetPageId: number | null;
   viewKey: string;
   nameJson: MultilingualText;
   configJson: ViewConfig;
@@ -3867,6 +3890,11 @@ export interface View {
 
 export interface ViewInput {
   viewKey: string;
+  /**
+     * Null/absent for the entity's main page; otherwise one mirror page of this entity.
+     * @nullable
+     */
+  targetPageId?: number | null;
   nameJson: MultilingualText;
   configJson?: ViewConfig;
   /**
@@ -3881,6 +3909,8 @@ export interface ViewInput {
 
 export interface ViewUpdate {
   viewKey?: string;
+  /** @nullable */
+  targetPageId?: number | null;
   nameJson?: MultilingualText;
   configJson?: ViewConfig;
   /** @nullable */
@@ -3917,6 +3947,8 @@ export type RecordQueryGroupValue = {
 };
 
 export interface RecordQuery {
+  /** Selected named view. The server resolves its authoritative hard filters and target-page assignment; client-supplied filters cannot replace or remove them. */
+  viewId?: number;
   filters?: FilterCondition[];
   /** Filter conditions on PAGE-LOCAL fields (values stored in page_record_values), keyed by page-field fieldKey. Requires pageId. Each condition is AND-combined with the rest of the query. Only visible (per-role) filterable page-local fields are accepted. */
   pageLocalFilters?: FilterCondition[];
@@ -4008,6 +4040,8 @@ export const FilterValuesQueryFilterConjunction = {
 } as const;
 
 export interface FilterValuesQuery {
+  /** Selected named view whose authoritative hard filters constrain the option list. */
+  viewId?: number;
   /** Optional mirror-page context. When the request is made through a mirror page, this lets the server honor a per-mirror-page record permission override for the view check. */
   pageId?: number;
   field: string;
@@ -4026,6 +4060,8 @@ export interface FilterValuesQuery {
 }
 
 export interface PageFilterValuesQuery {
+  /** Selected page-specific view whose authoritative hard filters constrain the option list. */
+  viewId?: number;
   /** The mirror-page context that owns the page-local field. */
   pageId: number;
   /** The page-local field key whose distinct existing values to list. */

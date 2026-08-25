@@ -10536,6 +10536,160 @@ export const useCreateEntityView = <TError = ErrorType<unknown>,
       return useMutation(getCreateEntityViewMutationOptions(options));
     }
 
+export const getListMainEntityViewsUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/main-views`
+}
+
+/**
+ * @summary List role-visible views assigned to the entity's main records page
+ */
+export const listMainEntityViews = async (entityId: number, options?: RequestInit): Promise<View[]> => {
+
+  return customFetch<View[]>(getListMainEntityViewsUrl(entityId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMainEntityViewsQueryKey = (entityId: number,) => {
+    return [
+    `/api/entities/${entityId}/main-views`
+    ] as const;
+    }
+
+
+export const getListMainEntityViewsQueryOptions = <TData = Awaited<ReturnType<typeof listMainEntityViews>>, TError = ErrorType<unknown>>(entityId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMainEntityViews>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMainEntityViewsQueryKey(entityId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMainEntityViews>>> = ({ signal }) => listMainEntityViews(entityId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(entityId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMainEntityViews>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMainEntityViewsQueryResult = NonNullable<Awaited<ReturnType<typeof listMainEntityViews>>>
+export type ListMainEntityViewsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List role-visible views assigned to the entity's main records page
+ */
+
+export function useListMainEntityViews<TData = Awaited<ReturnType<typeof listMainEntityViews>>, TError = ErrorType<unknown>>(
+ entityId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMainEntityViews>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMainEntityViewsQueryOptions(entityId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListPageViewsUrl = (pageId: number,) => {
+
+
+
+
+  return `/api/pages/${pageId}/views`
+}
+
+/**
+ * @summary List role-visible views assigned to one mirror page
+ */
+export const listPageViews = async (pageId: number, options?: RequestInit): Promise<View[]> => {
+
+  return customFetch<View[]>(getListPageViewsUrl(pageId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPageViewsQueryKey = (pageId: number,) => {
+    return [
+    `/api/pages/${pageId}/views`
+    ] as const;
+    }
+
+
+export const getListPageViewsQueryOptions = <TData = Awaited<ReturnType<typeof listPageViews>>, TError = ErrorType<unknown>>(pageId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPageViews>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPageViewsQueryKey(pageId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPageViews>>> = ({ signal }) => listPageViews(pageId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(pageId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPageViews>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPageViewsQueryResult = NonNullable<Awaited<ReturnType<typeof listPageViews>>>
+export type ListPageViewsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List role-visible views assigned to one mirror page
+ */
+
+export function useListPageViews<TData = Awaited<ReturnType<typeof listPageViews>>, TError = ErrorType<unknown>>(
+ pageId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPageViews>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPageViewsQueryOptions(pageId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
 export const getGetViewUrl = (id: number,) => {
 
 

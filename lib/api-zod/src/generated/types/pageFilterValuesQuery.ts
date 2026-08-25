@@ -8,6 +8,8 @@
 import type { ArchiveFilter } from './archiveFilter';
 
 export interface PageFilterValuesQuery {
+  /** Selected page-specific view whose authoritative hard filters constrain the option list. */
+  viewId?: number;
   /** The mirror-page context that owns the page-local field. */
   pageId: number;
   /** The page-local field key whose distinct existing values to list. */

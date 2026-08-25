@@ -5870,6 +5870,7 @@ export const queryEntityRecordsBodyGroupedDefault = false;
 export const queryEntityRecordsBodyWithRowGroupsDefault = false;
 
 export const QueryEntityRecordsBody = zod.object({
+  "viewId": zod.number().optional().describe('Selected named view. The server resolves its authoritative hard filters and target-page assignment; client-supplied filters cannot replace or remove them.'),
   "filters": zod.array(zod.object({
   "field": zod.string(),
   "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
@@ -6064,6 +6065,7 @@ export const getEntityFilterValuesBodyExcludeFiltersItemExcludeEmptyDefault = fa
 export const getEntityFilterValuesBodyArchivedDefault = `active`;
 
 export const GetEntityFilterValuesBody = zod.object({
+  "viewId": zod.number().optional().describe('Selected named view whose authoritative hard filters constrain the option list.'),
   "pageId": zod.number().optional().describe('Optional mirror-page context. When the request is made through a mirror page, this lets the server honor a per-mirror-page record permission override for the view check.'),
   "field": zod.string(),
   "baseFilters": zod.array(zod.object({
@@ -6104,6 +6106,7 @@ export const GetPageFilterValuesParams = zod.object({
 export const getPageFilterValuesBodyArchivedDefault = `active`;
 
 export const GetPageFilterValuesBody = zod.object({
+  "viewId": zod.number().optional().describe('Selected page-specific view whose authoritative hard filters constrain the option list.'),
   "pageId": zod.number().describe('The mirror-page context that owns the page-local field.'),
   "field": zod.string().describe('The page-local field key whose distinct existing values to list.'),
   "valueSearch": zod.string().optional().describe('Substring search over the option values, applied server-side before the row limit (same semantics as FilterValuesQuery.valueSearch).'),
@@ -6467,6 +6470,7 @@ export const ListEntityViewsParams = zod.object({
   "entityId": zod.coerce.number()
 })
 
+export const listEntityViewsResponseConfigJsonFiltersItemSourceDefault = `entity`;
 export const listEntityViewsResponseConfigJsonFilterConjunctionDefault = `and`;
 export const listEntityViewsResponseConfigJsonSortsItemDirectionDefault = `asc`;
 export const listEntityViewsResponseConfigJsonViewTypeDefault = `table`;
@@ -6474,6 +6478,7 @@ export const listEntityViewsResponseConfigJsonViewTypeDefault = `table`;
 export const ListEntityViewsResponseItem = zod.object({
   "id": zod.number(),
   "entityId": zod.number(),
+  "targetPageId": zod.number().nullable().describe('Null for the entity\'s main page; otherwise one concrete mirror page.'),
   "viewKey": zod.string(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
@@ -6482,10 +6487,11 @@ export const ListEntityViewsResponseItem = zod.object({
 }),
   "configJson": zod.object({
   "filters": zod.array(zod.object({
+  "source": zod.enum(['entity', 'page']).default(listEntityViewsResponseConfigJsonFiltersItemSourceDefault),
   "field": zod.string(),
   "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
   "value": zod.unknown().optional()
-})).optional(),
+}).describe('One authoritative, admin-authored hard condition of a named view. Entity conditions work on every view. Page conditions are valid only when the view targets that concrete mirror page. Missing source means entity for backward compatibility with existing saved views.')).optional(),
   "filterConjunction": zod.enum(['and', 'or']).default(listEntityViewsResponseConfigJsonFilterConjunctionDefault),
   "sorts": zod.array(zod.object({
   "field": zod.string(),
@@ -6569,6 +6575,7 @@ export const CreateEntityViewParams = zod.object({
   "entityId": zod.coerce.number()
 })
 
+export const createEntityViewBodyConfigJsonFiltersItemSourceDefault = `entity`;
 export const createEntityViewBodyConfigJsonFilterConjunctionDefault = `and`;
 export const createEntityViewBodyConfigJsonSortsItemDirectionDefault = `asc`;
 export const createEntityViewBodyConfigJsonViewTypeDefault = `table`;
@@ -6577,6 +6584,7 @@ export const createEntityViewBodyIsActiveDefault = true;
 
 export const CreateEntityViewBody = zod.object({
   "viewKey": zod.string(),
+  "targetPageId": zod.number().nullish().describe('Null\/absent for the entity\'s main page; otherwise one mirror page of this entity.'),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -6584,10 +6592,11 @@ export const CreateEntityViewBody = zod.object({
 }),
   "configJson": zod.object({
   "filters": zod.array(zod.object({
+  "source": zod.enum(['entity', 'page']).default(createEntityViewBodyConfigJsonFiltersItemSourceDefault),
   "field": zod.string(),
   "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
   "value": zod.unknown().optional()
-})).optional(),
+}).describe('One authoritative, admin-authored hard condition of a named view. Entity conditions work on every view. Page conditions are valid only when the view targets that concrete mirror page. Missing source means entity for backward compatibility with existing saved views.')).optional(),
   "filterConjunction": zod.enum(['and', 'or']).default(createEntityViewBodyConfigJsonFilterConjunctionDefault),
   "sorts": zod.array(zod.object({
   "field": zod.string(),
@@ -6662,19 +6671,21 @@ export const CreateEntityViewBody = zod.object({
 
 
 /**
- * @summary Get view by ID
+ * @summary List role-visible views assigned to the entity's main records page
  */
-export const GetViewParams = zod.object({
-  "id": zod.coerce.number()
+export const ListMainEntityViewsParams = zod.object({
+  "entityId": zod.coerce.number()
 })
 
-export const getViewResponseConfigJsonFilterConjunctionDefault = `and`;
-export const getViewResponseConfigJsonSortsItemDirectionDefault = `asc`;
-export const getViewResponseConfigJsonViewTypeDefault = `table`;
+export const listMainEntityViewsResponseConfigJsonFiltersItemSourceDefault = `entity`;
+export const listMainEntityViewsResponseConfigJsonFilterConjunctionDefault = `and`;
+export const listMainEntityViewsResponseConfigJsonSortsItemDirectionDefault = `asc`;
+export const listMainEntityViewsResponseConfigJsonViewTypeDefault = `table`;
 
-export const GetViewResponse = zod.object({
+export const ListMainEntityViewsResponseItem = zod.object({
   "id": zod.number(),
   "entityId": zod.number(),
+  "targetPageId": zod.number().nullable().describe('Null for the entity\'s main page; otherwise one concrete mirror page.'),
   "viewKey": zod.string(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
@@ -6683,10 +6694,221 @@ export const GetViewResponse = zod.object({
 }),
   "configJson": zod.object({
   "filters": zod.array(zod.object({
+  "source": zod.enum(['entity', 'page']).default(listMainEntityViewsResponseConfigJsonFiltersItemSourceDefault),
   "field": zod.string(),
   "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
   "value": zod.unknown().optional()
+}).describe('One authoritative, admin-authored hard condition of a named view. Entity conditions work on every view. Page conditions are valid only when the view targets that concrete mirror page. Missing source means entity for backward compatibility with existing saved views.')).optional(),
+  "filterConjunction": zod.enum(['and', 'or']).default(listMainEntityViewsResponseConfigJsonFilterConjunctionDefault),
+  "sorts": zod.array(zod.object({
+  "field": zod.string(),
+  "direction": zod.enum(['asc', 'desc']).default(listMainEntityViewsResponseConfigJsonSortsItemDirectionDefault)
 })).optional(),
+  "search": zod.string().optional(),
+  "visibleFields": zod.array(zod.string()).optional(),
+  "viewType": zod.enum(['table', 'pivot', 'calendar']).default(listMainEntityViewsResponseConfigJsonViewTypeDefault),
+  "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
+  "pivot": zod.object({
+  "rows": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}),
+  "cols": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}).optional(),
+  "measure": zod.object({
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+}).optional().describe('Single-measure mode (the cell value). Required unless `measures` is present and non-empty (multi-measure mode), in which case it is ignored. Server validation enforces that exactly one of the two modes is supplied.'),
+  "measures": zod.array(zod.object({
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+})).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
+  "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
+}).optional(),
+  "calendar": zod.object({
+  "dateFieldKey": zod.string().describe('Date\/datetime field key that places a record on the calendar.'),
+  "endDateFieldKey": zod.string().nullish().describe('Optional date\/datetime field key for the end of a multi-day span.'),
+  "titleFieldKey": zod.string().nullish().describe('Field whose value is the chip title. Falls back to the first text field.'),
+  "cardFieldKeys": zod.array(zod.string()).optional().describe('Additional field keys rendered on the event chip under the title.'),
+  "colorBy": zod.union([zod.literal('status'),zod.literal('field'),zod.literal(null)]).nullish().describe('Color chips by record status, by a field value, or not at all.'),
+  "colorFieldKey": zod.string().nullish().describe('Field key used for coloring when colorBy=field (a select\/status-like field).'),
+  "defaultMode": zod.union([zod.literal('month'),zod.literal('week'),zod.literal('day'),zod.literal('agenda'),zod.literal(null)]).nullish().describe('Initial calendar layout. Defaults to month.')
+}).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.')
+}),
+  "visibleRoleIds": zod.array(zod.number()).nullish(),
+  "isDefault": zod.boolean(),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListMainEntityViewsResponse = zod.array(ListMainEntityViewsResponseItem)
+
+
+/**
+ * @summary List role-visible views assigned to one mirror page
+ */
+export const ListPageViewsParams = zod.object({
+  "pageId": zod.coerce.number()
+})
+
+export const listPageViewsResponseConfigJsonFiltersItemSourceDefault = `entity`;
+export const listPageViewsResponseConfigJsonFilterConjunctionDefault = `and`;
+export const listPageViewsResponseConfigJsonSortsItemDirectionDefault = `asc`;
+export const listPageViewsResponseConfigJsonViewTypeDefault = `table`;
+
+export const ListPageViewsResponseItem = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "targetPageId": zod.number().nullable().describe('Null for the entity\'s main page; otherwise one concrete mirror page.'),
+  "viewKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "configJson": zod.object({
+  "filters": zod.array(zod.object({
+  "source": zod.enum(['entity', 'page']).default(listPageViewsResponseConfigJsonFiltersItemSourceDefault),
+  "field": zod.string(),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
+  "value": zod.unknown().optional()
+}).describe('One authoritative, admin-authored hard condition of a named view. Entity conditions work on every view. Page conditions are valid only when the view targets that concrete mirror page. Missing source means entity for backward compatibility with existing saved views.')).optional(),
+  "filterConjunction": zod.enum(['and', 'or']).default(listPageViewsResponseConfigJsonFilterConjunctionDefault),
+  "sorts": zod.array(zod.object({
+  "field": zod.string(),
+  "direction": zod.enum(['asc', 'desc']).default(listPageViewsResponseConfigJsonSortsItemDirectionDefault)
+})).optional(),
+  "search": zod.string().optional(),
+  "visibleFields": zod.array(zod.string()).optional(),
+  "viewType": zod.enum(['table', 'pivot', 'calendar']).default(listPageViewsResponseConfigJsonViewTypeDefault),
+  "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
+  "pivot": zod.object({
+  "rows": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}),
+  "cols": zod.object({
+  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
+}).optional(),
+  "measure": zod.object({
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+}).optional().describe('Single-measure mode (the cell value). Required unless `measures` is present and non-empty (multi-measure mode), in which case it is ignored. Server validation enforces that exactly one of the two modes is supplied.'),
+  "measures": zod.array(zod.object({
+  "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
+  "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
+  "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
+  "nameJson": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Optional multilingual display name used as this measure\'s column header (all agg types). Falls back to a per-agg default (the field name for sum, \"Количество\" for count, \"Формула\" for formula\/calc).'),
+  "formulaName": zod.union([zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),zod.null()]).optional().describe('Deprecated alias of nameJson for a single formula measure (still honored as a fallback for already-saved configs). Prefer nameJson.')
+})).optional().describe('Multi-measure mode: each measure becomes its own value column. When present and non-empty, this takes precedence over `measure` and any `cols` dimension is ignored (multiple measures XOR a column dimension). A `calc` measure references the others by their `key`.'),
+  "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
+}).optional(),
+  "calendar": zod.object({
+  "dateFieldKey": zod.string().describe('Date\/datetime field key that places a record on the calendar.'),
+  "endDateFieldKey": zod.string().nullish().describe('Optional date\/datetime field key for the end of a multi-day span.'),
+  "titleFieldKey": zod.string().nullish().describe('Field whose value is the chip title. Falls back to the first text field.'),
+  "cardFieldKeys": zod.array(zod.string()).optional().describe('Additional field keys rendered on the event chip under the title.'),
+  "colorBy": zod.union([zod.literal('status'),zod.literal('field'),zod.literal(null)]).nullish().describe('Color chips by record status, by a field value, or not at all.'),
+  "colorFieldKey": zod.string().nullish().describe('Field key used for coloring when colorBy=field (a select\/status-like field).'),
+  "defaultMode": zod.union([zod.literal('month'),zod.literal('week'),zod.literal('day'),zod.literal('agenda'),zod.literal(null)]).nullish().describe('Initial calendar layout. Defaults to month.')
+}).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.')
+}),
+  "visibleRoleIds": zod.array(zod.number()).nullish(),
+  "isDefault": zod.boolean(),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListPageViewsResponse = zod.array(ListPageViewsResponseItem)
+
+
+/**
+ * @summary Get view by ID
+ */
+export const GetViewParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const getViewResponseConfigJsonFiltersItemSourceDefault = `entity`;
+export const getViewResponseConfigJsonFilterConjunctionDefault = `and`;
+export const getViewResponseConfigJsonSortsItemDirectionDefault = `asc`;
+export const getViewResponseConfigJsonViewTypeDefault = `table`;
+
+export const GetViewResponse = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "targetPageId": zod.number().nullable().describe('Null for the entity\'s main page; otherwise one concrete mirror page.'),
+  "viewKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "configJson": zod.object({
+  "filters": zod.array(zod.object({
+  "source": zod.enum(['entity', 'page']).default(getViewResponseConfigJsonFiltersItemSourceDefault),
+  "field": zod.string(),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
+  "value": zod.unknown().optional()
+}).describe('One authoritative, admin-authored hard condition of a named view. Entity conditions work on every view. Page conditions are valid only when the view targets that concrete mirror page. Missing source means entity for backward compatibility with existing saved views.')).optional(),
   "filterConjunction": zod.enum(['and', 'or']).default(getViewResponseConfigJsonFilterConjunctionDefault),
   "sorts": zod.array(zod.object({
   "field": zod.string(),
@@ -6769,12 +6991,14 @@ export const UpdateViewParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const updateViewBodyConfigJsonFiltersItemSourceDefault = `entity`;
 export const updateViewBodyConfigJsonFilterConjunctionDefault = `and`;
 export const updateViewBodyConfigJsonSortsItemDirectionDefault = `asc`;
 export const updateViewBodyConfigJsonViewTypeDefault = `table`;
 
 export const UpdateViewBody = zod.object({
   "viewKey": zod.string().optional(),
+  "targetPageId": zod.number().nullish(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -6782,10 +7006,11 @@ export const UpdateViewBody = zod.object({
 }).optional(),
   "configJson": zod.object({
   "filters": zod.array(zod.object({
+  "source": zod.enum(['entity', 'page']).default(updateViewBodyConfigJsonFiltersItemSourceDefault),
   "field": zod.string(),
   "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
   "value": zod.unknown().optional()
-})).optional(),
+}).describe('One authoritative, admin-authored hard condition of a named view. Entity conditions work on every view. Page conditions are valid only when the view targets that concrete mirror page. Missing source means entity for backward compatibility with existing saved views.')).optional(),
   "filterConjunction": zod.enum(['and', 'or']).default(updateViewBodyConfigJsonFilterConjunctionDefault),
   "sorts": zod.array(zod.object({
   "field": zod.string(),
@@ -6858,6 +7083,7 @@ export const UpdateViewBody = zod.object({
   "isActive": zod.boolean().optional()
 })
 
+export const updateViewResponseConfigJsonFiltersItemSourceDefault = `entity`;
 export const updateViewResponseConfigJsonFilterConjunctionDefault = `and`;
 export const updateViewResponseConfigJsonSortsItemDirectionDefault = `asc`;
 export const updateViewResponseConfigJsonViewTypeDefault = `table`;
@@ -6865,6 +7091,7 @@ export const updateViewResponseConfigJsonViewTypeDefault = `table`;
 export const UpdateViewResponse = zod.object({
   "id": zod.number(),
   "entityId": zod.number(),
+  "targetPageId": zod.number().nullable().describe('Null for the entity\'s main page; otherwise one concrete mirror page.'),
   "viewKey": zod.string(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
@@ -6873,10 +7100,11 @@ export const UpdateViewResponse = zod.object({
 }),
   "configJson": zod.object({
   "filters": zod.array(zod.object({
+  "source": zod.enum(['entity', 'page']).default(updateViewResponseConfigJsonFiltersItemSourceDefault),
   "field": zod.string(),
   "operator": zod.enum(['eq', 'neq', 'contains', 'not_contains', 'starts_with', 'ends_with', 'gt', 'gte', 'lt', 'lte', 'is_empty', 'is_not_empty', 'in', 'between']),
   "value": zod.unknown().optional()
-})).optional(),
+}).describe('One authoritative, admin-authored hard condition of a named view. Entity conditions work on every view. Page conditions are valid only when the view targets that concrete mirror page. Missing source means entity for backward compatibility with existing saved views.')).optional(),
   "filterConjunction": zod.enum(['and', 'or']).default(updateViewResponseConfigJsonFilterConjunctionDefault),
   "sorts": zod.array(zod.object({
   "field": zod.string(),

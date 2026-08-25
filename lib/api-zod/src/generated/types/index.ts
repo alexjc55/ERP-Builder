@@ -373,6 +373,8 @@ export * from './viewConfig';
 export * from './viewConfigFilterConjunction';
 export * from './viewConfigPageSize';
 export * from './viewConfigViewType';
+export * from './viewFilterCondition';
+export * from './viewFilterConditionSource';
 export * from './viewInput';
 export * from './viewsReorderInput';
 export * from './viewsReorderInputItemsItem';

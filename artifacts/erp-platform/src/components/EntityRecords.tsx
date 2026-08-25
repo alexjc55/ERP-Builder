@@ -11,7 +11,10 @@ import {
   useListEntityStatuses,
   useListEntityTransitions,
   useListEntityRelations,
-  useListEntityViews,
+  useListMainEntityViews,
+  useListPageViews,
+  getListMainEntityViewsQueryKey,
+  getListPageViewsQueryKey,
   useGetEntity,
   useQueryEntityRecords,
   useGetEntityFilterValues,
@@ -64,6 +67,7 @@ import {
   type Relation,
   type View,
   type ViewConfig,
+  type ViewFilterCondition,
   type Transition,
   type RecordQuery,
   type RecordGroup,
@@ -163,6 +167,7 @@ import {
   type FormulaEvaluationOptions,
   type FormulaFieldDef,
 } from "@workspace/formula";
+import { operatorLabel, filterValueToText } from "@/components/ViewConfigEditors";
 import { computeRowFormatting, ruleMatches, type FormatField } from "@/lib/formatRules";
 import type { FieldFormatRule, CustomFilterPick, CustomFilter, CustomFilterInput } from "@workspace/api-client-react";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
@@ -1739,7 +1744,10 @@ export function EntityRecords({
   );
   const { data: statuses = [] } = useListEntityStatuses(entityId);
   const { data: transitions = [] } = useListEntityTransitions(entityId);
-  const { data: views = [] } = useListEntityViews(entityId);
+  const { data: mainViews = [], isLoading: mainViewsLoading } = useListMainEntityViews(entityId, { query: { enabled: !isMirror, queryKey: getListMainEntityViewsQueryKey(entityId) } });
+  const { data: pageViews = [], isLoading: pageViewsLoading } = useListPageViews(pageId ?? 0, { query: { enabled: isMirror && !!pageId, queryKey: getListPageViewsQueryKey(pageId ?? 0) } });
+  const views = isMirror ? pageViews : mainViews;
+  const viewsLoading = isMirror ? pageViewsLoading : mainViewsLoading;
   const { data: entity } = useGetEntity(entityId);
   const collabPageId = pageId ?? entity?.pageId;
   const collab = useCollaboration(collabPageId);
@@ -2529,6 +2537,7 @@ export function EntityRecords({
 
   // View / filter / search / pagination state for the server-side query endpoint.
   const [selectedViewId, setSelectedViewId] = useState<string>(NO_VIEW);
+
   const [search, setSearch] = useState("");
   // Debounced copy of `search` used by the server query: on a large database a
   // per-keystroke query takes seconds, so firing one request per letter makes
@@ -2714,7 +2723,7 @@ export function EntityRecords({
     setPage(1);
     setViewInitialized(false);
     setExpandedGroupKey(undefined);
-  }, [entityId]);
+  }, [entityId, pageId]);
 
   // Collapse the accordion when the page's group field changes (or grouping is
   // turned off) so a stale group key never filters the query, and re-apply the
@@ -2724,18 +2733,17 @@ export function EntityRecords({
     setExpandAll(Boolean(groupDefaultExpanded));
   }, [groupByFieldKey, groupDefaultExpanded]);
 
-  // Auto-select the entity's default view once its views load (only on first arrival).
+  // Auto-select after the exact main/mirror scope has loaded. Mirror pages with
+  // assigned views cannot fall back to "all records"; main pages keep that option
+  // unless an explicit default exists.
   useEffect(() => {
-    if (viewInitialized || views.length === 0) return;
+    if (viewInitialized || viewsLoading) return;
     const def = views.find((v: View) => v.isDefault);
-    if (def) {
-      setSelectedViewId(String(def.id));
-      const viewSearch = ((def.configJson ?? {}) as ViewConfig).search ?? "";
-      setSearch(viewSearch);
-      setDebouncedSearch(viewSearch);
-    }
+    const first = [...views].sort((a: View, b: View) => a.sortOrder - b.sortOrder)[0];
+    const initial = def ?? (isMirror ? first : undefined);
+    setSelectedViewId(initial ? String(initial.id) : NO_VIEW);
     setViewInitialized(true);
-  }, [views, viewInitialized]);
+  }, [views, viewsLoading, viewInitialized, isMirror]);
 
   const queryMutation = useQueryEntityRecords();
   const runQuery = queryMutation.mutateAsync;
@@ -2893,14 +2901,14 @@ export function EntityRecords({
     [defaultEffectiveSorts],
   );
 
-  // When no view is selected, the entity's default filters (configured on the
-  // Views admin screen) act as the base filters, mirroring entityDefaultSorts.
+  // When no view is selected, the entity's default filters act as the base filters.
+  // When a view is selected, we send its viewId instead of copying its filters.
   const entityDefaultFilters = useMemo(() => {
     const raw = Array.isArray(entity?.defaultFilterJson) ? (entity.defaultFilterJson as FilterCondition[]) : [];
     const known = new Set(allFields.filter((f: Field) => f.isActive).map((f: Field) => f.fieldKey));
     return raw.filter((c) => known.has(c.field));
   }, [entity?.defaultFilterJson, allFields]);
-  const baseFilters = selectedView ? (selectedConfig.filters ?? []) : entityDefaultFilters;
+  const baseFilters = selectedView ? [] : entityDefaultFilters;
   const baseFiltersKey = JSON.stringify(baseFilters);
 
   // SOFT exclusion default: hide rows matching the page's stored exclusion until
@@ -2982,8 +2990,9 @@ export function EntityRecords({
 
   const recordQuery: RecordQuery = useMemo(
     () => ({
+      viewId: selectedView ? selectedView.id : undefined,
       filters: [...baseFilters, ...adHocFilters, ...dateFilterConditions],
-      filterConjunction: selectedConfig.filterConjunction ?? "and",
+      filterConjunction: "and",
       pageLocalFilters: [...pageAdHocFilters, ...pageDateFilterConditions],
       customFilters: customFilterPicks.length > 0 ? customFilterPicks : undefined,
       statusIds: statusFilter.length > 0 ? statusFilter : undefined,
@@ -3013,7 +3022,7 @@ export function EntityRecords({
         : {}),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [baseFiltersKey, selectedConfig.filterConjunction, sortsKey, adHocKey, dateKey, customFilterKey, pageAdHocKey, pageDateKey, statusKey, excludeKey, debouncedSearch, archived, page, pageSize, groupingActive, expandedGroupKey, expandAll],
+    [baseFiltersKey, selectedView?.id, sortsKey, adHocKey, dateKey, customFilterKey, pageAdHocKey, pageDateKey, statusKey, excludeKey, debouncedSearch, archived, page, pageSize, groupingActive, expandedGroupKey, expandAll],
   );
 
   // Pivot (Сводная таблица): a view whose configJson.viewType is "pivot" carries a
@@ -3046,7 +3055,7 @@ export function EntityRecords({
   const pivotQuery: PivotQuery = useMemo(
     () => ({
       filters: [...baseFilters, ...adHocFilters, ...dateFilterConditions],
-      filterConjunction: selectedConfig.filterConjunction ?? "and",
+      filterConjunction: "and",
       pageLocalFilters: [...pageAdHocFilters, ...pageDateFilterConditions],
       statusIds: statusFilter.length > 0 ? statusFilter : undefined,
       search: debouncedSearch.trim() || undefined,
@@ -3057,7 +3066,7 @@ export function EntityRecords({
       pivot: (pivotConfig ?? { rows: { source: "status" }, measure: { agg: "count" } }) as PivotConfig,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [baseFiltersKey, selectedConfig.filterConjunction, adHocKey, dateKey, customFilterKey, pageAdHocKey, pageDateKey, statusKey, debouncedSearch, archived, selectedView?.id, JSON.stringify(pivotConfig)],
+    [baseFiltersKey, adHocKey, dateKey, customFilterKey, pageAdHocKey, pageDateKey, statusKey, debouncedSearch, archived, selectedView?.id, JSON.stringify(pivotConfig)],
   );
 
   // Calendar (Календарь): a view whose configJson.viewType is "calendar" carries a
@@ -3080,8 +3089,9 @@ export function EntityRecords({
 
   const calendarBaseQuery: CalendarBaseQuery = useMemo(
     () => ({
+      viewId: selectedView?.id,
       filters: [...baseFilters, ...adHocFilters, ...dateFilterConditions],
-      filterConjunction: selectedConfig.filterConjunction ?? "and",
+      filterConjunction: "and",
       pageLocalFilters: [...pageAdHocFilters, ...pageDateFilterConditions],
       statusIds: statusFilter.length > 0 ? statusFilter : undefined,
       search: debouncedSearch.trim() || undefined,
@@ -3090,7 +3100,7 @@ export function EntityRecords({
       customFilters: customFilterPicks.length > 0 ? customFilterPicks : undefined,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [baseFiltersKey, selectedConfig.filterConjunction, adHocKey, dateKey, customFilterKey, pageAdHocKey, pageDateKey, statusKey, debouncedSearch, archived, permPageId],
+    [baseFiltersKey, selectedView?.id, adHocKey, dateKey, customFilterKey, pageAdHocKey, pageDateKey, statusKey, debouncedSearch, archived, permPageId],
   );
 
   // Dependent filters: when fetching the option list for a field, we run a query against the
@@ -3107,16 +3117,16 @@ export function EntityRecords({
       const res = await fetchFilterOptions({
         entityId,
         data: {
+          viewId: selectedView?.id,
           pageId: permPageId,
           field: fieldKey,
-          // The view's HARD filters go in `baseFilters` (kept even on the target
-          // field, so a field pinned by the view only offers the permitted
-          // value(s)). Only the viewer's ad-hoc picks self-exclude the target.
+          // The view's HARD filters are resolved on the server via viewId.
+          // Entity defaults (when no view is selected) still pass via baseFilters.
           baseFilters,
           filters: [...others, ...dateOthers],
-          // Mirror the records query's conjunction so option lists stay consistent with the
-          // rows actually shown (a view may be configured with OR logic).
-          filterConjunction: selectedConfig.filterConjunction ?? "and",
+          // Viewer filters are always AND-narrowing. The selected view's own
+          // conjunction is resolved independently on the server.
+          filterConjunction: "and",
           statusIds: statusFilter.length > 0 ? statusFilter : undefined,
           // Co-narrow the option list by the active exclusions (the server skips
           // the target field's own exclusion so its dropdown still lists every
@@ -3133,7 +3143,7 @@ export function EntityRecords({
       return res.values ?? [];
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [entityId, adHocKey, dateKey, statusKey, excludeKey, debouncedSearch, archived, baseFiltersKey, selectedConfig.filterConjunction, fetchFilterOptions],
+    [entityId, selectedView?.id, adHocKey, dateKey, statusKey, excludeKey, debouncedSearch, archived, baseFiltersKey, fetchFilterOptions],
   );
 
   const setFieldFilter = useCallback((fieldKey: string, values: string[]) => {
@@ -3231,11 +3241,11 @@ export function EntityRecords({
       if (permPageId == null) return [];
       const res = await fetchPageFilterOptions({
         entityId,
-        data: { pageId: permPageId, field: fieldKey, valueSearch: valueSearch || undefined, archived },
+        data: { viewId: selectedView?.id, pageId: permPageId, field: fieldKey, valueSearch: valueSearch || undefined, archived },
       });
       return res.values ?? [];
     },
-    [filterablePageFields, fetchPageFilterOptions, entityId, permPageId, archived],
+    [filterablePageFields, fetchPageFilterOptions, entityId, permPageId, archived, selectedView?.id],
   );
 
   const toggleStatus = useCallback((id: number) => {
@@ -3829,9 +3839,6 @@ export function EntityRecords({
   const handleViewChange = (value: string) => {
     setSelectedViewId(value);
     setPage(1);
-    const cfg = value === NO_VIEW ? undefined : (views.find((v: View) => String(v.id) === value)?.configJson as ViewConfig | undefined);
-    setSearch(cfg?.search ?? "");
-    setDebouncedSearch(cfg?.search ?? "");
   };
 
   const createMutation = useCreateEntityRecord({
@@ -5053,7 +5060,7 @@ export function EntityRecords({
       <div className={cn("space-y-2", !mobileToolbarOpen && "max-sm:hidden")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-          {views.length > 0 && (
+          {views.length > 0 && !(isMirror && views.length === 1) && (
             <div className="flex items-center gap-1.5 w-full sm:w-auto">
               <LayoutList className="w-4 h-4 text-slate-400 shrink-0" />
               <Select value={selectedViewId} onValueChange={handleViewChange}>
@@ -5061,7 +5068,9 @@ export function EntityRecords({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NO_VIEW}>{t("records.allRecords", "Все записи")}</SelectItem>
+                  {(!isMirror || views.length === 0) && (
+                    <SelectItem value={NO_VIEW}>{t("records.allRecords", "Все записи")}</SelectItem>
+                  )}
                   {views.map((v: View) => (
                     <SelectItem key={v.id} value={String(v.id)}>
                       <span className="inline-flex items-center gap-1.5">
@@ -5355,6 +5364,33 @@ export function EntityRecords({
             <Filter className="w-4 h-4 shrink-0" />
             <ChevronDown className="w-3.5 h-3.5 rotate-180" />
           </button>
+          {selectedView && ((selectedConfig.filters?.length ?? 0) > 0 || !!selectedConfig.search?.trim()) && (
+            <div className="col-span-2 sm:col-span-1 flex flex-wrap items-center gap-1.5 border-r border-slate-200 pr-3 mr-1">
+              {(selectedConfig.filters ?? []).map((f: ViewFilterCondition, i: number) => {
+                const isPage = f.source === "page";
+                const field = isPage
+                  ? pageFields.find((pf: PageField) => pf.fieldKey === f.field)
+                  : allFields.find((af: Field) => af.fieldKey === f.field);
+                const fieldName = field ? ml(field.nameJson) : f.field;
+                const opLabel = t(`views.op_${f.operator}`, operatorLabel(f.operator));
+                const valText = filterValueToText(f.value);
+                const text = valText ? `${opLabel} ${valText}` : opLabel;
+                return (
+                  <Badge key={i} variant="secondary" className="bg-slate-100 text-slate-600 font-normal h-7 flex items-center gap-1">
+                    <span className="font-medium">{fieldName}:</span>
+                    <span>{text}</span>
+                  </Badge>
+                );
+              })}
+              {selectedConfig.search?.trim() && (
+                <Badge variant="secondary" className="bg-slate-100 text-slate-600 font-normal h-7 flex items-center gap-1">
+                  <span className="font-medium">{t("views.textSearch", "Поиск")}:</span>
+                  <span>{selectedConfig.search.trim()}</span>
+                </Badge>
+              )}
+            </div>
+          )}
+
           {filterableStatuses.length > 0 && (
             <Popover>
               <PopoverTrigger asChild>

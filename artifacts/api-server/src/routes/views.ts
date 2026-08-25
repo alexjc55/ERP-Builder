@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
-import { db, viewsTable, entitiesTable } from "@workspace/db";
-import { eq, asc, and, ne, inArray } from "drizzle-orm";
+import { db, viewsTable, entitiesTable, pagesTable, entityFieldsTable, pageFieldsTable } from "@workspace/db";
+import { eq, asc, and, ne, inArray, isNull } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
-import { requireAdmin, getPermissions, getUserRoleIds } from "../middlewares/permissions";
+import { requireAdmin, requireRecordParam, getPermissions, getUserRoleIds } from "../middlewares/permissions";
 import {
   ListEntityViewsParams,
   CreateEntityViewParams,
@@ -13,6 +13,8 @@ import {
   DeleteViewParams,
   ReorderViewsParams,
   ReorderViewsBody,
+  ListMainEntityViewsParams,
+  ListPageViewsParams,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -54,11 +56,74 @@ function uniqueViolationConstraint(err: unknown): string | null {
 }
 
 function mapViewConflict(constraint: string, res: import("express").Response): void {
-  if (constraint === "view_one_default") {
-    res.status(409).json({ error: "This entity already has a default view" });
+  if (constraint === "view_one_default_entity" || constraint === "view_one_default_page") {
+    res.status(409).json({ error: "This page already has a default view" });
   } else {
     res.status(409).json({ error: "A view with this key already exists on this entity" });
   }
+}
+
+const PAGE_FILTER_TYPES = new Set([
+  "text", "textarea", "email", "url", "phone", "select", "number", "percent",
+  "boolean", "date", "datetime", "user",
+]);
+
+type StoredViewConfig = {
+  filters?: Array<{ source?: "entity" | "page"; field: string; operator: string; value?: unknown }>;
+  filterConjunction?: "and" | "or";
+  [key: string]: unknown;
+};
+
+async function validateTargetAndConfig(
+  entityId: number,
+  targetPageId: number | null,
+  config: StoredViewConfig,
+): Promise<string | null> {
+  if (targetPageId != null) {
+    const [page] = await db.select({ mirrorEntityId: pagesTable.mirrorEntityId }).from(pagesTable)
+      .where(eq(pagesTable.id, targetPageId)).limit(1);
+    if (!page || page.mirrorEntityId !== entityId) {
+      return "targetPageId must identify a mirror page of this entity";
+    }
+  }
+  const filters = config.filters ?? [];
+  const entityKeys = new Set((await db.select({ key: entityFieldsTable.fieldKey }).from(entityFieldsTable)
+    .where(and(eq(entityFieldsTable.entityId, entityId), eq(entityFieldsTable.isActive, true)))).map((f) => f.key));
+  const pageFields = targetPageId == null ? [] : await db.select({
+    key: pageFieldsTable.fieldKey,
+    type: pageFieldsTable.fieldType,
+  }).from(pageFieldsTable).where(and(eq(pageFieldsTable.pageId, targetPageId), eq(pageFieldsTable.isActive, true)));
+  const pageByKey = new Map(pageFields.map((f) => [f.key, f.type]));
+  for (const condition of filters) {
+    const source = condition.source ?? "entity";
+    if (source === "entity") {
+      if (!entityKeys.has(condition.field)) return `Unknown or inactive entity field "${condition.field}"`;
+    } else {
+      if (targetPageId == null) return "Page-source filters require a targeted mirror page";
+      const type = pageByKey.get(condition.field);
+      if (!type || !PAGE_FILTER_TYPES.has(type)) {
+        return `Unknown, inactive, or unsupported page field "${condition.field}"`;
+      }
+    }
+    if (condition.operator !== "is_empty" && condition.operator !== "is_not_empty" && condition.value == null) {
+      return `Operator "${condition.operator}" requires a value for field "${condition.field}"`;
+    }
+  }
+  return null;
+}
+
+async function visibleViewsForTarget(
+  req: import("express").Request,
+  entityId: number,
+  targetPageId: number | null,
+) {
+  const target = targetPageId == null ? isNull(viewsTable.targetPageId) : eq(viewsTable.targetPageId, targetPageId);
+  const rows = await db.select().from(viewsTable)
+    .where(and(eq(viewsTable.entityId, entityId), target, eq(viewsTable.isActive, true)))
+    .orderBy(asc(viewsTable.sortOrder));
+  const perms = await getPermissions(req);
+  const roleIds = await getUserRoleIds(req);
+  return rows.filter((v) => viewVisibleToRole(v, roleIds, perms.superAdmin)).map(serializeView);
 }
 
 async function entityExists(entityId: number): Promise<boolean> {
@@ -75,7 +140,7 @@ async function viewKeyTaken(entityId: number, viewKey: string, excludeId: number
   return Boolean(taken);
 }
 
-router.get("/entities/:entityId/views", requireAuth, async (req, res): Promise<void> => {
+router.get("/entities/:entityId/views", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
   const params = ListEntityViewsParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -90,9 +155,28 @@ router.get("/entities/:entityId/views", requireAuth, async (req, res): Promise<v
     .from(viewsTable)
     .where(eq(viewsTable.entityId, params.data.entityId))
     .orderBy(asc(viewsTable.sortOrder));
+  res.json(views.map(serializeView));
+});
+
+router.get("/entities/:entityId/main-views", requireAuth, requireRecordParam("view", { entityOnly: true }), async (req, res): Promise<void> => {
+  const params = ListMainEntityViewsParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  if (!(await entityExists(params.data.entityId))) { res.status(404).json({ error: "Entity not found" }); return; }
+  res.json(await visibleViewsForTarget(req, params.data.entityId, null));
+});
+
+router.get("/pages/:pageId/views", requireAuth, async (req, res): Promise<void> => {
+  const params = ListPageViewsParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [page] = await db.select({ mirrorEntityId: pagesTable.mirrorEntityId }).from(pagesTable)
+    .where(eq(pagesTable.id, params.data.pageId)).limit(1);
+  if (!page || page.mirrorEntityId == null) { res.status(404).json({ error: "Mirror page not found" }); return; }
   const perms = await getPermissions(req);
-  const roleIds = await getUserRoleIds(req);
-  res.json(views.filter((v) => viewVisibleToRole(v, roleIds, perms.superAdmin)).map(serializeView));
+  if (!perms.superAdmin && !perms.pageIds.includes(params.data.pageId)) {
+    res.status(403).json({ error: "Page access denied" });
+    return;
+  }
+  res.json(await visibleViewsForTarget(req, page.mirrorEntityId, params.data.pageId));
 });
 
 router.post("/entities/:entityId/views", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
@@ -123,11 +207,15 @@ router.post("/entities/:entityId/views", requireAuth, requireAdmin("entities"), 
     res.status(409).json({ error: "A view with this key already exists on this entity" });
     return;
   }
+  const targetPageId = parsed.data.targetPageId ?? null;
+  const configError = await validateTargetAndConfig(entityId, targetPageId, (parsed.data.configJson ?? {}) as StoredViewConfig);
+  if (configError) { res.status(400).json({ error: configError }); return; }
 
   try {
     const view = await db.transaction(async (tx) => {
       if (parsed.data.isDefault) {
-        await tx.update(viewsTable).set({ isDefault: false }).where(eq(viewsTable.entityId, entityId));
+        const target = targetPageId == null ? isNull(viewsTable.targetPageId) : eq(viewsTable.targetPageId, targetPageId);
+        await tx.update(viewsTable).set({ isDefault: false }).where(and(eq(viewsTable.entityId, entityId), target));
       }
       const { visibleRoleIds, ...rest } = parsed.data;
       const [created] = await tx
@@ -202,7 +290,7 @@ router.post("/entities/:entityId/views/reorder", requireAuth, requireAdmin("enti
   res.json({ success: true, message: "Reordered" });
 });
 
-router.get("/views/:id", requireAuth, async (req, res): Promise<void> => {
+router.get("/views/:id", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
   const params = GetViewParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -210,12 +298,6 @@ router.get("/views/:id", requireAuth, async (req, res): Promise<void> => {
   }
   const [view] = await db.select().from(viewsTable).where(eq(viewsTable.id, params.data.id)).limit(1);
   if (!view) {
-    res.status(404).json({ error: "View not found" });
-    return;
-  }
-  const perms = await getPermissions(req);
-  const roleIds = await getUserRoleIds(req);
-  if (!viewVisibleToRole(view, roleIds, perms.superAdmin)) {
     res.status(404).json({ error: "View not found" });
     return;
   }
@@ -242,6 +324,10 @@ router.put("/views/:id", requireAuth, requireAdmin("entities"), async (req, res)
 
   const body = parsed.data;
   const updateData: Record<string, unknown> = {};
+  const finalTargetPageId = body.targetPageId !== undefined ? body.targetPageId : current.targetPageId;
+  const finalConfig = (body.configJson ?? current.configJson ?? {}) as StoredViewConfig;
+  const configError = await validateTargetAndConfig(current.entityId, finalTargetPageId, finalConfig);
+  if (configError) { res.status(400).json({ error: configError }); return; }
 
   if (body.viewKey != null) {
     const key = body.viewKey.trim();
@@ -259,6 +345,7 @@ router.put("/views/:id", requireAuth, requireAdmin("entities"), async (req, res)
   }
 
   if (body.nameJson != null) updateData.nameJson = body.nameJson;
+  if (body.targetPageId !== undefined) updateData.targetPageId = body.targetPageId;
   if (body.configJson != null) updateData.configJson = body.configJson;
   if (body.visibleRoleIds !== undefined) updateData.visibleRoleIdsJson = body.visibleRoleIds ?? null;
   if (body.isDefault != null) updateData.isDefault = body.isDefault;
@@ -272,11 +359,12 @@ router.put("/views/:id", requireAuth, requireAdmin("entities"), async (req, res)
 
   try {
     const view = await db.transaction(async (tx) => {
-      if (body.isDefault === true) {
+      if ((body.isDefault ?? current.isDefault) === true) {
+        const target = finalTargetPageId == null ? isNull(viewsTable.targetPageId) : eq(viewsTable.targetPageId, finalTargetPageId);
         await tx
           .update(viewsTable)
           .set({ isDefault: false })
-          .where(and(eq(viewsTable.entityId, current.entityId), ne(viewsTable.id, current.id)));
+          .where(and(eq(viewsTable.entityId, current.entityId), target, ne(viewsTable.id, current.id)));
       }
       const [updated] = await tx
         .update(viewsTable)

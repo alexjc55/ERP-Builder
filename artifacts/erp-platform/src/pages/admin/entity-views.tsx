@@ -2,6 +2,9 @@ import { useState, useCallback, useMemo, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import {
   useListEntityViews,
+  useListPages,
+  useListPageFields,
+  getListPageFieldsQueryKey,
   useCreateEntityView,
   useUpdateView,
   useDeleteView,
@@ -18,7 +21,10 @@ import {
   type UserOption,
   type View,
   type ViewConfig,
+  type Page,
+  type PageField,
   type FilterCondition,
+  type ViewFilterCondition,
   type FilterOperator,
   type SortSpec,
   type SortSpecDirection,
@@ -132,6 +138,20 @@ const SYSTEM_SORT_CREATED_AT = "__created_at__";
 const SYSTEM_SORT_RECORD_ID = "__record_id__";
 // Allowed rows-per-page choices for the records table (0 is the "inherit" sentinel).
 const PAGE_SIZE_CHOICES: number[] = [50, 100, 200, 300, 500];
+const PAGE_LOCAL_FILTERABLE_TYPES = new Set<string>([
+  "text",
+  "textarea",
+  "email",
+  "url",
+  "phone",
+  "select",
+  "number",
+  "percent",
+  "boolean",
+  "date",
+  "datetime",
+  "user",
+]);
 
 
 export default function EntityViewsPage() {
@@ -225,11 +245,19 @@ export default function EntityViewsPage() {
   // render ([...allFields].filter().sort()) and the projection maps churn too, so
   // depending on them directly would change getDomainOptions each render and make
   // ValueChecklistPicker's getOptions-keyed fetch effect re-run in a loop while open.
+  const pageFilterFieldsRef = useRef<PageField[]>([]);
   const domainDataRef = useRef({ fields, userOptions, projectedTypeByField, projectedFieldByField });
   domainDataRef.current = { fields, userOptions, projectedTypeByField, projectedFieldByField };
   const getDomainOptions = useCallback(
-    async (fieldKey: string): Promise<string[]> => {
+    async (fieldKey: string, source: "entity" | "page" = "entity"): Promise<string[]> => {
       const d = domainDataRef.current;
+      if (source === "page") {
+        const pf = pageFilterFieldsRef.current.find((x) => x.fieldKey === fieldKey);
+        if (pf?.fieldType === "user") return d.userOptions.map((u) => String(u.id));
+        if (pf?.fieldType === "boolean") return ["true", "false"];
+        const opts = normalizeSelectOptions(pf?.optionsJson).map((o) => o.value);
+        return opts;
+      }
       const f = d.fields.find((x: Field) => x.fieldKey === fieldKey);
       const ft = f?.fieldType;
       const eff = ft === "relation" || ft === "lookup" ? (d.projectedTypeByField.get(fieldKey) ?? "text") : ft;
@@ -264,10 +292,21 @@ export default function EntityViewsPage() {
   const pivotFormulaRefs: FormulaFieldRef[] = pivotSumFields.map((f: Field) => ({ key: f.fieldKey, label: ml(f.nameJson) }));
 
   const { data: views = [], isLoading } = useListEntityViews(entityId);
+  const { data: allPages = [] } = useListPages();
+  const mirrorPages = allPages.filter((p: Page) => p.mirrorEntityId === entityId);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<View | null>(null);
   const [toDelete, setToDelete] = useState<View | null>(null);
+
+  const [targetPageId, setTargetPageId] = useState<number | null>(null);
+
+  // targetPageId is bound to the view's current target. If null, we fetch nothing.
+  const { data: allPageFields = [] } = useListPageFields(targetPageId ?? 0, { query: { enabled: !!targetPageId, queryKey: getListPageFieldsQueryKey(targetPageId ?? 0) } });
+  const activePageFields = allPageFields
+    .filter((f: PageField) => PAGE_LOCAL_FILTERABLE_TYPES.has(f.fieldType))
+    .sort((a: PageField, b: PageField) => a.sortOrder - b.sortOrder);
+  pageFilterFieldsRef.current = activePageFields;
 
   const [viewKey, setViewKey] = useState("");
   const [nameJson, setNameJson] = useState<MLValue>({});
@@ -394,6 +433,7 @@ export default function EntityViewsPage() {
 
   const openCreate = () => {
     setEditing(null);
+    setTargetPageId(null);
     setViewKey("");
     setNameJson({});
     setIsDefault(false);
@@ -416,6 +456,7 @@ export default function EntityViewsPage() {
 
   const openEdit = (view: View) => {
     setEditing(view);
+    setTargetPageId(view.targetPageId ?? null);
     setViewKey(view.viewKey);
     const n = view.nameJson;
     setNameJson(typeof n === "object" && n ? { ru: n.ru, en: n.en, he: n.he } : {});
@@ -424,7 +465,8 @@ export default function EntityViewsPage() {
     setFilterConjunction(cfg.filterConjunction === "or" ? "or" : "and");
     setSearch(cfg.search ?? "");
     setFilters(
-      (cfg.filters ?? []).map((f) => ({
+      (cfg.filters ?? []).map((f: any) => ({
+        source: f.source === "page" ? "page" : "entity",
         field: f.field,
         operator: f.operator,
         valueText: filterValueToText(f.value),
@@ -466,7 +508,7 @@ export default function EntityViewsPage() {
 
   const addFilter = () => {
     const field = fields[0]?.fieldKey ?? "";
-    setFilters((prev) => [...prev, { field, operator: "eq", valueText: "" }]);
+    setFilters((prev) => [...prev, { source: "entity", field, operator: "eq", valueText: "" }]);
   };
   const updateFilter = (idx: number, patch: Partial<DraftFilter>) => {
     setFilters((prev) => prev.map((f, i) => (i === idx ? { ...f, ...patch } : f)));
@@ -486,6 +528,7 @@ export default function EntityViewsPage() {
     setDefaultSorts(entityDefaultSorts.map((s) => ({ field: s.field, direction: s.direction ?? "asc" })));
     setDefaultFilters(
       entityDefaultFilters.map((f) => ({
+        source: "entity",
         field: f.field,
         operator: f.operator,
         valueText: filterValueToText(f.value),
@@ -517,7 +560,7 @@ export default function EntityViewsPage() {
   const removeDefaultSort = (idx: number) => setDefaultSorts((prev) => prev.filter((_, i) => i !== idx));
   const addDefaultFilter = () => {
     const field = fields[0]?.fieldKey ?? "";
-    setDefaultFilters((prev) => [...prev, { field, operator: "eq", valueText: "" }]);
+    setDefaultFilters((prev) => [...prev, { source: "entity", field, operator: "eq", valueText: "" }]);
   };
   const updateDefaultFilter = (idx: number, patch: Partial<DraftFilter>) => {
     setDefaultFilters((prev) => prev.map((f, i) => (i === idx ? { ...f, ...patch } : f)));
@@ -573,12 +616,18 @@ export default function EntityViewsPage() {
   };
 
   const buildConfig = (): ViewConfig => {
-    const builtFilters: FilterCondition[] = filters.map((f) => {
-      const cond: FilterCondition = { field: f.field, operator: f.operator };
-      const value = textToFilterValue(f.operator, f.valueText);
-      if (value !== undefined) cond.value = value;
-      return cond;
-    });
+    const builtFilters: ViewFilterCondition[] = filters
+      .filter((f) => targetPageId != null || f.source !== "page")
+      .map((f) => {
+        const cond: ViewFilterCondition = {
+          source: f.source === "page" ? "page" : "entity",
+          field: f.field,
+          operator: f.operator,
+        };
+        const value = textToFilterValue(f.operator, f.valueText);
+        if (value !== undefined) cond.value = value;
+        return cond;
+      });
     const builtSorts: SortSpec[] = sorts.map((s) => ({ field: s.field, direction: s.direction }));
     const base: ViewConfig = {
       filters: builtFilters,
@@ -661,12 +710,12 @@ export default function EntityViewsPage() {
     if (editing) {
       updateMutation.mutate({
         id: editing.id,
-        data: { viewKey: resolvedKey, nameJson: nameJson as MultilingualText, configJson, isDefault, visibleRoleIds: roleVisibility },
+        data: { targetPageId, viewKey: resolvedKey, nameJson: nameJson as MultilingualText, configJson, isDefault, visibleRoleIds: roleVisibility },
       });
     } else {
       createMutation.mutate({
         entityId,
-        data: { viewKey: resolvedKey, nameJson: nameJson as MultilingualText, configJson, isDefault, visibleRoleIds: roleVisibility },
+        data: { targetPageId, viewKey: resolvedKey, nameJson: nameJson as MultilingualText, configJson, isDefault, visibleRoleIds: roleVisibility },
       });
     }
   };
@@ -838,6 +887,12 @@ export default function EntityViewsPage() {
                           {view.isDefault && <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />}
                           {ml(view.nameJson)}
                         </span>
+                        {view.targetPageId != null && (
+                          <Badge variant="outline" className="ml-2 bg-indigo-50 text-indigo-700 border-indigo-200">
+                            {ml(mirrorPages.find((p) => p.id === view.targetPageId)?.nameJson) ||
+                              t("views.badgePageScoped", "страница")}
+                          </Badge>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-slate-500 font-mono text-xs">{view.viewKey}</td>
                       <td className="px-4 py-3 text-slate-500">
@@ -898,6 +953,35 @@ export default function EntityViewsPage() {
               <Switch checked={isDefault} onCheckedChange={setIsDefault} />
               <Label className="cursor-pointer">{t("views.defaultView", "Вид по умолчанию")}</Label>
             </div>
+
+            {mirrorPages.length > 0 && (
+              <div className="space-y-1.5 border-b border-slate-100 pb-4">
+                <Label>{t("views.targetPage", "Привязка к странице")}</Label>
+                <Select
+                  value={targetPageId ? String(targetPageId) : "__main__"}
+                  onValueChange={(v) => {
+                    const nextId = v === "__main__" ? null : Number(v);
+                    setTargetPageId(nextId);
+                    if (nextId !== targetPageId) {
+                      setFilters(prev => prev.filter(f => f.source !== "page"));
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__main__">{t("views.mainEntityPage", "Основная страница сущности")}</SelectItem>
+                    {mirrorPages.map((p) => (
+                      <SelectItem key={p.id} value={String(p.id)}>{ml(p.nameJson)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-slate-400">
+                  {t("views.targetPageHint", "Привязанный вид будет доступен только на выбранной странице. Основные виды не могут использовать поля страниц.")}
+                </p>
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <Label>{t("pivot.viewMode", "Тип отображения")}</Label>
@@ -960,9 +1044,14 @@ export default function EntityViewsPage() {
               )}
             </div>
 
+            <div className="space-y-1 text-sm text-slate-500 bg-blue-50/50 p-3 rounded-md border border-blue-100">
+              <p className="font-medium text-blue-800">{t("views.mandatoryFiltersTitle", "Жёсткие ограничения вида")}</p>
+              <p>{t("views.mandatoryFiltersDesc", "Эти условия применяются на сервере принудительно. Пользователи не смогут отменить или изменить их при просмотре записей. Удобно для создания видов типа «Мои активные задачи» или «Открытые сделки» (где статус = В работе).")}</p>
+            </div>
             <FilterRowsEditor
               filters={filters}
               fields={fields}
+              pageFields={activePageFields}
               userOptions={userOptions}
               ml={ml}
               t={t}

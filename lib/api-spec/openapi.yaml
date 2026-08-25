@@ -3183,6 +3183,48 @@ paths:
               schema:
                 $ref: "#/components/schemas/View"
 
+  /entities/{entityId}/main-views:
+    get:
+      operationId: listMainEntityViews
+      tags: [views]
+      summary: List role-visible views assigned to the entity's main records page
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Main-page views
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/View"
+
+  /pages/{pageId}/views:
+    get:
+      operationId: listPageViews
+      tags: [views]
+      summary: List role-visible views assigned to one mirror page
+      parameters:
+        - name: pageId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Page-specific views
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/View"
+
   /views/{id}:
     get:
       operationId: getView
@@ -7988,6 +8030,25 @@ components:
           $ref: "#/components/schemas/FilterOperator"
         value: {}
 
+    ViewFilterCondition:
+      type: object
+      required: [field, operator]
+      description: >-
+        One authoritative, admin-authored hard condition of a named view.
+        Entity conditions work on every view. Page conditions are valid only
+        when the view targets that concrete mirror page. Missing source means
+        entity for backward compatibility with existing saved views.
+      properties:
+        source:
+          type: string
+          enum: [entity, page]
+          default: entity
+        field:
+          type: string
+        operator:
+          $ref: "#/components/schemas/FilterOperator"
+        value: {}
+
     CustomFilterOperator:
       type: string
       enum: [eq, neq, contains, notContains, gt, lt, gte, lte, between, empty, notEmpty]
@@ -8197,7 +8258,7 @@ components:
         filters:
           type: array
           items:
-            $ref: "#/components/schemas/FilterCondition"
+            $ref: "#/components/schemas/ViewFilterCondition"
         filterConjunction:
           type: string
           enum: [and, or]
@@ -8511,12 +8572,15 @@ components:
 
     View:
       type: object
-      required: [id, entityId, viewKey, nameJson, configJson, isDefault, sortOrder, isActive, createdAt, updatedAt]
+      required: [id, entityId, targetPageId, viewKey, nameJson, configJson, isDefault, sortOrder, isActive, createdAt, updatedAt]
       properties:
         id:
           type: integer
         entityId:
           type: integer
+        targetPageId:
+          type: ["integer", "null"]
+          description: Null for the entity's main page; otherwise one concrete mirror page.
         viewKey:
           type: string
         nameJson:
@@ -8546,6 +8610,9 @@ components:
       properties:
         viewKey:
           type: string
+        targetPageId:
+          type: ["integer", "null"]
+          description: Null/absent for the entity's main page; otherwise one mirror page of this entity.
         nameJson:
           $ref: "#/components/schemas/MultilingualText"
         configJson:
@@ -8569,6 +8636,8 @@ components:
       properties:
         viewKey:
           type: string
+        targetPageId:
+          type: ["integer", "null"]
         nameJson:
           $ref: "#/components/schemas/MultilingualText"
         configJson:
@@ -8604,6 +8673,12 @@ components:
     RecordQuery:
       type: object
       properties:
+        viewId:
+          type: integer
+          description: >-
+            Selected named view. The server resolves its authoritative hard
+            filters and target-page assignment; client-supplied filters cannot
+            replace or remove them.
         filters:
           type: array
           items:
@@ -8776,6 +8851,9 @@ components:
       type: object
       required: [field]
       properties:
+        viewId:
+          type: integer
+          description: Selected named view whose authoritative hard filters constrain the option list.
         pageId:
           type: integer
           description: >-
@@ -8906,6 +8984,9 @@ components:
       type: object
       required: [pageId, field]
       properties:
+        viewId:
+          type: integer
+          description: Selected page-specific view whose authoritative hard filters constrain the option list.
         pageId:
           type: integer
           description: The mirror-page context that owns the page-local field.

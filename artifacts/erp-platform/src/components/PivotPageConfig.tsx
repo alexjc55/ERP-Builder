@@ -207,7 +207,8 @@ export function PivotPageConfig({
   const [search, setSearch] = useState(initial?.search ?? "");
   const [statusIds, setStatusIds] = useState<number[]>(initial?.statusIds ?? []);
   const [filters, setFilters] = useState<DraftFilter[]>(
-    (initial?.filters ?? []).map((f) => ({
+    (initial?.filters ?? []).map((f: any) => ({
+      source: f.source === "page" ? "page" : "entity",
       field: f.field,
       operator: f.operator as FilterOperator,
       valueText: filterValueToText(f.value),
@@ -252,7 +253,7 @@ export function PivotPageConfig({
   };
 
   const addFilter = () =>
-    setFilters((prev) => [...prev, { field: fields[0]?.fieldKey ?? "", operator: "eq" as FilterOperator, valueText: "" }]);
+    setFilters((prev) => [...prev, { source: "entity", field: fields[0]?.fieldKey ?? "", operator: "eq" as FilterOperator, valueText: "" }]);
   const updateFilter = (idx: number, patch: Partial<DraftFilter>) =>
     setFilters((prev) => prev.map((f, i) => (i === idx ? { ...f, ...patch } : f)));
   const removeFilter = (idx: number) => setFilters((prev) => prev.filter((_, i) => i !== idx));

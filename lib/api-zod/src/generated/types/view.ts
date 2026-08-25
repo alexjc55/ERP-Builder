@@ -11,6 +11,11 @@ import type { ViewConfig } from './viewConfig';
 export interface View {
   id: number;
   entityId: number;
+  /**
+     * Null for the entity's main page; otherwise one concrete mirror page.
+     * @nullable
+     */
+  targetPageId: number | null;
   viewKey: string;
   nameJson: MultilingualText;
   configJson: ViewConfig;

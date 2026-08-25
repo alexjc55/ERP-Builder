@@ -5,6 +5,7 @@ import {
   type FilterOperator,
   type SortSpecDirection,
   type Field,
+  type PageField,
   type MultilingualText,
   type PivotDimension,
   type PivotDimensionSource,
@@ -103,7 +104,7 @@ export function textToFilterValue(op: FilterOperator, text: string): unknown {
   return text;
 }
 
-export type DraftFilter = { field: string; operator: FilterOperator; valueText: string };
+export type DraftFilter = { source: "entity" | "page"; field: string; operator: FilterOperator; valueText: string };
 export type DraftSort = { field: string; direction: SortSpecDirection };
 // Pivot dimension draft. Entity-views editors only use entity|status; the "page"
 // source is available where the editor has a page context (pivot PAGE custom config).
@@ -405,6 +406,7 @@ function FilterValueEditor({
 export function FilterRowsEditor({
   filters,
   fields,
+  pageFields = [],
   userOptions,
   ml,
   t,
@@ -419,6 +421,7 @@ export function FilterRowsEditor({
 }: {
   filters: DraftFilter[];
   fields: Field[];
+  pageFields?: PageField[];
   userOptions: UserOption[];
   ml: (val: MultilingualText | string | undefined | null) => string;
   t: (key: string, def: string) => string;
@@ -427,7 +430,7 @@ export function FilterRowsEditor({
   onRemove: (idx: number) => void;
   conjunction?: "and" | "or";
   onConjunctionChange?: (v: "and" | "or") => void;
-  getOptions?: (fieldKey: string) => Promise<string[]>;
+  getOptions?: (fieldKey: string, source?: "entity" | "page") => Promise<string[]>;
   projectedTypeByField?: Map<string, Field["fieldType"]>;
   projectedFieldByField?: Map<string, Field>;
 }) {
@@ -460,7 +463,9 @@ export function FilterRowsEditor({
       ) : (
         <div className="space-y-2">
           {filters.map((f, idx) => {
-            const rowField = fields.find((x: Field) => x.fieldKey === f.field);
+            const rowField = f.source === "page"
+              ? pageFields.find((x) => x.fieldKey === f.field) as unknown as Field
+              : fields.find((x) => x.fieldKey === f.field);
             const rowFt = rowField?.fieldType;
             const rowEff =
               rowFt === "relation" || rowFt === "lookup"
@@ -470,19 +475,22 @@ export function FilterRowsEditor({
             return (
               <div key={idx} className="flex items-center gap-2">
                 <Select
-                  value={f.field}
+                  value={f.source === "page" ? `p:${f.field}` : f.field}
                   onValueChange={(v) => {
-                    const nf = fields.find((x: Field) => x.fieldKey === v);
+                    const isPage = v.startsWith("p:");
+                    const key = isPage ? v.slice(2) : v;
+                    const nf = isPage
+                      ? pageFields.find((x) => x.fieldKey === key) as unknown as Field
+                      : fields.find((x) => x.fieldKey === key);
                     const nft = nf?.fieldType;
                     const neff =
                       nft === "relation" || nft === "lookup"
-                        ? (projectedTypeByField?.get(v) ?? "text")
+                        ? (projectedTypeByField?.get(key) ?? "text")
                         : nft;
                     const allowed = operatorsForType(neff).map((o) => o.value);
-                    // Reset to "равно" if the current operator is meaningless for the new
-                    // field type (e.g. switching a "содержит" text filter to a user field).
                     onUpdate(idx, {
-                      field: v,
+                      source: isPage ? "page" : "entity",
+                      field: key,
                       valueText: "",
                       ...(allowed.includes(f.operator) ? {} : { operator: "eq" as FilterOperator }),
                     });
@@ -492,6 +500,14 @@ export function FilterRowsEditor({
                   <SelectContent>
                     {fields.map((fld: Field) => (
                       <SelectItem key={fld.fieldKey} value={fld.fieldKey}>{ml(fld.nameJson)}</SelectItem>
+                    ))}
+                    {pageFields.length > 0 && (
+                      <div className="px-2 py-1 text-xs font-semibold text-slate-500 uppercase tracking-wider bg-slate-50 mt-1 mb-1">{t("views.pageFields", "Поля страницы")}</div>
+                    )}
+                    {pageFields.map((fld) => (
+                      <SelectItem key={`p:${fld.fieldKey}`} value={`p:${fld.fieldKey}`}>
+                        {ml(fld.nameJson as MultilingualText)}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -510,7 +526,7 @@ export function FilterRowsEditor({
                   onChange={(text) => onUpdate(idx, { valueText: text })}
                   t={t}
                   userOptions={userOptions}
-                  getOptions={getOptions}
+                  getOptions={getOptions ? (fieldKey) => getOptions(fieldKey, f.source) : undefined}
                   projectedType={projectedTypeByField?.get(f.field)}
                   projectedField={projectedFieldByField?.get(f.field)}
                 />

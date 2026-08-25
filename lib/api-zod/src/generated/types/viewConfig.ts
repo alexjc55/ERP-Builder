@@ -6,15 +6,15 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CalendarConfig } from './calendarConfig';
-import type { FilterCondition } from './filterCondition';
 import type { PivotConfig } from './pivotConfig';
 import type { SortSpec } from './sortSpec';
 import type { ViewConfigFilterConjunction } from './viewConfigFilterConjunction';
 import type { ViewConfigPageSize } from './viewConfigPageSize';
 import type { ViewConfigViewType } from './viewConfigViewType';
+import type { ViewFilterCondition } from './viewFilterCondition';
 
 export interface ViewConfig {
-  filters?: FilterCondition[];
+  filters?: ViewFilterCondition[];
   filterConjunction?: ViewConfigFilterConjunction;
   sorts?: SortSpec[];
   search?: string;

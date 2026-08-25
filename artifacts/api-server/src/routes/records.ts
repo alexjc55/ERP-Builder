@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, appSettingsTable, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable, pageFieldsTable, pageRecordValuesTable, pagesTable, relationsTable, recordLinksTable, viewsTable } from "@workspace/db";
+import { db, appSettingsTable, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable, pageFieldsTable, pageRecordValuesTable, pagesTable, relationsTable, recordLinksTable } from "@workspace/db";
 import { eq, asc, desc, and, or, sql, inArray, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { buildFormulaScope, evaluateFormula, normalizeDecimals, cleanFpNoise, DEFAULT_FORMULA_TIME_ZONE, type FormulaEvaluationOptions, type FormulaFieldDef } from "@workspace/formula";
@@ -92,6 +92,10 @@ import {
   referencedUserIds,
   UserReferenceBusyError,
 } from "../lib/user-reference-barrier";
+import {
+  combineAuthoritativeAndViewerWhere,
+  resolveAuthoritativeView,
+} from "../lib/authoritative-view";
 
 const router: IRouter = Router();
 
@@ -943,6 +947,17 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
 
   const formulaOptions = await loadFormulaOptions();
   const fields = await loadActiveFields(entityId);
+  const selectedView = await resolveAuthoritativeView({
+    req,
+    entityId,
+    pageId: body.data.pageId,
+    viewId: body.data.viewId,
+    allFields: fields,
+  });
+  if (!selectedView.ok) {
+    res.status(selectedView.status).json({ error: selectedView.error });
+    return;
+  }
   const { hidden } = await fieldAccessContext(req, entityId, fields, body.data.pageId);
   // Hidden fields must not be observable, including via filter/sort/search inference.
   // Restrict the query whitelist to visible fields so any reference to a hidden field
@@ -1180,7 +1195,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     }
   }
 
-  const where = and(...clauses)!;
+  const where = combineAuthoritativeAndViewerWhere(selectedView.hardWhere, clauses)!;
 
   const { page, pageSize } = body.data;
   const offset = (page - 1) * pageSize;
@@ -2116,6 +2131,18 @@ router.post(
     const pageId = body.data.pageId ?? undefined;
 
     const fields = await loadActiveFields(entityId);
+    const selectedView = await resolveAuthoritativeView({
+      req,
+      entityId,
+      pageId,
+      viewId: body.data.viewId,
+      allFields: fields,
+      requirePivot: body.data.viewId != null,
+    });
+    if (!selectedView.ok) {
+      res.status(selectedView.status).json({ error: selectedView.error });
+      return;
+    }
     const { hidden } = await fieldAccessContext(req, entityId, fields, pageId);
     const visibleFields = fields.filter((f) => !hidden.has(f.fieldKey));
 
@@ -2164,29 +2191,7 @@ router.post(
     //  - no viewId → this is the entity DEFAULT pivot, so enforce
     //    defaultPivotJson.visibleRoleIds as a hard boundary.
     // superAdmin always passes; empty/absent visibleRoleIds = everyone with access.
-    if (body.data.viewId != null) {
-      const [view] = await db
-        .select({ entityId: viewsTable.entityId, visibleRoleIdsJson: viewsTable.visibleRoleIdsJson, configJson: viewsTable.configJson })
-        .from(viewsTable)
-        .where(eq(viewsTable.id, body.data.viewId))
-        .limit(1);
-      const ids = view?.visibleRoleIdsJson;
-      const cfg = view?.configJson as { viewType?: string; pivot?: unknown } | null | undefined;
-      // The named-view branch is the role gate for named pivots, so the view must
-      // (a) belong to this entity, (b) actually BE a pivot view (else a visible
-      // table view could be used to enter this branch and skip the default gate),
-      // and (c) be visible to the viewer. Otherwise 404 (mirrors the views list).
-      const viewVisible =
-        view != null &&
-        view.entityId === entityId &&
-        cfg?.viewType === "pivot" &&
-        cfg.pivot != null &&
-        (perms.superAdmin || !ids || ids.length === 0 || ids.some((id) => roleIds.includes(id)));
-      if (!viewVisible) {
-        res.status(404).json({ error: "View not found" });
-        return;
-      }
-    } else {
+    if (selectedView.view == null) {
       const dpv = (entity.defaultPivotJson as { visibleRoleIds?: number[] } | null)?.visibleRoleIds;
       if (!perms.superAdmin && dpv && dpv.length > 0 && !dpv.some((id) => roleIds.includes(id))) {
         res.status(403).json({ error: "Сводная таблица недоступна для вашей роли" });
@@ -2248,7 +2253,7 @@ router.post(
       for (const c of cf.clauses) clauses.push(c);
     }
 
-    const where = and(...clauses)!;
+    const where = combineAuthoritativeAndViewerWhere(selectedView.hardWhere, clauses)!;
 
     const outcome = await computePivot({
       entityId,
@@ -2290,7 +2295,18 @@ router.post(
     }
 
     const fields = await loadActiveFields(entityId);
-    const { hidden } = await fieldAccessContext(req, entityId, fields);
+    const selectedView = await resolveAuthoritativeView({
+      req,
+      entityId,
+      pageId: body.data.pageId,
+      viewId: body.data.viewId,
+      allFields: fields,
+    });
+    if (!selectedView.ok) {
+      res.status(selectedView.status).json({ error: selectedView.error });
+      return;
+    }
+    const { hidden } = await fieldAccessContext(req, entityId, fields, body.data.pageId);
     const visibleFields = fields.filter((f) => !hidden.has(f.fieldKey));
 
     const target = visibleFields.find((f) => f.fieldKey === body.data.field);
@@ -2314,7 +2330,7 @@ router.post(
     // same way the records query flattens them.
     const spec: RecordQuerySpec = {
       filters: [
-        ...(body.data.baseFilters ?? []),
+        ...(selectedView.view == null ? (body.data.baseFilters ?? []) : []),
         ...(body.data.filters ?? []).filter((c) => c.field !== body.data.field),
       ],
       filterConjunction: body.data.filterConjunction ?? "and",
@@ -2375,7 +2391,10 @@ router.post(
       const linkedCol = targetMeta.direction === "source" ? frl.targetRecordId : frl.sourceRecordId;
       const valueExpr = sql<string | null>`(${flt.valuesJson} ->> ${targetMeta.relatedFieldKey})`;
       const vsClauses = valueSearch ? [sql`${valueExpr} ILIKE ${"%" + valueSearch + "%"}`] : [];
-      const where = and(...clauses, ...vsClauses, sql`${valueExpr} IS NOT NULL AND ${valueExpr} <> ''`)!;
+      const where = combineAuthoritativeAndViewerWhere(
+        selectedView.hardWhere,
+        [...clauses, ...vsClauses, sql`${valueExpr} IS NOT NULL AND ${valueExpr} <> ''`],
+      )!;
       // ORDER BY ordinal (1) — same SELECT DISTINCT constraint as below.
       const rows = await db
         .selectDistinct({ v: valueExpr })
@@ -2393,7 +2412,7 @@ router.post(
         const [emptyRow] = await db
           .select({ one: sql<number>`1` })
           .from(entityRecordsTable)
-          .where(and(...clauses, noLink)!)
+          .where(combineAuthoritativeAndViewerWhere(selectedView.hardWhere, [...clauses, noLink])!)
           .limit(1);
         if (emptyRow) values = [EMPTY_FILTER_VALUE, ...values];
       }
@@ -2405,7 +2424,10 @@ router.post(
           ? sql<string | null>`to_char(${entityRecordsTable.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`
           : sql<string | null>`(${entityRecordsTable.valuesJson} ->> ${body.data.field})`;
       const vsClauses = valueSearch ? [sql`${valueExpr} ILIKE ${"%" + valueSearch + "%"}`] : [];
-      const where = and(...clauses, ...vsClauses, sql`${valueExpr} IS NOT NULL AND ${valueExpr} <> ''`)!;
+      const where = combineAuthoritativeAndViewerWhere(
+        selectedView.hardWhere,
+        [...clauses, ...vsClauses, sql`${valueExpr} IS NOT NULL AND ${valueExpr} <> ''`],
+      )!;
       // ORDER BY ordinal (1) — for SELECT DISTINCT the order-by expression must match the
       // selected column; re-emitting valueExpr would bind a fresh param and Postgres would
       // reject it as not in the select list.
@@ -2421,7 +2443,10 @@ router.post(
         const [emptyRow] = await db
           .select({ one: sql<number>`1` })
           .from(entityRecordsTable)
-          .where(and(...clauses, sql`(${valueExpr} IS NULL OR ${valueExpr} = '')`)!)
+          .where(combineAuthoritativeAndViewerWhere(
+            selectedView.hardWhere,
+            [...clauses, sql`(${valueExpr} IS NULL OR ${valueExpr} = '')`],
+          )!)
           .limit(1);
         if (emptyRow) values = [EMPTY_FILTER_VALUE, ...values];
       }
@@ -2483,6 +2508,17 @@ router.post(
     const valKey = resolved.exprKey;
 
     const fields = await loadActiveFields(entityId);
+    const selectedView = await resolveAuthoritativeView({
+      req,
+      entityId,
+      pageId,
+      viewId: body.data.viewId,
+      allFields: fields,
+    });
+    if (!selectedView.ok) {
+      res.status(selectedView.status).json({ error: selectedView.error });
+      return;
+    }
     const perms = await getPermissions(req);
     const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, entityId, pageId);
     const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, entityId);
@@ -2503,7 +2539,7 @@ router.post(
     // Same server-side picker search as entity filter-values (pre-limit).
     const pfValueSearch = (body.data.valueSearch ?? "").trim();
     if (pfValueSearch) clauses.push(sql`${valueExpr} ILIKE ${"%" + pfValueSearch + "%"}`);
-    const where = and(...clauses)!;
+    const where = combineAuthoritativeAndViewerWhere(selectedView.hardWhere, clauses)!;
 
     // ORDER BY ordinal (1) — same SELECT DISTINCT constraint as filter-values:
     // re-emitting valueExpr in ORDER BY would bind a fresh param Postgres rejects.

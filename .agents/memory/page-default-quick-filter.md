@@ -1,35 +1,32 @@
 ---
-name: Page default quick-filter & filter-values baseFilters
-description: How the records filter-values endpoint separates a view's HARD filters from ad-hoc picks, and how the per-page SOFT default quick-filter seeds the bar without ever bypassing the hard boundary.
+name: Page default quick-filter & authoritative filter-values
+description: How filter-values separates authoritative named views, no-view entity defaults, and per-page soft filters without bypassing the hard boundary.
 ---
 
-## filter-values: baseFilters vs filters (the dependent-dropdown fix)
+## filter-values: authoritative viewId vs entity-default baseFilters
 
-The records `filter-values` endpoint (option lists for the filter bar) takes TWO
-condition arrays that both compose under one conjunction into the same query:
+The records `filter-values` endpoint separates three sources:
 
-- `baseFilters` — the view's / entity-default HARD filters. Kept on EVERY field,
-  including the target field being listed. So a field the view pins to a fixed
-  value only offers the permitted value(s) — never all values.
+- `viewId` — a named view's server-loaded authoritative hard filters/search.
+  They stay applied to every target, so a pinned field never offers values outside
+  the view.
+- `baseFilters` — only the entity-default filters when no named view is selected.
 - `filters` — the viewer's AD-HOC picks. These self-exclude the target field
   (`c.field !== target`) so a field's own current selection can still be widened.
 
-**Why:** before the split, the client merged view filters into `filters`, which
-self-excluded the target field wholesale, so a view-pinned field's dropdown
-listed ALL values (leaking values the view hides from view).
+**Why:** browser-supplied named-view filters were removable, and merging them into
+`filters` self-excluded the target field, exposing values outside the view.
 
-**How to apply:** never merge a view's fixed filters into the self-excluding
-`filters` array. Persistent/hard filters always go in `baseFilters`. The endpoint
-still re-applies the full records read boundary (field visibility, own-row scope,
-hidden-status, archived) independently — baseFilters is a query narrowing, not the
-security boundary.
+**How to apply:** never send a named view's fixed filters in caller arrays; send
+`viewId`. Only no-view entity defaults use `baseFilters`. The endpoint re-applies
+exact page access plus field/row/status/archive boundaries independently.
 
 ## Per-page SOFT default quick-filter
 
 `pages.defaultQuickFilterJson = { fieldFilters?: Record<string,string[]>; statusIds?: number[] }`
 pre-fills the filter bar on page open. It is USER-ADJUSTABLE and can NEVER reveal
 rows the view's hard filter hides — it only seeds the ad-hoc field-dropdown +
-status quick-filter, which AND on top of `baseFilters` in the records query.
+status quick-filter, which AND on top of the authoritative view group.
 
 - **Seeding effect is authoritative** for the two dimensions it owns
   (`fieldFilters`, `statusFilter`): on each (entityId, pageId) it sets them to the
