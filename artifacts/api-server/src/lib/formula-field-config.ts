@@ -27,6 +27,7 @@ export const FORMULA_CONFIG_LIMITS = {
   uniqueJoinSeparatorLength: 100,
   equalityJoinCount: 8,
   aggregateLimit: 10_000,
+  groupResultFieldCount: 8,
 } as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -60,6 +61,28 @@ function normalizeFieldReference(input: unknown): FormulaFieldReference | null {
     return pageId ? { scope: "page", pageId, fieldKey } : null;
   }
   return null;
+}
+
+function normalizeGroupResult(input: unknown): {
+  enabled: boolean;
+  fields: FormulaFieldReference[];
+} | null {
+  if (!isRecord(input) || typeof input.enabled !== "boolean" || !Array.isArray(input.fields)) {
+    return null;
+  }
+  const fields: FormulaFieldReference[] = [];
+  const seen = new Set<string>();
+  for (const item of input.fields.slice(0, FORMULA_CONFIG_LIMITS.groupResultFieldCount)) {
+    const ref = normalizeFieldReference(item);
+    if (!ref) continue;
+    const key = ref.scope === "entity"
+      ? `entity:${ref.fieldKey}`
+      : `page:${ref.pageId}:${ref.fieldKey}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    fields.push(ref);
+  }
+  return { enabled: input.enabled, fields };
 }
 
 function normalizeExternalSource(
@@ -158,6 +181,20 @@ export function validateFormulaFieldConfig(config: unknown): string[] {
       }
     }
   }
+  if (config.groupResult !== undefined) {
+    const normalized = normalizeGroupResult(config.groupResult);
+    if (
+      !normalized ||
+      !isRecord(config.groupResult) ||
+      !Array.isArray(config.groupResult.fields) ||
+      config.groupResult.fields.length > FORMULA_CONFIG_LIMITS.groupResultFieldCount ||
+      JSON.stringify(normalized) !== JSON.stringify(config.groupResult)
+    ) {
+      errors.push("groupResult contains malformed or duplicate field references");
+    } else if (normalized.enabled && normalized.fields.length === 0) {
+      errors.push("groupResult.fields must not be empty when enabled");
+    }
+  }
   return errors;
 }
 
@@ -177,6 +214,7 @@ export function normalizeFormulaFieldConfig<T>(config: T, fieldType: string): T 
     displayAffix?: unknown;
     displayAffixPosition?: unknown;
     sources?: unknown;
+    groupResult?: unknown;
   };
   let normalized: Record<string, unknown> = { ...(config as object) };
 
@@ -193,6 +231,11 @@ export function normalizeFormulaFieldConfig<T>(config: T, fieldType: string): T 
   }
   if ("sources" in source) {
     normalized.sources = fieldType === "function" ? normalizeFormulaFieldSources(source.sources) : [];
+  }
+  if ("groupResult" in source) {
+    const groupResult = normalizeGroupResult(source.groupResult);
+    if (fieldType === "function" && groupResult) normalized.groupResult = groupResult;
+    else delete normalized.groupResult;
   }
 
   if (fieldType !== "number" && fieldType !== "function") {

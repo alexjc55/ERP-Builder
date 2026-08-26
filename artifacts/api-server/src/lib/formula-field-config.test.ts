@@ -244,3 +244,72 @@ test("rejects source input that would require write-boundary normalization", () 
     ["sources contains malformed or duplicate entries"],
   );
 });
+
+test("normalizes groupResult only for function fields", () => {
+  const input = {
+    expression: "{amount}",
+    groupResult: {
+      enabled: true,
+      fields: [
+        { scope: "entity", fieldKey: " customer " },
+        { scope: "page", pageId: 9, fieldKey: " month " },
+      ],
+    },
+  };
+  assert.deepEqual(normalizeFormulaFieldConfig(input, "function"), {
+    expression: "{amount}",
+    groupResult: {
+      enabled: true,
+      fields: [
+        { scope: "entity", fieldKey: "customer" },
+        { scope: "page", pageId: 9, fieldKey: "month" },
+      ],
+    },
+  });
+  assert.deepEqual(normalizeFormulaFieldConfig(input, "number"), {
+    expression: "{amount}",
+  });
+});
+
+test("validates groupResult malformed, duplicate, over-limit, and enabled-empty lists", () => {
+  assert.deepEqual(validateFormulaFieldConfig({
+    groupResult: { enabled: true, fields: [] },
+  }), ["groupResult.fields must not be empty when enabled"]);
+  assert.deepEqual(validateFormulaFieldConfig({
+    groupResult: {
+      enabled: false,
+      fields: [
+        { scope: "entity", fieldKey: "x" },
+        { scope: "entity", fieldKey: "x" },
+      ],
+    },
+  }), ["groupResult contains malformed or duplicate field references"]);
+  assert.deepEqual(validateFormulaFieldConfig({
+    groupResult: {
+      enabled: false,
+      fields: Array.from({ length: 9 }, (_, index) => ({
+        scope: "entity",
+        fieldKey: `x${index}`,
+      })),
+    },
+  }), ["groupResult contains malformed or duplicate field references"]);
+  assert.deepEqual(validateFormulaFieldConfig({
+    groupResult: { enabled: false, fields: [] },
+  }), []);
+});
+
+test("generated API contract carries qualified groupResult fields", () => {
+  const parsed = CreateEntityFieldBody.safeParse({
+    fieldKey: "grouped_total",
+    fieldType: "function",
+    nameJson: { en: "Grouped total" },
+    formulaConfigJson: {
+      expression: "{amount}",
+      groupResult: {
+        enabled: true,
+        fields: [{ scope: "entity", fieldKey: "customer" }],
+      },
+    },
+  });
+  assert.equal(parsed.success, true);
+});

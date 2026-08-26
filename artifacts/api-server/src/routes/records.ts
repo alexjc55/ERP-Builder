@@ -104,8 +104,15 @@ import {
   materializeVisibleEntityFormulas,
   canUseRecordPageFormulaContext,
   projectViewerFormulaValues,
+  materializeVisiblePageFormulas,
 } from "../lib/formula-runtime";
 import { effectiveEntityForPage } from "./page-fields";
+import {
+  applyFormulaGroupResults,
+  formulaGroupResultWinners,
+  type FormulaGroupConfig,
+  type FormulaGroupReference,
+} from "../lib/formula-group-result";
 
 const router: IRouter = Router();
 
@@ -1387,7 +1394,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     ],
     permissions: formulaPermissions,
   });
-  const dataFormulaValues = materializeVisibleEntityFormulas({
+  let dataFormulaValues = materializeVisibleEntityFormulas({
     entityId,
     rows: data.map((r) => ({ id: r.id, values: (r.valuesJson ?? {}) as Record<string, unknown> })),
         fields: visibleFields,
@@ -1399,6 +1406,191 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     linkedInputs: dataLinkedInputs,
     formulaOptions,
   });
+
+  // Resolve grouping capabilities exclusively against this viewer's visible
+  // schema. Page references are additionally restricted to the authorized page
+  // context of the same effective entity (resolved above).
+  const visibleEntityKeys = new Set(visibleFields.map((field) => field.fieldKey));
+  const visiblePageKeys = new Set(visibleDataPageFields.map((field) => field.fieldKey));
+  const secureGroupConfig = (
+    field: { fieldKey: string; fieldType: string; formulaConfigJson: unknown },
+  ): FormulaGroupConfig | null => {
+    if (field.fieldType !== "function") return null;
+    const groupResult = (field.formulaConfigJson as {
+      groupResult?: { enabled?: unknown; fields?: unknown };
+    } | null)?.groupResult;
+    if (!groupResult || groupResult.enabled !== true || !Array.isArray(groupResult.fields) ||
+        groupResult.fields.length === 0 || groupResult.fields.length > 8) return null;
+    const refs: FormulaGroupReference[] = [];
+    const seen = new Set<string>();
+    for (const raw of groupResult.fields) {
+      if (!raw || typeof raw !== "object") return null;
+      const ref = raw as { scope?: unknown; pageId?: unknown; fieldKey?: unknown };
+      if (typeof ref.fieldKey !== "string") return null;
+      if (ref.scope === "entity" && visibleEntityKeys.has(ref.fieldKey)) {
+        const key = `entity:${ref.fieldKey}`;
+        if (seen.has(key)) return null;
+        seen.add(key);
+        refs.push({ scope: "entity", fieldKey: ref.fieldKey });
+      } else if (
+        ref.scope === "page" &&
+        formulaPageId != null &&
+        ref.pageId === formulaPageId &&
+        visiblePageKeys.has(ref.fieldKey)
+      ) {
+        const key = `page:${formulaPageId}:${ref.fieldKey}`;
+        if (seen.has(key)) return null;
+        seen.add(key);
+        refs.push({ scope: "page", pageId: formulaPageId, fieldKey: ref.fieldKey });
+      } else {
+        // A hidden, foreign-entity, or inaccessible-page reference disables the
+        // grouping behavior rather than turning it into an inference oracle.
+        return null;
+      }
+    }
+    return { key: field.fieldKey, fields: refs };
+  };
+  const entityGroupConfigs = visibleFields
+    .map(secureGroupConfig)
+    .filter((config): config is FormulaGroupConfig => config !== null);
+  const pageGroupConfigs = visibleDataPageFields
+    .map(secureGroupConfig)
+    .filter((config): config is FormulaGroupConfig => config !== null);
+  let formulaGroupWinners = new Map<string, Set<number>>();
+  let pageFormulaGroupWinners = new Map<string, Set<number>>();
+  let formulaGroupRows: {
+    id: number;
+    createdAt: Date;
+    values: Record<string, unknown>;
+  }[] = [];
+  let formulaGroupPageValues = new Map<number, Record<string, unknown>>();
+  if (entityGroupConfigs.length > 0 || pageGroupConfigs.length > 0) {
+    const groupingWhere = combineAuthoritativeAndViewerWhere(
+      selectedView.hardWhere,
+      groupsClauses,
+    )!;
+    formulaGroupRows = (await db
+      .select({
+        id: entityRecordsTable.id,
+        createdAt: entityRecordsTable.createdAt,
+        values: entityRecordsTable.valuesJson,
+      })
+      .from(entityRecordsTable)
+      .where(groupingWhere)).map((row) => ({
+        id: row.id,
+        createdAt: row.createdAt,
+        values: projectViewerFormulaValues(
+          (row.values ?? {}) as Record<string, unknown>,
+          visibleFields,
+        ),
+      }));
+    if (formulaPageId != null && formulaGroupRows.length > 0) {
+      const pageRows = await db
+        .select({
+          recordId: pageRecordValuesTable.recordId,
+          values: pageRecordValuesTable.valuesJson,
+        })
+        .from(pageRecordValuesTable)
+        .where(and(
+          eq(pageRecordValuesTable.pageId, formulaPageId),
+          inArray(pageRecordValuesTable.recordId, formulaGroupRows.map((row) => row.id)),
+        ));
+      for (const row of pageRows) {
+        formulaGroupPageValues.set(
+          row.recordId,
+          projectViewerFormulaValues(
+            (row.values ?? {}) as Record<string, unknown>,
+            visibleDataPageFields,
+          ),
+        );
+      }
+    }
+    for (const row of formulaGroupRows) {
+      for (const field of visibleFields) {
+        if (field.fieldType === "created_at") row.values[field.fieldKey] = row.createdAt.toISOString();
+      }
+    }
+    const groupingLinkedInputs = await mergeLinkedFormulaInputs({
+      entityId,
+      pageId: formulaPageId,
+      rows: formulaGroupRows.map((row) => ({ id: row.id, values: row.values })),
+      fields: [...visibleFields, ...visibleDataPageFields],
+      permissions: formulaPermissions,
+    });
+    const groupingEntityValues = materializeVisibleEntityFormulas({
+      entityId,
+      rows: formulaGroupRows.map((row) => ({ id: row.id, values: row.values })),
+      fields: visibleFields,
+      hidden,
+      pageId: formulaPageId,
+      pageValues: formulaGroupPageValues,
+      pageFields: dataPageFormulaContext.fields,
+      hiddenPage: dataPageFormulaContext.hidden,
+      linkedInputs: groupingLinkedInputs,
+      formulaOptions,
+    });
+    const groupingPageValues = formulaPageId == null
+      ? new Map<number, Record<string, unknown>>()
+      : materializeVisiblePageFormulas({
+          entityId,
+          pageId: formulaPageId,
+          rows: formulaGroupRows.map((row) => ({
+            id: row.id,
+            entityValues: row.values,
+            pageValues: formulaGroupPageValues.get(row.id) ?? {},
+          })),
+          entityFields: visibleFields,
+          pageFields: dataPageFormulaContext.fields,
+          hiddenEntity: hidden,
+          hiddenPage: dataPageFormulaContext.hidden,
+          linkedInputs: groupingLinkedInputs,
+          formulaOptions,
+        });
+    const groupingRows = formulaGroupRows.map((row) => ({
+      id: row.id,
+      createdAt: row.createdAt,
+      entityValues: groupingEntityValues.get(row.id) ?? row.values,
+      pageValues: formulaPageId == null
+        ? undefined
+        : new Map([[
+            formulaPageId,
+            groupingPageValues.get(row.id) ?? formulaGroupPageValues.get(row.id) ?? {},
+          ]]),
+    }));
+    formulaGroupWinners = formulaGroupResultWinners(groupingRows, entityGroupConfigs);
+    pageFormulaGroupWinners = formulaGroupResultWinners(groupingRows, pageGroupConfigs);
+    dataFormulaValues = applyFormulaGroupResults(dataFormulaValues, formulaGroupWinners);
+  }
+  let dataPageFormulaValues = materializeVisiblePageFormulas({
+    entityId,
+    pageId: formulaPageId ?? 0,
+    rows: data.map((row) => ({
+      id: row.id,
+      entityValues: (row.valuesJson ?? {}) as Record<string, unknown>,
+      pageValues: dataPageFormulaContext.values.get(row.id) ?? {},
+    })),
+    entityFields: visibleFields,
+    pageFields: dataPageFormulaContext.fields,
+    hiddenEntity: hidden,
+    hiddenPage: dataPageFormulaContext.hidden,
+    linkedInputs: dataLinkedInputs,
+    formulaOptions,
+  });
+  dataPageFormulaValues = applyFormulaGroupResults(
+    dataPageFormulaValues,
+    pageFormulaGroupWinners,
+  );
+  const visiblePageFormulaKeys = new Set(visibleDataPageFields
+    .filter((field) => field.fieldType === "function")
+    .map((field) => field.fieldKey));
+  const presentedPageFormulaValues: Record<string, Record<string, unknown>> = {};
+  if (formulaPageId != null && visiblePageFormulaKeys.size > 0) {
+    for (const [recordId, values] of dataPageFormulaValues) {
+      presentedPageFormulaValues[String(recordId)] = Object.fromEntries(
+        Object.entries(values).filter(([key]) => visiblePageFormulaKeys.has(key)),
+      );
+    }
+  }
 
   // Row → group-key map for the returned page (same key space as RecordGroup.key,
   // null = the "no value" group). Computed with the SAME key expression the
@@ -1501,6 +1693,8 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       const d = normalizeDecimals(cfg?.decimals);
       let sum = 0;
       for (const r of allRows) {
+        const winners = formulaGroupWinners.get(f.fieldKey);
+        if (winners && !winners.has(r.id)) continue;
         // Resolver inputs and aliases were assembled only from fields visible to
         // this viewer. Raw hidden values may exist in storage, but cannot become a
         // formula capability through a total.
@@ -1688,7 +1882,8 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           const d = normalizeDecimals(cfg?.decimals);
           let sum = 0;
           for (const r of recRows) {
-            const merged = { ...(pageLinkedInputs.get(r.id) ?? ((r.values as Record<string, unknown> | null) ?? {})), ...(pvByRecord.get(r.id) ?? {}) };
+            const winners = pageFormulaGroupWinners.get(pf.fieldKey);
+            if (winners && !winners.has(r.id)) continue;
             try {
               const out = evaluateFormula(expr, buildQualifiedFormulaScope({
                 entityId,
@@ -2099,6 +2294,8 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       }
       for (const f of totalFields) b.sums[f.fieldKey] = (b.sums[f.fieldKey] ?? 0) + numVal(vals[f.fieldKey]);
       for (const f of formulaTotalFields) {
+        const winners = formulaGroupWinners.get(f.fieldKey);
+        if (winners && !winners.has(r.id)) continue;
         const cfg = f.formulaConfigJson as { expression?: string; decimals?: number | null } | null;
         const expr = (cfg?.expression ?? "").trim();
         if (!expr) continue;
@@ -2121,6 +2318,8 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         if (pf.fieldType === "number") {
           b.sums[totalKey] = (b.sums[totalKey] ?? 0) + numVal(pvVals[pf.fieldKey]);
         } else {
+          const winners = pageFormulaGroupWinners.get(pf.fieldKey);
+          if (winners && !winners.has(r.id)) continue;
           const cfg = pf.formulaConfigJson as { expression?: string; decimals?: number | null } | null;
           const expr = (cfg?.expression ?? "").trim();
           if (!expr) continue;
@@ -2182,25 +2381,29 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       // already filtered by the row boundary (hiddenRowStatusIds), so any
       // status that reaches here is visible to the viewer.
       trackCommon(b, "__status__", r.statusId, firstRow);
-      for (const f of gFormulaCommon)
-        trackCommon(b, f.fieldKey, evalFormulaVal(f, buildQualifiedFormulaScope({
+      for (const f of gFormulaCommon) {
+        const winners = formulaGroupWinners.get(f.fieldKey);
+        trackCommon(b, f.fieldKey, winners && !winners.has(r.id) ? 0 : evalFormulaVal(f, buildQualifiedFormulaScope({
           entityId, entityValues: vals, entityFormulas: entityFormulaDefs,
           pageId: gPageId, pageValues: gPvByRec.get(r.id) ?? {},
           pageFormulas: gPfVisible.filter((field) => field.fieldType === "function").map(toFormulaDef), formulaOptions,
         })), firstRow);
+      }
       for (const rc of relCommonCols) {
         trackCommon(b, rc.fieldKey, (r as Record<string, unknown>)[`relval__${rc.fieldKey}`], firstRow);
       }
       if (gPfScalarCommon.length > 0 || gPfFormulaCommon.length > 0) {
         const pvVals = gPvByRec.get(r.id) ?? {};
         for (const pf of gPfScalarCommon) trackCommon(b, `pf:${pf.id}`, pvVals[pf.fieldKey], firstRow);
-        for (const pf of gPfFormulaCommon)
-          trackCommon(b, `pf:${pf.id}`, evalFormulaVal(pf, buildQualifiedFormulaScope({
+        for (const pf of gPfFormulaCommon) {
+          const winners = pageFormulaGroupWinners.get(pf.fieldKey);
+          trackCommon(b, `pf:${pf.id}`, winners && !winners.has(r.id) ? 0 : evalFormulaVal(pf, buildQualifiedFormulaScope({
             entityId, entityValues: vals, entityFormulas: entityFormulaDefs,
             pageId: gPageId, pageValues: pvVals,
             pageFormulas: gPfVisible.filter((field) => field.fieldType === "function").map(toFormulaDef),
             formulaOptions,
           })), firstRow);
+        }
       }
     }
     // Final per-group rounding for formula sums (matches the flat totals).
@@ -2310,6 +2513,9 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       fields,
     )),
     total: countRow?.count ?? 0,
+    ...(Object.keys(presentedPageFormulaValues).length > 0
+      ? { pageFormulaValues: presentedPageFormulaValues }
+      : {}),
     ...(numericTotals ? { numericTotals } : {}),
     ...(groups ? { groups } : {}),
     ...(rowGroups ? { rowGroups } : {}),

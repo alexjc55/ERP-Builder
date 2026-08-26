@@ -42,6 +42,7 @@ import { PAGE_REF_SOURCE_TYPES, loadPageRefSource } from "./record-query";
 import { validateFileValue, trashRemovedPageServerFiles, type DbExecutor } from "./records";
 import { isGoogleDriveModuleEnabled } from "../lib/googleDrive";
 import { normalizeFormulaFieldConfig, validateFormulaFieldConfig } from "../lib/formula-field-config";
+import { validateFormulaGroupResultReferences } from "../lib/formula-group-result-config";
 import { validateFormulaSources } from "../lib/formula-source-validator";
 import {
   interactiveFormulaPermissions,
@@ -697,6 +698,18 @@ router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (
     res.status(400).json({ error: "Structured formula sources are only supported by function fields" });
     return;
   }
+  if (parsed.data.formulaConfigJson?.groupResult != null && parsed.data.fieldType !== "function") {
+    res.status(400).json({ error: "Grouped formula results are only supported by function fields" });
+    return;
+  }
+  const formulaGroupErrors = await validateFormulaGroupResultReferences(
+    { kind: "page", pageId: params.data.pageId },
+    parsed.data.formulaConfigJson,
+  );
+  if (formulaGroupErrors.length) {
+    res.status(400).json({ error: formulaGroupErrors.join("; ") });
+    return;
+  }
   const createFormulaEntity = await effectiveEntityForPage(params.data.pageId);
   if (parsed.data.formulaConfigJson?.sources != null) {
     if (createFormulaEntity.entityId == null) {
@@ -895,6 +908,18 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
       res.status(400).json({ error: "Structured formula sources are only supported by function fields" });
       return;
     }
+    if (body.formulaConfigJson.groupResult != null && nextType !== "function") {
+      res.status(400).json({ error: "Grouped formula results are only supported by function fields" });
+      return;
+    }
+    const formulaGroupErrors = await validateFormulaGroupResultReferences(
+      { kind: "page", pageId: current.pageId },
+      body.formulaConfigJson,
+    );
+    if (formulaGroupErrors.length) {
+      res.status(400).json({ error: formulaGroupErrors.join("; ") });
+      return;
+    }
     if (body.formulaConfigJson.sources != null) {
       const formulaEntity = await effectiveEntityForPage(current.pageId);
       if (formulaEntity.entityId == null) {
@@ -911,7 +936,7 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
       }
     }
     updateData.formulaConfigJson = normalizeFormulaFieldConfig(body.formulaConfigJson, nextType);
-  } else if (body.fieldType != null && nextType !== "number" && nextType !== "function") {
+  } else if (body.fieldType != null && nextType !== "function") {
     // Clean stale affixes on a type transition even when formulaConfigJson was
     // omitted, without dropping expression/decimals or unknown legacy config.
     updateData.formulaConfigJson = normalizeFormulaFieldConfig(

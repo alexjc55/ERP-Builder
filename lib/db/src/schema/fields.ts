@@ -180,6 +180,14 @@ export type FormulaFieldConfig = {
   displayAffix?: string | null;
   displayAffixPosition?: "before" | "after" | null;
   sources?: FormulaFieldSource[];
+  /**
+   * When enabled, the formula result is emitted only on the deterministic first
+   * record for each tuple of qualified field values.
+   */
+  groupResult?: {
+    enabled: boolean;
+    fields: FormulaFieldReference[];
+  };
 };
 
 /**

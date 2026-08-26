@@ -2619,6 +2619,7 @@ export function EntityRecords({
   const [records, setRecords] = useState<EntityRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [numericTotals, setNumericTotals] = useState<Record<string, number>>({});
+  const [pageFormulaValues, setPageFormulaValues] = useState<Record<string, Record<string, unknown>>>({});
   const [recordsLoading, setRecordsLoading] = useState(true);
   // Mirror-page grouping: server-computed group buckets + which group is
   // expanded (accordion — at most one). NULL_GROUP_KEY is the client sentinel
@@ -3679,6 +3680,7 @@ export function EntityRecords({
         setRecords(res.data);
         setTotal(res.total);
         setNumericTotals(res.numericTotals ?? {});
+        setPageFormulaValues(res.pageFormulaValues ?? {});
         setGroups(res.groups ?? null);
         setRowGroupMap((res as { rowGroups?: Record<string, string | null> }).rowGroups ?? {});
         setLoadedGroupSig(sigForFetch);
@@ -3688,6 +3690,7 @@ export function EntityRecords({
         setRecords([]);
         setTotal(0);
         setNumericTotals({});
+        setPageFormulaValues({});
         setGroups(null);
         setRowGroupMap({});
         toast({ title: t("records.loadError", "Ошибка загрузки записей"), description: extractError(err), variant: "destructive" });
@@ -6792,7 +6795,10 @@ export function EntityRecords({
                   )}
                   {(!showGroups || expandedGroupIndex >= 0 || expandAll) && groupRowsReady && records.map((record: EntityRecord, rowIndex: number) => {
                     const values = (record.valuesJson ?? {}) as Record<string, unknown>;
-                    const pageValues = pageValuesByRecord.get(record.id)?.values ?? {};
+                    const pageValues = {
+                      ...(pageValuesByRecord.get(record.id)?.values ?? {}),
+                      ...(pageFormulaValues[String(record.id)] ?? {}),
+                    };
                     // Related values are permission-filtered server projections.
                     // Merge them before resolving formula references so entity and
                     // page function fields (including chained formulas) see the

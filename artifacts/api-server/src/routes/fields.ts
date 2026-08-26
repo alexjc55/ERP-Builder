@@ -17,6 +17,7 @@ import { requireAdmin } from "../middlewares/permissions";
 import { sanitizeOptionsInput, normalizeOptions } from "../lib/selectOptions";
 import { validateFormatInherit, withInheritedFormatRules } from "../lib/format-inherit";
 import { normalizeFormulaFieldConfig, validateFormulaFieldConfig } from "../lib/formula-field-config";
+import { validateFormulaGroupResultReferences } from "../lib/formula-group-result-config";
 import { validateFormulaSources } from "../lib/formula-source-validator";
 import {
   ListEntityFieldsParams,
@@ -353,6 +354,18 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
     res.status(400).json({ error: "Structured formula sources are only supported by function fields" });
     return;
   }
+  if (parsed.data.formulaConfigJson?.groupResult != null && parsed.data.fieldType !== "function") {
+    res.status(400).json({ error: "Grouped formula results are only supported by function fields" });
+    return;
+  }
+  const formulaGroupErrors = await validateFormulaGroupResultReferences(
+    { kind: "entity", entityId: params.data.entityId },
+    parsed.data.formulaConfigJson,
+  );
+  if (formulaGroupErrors.length) {
+    res.status(400).json({ error: formulaGroupErrors.join("; ") });
+    return;
+  }
   const formulaSourceErrors = await validateFormulaSources(
     { kind: "entity", entityId: params.data.entityId },
     parsed.data.formulaConfigJson ?? {},
@@ -648,6 +661,18 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
       res.status(400).json({ error: "Structured formula sources are only supported by function fields" });
       return;
     }
+    if (body.formulaConfigJson.groupResult != null && nextType !== "function") {
+      res.status(400).json({ error: "Grouped formula results are only supported by function fields" });
+      return;
+    }
+    const formulaGroupErrors = await validateFormulaGroupResultReferences(
+      { kind: "entity", entityId: current.entityId },
+      body.formulaConfigJson,
+    );
+    if (formulaGroupErrors.length) {
+      res.status(400).json({ error: formulaGroupErrors.join("; ") });
+      return;
+    }
     const formulaSourceErrors = await validateFormulaSources(
       { kind: "entity", entityId: current.entityId },
       body.formulaConfigJson,
@@ -657,7 +682,7 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
       return;
     }
     updateData.formulaConfigJson = normalizeFormulaFieldConfig(body.formulaConfigJson, nextType);
-  } else if (body.fieldType != null && nextType !== "number" && nextType !== "function") {
+  } else if (body.fieldType != null && nextType !== "function") {
     // A type transition must also clean affixes from the stored config when the
     // caller does not send formulaConfigJson. Keep expression/decimals and any
     // unknown legacy properties intact.

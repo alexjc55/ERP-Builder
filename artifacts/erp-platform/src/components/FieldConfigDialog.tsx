@@ -87,6 +87,7 @@ import { ColorPickerControl } from "@/components/ColorPickerControl";
 import { useToast } from "@/hooks/use-toast";
 import { FormulaEditor, type FormulaFieldRef } from "@/components/FormulaEditor";
 import { FormulaSourceBuilder, type FormulaSource, useFormulaSourceRefs } from "@/components/FormulaSourceBuilder";
+import { FormulaGroupResultEditor, type GroupResultConfig } from "@/components/FormulaGroupResultEditor";
 import { normalizeDecimals } from "@workspace/formula";
 import { useML, useT } from "@/lib/i18n";
 import { FIELD_KEY_RE, slugifyKey, uniqueKey } from "@/lib/keys";
@@ -220,6 +221,7 @@ export function FieldConfigDialog({
   const [validationRules, setValidationRules] = useState<FieldValidationRule[]>([]);
   const [formula, setFormula] = useState("");
   const [formulaSources, setFormulaSources] = useState<FormulaSource[]>([]);
+  const [groupResult, setGroupResult] = useState<GroupResultConfig>({ enabled: false, fields: [] });
   const [formulaDecimals, setFormulaDecimals] = useState("");
   const [displayAffix, setDisplayAffix] = useState("");
   const [displayAffixPosition, setDisplayAffixPosition] = useState<"before" | "after">("after");
@@ -292,6 +294,9 @@ export function FieldConfigDialog({
           ? [...((formulaConfig as FormulaFieldConfig & { sources: FormulaSource[] }).sources)]
           : [],
       );
+      setGroupResult(
+        formulaConfig?.groupResult ?? { enabled: false, fields: [] },
+      );
       setFormulaDecimals(
         formulaConfig?.decimals != null ? String(formulaConfig.decimals) : "",
       );
@@ -341,6 +346,7 @@ export function FieldConfigDialog({
       setValidationRules([]);
       setFormula("");
       setFormulaSources([]);
+      setGroupResult({ enabled: false, fields: [] });
       setFormulaDecimals("");
       setDisplayAffix("");
       setDisplayAffixPosition("after");
@@ -569,6 +575,7 @@ export function FieldConfigDialog({
                 ? { displayAffix: displayAffix.trim(), displayAffixPosition }
                 : {}),
               ...(formulaSources.length ? { sources: formulaSources } : {}),
+              ...(groupResult.enabled || groupResult.fields.length > 0 ? { groupResult } : {}),
             }
           : fieldType === "number"
             ? // Number fields reuse the same decimals knob (display-only rounding
@@ -627,11 +634,12 @@ export function FieldConfigDialog({
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
+  const groupResultValid = fieldType !== "function" || !groupResult.enabled || groupResult.fields.length > 0;
   const relationIncomplete =
     (fieldType === "relation" || fieldType === "lookup") && (relationId == null || !relatedFieldKey);
   const hasName = Object.values(nameJson).some((v) => typeof v === "string" && v.trim() !== "");
   const canSubmit =
-    !isPending && hasName && FIELD_KEY_RE.test(effectiveKey) && !manualKeyTaken && !keyFormatInvalid && !relationIncomplete;
+    !isPending && hasName && FIELD_KEY_RE.test(effectiveKey) && !manualKeyTaken && !keyFormatInvalid && !relationIncomplete && groupResultValid;
 
   return (
     <>
@@ -1051,6 +1059,11 @@ export function FieldConfigDialog({
                     onChange={setFormulaSources}
                   />
                 </FormulaEditor>
+                <FormulaGroupResultEditor
+                  entityId={entityId}
+                  value={groupResult}
+                  onChange={setGroupResult}
+                />
                 <NumericDisplayFormatControls
                   idPrefix="fcd-formula"
                   decimals={formulaDecimals}

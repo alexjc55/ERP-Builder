@@ -2506,6 +2506,25 @@ export interface FieldValidationRule {
   value2?: string;
 }
 
+export type FormulaFieldRef = {
+  scope: 'entity';
+  fieldKey: string;
+} | {
+  scope: 'page';
+  /** @minimum 1 */
+  pageId: number;
+  fieldKey: string;
+};
+
+/**
+ * Emits this function field's result only once for each tuple of qualified field values. The deterministic winner is the oldest record (createdAt, then id). An empty disabled list is allowed.
+ */
+export type FormulaFieldConfigGroupResult = {
+  enabled: boolean;
+  /** @maxItems 8 */
+  fields: FormulaFieldRef[];
+};
+
 /**
  * Side on which displayAffix is shown. Defaults to after when an affix is present.
  */
@@ -2516,16 +2535,6 @@ export const FormulaFieldConfigDisplayAffixPosition = {
   before: 'before',
   after: 'after',
 } as const;
-
-export type FormulaFieldRef = {
-  scope: 'entity';
-  fieldKey: string;
-} | {
-  scope: 'page';
-  /** @minimum 1 */
-  pageId: number;
-  fieldKey: string;
-};
 
 export type FormulaFieldSource = {
   kind: 'pageLocal';
@@ -2577,6 +2586,8 @@ export interface FormulaFieldConfig {
      * @maxItems 32
      */
   sources?: FormulaFieldSource[];
+  /** Emits this function field's result only once for each tuple of qualified field values. The deterministic winner is the oldest record (createdAt, then id). An empty disabled list is allowed. */
+  groupResult?: FormulaFieldConfigGroupResult;
   /**
      * Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null/omitted means no rounding. Ignored for non-numeric (text/boolean) results.
      * @minimum 0
@@ -4103,6 +4114,11 @@ export interface RecordQuery {
 export type RecordQueryResultNumericTotals = {[key: string]: number};
 
 /**
+ * Server-materialized visible page formula values for returned rows, keyed first by record id and then page field key. Group-result non-winners are numeric zero.
+ */
+export type RecordQueryResultPageFormulaValues = {[key: string]: { [key: string]: unknown }};
+
+/**
  * Present only when the query was sent with withRowGroups=true on a grouped mirror page. Maps each returned record id (as a string key) to its group key (the same key space as RecordGroup.key; null = the "no value" group), so the client can render every group expanded.
  */
 export type RecordQueryResultRowGroups = {[key: string]: string | null};
@@ -4140,6 +4156,8 @@ export interface RecordQueryResult {
   total: number;
   /** Sum per numeric field flagged showColumnTotal, over the full filtered set (all pages). */
   numericTotals?: RecordQueryResultNumericTotals;
+  /** Server-materialized visible page formula values for returned rows, keyed first by record id and then page field key. Group-result non-winners are numeric zero. */
+  pageFormulaValues?: RecordQueryResultPageFormulaValues;
   /** Present only when the query was sent with grouped=true on a mirror page with groupByFieldKey. One bucket per distinct group value over the FULL filtered set, ordered by label (the empty group last). */
   groups?: RecordGroup[];
   /** Present only when the query was sent with withRowGroups=true on a grouped mirror page. Maps each returned record id (as a string key) to its group key (the same key space as RecordGroup.key; null = the "no value" group), so the client can render every group expanded. */

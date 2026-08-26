@@ -6342,6 +6342,21 @@ components:
             the expression under their opaque key.
           items:
             $ref: "#/components/schemas/FormulaFieldSource"
+        groupResult:
+          type: object
+          required: [enabled, fields]
+          description: >-
+            Emits this function field's result only once for each tuple of
+            qualified field values. The deterministic winner is the oldest
+            record (createdAt, then id). An empty disabled list is allowed.
+          properties:
+            enabled:
+              type: boolean
+            fields:
+              type: array
+              maxItems: 8
+              items:
+                $ref: "#/components/schemas/FormulaFieldRef"
         decimals:
           type: integer
           minimum: 0
@@ -8974,6 +8989,15 @@ components:
           additionalProperties:
             type: number
           description: Sum per numeric field flagged showColumnTotal, over the full filtered set (all pages).
+        pageFormulaValues:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties: true
+          description: >-
+            Server-materialized visible page formula values for returned rows,
+            keyed first by record id and then page field key. Group-result
+            non-winners are numeric zero.
         groups:
           type: array
           description: >-

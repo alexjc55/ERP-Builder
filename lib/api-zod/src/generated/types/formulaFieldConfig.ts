@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { FormulaFieldConfigDisplayAffixPosition } from './formulaFieldConfigDisplayAffixPosition';
+import type { FormulaFieldConfigGroupResult } from './formulaFieldConfigGroupResult';
 import type { FormulaFieldSource } from './formulaFieldSource';
 
 /**
@@ -18,6 +19,8 @@ export interface FormulaFieldConfig {
      * @maxItems 32
      */
   sources?: FormulaFieldSource[];
+  /** Emits this function field's result only once for each tuple of qualified field values. The deterministic winner is the oldest record (createdAt, then id). An empty disabled list is allowed. */
+  groupResult?: FormulaFieldConfigGroupResult;
   /**
      * Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null/omitted means no rounding. Ignored for non-numeric (text/boolean) results.
      * @minimum 0

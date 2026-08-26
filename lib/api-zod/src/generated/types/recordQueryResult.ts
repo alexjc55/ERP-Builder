@@ -8,6 +8,7 @@
 import type { EntityRecord } from './entityRecord';
 import type { RecordGroup } from './recordGroup';
 import type { RecordQueryResultNumericTotals } from './recordQueryResultNumericTotals';
+import type { RecordQueryResultPageFormulaValues } from './recordQueryResultPageFormulaValues';
 import type { RecordQueryResultRowGroups } from './recordQueryResultRowGroups';
 
 export interface RecordQueryResult {
@@ -15,6 +16,8 @@ export interface RecordQueryResult {
   total: number;
   /** Sum per numeric field flagged showColumnTotal, over the full filtered set (all pages). */
   numericTotals?: RecordQueryResultNumericTotals;
+  /** Server-materialized visible page formula values for returned rows, keyed first by record id and then page field key. Group-result non-winners are numeric zero. */
+  pageFormulaValues?: RecordQueryResultPageFormulaValues;
   /** Present only when the query was sent with grouped=true on a mirror page with groupByFieldKey. One bucket per distinct group value over the FULL filtered set, ordered by label (the empty group last). */
   groups?: RecordGroup[];
   /** Present only when the query was sent with withRowGroups=true on a grouped mirror page. Maps each returned record id (as a string key) to its group key (the same key space as RecordGroup.key; null = the "no value" group), so the client can render every group expanded. */
