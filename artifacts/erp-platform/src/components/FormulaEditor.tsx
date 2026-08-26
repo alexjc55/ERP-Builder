@@ -1,160 +1,66 @@
-import { useRef } from "react";
+import { useMemo, useRef, useState } from "react";
+import { Search } from "lucide-react";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useT } from "@/lib/i18n";
 
-export type FormulaFieldRef = { key: string; label: string };
+export type FormulaFieldRef = {
+  /** Lookup key without braces. Legacy callers may continue to supply flat keys. */
+  key: string;
+  label: string;
+  /** Unambiguous key inserted for newly configured entity/page fields. */
+  token?: string;
+  /** Human-readable source heading, for example “Страница: Заказы”. */
+  sourceLabel?: string;
+  sourceKind?: "entity" | "page" | "linked";
+};
 
-/**
- * Functions that take arguments — clicking inserts `name()` with the caret
- * inside. `sig` shows the signature (parameters separated by commas), `example`
- * a concrete call, `descKey`/`descFallback` a short i18n description — all shown
- * on hover so users know how to separate parameters.
- */
-const FORMULA_FUNCS: {
+type FormulaFunction = {
   name: string;
-  sig: string;
-  sigKey: string;
+  category: "numeric" | "text" | "logical" | "date" | "aggregate";
+  signature: string;
   example: string;
-  descKey: string;
-  descFallback: string;
-}[] = [
-  {
-    name: "if",
-    sig: "if(условие, если_да, если_нет)",
-    sigKey: "fields.fnSigIf",
-    example: 'if({qty} > 10, "опт", "розница")',
-    descKey: "fields.fnIf",
-    descFallback: "Возвращает второй аргумент, если условие истинно, иначе третий.",
-  },
-  {
-    name: "round",
-    sig: "round(число, знаки)",
-    sigKey: "fields.fnSigRound",
-    example: "round({price} * 1.2, 2)",
-    descKey: "fields.fnRound",
-    descFallback: "Округляет число до указанного количества знаков после запятой.",
-  },
-  {
-    name: "min",
-    sig: "min(число1, число2, …)",
-    sigKey: "fields.fnSigMin",
-    example: "min({plan}, {fact})",
-    descKey: "fields.fnMin",
-    descFallback: "Наименьшее из перечисленных значений.",
-  },
-  {
-    name: "max",
-    sig: "max(число1, число2, …)",
-    sigKey: "fields.fnSigMax",
-    example: "max({plan}, {fact})",
-    descKey: "fields.fnMax",
-    descFallback: "Наибольшее из перечисленных значений.",
-  },
-  {
-    name: "sum",
-    sig: "sum(число1, число2, …)",
-    sigKey: "fields.fnSigSum",
-    example: "sum({q1}, {q2}, {q3})",
-    descKey: "fields.fnSum",
-    descFallback: "Сумма всех перечисленных значений.",
-  },
-  {
-    name: "abs",
-    sig: "abs(число)",
-    sigKey: "fields.fnSigAbs",
-    example: "abs({balance})",
-    descKey: "fields.fnAbs",
-    descFallback: "Абсолютное значение (модуль) числа.",
-  },
-  {
-    name: "concat",
-    sig: "concat(значение1, значение2, …)",
-    sigKey: "fields.fnSigConcat",
-    example: 'concat({first}, " ", {last})',
-    descKey: "fields.fnConcat",
-    descFallback: "Объединяет значения в одну строку.",
-  },
-  {
-    name: "coalesce",
-    sig: "coalesce(значение1, значение2, …)",
-    sigKey: "fields.fnSigCoalesce",
-    example: "coalesce({nick}, {name})",
-    descKey: "fields.fnCoalesce",
-    descFallback: "Первое непустое значение из перечисленных.",
-  },
-  {
-    name: "upper",
-    sig: "upper(текст)",
-    sigKey: "fields.fnSigUpper",
-    example: "upper({code})",
-    descKey: "fields.fnUpper",
-    descFallback: "Переводит текст в ВЕРХНИЙ регистр.",
-  },
-  {
-    name: "lower",
-    sig: "lower(текст)",
-    sigKey: "fields.fnSigLower",
-    example: "lower({email})",
-    descKey: "fields.fnLower",
-    descFallback: "Переводит текст в нижний регистр.",
-  },
-  {
-    name: "len",
-    sig: "len(текст)",
-    sigKey: "fields.fnSigLen",
-    example: "len({title})",
-    descKey: "fields.fnLen",
-    descFallback: "Количество символов в тексте.",
-  },
-  {
-    name: "today",
-    sig: "today()",
-    sigKey: "fields.fnSigToday",
-    example: "today()",
-    descKey: "fields.fnToday",
-    descFallback: "Текущая системная дата.",
-  },
-  {
-    name: "daysBetween",
-    sig: "daysBetween(дата_начала, дата_окончания)",
-    sigKey: "fields.fnSigDaysBetween",
-    example: "daysBetween({project_start}, {project_end})",
-    descKey: "fields.fnDaysBetween",
-    descFallback: "Количество календарных дней между двумя датами.",
-  },
-  {
-    name: "workingDaysBetween",
-    sig: "workingDaysBetween(дата_начала, дата_окончания)",
-    sigKey: "fields.fnSigWorkingDaysBetween",
-    example: "workingDaysBetween({project_start}, {project_end})",
-    descKey: "fields.fnWorkingDaysBetween",
-    descFallback: "Количество рабочих дней между двумя датами по настройкам сайта.",
-  },
-  {
-    name: "daysSince",
-    sig: "daysSince(дата_начала)",
-    sigKey: "fields.fnSigDaysSince",
-    example: "daysSince({project_start})",
-    descKey: "fields.fnDaysSince",
-    descFallback: "Количество календарных дней от указанной даты до сегодня.",
-  },
-  {
-    name: "daysUntil",
-    sig: "daysUntil(дата_окончания)",
-    sigKey: "fields.fnSigDaysUntil",
-    example: "daysUntil({project_end})",
-    descKey: "fields.fnDaysUntil",
-    descFallback: "Количество календарных дней от сегодня до указанной даты.",
-  },
+  description: string;
+  noCaret?: boolean;
+};
+
+const FORMULA_FUNCS: FormulaFunction[] = [
+  { name: "round", category: "numeric", signature: "round(число, знаки)", example: "round({entity:1.price}, 2)", description: "Округляет число." },
+  { name: "floor", category: "numeric", signature: "floor(число)", example: "floor({entity:1.price})", description: "Округляет вниз." },
+  { name: "ceil", category: "numeric", signature: "ceil(число)", example: "ceil({entity:1.price})", description: "Округляет вверх." },
+  { name: "abs", category: "numeric", signature: "abs(число)", example: "abs({entity:1.balance})", description: "Возвращает модуль числа." },
+  { name: "min", category: "numeric", signature: "min(число1, число2, …)", example: "min({plan}, {fact})", description: "Наименьшее значение." },
+  { name: "max", category: "numeric", signature: "max(число1, число2, …)", example: "max({plan}, {fact})", description: "Наибольшее значение." },
+  { name: "sum", category: "aggregate", signature: "sum(число1, число2, …)", example: "sum({q1}, {q2})", description: "Сумма значений." },
+  { name: "average", category: "aggregate", signature: "average(число1, число2, …)", example: "average({plan}, {fact})", description: "Среднее значение." },
+  { name: "concat", category: "text", signature: "concat(значение1, значение2, …)", example: 'concat({first}, " ", {last})', description: "Объединяет текст." },
+  { name: "upper", category: "text", signature: "upper(текст)", example: "upper({code})", description: "Переводит текст в верхний регистр." },
+  { name: "lower", category: "text", signature: "lower(текст)", example: "lower({email})", description: "Переводит текст в нижний регистр." },
+  { name: "trim", category: "text", signature: "trim(текст)", example: "trim({title})", description: "Удаляет пробелы в начале и конце." },
+  { name: "replace", category: "text", signature: "replace(текст, что, на_что)", example: 'replace({phone}, "-", "")', description: "Заменяет все вхождения текста." },
+  { name: "contains", category: "text", signature: "contains(текст, искомое)", example: 'contains({email}, "@")', description: "Проверяет, содержит ли текст фрагмент." },
+  { name: "startsWith", category: "text", signature: "startsWith(текст, начало)", example: 'startsWith({code}, "A-")', description: "Проверяет начало текста." },
+  { name: "endsWith", category: "text", signature: "endsWith(текст, окончание)", example: 'endsWith({file}, ".pdf")', description: "Проверяет окончание текста." },
+  { name: "len", category: "text", signature: "len(текст)", example: "len({title})", description: "Количество символов." },
+  { name: "coalesce", category: "logical", signature: "coalesce(значение1, значение2, …)", example: "coalesce({nick}, {name})", description: "Первое непустое значение." },
+  { name: "if", category: "logical", signature: "if(условие, если_да, если_нет)", example: 'if({qty} > 10, "опт", "розница")', description: "Выбирает результат по условию." },
+  { name: "today", category: "date", signature: "today()", example: "today()", description: "Текущая системная дата.", noCaret: true },
+  { name: "daysBetween", category: "date", signature: "daysBetween(начало, конец)", example: "daysBetween({start}, {end})", description: "Количество календарных дней." },
+  { name: "workingDaysBetween", category: "date", signature: "workingDaysBetween(начало, конец)", example: "workingDaysBetween({start}, {end})", description: "Количество рабочих дней." },
+  { name: "daysSince", category: "date", signature: "daysSince(дата)", example: "daysSince({start})", description: "Дни от даты до сегодня." },
+  { name: "daysUntil", category: "date", signature: "daysUntil(дата)", example: "daysUntil({end})", description: "Дни от сегодня до даты." },
 ];
 
-/**
- * Formula textarea for `function`-type fields with clickable helpers: a chip per
- * referenceable field (inserts `{key}` at the caret) and a row of function chips.
- * This removes the need to remember every column's system key by hand.
- */
+const CATEGORY_LABELS: Record<FormulaFunction["category"], string> = {
+  numeric: "Числовые",
+  text: "Текстовые",
+  logical: "Логические",
+  date: "Дата",
+  aggregate: "Агрегаты",
+};
+
 export function FormulaEditor({
   value,
   onChange,
@@ -164,34 +70,29 @@ export function FormulaEditor({
   hint,
   insertLabel,
   hideFunctions,
+  children,
 }: {
   value: string;
   onChange: (v: string) => void;
   fields: FormulaFieldRef[];
-  /** Override the field label (default «Формула»). */
   label?: string;
-  /** Override the textarea placeholder. */
   placeholder?: string;
-  /** Override the hint shown under the editor. */
   hint?: string;
-  /** Override the "insert field" chips heading (e.g. «Вставить метрику:»). */
   insertLabel?: string;
-  /** Hide the function chips — for plain text-interpolation templates. */
   hideFunctions?: boolean;
+  /** Optional structured-source builder supplied by field configuration dialogs. */
+  children?: React.ReactNode;
 }) {
   const t = useT();
   const ref = useRef<HTMLTextAreaElement>(null);
+  const [search, setSearch] = useState("");
 
   const insert = (snippet: string, caretBack = 0) => {
     const el = ref.current;
-    if (!el) {
-      onChange(value + snippet);
-      return;
-    }
+    if (!el) return onChange(value + snippet);
     const start = el.selectionStart ?? value.length;
     const end = el.selectionEnd ?? value.length;
-    const next = value.slice(0, start) + snippet + value.slice(end);
-    onChange(next);
+    onChange(value.slice(0, start) + snippet + value.slice(end));
     const pos = start + snippet.length - caretBack;
     requestAnimationFrame(() => {
       el.focus();
@@ -199,70 +100,84 @@ export function FormulaEditor({
     });
   };
 
+  const groups = useMemo(() => {
+    const q = search.trim().toLocaleLowerCase();
+    const map = new Map<string, FormulaFieldRef[]>();
+    for (const field of fields) {
+      const token = field.token ?? field.key;
+      if (q && !`${field.label} ${field.sourceLabel ?? ""} ${token}`.toLocaleLowerCase().includes(q)) continue;
+      const group = field.sourceLabel ?? t("fields.formulaCurrentSource", "Текущая запись");
+      map.set(group, [...(map.get(group) ?? []), field]);
+    }
+    return [...map.entries()];
+  }, [fields, search, t]);
+
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <Label>{label ?? t("fields.formula", "Формула")}</Label>
-      <Textarea
-        ref={ref}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder ?? "{price} * {qty} * (1 + {vat} / 100)"}
-        rows={3}
-        className="font-mono text-sm"
-      />
+      <Textarea ref={ref} value={value} onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder ?? "{entity:12.price} * {entity:12.qty}"} rows={3} className="font-mono text-sm" />
       {fields.length > 0 && (
-        <div className="space-y-1">
-          <p className="text-xs text-slate-500">{insertLabel ?? t("fields.formulaInsertField", "Вставить поле:")}</p>
-          <div className="flex flex-wrap gap-1">
-            {fields.map((f) => (
-              <button
-                key={f.key}
-                type="button"
-                onClick={() => insert(`{${f.key}}`)}
-                className="px-2 py-0.5 rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 hover:border-slate-300 text-xs transition-colors"
-                title={`{${f.key}}`}
-              >
-                <span className="font-medium text-slate-700">{f.label}</span>
-                <span className="ml-1 font-mono text-slate-400">{`{${f.key}}`}</span>
-              </button>
+        <div className="space-y-2 rounded-md border border-slate-200 p-2">
+          <p className="text-xs font-medium text-slate-600">{insertLabel ?? t("fields.formulaInsertField", "Вставить поле:")}</p>
+          <div className="relative">
+            <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-slate-400" />
+            <Input value={search} onChange={(e) => setSearch(e.target.value)}
+              placeholder={t("fields.formulaSearch", "Поиск поля или источника")} className="h-8 pl-7 text-xs" />
+          </div>
+          <div className="max-h-52 space-y-2 overflow-y-auto">
+            {groups.map(([group, refs]) => (
+              <section key={group}>
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{group}</p>
+                <div className="flex flex-wrap gap-1">
+                  {refs.map((field) => {
+                    const token = field.token ?? field.key;
+                    return (
+                      <button key={`${group}:${token}`} type="button" onClick={() => insert(`{${token}}`)}
+                        className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-left text-xs hover:border-slate-300 hover:bg-slate-100"
+                        title={`${group} · ${field.label} · {${token}}`}>
+                        <span className="font-medium text-slate-700">{field.label}</span>
+                        <span className="ml-1 font-mono text-slate-400">{`{${token}}`}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
             ))}
+            {groups.length === 0 && <p className="py-2 text-center text-xs text-slate-400">{t("common.noResults", "Ничего не найдено")}</p>}
           </div>
         </div>
       )}
+      {children}
       {!hideFunctions && (
-      <div className="space-y-1">
-        <p className="text-xs text-slate-500">{t("fields.formulaInsertFunc", "Функции:")}</p>
-        <div className="flex flex-wrap gap-1">
-          {FORMULA_FUNCS.map((fn) => (
-            <Tooltip key={fn.name}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => insert(`${fn.name}()`, fn.name === "today" ? 0 : 1)}
-                  className="px-2 py-0.5 rounded border border-slate-200 bg-white hover:bg-slate-100 hover:border-slate-300 font-mono text-xs text-slate-600 transition-colors"
-                >
-                  {fn.name}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="max-w-xs space-y-1">
-                <p className="font-mono text-[11px]">{t(fn.sigKey, fn.sig)}</p>
-                <p className="opacity-80">{t(fn.descKey, fn.descFallback)}</p>
-                <p className="font-mono text-[11px] opacity-70">
-                  {t("fields.fnExample", "Пример")}: {fn.example}
-                </p>
-              </TooltipContent>
-            </Tooltip>
+        <div className="space-y-2">
+          <p className="text-xs text-slate-500">{t("fields.formulaInsertFunc", "Функции:")}</p>
+          {(Object.keys(CATEGORY_LABELS) as FormulaFunction["category"][]).map((category) => (
+            <div key={category} className="flex items-start gap-2">
+              <span className="w-20 shrink-0 pt-1 text-[11px] text-slate-400">{CATEGORY_LABELS[category]}</span>
+              <div className="flex flex-wrap gap-1">
+                {FORMULA_FUNCS.filter((fn) => fn.category === category).map((fn) => (
+                  <Tooltip key={fn.name}>
+                    <TooltipTrigger asChild>
+                      <button type="button" onClick={() => insert(`${fn.name}()`, fn.noCaret ? 0 : 1)}
+                        className="rounded border border-slate-200 bg-white px-2 py-0.5 font-mono text-xs text-slate-600 hover:bg-slate-100">
+                        {fn.name}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs space-y-1">
+                      <p className="font-mono text-[11px]">{fn.signature}</p>
+                      <p className="opacity-80">{fn.description}</p>
+                      <p className="font-mono text-[11px] opacity-70">{t("fields.fnExample", "Пример")}: {fn.example}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
-      </div>
       )}
-      <p className="text-xs text-slate-400">
-        {hint ??
-          t(
-            "fields.formulaHint",
-            "Ссылайтесь на другие поля этой записи через {ключ_поля}. Операторы: + - * / %, сравнения, && || !, тернарный ?:. Функции: if, round, abs, min, max, sum, concat, upper, lower, len, coalesce, today, daysBetween, workingDaysBetween, daysSince, daysUntil. Вычисляется при показе и не хранится.",
-          )}
-      </p>
+      <p className="text-xs text-slate-400">{hint ?? t("fields.formulaHintQualified",
+        "Новые ссылки имеют однозначный вид {entity:ID.ключ}, {page:ID.ключ} или {source:ключ}. Старые формулы с {ключ} продолжат работать.")}</p>
     </div>
   );
 }

@@ -86,6 +86,7 @@ import { FieldValidationRulesEditor, type OtherField } from "@/components/FieldV
 import { ColorPickerControl } from "@/components/ColorPickerControl";
 import { useToast } from "@/hooks/use-toast";
 import { FormulaEditor, type FormulaFieldRef } from "@/components/FormulaEditor";
+import { FormulaSourceBuilder, type FormulaSource } from "@/components/FormulaSourceBuilder";
 import { normalizeDecimals } from "@workspace/formula";
 import { useML, useT } from "@/lib/i18n";
 import { FIELD_KEY_RE, slugifyKey, uniqueKey } from "@/lib/keys";
@@ -218,6 +219,7 @@ export function FieldConfigDialog({
   }, [fieldType, allowedRoleIds, userOptions]);
   const [validationRules, setValidationRules] = useState<FieldValidationRule[]>([]);
   const [formula, setFormula] = useState("");
+  const [formulaSources, setFormulaSources] = useState<FormulaSource[]>([]);
   const [formulaDecimals, setFormulaDecimals] = useState("");
   const [displayAffix, setDisplayAffix] = useState("");
   const [displayAffixPosition, setDisplayAffixPosition] = useState<"before" | "after">("after");
@@ -285,6 +287,11 @@ export function FieldConfigDialog({
       setValidationRules(Array.isArray(field.validationRulesJson) ? field.validationRulesJson : []);
       const formulaConfig = field.formulaConfigJson as FormulaFieldConfig | null | undefined;
       setFormula(formulaConfig?.expression ?? "");
+      setFormulaSources(
+        Array.isArray((formulaConfig as (FormulaFieldConfig & { sources?: FormulaSource[] }) | undefined)?.sources)
+          ? [...((formulaConfig as FormulaFieldConfig & { sources: FormulaSource[] }).sources)]
+          : [],
+      );
       setFormulaDecimals(
         formulaConfig?.decimals != null ? String(formulaConfig.decimals) : "",
       );
@@ -333,6 +340,7 @@ export function FieldConfigDialog({
       setFormatInherit([]);
       setValidationRules([]);
       setFormula("");
+      setFormulaSources([]);
       setFormulaDecimals("");
       setDisplayAffix("");
       setDisplayAffixPosition("after");
@@ -431,11 +439,29 @@ export function FieldConfigDialog({
     }
     return false;
   };
-  const formulaFields: FormulaFieldRef[] = existingFields
+  const currentFormulaFields: FormulaFieldRef[] = existingFields
     .filter(
       (f: Field) => f.id !== field?.id && !(f.fieldType === "function" && formulaWouldCycle(f.fieldKey)),
     )
-    .map((f: Field) => ({ key: f.fieldKey, label: ml(f.nameJson) || f.fieldKey }));
+    .map((f: Field) => ({
+      key: f.fieldKey,
+      token: `entity:${entityId}.${f.fieldKey}`,
+      label: ml(f.nameJson) || f.fieldKey,
+      sourceLabel: t("fields.formulaCurrentEntity", "Текущая сущность"),
+      sourceKind: "entity" as const,
+    }));
+  const formulaFields: FormulaFieldRef[] = [
+    ...currentFormulaFields,
+    ...formulaSources.map((source) => ({
+      key: source.key,
+      token: source.key,
+      label: source.kind === "aggregate" ? source.key.replace(/^source:/, "") : source.fieldKey,
+      sourceLabel: source.kind === "aggregate"
+        ? t("fields.formulaLinkedData", "Связанные данные")
+        : t("fields.formulaPageData", "Поля страницы"),
+      sourceKind: source.kind === "aggregate" ? "linked" as const : "page" as const,
+    })),
+  ];
 
   // Candidate parent fields for a dependency: any OTHER field whose own
   // dependency chain does NOT already lead back to this field (cycle guard).
@@ -541,6 +567,7 @@ export function FieldConfigDialog({
               ...(displayAffix.trim()
                 ? { displayAffix: displayAffix.trim(), displayAffixPosition }
                 : {}),
+              ...(formulaSources.length ? { sources: formulaSources } : {}),
             }
           : fieldType === "number"
             ? // Number fields reuse the same decimals knob (display-only rounding
@@ -1015,7 +1042,14 @@ export function FieldConfigDialog({
             )}
             {fieldType === "function" && (
               <div className="space-y-3">
-                <FormulaEditor value={formula} onChange={setFormula} fields={formulaFields} />
+                <FormulaEditor value={formula} onChange={setFormula} fields={formulaFields}>
+                  <FormulaSourceBuilder
+                    currentEntityId={entityId}
+                    currentFields={currentFormulaFields}
+                    value={formulaSources}
+                    onChange={setFormulaSources}
+                  />
+                </FormulaEditor>
                 <NumericDisplayFormatControls
                   idPrefix="fcd-formula"
                   decimals={formulaDecimals}

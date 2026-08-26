@@ -41,7 +41,14 @@ import { ownScopeWhere, isRecordOwned } from "./own-scope";
 import { PAGE_REF_SOURCE_TYPES, loadPageRefSource } from "./record-query";
 import { validateFileValue, trashRemovedPageServerFiles, type DbExecutor } from "./records";
 import { isGoogleDriveModuleEnabled } from "../lib/googleDrive";
-import { normalizeFormulaFieldConfig } from "../lib/formula-field-config";
+import { normalizeFormulaFieldConfig, validateFormulaFieldConfig } from "../lib/formula-field-config";
+import { validateFormulaSources } from "../lib/formula-source-validator";
+import {
+  interactiveFormulaPermissions,
+  materializeVisiblePageFormulas,
+  mergeLinkedFormulaInputs,
+  projectViewerFormulaValues,
+} from "../lib/formula-runtime";
 import { emitEvent, EVENT_PAGE_FIELD_SAVED } from "../lib/events";
 import {
   lockAndValidateUserReferences,
@@ -681,6 +688,30 @@ router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (
     res.status(409).json({ error: "A page field with this key already exists on this page" });
     return;
   }
+  const formulaErrors = validateFormulaFieldConfig(parsed.data.formulaConfigJson ?? {});
+  if (formulaErrors.length) {
+    res.status(400).json({ error: formulaErrors.join("; ") });
+    return;
+  }
+  if (parsed.data.formulaConfigJson?.sources != null && parsed.data.fieldType !== "function") {
+    res.status(400).json({ error: "Structured formula sources are only supported by function fields" });
+    return;
+  }
+  const createFormulaEntity = await effectiveEntityForPage(params.data.pageId);
+  if (parsed.data.formulaConfigJson?.sources != null) {
+    if (createFormulaEntity.entityId == null) {
+      res.status(400).json({ error: "Structured formula sources require the page to be bound to an entity" });
+      return;
+    }
+    const formulaSourceErrors = await validateFormulaSources(
+      { kind: "page", pageId: params.data.pageId, entityId: createFormulaEntity.entityId },
+      parsed.data.formulaConfigJson,
+    );
+    if (formulaSourceErrors.length) {
+      res.status(400).json({ error: formulaSourceErrors.join("; ") });
+      return;
+    }
+  }
   try {
     const [field] = await db
       .insert(pageFieldsTable)
@@ -855,6 +886,30 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
   if (sanitizedOptions != null) updateData.optionsJson = sanitizedOptions;
   if (body.formatRulesJson != null) updateData.formatRulesJson = body.formatRulesJson;
   if (body.formulaConfigJson != null) {
+    const formulaErrors = validateFormulaFieldConfig(body.formulaConfigJson);
+    if (formulaErrors.length) {
+      res.status(400).json({ error: formulaErrors.join("; ") });
+      return;
+    }
+    if (body.formulaConfigJson.sources != null && nextType !== "function") {
+      res.status(400).json({ error: "Structured formula sources are only supported by function fields" });
+      return;
+    }
+    if (body.formulaConfigJson.sources != null) {
+      const formulaEntity = await effectiveEntityForPage(current.pageId);
+      if (formulaEntity.entityId == null) {
+        res.status(400).json({ error: "Structured formula sources require the page to be bound to an entity" });
+        return;
+      }
+      const formulaSourceErrors = await validateFormulaSources(
+        { kind: "page", pageId: current.pageId, entityId: formulaEntity.entityId },
+        body.formulaConfigJson,
+      );
+      if (formulaSourceErrors.length) {
+        res.status(400).json({ error: formulaSourceErrors.join("; ") });
+        return;
+      }
+    }
     updateData.formulaConfigJson = normalizeFormulaFieldConfig(body.formulaConfigJson, nextType);
   } else if (body.fieldType != null && nextType !== "number" && nextType !== "function") {
     // Clean stale affixes on a type transition even when formulaConfigJson was
@@ -883,6 +938,26 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
   if ("columnGroupId" in body) updateData.columnGroupId = body.columnGroupId ?? null;
   if (body.fileConfigJson != null) updateData.fileConfigJson = body.fileConfigJson as FileFieldConfig;
   if (pageRefConfigToPersist !== undefined) updateData.pageRefConfigJson = pageRefConfigToPersist;
+  // See entity-field update: an omitted config must not allow a stored
+  // structured schema to skip semantic validation at this write boundary.
+  if (nextType === "function" && body.formulaConfigJson == null) {
+    const storedSources = (current.formulaConfigJson as { sources?: unknown } | null)?.sources;
+    if (Array.isArray(storedSources)) {
+      const formulaEntity = await effectiveEntityForPage(current.pageId);
+      if (formulaEntity.entityId == null) {
+        res.status(400).json({ error: "Structured formula sources require the page to be bound to an entity" });
+        return;
+      }
+      const currentSourceErrors = await validateFormulaSources(
+        { kind: "page", pageId: current.pageId, entityId: formulaEntity.entityId },
+        current.formulaConfigJson,
+      );
+      if (currentSourceErrors.length) {
+        res.status(400).json({ error: currentSourceErrors.join("; ") });
+        return;
+      }
+    }
+  }
   if (Object.keys(updateData).length === 0) {
     res.status(400).json({ error: "No fields to update" });
     return;
@@ -983,6 +1058,7 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
       recordId: pageRecordValuesTable.recordId,
       valuesJson: pageRecordValuesTable.valuesJson,
       version: pageRecordValuesTable.version,
+      entityValuesJson: entityRecordsTable.valuesJson,
     })
     .from(pageRecordValuesTable)
     .innerJoin(entityRecordsTable, eq(entityRecordsTable.id, pageRecordValuesTable.recordId))
@@ -1067,15 +1143,6 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
       fieldVersions: Object.fromEntries(visibleLocalFieldKeys.map((fieldKey) => [fieldKey, row.version])),
     });
   }
-  if (refFields.length === 0) {
-    res.json(
-      [...enrichedByRecord.entries()].map(([recordId, value]) => ({
-        recordId,
-        ...value,
-      })),
-    );
-    return;
-  }
   const sourcePageIds = [...new Set(refFields.map((f) => (f.pageRefConfigJson as PageRefFieldConfig).sourcePageId!))];
   const sourceRowsByPage = new Map<
     number,
@@ -1131,6 +1198,63 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
       const value = source?.valuesJson[cfg.sourceFieldKey!];
       if (value !== undefined && value !== null) target.valuesJson[field.fieldKey] = value;
     }
+  }
+  // Page formulas are derived response data just like entity formulas. Resolve
+  // their structured inputs on the server, then emit only visible scalar field
+  // results under the page field's ordinary key.
+  const entityRows = new Map(rows.map((row) => [
+    row.recordId,
+    (row.entityValuesJson as Record<string, unknown>) ?? {},
+  ]));
+  const entityFields = await loadActiveEntityFields(entityId);
+  const pageHidden = new Set(
+    pageFieldCandidates
+      .filter((field) => !isSetupAdmin && mostPermissiveFieldPerm(
+        field.permissionsJson as FieldPermissions | null,
+        viewerRoleIds, "view", perms, entityId, params.data.pageId,
+      ) === "hidden")
+      .map((field) => field.fieldKey),
+  );
+  const entityPerm = await effectiveRecordPerm(req, perms, entityId, params.data.pageId);
+  const entityHidden = new Set(
+    entityFields
+      .filter((field) => resolveFieldAccess(field, perms, viewerRoleIds, entityId, entityPerm, params.data.pageId) === "hidden")
+      .map((field) => field.fieldKey),
+  );
+  const formulaRows = [...enrichedByRecord.entries()].map(([id, value]) => ({
+    id,
+    values: projectViewerFormulaValues(
+      entityRows.get(id) ?? {},
+      entityFields.filter((field) => !entityHidden.has(field.fieldKey)),
+    ),
+  }));
+  const linkedInputs = await mergeLinkedFormulaInputs({
+    entityId,
+    pageId: params.data.pageId,
+    rows: formulaRows,
+    fields: [
+      ...entityFields.filter((field) => !entityHidden.has(field.fieldKey)),
+      ...pageFieldCandidates.filter((field) => !pageHidden.has(field.fieldKey)),
+    ],
+    permissions: await interactiveFormulaPermissions(req, entityId, params.data.pageId),
+  });
+  const pageFormulaValues = materializeVisiblePageFormulas({
+    entityId,
+    pageId: params.data.pageId,
+    rows: [...enrichedByRecord.entries()].map(([id, value]) => ({
+      id,
+      entityValues: entityRows.get(id) ?? {},
+      pageValues: value.valuesJson,
+    })),
+    entityFields,
+    pageFields: pageFieldCandidates,
+    hiddenEntity: entityHidden,
+    hiddenPage: pageHidden,
+    linkedInputs,
+  });
+  for (const [id, values] of pageFormulaValues) {
+    const target = enrichedByRecord.get(id);
+    if (target) target.valuesJson = values;
   }
   res.json(
     [...enrichedByRecord.entries()].map(([recordId, value]) => ({

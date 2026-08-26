@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, appSettingsTable, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable, pageFieldsTable, pageRecordValuesTable, pagesTable, relationsTable, recordLinksTable } from "@workspace/db";
 import { eq, asc, desc, and, or, sql, inArray, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { buildFormulaScope, evaluateFormula, normalizeDecimals, cleanFpNoise, DEFAULT_FORMULA_TIME_ZONE, DEFAULT_WORKING_DAYS, type FormulaEvaluationOptions, type FormulaFieldDef } from "@workspace/formula";
+import { evaluateFormula, normalizeDecimals, cleanFpNoise, DEFAULT_FORMULA_TIME_ZONE, DEFAULT_WORKING_DAYS, type FormulaEvaluationOptions, type FormulaFieldDef } from "@workspace/formula";
 import type { Request } from "express";
 import { requireAuth } from "../middlewares/auth";
 import {
@@ -96,6 +96,16 @@ import {
   combineAuthoritativeAndViewerWhere,
   resolveAuthoritativeView,
 } from "../lib/authoritative-view";
+import {
+  interactiveFormulaPermissions,
+  mergeLinkedFormulaInputs,
+  buildQualifiedFormulaScope,
+  formulaSourcesOf,
+  materializeVisibleEntityFormulas,
+  canUseRecordPageFormulaContext,
+  projectViewerFormulaValues,
+} from "../lib/formula-runtime";
+import { effectiveEntityForPage } from "./page-fields";
 
 const router: IRouter = Router();
 
@@ -504,6 +514,65 @@ export async function fieldAccessContext(
   return { hidden, editable };
 }
 
+async function resolvePageFormulaContextId(
+  req: Request,
+  entityId: number,
+  pageId: number | undefined,
+): Promise<number | undefined> {
+  if (pageId == null) return undefined;
+  const [pageEntity, perms] = await Promise.all([
+    effectiveEntityForPage(pageId),
+    getPermissions(req),
+  ]);
+  const recordPermission = pageEntity.found && pageEntity.entityId === entityId
+    ? await effectiveRecordPerm(req, perms, entityId, pageId)
+    : undefined;
+  return pageEntity.found && canUseRecordPageFormulaContext({
+    permissions: perms,
+    entityId,
+    pageId,
+    pageEntityId: pageEntity.entityId,
+    recordPermission,
+  }) ? pageId : undefined;
+}
+
+async function loadPageFormulaResponseContext(
+  req: Request,
+  entityId: number,
+  pageId: number | undefined,
+  recordIds: readonly number[],
+): Promise<{
+  fields: PageField[];
+  hidden: Set<string>;
+  values: Map<number, Record<string, unknown>>;
+}> {
+  const authorizedPageId = await resolvePageFormulaContextId(req, entityId, pageId);
+  if (authorizedPageId == null) return { fields: [], hidden: new Set(), values: new Map() };
+  // pageId is untrusted on record routes. Resolve the canonical page→entity
+  // binding and page-aware read permission before touching page schema or data.
+  const [perms, roleIds] = await Promise.all([getPermissions(req), getUserRoleIds(req)]);
+  const fields = await db.select().from(pageFieldsTable).where(and(
+      eq(pageFieldsTable.pageId, authorizedPageId),
+      eq(pageFieldsTable.isActive, true),
+    ));
+  const hidden = new Set(fields
+    .filter((field) =>
+      mostPermissiveFieldPerm(field.permissionsJson, roleIds, "view", perms, entityId, authorizedPageId) === "hidden")
+    .map((field) => field.fieldKey));
+  const values = new Map<number, Record<string, unknown>>();
+  if (recordIds.length > 0) {
+    const rows = await db
+      .select({ recordId: pageRecordValuesTable.recordId, values: pageRecordValuesTable.valuesJson })
+      .from(pageRecordValuesTable)
+      .where(and(
+        eq(pageRecordValuesTable.pageId, authorizedPageId),
+        inArray(pageRecordValuesTable.recordId, [...recordIds]),
+      ));
+    for (const row of rows) values.set(row.recordId, (row.values as Record<string, unknown> | null) ?? {});
+  }
+  return { fields, hidden, values };
+}
+
 /** Remove hidden field keys from a record's valuesJson before returning it. */
 function stripHidden<T extends { valuesJson: unknown }>(record: T, hidden: Set<string>): T {
   if (hidden.size === 0) return record;
@@ -525,9 +594,13 @@ export function presentRecord<T extends { valuesJson: unknown; createdAt: Date |
 ): T {
   const out = stripHidden(record, hidden);
   const sysKeys = fields.filter((f) => f.fieldType === "created_at" && !hidden.has(f.fieldKey));
-  if (sysKeys.length === 0) return out;
-  const iso = record.createdAt instanceof Date ? record.createdAt.toISOString() : String(record.createdAt);
   const values = { ...((out.valuesJson as Record<string, unknown>) ?? {}) };
+  // Resolver inputs are evaluation-only capabilities. Never serialize them:
+  // their keys may reveal linked/page schema and their values may be derived
+  // from a formula the viewer is not allowed to inspect.
+  for (const source of formulaSourcesOf(fields)) delete values[source.key];
+  if (sysKeys.length === 0) return { ...out, valuesJson: values };
+  const iso = record.createdAt instanceof Date ? record.createdAt.toISOString() : String(record.createdAt);
   for (const f of sysKeys) values[f.fieldKey] = iso;
   return { ...out, valuesJson: values };
 }
@@ -931,7 +1004,26 @@ router.get("/entities/:entityId/records", requireAuth, requireRecordParam("view"
     .from(entityRecordsTable)
     .where(where)
     .orderBy(desc(entityRecordsTable.createdAt));
-  res.json(records.map((r) => presentRecord(r, hidden, fields)));
+  const formulaPermissions = await interactiveFormulaPermissions(req, entityId);
+  const linked = await mergeLinkedFormulaInputs({
+    entityId,
+    rows: records.map((r) => ({ id: r.id, values: projectViewerFormulaValues((r.valuesJson ?? {}) as Record<string, unknown>, fields.filter((field) => !hidden.has(field.fieldKey))) })),
+    fields: fields.filter((field) => !hidden.has(field.fieldKey)),
+    permissions: formulaPermissions,
+  });
+  const formulaValues = materializeVisibleEntityFormulas({
+    entityId,
+    rows: records.map((r) => ({ id: r.id, values: (r.valuesJson ?? {}) as Record<string, unknown> })),
+    fields: fields.filter((field) => !hidden.has(field.fieldKey)),
+    hidden,
+    linkedInputs: linked,
+    formulaOptions: await loadFormulaOptions(),
+  });
+  res.json(records.map((r) => presentRecord(
+    { ...r, valuesJson: formulaValues.get(r.id) ?? r.valuesJson },
+    hidden,
+    fields,
+  )));
 });
 
 router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam("view"), async (req, res): Promise<void> => {
@@ -951,6 +1043,10 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     return;
   }
 
+  // Keep ordinary entity query semantics intact, but treat an untrusted page
+  // context as absent for every derived/formula path unless it passes the page
+  // ownership, page access, and page-aware record-view boundaries.
+  const formulaPageId = await resolvePageFormulaContextId(req, entityId, body.data.pageId);
   const formulaOptions = await loadFormulaOptions();
   const fields = await loadActiveFields(entityId);
   const selectedView = await resolveAuthoritativeView({
@@ -969,16 +1065,13 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   // Restrict the query whitelist to visible fields so any reference to a hidden field
   // is rejected as an unknown field and search never touches hidden values.
   const visibleFields = fields.filter((f) => !hidden.has(f.fieldKey));
-  // Formula fields can reference OTHER formula fields by key. A formula's value is
-  // never stored, so wrapping the raw values map in `buildFormulaScope` lets those
-  // references resolve (lazily, with cycle protection). Built from ALL active
-  // fields (not just visible) so a formula may reference a hidden formula — the
-  // same "totals compute over the true raw values" decision used below.
+  // Formula aliases are an evaluation capability: never register a hidden formula
+  // here, otherwise a visible formula can infer its output (and linked sources).
   const toFormulaDef = (f: { fieldKey: string; formulaConfigJson: unknown }): FormulaFieldDef => {
     const cfg = f.formulaConfigJson as { expression?: string; decimals?: number | null } | null;
     return { key: f.fieldKey, expression: cfg?.expression ?? "", decimals: cfg?.decimals ?? null };
   };
-  const entityFormulaDefs = fields.filter((f) => f.fieldType === "function").map(toFormulaDef);
+  const entityFormulaDefs = visibleFields.filter((f) => f.fieldType === "function").map(toFormulaDef);
   const relationMeta = await buildRelationMeta(entityId, visibleFields);
   const built = buildRecordQuery(visibleFields, body.data as RecordQuerySpec, relationMeta);
   if ("error" in built) {
@@ -987,6 +1080,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   }
 
   const perms = await getPermissions(req);
+  const formulaPermissions = await interactiveFormulaPermissions(req, entityId, formulaPageId);
   const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, entityId, body.data.pageId);
   const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, entityId);
 
@@ -1089,18 +1183,26 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   // Per-entity CUSTOM filters (custom_filters): each picked filter references an
   // AUTHORITATIVE def by id + any runtime input values. The def (a two-level
   // И/ИЛИ condition tree over ANY field, incl. formula) is resolved server-side
-  // and ADMIN-AUTHORITATIVE (it may reference fields hidden for this viewer) —
-  // the returned rows still obey the viewer's row/field boundary via the other
-  // clauses. Formula conditions are evaluated post-compute into a matching
-  // record-id set. AND-combined with the rest of the query.
+  // and is evaluated only over the viewer-visible schema. A hidden formula or
+  // its linked sources must never become an inference oracle through filtering.
   {
     const cf = await resolveCustomFilterClauses({
       entityId,
-      allFields: fields,
+      allFields: visibleFields,
       relationMeta,
       picks: (body.data.customFilters ?? []) as CustomFilterPick[],
-      pageId: body.data.pageId,
+      pageId: formulaPageId,
       formulaOptions,
+      formulaPermissions,
+      loadVisiblePageFields: async (pageId) => {
+        const context = await loadPageFormulaResponseContext(req, entityId, pageId, []);
+        return new Map(context.fields
+          .filter((field) => !context.hidden.has(field.fieldKey))
+          .map((field) => [field.fieldKey, {
+            fieldType: field.fieldType,
+            formulaConfigJson: field.formulaConfigJson,
+          }] as const));
+      },
     });
     if ("error" in cf) {
       res.status(400).json({ error: cf.error });
@@ -1269,6 +1371,34 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     .orderBy(...(rowGroupOrder.length > 0 ? [...rowGroupOrder, ...built.orderBy] : built.orderBy))
     .limit(pageSize)
     .offset(offset);
+  const dataPageFormulaContext = await loadPageFormulaResponseContext(
+    req, entityId, formulaPageId, data.map((row) => row.id),
+  );
+  const visibleDataPageFields = dataPageFormulaContext.fields.filter(
+    (field) => !dataPageFormulaContext.hidden.has(field.fieldKey),
+  );
+  const dataLinkedInputs = await mergeLinkedFormulaInputs({
+    entityId,
+    pageId: formulaPageId,
+    rows: data.map((r) => ({ id: r.id, values: projectViewerFormulaValues((r.valuesJson ?? {}) as Record<string, unknown>, visibleFields) })),
+    fields: [
+      ...fields.filter((field) => !hidden.has(field.fieldKey)),
+      ...visibleDataPageFields,
+    ],
+    permissions: formulaPermissions,
+  });
+  const dataFormulaValues = materializeVisibleEntityFormulas({
+    entityId,
+    rows: data.map((r) => ({ id: r.id, values: (r.valuesJson ?? {}) as Record<string, unknown> })),
+        fields: visibleFields,
+    hidden,
+    pageId: formulaPageId,
+    pageValues: dataPageFormulaContext.values,
+    pageFields: dataPageFormulaContext.fields,
+    hiddenPage: dataPageFormulaContext.hidden,
+    linkedInputs: dataLinkedInputs,
+    formulaOptions,
+  });
 
   // Row → group-key map for the returned page (same key space as RecordGroup.key,
   // null = the "no value" group). Computed with the SAME key expression the
@@ -1339,10 +1469,31 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   }
   if (formulaTotalFields.length > 0) {
     const allRows = await db
-      .select({ values: entityRecordsTable.valuesJson })
+      .select({ id: entityRecordsTable.id, values: entityRecordsTable.valuesJson })
       .from(entityRecordsTable)
       .where(where);
+    const totalLinkedInputs = await mergeLinkedFormulaInputs({
+      entityId,
+      pageId: formulaPageId,
+      rows: allRows.map((r) => ({ id: r.id, values: projectViewerFormulaValues((r.values ?? {}) as Record<string, unknown>, visibleFields) })),
+      fields: [...visibleFields, ...visibleDataPageFields],
+      permissions: formulaPermissions,
+    });
+    const totalCurrentPageValues = new Map<number, Record<string, unknown>>();
+    if (formulaPageId != null && allRows.length > 0) {
+      const rows = await db
+        .select({ recordId: pageRecordValuesTable.recordId, values: pageRecordValuesTable.valuesJson })
+        .from(pageRecordValuesTable)
+        .where(and(eq(pageRecordValuesTable.pageId, formulaPageId), inArray(pageRecordValuesTable.recordId, allRows.map((row) => row.id))));
+          for (const row of rows) totalCurrentPageValues.set(
+            row.recordId,
+            projectViewerFormulaValues((row.values ?? {}) as Record<string, unknown>, visibleDataPageFields),
+          );
+    }
     numericTotals = numericTotals ?? {};
+    const totalPageFormulaDefs = visibleDataPageFields
+      .filter((field) => field.fieldType === "function")
+      .map(toFormulaDef);
     for (const f of formulaTotalFields) {
       const cfg = f.formulaConfigJson as { expression?: string; decimals?: number | null } | null;
       const expr = (cfg?.expression ?? "").trim();
@@ -1350,16 +1501,23 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       const d = normalizeDecimals(cfg?.decimals);
       let sum = 0;
       for (const r of allRows) {
-        // Evaluate over the RAW stored values, INCLUDING fields hidden for this
-        // viewer. This is a deliberate product decision: a column total must be
-        // the true total. Silently dropping hidden-field contributions would
-        // produce an under-count that the viewer cannot detect — unacceptable for
-        // financial data where a wrong sum has serious consequences. The trade-off
-        // is that the aggregate may reflect data the viewer cannot see per-row;
-        // correctness of the total is prioritized over that aggregate confidentiality.
-        const vals = (r.values as Record<string, unknown> | null) ?? {};
+        // Resolver inputs and aliases were assembled only from fields visible to
+        // this viewer. Raw hidden values may exist in storage, but cannot become a
+        // formula capability through a total.
+        const vals = totalLinkedInputs.get(r.id) ?? projectViewerFormulaValues(
+          (r.values as Record<string, unknown> | null) ?? {},
+          visibleFields,
+        );
         try {
-          const out = evaluateFormula(expr, buildFormulaScope(vals, entityFormulaDefs, formulaOptions), formulaOptions);
+          const out = evaluateFormula(expr, buildQualifiedFormulaScope({
+            entityId,
+            entityValues: vals,
+            entityFormulas: entityFormulaDefs,
+            pageId: formulaPageId,
+            pageValues: totalCurrentPageValues.get(r.id),
+            pageFormulas: totalPageFormulaDefs,
+            formulaOptions,
+          }), formulaOptions);
           if (typeof out === "number" && Number.isFinite(out)) {
             // Round EACH per-row result to the field's configured decimals before
             // summing, so the total equals the sum of the values the user actually
@@ -1387,7 +1545,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   // formula totals above — evaluate over the full underlying values for
   // correctness. Mirror pages are covered because `where` is built over the
   // page's effective (mirrored) entity.
-  const totalsPageId = body.data.pageId;
+  const totalsPageId = formulaPageId;
   if (totalsPageId != null) {
     const roleIds = await getUserRoleIds(req);
     // Cross-formula resolution needs EVERY active page formula field for this
@@ -1395,7 +1553,11 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     // is NOT itself total-enabled — so pull them independently of the
     // showColumnTotal gate applied to the totals subset below.
     const pageAllFormulaRows = await db
-      .select({ fieldKey: pageFieldsTable.fieldKey, formulaConfigJson: pageFieldsTable.formulaConfigJson })
+      .select({
+        fieldKey: pageFieldsTable.fieldKey,
+        formulaConfigJson: pageFieldsTable.formulaConfigJson,
+        permissionsJson: pageFieldsTable.permissionsJson,
+      })
       .from(pageFieldsTable)
       .where(
         and(
@@ -1404,6 +1566,9 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           eq(pageFieldsTable.fieldType, "function"),
         ),
       );
+    const visiblePageAllFormulaRows = pageAllFormulaRows.filter(
+      (pf) => mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view", perms, entityId, totalsPageId) !== "hidden",
+    );
     // Flat totals row (общий результат) is opt-in per field, so only pull page
     // fields flagged showColumnTotal. Percent columns average (not sum) but are
     // still gated by the same flag here; their ALWAYS-shown per-group averages
@@ -1460,6 +1625,17 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         .select({ id: entityRecordsTable.id, values: entityRecordsTable.valuesJson })
         .from(entityRecordsTable)
         .where(where);
+      const pageLinkedInputs = await mergeLinkedFormulaInputs({
+        entityId,
+        pageId: totalsPageId,
+        rows: recRows.map((r) => ({ id: r.id, values: projectViewerFormulaValues((r.values ?? {}) as Record<string, unknown>, visibleFields) })),
+        fields: [
+          ...visibleFields,
+          ...pageFieldRows.filter((pf) => mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view", perms, entityId, totalsPageId) !== "hidden"),
+          ...visiblePageAllFormulaRows.map((r) => ({ ...r, fieldType: "function" })),
+        ],
+        permissions: formulaPermissions,
+      });
       const ids = recRows.map((r) => r.id);
       const pvRows =
         ids.length > 0
@@ -1469,7 +1645,13 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
               .where(and(eq(pageRecordValuesTable.pageId, totalsPageId), inArray(pageRecordValuesTable.recordId, ids)))
           : [];
       const pvByRecord = new Map<number, Record<string, unknown>>();
-      for (const r of pvRows) pvByRecord.set(r.recordId, (r.values as Record<string, unknown> | null) ?? {});
+      for (const r of pvRows) pvByRecord.set(
+        r.recordId,
+        projectViewerFormulaValues(
+          (r.values as Record<string, unknown> | null) ?? {},
+          visibleDataPageFields,
+        ),
+      );
       // page_ref totals read the SOURCE page's values — one map per source page.
       const srcPvByPage = new Map<number, Map<number, Record<string, unknown>>>();
       if (ids.length > 0) {
@@ -1486,7 +1668,6 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       numericTotals = numericTotals ?? {};
       // Page-local formulas evaluate over {entity ∪ page} values and may reference
       // either entity or page formula fields by key.
-      const pageScopeFormulaDefs = [...entityFormulaDefs, ...pageAllFormulaRows.map(toFormulaDef)];
       for (const pf of pageTotalFields) {
         // Namespace page totals by the stable page-field id (`pf:<id>`) so they
         // can never collide with an entity field that happens to share the same
@@ -1507,9 +1688,17 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           const d = normalizeDecimals(cfg?.decimals);
           let sum = 0;
           for (const r of recRows) {
-            const merged = { ...((r.values as Record<string, unknown> | null) ?? {}), ...(pvByRecord.get(r.id) ?? {}) };
+            const merged = { ...(pageLinkedInputs.get(r.id) ?? ((r.values as Record<string, unknown> | null) ?? {})), ...(pvByRecord.get(r.id) ?? {}) };
             try {
-              const out = evaluateFormula(expr, buildFormulaScope(merged, pageScopeFormulaDefs, formulaOptions), formulaOptions);
+              const out = evaluateFormula(expr, buildQualifiedFormulaScope({
+                entityId,
+                entityValues: pageLinkedInputs.get(r.id) ?? ((r.values as Record<string, unknown> | null) ?? {}),
+                entityFormulas: entityFormulaDefs,
+                pageId: totalsPageId,
+                pageValues: pvByRecord.get(r.id) ?? {},
+                pageFormulas: visiblePageAllFormulaRows.map(toFormulaDef),
+                formulaOptions,
+              }), formulaOptions);
               // Round each per-row result to the configured decimals before summing
               // so the total matches the sum of the per-row values the user sees.
               if (typeof out === "number" && Number.isFinite(out)) sum += d != null ? Number(out.toFixed(d)) : cleanFpNoise(out);
@@ -1679,15 +1868,24 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     // like the flat totals above. Sum columns = number/function flagged
     // showColumnTotal; the rest of the value-backed visible ones participate in
     // the group-common-value pass instead.
-    const gPageId = body.data.pageId!;
+    const gPageId = formulaPageId;
     const gRoleIds = gCommonRoleIds;
-    const gPfRows = await db
-      .select()
-      .from(pageFieldsTable)
-      .where(and(eq(pageFieldsTable.pageId, gPageId), eq(pageFieldsTable.isActive, true)));
+    const gPfRows = gPageId == null
+      ? []
+      : await db
+          .select()
+          .from(pageFieldsTable)
+          .where(and(eq(pageFieldsTable.pageId, gPageId), eq(pageFieldsTable.isActive, true)));
     const gPfVisible = gPfRows.filter(
       (pf) => mostPermissiveFieldPerm(pf.permissionsJson, gRoleIds, "view", perms, entityId, gPageId) !== "hidden",
     );
+    const groupLinkedInputs = await mergeLinkedFormulaInputs({
+      entityId,
+      pageId: gPageId,
+      rows: gRows.map((r) => ({ id: r.id, values: projectViewerFormulaValues((r.values ?? {}) as Record<string, unknown>, visibleFields) })),
+      fields: [...visibleFields, ...gPfVisible],
+      permissions: formulaPermissions,
+    });
     const gPfSumFields = gPfVisible.filter(
       (pf) => pf.showColumnTotal && (pf.fieldType === "number" || pf.fieldType === "function"),
     );
@@ -1736,10 +1934,6 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     const gPfRefCommon = gPfRefTargets.filter((t) => t.srcType !== "number" && t.srcType !== "percent");
     // Cross-formula resolution scope for the grouped page: entity formulas ∪ this
     // page's formula fields (page formulas evaluate over {entity ∪ page} values).
-    const gPfScopeFormulaDefs = [
-      ...entityFormulaDefs,
-      ...gPfRows.filter((pf) => pf.fieldType === "function").map(toFormulaDef),
-    ];
     // Source-page value maps for page_ref group columns (one per source page).
     const gSrcPvByPage = new Map<number, Map<number, Record<string, unknown>>>();
     if (gPfRefTargets.length > 0 && gRows.length > 0) {
@@ -1767,6 +1961,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         gPfScalarCommon.length > 0 ||
         gPfFormulaCommon.length > 0 ||
         gPfPercentFields.length > 0) &&
+      gPageId != null &&
       gRows.length > 0
     ) {
       const pv = await db
@@ -1781,7 +1976,10 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
             ),
           ),
         );
-      for (const r of pv) gPvByRec.set(r.recordId, (r.values as Record<string, unknown> | null) ?? {});
+      for (const r of pv) gPvByRec.set(
+        r.recordId,
+        projectViewerFormulaValues((r.values as Record<string, unknown> | null) ?? {}, gPfVisible),
+      );
     }
 
     // Mirrors the SQL NUMERIC_RE gate: only clean numeric text contributes.
@@ -1893,7 +2091,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         b.newestCreatedAtMs = Math.max(b.newestCreatedAtMs, createdAtMs);
         b.oldestCreatedAtMs = Math.min(b.oldestCreatedAtMs, createdAtMs);
       }
-      const vals = { ...((r.values as Record<string, unknown> | null) ?? {}) };
+      const vals = { ...(groupLinkedInputs.get(r.id) ?? ((r.values as Record<string, unknown> | null) ?? {})) };
       // created_at fields carry no stored value — inject the system timestamp so
       // the common-value pass sees it like any other scalar column.
       for (const f of gScalarCommon) {
@@ -1906,7 +2104,11 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         if (!expr) continue;
         const d = normalizeDecimals(cfg?.decimals);
         try {
-          const out = evaluateFormula(expr, buildFormulaScope(vals, entityFormulaDefs, formulaOptions), formulaOptions);
+          const out = evaluateFormula(expr, buildQualifiedFormulaScope({
+            entityId, entityValues: vals, entityFormulas: entityFormulaDefs,
+            pageId: gPageId, pageValues: gPvByRec.get(r.id) ?? {},
+            pageFormulas: gPfVisible.filter((field) => field.fieldType === "function").map(toFormulaDef), formulaOptions,
+          }), formulaOptions);
           if (typeof out === "number" && Number.isFinite(out))
             b.sums[f.fieldKey] = (b.sums[f.fieldKey] ?? 0) + (d != null ? Number(out.toFixed(d)) : cleanFpNoise(out));
         } catch {
@@ -1924,7 +2126,12 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           if (!expr) continue;
           const d = normalizeDecimals(cfg?.decimals);
           try {
-            const out = evaluateFormula(expr, buildFormulaScope({ ...vals, ...pvVals }, gPfScopeFormulaDefs, formulaOptions), formulaOptions);
+            const out = evaluateFormula(expr, buildQualifiedFormulaScope({
+              entityId, entityValues: vals, entityFormulas: entityFormulaDefs,
+              pageId: gPageId, pageValues: pvVals,
+              pageFormulas: gPfVisible.filter((field) => field.fieldType === "function").map(toFormulaDef),
+              formulaOptions,
+            }), formulaOptions);
             if (typeof out === "number" && Number.isFinite(out))
               b.sums[totalKey] = (b.sums[totalKey] ?? 0) + (d != null ? Number(out.toFixed(d)) : cleanFpNoise(out));
           } catch {
@@ -1976,7 +2183,11 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       // status that reaches here is visible to the viewer.
       trackCommon(b, "__status__", r.statusId, firstRow);
       for (const f of gFormulaCommon)
-        trackCommon(b, f.fieldKey, evalFormulaVal(f, buildFormulaScope(vals, entityFormulaDefs, formulaOptions)), firstRow);
+        trackCommon(b, f.fieldKey, evalFormulaVal(f, buildQualifiedFormulaScope({
+          entityId, entityValues: vals, entityFormulas: entityFormulaDefs,
+          pageId: gPageId, pageValues: gPvByRec.get(r.id) ?? {},
+          pageFormulas: gPfVisible.filter((field) => field.fieldType === "function").map(toFormulaDef), formulaOptions,
+        })), firstRow);
       for (const rc of relCommonCols) {
         trackCommon(b, rc.fieldKey, (r as Record<string, unknown>)[`relval__${rc.fieldKey}`], firstRow);
       }
@@ -1984,7 +2195,12 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         const pvVals = gPvByRec.get(r.id) ?? {};
         for (const pf of gPfScalarCommon) trackCommon(b, `pf:${pf.id}`, pvVals[pf.fieldKey], firstRow);
         for (const pf of gPfFormulaCommon)
-          trackCommon(b, `pf:${pf.id}`, evalFormulaVal(pf, buildFormulaScope({ ...vals, ...pvVals }, gPfScopeFormulaDefs, formulaOptions)), firstRow);
+          trackCommon(b, `pf:${pf.id}`, evalFormulaVal(pf, buildQualifiedFormulaScope({
+            entityId, entityValues: vals, entityFormulas: entityFormulaDefs,
+            pageId: gPageId, pageValues: pvVals,
+            pageFormulas: gPfVisible.filter((field) => field.fieldType === "function").map(toFormulaDef),
+            formulaOptions,
+          })), firstRow);
       }
     }
     // Final per-group rounding for formula sums (matches the flat totals).
@@ -2088,7 +2304,11 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   }
 
   res.json({
-    data: data.map((r) => presentRecord(r, hidden, fields)),
+    data: data.map((r) => presentRecord(
+      { ...r, valuesJson: dataFormulaValues.get(r.id) ?? r.valuesJson },
+      hidden,
+      fields,
+    )),
     total: countRow?.count ?? 0,
     ...(numericTotals ? { numericTotals } : {}),
     ...(groups ? { groups } : {}),
@@ -2135,6 +2355,7 @@ router.post(
     const formulaOptions = await loadFormulaOptions();
     const pivot = body.data.pivot;
     const pageId = body.data.pageId ?? undefined;
+    const formulaPageId = await resolvePageFormulaContextId(req, entityId, pageId);
 
     const fields = await loadActiveFields(entityId);
     const selectedView = await resolveAuthoritativeView({
@@ -2158,14 +2379,14 @@ router.post(
     const roleIds = await getUserRoleIds(req);
     const plPerms = await getPermissions(req);
     const plAll =
-      pageId != null
+      formulaPageId != null
         ? await db
             .select()
             .from(pageFieldsTable)
-            .where(and(eq(pageFieldsTable.pageId, pageId), eq(pageFieldsTable.isActive, true)))
+            .where(and(eq(pageFieldsTable.pageId, formulaPageId), eq(pageFieldsTable.isActive, true)))
         : [];
     const visiblePl = plAll.filter(
-      (pf) => mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view", plPerms, entityId, pageId) !== "hidden",
+      (pf) => mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view", plPerms, entityId, formulaPageId) !== "hidden",
     );
 
     // Relation/lookup dims project the SINGLE linked record's value. Built from
@@ -2187,6 +2408,7 @@ router.post(
     }
 
     const perms = await getPermissions(req);
+    const pivotFormulaPermissions = await interactiveFormulaPermissions(req, entityId, formulaPageId);
 
     // Pivot role visibility. The request's viewId is UNTRUSTED, so we never use its
     // mere presence as the branch condition (that would let a caller dodge the
@@ -2222,14 +2444,14 @@ router.post(
 
     const pageLocalFilters = (body.data.pageLocalFilters ?? []) as FilterCondition[];
     if (pageLocalFilters.length > 0) {
-      if (pageId == null) {
+      if (formulaPageId == null) {
         res.status(400).json({ error: "pageLocalFilters require pageId" });
         return;
       }
       const plFilterByKey = new Map(visiblePl.map((pf) => [pf.fieldKey, pf] as const));
       for (const cond of pageLocalFilters) {
         const pf = plFilterByKey.get(cond.field);
-        const target = pf ? await resolvePageLocalFilterTarget(pf, roleIds, plPerms, entityId, pageId) : null;
+        const target = pf ? await resolvePageLocalFilterTarget(pf, roleIds, plPerms, entityId, formulaPageId) : null;
         if (!target) {
           res.status(400).json({ error: `Unknown or non-filterable page field "${cond.field}"` });
           return;
@@ -2246,11 +2468,18 @@ router.post(
     {
       const cf = await resolveCustomFilterClauses({
         entityId,
-        allFields: fields,
+        allFields: visibleFields,
         relationMeta,
         picks: (body.data.customFilters ?? []) as CustomFilterPick[],
-        pageId: pageId ?? undefined,
+        pageId: formulaPageId,
         formulaOptions,
+        formulaPermissions: pivotFormulaPermissions,
+        loadVisiblePageFields: async (requestedPageId) => new Map(
+          (requestedPageId === formulaPageId ? visiblePl : []).map((field) => [field.fieldKey, {
+            fieldType: field.fieldType,
+            formulaConfigJson: field.formulaConfigJson,
+          }] as const),
+        ),
       });
       if ("error" in cf) {
         res.status(400).json({ error: cf.error });
@@ -2260,6 +2489,20 @@ router.post(
     }
 
     const where = combineAuthoritativeAndViewerWhere(selectedView.hardWhere, clauses)!;
+    // Pivot formula measures are evaluated in JS. Supply their linked inputs in
+    // one batch; without this an otherwise declared `{entity:…}`/linked token
+    // silently resolved as null in the pivot-only evaluator.
+    const pivotRows = await db
+      .select({ id: entityRecordsTable.id, values: entityRecordsTable.valuesJson })
+      .from(entityRecordsTable)
+      .where(where);
+    const pivotFormulaInputs = await mergeLinkedFormulaInputs({
+      entityId,
+      pageId: formulaPageId,
+      rows: pivotRows.map((row) => ({ id: row.id, values: projectViewerFormulaValues((row.values ?? {}) as Record<string, unknown>, visibleFields) })),
+      fields: [...visibleFields, ...visiblePl],
+      permissions: pivotFormulaPermissions,
+    });
 
     const outcome = await computePivot({
       entityId,
@@ -2267,9 +2510,10 @@ router.post(
       entityFields: visibleFields,
       relationMeta,
       pageFields: visiblePl,
-      pageId,
+      pageId: formulaPageId,
       where,
       formulaOptions,
+      formulaInputs: pivotFormulaInputs,
     });
     if (!outcome.ok) {
       res.status(400).json({ error: outcome.error });
@@ -3012,7 +3256,31 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
     req.log,
   );
 
-  res.status(201).json(presentRecord(record, hidden, fields));
+  const createFormulaPageId = await resolvePageFormulaContextId(req, entityId, body.data.pageId);
+  const createPageFormulaContext = await loadPageFormulaResponseContext(req, entityId, createFormulaPageId, [record.id]);
+  const createVisibleFormulaFields = [
+    ...fields.filter((field) => !hidden.has(field.fieldKey)),
+    ...createPageFormulaContext.fields.filter((field) => !createPageFormulaContext.hidden.has(field.fieldKey)),
+  ];
+  const createInputs = await mergeLinkedFormulaInputs({
+    entityId, rows: [{ id: record.id, values: projectViewerFormulaValues((record.valuesJson ?? {}) as Record<string, unknown>, createVisibleFormulaFields) }],
+    pageId: createFormulaPageId,
+    fields: createVisibleFormulaFields,
+    permissions: await interactiveFormulaPermissions(req, entityId, createFormulaPageId),
+  });
+  const createFormulaValues = materializeVisibleEntityFormulas({
+    entityId,
+    rows: [{ id: record.id, values: (record.valuesJson ?? {}) as Record<string, unknown> }],
+    fields,
+    hidden,
+    pageId: createFormulaPageId,
+    pageValues: createPageFormulaContext.values,
+    pageFields: createPageFormulaContext.fields,
+    hiddenPage: createPageFormulaContext.hidden,
+    linkedInputs: createInputs,
+    formulaOptions: await loadFormulaOptions(),
+  });
+  res.status(201).json(presentRecord({ ...record, valuesJson: createFormulaValues.get(record.id) ?? record.valuesJson }, hidden, fields));
 });
 
 router.get("/records/:id", requireAuth, async (req, res): Promise<void> => {
@@ -3048,7 +3316,21 @@ router.get("/records/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   const { hidden } = await fieldAccessContext(req, record.entityId, fields);
-  res.json(presentRecord(record, hidden, fields));
+  const readInputs = await mergeLinkedFormulaInputs({
+    entityId: record.entityId,
+    rows: [{ id: record.id, values: projectViewerFormulaValues((record.valuesJson ?? {}) as Record<string, unknown>, fields.filter((field) => !hidden.has(field.fieldKey))) }],
+    fields: fields.filter((field) => !hidden.has(field.fieldKey)),
+    permissions: await interactiveFormulaPermissions(req, record.entityId),
+  });
+  const readFormulaValues = materializeVisibleEntityFormulas({
+    entityId: record.entityId,
+    rows: [{ id: record.id, values: (record.valuesJson ?? {}) as Record<string, unknown> }],
+    fields,
+    hidden,
+    linkedInputs: readInputs,
+    formulaOptions: await loadFormulaOptions(),
+  });
+  res.json(presentRecord({ ...record, valuesJson: readFormulaValues.get(record.id) ?? record.valuesJson }, hidden, fields));
 });
 
 type TrashReason = "record_deleted" | "field_cleared" | "field_replaced";
@@ -3530,7 +3812,34 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
   }
   await emitEvent(events, req.log);
 
-  res.json(presentRecord(record, hidden, fields));
+  const updateFormulaPageId = await resolvePageFormulaContextId(req, record.entityId, input.pageId);
+  const updatePageFormulaContext = await loadPageFormulaResponseContext(
+    req, record.entityId, updateFormulaPageId, [record.id],
+  );
+  const updateVisibleFormulaFields = [
+    ...fields.filter((field) => !hidden.has(field.fieldKey)),
+    ...updatePageFormulaContext.fields.filter((field) => !updatePageFormulaContext.hidden.has(field.fieldKey)),
+  ];
+  const updateInputs = await mergeLinkedFormulaInputs({
+    entityId: record.entityId,
+    pageId: updateFormulaPageId,
+    rows: [{ id: record.id, values: projectViewerFormulaValues((record.valuesJson ?? {}) as Record<string, unknown>, updateVisibleFormulaFields) }],
+    fields: updateVisibleFormulaFields,
+    permissions: await interactiveFormulaPermissions(req, record.entityId, updateFormulaPageId),
+  });
+  const updateFormulaValues = materializeVisibleEntityFormulas({
+    entityId: record.entityId,
+    rows: [{ id: record.id, values: (record.valuesJson ?? {}) as Record<string, unknown> }],
+    fields,
+    hidden,
+    pageId: updateFormulaPageId,
+    pageValues: updatePageFormulaContext.values,
+    pageFields: updatePageFormulaContext.fields,
+    hiddenPage: updatePageFormulaContext.hidden,
+    linkedInputs: updateInputs,
+    formulaOptions: await loadFormulaOptions(),
+  });
+  res.json(presentRecord({ ...record, valuesJson: updateFormulaValues.get(record.id) ?? record.valuesJson }, hidden, fields));
 });
 
 router.delete("/records/:id", requireAuth, async (req, res): Promise<void> => {

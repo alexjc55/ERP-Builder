@@ -156,6 +156,8 @@ export * from './formatInheritSourceKind';
 export * from './formatOperator';
 export * from './formulaFieldConfig';
 export * from './formulaFieldConfigDisplayAffixPosition';
+export * from './formulaFieldRef';
+export * from './formulaFieldSource';
 export * from './getGoogleDriveNameTemplateParams';
 export * from './googleDriveAuthUrl';
 export * from './googleDriveConnectionInfo';

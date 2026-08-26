@@ -7,15 +7,16 @@
  *
  * Supported:
  *   - numbers, 'strings', "strings", true/false
- *   - field refs: {price}, {qty}
+ *   - field refs: {price}, {qty}, and opaque qualified refs such as
+ *     {page:42.total} (the complete text between braces is the lookup key)
  *   - arithmetic: + - * / %   (unary -)
  *   - comparison: == != < > <= >=
  *   - logic: && || !
  *   - ternary: cond ? a : b
  *   - parentheses
- *   - functions: if, round, floor, ceil, abs, min, max, sum, concat, upper,
- *     lower, len, coalesce, today, daysBetween, workingDaysBetween, daysSince,
- *     daysUntil
+ *   - functions: if, round, floor, ceil, abs, min, max, sum, average, concat,
+ *     upper, lower, trim, replace, contains, startsWith, endsWith, len,
+ *     coalesce, today, daysBetween, workingDaysBetween, daysSince, daysUntil
  *
  * `+` adds when both operands are numbers, otherwise concatenates as text.
  */
@@ -177,7 +178,12 @@ function tokenize(src: string): Tok[] {
     if (c === "{") {
       const end = src.indexOf("}", i);
       if (end === -1) throw new Error("Незакрытая { в формуле");
-      toks.push({ t: "field", v: src.slice(i + 1, end).trim() });
+      const key = src.slice(i + 1, end).trim();
+      if (!key) throw new Error("Пустая ссылка на поле в формуле");
+      // Deliberately do not parse qualified references here. A source resolver
+      // can use any stable qualification scheme and supply that exact key in
+      // `values`; legacy flat field keys continue to work unchanged.
+      toks.push({ t: "field", v: key });
       i = end + 1;
       continue;
     }
@@ -476,12 +482,29 @@ function evalNode(
           return a.length ? Math.max(...a.map(toNum)) : null;
         case "sum":
           return a.reduce<number>((acc, v) => acc + toNum(v), 0);
+        case "average":
+          return a.length
+            ? a.reduce<number>((acc, v) => acc + toNum(v), 0) / a.length
+            : null;
         case "concat":
           return a.map(toStr).join("");
         case "upper":
           return toStr(a[0]).toUpperCase();
         case "lower":
           return toStr(a[0]).toLowerCase();
+        case "trim":
+          return toStr(a[0]).trim();
+        case "replace": {
+          const input = toStr(a[0]);
+          const search = toStr(a[1]);
+          return search === "" ? input : input.split(search).join(toStr(a[2]));
+        }
+        case "contains":
+          return toStr(a[0]).includes(toStr(a[1]));
+        case "startswith":
+          return toStr(a[0]).startsWith(toStr(a[1]));
+        case "endswith":
+          return toStr(a[0]).endsWith(toStr(a[1]));
         case "len":
           return toStr(a[0]).length;
         case "coalesce":

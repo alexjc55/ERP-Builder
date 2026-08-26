@@ -34,7 +34,7 @@ import {
   type CustomFilterInputType,
 } from "@workspace/db";
 import { and, or, eq, inArray, sql, type SQL } from "drizzle-orm";
-import { buildFormulaScope, evaluateFormula, type FormulaEvaluationOptions, type FormulaFieldDef } from "@workspace/formula";
+import { evaluateFormula, type FormulaEvaluationOptions, type FormulaFieldDef } from "@workspace/formula";
 import {
   buildCondition,
   buildPageLocalCondition,
@@ -45,6 +45,8 @@ import {
   type RelationFilterMeta,
 } from "./record-query";
 import { buildRelationMeta } from "./own-scope";
+import type { LinkedFormulaPermissionContext } from "../lib/linked-formula-resolver";
+import { buildQualifiedFormulaScope, mergeLinkedFormulaInputs, projectViewerFormulaValues } from "../lib/formula-runtime";
 
 /** Runtime pick sent by the client: which filter + any user-supplied input values. */
 export interface CustomFilterPick {
@@ -83,6 +85,10 @@ interface ApplyOpts {
   pageId?: number;
   /** App-configured formula evaluation context supplied by the records route. */
   formulaOptions?: FormulaEvaluationOptions;
+  /** Viewer or explicit SYSTEM boundary for structured formula dependencies. */
+  formulaPermissions: LinkedFormulaPermissionContext;
+  /** Viewer-filtered page schema supplied by the interactive route. */
+  loadVisiblePageFields?: (pageId: number) => Promise<Map<string, { fieldType: string; formulaConfigJson: unknown }>>;
 }
 
 const toFormulaDef = (f: { fieldKey: string; formulaConfigJson: unknown }): FormulaFieldDef => {
@@ -117,11 +123,15 @@ export async function resolveCustomFilterClauses(
   const pageFieldsByPage = new Map<number, Map<string, { fieldType: string; formulaConfigJson: unknown }>>();
   const loadPageFields = async (pid: number) => {
     if (pageFieldsByPage.has(pid)) return pageFieldsByPage.get(pid)!;
-    const rows = await db
+    const rows = opts.loadVisiblePageFields
+      ? null
+      : await db
       .select()
       .from(pageFieldsTable)
       .where(and(eq(pageFieldsTable.pageId, pid), eq(pageFieldsTable.isActive, true)));
-    const m = new Map(rows.map((r) => [r.fieldKey, { fieldType: r.fieldType, formulaConfigJson: r.formulaConfigJson }] as const));
+    const m = opts.loadVisiblePageFields
+      ? await opts.loadVisiblePageFields(pid)
+      : new Map(rows!.map((r) => [r.fieldKey, { fieldType: r.fieldType, formulaConfigJson: r.formulaConfigJson }] as const));
     pageFieldsByPage.set(pid, m);
     return m;
   };
@@ -204,6 +214,7 @@ export async function resolveCustomFilterClauses(
         loadPageFields,
         pageId,
         formulaOptions: opts.formulaOptions,
+        formulaPermissions: opts.formulaPermissions,
       });
       if ("error" in r) return { error: r.error };
       clauses.push(r.ids.length > 0 ? inArray(entityRecordsTable.id, r.ids) : sql`false`);
@@ -292,6 +303,7 @@ interface JsCtx {
   loadPageFields: (pid: number) => Promise<Map<string, { fieldType: string; formulaConfigJson: unknown }>>;
   pageId?: number;
   formulaOptions?: FormulaEvaluationOptions;
+  formulaPermissions: LinkedFormulaPermissionContext;
 }
 
 /** Compute the set of record ids matching a (formula-referencing) filter tree. */
@@ -325,6 +337,9 @@ async function buildFormulaIdSet(
       else if (ctx.relationMeta.has(c.fieldKey)) refRelationKeys.add(c.fieldKey);
     }
   }
+  // An entity formula can explicitly reference the current page even when the
+  // filter condition itself targets an entity field.
+  if (ctx.pageId != null) refPageIds.add(ctx.pageId);
 
   for (const key of refRelationKeys) {
     const meta = ctx.relationMeta.get(key)!;
@@ -350,10 +365,49 @@ async function buildFormulaIdSet(
     pageFormulaDefsByPage.set(pid, fdefs);
   }
 
+  // All structured dependencies are resolved once for the complete JS-filter
+  // candidate batch (never once per row). Include referenced page formula defs
+  // because they can carry their own page-local/linked sources.
+  const linkedInputs = await mergeLinkedFormulaInputs({
+    entityId: ctx.entityId,
+    pageId: ctx.pageId,
+    rows: rows.map((row) => ({
+      id: row.id,
+      values: projectViewerFormulaValues((row.vals ?? {}) as Record<string, unknown>, ctx.allFields),
+    })),
+    fields: [
+      ...ctx.allFields,
+      ...[...pageMetaByPage.values()].flatMap((fields) =>
+        [...fields.values()].map((field) => ({ ...field })),
+      ),
+    ],
+    permissions: ctx.formulaPermissions,
+  });
+
   const ids: number[] = [];
   for (const row of rows) {
-    const vals = (row.vals ?? {}) as Record<string, unknown>;
-    const scope = buildFormulaScope(vals, ctx.entityFormulaDefs, ctx.formulaOptions);
+    const vals = projectViewerFormulaValues(
+      linkedInputs.get(row.id) ?? ((row.vals ?? {}) as Record<string, unknown>),
+      ctx.allFields,
+    );
+    const currentPageMeta = ctx.pageId == null ? undefined : pageMetaByPage.get(ctx.pageId);
+    const currentPageValues = ctx.pageId == null
+      ? undefined
+      : projectViewerFormulaValues(
+          pageValsByPage.get(ctx.pageId)?.get(row.id) ?? {},
+          currentPageMeta == null
+            ? []
+            : [...currentPageMeta.entries()].map(([fieldKey, field]) => ({ fieldKey, ...field })),
+        );
+    const scope = buildQualifiedFormulaScope({
+      entityId: ctx.entityId,
+      entityValues: vals,
+      entityFormulas: ctx.entityFormulaDefs,
+      pageId: ctx.pageId,
+      pageValues: currentPageValues,
+      pageFormulas: ctx.pageId == null ? undefined : pageFormulaDefsByPage.get(ctx.pageId) ?? [],
+      formulaOptions: ctx.formulaOptions,
+    });
     const groupResults: boolean[] = [];
     for (const g of groups) {
       const parts: boolean[] = [];
@@ -398,11 +452,25 @@ function evalConditionJs(
   let kind: "numeric" | "date" | "text";
   if (src === "page") {
     const pid = c.pageId ?? ctx.pageId!;
-    const pv = pageValsByPage.get(pid)?.get(recordId) ?? {};
+    const pageMeta = pageMetaByPage.get(pid);
+    const pv = projectViewerFormulaValues(
+      pageValsByPage.get(pid)?.get(recordId) ?? {},
+      pageMeta == null
+        ? []
+        : [...pageMeta.entries()].map(([fieldKey, field]) => ({ fieldKey, ...field })),
+    );
     const pf = pageMetaByPage.get(pid)?.get(c.fieldKey);
     if (pf?.fieldType === "function") {
       // Page-local FORMULA: compute the value from the page-local scope.
-      const pscope = buildFormulaScope(pv, pageFormulaDefsByPage.get(pid) ?? [], ctx.formulaOptions);
+      const pscope = buildQualifiedFormulaScope({
+        entityId: ctx.entityId,
+        entityValues: vals,
+        entityFormulas: ctx.entityFormulaDefs,
+        pageId: pid,
+        pageValues: pv,
+        pageFormulas: pageFormulaDefsByPage.get(pid) ?? [],
+        formulaOptions: ctx.formulaOptions,
+      });
       cell = pscope[c.fieldKey];
       kind = typeof cell === "number" ? "numeric" : "text";
     } else {

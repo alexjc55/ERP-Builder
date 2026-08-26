@@ -2855,6 +2855,22 @@ export const ListEntityFieldsParams = zod.object({
   "entityId": zod.coerce.number()
 })
 
+
+
+
+
+
+
+
+export const listEntityFieldsResponseFormulaConfigJsonSourcesItemTwoJoinTwoOnMax = 8;
+
+export const listEntityFieldsResponseFormulaConfigJsonSourcesItemTwoLimitMin = 0;
+export const listEntityFieldsResponseFormulaConfigJsonSourcesItemTwoLimitMax = 10000;
+
+export const listEntityFieldsResponseFormulaConfigJsonSourcesItemTwoSeparatorMax = 100;
+
+export const listEntityFieldsResponseFormulaConfigJsonSourcesMax = 32;
+
 export const listEntityFieldsResponseFormulaConfigJsonDecimalsMin = 0;
 export const listEntityFieldsResponseFormulaConfigJsonDecimalsMax = 10;
 
@@ -2942,6 +2958,53 @@ export const ListEntityFieldsResponseItem = zod.object({
 }).describe('One cross-field validation (\"fill\") rule. Distinct from conditional formatting (which is cosmetic): this is a HARD constraint on saving. Saving THIS field with a value (any non-empty value, or one of applyToValues when that list is non-empty) is allowed only when the field named conditionFieldKey (same entity) satisfies operator\/value (value2 is the upper bound for `between`). Otherwise the record save is rejected server-side with an auto-generated message.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
+  "sources": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['pageLocal']),
+  "key": zod.string(),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+}),zod.object({
+  "kind": zod.enum(['aggregate']),
+  "key": zod.string(),
+  "targetEntityId": zod.number().min(1),
+  "targetPageId": zod.number().min(1).optional(),
+  "value": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})]),
+  "join": zod.union([zod.object({
+  "kind": zod.enum(['relation']),
+  "relationId": zod.number().min(1),
+  "baseSide": zod.enum(['source', 'target'])
+}),zod.object({
+  "kind": zod.enum(['equality']),
+  "on": zod.array(zod.object({
+  "base": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})]),
+  "target": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})])
+})).min(1).max(listEntityFieldsResponseFormulaConfigJsonSourcesItemTwoJoinTwoOnMax)
+})]),
+  "aggregate": zod.enum(['sum', 'average', 'min', 'max', 'count', 'uniqueJoin']),
+  "limit": zod.number().min(listEntityFieldsResponseFormulaConfigJsonSourcesItemTwoLimitMin).max(listEntityFieldsResponseFormulaConfigJsonSourcesItemTwoLimitMax).optional(),
+  "separator": zod.string().max(listEntityFieldsResponseFormulaConfigJsonSourcesItemTwoSeparatorMax).optional()
+})])).max(listEntityFieldsResponseFormulaConfigJsonSourcesMax).optional().describe('Qualified page-local and linked aggregate inputs made available to the expression under their opaque key.'),
   "decimals": zod.number().min(listEntityFieldsResponseFormulaConfigJsonDecimalsMin).max(listEntityFieldsResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.'),
   "displayAffix": zod.string().max(listEntityFieldsResponseFormulaConfigJsonDisplayAffixMax).nullish().describe('Optional plain-text label displayed next to the value. Leading and trailing whitespace is removed by the server; blank becomes null.'),
   "displayAffixPosition": zod.enum(['before', 'after']).nullish().describe('Side on which displayAffix is shown. Defaults to after when an affix is present.')
@@ -2988,6 +3051,21 @@ export const CreateEntityFieldParams = zod.object({
 
 export const createEntityFieldBodyIsRequiredDefault = false;
 export const createEntityFieldBodyDefaultToTodayDefault = false;
+
+
+
+
+
+
+export const createEntityFieldBodyFormulaConfigJsonSourcesItemTwoJoinTwoOnMax = 8;
+
+export const createEntityFieldBodyFormulaConfigJsonSourcesItemTwoLimitMin = 0;
+export const createEntityFieldBodyFormulaConfigJsonSourcesItemTwoLimitMax = 10000;
+
+export const createEntityFieldBodyFormulaConfigJsonSourcesItemTwoSeparatorMax = 100;
+
+export const createEntityFieldBodyFormulaConfigJsonSourcesMax = 32;
+
 export const createEntityFieldBodyFormulaConfigJsonDecimalsMin = 0;
 export const createEntityFieldBodyFormulaConfigJsonDecimalsMax = 10;
 
@@ -3073,6 +3151,53 @@ export const CreateEntityFieldBody = zod.object({
 }).describe('One cross-field validation (\"fill\") rule. Distinct from conditional formatting (which is cosmetic): this is a HARD constraint on saving. Saving THIS field with a value (any non-empty value, or one of applyToValues when that list is non-empty) is allowed only when the field named conditionFieldKey (same entity) satisfies operator\/value (value2 is the upper bound for `between`). Otherwise the record save is rejected server-side with an auto-generated message.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
+  "sources": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['pageLocal']),
+  "key": zod.string(),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+}),zod.object({
+  "kind": zod.enum(['aggregate']),
+  "key": zod.string(),
+  "targetEntityId": zod.number().min(1),
+  "targetPageId": zod.number().min(1).optional(),
+  "value": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})]),
+  "join": zod.union([zod.object({
+  "kind": zod.enum(['relation']),
+  "relationId": zod.number().min(1),
+  "baseSide": zod.enum(['source', 'target'])
+}),zod.object({
+  "kind": zod.enum(['equality']),
+  "on": zod.array(zod.object({
+  "base": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})]),
+  "target": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})])
+})).min(1).max(createEntityFieldBodyFormulaConfigJsonSourcesItemTwoJoinTwoOnMax)
+})]),
+  "aggregate": zod.enum(['sum', 'average', 'min', 'max', 'count', 'uniqueJoin']),
+  "limit": zod.number().min(createEntityFieldBodyFormulaConfigJsonSourcesItemTwoLimitMin).max(createEntityFieldBodyFormulaConfigJsonSourcesItemTwoLimitMax).optional(),
+  "separator": zod.string().max(createEntityFieldBodyFormulaConfigJsonSourcesItemTwoSeparatorMax).optional()
+})])).max(createEntityFieldBodyFormulaConfigJsonSourcesMax).optional().describe('Qualified page-local and linked aggregate inputs made available to the expression under their opaque key.'),
   "decimals": zod.number().min(createEntityFieldBodyFormulaConfigJsonDecimalsMin).max(createEntityFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.'),
   "displayAffix": zod.string().max(createEntityFieldBodyFormulaConfigJsonDisplayAffixMax).nullish().describe('Optional plain-text label displayed next to the value. Leading and trailing whitespace is removed by the server; blank becomes null.'),
   "displayAffixPosition": zod.enum(['before', 'after']).nullish().describe('Side on which displayAffix is shown. Defaults to after when an affix is present.')
@@ -3113,6 +3238,22 @@ export const CreateEntityFieldBody = zod.object({
 export const GetFieldParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
+
+
+
+
+
+
+export const getFieldResponseFormulaConfigJsonSourcesItemTwoJoinTwoOnMax = 8;
+
+export const getFieldResponseFormulaConfigJsonSourcesItemTwoLimitMin = 0;
+export const getFieldResponseFormulaConfigJsonSourcesItemTwoLimitMax = 10000;
+
+export const getFieldResponseFormulaConfigJsonSourcesItemTwoSeparatorMax = 100;
+
+export const getFieldResponseFormulaConfigJsonSourcesMax = 32;
 
 export const getFieldResponseFormulaConfigJsonDecimalsMin = 0;
 export const getFieldResponseFormulaConfigJsonDecimalsMax = 10;
@@ -3201,6 +3342,53 @@ export const GetFieldResponse = zod.object({
 }).describe('One cross-field validation (\"fill\") rule. Distinct from conditional formatting (which is cosmetic): this is a HARD constraint on saving. Saving THIS field with a value (any non-empty value, or one of applyToValues when that list is non-empty) is allowed only when the field named conditionFieldKey (same entity) satisfies operator\/value (value2 is the upper bound for `between`). Otherwise the record save is rejected server-side with an auto-generated message.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
+  "sources": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['pageLocal']),
+  "key": zod.string(),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+}),zod.object({
+  "kind": zod.enum(['aggregate']),
+  "key": zod.string(),
+  "targetEntityId": zod.number().min(1),
+  "targetPageId": zod.number().min(1).optional(),
+  "value": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})]),
+  "join": zod.union([zod.object({
+  "kind": zod.enum(['relation']),
+  "relationId": zod.number().min(1),
+  "baseSide": zod.enum(['source', 'target'])
+}),zod.object({
+  "kind": zod.enum(['equality']),
+  "on": zod.array(zod.object({
+  "base": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})]),
+  "target": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})])
+})).min(1).max(getFieldResponseFormulaConfigJsonSourcesItemTwoJoinTwoOnMax)
+})]),
+  "aggregate": zod.enum(['sum', 'average', 'min', 'max', 'count', 'uniqueJoin']),
+  "limit": zod.number().min(getFieldResponseFormulaConfigJsonSourcesItemTwoLimitMin).max(getFieldResponseFormulaConfigJsonSourcesItemTwoLimitMax).optional(),
+  "separator": zod.string().max(getFieldResponseFormulaConfigJsonSourcesItemTwoSeparatorMax).optional()
+})])).max(getFieldResponseFormulaConfigJsonSourcesMax).optional().describe('Qualified page-local and linked aggregate inputs made available to the expression under their opaque key.'),
   "decimals": zod.number().min(getFieldResponseFormulaConfigJsonDecimalsMin).max(getFieldResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.'),
   "displayAffix": zod.string().max(getFieldResponseFormulaConfigJsonDisplayAffixMax).nullish().describe('Optional plain-text label displayed next to the value. Leading and trailing whitespace is removed by the server; blank becomes null.'),
   "displayAffixPosition": zod.enum(['before', 'after']).nullish().describe('Side on which displayAffix is shown. Defaults to after when an affix is present.')
@@ -3243,6 +3431,22 @@ export const GetFieldResponse = zod.object({
 export const UpdateFieldParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
+
+
+
+
+
+
+export const updateFieldBodyFormulaConfigJsonSourcesItemTwoJoinTwoOnMax = 8;
+
+export const updateFieldBodyFormulaConfigJsonSourcesItemTwoLimitMin = 0;
+export const updateFieldBodyFormulaConfigJsonSourcesItemTwoLimitMax = 10000;
+
+export const updateFieldBodyFormulaConfigJsonSourcesItemTwoSeparatorMax = 100;
+
+export const updateFieldBodyFormulaConfigJsonSourcesMax = 32;
 
 export const updateFieldBodyFormulaConfigJsonDecimalsMin = 0;
 export const updateFieldBodyFormulaConfigJsonDecimalsMax = 10;
@@ -3321,6 +3525,53 @@ export const UpdateFieldBody = zod.object({
 }).describe('One cross-field validation (\"fill\") rule. Distinct from conditional formatting (which is cosmetic): this is a HARD constraint on saving. Saving THIS field with a value (any non-empty value, or one of applyToValues when that list is non-empty) is allowed only when the field named conditionFieldKey (same entity) satisfies operator\/value (value2 is the upper bound for `between`). Otherwise the record save is rejected server-side with an auto-generated message.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
+  "sources": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['pageLocal']),
+  "key": zod.string(),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+}),zod.object({
+  "kind": zod.enum(['aggregate']),
+  "key": zod.string(),
+  "targetEntityId": zod.number().min(1),
+  "targetPageId": zod.number().min(1).optional(),
+  "value": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})]),
+  "join": zod.union([zod.object({
+  "kind": zod.enum(['relation']),
+  "relationId": zod.number().min(1),
+  "baseSide": zod.enum(['source', 'target'])
+}),zod.object({
+  "kind": zod.enum(['equality']),
+  "on": zod.array(zod.object({
+  "base": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})]),
+  "target": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})])
+})).min(1).max(updateFieldBodyFormulaConfigJsonSourcesItemTwoJoinTwoOnMax)
+})]),
+  "aggregate": zod.enum(['sum', 'average', 'min', 'max', 'count', 'uniqueJoin']),
+  "limit": zod.number().min(updateFieldBodyFormulaConfigJsonSourcesItemTwoLimitMin).max(updateFieldBodyFormulaConfigJsonSourcesItemTwoLimitMax).optional(),
+  "separator": zod.string().max(updateFieldBodyFormulaConfigJsonSourcesItemTwoSeparatorMax).optional()
+})])).max(updateFieldBodyFormulaConfigJsonSourcesMax).optional().describe('Qualified page-local and linked aggregate inputs made available to the expression under their opaque key.'),
   "decimals": zod.number().min(updateFieldBodyFormulaConfigJsonDecimalsMin).max(updateFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.'),
   "displayAffix": zod.string().max(updateFieldBodyFormulaConfigJsonDisplayAffixMax).nullish().describe('Optional plain-text label displayed next to the value. Leading and trailing whitespace is removed by the server; blank becomes null.'),
   "displayAffixPosition": zod.enum(['before', 'after']).nullish().describe('Side on which displayAffix is shown. Defaults to after when an affix is present.')
@@ -3353,6 +3604,22 @@ export const UpdateFieldBody = zod.object({
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
+
+
+
+
+
+
+
+
+export const updateFieldResponseFormulaConfigJsonSourcesItemTwoJoinTwoOnMax = 8;
+
+export const updateFieldResponseFormulaConfigJsonSourcesItemTwoLimitMin = 0;
+export const updateFieldResponseFormulaConfigJsonSourcesItemTwoLimitMax = 10000;
+
+export const updateFieldResponseFormulaConfigJsonSourcesItemTwoSeparatorMax = 100;
+
+export const updateFieldResponseFormulaConfigJsonSourcesMax = 32;
 
 export const updateFieldResponseFormulaConfigJsonDecimalsMin = 0;
 export const updateFieldResponseFormulaConfigJsonDecimalsMax = 10;
@@ -3441,6 +3708,53 @@ export const UpdateFieldResponse = zod.object({
 }).describe('One cross-field validation (\"fill\") rule. Distinct from conditional formatting (which is cosmetic): this is a HARD constraint on saving. Saving THIS field with a value (any non-empty value, or one of applyToValues when that list is non-empty) is allowed only when the field named conditionFieldKey (same entity) satisfies operator\/value (value2 is the upper bound for `between`). Otherwise the record save is rejected server-side with an auto-generated message.')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
+  "sources": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['pageLocal']),
+  "key": zod.string(),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+}),zod.object({
+  "kind": zod.enum(['aggregate']),
+  "key": zod.string(),
+  "targetEntityId": zod.number().min(1),
+  "targetPageId": zod.number().min(1).optional(),
+  "value": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})]),
+  "join": zod.union([zod.object({
+  "kind": zod.enum(['relation']),
+  "relationId": zod.number().min(1),
+  "baseSide": zod.enum(['source', 'target'])
+}),zod.object({
+  "kind": zod.enum(['equality']),
+  "on": zod.array(zod.object({
+  "base": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})]),
+  "target": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})])
+})).min(1).max(updateFieldResponseFormulaConfigJsonSourcesItemTwoJoinTwoOnMax)
+})]),
+  "aggregate": zod.enum(['sum', 'average', 'min', 'max', 'count', 'uniqueJoin']),
+  "limit": zod.number().min(updateFieldResponseFormulaConfigJsonSourcesItemTwoLimitMin).max(updateFieldResponseFormulaConfigJsonSourcesItemTwoLimitMax).optional(),
+  "separator": zod.string().max(updateFieldResponseFormulaConfigJsonSourcesItemTwoSeparatorMax).optional()
+})])).max(updateFieldResponseFormulaConfigJsonSourcesMax).optional().describe('Qualified page-local and linked aggregate inputs made available to the expression under their opaque key.'),
   "decimals": zod.number().min(updateFieldResponseFormulaConfigJsonDecimalsMin).max(updateFieldResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.'),
   "displayAffix": zod.string().max(updateFieldResponseFormulaConfigJsonDisplayAffixMax).nullish().describe('Optional plain-text label displayed next to the value. Leading and trailing whitespace is removed by the server; blank becomes null.'),
   "displayAffixPosition": zod.enum(['before', 'after']).nullish().describe('Side on which displayAffix is shown. Defaults to after when an affix is present.')
@@ -3514,6 +3828,22 @@ export const ListPageFieldsParams = zod.object({
   "pageId": zod.coerce.number()
 })
 
+
+
+
+
+
+
+
+export const listPageFieldsResponseFormulaConfigJsonSourcesItemTwoJoinTwoOnMax = 8;
+
+export const listPageFieldsResponseFormulaConfigJsonSourcesItemTwoLimitMin = 0;
+export const listPageFieldsResponseFormulaConfigJsonSourcesItemTwoLimitMax = 10000;
+
+export const listPageFieldsResponseFormulaConfigJsonSourcesItemTwoSeparatorMax = 100;
+
+export const listPageFieldsResponseFormulaConfigJsonSourcesMax = 32;
+
 export const listPageFieldsResponseFormulaConfigJsonDecimalsMin = 0;
 export const listPageFieldsResponseFormulaConfigJsonDecimalsMax = 10;
 
@@ -3564,6 +3894,53 @@ export const ListPageFieldsResponseItem = zod.object({
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
+  "sources": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['pageLocal']),
+  "key": zod.string(),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+}),zod.object({
+  "kind": zod.enum(['aggregate']),
+  "key": zod.string(),
+  "targetEntityId": zod.number().min(1),
+  "targetPageId": zod.number().min(1).optional(),
+  "value": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})]),
+  "join": zod.union([zod.object({
+  "kind": zod.enum(['relation']),
+  "relationId": zod.number().min(1),
+  "baseSide": zod.enum(['source', 'target'])
+}),zod.object({
+  "kind": zod.enum(['equality']),
+  "on": zod.array(zod.object({
+  "base": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})]),
+  "target": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})])
+})).min(1).max(listPageFieldsResponseFormulaConfigJsonSourcesItemTwoJoinTwoOnMax)
+})]),
+  "aggregate": zod.enum(['sum', 'average', 'min', 'max', 'count', 'uniqueJoin']),
+  "limit": zod.number().min(listPageFieldsResponseFormulaConfigJsonSourcesItemTwoLimitMin).max(listPageFieldsResponseFormulaConfigJsonSourcesItemTwoLimitMax).optional(),
+  "separator": zod.string().max(listPageFieldsResponseFormulaConfigJsonSourcesItemTwoSeparatorMax).optional()
+})])).max(listPageFieldsResponseFormulaConfigJsonSourcesMax).optional().describe('Qualified page-local and linked aggregate inputs made available to the expression under their opaque key.'),
   "decimals": zod.number().min(listPageFieldsResponseFormulaConfigJsonDecimalsMin).max(listPageFieldsResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.'),
   "displayAffix": zod.string().max(listPageFieldsResponseFormulaConfigJsonDisplayAffixMax).nullish().describe('Optional plain-text label displayed next to the value. Leading and trailing whitespace is removed by the server; blank becomes null.'),
   "displayAffixPosition": zod.enum(['before', 'after']).nullish().describe('Side on which displayAffix is shown. Defaults to after when an affix is present.')
@@ -3630,6 +4007,21 @@ export const CreatePageFieldParams = zod.object({
 export const createPageFieldBodyIsRequiredDefault = false;
 export const createPageFieldBodyIsFilterableDefault = false;
 export const createPageFieldBodyPivotEnabledDefault = false;
+
+
+
+
+
+
+export const createPageFieldBodyFormulaConfigJsonSourcesItemTwoJoinTwoOnMax = 8;
+
+export const createPageFieldBodyFormulaConfigJsonSourcesItemTwoLimitMin = 0;
+export const createPageFieldBodyFormulaConfigJsonSourcesItemTwoLimitMax = 10000;
+
+export const createPageFieldBodyFormulaConfigJsonSourcesItemTwoSeparatorMax = 100;
+
+export const createPageFieldBodyFormulaConfigJsonSourcesMax = 32;
+
 export const createPageFieldBodyFormulaConfigJsonDecimalsMin = 0;
 export const createPageFieldBodyFormulaConfigJsonDecimalsMax = 10;
 
@@ -3681,6 +4073,53 @@ export const CreatePageFieldBody = zod.object({
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
+  "sources": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['pageLocal']),
+  "key": zod.string(),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+}),zod.object({
+  "kind": zod.enum(['aggregate']),
+  "key": zod.string(),
+  "targetEntityId": zod.number().min(1),
+  "targetPageId": zod.number().min(1).optional(),
+  "value": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})]),
+  "join": zod.union([zod.object({
+  "kind": zod.enum(['relation']),
+  "relationId": zod.number().min(1),
+  "baseSide": zod.enum(['source', 'target'])
+}),zod.object({
+  "kind": zod.enum(['equality']),
+  "on": zod.array(zod.object({
+  "base": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})]),
+  "target": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})])
+})).min(1).max(createPageFieldBodyFormulaConfigJsonSourcesItemTwoJoinTwoOnMax)
+})]),
+  "aggregate": zod.enum(['sum', 'average', 'min', 'max', 'count', 'uniqueJoin']),
+  "limit": zod.number().min(createPageFieldBodyFormulaConfigJsonSourcesItemTwoLimitMin).max(createPageFieldBodyFormulaConfigJsonSourcesItemTwoLimitMax).optional(),
+  "separator": zod.string().max(createPageFieldBodyFormulaConfigJsonSourcesItemTwoSeparatorMax).optional()
+})])).max(createPageFieldBodyFormulaConfigJsonSourcesMax).optional().describe('Qualified page-local and linked aggregate inputs made available to the expression under their opaque key.'),
   "decimals": zod.number().min(createPageFieldBodyFormulaConfigJsonDecimalsMin).max(createPageFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.'),
   "displayAffix": zod.string().max(createPageFieldBodyFormulaConfigJsonDisplayAffixMax).nullish().describe('Optional plain-text label displayed next to the value. Leading and trailing whitespace is removed by the server; blank becomes null.'),
   "displayAffixPosition": zod.enum(['before', 'after']).nullish().describe('Side on which displayAffix is shown. Defaults to after when an affix is present.')
@@ -3741,6 +4180,22 @@ export const UpdatePageFieldParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
+
+
+
+
+
+
+export const updatePageFieldBodyFormulaConfigJsonSourcesItemTwoJoinTwoOnMax = 8;
+
+export const updatePageFieldBodyFormulaConfigJsonSourcesItemTwoLimitMin = 0;
+export const updatePageFieldBodyFormulaConfigJsonSourcesItemTwoLimitMax = 10000;
+
+export const updatePageFieldBodyFormulaConfigJsonSourcesItemTwoSeparatorMax = 100;
+
+export const updatePageFieldBodyFormulaConfigJsonSourcesMax = 32;
+
 export const updatePageFieldBodyFormulaConfigJsonDecimalsMin = 0;
 export const updatePageFieldBodyFormulaConfigJsonDecimalsMax = 10;
 
@@ -3789,6 +4244,53 @@ export const UpdatePageFieldBody = zod.object({
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
+  "sources": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['pageLocal']),
+  "key": zod.string(),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+}),zod.object({
+  "kind": zod.enum(['aggregate']),
+  "key": zod.string(),
+  "targetEntityId": zod.number().min(1),
+  "targetPageId": zod.number().min(1).optional(),
+  "value": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})]),
+  "join": zod.union([zod.object({
+  "kind": zod.enum(['relation']),
+  "relationId": zod.number().min(1),
+  "baseSide": zod.enum(['source', 'target'])
+}),zod.object({
+  "kind": zod.enum(['equality']),
+  "on": zod.array(zod.object({
+  "base": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})]),
+  "target": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})])
+})).min(1).max(updatePageFieldBodyFormulaConfigJsonSourcesItemTwoJoinTwoOnMax)
+})]),
+  "aggregate": zod.enum(['sum', 'average', 'min', 'max', 'count', 'uniqueJoin']),
+  "limit": zod.number().min(updatePageFieldBodyFormulaConfigJsonSourcesItemTwoLimitMin).max(updatePageFieldBodyFormulaConfigJsonSourcesItemTwoLimitMax).optional(),
+  "separator": zod.string().max(updatePageFieldBodyFormulaConfigJsonSourcesItemTwoSeparatorMax).optional()
+})])).max(updatePageFieldBodyFormulaConfigJsonSourcesMax).optional().describe('Qualified page-local and linked aggregate inputs made available to the expression under their opaque key.'),
   "decimals": zod.number().min(updatePageFieldBodyFormulaConfigJsonDecimalsMin).max(updatePageFieldBodyFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.'),
   "displayAffix": zod.string().max(updatePageFieldBodyFormulaConfigJsonDisplayAffixMax).nullish().describe('Optional plain-text label displayed next to the value. Leading and trailing whitespace is removed by the server; blank becomes null.'),
   "displayAffixPosition": zod.enum(['before', 'after']).nullish().describe('Side on which displayAffix is shown. Defaults to after when an affix is present.')
@@ -3841,6 +4343,22 @@ export const UpdatePageFieldBody = zod.object({
   "isActive": zod.boolean().optional()
 })
 
+
+
+
+
+
+
+
+export const updatePageFieldResponseFormulaConfigJsonSourcesItemTwoJoinTwoOnMax = 8;
+
+export const updatePageFieldResponseFormulaConfigJsonSourcesItemTwoLimitMin = 0;
+export const updatePageFieldResponseFormulaConfigJsonSourcesItemTwoLimitMax = 10000;
+
+export const updatePageFieldResponseFormulaConfigJsonSourcesItemTwoSeparatorMax = 100;
+
+export const updatePageFieldResponseFormulaConfigJsonSourcesMax = 32;
+
 export const updatePageFieldResponseFormulaConfigJsonDecimalsMin = 0;
 export const updatePageFieldResponseFormulaConfigJsonDecimalsMax = 10;
 
@@ -3891,6 +4409,53 @@ export const UpdatePageFieldResponse = zod.object({
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
+  "sources": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['pageLocal']),
+  "key": zod.string(),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+}),zod.object({
+  "kind": zod.enum(['aggregate']),
+  "key": zod.string(),
+  "targetEntityId": zod.number().min(1),
+  "targetPageId": zod.number().min(1).optional(),
+  "value": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})]),
+  "join": zod.union([zod.object({
+  "kind": zod.enum(['relation']),
+  "relationId": zod.number().min(1),
+  "baseSide": zod.enum(['source', 'target'])
+}),zod.object({
+  "kind": zod.enum(['equality']),
+  "on": zod.array(zod.object({
+  "base": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})]),
+  "target": zod.union([zod.object({
+  "scope": zod.enum(['entity']),
+  "fieldKey": zod.string()
+}),zod.object({
+  "scope": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string()
+})])
+})).min(1).max(updatePageFieldResponseFormulaConfigJsonSourcesItemTwoJoinTwoOnMax)
+})]),
+  "aggregate": zod.enum(['sum', 'average', 'min', 'max', 'count', 'uniqueJoin']),
+  "limit": zod.number().min(updatePageFieldResponseFormulaConfigJsonSourcesItemTwoLimitMin).max(updatePageFieldResponseFormulaConfigJsonSourcesItemTwoLimitMax).optional(),
+  "separator": zod.string().max(updatePageFieldResponseFormulaConfigJsonSourcesItemTwoSeparatorMax).optional()
+})])).max(updatePageFieldResponseFormulaConfigJsonSourcesMax).optional().describe('Qualified page-local and linked aggregate inputs made available to the expression under their opaque key.'),
   "decimals": zod.number().min(updatePageFieldResponseFormulaConfigJsonDecimalsMin).max(updatePageFieldResponseFormulaConfigJsonDecimalsMax).nullish().describe('Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null\/omitted means no rounding. Ignored for non-numeric (text\/boolean) results.'),
   "displayAffix": zod.string().max(updatePageFieldResponseFormulaConfigJsonDisplayAffixMax).nullish().describe('Optional plain-text label displayed next to the value. Leading and trailing whitespace is removed by the server; blank becomes null.'),
   "displayAffixPosition": zod.enum(['before', 'after']).nullish().describe('Side on which displayAffix is shown. Defaults to after when an affix is present.')

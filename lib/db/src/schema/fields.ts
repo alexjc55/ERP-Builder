@@ -118,19 +118,68 @@ export type FieldValidationRule = {
   value2?: string;
 };
 
+/** A field reference whose storage scope is always explicit. */
+export type FormulaFieldReference =
+  | { scope: "entity"; fieldKey: string }
+  | { scope: "page"; pageId: number; fieldKey: string };
+
+/** A named formula input read from a page-local value of the current record. */
+export type FormulaPageReferenceSource = {
+  kind: "pageLocal";
+  /** Opaque expression key (without braces), e.g. `page:12.margin`. */
+  key: string;
+  pageId: number;
+  fieldKey: string;
+};
+
+/** How an external aggregate finds records related to the current record. */
+export type FormulaExternalJoin =
+  | {
+      kind: "relation";
+      relationId: number;
+      /** Which relation endpoint contains the record being evaluated. */
+      baseSide: "source" | "target";
+    }
+  | {
+      kind: "equality";
+      /** All comparisons are ANDed; null values never match. */
+      on: Array<{ base: FormulaFieldReference; target: FormulaFieldReference }>;
+    };
+
+export type FormulaExternalAggregate = "sum" | "average" | "min" | "max" | "count" | "uniqueJoin";
+
+/** A named formula input aggregated from records of another entity. */
+export type FormulaExternalAggregateSource = {
+  kind: "aggregate";
+  key: string;
+  targetEntityId: number;
+  /** Qualifies target page references; never inferred from the current page. */
+  targetPageId?: number;
+  /** Optional only for count, which counts matching records without reading a value. */
+  value?: FormulaFieldReference;
+  join: FormulaExternalJoin;
+  aggregate: FormulaExternalAggregate;
+  /** Stable target-record-id ordered cap applied after permissions. */
+  limit?: number;
+  /** Used only by uniqueJoin. */
+  separator?: string;
+};
+
+export type FormulaFieldSource =
+  | FormulaPageReferenceSource
+  | FormulaExternalAggregateSource;
+
 /**
  * Display and formula configuration stored in `formulaConfigJson` for `number`
- * and `function` fields. `expression` is used by function fields and safely
- * references other fields of the same record via `{field_key}`. It is evaluated
- * at read time (never stored) by a sandboxed evaluator. `decimals` rounds a
- * numeric result on display. `displayAffix` is optional plain text rendered
- * before or after the displayed value.
+ * and `function` fields. Expressions may reference same-record fields with flat
+ * tokens (`{field_key}`) and structured sources with opaque qualified tokens.
  */
 export type FormulaFieldConfig = {
   expression?: string;
   decimals?: number | null;
   displayAffix?: string | null;
   displayAffixPosition?: "before" | "after" | null;
+  sources?: FormulaFieldSource[];
 };
 
 /**

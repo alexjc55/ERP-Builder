@@ -2517,11 +2517,66 @@ export const FormulaFieldConfigDisplayAffixPosition = {
   after: 'after',
 } as const;
 
+export type FormulaFieldRef = {
+  scope: 'entity';
+  fieldKey: string;
+} | {
+  scope: 'page';
+  /** @minimum 1 */
+  pageId: number;
+  fieldKey: string;
+};
+
+export type FormulaFieldSource = {
+  kind: 'pageLocal';
+  key: string;
+  /** @minimum 1 */
+  pageId: number;
+  fieldKey: string;
+} | {
+  kind: 'aggregate';
+  key: string;
+  /** @minimum 1 */
+  targetEntityId: number;
+  /** @minimum 1 */
+  targetPageId?: number;
+  value: FormulaFieldRef;
+  join: {
+  kind: 'relation';
+  /** @minimum 1 */
+  relationId: number;
+  baseSide: 'source' | 'target';
+} | {
+  kind: 'equality';
+  /**
+     * @minItems 1
+     * @maxItems 8
+     */
+  on: {
+  base: FormulaFieldRef;
+  target: FormulaFieldRef;
+}[];
+};
+  aggregate: 'sum' | 'average' | 'min' | 'max' | 'count' | 'uniqueJoin';
+  /**
+     * @minimum 0
+     * @maximum 10000
+     */
+  limit?: number;
+  /** @maxLength 100 */
+  separator?: string;
+};
+
 /**
  * Display and formula configuration stored in formulaConfigJson for `number` and `function` fields. `expression` is used by function fields and safely references other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display. `displayAffix` is optional plain text shown before or after the value.
  */
 export interface FormulaFieldConfig {
   expression?: string;
+  /**
+     * Qualified page-local and linked aggregate inputs made available to the expression under their opaque key.
+     * @maxItems 32
+     */
+  sources?: FormulaFieldSource[];
   /**
      * Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null/omitted means no rounding. Ignored for non-numeric (text/boolean) results.
      * @minimum 0

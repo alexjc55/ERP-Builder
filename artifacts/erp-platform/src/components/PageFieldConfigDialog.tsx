@@ -65,6 +65,7 @@ import { normalizeSelectOptions, type SelectOption } from "@/lib/selectOptions";
 import { FieldFormatRulesEditor } from "@/components/FieldFormatRulesEditor";
 import { ColorPickerControl } from "@/components/ColorPickerControl";
 import { FormulaEditor, type FormulaFieldRef } from "@/components/FormulaEditor";
+import { FormulaSourceBuilder, type FormulaSource } from "@/components/FormulaSourceBuilder";
 import { normalizeDecimals } from "@workspace/formula";
 import { useToast } from "@/hooks/use-toast";
 import { useML, useT } from "@/lib/i18n";
@@ -225,6 +226,7 @@ export function PageFieldConfigDialog({
   const [totalTextColor, setTotalTextColor] = useState("");
   const [formatRules, setFormatRules] = useState<FieldFormatRule[]>([]);
   const [formula, setFormula] = useState("");
+  const [formulaSources, setFormulaSources] = useState<FormulaSource[]>([]);
   const [formulaDecimals, setFormulaDecimals] = useState("");
   const [displayAffix, setDisplayAffix] = useState("");
   const [displayAffixPosition, setDisplayAffixPosition] = useState<"before" | "after">("after");
@@ -273,6 +275,11 @@ export function PageFieldConfigDialog({
       setFormatRules(Array.isArray(field.formatRulesJson) ? field.formatRulesJson : []);
       const formulaConfig = field.formulaConfigJson as FormulaFieldConfig | null | undefined;
       setFormula(formulaConfig?.expression ?? "");
+      setFormulaSources(
+        Array.isArray((formulaConfig as (FormulaFieldConfig & { sources?: FormulaSource[] }) | undefined)?.sources)
+          ? [...((formulaConfig as FormulaFieldConfig & { sources: FormulaSource[] }).sources)]
+          : [],
+      );
       setFormulaDecimals(
         formulaConfig?.decimals != null ? String(formulaConfig.decimals) : "",
       );
@@ -315,6 +322,7 @@ export function PageFieldConfigDialog({
       setTotalTextColor("");
       setFormatRules([]);
       setFormula("");
+      setFormulaSources([]);
       setFormulaDecimals("");
       setDisplayAffix("");
       setDisplayAffixPosition("after");
@@ -418,8 +426,28 @@ export function PageFieldConfigDialog({
         (f: PageField) => f.id !== field?.id && !(f.fieldType === "function" && wouldCycle(f.fieldKey)),
       )
       .map((f: PageField) => ({ key: f.fieldKey, label: ml(f.nameJson) || f.fieldKey }));
-    const seen = new Set(pageRefs.map((r) => r.key));
-    return [...pageRefs, ...sourceFields.filter((r) => !seen.has(r.key))];
+    const qualifiedPageRefs = pageRefs.map((ref) => ({
+      ...ref,
+      token: `page:${pageId}.${ref.key}`,
+      sourceLabel: t("fields.formulaCurrentPage", "Текущая страница"),
+      sourceKind: "page" as const,
+    }));
+    const qualifiedEntityRefs = sourceFields.map((ref) => ({
+      ...ref,
+      token: `entity:${entityId}.${ref.key}`,
+      sourceLabel: t("fields.formulaCurrentEntity", "Текущая сущность"),
+      sourceKind: "entity" as const,
+    }));
+    const structuredRefs: FormulaFieldRef[] = formulaSources.map((source) => ({
+      key: source.key,
+      token: source.key,
+      label: source.kind === "aggregate" ? source.key.replace(/^source:/, "") : source.fieldKey,
+      sourceLabel: source.kind === "aggregate"
+        ? t("fields.formulaLinkedData", "Связанные данные")
+        : t("fields.formulaPageData", "Поля страницы"),
+      sourceKind: source.kind === "aggregate" ? "linked" : "page",
+    }));
+    return [...qualifiedPageRefs, ...qualifiedEntityRefs, ...structuredRefs];
   })();
 
   // page_ref: candidate source pages = OTHER pages showing the same records —
@@ -509,6 +537,7 @@ export function PageFieldConfigDialog({
               ...(displayAffix.trim()
                 ? { displayAffix: displayAffix.trim(), displayAffixPosition }
                 : {}),
+              ...(formulaSources.length ? { sources: formulaSources } : {}),
             }
           : fieldType === "number"
             ? // Number fields reuse the same decimals knob (display-only rounding
@@ -783,7 +812,14 @@ export function PageFieldConfigDialog({
             )}
             {fieldType === "function" && (
               <div className="space-y-3">
-                <FormulaEditor value={formula} onChange={setFormula} fields={formulaFields} />
+                <FormulaEditor value={formula} onChange={setFormula} fields={formulaFields}>
+                  <FormulaSourceBuilder
+                    currentEntityId={entityId}
+                    currentFields={formulaFields.filter((ref) => ref.sourceKind !== "linked")}
+                    value={formulaSources}
+                    onChange={setFormulaSources}
+                  />
+                </FormulaEditor>
                 <NumericDisplayFormatControls
                   idPrefix="pfcd-formula"
                   decimals={formulaDecimals}

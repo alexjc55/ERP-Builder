@@ -24,6 +24,7 @@ import {
   DEFAULT_WORKING_DAYS,
   evaluateFormula,
   type FormulaEvaluationOptions,
+  type FormulaFieldDef,
 } from "@workspace/formula";
 import {
   relationValueScalar,
@@ -34,8 +35,10 @@ import {
 } from "./record-query";
 import {
   resolvePivotMeasureDisplayAffix,
+  type PivotDisplayAffixField,
   type PivotMeasureDisplayAffix,
 } from "./pivot-display-affix";
+import { buildQualifiedFormulaScope } from "../lib/formula-runtime";
 
 export const PIVOT_DIM_TYPES = new Set([
   "text",
@@ -110,15 +113,11 @@ export interface PivotConfigInput {
 }
 
 /** Minimal shape of a page-local field needed for pivot dim/measure resolution. */
-export interface PivotPageField {
+export interface PivotPageField extends PivotDisplayAffixField {
   fieldKey: string;
   pivotEnabled: boolean | null;
   fieldType: string;
   nameJson: unknown;
-  formulaConfigJson?: {
-    displayAffix?: string | null;
-    displayAffixPosition?: "before" | "after" | null;
-  } | null;
 }
 
 export interface PivotComputeInput {
@@ -135,6 +134,8 @@ export interface PivotComputeInput {
   where: SQL;
   /** Optional request-scoped formula context supplied by a records route. */
   formulaOptions?: FormulaEvaluationOptions;
+  /** Batched linked/qualified formula inputs keyed by record id. */
+  formulaInputs?: Map<number, Record<string, unknown>>;
 }
 
 export interface PivotResultShape {
@@ -188,6 +189,19 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
     };
   const entFieldByKey = new Map(entityFields.map((f) => [f.fieldKey, f]));
   const pageFieldByKey = new Map((input.pageFields ?? []).map((pf) => [pf.fieldKey, pf] as const));
+  // Formula measures are evaluated per record in JS. Keep configured formula
+  // fields as lazy definitions rather than expecting their (unstored) values in
+  // valuesJson; this also makes qualified entity/page formula chains available.
+  const toFormulaDef = (field: { fieldKey: string; formulaConfigJson?: unknown }): FormulaFieldDef => {
+    const config = field.formulaConfigJson as { expression?: string; decimals?: number | null } | null;
+    return { key: field.fieldKey, expression: config?.expression ?? "", decimals: config?.decimals ?? null };
+  };
+  const entityFormulaDefs = entityFields
+    .filter((field) => field.fieldType === "function")
+    .map(toFormulaDef);
+  const pageFormulaDefs = (input.pageFields ?? [])
+    .filter((field) => field.fieldType === "function")
+    .map(toFormulaDef);
   const measureDisplayAffixes: PivotMeasureDisplayAffix[] = [];
 
   // In multi-measure mode any sum measure may target a page-local field; in
@@ -439,17 +453,26 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
     // One per-record pull for all formula measures, evaluated in JS and summed.
     if (formulaPlans.length > 0) {
       const raw = await db
-        .select({ rk: sql<string | null>`${rowKeyExpr}`, vals: entityRecordsTable.valuesJson })
+        .select({ id: entityRecordsTable.id, rk: sql<string | null>`${rowKeyExpr}`, vals: entityRecordsTable.valuesJson })
         .from(entityRecordsTable)
         .where(where);
       for (const r of raw) {
-        const srcVals = (r.vals ?? {}) as Record<string, unknown>;
+        const rawVals = (r.vals ?? {}) as Record<string, unknown>;
+        const srcVals = input.formulaInputs?.get(r.id) ?? rawVals;
         for (const p of formulaPlans) {
           const scoped: Record<string, unknown> = {};
           for (const k of p.allowedKeys) scoped[k] = srcVals[k];
+          for (const [k, value] of Object.entries(srcVals)) if (!(k in rawVals)) scoped[k] = value;
           let v = 0;
           try {
-            const res = evaluateFormula(p.expr, scoped, formulaOptions);
+            const res = evaluateFormula(p.expr, buildQualifiedFormulaScope({
+              entityId,
+              entityValues: scoped,
+              entityFormulas: entityFormulaDefs,
+              pageId,
+              pageFormulas: pageFormulaDefs,
+              formulaOptions,
+            }), formulaOptions);
             if (typeof res === "number" && Number.isFinite(res)) v = res;
           } catch {
             v = 0;
@@ -488,6 +511,7 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
       const allowed = measure.allowedKeys;
       const raw = await db
         .select({
+          id: entityRecordsTable.id,
           rk: sql<string | null>`${rowKeyExpr}`,
           ck: colKeyExpr ? sql<string | null>`${colKeyExpr}` : sql<string>`${PIVOT_COL_ALL}`,
           vals: entityRecordsTable.valuesJson,
@@ -495,12 +519,21 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
         .from(entityRecordsTable)
         .where(where);
       grouped = raw.map((r) => {
-        const srcVals = (r.vals ?? {}) as Record<string, unknown>;
+        const rawVals = (r.vals ?? {}) as Record<string, unknown>;
+        const srcVals = input.formulaInputs?.get(r.id) ?? rawVals;
         const scoped: Record<string, unknown> = {};
         for (const k of allowed) scoped[k] = srcVals[k];
+        for (const [k, value] of Object.entries(srcVals)) if (!(k in rawVals)) scoped[k] = value;
         let v = 0;
         try {
-          const res = evaluateFormula(measure.expr, scoped, formulaOptions);
+          const res = evaluateFormula(measure.expr, buildQualifiedFormulaScope({
+            entityId,
+            entityValues: scoped,
+            entityFormulas: entityFormulaDefs,
+            pageId,
+            pageFormulas: pageFormulaDefs,
+            formulaOptions,
+          }), formulaOptions);
           if (typeof res === "number" && Number.isFinite(res)) v = res;
         } catch {
           v = 0;

@@ -30,3 +30,26 @@ assert.equal(
   evaluateFormula("daysBetween({page_entry_date},{material_release_date})", pageScope),
   1,
 );
+
+const qualifiedScope = mergeFormulaInputValues(
+  {
+    amount: 3,
+    linked_amount: 999,
+    "source:related_total": 12,
+  },
+  { amount: 8, page_linked_amount: "stale raw value" },
+  new Map([["linked_amount", { fieldKey: "linked_amount", value: 4 }]]),
+  new Map([["page_linked_amount", { fieldKey: "page_linked_amount", value: 6 }]]),
+  { entityId: 17, pageId: 42 },
+);
+assert.equal(
+  evaluateFormula(
+    "{entity:17.amount} + {page:42.amount} + {entity:17.linked_amount} + {page:42.page_linked_amount} + {source:related_total}",
+    qualifiedScope,
+  ),
+  33,
+);
+assert.equal(qualifiedScope.linked_amount, 4);
+assert.equal(qualifiedScope["entity:17.linked_amount"], 4);
+assert.equal(qualifiedScope.page_linked_amount, 6);
+assert.equal(qualifiedScope["page:42.page_linked_amount"], 6);

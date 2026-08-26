@@ -15,6 +15,7 @@ import { buildRelationMeta } from "./own-scope";
 import { cascadeDeletePageRefFields } from "./page-fields";
 import { computePivot, type PivotConfigInput } from "./pivot-compute";
 import { buildRecordQuery, type RecordQuerySpec, type FilterCondition } from "./record-query";
+import { mergeLinkedFormulaInputs, systemFormulaPermissions } from "../lib/formula-runtime";
 import {
   CreatePageBody,
   UpdatePageBody,
@@ -352,6 +353,25 @@ router.get("/pages/:id/pivot/data", requireAuth, async (req, res): Promise<void>
     }
   }
 
+  const where = and(...clauses)!;
+  // Pivot pages are admin-authoritative. Resolve all structured formula sources
+  // for the complete candidate set in one system-scoped batch before the pivot
+  // core evaluates formula measures (including qualified page formula chains).
+  const pivotRows = await db
+    .select({ id: entityRecordsTable.id, values: entityRecordsTable.valuesJson })
+    .from(entityRecordsTable)
+    .where(where);
+  const formulaInputs = await mergeLinkedFormulaInputs({
+    entityId,
+    pageId: ctxPageId,
+    rows: pivotRows.map((row) => ({
+      id: row.id,
+      values: (row.values ?? {}) as Record<string, unknown>,
+    })),
+    fields: [...fields, ...pageFields],
+    permissions: systemFormulaPermissions,
+  });
+
   const outcome = await computePivot({
     entityId,
     pivot,
@@ -359,7 +379,8 @@ router.get("/pages/:id/pivot/data", requireAuth, async (req, res): Promise<void>
     relationMeta,
     pageFields,
     pageId: ctxPageId,
-    where: and(...clauses)!,
+    where,
+    formulaInputs,
   });
   if (!outcome.ok) {
     // An invalid stored config (e.g. a field lost its pivot opt-in) degrades to an

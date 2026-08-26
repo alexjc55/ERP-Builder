@@ -42,6 +42,10 @@ import {
   UpdateNotesContentBody,
 } from "@workspace/api-zod";
 import { globalPresenceSnapshot } from "../lib/collaboration";
+import {
+  mergeLinkedFormulaInputs,
+  systemFormulaPermissions,
+} from "../lib/formula-runtime";
 
 const router: IRouter = Router();
 
@@ -838,6 +842,24 @@ async function computePivotWidget(spec: PivotSpec): Promise<PivotResultShape | n
   ];
   const statusIds = (spec.statusIds ?? []).filter((n) => Number.isInteger(n));
   if (statusIds.length > 0) conds.push(inArray(entityRecordsTable.statusId, statusIds));
+  const where = and(...conds)!;
+  // Formula measures can consume structured linked sources. Resolve every
+  // candidate row together under the dashboard's admin-authoritative identity;
+  // computePivot then reuses this map while evaluating its per-record formulas.
+  const pivotRows = await db
+    .select({ id: entityRecordsTable.id, values: entityRecordsTable.valuesJson })
+    .from(entityRecordsTable)
+    .where(where);
+  const formulaInputs = await mergeLinkedFormulaInputs({
+    entityId: spec.entityId,
+    pageId,
+    rows: pivotRows.map((row) => ({
+      id: row.id,
+      values: (row.values ?? {}) as Record<string, unknown>,
+    })),
+    fields: [...fields, ...pageFields],
+    permissions: systemFormulaPermissions,
+  });
   const outcome = await computePivot({
     entityId: spec.entityId,
     pivot: spec.pivot,
@@ -845,7 +867,8 @@ async function computePivotWidget(spec: PivotSpec): Promise<PivotResultShape | n
     relationMeta,
     pageFields,
     pageId,
-    where: and(...conds)!,
+    where,
+    formulaInputs,
   });
   return outcome.ok ? outcome.result : null;
 }

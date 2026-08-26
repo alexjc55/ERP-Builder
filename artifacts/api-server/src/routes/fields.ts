@@ -16,7 +16,8 @@ import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
 import { sanitizeOptionsInput, normalizeOptions } from "../lib/selectOptions";
 import { validateFormatInherit, withInheritedFormatRules } from "../lib/format-inherit";
-import { normalizeFormulaFieldConfig } from "../lib/formula-field-config";
+import { normalizeFormulaFieldConfig, validateFormulaFieldConfig } from "../lib/formula-field-config";
+import { validateFormulaSources } from "../lib/formula-source-validator";
 import {
   ListEntityFieldsParams,
   CreateEntityFieldParams,
@@ -343,6 +344,23 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
     res.status(409).json({ error: "A field with this key already exists on this entity" });
     return;
   }
+  const formulaErrors = validateFormulaFieldConfig(parsed.data.formulaConfigJson ?? {});
+  if (formulaErrors.length) {
+    res.status(400).json({ error: formulaErrors.join("; ") });
+    return;
+  }
+  if (parsed.data.formulaConfigJson?.sources != null && parsed.data.fieldType !== "function") {
+    res.status(400).json({ error: "Structured formula sources are only supported by function fields" });
+    return;
+  }
+  const formulaSourceErrors = await validateFormulaSources(
+    { kind: "entity", entityId: params.data.entityId },
+    parsed.data.formulaConfigJson ?? {},
+  );
+  if (formulaSourceErrors.length) {
+    res.status(400).json({ error: formulaSourceErrors.join("; ") });
+    return;
+  }
 
   try {
     const [field] = await db
@@ -621,6 +639,23 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   }
   if (body.validationRulesJson != null) updateData.validationRulesJson = body.validationRulesJson;
   if (body.formulaConfigJson != null) {
+    const formulaErrors = validateFormulaFieldConfig(body.formulaConfigJson);
+    if (formulaErrors.length) {
+      res.status(400).json({ error: formulaErrors.join("; ") });
+      return;
+    }
+    if (body.formulaConfigJson.sources != null && nextType !== "function") {
+      res.status(400).json({ error: "Structured formula sources are only supported by function fields" });
+      return;
+    }
+    const formulaSourceErrors = await validateFormulaSources(
+      { kind: "entity", entityId: current.entityId },
+      body.formulaConfigJson,
+    );
+    if (formulaSourceErrors.length) {
+      res.status(400).json({ error: formulaSourceErrors.join("; ") });
+      return;
+    }
     updateData.formulaConfigJson = normalizeFormulaFieldConfig(body.formulaConfigJson, nextType);
   } else if (body.fieldType != null && nextType !== "number" && nextType !== "function") {
     // A type transition must also clean affixes from the stored config when the
@@ -661,6 +696,20 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   if ("columnGroupId" in body) updateData.columnGroupId = body.columnGroupId ?? null;
   if ("fileConfigJson" in body) updateData.fileConfigJson = (body.fileConfigJson ?? {}) as FileFieldConfig;
   if ("userConfigJson" in body) updateData.userConfigJson = body.userConfigJson ?? {};
+
+  // A type-only update is still a write of this formula schema. Re-check stored
+  // structured sources before saving so an old/stale config cannot bypass the
+  // semantic boundary merely by omitting formulaConfigJson from this request.
+  if (nextType === "function" && body.formulaConfigJson == null) {
+    const currentSourceErrors = await validateFormulaSources(
+      { kind: "entity", entityId: current.entityId },
+      current.formulaConfigJson,
+    );
+    if (currentSourceErrors.length) {
+      res.status(400).json({ error: currentSourceErrors.join("; ") });
+      return;
+    }
+  }
 
   if (Object.keys(updateData).length === 0) {
     res.status(400).json({ error: "No fields to update" });

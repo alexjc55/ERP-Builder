@@ -6,12 +6,18 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { FormulaFieldConfigDisplayAffixPosition } from './formulaFieldConfigDisplayAffixPosition';
+import type { FormulaFieldSource } from './formulaFieldSource';
 
 /**
  * Display and formula configuration stored in formulaConfigJson for `number` and `function` fields. `expression` is used by function fields and safely references other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display. `displayAffix` is optional plain text shown before or after the value.
  */
 export interface FormulaFieldConfig {
   expression?: string;
+  /**
+     * Qualified page-local and linked aggregate inputs made available to the expression under their opaque key.
+     * @maxItems 32
+     */
+  sources?: FormulaFieldSource[];
   /**
      * Optional. When set and the formula result is numeric, the value is rounded and shown with this many decimal places. Null/omitted means no rounding. Ignored for non-numeric (text/boolean) results.
      * @minimum 0

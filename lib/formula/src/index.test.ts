@@ -137,3 +137,30 @@ test("function parsing remains case-insensitive", () => {
     1,
   );
 });
+
+test("treats qualified field references as opaque lookup keys", () => {
+  assert.equal(
+    evaluateFormula("{page:42.total} + {amount}", {
+      "page:42.total": 8,
+      amount: 2,
+    }),
+    10,
+  );
+  assert.equal(evaluateFormula("{ entity/order:price }", { "entity/order:price": 7 }), 7);
+  assert.throws(() => evaluateFormula("{}", {}), /Пустая ссылка/);
+});
+
+test("supports scalar text helpers", () => {
+  assert.equal(evaluateFormula("trim('  hello  ')", {}), "hello");
+  assert.equal(evaluateFormula("replace('a-b-a', 'a', 'x')", {}), "x-b-x");
+  assert.equal(evaluateFormula("replace('abc', '', 'x')", {}), "abc");
+  assert.equal(evaluateFormula("contains('invoice-42', 'voice')", {}), true);
+  assert.equal(evaluateFormula("startsWith('invoice-42', 'inv')", {}), true);
+  assert.equal(evaluateFormula("endsWith('invoice-42', '42')", {}), true);
+});
+
+test("supports average over scalar arguments", () => {
+  assert.equal(evaluateFormula("average(2, 4, 9)", {}), 5);
+  assert.equal(evaluateFormula("AvErAgE({a}, {b})", { a: "2", b: 6 }), 4);
+  assert.equal(evaluateFormula("average()", {}), null);
+});

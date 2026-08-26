@@ -1914,23 +1914,31 @@ export function EntityRecords({
   // ALL fields (entity + page-local), not just displayed ones, so a formula may
   // reference a formula column that is hidden or not shown in the table.
   const formulaFieldDefs = useMemo<FormulaFieldDef[]>(
-    () => [
-      ...allFields
+    () => {
+      const entityFormulaDefs = allFields
         .filter((f: Field) => f.fieldType === "function")
         .map((f: Field) => ({
           key: f.fieldKey,
           expression: f.formulaConfigJson?.expression ?? "",
           decimals: f.formulaConfigJson?.decimals ?? null,
-        })),
-      ...pageFields
+        }));
+      const pageFormulaDefs = pageFields
         .filter((pf: PageField) => pf.fieldType === "function")
         .map((pf: PageField) => ({
           key: pf.fieldKey,
           expression: pf.formulaConfigJson?.expression ?? "",
           decimals: pf.formulaConfigJson?.decimals ?? null,
-        })),
-    ],
-    [allFields, pageFields],
+        }));
+      return [
+        ...entityFormulaDefs,
+        ...pageFormulaDefs,
+        ...entityFormulaDefs.map((formula) => ({ ...formula, key: `entity:${entityId}.${formula.key}` })),
+        ...(pageId == null
+          ? []
+          : pageFormulaDefs.map((formula) => ({ ...formula, key: `page:${pageId}.${formula.key}` }))),
+      ];
+    },
+    [allFields, pageFields, entityId, pageId],
   );
   const pageValuesByRecord = useMemo(() => {
     const m = new Map<
@@ -4528,6 +4536,14 @@ export function EntityRecords({
     allValues: Record<string, unknown>,
   ): unknown => {
     if (field.fieldType === "function") {
+      // Structured linked sources are server-only capabilities and are stripped
+      // from record responses. When the API materializes a visible formula under
+      // its ordinary field key, prefer that authoritative scalar. Draft rows and
+      // legacy formula responses have no such key, so they retain the live
+      // browser preview below.
+      if (Object.prototype.hasOwnProperty.call(allValues, field.fieldKey)) {
+        return allValues[field.fieldKey];
+      }
       return evaluateFormula(field.formulaConfigJson?.expression ?? "", allValues, formulaOptions);
     }
     return allValues[field.fieldKey];
@@ -6597,7 +6613,7 @@ export function EntityRecords({
                                     pf.formulaConfigJson?.expression ?? "",
                                     buildFormulaScope(
                                       resolveFormulaValues(
-                                        mergeFormulaInputValues(newRow, newPageRow, newRowProjectedValues),
+                                        mergeFormulaInputValues(newRow, newPageRow, newRowProjectedValues, undefined, { entityId, pageId }),
                                       ),
                                       formulaFieldDefs,
                                       formulaOptions,
@@ -6672,7 +6688,7 @@ export function EntityRecords({
                                   f.formulaConfigJson?.expression ?? "",
                                   buildFormulaScope(
                                     resolveFormulaValues(
-                                      mergeFormulaInputValues(newRow, newPageRow, newRowProjectedValues),
+                                      mergeFormulaInputValues(newRow, newPageRow, newRowProjectedValues, undefined, { entityId, pageId }),
                                     ),
                                     formulaFieldDefs,
                                     formulaOptions,
@@ -6786,6 +6802,7 @@ export function EntityRecords({
                       pageValues,
                       entityRelatedByRecord.get(record.id),
                       relatedByRecord.get(record.id),
+                      { entityId, pageId },
                     );
                     const formulaValues = buildFormulaScope(resolveFormulaValues(allValues), formulaFieldDefs, formulaOptions);
                     const status = record.statusId != null ? statusById.get(record.statusId) : undefined;
@@ -8865,21 +8882,29 @@ function RecordFormBody({
   // only after saving. user-type refs resolve ids → names (same as the table);
   // formula-to-formula refs go through buildFormulaScope (lazy + cycle-guarded).
   const formFormulaDefs = useMemo<FormulaFieldDef[]>(
-    () =>
-      allFields
+    () => {
+      const formulas = allFields
         .filter((f: Field) => f.fieldType === "function")
         .map((f: Field) => ({
           key: f.fieldKey,
           expression: f.formulaConfigJson?.expression ?? "",
           decimals: f.formulaConfigJson?.decimals ?? null,
-        })),
-    [allFields],
+        }));
+      return [...formulas, ...formulas.map((formula) => ({ ...formula, key: `entity:${entityId}.${formula.key}` }))];
+    },
+    [allFields, entityId],
   );
   const formFormulaScope = useMemo(() => {
     // Keep formWithRelationParents intact for dependency pickers; only formula
     // evaluation replaces raw relation ids with visible, permission-filtered
     // related-values projections.
-    const vals = mergeFormulaInputValues(formWithRelationParents, undefined, relByField);
+    const vals = mergeFormulaInputValues(
+      formWithRelationParents,
+      undefined,
+      relByField,
+      undefined,
+      { entityId, pageId },
+    );
     for (const f of allFields) {
       if (f.fieldType !== "user") continue;
       const v = vals[f.fieldKey];
@@ -8888,7 +8913,7 @@ function RecordFormBody({
       else vals[f.fieldKey] = userNames.get(Number(v)) ?? v;
     }
     return buildFormulaScope(vals, formFormulaDefs, formulaOptions);
-  }, [formWithRelationParents, relByField, allFields, formFormulaDefs, userNames, formulaOptions]);
+  }, [formWithRelationParents, relByField, allFields, formFormulaDefs, userNames, formulaOptions, entityId, pageId]);
 
   // Read-only display node for a relation/lookup field's current value (its
   // configured display field), or an em dash when nothing is linked.

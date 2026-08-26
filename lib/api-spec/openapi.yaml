@@ -6334,6 +6334,14 @@ components:
       properties:
         expression:
           type: string
+        sources:
+          type: array
+          maxItems: 32
+          description: >-
+            Qualified page-local and linked aggregate inputs made available to
+            the expression under their opaque key.
+          items:
+            $ref: "#/components/schemas/FormulaFieldSource"
         decimals:
           type: integer
           minimum: 0
@@ -6359,6 +6367,102 @@ components:
           description: >-
             Side on which displayAffix is shown. Defaults to after when an affix
             is present.
+
+    FormulaFieldRef:
+      oneOf:
+        - type: object
+          required: [scope, fieldKey]
+          properties:
+            scope:
+              type: string
+              enum: [entity]
+            fieldKey:
+              type: string
+        - type: object
+          required: [scope, pageId, fieldKey]
+          properties:
+            scope:
+              type: string
+              enum: [page]
+            pageId:
+              type: integer
+              minimum: 1
+            fieldKey:
+              type: string
+
+    FormulaFieldSource:
+      oneOf:
+        - type: object
+          required: [kind, key, pageId, fieldKey]
+          properties:
+            kind:
+              type: string
+              enum: [pageLocal]
+            key:
+              type: string
+            pageId:
+              type: integer
+              minimum: 1
+            fieldKey:
+              type: string
+        - type: object
+          required: [kind, key, targetEntityId, value, join, aggregate]
+          properties:
+            kind:
+              type: string
+              enum: [aggregate]
+            key:
+              type: string
+            targetEntityId:
+              type: integer
+              minimum: 1
+            targetPageId:
+              type: integer
+              minimum: 1
+            value:
+              $ref: "#/components/schemas/FormulaFieldRef"
+            join:
+              oneOf:
+                - type: object
+                  required: [kind, relationId, baseSide]
+                  properties:
+                    kind:
+                      type: string
+                      enum: [relation]
+                    relationId:
+                      type: integer
+                      minimum: 1
+                    baseSide:
+                      type: string
+                      enum: [source, target]
+                - type: object
+                  required: [kind, on]
+                  properties:
+                    kind:
+                      type: string
+                      enum: [equality]
+                    on:
+                      type: array
+                      minItems: 1
+                      maxItems: 8
+                      items:
+                        type: object
+                        required: [base, target]
+                        properties:
+                          base:
+                            $ref: "#/components/schemas/FormulaFieldRef"
+                          target:
+                            $ref: "#/components/schemas/FormulaFieldRef"
+            aggregate:
+              type: string
+              enum: [sum, average, min, max, count, uniqueJoin]
+            limit:
+              type: integer
+              minimum: 0
+              maximum: 10000
+            separator:
+              type: string
+              maxLength: 100
 
     PercentFieldConfig:
       type: object

@@ -63,12 +63,12 @@ import {
   type EventInput,
 } from "./events";
 import {
-  buildFormulaScope,
   DEFAULT_FORMULA_TIME_ZONE,
   DEFAULT_WORKING_DAYS,
   type FormulaEvaluationOptions,
   type FormulaFieldDef,
 } from "@workspace/formula";
+import { buildQualifiedFormulaScope, mergeLinkedFormulaInputs, systemFormulaPermissions } from "./formula-runtime";
 import { validatePageValues } from "../routes/page-fields";
 import { applyPageFieldDefaults } from "./page-field-defaults";
 import { isGoogleDriveModuleEnabled } from "./googleDrive";
@@ -845,6 +845,7 @@ function interpolateTemplate(template: string, display: Record<string, string>):
 
 type MappingCtx = {
   entityId: number;
+  recordId: number;
   values: Record<string, unknown>;
   statusId: number | null;
   /** App-configured context shared by all formula mappings in this run. */
@@ -852,6 +853,19 @@ type MappingCtx = {
   /** Page contexts of the TRIGGERING record, for `sourceFieldSource: "page"`. */
   pageContexts?: Map<number, PageContext>;
 };
+
+/** Resolve all structured formula sources for the triggering row AS SYSTEM. */
+async function withSystemFormulaInputs(ctx: MappingCtx): Promise<MappingCtx> {
+  const entityFields = await loadActiveFields(ctx.entityId);
+  const pageFields = [...(ctx.pageContexts?.values() ?? [])].flatMap((page) => [...page.fieldByKey.values()]);
+  const merged = await mergeLinkedFormulaInputs({
+    entityId: ctx.entityId,
+    rows: [{ id: ctx.recordId, values: ctx.values }],
+    fields: [...entityFields, ...pageFields],
+    permissions: systemFormulaPermissions,
+  });
+  return { ...ctx, values: merged.get(ctx.recordId) ?? ctx.values };
+}
 
 /** Formula defs of the `function`-type fields in a field list (entity or page). */
 function formulaDefsOf(
@@ -894,7 +908,15 @@ async function resolveMappingValue(
           ...formulaDefsOf(entityFields),
           ...formulaDefsOf([...ctxPage.fieldByKey.values()]),
         ];
-        const scope = buildFormulaScope({ ...ctx.values, ...ctxPage.values }, defs, ctx.formulaOptions);
+        const scope = buildQualifiedFormulaScope({
+          entityId: ctx.entityId,
+          entityValues: ctx.values,
+          entityFormulas: formulaDefsOf(entityFields),
+          pageId: m.sourcePageId,
+          pageValues: ctxPage.values,
+          pageFormulas: formulaDefsOf([...ctxPage.fieldByKey.values()]),
+          formulaOptions: ctx.formulaOptions,
+        });
         return { has: true, value: scope[m.sourceFieldKey] ?? null };
       }
       if (
@@ -918,7 +940,12 @@ async function resolveMappingValue(
       const entityFields = await loadActiveFields(ctx.entityId);
       const def = entityFields.find((f) => f.fieldKey === m.sourceFieldKey);
       if (def?.fieldType === "function") {
-        const scope = buildFormulaScope({ ...ctx.values }, formulaDefsOf(entityFields), ctx.formulaOptions);
+        const scope = buildQualifiedFormulaScope({
+          entityId: ctx.entityId,
+          entityValues: ctx.values,
+          entityFormulas: formulaDefsOf(entityFields),
+          formulaOptions: ctx.formulaOptions,
+        });
         return { has: true, value: scope[m.sourceFieldKey] ?? null };
       }
     }
@@ -940,6 +967,7 @@ async function buildMappedValues(
   mapping: AutomationMapping[],
   ctx: MappingCtx,
 ): Promise<Record<string, unknown>> {
+  ctx = await withSystemFormulaInputs(ctx);
   const out: Record<string, unknown> = {};
   const displayRef: { display: Record<string, string> | null } = { display: null };
   for (const m of mapping) {
@@ -961,6 +989,7 @@ async function buildPageTargetWrites(
   mapping: AutomationMapping[],
   ctx: MappingCtx,
 ): Promise<PageTargetWrite[]> {
+  ctx = await withSystemFormulaInputs(ctx);
   const out: PageTargetWrite[] = [];
   const displayRef: { display: Record<string, string> | null } = { display: null };
   for (const m of mapping) {
@@ -1110,6 +1139,7 @@ async function runActions(
       case "create_record": {
         const values = await buildMappedValues(action.mapping ?? [], {
           entityId: ctx.entityId,
+          recordId: ctx.recordId,
           values: ctx.values,
           statusId: ctx.statusId,
           formulaOptions: ctx.formulaOptions,
@@ -1130,6 +1160,7 @@ async function runActions(
           .where(eq(entityRecordsTable.entityId, action.targetEntityId));
         const mapCtx = {
           entityId: ctx.entityId,
+          recordId: ctx.recordId,
           values: ctx.values,
           statusId: ctx.statusId,
           formulaOptions: ctx.formulaOptions,
