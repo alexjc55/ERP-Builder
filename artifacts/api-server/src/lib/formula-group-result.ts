@@ -14,6 +14,77 @@ export type FormulaGroupRow = {
   pageValues?: ReadonlyMap<number, Readonly<Record<string, unknown>>>;
 };
 
+export type FormulaGroupField = {
+  fieldKey: string;
+  fieldType: string;
+  formulaConfigJson?: unknown;
+};
+
+/**
+ * Resolves enabled group-result configs only against the field sets the caller
+ * is already allowed to compute with. An inaccessible or foreign reference
+ * disables grouping for that formula instead of becoming an inference oracle.
+ */
+export function secureFormulaGroupConfigs(options: {
+  fields: readonly FormulaGroupField[];
+  entityFields: readonly FormulaGroupField[];
+  pageFields?: readonly FormulaGroupField[];
+  pageId?: number;
+}): FormulaGroupConfig[] {
+  const entityKeys = new Set(options.entityFields.map((field) => field.fieldKey));
+  const pageKeys = new Set((options.pageFields ?? []).map((field) => field.fieldKey));
+  const configs: FormulaGroupConfig[] = [];
+  for (const field of options.fields) {
+    if (field.fieldType !== "function") continue;
+    const groupResult = (field.formulaConfigJson as {
+      groupResult?: { enabled?: unknown; fields?: unknown };
+    } | null)?.groupResult;
+    if (!groupResult || groupResult.enabled !== true || !Array.isArray(groupResult.fields) ||
+        groupResult.fields.length === 0 || groupResult.fields.length > 8) continue;
+    const refs: FormulaGroupReference[] = [];
+    const seen = new Set<string>();
+    let valid = true;
+    for (const raw of groupResult.fields) {
+      if (!raw || typeof raw !== "object") {
+        valid = false;
+        break;
+      }
+      const ref = raw as { scope?: unknown; pageId?: unknown; fieldKey?: unknown };
+      if (typeof ref.fieldKey !== "string") {
+        valid = false;
+        break;
+      }
+      if (ref.scope === "entity" && entityKeys.has(ref.fieldKey)) {
+        const id = `entity:${ref.fieldKey}`;
+        if (seen.has(id)) {
+          valid = false;
+          break;
+        }
+        seen.add(id);
+        refs.push({ scope: "entity", fieldKey: ref.fieldKey });
+      } else if (
+        ref.scope === "page" &&
+        options.pageId != null &&
+        ref.pageId === options.pageId &&
+        pageKeys.has(ref.fieldKey)
+      ) {
+        const id = `page:${options.pageId}:${ref.fieldKey}`;
+        if (seen.has(id)) {
+          valid = false;
+          break;
+        }
+        seen.add(id);
+        refs.push({ scope: "page", pageId: options.pageId, fieldKey: ref.fieldKey });
+      } else {
+        valid = false;
+        break;
+      }
+    }
+    if (valid) configs.push({ key: field.fieldKey, fields: refs });
+  }
+  return configs;
+}
+
 function canonical(value: unknown): string {
   if (value === undefined) return "undefined";
   if (typeof value === "number") {

@@ -99,6 +99,7 @@ import {
 import {
   interactiveFormulaPermissions,
   mergeLinkedFormulaInputs,
+  mergeLinkedFormulaInputsBatched,
   buildQualifiedFormulaScope,
   formulaSourcesOf,
   materializeVisibleEntityFormulas,
@@ -110,6 +111,7 @@ import { effectiveEntityForPage } from "./page-fields";
 import {
   applyFormulaGroupResults,
   formulaGroupResultWinners,
+  secureFormulaGroupConfigs,
   type FormulaGroupConfig,
   type FormulaGroupReference,
 } from "../lib/formula-group-result";
@@ -1012,20 +1014,45 @@ router.get("/entities/:entityId/records", requireAuth, requireRecordParam("view"
     .where(where)
     .orderBy(desc(entityRecordsTable.createdAt));
   const formulaPermissions = await interactiveFormulaPermissions(req, entityId);
-  const linked = await mergeLinkedFormulaInputs({
+  const visibleFields = fields.filter((field) => !hidden.has(field.fieldKey));
+  const formulaRows = records.map((record) => {
+    const values = { ...((record.valuesJson ?? {}) as Record<string, unknown>) };
+    for (const field of visibleFields) {
+      if (field.fieldType === "created_at") values[field.fieldKey] = record.createdAt.toISOString();
+    }
+    return { id: record.id, createdAt: record.createdAt, values };
+  });
+  const linked = await mergeLinkedFormulaInputsBatched({
     entityId,
-    rows: records.map((r) => ({ id: r.id, values: projectViewerFormulaValues((r.valuesJson ?? {}) as Record<string, unknown>, fields.filter((field) => !hidden.has(field.fieldKey))) })),
-    fields: fields.filter((field) => !hidden.has(field.fieldKey)),
+    rows: formulaRows.map((row) => ({
+      id: row.id,
+      values: projectViewerFormulaValues(row.values, visibleFields),
+    })),
+    fields: visibleFields,
     permissions: formulaPermissions,
   });
-  const formulaValues = materializeVisibleEntityFormulas({
+  let formulaValues = materializeVisibleEntityFormulas({
     entityId,
-    rows: records.map((r) => ({ id: r.id, values: (r.valuesJson ?? {}) as Record<string, unknown> })),
-    fields: fields.filter((field) => !hidden.has(field.fieldKey)),
+    rows: formulaRows,
+    fields: visibleFields,
     hidden,
     linkedInputs: linked,
     formulaOptions: await loadFormulaOptions(),
   });
+  const groupConfigs = secureFormulaGroupConfigs({
+    fields: visibleFields,
+    entityFields: visibleFields,
+  });
+  if (groupConfigs.length > 0) {
+    formulaValues = applyFormulaGroupResults(
+      formulaValues,
+      formulaGroupResultWinners(formulaRows.map((row) => ({
+        id: row.id,
+        createdAt: row.createdAt,
+        entityValues: formulaValues.get(row.id) ?? row.values,
+      })), groupConfigs),
+    );
+  }
   res.json(records.map((r) => presentRecord(
     { ...r, valuesJson: formulaValues.get(r.id) ?? r.valuesJson },
     hidden,
@@ -1510,7 +1537,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         if (field.fieldType === "created_at") row.values[field.fieldKey] = row.createdAt.toISOString();
       }
     }
-    const groupingLinkedInputs = await mergeLinkedFormulaInputs({
+    const groupingLinkedInputs = await mergeLinkedFormulaInputsBatched({
       entityId,
       pageId: formulaPageId,
       rows: formulaGroupRows.map((row) => ({ id: row.id, values: row.values })),
@@ -2702,7 +2729,7 @@ router.post(
       .select({ id: entityRecordsTable.id, values: entityRecordsTable.valuesJson })
       .from(entityRecordsTable)
       .where(where);
-    const pivotFormulaInputs = await mergeLinkedFormulaInputs({
+    const pivotFormulaInputs = await mergeLinkedFormulaInputsBatched({
       entityId,
       pageId: formulaPageId,
       rows: pivotRows.map((row) => ({ id: row.id, values: projectViewerFormulaValues((row.values ?? {}) as Record<string, unknown>, visibleFields) })),

@@ -15,10 +15,11 @@ import {
   appSettingsTable,
   entityRecordsTable,
   entityStatusesTable,
+  pageRecordValuesTable,
   usersTable,
   type EntityField,
 } from "@workspace/db";
-import { eq, sql, inArray, type SQL } from "drizzle-orm";
+import { and, eq, sql, inArray, type SQL } from "drizzle-orm";
 import {
   DEFAULT_FORMULA_TIME_ZONE,
   DEFAULT_WORKING_DAYS,
@@ -39,6 +40,15 @@ import {
   type PivotMeasureDisplayAffix,
 } from "./pivot-display-affix";
 import { buildQualifiedFormulaScope } from "../lib/formula-runtime";
+import {
+  materializeVisibleEntityFormulas,
+  materializeVisiblePageFormulas,
+} from "../lib/formula-runtime";
+import {
+  applyFormulaGroupResults,
+  formulaGroupResultWinners,
+  secureFormulaGroupConfigs,
+} from "../lib/formula-group-result";
 
 export const PIVOT_DIM_TYPES = new Set([
   "text",
@@ -113,11 +123,22 @@ export interface PivotConfigInput {
 }
 
 /** Minimal shape of a page-local field needed for pivot dim/measure resolution. */
-export interface PivotPageField extends PivotDisplayAffixField {
+export interface PivotPageField extends Omit<PivotDisplayAffixField, "formulaConfigJson"> {
   fieldKey: string;
   pivotEnabled: boolean | null;
   fieldType: string;
   nameJson: unknown;
+  formulaConfigJson?: (
+    NonNullable<PivotDisplayAffixField["formulaConfigJson"]> & {
+      groupResult?: {
+        enabled?: boolean;
+        fields?: Array<
+          | { scope: "entity"; fieldKey: string }
+          | { scope: "page"; pageId: number; fieldKey: string }
+        >;
+      };
+    }
+  ) | null;
 }
 
 export interface PivotComputeInput {
@@ -202,6 +223,100 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
   const pageFormulaDefs = (input.pageFields ?? [])
     .filter((field) => field.fieldType === "function")
     .map(toFormulaDef);
+  const emptyHidden = new Set<string>();
+  const entityGroupConfigs = secureFormulaGroupConfigs({
+    fields: entityFields,
+    entityFields,
+    pageFields: input.pageFields,
+    pageId,
+  });
+  const pageGroupConfigs = secureFormulaGroupConfigs({
+    fields: input.pageFields ?? [],
+    entityFields,
+    pageFields: input.pageFields,
+    pageId,
+  });
+  let groupedEntityValues: Map<number, Record<string, unknown>> | undefined;
+  let groupedPageValues: Map<number, Record<string, unknown>> | undefined;
+  if (entityGroupConfigs.length > 0 || pageGroupConfigs.length > 0) {
+    const rows = await db
+      .select({
+        id: entityRecordsTable.id,
+        createdAt: entityRecordsTable.createdAt,
+        values: entityRecordsTable.valuesJson,
+      })
+      .from(entityRecordsTable)
+      .where(where);
+    const formulaRows = rows.map((row) => {
+      const values = { ...((row.values ?? {}) as Record<string, unknown>) };
+      for (const field of entityFields) {
+        if (field.fieldType === SYSTEM_DATE_FIELD_TYPE) values[field.fieldKey] = row.createdAt.toISOString();
+      }
+      return { id: row.id, createdAt: row.createdAt, values };
+    });
+    const rawPageValues = new Map<number, Record<string, unknown>>();
+    if (pageId != null && formulaRows.length > 0) {
+      const ids = formulaRows.map((row) => row.id);
+      for (let offset = 0; offset < ids.length; offset += 5_000) {
+        const pageRows = await db
+          .select({
+            recordId: pageRecordValuesTable.recordId,
+            values: pageRecordValuesTable.valuesJson,
+          })
+          .from(pageRecordValuesTable)
+          .where(and(
+            eq(pageRecordValuesTable.pageId, pageId),
+            inArray(pageRecordValuesTable.recordId, ids.slice(offset, offset + 5_000)),
+          ));
+        for (const row of pageRows) rawPageValues.set(row.recordId, (row.values ?? {}) as Record<string, unknown>);
+      }
+    }
+    const materializedEntity = materializeVisibleEntityFormulas({
+      entityId,
+      rows: formulaRows,
+      fields: entityFields,
+      hidden: emptyHidden,
+      pageId,
+      pageValues: rawPageValues,
+      pageFields: input.pageFields,
+      hiddenPage: emptyHidden,
+      linkedInputs: input.formulaInputs,
+      formulaOptions,
+    });
+    const materializedPage = pageId == null
+      ? new Map<number, Record<string, unknown>>()
+      : materializeVisiblePageFormulas({
+          entityId,
+          pageId,
+          rows: formulaRows.map((row) => ({
+            id: row.id,
+            entityValues: row.values,
+            pageValues: rawPageValues.get(row.id) ?? {},
+          })),
+          entityFields,
+          pageFields: input.pageFields ?? [],
+          hiddenEntity: emptyHidden,
+          hiddenPage: emptyHidden,
+          linkedInputs: input.formulaInputs,
+          formulaOptions,
+        });
+    const groupingRows = formulaRows.map((row) => ({
+      id: row.id,
+      createdAt: row.createdAt,
+      entityValues: materializedEntity.get(row.id) ?? {},
+      pageValues: pageId == null
+        ? undefined
+        : new Map([[pageId, materializedPage.get(row.id) ?? rawPageValues.get(row.id) ?? {}]]),
+    }));
+    groupedEntityValues = applyFormulaGroupResults(
+      materializedEntity,
+      formulaGroupResultWinners(groupingRows, entityGroupConfigs),
+    );
+    groupedPageValues = applyFormulaGroupResults(
+      materializedPage,
+      formulaGroupResultWinners(groupingRows, pageGroupConfigs),
+    );
+  }
   const measureDisplayAffixes: PivotMeasureDisplayAffix[] = [];
 
   // In multi-measure mode any sum measure may target a page-local field; in
@@ -458,7 +573,7 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
         .where(where);
       for (const r of raw) {
         const rawVals = (r.vals ?? {}) as Record<string, unknown>;
-        const srcVals = input.formulaInputs?.get(r.id) ?? rawVals;
+        const srcVals = { ...(input.formulaInputs?.get(r.id) ?? rawVals), ...(groupedEntityValues?.get(r.id) ?? {}) };
         for (const p of formulaPlans) {
           const scoped: Record<string, unknown> = {};
           for (const k of p.allowedKeys) scoped[k] = srcVals[k];
@@ -470,6 +585,7 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
               entityValues: scoped,
               entityFormulas: entityFormulaDefs,
               pageId,
+               pageValues: groupedPageValues?.get(r.id),
               pageFormulas: pageFormulaDefs,
               formulaOptions,
             }), formulaOptions);
@@ -520,7 +636,7 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
         .where(where);
       grouped = raw.map((r) => {
         const rawVals = (r.vals ?? {}) as Record<string, unknown>;
-        const srcVals = input.formulaInputs?.get(r.id) ?? rawVals;
+        const srcVals = { ...(input.formulaInputs?.get(r.id) ?? rawVals), ...(groupedEntityValues?.get(r.id) ?? {}) };
         const scoped: Record<string, unknown> = {};
         for (const k of allowed) scoped[k] = srcVals[k];
         for (const [k, value] of Object.entries(srcVals)) if (!(k in rawVals)) scoped[k] = value;
@@ -531,6 +647,7 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
             entityValues: scoped,
             entityFormulas: entityFormulaDefs,
             pageId,
+             pageValues: groupedPageValues?.get(r.id),
             pageFormulas: pageFormulaDefs,
             formulaOptions,
           }), formulaOptions);

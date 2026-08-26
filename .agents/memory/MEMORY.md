@@ -52,6 +52,7 @@
 - [Formula FP-noise policy](formula-fp-noise.md) — no-decimals formula results must be cleaned to 12 sig digits per row before summing, everywhere.
 - [Percent field type](percent-field.md) — numeric field (list/value); stored as NUMBER; aggregates as AVERAGE — flat totals gated by showColumnTotal, group rows ALWAYS; list-mode validation compares by numeric equivalence (optionNumbers), not String(num).
 - [Formula cross-references](formula-cross-reference.md) — a formula field can reference another formula's result via buildFormulaScope (Proxy, lazy+memoized+cycle-guarded); wire it at EVERY eval site; scope must include ALL formula fields, not just visible/total-enabled ones.
+- [One-time formula aggregation](one-time-formula-aggregation.md) — group-result winners come from the full permission-scoped set before pagination/limits; dashboard/pivot must reuse the same post-materialization zeroing.
 - [Linked formula sources](linked-formula-sources.md) — external/page formula inputs are server-only capabilities; expose only materialized visible formula results after full RBAC and batched resolution.
 - [Formula date functions](formula-date-functions.md) — date differences use strict ISO calendar dates and UTC `today()` so browser/server results stay identical.
 - [External FastPanel deploy](external-fastpanel-deploy.md) — prod runs on an external Debian/FastPanel server; FastPanel regenerates the nginx conf (restore from backup + reload); npmmirror registry, PM2, static build via nginx.

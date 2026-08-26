@@ -322,6 +322,25 @@ export async function mergeLinkedFormulaInputs(options: {
 }
 
 /**
+ * Full-set counterpart for aggregates/group-result evaluation. Resolves linked
+ * inputs in bounded batches while returning one map for winner selection across
+ * the complete caller-provided row set.
+ */
+export async function mergeLinkedFormulaInputsBatched(
+  options: Parameters<typeof mergeLinkedFormulaInputs>[0],
+  batchSize = 5_000,
+): Promise<Map<number, Record<string, unknown>>> {
+  const size = Math.max(1, Math.trunc(batchSize));
+  const out = new Map<number, Record<string, unknown>>();
+  for (let offset = 0; offset < options.rows.length; offset += size) {
+    const batch = options.rows.slice(offset, offset + size);
+    const resolved = await mergeLinkedFormulaInputs({ ...options, rows: batch });
+    for (const [id, values] of resolved) out.set(id, values);
+  }
+  return out;
+}
+
+/**
  * Materialize the response-safe portion of entity formula fields after linked
  * inputs have been resolved.  Resolver tokens are intentionally left only in
  * this temporary input map; callers still pass the result through

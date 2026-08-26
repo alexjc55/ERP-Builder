@@ -44,8 +44,16 @@ import {
 import { globalPresenceSnapshot } from "../lib/collaboration";
 import {
   mergeLinkedFormulaInputs,
+  mergeLinkedFormulaInputsBatched,
+  materializeVisibleEntityFormulas,
+  materializeVisiblePageFormulas,
   systemFormulaPermissions,
 } from "../lib/formula-runtime";
+import {
+  applyFormulaGroupResults,
+  formulaGroupResultWinners,
+  secureFormulaGroupConfigs,
+} from "../lib/formula-group-result";
 
 const router: IRouter = Router();
 
@@ -850,7 +858,7 @@ async function computePivotWidget(spec: PivotSpec): Promise<PivotResultShape | n
     .select({ id: entityRecordsTable.id, values: entityRecordsTable.valuesJson })
     .from(entityRecordsTable)
     .where(where);
-  const formulaInputs = await mergeLinkedFormulaInputs({
+  const formulaInputs = await mergeLinkedFormulaInputsBatched({
     entityId: spec.entityId,
     pageId,
     rows: pivotRows.map((row) => ({
@@ -1173,9 +1181,10 @@ async function computeTableData(
       fieldKey: entityFieldsTable.fieldKey,
       nameJson: entityFieldsTable.nameJson,
       fieldType: entityFieldsTable.fieldType,
+      formulaConfigJson: entityFieldsTable.formulaConfigJson,
     })
     .from(entityFieldsTable)
-    .where(eq(entityFieldsTable.entityId, t.entityId));
+    .where(and(eq(entityFieldsTable.entityId, t.entityId), eq(entityFieldsTable.isActive, true)));
   const byKey = new Map(fields.map((f) => [f.fieldKey, f]));
 
   // Keep only valid keys (incl. the synthetic status column), preserving the
@@ -1196,7 +1205,31 @@ async function computeTableData(
   const statusIds = (t.statusIds ?? []).filter((n) => Number.isInteger(n));
   if (statusIds.length > 0) conds.push(inArray(entityRecordsTable.statusId, statusIds));
 
-  const records = await db
+  let pageFields: Array<{
+    fieldKey: string;
+    nameJson: unknown;
+    fieldType: string;
+    formulaConfigJson: typeof pageFieldsTable.$inferSelect.formulaConfigJson;
+  }> = [];
+  if (t.pageId != null && await resolvePageEntityId(t.pageId) === t.entityId) {
+    pageFields = await db
+      .select({
+        fieldKey: pageFieldsTable.fieldKey,
+        nameJson: pageFieldsTable.nameJson,
+        fieldType: pageFieldsTable.fieldType,
+        formulaConfigJson: pageFieldsTable.formulaConfigJson,
+      })
+      .from(pageFieldsTable)
+      .where(and(eq(pageFieldsTable.pageId, t.pageId), eq(pageFieldsTable.isActive, true)));
+  }
+  const wantsEntityFormula = columns.some((column) => column.fieldType === "function");
+  const wantedPfKeys = (t.pageFieldKeys ?? []).filter((k) => typeof k === "string" && k);
+  const wantedPfKeySet = new Set(wantedPfKeys);
+  const wantsPageFormula = pageFields.some(
+    (field) => wantedPfKeySet.has(field.fieldKey) && field.fieldType === "function",
+  );
+  const needsFormulaSet = wantsEntityFormula || wantsPageFormula;
+  const recordQuery = db
     .select({
       id: entityRecordsTable.id,
       valuesJson: entityRecordsTable.valuesJson,
@@ -1205,8 +1238,13 @@ async function computeTableData(
     })
     .from(entityRecordsTable)
     .where(and(...conds))
-    .orderBy(sql`${entityRecordsTable.createdAt} desc`)
-    .limit(clampTableLimit(t.limit));
+    .orderBy(sql`${entityRecordsTable.createdAt} desc`);
+  const allRecords = needsFormulaSet
+    ? await recordQuery
+    : await recordQuery.limit(clampTableLimit(t.limit));
+  const records = needsFormulaSet
+    ? allRecords.slice(0, clampTableLimit(t.limit))
+    : allRecords;
 
   // Resolve status name/color only when the status column is requested.
   const statusById = new Map<number, { name: string; color: string }>();
@@ -1279,19 +1317,8 @@ async function computeTableData(
   // The page-vs-entity binding is re-checked at compute time (degrade: skip cols).
   const pageCols: Array<{ fieldKey: string; label: string; fieldType: string; pfKey: string }> = [];
   const pageValuesByRecord = new Map<number, Record<string, unknown>>();
-  const wantedPfKeys = (t.pageFieldKeys ?? []).filter((k) => typeof k === "string" && k);
-  if (t.pageId != null && wantedPfKeys.length > 0) {
-    const pageEntityId = await resolvePageEntityId(t.pageId);
-    if (pageEntityId === t.entityId) {
-      const pfs = await db
-        .select({
-          fieldKey: pageFieldsTable.fieldKey,
-          nameJson: pageFieldsTable.nameJson,
-          fieldType: pageFieldsTable.fieldType,
-        })
-        .from(pageFieldsTable)
-        .where(and(eq(pageFieldsTable.pageId, t.pageId), eq(pageFieldsTable.isActive, true)));
-      const pfByKey = new Map(pfs.map((f) => [f.fieldKey, f]));
+  if (t.pageId != null && (wantedPfKeys.length > 0 || needsFormulaSet) && pageFields.length > 0) {
+      const pfByKey = new Map(pageFields.map((f) => [f.fieldKey, f]));
       for (const key of wantedPfKeys) {
         const pf = pfByKey.get(key);
         if (!pf) continue;
@@ -1302,16 +1329,94 @@ async function computeTableData(
           pfKey: key,
         });
       }
-      if (pageCols.length > 0 && baseIds.length > 0) {
-        const pvs = await db
-          .select({ recordId: pageRecordValuesTable.recordId, valuesJson: pageRecordValuesTable.valuesJson })
-          .from(pageRecordValuesTable)
-          .where(and(eq(pageRecordValuesTable.pageId, t.pageId), inArray(pageRecordValuesTable.recordId, baseIds)));
-        for (const pv of pvs) {
-          pageValuesByRecord.set(pv.recordId, (pv.valuesJson as Record<string, unknown>) ?? {});
+      const pageValueIds = needsFormulaSet ? allRecords.map((record) => record.id) : baseIds;
+      if ((pageCols.length > 0 || needsFormulaSet) && pageValueIds.length > 0) {
+        for (let offset = 0; offset < pageValueIds.length; offset += 5_000) {
+          const pvs = await db
+            .select({ recordId: pageRecordValuesTable.recordId, valuesJson: pageRecordValuesTable.valuesJson })
+            .from(pageRecordValuesTable)
+            .where(and(
+              eq(pageRecordValuesTable.pageId, t.pageId),
+              inArray(pageRecordValuesTable.recordId, pageValueIds.slice(offset, offset + 5_000)),
+            ));
+          for (const pv of pvs) {
+            pageValuesByRecord.set(pv.recordId, (pv.valuesJson as Record<string, unknown>) ?? {});
+          }
         }
       }
-    }
+  }
+
+  let entityFormulaValues = new Map<number, Record<string, unknown>>();
+  let pageFormulaValues = new Map<number, Record<string, unknown>>();
+  if (needsFormulaSet) {
+    const emptyHidden = new Set<string>();
+    const formulaRows = allRecords.map((record) => {
+      const values = { ...((record.valuesJson ?? {}) as Record<string, unknown>) };
+      for (const field of fields) {
+        if (field.fieldType === "created_at") values[field.fieldKey] = record.createdAt.toISOString();
+      }
+      return { id: record.id, createdAt: record.createdAt, values };
+    });
+    const linkedInputs = await mergeLinkedFormulaInputsBatched({
+      entityId: t.entityId,
+      pageId: t.pageId ?? undefined,
+      rows: formulaRows.map((row) => ({ id: row.id, values: row.values })),
+      fields: [...fields, ...pageFields],
+      permissions: systemFormulaPermissions,
+    });
+    entityFormulaValues = materializeVisibleEntityFormulas({
+      entityId: t.entityId,
+      rows: formulaRows,
+      fields,
+      hidden: emptyHidden,
+      pageId: t.pageId ?? undefined,
+      pageValues: pageValuesByRecord,
+      pageFields,
+      hiddenPage: emptyHidden,
+      linkedInputs,
+    });
+    pageFormulaValues = t.pageId == null
+      ? new Map()
+      : materializeVisiblePageFormulas({
+          entityId: t.entityId,
+          pageId: t.pageId,
+          rows: formulaRows.map((row) => ({
+            id: row.id,
+            entityValues: row.values,
+            pageValues: pageValuesByRecord.get(row.id) ?? {},
+          })),
+          entityFields: fields,
+          pageFields,
+          hiddenEntity: emptyHidden,
+          hiddenPage: emptyHidden,
+          linkedInputs,
+        });
+    const groupingRows = formulaRows.map((row) => ({
+      id: row.id,
+      createdAt: row.createdAt,
+      entityValues: entityFormulaValues.get(row.id) ?? row.values,
+      pageValues: t.pageId == null
+        ? undefined
+        : new Map([[t.pageId, pageFormulaValues.get(row.id) ?? pageValuesByRecord.get(row.id) ?? {}]]),
+    }));
+    entityFormulaValues = applyFormulaGroupResults(
+      entityFormulaValues,
+      formulaGroupResultWinners(groupingRows, secureFormulaGroupConfigs({
+        fields,
+        entityFields: fields,
+        pageFields,
+        pageId: t.pageId ?? undefined,
+      })),
+    );
+    pageFormulaValues = applyFormulaGroupResults(
+      pageFormulaValues,
+      formulaGroupResultWinners(groupingRows, secureFormulaGroupConfigs({
+        fields: pageFields,
+        entityFields: fields,
+        pageFields,
+        pageId: t.pageId ?? undefined,
+      })),
+    );
   }
 
   const allColumns = [
@@ -1330,12 +1435,16 @@ async function computeTableData(
         // System date: no stored value — inject the record's system creation
         // timestamp (ISO), same as record read paths do.
         values[c.fieldKey] = r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt);
+      } else if (c.fieldType === "function") {
+        values[c.fieldKey] = entityFormulaValues.get(r.id)?.[c.fieldKey] ?? null;
       } else {
         values[c.fieldKey] = all[c.fieldKey] ?? null;
       }
     }
     for (const pc of pageCols) {
-      const pv = pageValuesByRecord.get(r.id);
+      const pv = pc.fieldType === "function"
+        ? pageFormulaValues.get(r.id)
+        : pageValuesByRecord.get(r.id);
       values[pc.fieldKey] = pv ? pv[pc.pfKey] ?? null : null;
     }
     for (const rc of relCols) {

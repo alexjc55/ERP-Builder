@@ -4,6 +4,7 @@ import {
   canUseRecordPageFormulaContext,
   materializeVisibleEntityFormulas,
   materializeVisiblePageFormulas,
+  mergeLinkedFormulaInputsBatched,
 } from "./formula-runtime";
 
 test("page formula context requires page access and canonical entity ownership", () => {
@@ -40,6 +41,23 @@ test("page formula context requires page access and canonical entity ownership",
     pageEntityId: 7,
     recordPermission: entityView,
   }), true);
+});
+
+test("batched linked inputs preserve every row in one merged full-set map", async () => {
+  const rows = Array.from({ length: 7 }, (_, index) => ({
+    id: index + 1,
+    values: { value: index },
+  }));
+  const result = await mergeLinkedFormulaInputsBatched({
+    entityId: 1,
+    rows,
+    fields: [],
+    permissions: {
+      authorizeResources: async () => new Set<string>(),
+      filterRows: async () => new Set<number>(),
+    },
+  }, 2);
+  assert.deepEqual([...result], rows.map((row) => [row.id, row.values]));
 });
 
 test("visible linked-source formulas are materialized without returning source tokens or hidden formulas", () => {
