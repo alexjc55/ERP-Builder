@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useML, useT } from "@/lib/i18n";
+import { usePagePathLabel } from "@/lib/pagePath";
 import type { FormulaFieldRef } from "@/components/FormulaEditor";
 
 export type FormulaSource =
@@ -53,8 +54,8 @@ const AGGREGATE_LABELS: Record<Extract<FormulaSource, { kind: "aggregate" }>["ag
  */
 export function useFormulaSourceRefs(value: FormulaSource[]): FormulaFieldRef[] {
   const ml = useML();
+  const pageLabel = usePagePathLabel();
   const { data: entities = [] } = useListEntities();
-  const { data: pages = [] } = useListPages();
   const pageIds = useMemo(
     () => [...new Set(value.flatMap((source) => {
       if (source.kind === "pageLocal") return [source.pageId];
@@ -79,7 +80,7 @@ export function useFormulaSourceRefs(value: FormulaSource[]): FormulaFieldRef[] 
 
   return value.map((source) => {
     if (source.kind === "pageLocal") {
-      const pageName = ml(pages.find((page) => page.id === source.pageId)?.nameJson) || `#${source.pageId}`;
+      const pageName = pageLabel(source.pageId);
       const field = pageFieldsById.get(source.pageId)?.find((item) => item.fieldKey === source.fieldKey);
       const fieldName = ml(field?.nameJson) || source.fieldKey;
       return {
@@ -96,9 +97,7 @@ export function useFormulaSourceRefs(value: FormulaSource[]): FormulaFieldRef[] 
       ? pageFieldsById.get(valuePageId)?.find((item) => item.fieldKey === source.value.fieldKey)
       : entityFieldsById.get(source.targetEntityId)?.find((item) => item.fieldKey === source.value.fieldKey);
     const fieldName = ml(valueField?.nameJson) || source.value.fieldKey;
-    const pageName = valuePageId != null
-      ? ml(pages.find((page) => page.id === valuePageId)?.nameJson) || `#${valuePageId}`
-      : "";
+    const pageName = valuePageId != null ? pageLabel(valuePageId) : "";
     return {
       key: source.key,
       token: source.key,
@@ -139,6 +138,7 @@ export function FormulaSourceBuilder({
 }) {
   const t = useT();
   const ml = useML();
+  const pageLabel = usePagePathLabel();
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [pageSourcePageId, setPageSourcePageId] = useState<number | null>(null);
   const [pageSourceFieldKey, setPageSourceFieldKey] = useState("");
@@ -254,7 +254,7 @@ export function FormulaSourceBuilder({
             onValueChange={(v) => { setPageSourcePageId(Number(v)); setPageSourceFieldKey(""); }}>
             <SelectTrigger className="h-8"><SelectValue placeholder={t("fields.formulaPage", "Страница")} /></SelectTrigger>
             <SelectContent>{currentPages.map((page) =>
-              <SelectItem key={page.id} value={String(page.id)}>{ml(page.nameJson) || `#${page.id}`}</SelectItem>)}</SelectContent>
+              <SelectItem key={page.id} value={String(page.id)}>{pageLabel(page)}</SelectItem>)}</SelectContent>
           </Select>
           <Select value={pageSourceFieldKey} onValueChange={setPageSourceFieldKey}>
             <SelectTrigger className="h-8"><SelectValue placeholder={t("fields.formulaValueField", "Поле значения")} /></SelectTrigger>
@@ -291,7 +291,7 @@ export function FormulaSourceBuilder({
             <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__entity__">{t("fields.formulaEntityFields", "Поля сущности")}</SelectItem>
-              {targetPages.map((page) => <SelectItem key={page.id} value={String(page.id)}>{ml(page.nameJson) || `#${page.id}`}</SelectItem>)}
+              {targetPages.map((page) => <SelectItem key={page.id} value={String(page.id)}>{pageLabel(page)}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>

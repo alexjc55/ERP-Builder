@@ -35,6 +35,7 @@ _Replace the heading above with the project's name, and this line with one sente
 - Multilingual content is stored as JSONB (`{ru,en,he}`) on each row, rendered via a `getML()` helper that falls back ru → en → he.
 - Referential integrity is enforced in the DB/API (not assumed): e.g. `entities.page_id` is a FK with `ON DELETE SET NULL`, and one-entity-per-page is enforced server-side.
 - Auth is custom email/password JWT (no self-registration). Role-based access control is implemented (see "Roles & Permissions" below): a structured `permissionsJson` per role, enforced as a hard boundary server-side and mirrored cosmetically in the UI. Permissions are read fresh from the DB per request, not embedded in the JWT.
+- Every picker or label that identifies a page must show its full nested path via the shared `usePagePathLabel()` helper (for example `Покрасочная / Эпоколь`), never a bare page name that can be ambiguous across branches.
 
 ## Product
 
