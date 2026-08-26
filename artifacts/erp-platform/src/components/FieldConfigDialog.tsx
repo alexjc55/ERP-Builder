@@ -86,7 +86,7 @@ import { FieldValidationRulesEditor, type OtherField } from "@/components/FieldV
 import { ColorPickerControl } from "@/components/ColorPickerControl";
 import { useToast } from "@/hooks/use-toast";
 import { FormulaEditor, type FormulaFieldRef } from "@/components/FormulaEditor";
-import { FormulaSourceBuilder, type FormulaSource } from "@/components/FormulaSourceBuilder";
+import { FormulaSourceBuilder, type FormulaSource, useFormulaSourceRefs } from "@/components/FormulaSourceBuilder";
 import { normalizeDecimals } from "@workspace/formula";
 import { useML, useT } from "@/lib/i18n";
 import { FIELD_KEY_RE, slugifyKey, uniqueKey } from "@/lib/keys";
@@ -450,17 +450,18 @@ export function FieldConfigDialog({
       sourceLabel: t("fields.formulaCurrentEntity", "Текущая сущность"),
       sourceKind: "entity" as const,
     }));
+  const resolvedFormulaSourceRefs = useFormulaSourceRefs(formulaSources);
   const formulaFields: FormulaFieldRef[] = [
     ...currentFormulaFields,
-    ...formulaSources.map((source) => ({
-      key: source.key,
-      token: source.key,
-      label: source.kind === "aggregate" ? source.key.replace(/^source:/, "") : source.fieldKey,
-      sourceLabel: source.kind === "aggregate"
+    ...resolvedFormulaSourceRefs.map((ref, index) => {
+      const source = formulaSources[index];
+      return {
+        ...ref,
+        sourceLabel: source.kind === "aggregate"
         ? t("fields.formulaLinkedData", "Связанные данные")
         : t("fields.formulaPageData", "Поля страницы"),
-      sourceKind: source.kind === "aggregate" ? "linked" as const : "page" as const,
-    })),
+      };
+    }),
   ];
 
   // Candidate parent fields for a dependency: any OTHER field whose own

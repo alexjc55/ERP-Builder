@@ -65,7 +65,7 @@ import { normalizeSelectOptions, type SelectOption } from "@/lib/selectOptions";
 import { FieldFormatRulesEditor } from "@/components/FieldFormatRulesEditor";
 import { ColorPickerControl } from "@/components/ColorPickerControl";
 import { FormulaEditor, type FormulaFieldRef } from "@/components/FormulaEditor";
-import { FormulaSourceBuilder, type FormulaSource } from "@/components/FormulaSourceBuilder";
+import { FormulaSourceBuilder, type FormulaSource, useFormulaSourceRefs } from "@/components/FormulaSourceBuilder";
 import { normalizeDecimals } from "@workspace/formula";
 import { useToast } from "@/hooks/use-toast";
 import { useML, useT } from "@/lib/i18n";
@@ -395,6 +395,7 @@ export function PageFieldConfigDialog({
   // merge as {...source, ...page}, so a page-local field shadows a same-key source
   // field; list page fields first and de-duplicate by key to match that precedence
   // (and to avoid duplicate React keys among the chips).
+  const resolvedFormulaSourceRefs = useFormulaSourceRefs(formulaSources);
   const formulaFields: FormulaFieldRef[] = (() => {
     // Page formulas may reference other page-local formulas as well as source
     // (mirrored-entity) fields passed in via sourceFields — both are offered now.
@@ -438,14 +439,11 @@ export function PageFieldConfigDialog({
       sourceLabel: t("fields.formulaCurrentEntity", "Текущая сущность"),
       sourceKind: "entity" as const,
     }));
-    const structuredRefs: FormulaFieldRef[] = formulaSources.map((source) => ({
-      key: source.key,
-      token: source.key,
-      label: source.kind === "aggregate" ? source.key.replace(/^source:/, "") : source.fieldKey,
-      sourceLabel: source.kind === "aggregate"
+    const structuredRefs: FormulaFieldRef[] = resolvedFormulaSourceRefs.map((ref, index) => ({
+      ...ref,
+      sourceLabel: formulaSources[index].kind === "aggregate"
         ? t("fields.formulaLinkedData", "Связанные данные")
         : t("fields.formulaPageData", "Поля страницы"),
-      sourceKind: source.kind === "aggregate" ? "linked" : "page",
     }));
     return [...qualifiedPageRefs, ...qualifiedEntityRefs, ...structuredRefs];
   })();

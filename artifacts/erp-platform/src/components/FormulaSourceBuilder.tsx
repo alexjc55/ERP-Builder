@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import {
+  getListEntityFieldsQueryOptions,
   getListEntityFieldsQueryKey,
+  getListPageFieldsQueryOptions,
   getListPageFieldsQueryKey,
   useListEntities,
   useListEntityFields,
@@ -8,6 +10,7 @@ import {
   useListPageFields,
   useListPages,
 } from "@workspace/api-client-react";
+import { useQueries } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +36,77 @@ export type FormulaSource =
       aggregate: "sum" | "average" | "min" | "max" | "count" | "uniqueJoin";
       separator?: string;
     };
+
+const AGGREGATE_LABELS: Record<Extract<FormulaSource, { kind: "aggregate" }>["aggregate"], string> = {
+  sum: "sum",
+  average: "average",
+  min: "min",
+  max: "max",
+  count: "count",
+  uniqueJoin: "uniqueJoin",
+};
+
+/**
+ * Resolve persisted source identifiers to current localized page/entity/field
+ * names. Labels are deliberately derived at render time rather than stored in
+ * formulaConfigJson, so renaming a page or field updates every formula picker.
+ */
+export function useFormulaSourceRefs(value: FormulaSource[]): FormulaFieldRef[] {
+  const ml = useML();
+  const { data: entities = [] } = useListEntities();
+  const { data: pages = [] } = useListPages();
+  const pageIds = useMemo(
+    () => [...new Set(value.flatMap((source) => {
+      if (source.kind === "pageLocal") return [source.pageId];
+      const valuePageId = source.targetPageId ??
+        (source.value.scope === "page" ? source.value.pageId : null);
+      return valuePageId == null ? [] : [valuePageId];
+    }))],
+    [value],
+  );
+  const entityIds = useMemo(
+    () => [...new Set(value.flatMap((source) => source.kind === "aggregate" ? [source.targetEntityId] : []))],
+    [value],
+  );
+  const pageFieldQueries = useQueries({
+    queries: pageIds.map((pageId) => getListPageFieldsQueryOptions(pageId)),
+  });
+  const entityFieldQueries = useQueries({
+    queries: entityIds.map((entityId) => getListEntityFieldsQueryOptions(entityId)),
+  });
+  const pageFieldsById = new Map(pageIds.map((pageId, index) => [pageId, pageFieldQueries[index]?.data ?? []]));
+  const entityFieldsById = new Map(entityIds.map((entityId, index) => [entityId, entityFieldQueries[index]?.data ?? []]));
+
+  return value.map((source) => {
+    if (source.kind === "pageLocal") {
+      const pageName = ml(pages.find((page) => page.id === source.pageId)?.nameJson) || `#${source.pageId}`;
+      const field = pageFieldsById.get(source.pageId)?.find((item) => item.fieldKey === source.fieldKey);
+      const fieldName = ml(field?.nameJson) || source.fieldKey;
+      return {
+        key: source.key,
+        token: source.key,
+        label: `${pageName} · ${fieldName}`,
+        sourceKind: "page" as const,
+      };
+    }
+
+    const entityName = ml(entities.find((entity) => entity.id === source.targetEntityId)?.nameJson) || `#${source.targetEntityId}`;
+    const valuePageId = source.value.scope === "page" ? source.value.pageId : source.targetPageId;
+    const valueField = valuePageId != null
+      ? pageFieldsById.get(valuePageId)?.find((item) => item.fieldKey === source.value.fieldKey)
+      : entityFieldsById.get(source.targetEntityId)?.find((item) => item.fieldKey === source.value.fieldKey);
+    const fieldName = ml(valueField?.nameJson) || source.value.fieldKey;
+    const pageName = valuePageId != null
+      ? ml(pages.find((page) => page.id === valuePageId)?.nameJson) || `#${valuePageId}`
+      : "";
+    return {
+      key: source.key,
+      token: source.key,
+      label: [entityName, pageName, `${AGGREGATE_LABELS[source.aggregate]}(${fieldName})`].filter(Boolean).join(" · "),
+      sourceKind: "linked" as const,
+    };
+  });
+}
 
 type Draft = {
   entityId: number | null;
@@ -80,6 +154,8 @@ export function FormulaSourceBuilder({
   const { data: pageSourceFields = [] } = useListPageFields(pageSourcePageId ?? 0, {
     query: { enabled: pageSourcePageId != null, queryKey: getListPageFieldsQueryKey(pageSourcePageId ?? 0) },
   });
+  const resolvedSourceRefs = useFormulaSourceRefs(value);
+  const resolvedSourceLabel = new Map(resolvedSourceRefs.map((ref) => [ref.key, ref.label]));
 
   const entityName = (id: number) => ml(entities.find((entity) => entity.id === id)?.nameJson) || `#${id}`;
   const targetPages = useMemo(() => {
@@ -154,9 +230,7 @@ export function FormulaSourceBuilder({
       {value.filter((source) => source.kind === "aggregate").map((source) => (
         <div key={source.key} className="flex items-center justify-between gap-2 rounded border bg-white px-2 py-1.5 text-xs">
           <div className="min-w-0">
-            <span className="font-medium">{entityName(source.targetEntityId)}</span>
-            <span className="mx-1 text-slate-400">·</span>
-            <span>{source.aggregate}</span>
+            <span className="font-medium">{resolvedSourceLabel.get(source.key) ?? `${entityName(source.targetEntityId)} · ${source.aggregate}`}</span>
             <code className="ml-2 text-slate-400">{`{${source.key}}`}</code>
           </div>
           <Button type="button" variant="ghost" size="icon" className="h-7 w-7"
@@ -168,11 +242,7 @@ export function FormulaSourceBuilder({
       {value.filter((source) => source.kind === "pageLocal").map((source) => (
           <div key={source.key} className="flex items-center justify-between rounded border bg-white px-2 py-1 text-xs">
             <span>
-              <span className="font-medium">
-                {ml(pages.find((page) => page.id === source.pageId)?.nameJson) || `${t("fields.formulaPage", "Страница")} #${source.pageId}`}
-              </span>
-              <span className="mx-1 text-slate-400">·</span>
-              <span>{ml(pageSourceFields.find((field) => field.fieldKey === source.fieldKey)?.nameJson) || source.fieldKey}</span>
+              <span className="font-medium">{resolvedSourceLabel.get(source.key) ?? source.fieldKey}</span>
               <code className="ml-2 text-slate-400">{`{${source.key}}`}</code>
             </span>
             <Button type="button" variant="ghost" size="icon" className="h-6 w-6"
