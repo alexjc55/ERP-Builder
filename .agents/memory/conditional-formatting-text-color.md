@@ -31,3 +31,11 @@ Conditional formatting supports a per-rule `textColor` (alongside row/cell backg
 ## A `user` field's rule value must be the user id, picked from a list — not free-typed
 **Rule:** because a `user` cell is matched by its stored **id** (the displayed name is only a label resolved via `userNames`), the rule-config UI must offer a user **dropdown** that stores `String(id)`, and restrict operators to identity/presence (`equals`/`notEquals`/`empty`/`notEmpty`). A free-text input lets an admin type the name, and `ruleMatches(String(id), name)` silently never matches.
 **Why:** the bug "conditional formatting on a user field does nothing" came from exactly this id-vs-name mismatch in the editor, masked by the cell rendering the name. **How to apply:** any value-input editor for a field whose stored value differs from its display (user, and by extension relation/lookup-projecting-user) must feed the editor the same id space the row computation compares against. Pass the users list (`useListUserOptions`) into the shared format-rules editor from BOTH the entity and page-field dialogs.
+
+## Alias and date equality semantics
+
+**Rule:** A `page_ref` rule compares the live resolved alias value used by the cell, not raw page storage. ISO date-only equality matches the same calendar day in a date/datetime/created-at value; full datetime equality compares instants. Invalid ISO-like values do not match.
+
+**Why:** Alias fields can have no value under their own key, and literal string equality makes a date rule fail against a timestamp from the same day.
+
+**How to apply:** Route every field type through one formatting-value resolver before operator evaluation. Preserve raw IDs for user fields and permission-filtered projections for relation/lookup fields; use validated ISO-aware equality only when both operands are date-like.

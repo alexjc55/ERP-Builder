@@ -378,7 +378,7 @@ async function buildFormulaIdSet(
     fields: [
       ...ctx.allFields,
       ...[...pageMetaByPage.values()].flatMap((fields) =>
-        [...fields.values()].map((field) => ({ ...field })),
+        [...fields.entries()].map(([fieldKey, field]) => ({ fieldKey, ...field })),
       ),
     ],
     permissions: ctx.formulaPermissions,

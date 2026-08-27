@@ -170,7 +170,7 @@ import {
   type FormulaFieldDef,
 } from "@workspace/formula";
 import { operatorLabel, filterValueToText } from "@/components/ViewConfigEditors";
-import { computeRowFormatting, ruleMatches, type FormatField } from "@/lib/formatRules";
+import { computeRowFormatting, resolveFormattingValue, ruleMatches, type FormatField, type FormatValueField } from "@/lib/formatRules";
 import type { FieldFormatRule, CustomFilterPick, CustomFilter, CustomFilterInput } from "@workspace/api-client-react";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 import { useQueryClient } from "@tanstack/react-query";
@@ -6820,29 +6820,29 @@ export function EntityRecords({
                         fieldKey: f.fieldKey,
                         formatRulesJson: [...(f.formatRulesJson ?? []), ...(f.inheritedFormatRulesJson ?? [])],
                       })),
-                      ...displayedPageFields.map((pf: PageField) => ({ fieldKey: pf.fieldKey, formatRulesJson: pf.formatRulesJson })),
+                      ...displayedPageFields.map((pf: PageField) => ({
+                        fieldKey: pf.fieldKey,
+                        formatRulesJson: pf.formatRulesJson,
+                      })),
                     ];
-                    const formatFieldByKey = new Map<string, { fieldType: string; formulaConfigJson?: { expression?: string } | null }>([
-                      ...displayFields.map((f: Field) => [f.fieldKey, { fieldType: f.fieldType, formulaConfigJson: f.formulaConfigJson }] as const),
-                      ...displayedPageFields.map((pf: PageField) => [pf.fieldKey, { fieldType: pf.fieldType, formulaConfigJson: pf.formulaConfigJson }] as const),
+                    const formatFieldByKey = new Map<string, FormatValueField & { formulaConfigJson?: { expression?: string } | null }>([
+                      ...displayFields.map((f: Field) => [f.fieldKey, { fieldKey: f.fieldKey, fieldType: f.fieldType, formulaConfigJson: f.formulaConfigJson }] as const),
+                      ...displayedPageFields.map((pf: PageField) => [pf.fieldKey, { fieldKey: pf.fieldKey, fieldType: pf.fieldType, formulaConfigJson: pf.formulaConfigJson }] as const),
                     ]);
                     const formatting = computeRowFormatting(formatFields, (key) => {
                       const def = formatFieldByKey.get(key);
-                      // relation/lookup values are projected from the linked
-                      // record (held in entityRelatedByRecord for entity fields,
-                      // relatedByRecord for page-relation fields), NOT stored in the
-                      // row's valuesJson. Resolve them here so conditional formatting
-                      // matches the displayed value instead of treating it as empty.
-                      if (def && (def.fieldType === "relation" || def.fieldType === "lookup")) {
-                        const entityRel = entityRelatedByRecord.get(record.id)?.get(key);
-                        if (entityRel) return entityRel.value;
-                        return relatedByRecord.get(record.id)?.get(key)?.value;
-                      }
-                      // user fields: formulaValues holds the display NAME (substituted
-                      // for formula evaluation), but format rules store the user ID —
-                      // compare against the raw stored value, not the name.
-                      if (def && def.fieldType === "user") return allValues[key];
-                      return def ? fieldRawValue({ fieldKey: key, ...def }, formulaValues) : formulaValues[key];
+                      return resolveFormattingValue(def, {
+                        rawValues: allValues,
+                        // page_ref values are live aliases. This is the same map
+                        // read by their render branch, rather than a raw field key.
+                        displayedPageValues: pageValues,
+                        entityRelatedValues: entityRelatedByRecord.get(record.id),
+                        pageRelatedValues: relatedByRecord.get(record.id),
+                        resolveDefault: () =>
+                          def
+                            ? fieldRawValue(def, formulaValues)
+                            : formulaValues[key],
+                      });
                     });
                     // Resolve the row background once so pinned (sticky) cells and
                     // the non-pinned row stay consistent. Priority: conditional

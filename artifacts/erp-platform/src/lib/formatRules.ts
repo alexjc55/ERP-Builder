@@ -18,6 +18,7 @@ function isEmpty(v: unknown): boolean {
 // like). Comparison operators treat such strings as timestamps so gt/lt/between
 // work with datetime semantics, not failed numeric parses.
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}([T ]|$)/;
+const ISO_DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function asNum(v: unknown): number | null {
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
@@ -33,13 +34,27 @@ function asNum(v: unknown): number | null {
   return null;
 }
 
+function equalValues(value: unknown, target: unknown): boolean {
+  const left = String(value ?? "");
+  const right = String(target ?? "");
+  if (!ISO_DATE_RE.test(left) || !ISO_DATE_RE.test(right)) return left === right;
+
+  const leftTime = asNum(left);
+  const rightTime = asNum(right);
+  if (leftTime == null || rightTime == null) return false;
+  // A date-only rule represents a calendar day even when the displayed value
+  // is a datetime/created_at timestamp on that day.
+  if (ISO_DATE_ONLY_RE.test(right)) return left.slice(0, 10) === right;
+  return leftTime === rightTime;
+}
+
 export function ruleMatches(rule: FieldFormatRule, value: unknown): boolean {
   const target = rule.value ?? "";
   switch (rule.operator) {
     case "equals":
-      return String(value ?? "") === String(target);
+      return equalValues(value, target);
     case "notEquals":
-      return String(value ?? "") !== String(target);
+      return !equalValues(value, target);
     case "contains":
       return String(value ?? "").toLowerCase().includes(String(target).toLowerCase());
     case "notContains":
@@ -85,6 +100,40 @@ export function ruleMatches(rule: FieldFormatRule, value: unknown): boolean {
 export interface FormatField {
   fieldKey: string;
   formatRulesJson?: FieldFormatRule[] | null;
+}
+
+export interface FormatValueField {
+  fieldKey: string;
+  fieldType: string;
+}
+
+export type FormatProjection = { value?: unknown };
+
+/**
+ * Select the value in the same representation that its table cell uses.
+ * Relation and lookup values are permission-filtered projections, user rules
+ * intentionally use their stored ID, and a page_ref is an alias whose resolved
+ * page value is what is rendered.
+ */
+export function resolveFormattingValue(
+  field: FormatValueField | undefined,
+  sources: {
+    rawValues: Record<string, unknown>;
+    displayedPageValues: Record<string, unknown>;
+    entityRelatedValues?: ReadonlyMap<string, FormatProjection>;
+    pageRelatedValues?: ReadonlyMap<string, FormatProjection>;
+    resolveDefault: () => unknown;
+  },
+): unknown {
+  if (!field) return sources.resolveDefault();
+  if (field.fieldType === "relation" || field.fieldType === "lookup") {
+    const entityProjection = sources.entityRelatedValues?.get(field.fieldKey);
+    if (entityProjection) return entityProjection.value;
+    return sources.pageRelatedValues?.get(field.fieldKey)?.value;
+  }
+  if (field.fieldType === "user") return sources.rawValues[field.fieldKey];
+  if (field.fieldType === "page_ref") return sources.displayedPageValues[field.fieldKey];
+  return sources.resolveDefault();
 }
 
 export interface RowFormatting {

@@ -9,6 +9,7 @@
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "test:calendar": "node --experimental-strip-types --test src/lib/calendarWeek.test.ts",
     "test:affix": "node --experimental-strip-types --test src/components/AffixedNumericValue.test.ts",
+    "test:format-rules": "node --experimental-strip-types --test src/lib/formatRules.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

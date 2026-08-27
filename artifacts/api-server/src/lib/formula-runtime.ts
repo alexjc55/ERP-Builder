@@ -5,6 +5,7 @@ import {
   entityRecordsTable,
   pageFieldsTable,
   pagesTable,
+  relationsTable,
   type EntityField,
   type RecordPermission,
   type RolePermissions,
@@ -29,7 +30,120 @@ import {
 import { normalizeFormulaFieldSources } from "./formula-field-config";
 import { buildFormulaScope, type FormulaEvaluationOptions, type FormulaFieldDef } from "@workspace/formula";
 
-type FormulaConfiguredField = { fieldType: string; formulaConfigJson?: unknown };
+type FormulaConfiguredField = { fieldType: string; formulaConfigJson?: unknown; relationConfigJson?: unknown };
+type FormulaDependencyField = FormulaConfiguredField & {
+  fieldKey: string;
+  relationConfigJson?: unknown;
+};
+type LegacyRelationField = {
+  fieldKey: string;
+  fieldType: string;
+  formulaConfigJson?: unknown;
+  relationConfigJson?: unknown;
+  scope: "entity" | "page";
+  pageId?: number;
+};
+type RelationEndpoint = { id: number; sourceEntityId: number; targetEntityId: number };
+
+/** Field references are deliberately extracted without evaluating an expression.
+ * Invalid expressions remain the evaluator's concern and simply contribute no
+ * dependency here. */
+function formulaReferenceKeys(fields: readonly FormulaConfiguredField[]): Set<string> {
+  const keys = new Set<string>();
+  for (const field of fields) {
+    if (field.fieldType !== "function") continue;
+    const expression = (field.formulaConfigJson as { expression?: unknown } | null)?.expression;
+    if (typeof expression !== "string") continue;
+    for (const match of expression.matchAll(/\{([^{}]+)\}/g)) {
+      const key = match[1].trim();
+      // Legacy references are flat. Qualified names already have an explicit
+      // namespace and must not be guessed as a relation field.
+      if (key && !key.includes(":") && !key.includes(".")) keys.add(key);
+    }
+  }
+  return keys;
+}
+
+/**
+ * Turn a legacy flat reference to a relation/lookup column into the same
+ * permission-aware linked source used by structured formulas.  This is pure so
+ * the security-sensitive discovery rules can be tested without a database.
+ */
+export function legacyFormulaSourcesFromFields(
+  fields: readonly LegacyRelationField[],
+  relations: readonly RelationEndpoint[],
+  entityId: number,
+  referencedKeys?: Iterable<string>,
+): LinkedFormulaSource[] {
+  const references = referencedKeys == null
+    ? formulaReferenceKeys(fields)
+    : new Set(referencedKeys);
+  const relationById = new Map(relations.map((relation) => [relation.id, relation]));
+  const result: LinkedFormulaSource[] = [];
+  const effectiveFields = new Map<string, LegacyRelationField>();
+  for (const field of fields) effectiveFields.set(field.fieldKey, field);
+  for (const field of effectiveFields.values()) {
+    if (!references.has(field.fieldKey) || (field.fieldType !== "relation" && field.fieldType !== "lookup")) continue;
+    const config = field.relationConfigJson as {
+      relationId?: unknown; relatedFieldKey?: unknown; relatedPageId?: unknown;
+    } | null;
+    const relationId = config?.relationId;
+    const relatedFieldKey = config?.relatedFieldKey;
+    if (
+      typeof relationId !== "number"
+      || !Number.isInteger(relationId)
+      || typeof relatedFieldKey !== "string"
+      || !relatedFieldKey
+    ) continue;
+    const relation = relationById.get(relationId);
+    if (!relation) continue;
+    const baseSide = relation.sourceEntityId === entityId
+      ? "source"
+      : relation.targetEntityId === entityId
+        ? "target"
+        : null;
+    if (!baseSide) continue;
+    const targetEntityId = baseSide === "source" ? relation.targetEntityId : relation.sourceEntityId;
+    const relatedPageId = config?.relatedPageId;
+    if (
+      relatedPageId != null
+      && (
+        typeof relatedPageId !== "number"
+        || !Number.isInteger(relatedPageId)
+        || relatedPageId <= 0
+      )
+    ) continue;
+    result.push({
+      key: field.fieldKey,
+      kind: "aggregate",
+      targetEntityId,
+      ...(relatedPageId == null ? {} : { targetPageId: relatedPageId }),
+      value: relatedPageId == null
+        ? { scope: "entity", fieldKey: relatedFieldKey }
+        : { scope: "page", pageId: relatedPageId, fieldKey: relatedFieldKey },
+      join: { kind: "relation", relationId, baseSide },
+      // Relation/lookup fields are configured only for qualifying single-link
+      // relations. min provides neutral scalar semantics if stale data violates
+      // that invariant, without choosing an arbitrary link.
+      aggregate: "min",
+      limit: 1,
+    });
+  }
+  return result;
+}
+
+function legacySourceKeysOf(fields: readonly FormulaDependencyField[]): string[] {
+  const references = formulaReferenceKeys(fields);
+  // Page fields occur after entity fields at every call site, matching flat-key
+  // formula scope shadowing. A relation/lookup dependency is transient input,
+  // never an additional response value.
+  const byKey = new Map<string, FormulaDependencyField>();
+  for (const field of fields) byKey.set(field.fieldKey, field);
+  return [...references].filter((key) => {
+    const field = byKey.get(key);
+    return field?.fieldType === "relation" || field?.fieldType === "lookup";
+  });
+}
 
 /**
  * A caller-supplied page may contribute page-local values to a record formula
@@ -187,20 +301,37 @@ export async function interactiveFormulaPermissions(
             recordPerm(resource.entityId, contextPage)?.view === true;
         } else if (resource.kind === "page") {
           const rp = recordPerm(resource.entityId, resource.pageId);
-          ok = (perms.superAdmin || perms.admin.pages || perms.pageIds.includes(resource.pageId)) && rp?.view === true;
+          ok = perms.superAdmin || (
+            (perms.admin.pages || perms.pageIds.includes(resource.pageId))
+            && rp?.view === true
+          );
         } else if (resource.scope === "entity") {
           const field = entityFieldByKey.get(`${resource.entityId}:${resource.fieldKey}`);
           const contextPage = resource.entityId === baseEntityId ? basePageId : undefined;
           const rp = recordPerm(resource.entityId, contextPage);
-          ok = !!field && rp?.view === true &&
-            resolveFieldAccess(field, perms, roleIds, resource.entityId, rp, contextPage) !== "hidden";
+          ok = !!field && (
+            perms.superAdmin || (
+              rp?.view === true
+              && resolveFieldAccess(field, perms, roleIds, resource.entityId, rp, contextPage) !== "hidden"
+            )
+          );
         } else {
           const field = pageFieldByKey.get(`${resource.pageId}:${resource.fieldKey}`);
           const rp = recordPerm(resource.entityId, resource.pageId);
-          ok = !!field &&
-            (perms.superAdmin || perms.admin.pages || perms.pageIds.includes(resource.pageId)) &&
-            rp?.view === true &&
-            mostPermissiveFieldPerm(field.permissionsJson, roleIds, "view", perms, resource.entityId, resource.pageId) !== "hidden";
+          ok = !!field && (
+            perms.superAdmin || (
+              (perms.admin.pages || perms.pageIds.includes(resource.pageId))
+              && rp?.view === true
+              && mostPermissiveFieldPerm(
+                field.permissionsJson,
+                roleIds,
+                "view",
+                perms,
+                resource.entityId,
+                resource.pageId,
+              ) !== "hidden"
+            )
+          );
         }
         if (ok) allowed.add(linkedFormulaResourceKey(resource));
       }
@@ -253,18 +384,86 @@ export async function mergeLinkedFormulaInputs(options: {
   entityId: number;
   pageId?: number;
   rows: readonly { id: number; values: Record<string, unknown> }[];
-  fields: readonly FormulaConfiguredField[];
+  fields: readonly FormulaDependencyField[];
   permissions: LinkedFormulaPermissionContext;
 }): Promise<Map<number, Record<string, unknown>>> {
   const out = new Map(options.rows.map((row) => [row.id, { ...row.values }]));
   const configuredSources = formulaSourcesOf(options.fields);
+  // Old formulas stored only `{relation_or_lookup_key}`. Load the active schema
+  // for the keys actually referenced, rather than treating valuesJson as an
+  // authority (these fields are derived and never stored there). Page columns
+  // shadow entity columns just as buildQualifiedFormulaScope does.
+  const referencedKeys = [...formulaReferenceKeys(options.fields)];
+  let legacySources: LinkedFormulaSource[] = [];
+  let legacyBaseResources = new Map<string, LinkedFormulaResource>();
+  if (referencedKeys.length) {
+    try {
+      const [entityFields, pageFields] = await Promise.all([
+        db.select({
+          fieldKey: entityFieldsTable.fieldKey,
+          fieldType: entityFieldsTable.fieldType,
+          relationConfigJson: entityFieldsTable.relationConfigJson,
+        }).from(entityFieldsTable).where(and(
+          eq(entityFieldsTable.entityId, options.entityId),
+          eq(entityFieldsTable.isActive, true),
+          inArray(entityFieldsTable.fieldKey, referencedKeys),
+        )),
+        options.pageId == null ? Promise.resolve([]) : db.select({
+          fieldKey: pageFieldsTable.fieldKey,
+          fieldType: pageFieldsTable.fieldType,
+          relationConfigJson: pageFieldsTable.relationConfigJson,
+        }).from(pageFieldsTable).where(and(
+          eq(pageFieldsTable.pageId, options.pageId),
+          eq(pageFieldsTable.isActive, true),
+          inArray(pageFieldsTable.fieldKey, referencedKeys),
+        )),
+      ]);
+      const candidates: LegacyRelationField[] = [
+        ...entityFields.map((field) => ({ ...field, scope: "entity" as const })),
+        // Deliberately last: current page is the flat-key compatibility scope.
+        ...pageFields.map((field) => ({ ...field, scope: "page" as const, pageId: options.pageId! })),
+      ];
+      const relationIds: number[] = [...new Set(candidates.flatMap((field) => {
+        const id = (field.relationConfigJson as { relationId?: unknown } | null)?.relationId;
+        return typeof id === "number" && Number.isInteger(id) ? [id] : [];
+      }))];
+      const relations = relationIds.length
+        ? await db.select({
+          id: relationsTable.id,
+          sourceEntityId: relationsTable.sourceEntityId,
+          targetEntityId: relationsTable.targetEntityId,
+        }).from(relationsTable).where(inArray(relationsTable.id, relationIds))
+        : [];
+      legacySources = legacyFormulaSourcesFromFields(
+        candidates,
+        relations,
+        options.entityId,
+        referencedKeys,
+      );
+      for (const source of legacySources) {
+        const candidate = [...candidates].reverse().find((field) => field.fieldKey === source.key)!;
+        legacyBaseResources.set(source.key, candidate.scope === "entity"
+          ? { kind: "field", entityId: options.entityId, scope: "entity", fieldKey: source.key }
+          : { kind: "field", entityId: options.entityId, scope: "page", pageId: candidate.pageId!, fieldKey: source.key });
+      }
+    } catch {
+      // Schema discovery is optional derived data; retain neutral formula input.
+    }
+  }
+  // Explicit configurations are the durable, authoritative definition. A
+  // legacy fallback only fills a token for which no explicit source exists.
+  const explicitKeys = new Set(configuredSources.map((source) => source.key));
+  const sourcesToConsider = [
+    ...configuredSources,
+    ...legacySources.filter((source) => !explicitKeys.has(source.key)),
+  ];
   const baseResources: LinkedFormulaResource[] = [
     { kind: "entity", entityId: options.entityId },
     ...(options.pageId == null ? [] : [{ kind: "page" as const, pageId: options.pageId, entityId: options.entityId }]),
   ];
   // Authorize the complete graph in one call. A hidden source becomes neutral
   // without suppressing unrelated allowed inputs.
-  const sourceRequirements = configuredSources.map((source) => {
+  const sourceRequirements = sourcesToConsider.map((source) => {
     const resources: LinkedFormulaResource[] = [...baseResources];
     if (source.kind === "pageLocal") {
       resources.push(
@@ -273,6 +472,8 @@ export async function mergeLinkedFormulaInputs(options: {
       );
     } else {
       resources.push({ kind: "entity", entityId: source.targetEntityId });
+      const legacyBase = legacyBaseResources.get(source.key);
+      if (legacyBase && !explicitKeys.has(source.key)) resources.push(legacyBase);
       if (source.value) resources.push({ kind: "field", entityId: source.targetEntityId, ...source.value });
       if (source.targetPageId != null) resources.push({ kind: "page", pageId: source.targetPageId, entityId: source.targetEntityId });
       if (source.join.kind === "equality") for (const pair of source.join.on) {
@@ -328,16 +529,83 @@ export async function mergeLinkedFormulaInputs(options: {
  */
 export async function mergeLinkedFormulaInputsBatched(
   options: Parameters<typeof mergeLinkedFormulaInputs>[0],
-  batchSize = 5_000,
+  _batchSize = 5_000,
 ): Promise<Map<number, Record<string, unknown>>> {
-  const size = Math.max(1, Math.trunc(batchSize));
-  const out = new Map<number, Record<string, unknown>>();
-  for (let offset = 0; offset < options.rows.length; offset += size) {
-    const batch = options.rows.slice(offset, offset + size);
-    const resolved = await mergeLinkedFormulaInputs({ ...options, rows: batch });
-    for (const [id, values] of resolved) out.set(id, values);
+  // The linked resolver already performs set-based metadata, target-record and
+  // relation-link loads. Splitting base rows here repeats the complete target
+  // scan for every chunk, so full-set callers must resolve once and then reuse
+  // the resulting map for winner/group selection.
+  return mergeLinkedFormulaInputs(options);
+}
+
+function hasOwnValue(values: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(values, key);
+}
+
+function prepareMaterializationValues(options: {
+  rawEntityValues: Record<string, unknown>;
+  rawPageValues: Record<string, unknown>;
+  linkedValues: Record<string, unknown>;
+  visibleEntityFields: readonly FormulaDependencyField[];
+  visiblePageFields: readonly FormulaDependencyField[];
+  sourceKeys: readonly string[];
+}): {
+  responseEntityValues: Record<string, unknown>;
+  responsePageValues: Record<string, unknown>;
+  scopeEntityValues: Record<string, unknown>;
+  scopePageValues: Record<string, unknown>;
+} {
+  const responseEntityValues = projectViewerFormulaValues(
+    options.rawEntityValues,
+    options.visibleEntityFields,
+  );
+  const responsePageValues = projectViewerFormulaValues(
+    options.rawPageValues,
+    options.visiblePageFields,
+  );
+  const scopeEntityValues = projectViewerFormulaValues(
+    options.linkedValues,
+    [...options.visibleEntityFields, ...options.visiblePageFields],
+  );
+  const scopePageValues = { ...responsePageValues };
+  const entityFieldByKey = new Map(options.visibleEntityFields.map((field) => [field.fieldKey, field]));
+  const pageFieldByKey = new Map(options.visiblePageFields.map((field) => [field.fieldKey, field]));
+
+  for (const sourceKey of options.sourceKeys) {
+    const entityField = entityFieldByKey.get(sourceKey);
+    const pageField = pageFieldByKey.get(sourceKey);
+    // Source tokens are capabilities, not response data. Preserve a same-key
+    // real scalar field, but never serialize a relation/lookup projection.
+    if (!entityField || entityField.fieldType === "relation" || entityField.fieldType === "lookup") {
+      delete responseEntityValues[sourceKey];
+    }
+    if (!pageField || pageField.fieldType === "relation" || pageField.fieldType === "lookup") {
+      delete responsePageValues[sourceKey];
+    }
+
+    // Current-page fields shadow entity fields for flat legacy references.
+    // Route a page relation/lookup projection into page scope, while restoring
+    // any same-key entity scalar for qualified {entity:<id>.<key>} reads.
+    if (
+      pageField
+      && (pageField.fieldType === "relation" || pageField.fieldType === "lookup")
+      && hasOwnValue(scopeEntityValues, sourceKey)
+    ) {
+      scopePageValues[sourceKey] = scopeEntityValues[sourceKey];
+      if (hasOwnValue(responseEntityValues, sourceKey)) {
+        scopeEntityValues[sourceKey] = responseEntityValues[sourceKey];
+      } else {
+        delete scopeEntityValues[sourceKey];
+      }
+    }
   }
-  return out;
+
+  return {
+    responseEntityValues,
+    responsePageValues,
+    scopeEntityValues,
+    scopePageValues,
+  };
 }
 
 /**
@@ -384,28 +652,33 @@ export function materializeVisibleEntityFormulas(options: {
         decimals: typeof config?.decimals === "number" ? config.decimals : null,
       };
     });
-  const sourceKeys = formulaSourcesOf([...options.fields, ...(options.pageFields ?? [])]).map((source) => source.key);
+  const dependencyFields = [...options.fields, ...(options.pageFields ?? [])];
+  const sourceKeys = [
+    ...formulaSourcesOf(dependencyFields).map((source) => source.key),
+    ...legacySourceKeysOf(dependencyFields),
+  ];
   const out = new Map<number, Record<string, unknown>>();
   const visibleEntityFields = options.fields.filter((field) => !options.hidden.has(field.fieldKey));
   const visiblePageFields = (options.pageFields ?? []).filter(
     (field) => !options.hiddenPage?.has(field.fieldKey),
   );
   for (const row of options.rows) {
-    const values = projectViewerFormulaValues(
-      options.linkedInputs?.get(row.id) ?? row.values,
-      [...visibleEntityFields, ...visiblePageFields],
-    );
-    const pageValues = projectViewerFormulaValues(
-      options.pageValues?.get(row.id) ?? {},
+    const prepared = prepareMaterializationValues({
+      rawEntityValues: row.values,
+      rawPageValues: options.pageValues?.get(row.id) ?? {},
+      linkedValues: options.linkedInputs?.get(row.id) ?? row.values,
+      visibleEntityFields,
       visiblePageFields,
-    );
+      sourceKeys,
+    });
+    const values = prepared.responseEntityValues;
     if (formulas.length > 0) {
       const scope = buildQualifiedFormulaScope({
         entityId: options.entityId,
-        entityValues: values,
+        entityValues: prepared.scopeEntityValues,
         entityFormulas: formulas,
         pageId: options.pageId,
-        pageValues,
+        pageValues: prepared.scopePageValues,
         pageFormulas,
         formulaOptions: options.formulaOptions,
       });
@@ -425,9 +698,6 @@ export function materializeVisibleEntityFormulas(options: {
         }
       }
     }
-    // Do not rely solely on a particular HTTP presenter to remove these
-    // capabilities: callers may use this helper for a dedicated response map.
-    for (const sourceKey of sourceKeys) delete values[sourceKey];
     out.set(row.id, values);
   }
   return out;
@@ -453,19 +723,27 @@ export function materializeVisiblePageFormulas(options: {
     });
   const entityFormulas = defs(options.entityFields, options.hiddenEntity);
   const pageFormulas = defs(options.pageFields, options.hiddenPage);
-  const sourceKeys = formulaSourcesOf([...options.entityFields, ...options.pageFields]).map((source) => source.key);
+  const dependencyFields = [...options.entityFields, ...options.pageFields];
+  const sourceKeys = [
+    ...formulaSourcesOf(dependencyFields).map((source) => source.key),
+    ...legacySourceKeysOf(dependencyFields),
+  ];
   const out = new Map<number, Record<string, unknown>>();
+  const visibleEntityFields = options.entityFields.filter((field) => !options.hiddenEntity.has(field.fieldKey));
+  const visiblePageFields = options.pageFields.filter((field) => !options.hiddenPage.has(field.fieldKey));
   for (const row of options.rows) {
-    const visibleEntityFields = options.entityFields.filter((field) => !options.hiddenEntity.has(field.fieldKey));
-    const visiblePageFields = options.pageFields.filter((field) => !options.hiddenPage.has(field.fieldKey));
-    const entityValues = projectViewerFormulaValues(
-      options.linkedInputs?.get(row.id) ?? row.entityValues,
-      [...visibleEntityFields, ...visiblePageFields],
-    );
-    const pageValues = projectViewerFormulaValues(row.pageValues, visiblePageFields);
+    const prepared = prepareMaterializationValues({
+      rawEntityValues: row.entityValues,
+      rawPageValues: row.pageValues,
+      linkedValues: options.linkedInputs?.get(row.id) ?? row.entityValues,
+      visibleEntityFields,
+      visiblePageFields,
+      sourceKeys,
+    });
+    const pageValues = prepared.responsePageValues;
     const scope = buildQualifiedFormulaScope({
-      entityId: options.entityId, entityValues, entityFormulas,
-      pageId: options.pageId, pageValues, pageFormulas, formulaOptions: options.formulaOptions,
+      entityId: options.entityId, entityValues: prepared.scopeEntityValues, entityFormulas,
+      pageId: options.pageId, pageValues: prepared.scopePageValues, pageFormulas, formulaOptions: options.formulaOptions,
     });
     for (const formula of pageFormulas) {
       const result = scope[`page:${options.pageId}.${formula.key}`];
@@ -473,7 +751,6 @@ export function materializeVisiblePageFormulas(options: {
         pageValues[formula.key] = result;
       }
     }
-    for (const sourceKey of sourceKeys) delete pageValues[sourceKey];
     out.set(row.id, pageValues);
   }
   return out;

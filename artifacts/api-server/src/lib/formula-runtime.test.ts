@@ -2,10 +2,129 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   canUseRecordPageFormulaContext,
+  legacyFormulaSourcesFromFields,
   materializeVisibleEntityFormulas,
   materializeVisiblePageFormulas,
   mergeLinkedFormulaInputsBatched,
 } from "./formula-runtime";
+
+test("legacy relation and lookup references become linked sources, with page shadowing", () => {
+  const sources = legacyFormulaSourcesFromFields([
+    {
+      fieldKey: "entry_date",
+      fieldType: "lookup",
+      scope: "entity",
+      relationConfigJson: { relationId: 4, relatedFieldKey: "date" },
+    },
+    {
+      fieldKey: "entry_date",
+      fieldType: "lookup",
+      scope: "page",
+      pageId: 22,
+      relationConfigJson: { relationId: 5, relatedFieldKey: "page_date", relatedPageId: 31 },
+    },
+    { fieldKey: "age", fieldType: "function", scope: "entity", formulaConfigJson: { expression: "daysSince({entry_date})" } },
+  ], [
+    { id: 4, sourceEntityId: 7, targetEntityId: 8 },
+    { id: 5, sourceEntityId: 7, targetEntityId: 9 },
+  ], 7);
+
+  assert.deepEqual(sources, [{
+    key: "entry_date",
+    kind: "aggregate",
+    targetEntityId: 9,
+    targetPageId: 31,
+    value: { scope: "page", pageId: 31, fieldKey: "page_date" },
+    join: { kind: "relation", relationId: 5, baseSide: "source" },
+    aggregate: "min",
+    limit: 1,
+  }]);
+});
+
+test("legacy source discovery accepts the pre-extracted keys used by the DB metadata path", () => {
+  const sources = legacyFormulaSourcesFromFields([
+    {
+      fieldKey: "entry_date",
+      fieldType: "lookup",
+      scope: "entity",
+      relationConfigJson: { relationId: 25, relatedFieldKey: "production_date" },
+    },
+  ], [
+    { id: 25, sourceEntityId: 72, targetEntityId: 74 },
+  ], 72, ["entry_date", "material_release_date"]);
+
+  assert.deepEqual(sources, [{
+    key: "entry_date",
+    kind: "aggregate",
+    targetEntityId: 74,
+    value: { scope: "entity", fieldKey: "production_date" },
+    join: { kind: "relation", relationId: 25, baseSide: "source" },
+    aggregate: "min",
+    limit: 1,
+  }]);
+});
+
+test("legacy relation source inputs feed visible formula chains but never serialize", () => {
+  const values = materializeVisibleEntityFormulas({
+    entityId: 7,
+    rows: [{ id: 1, values: {} }],
+    linkedInputs: new Map([[1, { entry_date: "2025-01-01" }]]),
+    fields: [
+      { fieldKey: "entry_date", fieldType: "lookup", relationConfigJson: { relationId: 4, relatedFieldKey: "date" } },
+      { fieldKey: "days", fieldType: "function", formulaConfigJson: { expression: "daysSince({entry_date})" } },
+      { fieldKey: "chain", fieldType: "function", formulaConfigJson: { expression: "{days} + 1" } },
+    ],
+    hidden: new Set(),
+    formulaOptions: { now: new Date("2025-01-15T12:00:00Z") },
+  }).get(1)!;
+  assert.equal(values.days, 14);
+  assert.equal(values.chain, 15);
+  assert.equal("entry_date" in values, false);
+});
+
+test("a page lookup shadow keeps the entity scalar and uses the projected page value", () => {
+  const entityFields = [
+    { fieldKey: "entry_date", fieldType: "date", formulaConfigJson: {} },
+    { fieldKey: "entity_copy", fieldType: "function", formulaConfigJson: { expression: "{entity:7.entry_date}" } },
+  ];
+  const pageFields = [
+    {
+      fieldKey: "entry_date",
+      fieldType: "lookup",
+      relationConfigJson: { relationId: 4, relatedFieldKey: "date" },
+      formulaConfigJson: {},
+    },
+    { fieldKey: "page_copy", fieldType: "function", formulaConfigJson: { expression: "{entry_date}" } },
+  ];
+  const linkedInputs = new Map([[1, { entry_date: "2026-02-01" }]]);
+
+  const entityValues = materializeVisibleEntityFormulas({
+    entityId: 7,
+    pageId: 22,
+    rows: [{ id: 1, values: { entry_date: "2026-01-01" } }],
+    fields: entityFields,
+    pageFields,
+    pageValues: new Map([[1, {}]]),
+    hidden: new Set(),
+    hiddenPage: new Set(),
+    linkedInputs,
+  }).get(1)!;
+  assert.equal(entityValues.entry_date, "2026-01-01");
+  assert.equal(entityValues.entity_copy, "2026-01-01");
+
+  const pageValues = materializeVisiblePageFormulas({
+    entityId: 7,
+    pageId: 22,
+    rows: [{ id: 1, entityValues: { entry_date: "2026-01-01" }, pageValues: {} }],
+    entityFields,
+    pageFields,
+    hiddenEntity: new Set(),
+    hiddenPage: new Set(),
+    linkedInputs,
+  }).get(1)!;
+  assert.equal(pageValues.page_copy, "2026-02-01");
+  assert.equal("entry_date" in pageValues, false);
+});
 
 test("page formula context requires page access and canonical entity ownership", () => {
   const entityAuthorized = {
