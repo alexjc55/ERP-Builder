@@ -48,7 +48,7 @@ import {
   MergeRecordsBody,
 } from "@workspace/api-zod";
 import type { EntityField, InsertAuditLog, FileSource, FileFieldConfig, FieldValidationRule } from "@workspace/db";
-import { optionValues, optionNumbers } from "../lib/selectOptions";
+import { mappedStatusForChangedValues, optionValues, optionNumbers } from "../lib/selectOptions";
 import { resolveCustomFilterClauses, type CustomFilterPick } from "./custom-filter-apply";
 import {
   buildRecordQuery,
@@ -3399,8 +3399,34 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
     return;
   }
 
+  const mappedCreateStatus = mappedStatusForChangedValues(fields, undefined, result.values);
+  if ("error" in mappedCreateStatus) {
+    res.status(422).json({ error: mappedCreateStatus.error });
+    return;
+  }
+  if (
+    mappedCreateStatus.statusId != null &&
+    body.data.statusId !== undefined &&
+    body.data.statusId !== mappedCreateStatus.statusId
+  ) {
+    res.status(422).json({ error: "Selected list value conflicts with the explicitly selected system status" });
+    return;
+  }
+
   let statusId: number | null;
-  if (body.data.statusId === undefined) {
+  if (mappedCreateStatus.statusId != null) {
+    if (!(await statusBelongsToEntity(mappedCreateStatus.statusId, entityId))) {
+      res.status(400).json({ error: "Mapped status does not belong to this entity" });
+      return;
+    }
+    const createPerms = await getPermissions(req);
+    const { hiddenStatusIds } = effectiveStatusVisibility(createPerms, entityId);
+    if (!createPerms.superAdmin && hiddenStatusIds.includes(mappedCreateStatus.statusId)) {
+      res.status(403).json({ error: "Mapped status is not available to your role" });
+      return;
+    }
+    statusId = mappedCreateStatus.statusId;
+  } else if (body.data.statusId === undefined) {
     statusId = await defaultStatusId(entityId);
   } else if (body.data.statusId === null) {
     statusId = null;
@@ -3764,6 +3790,7 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
 
   const hasValues = input.valuesJson !== undefined;
   const hasStatus = input.statusId !== undefined;
+  let effectiveHasStatus = hasStatus;
   if (!hasValues && !hasStatus) {
     res.status(400).json({ error: "No fields to update" });
     return;
@@ -3876,14 +3903,43 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
         validated = validateValues(fields, finalValues, await isGoogleDriveModuleEnabled(), existingValues);
         if ("error" in validated) throw new LockedUpdateError(400, validated.error);
         update.valuesJson = validated.values;
+        const mapped = mappedStatusForChangedValues(fields, existingValues, update.valuesJson);
+        if ("error" in mapped) throw new LockedUpdateError(422, mapped.error);
+        if (mapped.statusId != null) {
+          if (hasStatus && update.statusId !== mapped.statusId) {
+            throw new LockedUpdateError(
+              422,
+              "Selected list value conflicts with the explicitly selected system status",
+            );
+          }
+          const [mappedStatus] = await tx
+            .select({ id: entityStatusesTable.id })
+            .from(entityStatusesTable)
+            .where(and(
+              eq(entityStatusesTable.id, mapped.statusId),
+              eq(entityStatusesTable.entityId, locked.entityId),
+            ))
+            .limit(1);
+          if (!mappedStatus) {
+            throw new LockedUpdateError(400, "Mapped status does not belong to this entity");
+          }
+          update.statusId = mapped.statusId;
+          effectiveHasStatus = true;
+        }
       } else {
         delete update.valuesJson;
       }
 
-      statusChanging = hasStatus && (update.statusId ?? null) !== (locked.statusId ?? null);
+      statusChanging = effectiveHasStatus && (update.statusId ?? null) !== (locked.statusId ?? null);
       delete update.statusChangedAt;
       delete update.archivedAt;
       delete update.archiveExempt;
+      if (statusChanging && update.statusId != null && !perms.superAdmin) {
+        const { hiddenStatusIds } = effectiveStatusVisibility(perms, locked.entityId);
+        if (hiddenStatusIds.includes(update.statusId)) {
+          throw new LockedUpdateError(403, "This status is not available to your role");
+        }
+      }
       if (statusChanging && locked.statusId != null && !perms.superAdmin) {
         const transitions = await tx.select().from(entityTransitionsTable)
           .where(eq(entityTransitionsTable.entityId, locked.entityId));
@@ -3905,6 +3961,14 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
           const validated = validateValues(fields, base, await isGoogleDriveModuleEnabled(), existingValues);
           if ("error" in validated) throw new LockedUpdateError(400, validated.error);
           update.valuesJson = validated.values;
+          const finalMapped = mappedStatusForChangedValues(fields, existingValues, update.valuesJson);
+          if ("error" in finalMapped) throw new LockedUpdateError(422, finalMapped.error);
+          if (finalMapped.statusId != null && finalMapped.statusId !== update.statusId) {
+            throw new LockedUpdateError(
+              422,
+              "Workflow actions conflict with the system status mapped from the final select value",
+            );
+          }
           const missing = ((match.requiredFieldKeys as string[]) ?? [])
             .filter((fieldKey) => isEmpty(update.valuesJson![fieldKey]));
           if (missing.length > 0) {
@@ -4033,11 +4097,11 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
   if (statusChanging) {
     events.push({
       eventName: EVENT_STATUS_CHANGED,
-      entityId: existing.entityId,
+      entityId: authoritativeExisting.entityId,
       recordId: record.id,
       payload: {
         actorUserId: userId,
-        from: existing.statusId ?? null,
+        from: authoritativeExisting.statusId ?? null,
         to: record.statusId ?? null,
         version: record.version,
       },
@@ -4409,14 +4473,20 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
     return;
   }
   const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, entityId, pageId);
+  const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, entityId);
   const gdriveModuleEnabled = await isGoogleDriveModuleEnabled();
   const keyFields = fields.filter((candidate) => candidate.isKey);
   const userId = req.user!.userId;
+  const userRoleIds = await getUserRoleIds(req);
 
   type ChangedRow = {
     id: number;
     before: Record<string, unknown>;
     after: Record<string, unknown>;
+    beforeStatusId: number | null;
+    afterStatusId: number | null;
+    beforeArchivedAt: Date | null;
+    afterArchivedAt: Date | null;
     version: number;
   };
   let changedRows: ChangedRow[] = [];
@@ -4432,6 +4502,9 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
       for (const recordId of recordIds) {
         const row = byId.get(recordId);
         if (!row) throw new BulkFieldUpdateError(404, recordId, "запись не найдена");
+        if (row.statusId != null && hiddenRowStatusIds.includes(row.statusId)) {
+          throw new BulkFieldUpdateError(404, recordId, "запись недоступна");
+        }
         const expectedVersion = expectedVersions?.[String(recordId)];
         if (expectedVersion != null && row.version !== expectedVersion) {
           throw new BulkFieldUpdateError(409, recordId, `устаревшая версия (текущая ${row.version})`);
@@ -4470,6 +4543,98 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
             throw new BulkFieldUpdateError(400, recordId, validated.error);
           }
         }
+        const mapped = mappedStatusForChangedValues(fields, before, validated.values);
+        if ("error" in mapped) throw new BulkFieldUpdateError(422, recordId, mapped.error);
+        const mappedStatusId = mapped.statusId;
+        const statusChanging =
+          mappedStatusId != null && mappedStatusId !== (row.statusId ?? null);
+        if (mappedStatusId != null) {
+          const [mappedStatus] = await tx
+            .select({
+              id: entityStatusesTable.id,
+              isArchiveTrigger: entityStatusesTable.isArchiveTrigger,
+              archiveAfterDays: entityStatusesTable.archiveAfterDays,
+            })
+            .from(entityStatusesTable)
+            .where(and(
+              eq(entityStatusesTable.id, mappedStatusId),
+              eq(entityStatusesTable.entityId, entityId),
+            ))
+            .limit(1);
+          if (!mappedStatus) {
+            throw new BulkFieldUpdateError(400, recordId, "Mapped status does not belong to this entity");
+          }
+          if (statusChanging && !perms.superAdmin) {
+            const { hiddenStatusIds } = effectiveStatusVisibility(perms, entityId);
+            if (hiddenStatusIds.includes(mappedStatusId)) {
+              throw new BulkFieldUpdateError(403, recordId, "Mapped status is not available to your role");
+            }
+            if (row.statusId != null) {
+              const transitions = await tx
+                .select()
+                .from(entityTransitionsTable)
+                .where(eq(entityTransitionsTable.entityId, entityId));
+              if (transitions.length > 0) {
+                const match = transitions.find((transition) =>
+                  transition.fromStatusId === row.statusId && transition.toStatusId === mappedStatusId)
+                  ?? transitions.find((transition) =>
+                    transition.fromStatusId === null && transition.toStatusId === mappedStatusId);
+                if (!match) {
+                  throw new BulkFieldUpdateError(422, recordId, "This status change is not an allowed transition");
+                }
+                const allowedRoleIds = (match.allowedRoleIds as number[]) ?? [];
+                if (
+                  allowedRoleIds.length > 0 &&
+                  !allowedRoleIds.some((id) => userRoleIds.includes(id))
+                ) {
+                  throw new BulkFieldUpdateError(
+                    403,
+                    recordId,
+                    "Your role is not allowed to perform this transition",
+                  );
+                }
+                const transitionValues = { ...validated.values };
+                for (const action of (match.actionsJson as {
+                  type: string;
+                  fieldKey: string;
+                  value?: unknown;
+                }[]) ?? []) {
+                  if (action.type === "set_field") transitionValues[action.fieldKey] = action.value;
+                }
+                const transitionValidated = validateValues(
+                  fields,
+                  transitionValues,
+                  gdriveModuleEnabled,
+                  before,
+                );
+                if ("error" in transitionValidated) {
+                  throw new BulkFieldUpdateError(400, recordId, transitionValidated.error);
+                }
+                validated = transitionValidated;
+                const finalMapped = mappedStatusForChangedValues(fields, before, validated.values);
+                if ("error" in finalMapped) {
+                  throw new BulkFieldUpdateError(422, recordId, finalMapped.error);
+                }
+                if (finalMapped.statusId != null && finalMapped.statusId !== mappedStatusId) {
+                  throw new BulkFieldUpdateError(
+                    422,
+                    recordId,
+                    "Workflow actions conflict with the system status mapped from the final select value",
+                  );
+                }
+                const missing = ((match.requiredFieldKeys as string[]) ?? [])
+                  .filter((requiredKey) => isEmpty(transitionValidated.values[requiredKey]));
+                if (missing.length > 0) {
+                  throw new BulkFieldUpdateError(
+                    422,
+                    recordId,
+                    `Fields required for this transition: ${missing.join(", ")}`,
+                  );
+                }
+              }
+            }
+          }
+        }
         const userRefError = await validateUserRefs(fields, validated.values, tx);
         if (userRefError) throw new BulkFieldUpdateError(400, recordId, userRefError);
         const dependentError = await checkDependentValues(
@@ -4490,16 +4655,49 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
         }
 
         const diffs = diffValues(before, validated.values, fields.map((candidateField) => candidateField.fieldKey));
-        if (diffs.length === 0) continue;
+        if (diffs.length === 0 && !statusChanging) continue;
+        const updateData: {
+          valuesJson: Record<string, unknown>;
+          statusId?: number;
+          statusChangedAt?: Date;
+          archiveExempt?: boolean;
+          archivedAt?: Date;
+        } = { valuesJson: validated.values };
+        if (statusChanging && mappedStatusId != null) {
+          updateData.statusId = mappedStatusId;
+          updateData.statusChangedAt = new Date();
+          updateData.archiveExempt = false;
+          const [archiveInfo] = await tx
+            .select({
+              isArchiveTrigger: entityStatusesTable.isArchiveTrigger,
+              archiveAfterDays: entityStatusesTable.archiveAfterDays,
+            })
+            .from(entityStatusesTable)
+            .where(eq(entityStatusesTable.id, mappedStatusId))
+            .limit(1);
+          if (archiveInfo?.isArchiveTrigger && (archiveInfo.archiveAfterDays ?? 0) === 0) {
+            updateData.archivedAt = new Date();
+          }
+        }
         const [updated] = await tx
           .update(entityRecordsTable)
-          .set({ valuesJson: validated.values })
+          .set(updateData)
           .where(eq(entityRecordsTable.id, recordId))
-          .returning({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson, version: entityRecordsTable.version });
+          .returning({
+            id: entityRecordsTable.id,
+            valuesJson: entityRecordsTable.valuesJson,
+            statusId: entityRecordsTable.statusId,
+            archivedAt: entityRecordsTable.archivedAt,
+            version: entityRecordsTable.version,
+          });
         changed.push({
           id: updated.id,
           before,
           after: updated.valuesJson as Record<string, unknown>,
+          beforeStatusId: row.statusId ?? null,
+          afterStatusId: updated.statusId ?? null,
+          beforeArchivedAt: row.archivedAt,
+          afterArchivedAt: updated.archivedAt,
           version: updated.version,
         });
       }
@@ -4528,12 +4726,51 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
     for (const change of changedFields) {
       auditEntries.push({ entityId, recordId: row.id, ...change, userId });
     }
+    const statusChanged = row.beforeStatusId !== row.afterStatusId;
+    if (statusChanged) {
+      auditEntries.push({
+        entityId,
+        recordId: row.id,
+        fieldKey: AUDIT_STATUS,
+        oldValue: row.beforeStatusId != null ? String(row.beforeStatusId) : null,
+        newValue: row.afterStatusId != null ? String(row.afterStatusId) : null,
+        userId,
+      });
+    }
+    if (row.beforeArchivedAt == null && row.afterArchivedAt != null) {
+      auditEntries.push({
+        entityId,
+        recordId: row.id,
+        fieldKey: AUDIT_ARCHIVED,
+        oldValue: "false",
+        newValue: "true",
+        userId,
+      });
+      changedFields.push({
+        fieldKey: ARCHIVED_CHANGED_FIELD,
+        oldValue: "false",
+        newValue: "true",
+      });
+    }
     events.push({
       eventName: EVENT_RECORD_UPDATED,
       entityId,
       recordId: row.id,
       payload: { actorUserId: userId, changedFields: changedFields.map((change) => change.fieldKey), version: row.version },
     });
+    if (statusChanged) {
+      events.push({
+        eventName: EVENT_STATUS_CHANGED,
+        entityId,
+        recordId: row.id,
+        payload: {
+          actorUserId: userId,
+          from: row.beforeStatusId,
+          to: row.afterStatusId,
+          version: row.version,
+        },
+      });
+    }
   }
   if (auditEntries.length > 0) await writeAudit(auditEntries, req.log);
   if (events.length > 0) await emitEvent(events, req.log);

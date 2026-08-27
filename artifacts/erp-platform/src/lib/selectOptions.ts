@@ -17,9 +17,15 @@ export function normalizeSelectOptions(raw: unknown): SelectOption[] {
       const v = el.trim();
       if (v) out.push({ value: v, labelJson: { ru: v } });
     } else if (el && typeof el === "object" && typeof (el as { value?: unknown }).value === "string") {
-      const o = el as { value: string; labelJson?: MultilingualText };
+      const o = el as { value: string; labelJson?: MultilingualText; statusId?: number };
       const value = o.value.trim();
-      if (value) out.push({ value, labelJson: o.labelJson ?? {} });
+      if (value) {
+        out.push({
+          value,
+          labelJson: o.labelJson ?? {},
+          ...(Number.isInteger(o.statusId) && (o.statusId ?? 0) > 0 ? { statusId: o.statusId } : {}),
+        });
+      }
     }
   }
   return out;

@@ -1,11 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
-import { useGetSettings, getGetSettingsQueryKey } from "@workspace/api-client-react";
+import {
+  useGetSettings,
+  getGetSettingsQueryKey,
+  type MultilingualText,
+  type Status,
+} from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { SelectOption } from "@/lib/selectOptions";
+import { getML } from "@/lib/i18n";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 type Lang = "ru" | "en" | "he";
@@ -14,6 +27,7 @@ interface SelectOptionsEditorProps {
   value: SelectOption[];
   onChange: (next: SelectOption[]) => void;
   t: (key: string, fallback: string) => string;
+  statuses?: Status[];
 }
 
 const LANGS: { code: Lang; label: string; name: string }[] = [
@@ -28,7 +42,7 @@ const LANGS: { code: Lang; label: string; name: string }[] = [
 // rows at once, so each option stays a compact one-line row. Existing options
 // keep their value untouched; new rows are sent with an empty value and the
 // server derives a stable value from the label on save.
-export function SelectOptionsEditor({ value, onChange, t }: SelectOptionsEditorProps) {
+export function SelectOptionsEditor({ value, onChange, t, statuses }: SelectOptionsEditorProps) {
   const { data: settings } = useGetSettings({
     query: { queryKey: getGetSettingsQueryKey() },
   });
@@ -50,6 +64,17 @@ export function SelectOptionsEditor({ value, onChange, t }: SelectOptionsEditorP
     const next = value.slice();
     const prev = (next[index]!.labelJson ?? {}) as MLValue;
     next[index] = { ...next[index]!, labelJson: { ...prev, [active]: text } };
+    onChange(next);
+  };
+  const updateStatus = (index: number, selected: string) => {
+    const next = value.slice();
+    const option = next[index]!;
+    const statusId = selected === "__none__" ? undefined : Number(selected);
+    next[index] = {
+      ...option,
+      ...(statusId ? { statusId } : {}),
+    };
+    if (!statusId) delete next[index]!.statusId;
     onChange(next);
   };
   const remove = (index: number) => onChange(value.filter((_, i) => i !== index));
@@ -121,6 +146,26 @@ export function SelectOptionsEditor({ value, onChange, t }: SelectOptionsEditorP
                 dir={active === "he" ? "rtl" : "ltr"}
                 className="text-sm flex-1 min-w-0"
               />
+              {statuses && (
+                <Select
+                  value={opt.statusId ? String(opt.statusId) : "__none__"}
+                  onValueChange={(selected) => updateStatus(i, selected)}
+                >
+                  <SelectTrigger className="w-56 shrink-0">
+                    <SelectValue placeholder={t("fields.statusSyncNone", "Не менять статус")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">
+                      {t("fields.statusSyncNone", "Не менять статус")}
+                    </SelectItem>
+                    {statuses.map((status) => (
+                      <SelectItem key={status.id} value={String(status.id)}>
+                        {getML(status.nameJson as MultilingualText, active) || `#${status.id}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <Button
                 type="button"
                 variant="ghost"

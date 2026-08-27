@@ -7,7 +7,7 @@
 // normalizing them to `{ value: "a", labelJson: { ru: "a" } }`.
 
 type MLText = { ru?: string | null; en?: string | null; he?: string | null };
-export type SelectOption = { value: string; labelJson: MLText };
+export type SelectOption = { value: string; labelJson: MLText; statusId?: number };
 
 function cleanLabel(raw: unknown): MLText {
   const lj = (raw && typeof raw === "object" ? raw : {}) as MLText;
@@ -33,7 +33,11 @@ export function normalizeOptions(raw: unknown): SelectOption[] {
       const o = el as Record<string, unknown>;
       const value = typeof o.value === "string" ? o.value.trim() : "";
       if (!value) continue;
-      out.push({ value, labelJson: cleanLabel(o.labelJson) });
+      const statusId =
+        typeof o.statusId === "number" && Number.isInteger(o.statusId) && o.statusId > 0
+          ? o.statusId
+          : undefined;
+      out.push({ value, labelJson: cleanLabel(o.labelJson), ...(statusId ? { statusId } : {}) });
     }
   }
   return out;
@@ -90,6 +94,7 @@ export function sanitizeOptionsInput(raw: unknown): SelectOption[] {
   for (const el of raw) {
     let value = "";
     let labelJson: MLText = {};
+    let statusId: number | undefined;
     if (typeof el === "string") {
       value = el.trim();
       labelJson = { ru: el.trim() };
@@ -97,6 +102,10 @@ export function sanitizeOptionsInput(raw: unknown): SelectOption[] {
       const o = el as Record<string, unknown>;
       value = typeof o.value === "string" ? o.value.trim() : "";
       labelJson = cleanLabel(o.labelJson);
+      statusId =
+        typeof o.statusId === "number" && Number.isInteger(o.statusId) && o.statusId > 0
+          ? o.statusId
+          : undefined;
     } else {
       continue;
     }
@@ -108,7 +117,51 @@ export function sanitizeOptionsInput(raw: unknown): SelectOption[] {
     let n = 2;
     while (used.has(v)) v = `${value}_${n++}`;
     used.add(v);
-    out.push({ value: v, labelJson });
+    out.push({ value: v, labelJson, ...(statusId ? { statusId } : {}) });
   }
   return out;
+}
+
+type SelectFieldLike = {
+  fieldKey: string;
+  fieldType: string;
+  optionsJson: unknown;
+};
+
+export type MappedStatusResult =
+  | { statusId?: number; fieldKeys: string[] }
+  | { error: string; fieldKeys: string[] };
+
+/**
+ * Resolve status bindings only for select values that actually changed.
+ * Multiple changed fields may point at the same status; different targets are
+ * rejected rather than depending on field ordering.
+ */
+export function mappedStatusForChangedValues(
+  fields: SelectFieldLike[],
+  before: Record<string, unknown> | undefined,
+  after: Record<string, unknown>,
+): MappedStatusResult {
+  const byStatus = new Map<number, string[]>();
+  for (const field of fields) {
+    if (field.fieldType !== "select") continue;
+    const previous = before?.[field.fieldKey];
+    const next = after[field.fieldKey];
+    if (before && JSON.stringify(previous ?? null) === JSON.stringify(next ?? null)) continue;
+    if (typeof next !== "string") continue;
+    const option = normalizeOptions(field.optionsJson).find((candidate) => candidate.value === next);
+    if (!option?.statusId) continue;
+    const keys = byStatus.get(option.statusId) ?? [];
+    keys.push(field.fieldKey);
+    byStatus.set(option.statusId, keys);
+  }
+  const fieldKeys = [...byStatus.values()].flat();
+  if (byStatus.size > 1) {
+    return {
+      error: `Changed select fields require different system statuses: ${fieldKeys.join(", ")}`,
+      fieldKeys,
+    };
+  }
+  const [statusId] = byStatus.keys();
+  return { ...(statusId ? { statusId } : {}), fieldKeys };
 }

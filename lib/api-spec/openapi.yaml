@@ -4454,8 +4454,8 @@ components:
           type: string
 
     # A single select-field option: a stable `value` (key, stored on records and
-    # never recomputed from the label) plus a multilingual display label. Renaming
-    # edits only labelJson, so the change reflects in every existing record.
+    # never recomputed from the label), a multilingual display label, and an
+    # optional entity-status binding. Renaming edits only labelJson.
     SelectOption:
       type: object
       required: [value, labelJson]
@@ -4464,6 +4464,10 @@ components:
           type: string
         labelJson:
           $ref: "#/components/schemas/MultilingualText"
+        statusId:
+          type: integer
+          minimum: 1
+          description: When this entity-select value is chosen, synchronize the record's system status to this status.
 
     # Platform branding / general settings (singleton row).
     AppSettings:

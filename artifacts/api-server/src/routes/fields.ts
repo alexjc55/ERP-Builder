@@ -4,6 +4,7 @@ import {
   entityFieldsTable,
   entitiesTable,
   entityRecordsTable,
+  entityStatusesTable,
   relationsTable,
   pagesTable,
   pageFieldsTable,
@@ -57,6 +58,23 @@ function clampFormulaDecimals<T>(cfg: T): T {
 // A percent-field option value must be a plain number (the stored record value is
 // numeric so it can be averaged and used in formulas).
 const PERCENT_NUM_RE = /^-?[0-9]+(\.[0-9]+)?$/;
+
+async function validateSelectStatusMappings(
+  entityId: number,
+  options: ReturnType<typeof normalizeOptions>,
+): Promise<string | null> {
+  const ids = [...new Set(options.flatMap((option) => option.statusId ? [option.statusId] : []))];
+  if (ids.length === 0) return null;
+  const found = await db
+    .select({ id: entityStatusesTable.id })
+    .from(entityStatusesTable)
+    .where(and(eq(entityStatusesTable.entityId, entityId), inArray(entityStatusesTable.id, ids)));
+  const foundIds = new Set(found.map((status) => status.id));
+  const missing = ids.filter((id) => !foundIds.has(id));
+  return missing.length > 0
+    ? `System status does not belong to this entity: ${missing.join(", ")}`
+    : null;
+}
 
 /**
  * Eligibility of a relation as an entity `relation` field on `entityId`.
@@ -294,6 +312,13 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
   if (parsed.data.fieldType === "select" && createOptions.length === 0) {
     res.status(400).json({ error: "Select fields require at least one option" });
     return;
+  }
+  if (parsed.data.fieldType === "select") {
+    const mappingError = await validateSelectStatusMappings(params.data.entityId, createOptions);
+    if (mappingError) {
+      res.status(400).json({ error: mappingError });
+      return;
+    }
   }
   if (parsed.data.fieldType === "percent" && (parsed.data.percentConfigJson?.mode ?? "value") === "list") {
     if (createOptions.length === 0) {
@@ -538,17 +563,24 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   }
 
   const sanitizedOptions = body.optionsJson != null ? sanitizeOptionsInput(body.optionsJson) : null;
+  const nextOptions = sanitizedOptions ?? normalizeOptions(current.optionsJson);
   if ("optionsJson" in body || body.fieldType != null) {
-    const nextOptions = sanitizedOptions ?? normalizeOptions(current.optionsJson);
     if (nextType === "select" && nextOptions.length === 0) {
       res.status(400).json({ error: "Select fields require at least one option" });
+      return;
+    }
+  }
+  if (nextType === "select") {
+    const mappingError = await validateSelectStatusMappings(current.entityId, nextOptions);
+    if (mappingError) {
+      res.status(400).json({ error: mappingError });
       return;
     }
   }
   {
     const nextPercentMode = body.percentConfigJson?.mode ?? current.percentConfigJson?.mode ?? "value";
     if (nextType === "percent" && nextPercentMode === "list") {
-      const nextOpts = sanitizedOptions ?? normalizeOptions(current.optionsJson);
+      const nextOpts = nextOptions;
       if (nextOpts.length === 0) {
         res.status(400).json({ error: "Поле «Проценты» в режиме списка требует хотя бы один вариант" });
         return;

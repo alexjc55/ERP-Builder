@@ -5,6 +5,7 @@ import {
   useDeleteField,
   useListRoles,
   useListEntityFields,
+  useListEntityStatuses,
   useListGoogleDriveFolders,
   useListLocalFolders,
   useListUserOptions,
@@ -159,6 +160,7 @@ export function FieldConfigDialog({
   const { toast } = useToast();
   const { data: roles = [] } = useListRoles();
   const { data: existingFields = [] } = useListEntityFields(entityId);
+  const { data: statuses = [] } = useListEntityStatuses(entityId);
   const { data: driveFolders = [] } = useListGoogleDriveFolders();
   const { data: localFolders = [] } = useListLocalFolders();
   const { data: userOptions = [] } = useListUserOptions();
@@ -856,7 +858,12 @@ export function FieldConfigDialog({
               </div>
             )}
             {fieldType === "select" && (
-              <SelectOptionsEditor value={options} onChange={setOptions} t={t} />
+              <SelectOptionsEditor
+                value={options}
+                onChange={setOptions}
+                t={t}
+                statuses={statuses}
+              />
             )}
             {fieldType === "percent" && (
               <div className="space-y-3">

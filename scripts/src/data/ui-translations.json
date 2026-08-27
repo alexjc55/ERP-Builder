@@ -6066,6 +6066,12 @@
     "he": "ניתן להגדיר כל אפשרות בכמה שפות. הערך השמור ברשומות אינו משתנה בעת שינוי שם."
   },
   {
+    "key": "fields.statusSyncNone",
+    "ru": "Не менять статус",
+    "en": "Do not change status",
+    "he": "אל תשנה סטטוס"
+  },
+  {
     "key": "fields.optionLabel",
     "ru": "Вариант",
     "en": "Option",

@@ -3185,6 +3185,7 @@ export const ListEntityFieldsParams = zod.object({
 
 
 
+
 export const listEntityFieldsResponseFormulaConfigJsonSourcesItemTwoJoinTwoOnMax = 8;
 
 export const listEntityFieldsResponseFormulaConfigJsonSourcesItemTwoLimitMin = 0;
@@ -3231,7 +3232,8 @@ export const ListEntityFieldsResponseItem = zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-})
+}),
+  "statusId": zod.number().min(1).optional().describe('When this entity-select value is chosen, synchronize the record\'s system status to this status.')
 })),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "fileConfigJson": zod.object({
@@ -3394,6 +3396,7 @@ export const createEntityFieldBodyDefaultToTodayDefault = false;
 
 
 
+
 export const createEntityFieldBodyFormulaConfigJsonSourcesItemTwoJoinTwoOnMax = 8;
 
 export const createEntityFieldBodyFormulaConfigJsonSourcesItemTwoLimitMin = 0;
@@ -3446,7 +3449,8 @@ export const CreateEntityFieldBody = zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-})
+}),
+  "statusId": zod.number().min(1).optional().describe('When this entity-select value is chosen, synchronize the record\'s system status to this status.')
 })).optional(),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "fileConfigJson": zod.object({
@@ -3597,6 +3601,7 @@ export const GetFieldParams = zod.object({
 
 
 
+
 export const getFieldResponseFormulaConfigJsonSourcesItemTwoJoinTwoOnMax = 8;
 
 export const getFieldResponseFormulaConfigJsonSourcesItemTwoLimitMin = 0;
@@ -3643,7 +3648,8 @@ export const GetFieldResponse = zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-})
+}),
+  "statusId": zod.number().min(1).optional().describe('When this entity-select value is chosen, synchronize the record\'s system status to this status.')
 })),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "fileConfigJson": zod.object({
@@ -3804,6 +3810,7 @@ export const UpdateFieldParams = zod.object({
 
 
 
+
 export const updateFieldBodyFormulaConfigJsonSourcesItemTwoJoinTwoOnMax = 8;
 
 export const updateFieldBodyFormulaConfigJsonSourcesItemTwoLimitMin = 0;
@@ -3848,7 +3855,8 @@ export const UpdateFieldBody = zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-})
+}),
+  "statusId": zod.number().min(1).optional().describe('When this entity-select value is chosen, synchronize the record\'s system status to this status.')
 })).optional(),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "fileConfigJson": zod.object({
@@ -3991,6 +3999,7 @@ export const UpdateFieldBody = zod.object({
 
 
 
+
 export const updateFieldResponseFormulaConfigJsonSourcesItemTwoJoinTwoOnMax = 8;
 
 export const updateFieldResponseFormulaConfigJsonSourcesItemTwoLimitMin = 0;
@@ -4037,7 +4046,8 @@ export const UpdateFieldResponse = zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-})
+}),
+  "statusId": zod.number().min(1).optional().describe('When this entity-select value is chosen, synchronize the record\'s system status to this status.')
 })),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
   "fileConfigJson": zod.object({
@@ -4228,6 +4238,7 @@ export const ListPageFieldsParams = zod.object({
 
 
 
+
 export const listPageFieldsResponseFormulaConfigJsonSourcesItemTwoJoinTwoOnMax = 8;
 
 export const listPageFieldsResponseFormulaConfigJsonSourcesItemTwoLimitMin = 0;
@@ -4278,7 +4289,8 @@ export const ListPageFieldsResponseItem = zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-})
+}),
+  "statusId": zod.number().min(1).optional().describe('When this entity-select value is chosen, synchronize the record\'s system status to this status.')
 })),
   "formatRulesJson": zod.array(zod.object({
   "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte', 'between']),
@@ -4420,6 +4432,7 @@ export const createPageFieldBodyPivotEnabledDefault = false;
 
 
 
+
 export const createPageFieldBodyFormulaConfigJsonSourcesItemTwoJoinTwoOnMax = 8;
 
 export const createPageFieldBodyFormulaConfigJsonSourcesItemTwoLimitMin = 0;
@@ -4471,7 +4484,8 @@ export const CreatePageFieldBody = zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-})
+}),
+  "statusId": zod.number().min(1).optional().describe('When this entity-select value is chosen, synchronize the record\'s system status to this status.')
 })).optional(),
   "formatRulesJson": zod.array(zod.object({
   "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte', 'between']),
@@ -4608,6 +4622,7 @@ export const UpdatePageFieldParams = zod.object({
 
 
 
+
 export const updatePageFieldBodyFormulaConfigJsonSourcesItemTwoJoinTwoOnMax = 8;
 
 export const updatePageFieldBodyFormulaConfigJsonSourcesItemTwoLimitMin = 0;
@@ -4656,7 +4671,8 @@ export const UpdatePageFieldBody = zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-})
+}),
+  "statusId": zod.number().min(1).optional().describe('When this entity-select value is chosen, synchronize the record\'s system status to this status.')
 })).optional(),
   "formatRulesJson": zod.array(zod.object({
   "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte', 'between']),
@@ -4785,6 +4801,7 @@ export const UpdatePageFieldBody = zod.object({
 
 
 
+
 export const updatePageFieldResponseFormulaConfigJsonSourcesItemTwoJoinTwoOnMax = 8;
 
 export const updatePageFieldResponseFormulaConfigJsonSourcesItemTwoLimitMin = 0;
@@ -4835,7 +4852,8 @@ export const UpdatePageFieldResponse = zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-})
+}),
+  "statusId": zod.number().min(1).optional().describe('When this entity-select value is chosen, synchronize the record\'s system status to this status.')
 })),
   "formatRulesJson": zod.array(zod.object({
   "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte', 'between']),
@@ -5075,6 +5093,9 @@ export const GetPageRelatedValuesBody = zod.object({
   "pageId": zod.number().optional().describe('Optional mirror-page context for the entity-keyed endpoint. When the records are viewed through a mirror page, pass its id so the view gate and own-scope honor the page\'s per-mirror permission override. Ignored by the page-keyed endpoint (which takes pageId from the path).')
 })
 
+
+
+
 export const GetPageRelatedValuesResponse = zod.object({
   "columns": zod.array(zod.object({
   "fieldKey": zod.string().describe('The relation page-field\'s own key (column identity).'),
@@ -5086,7 +5107,8 @@ export const GetPageRelatedValuesResponse = zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-})
+}),
+  "statusId": zod.number().min(1).optional().describe('When this entity-select value is chosen, synchronize the record\'s system status to this status.')
 })).optional().describe('Select options of the related field (for inline editing).'),
   "editableColumn": zod.boolean().describe('Whether the viewer\'s role may edit the related field at all (before per-row scope).'),
   "relatedEntityId": zod.number().optional().describe('The id of the related entity this column projects from (set by the entity-keyed endpoint; used to open the linked record\'s editor for write-through lookups).'),
@@ -5268,6 +5290,9 @@ export const GetEntityRelatedValuesBody = zod.object({
   "pageId": zod.number().optional().describe('Optional mirror-page context for the entity-keyed endpoint. When the records are viewed through a mirror page, pass its id so the view gate and own-scope honor the page\'s per-mirror permission override. Ignored by the page-keyed endpoint (which takes pageId from the path).')
 })
 
+
+
+
 export const GetEntityRelatedValuesResponse = zod.object({
   "columns": zod.array(zod.object({
   "fieldKey": zod.string().describe('The relation page-field\'s own key (column identity).'),
@@ -5279,7 +5304,8 @@ export const GetEntityRelatedValuesResponse = zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
   "he": zod.string().optional()
-})
+}),
+  "statusId": zod.number().min(1).optional().describe('When this entity-select value is chosen, synchronize the record\'s system status to this status.')
 })).optional().describe('Select options of the related field (for inline editing).'),
   "editableColumn": zod.boolean().describe('Whether the viewer\'s role may edit the related field at all (before per-row scope).'),
   "relatedEntityId": zod.number().optional().describe('The id of the related entity this column projects from (set by the entity-keyed endpoint; used to open the linked record\'s editor for write-through lookups).'),

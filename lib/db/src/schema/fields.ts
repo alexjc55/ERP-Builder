@@ -211,6 +211,14 @@ export type PercentFieldConfig = { mode?: "list" | "value" | null; decimals?: nu
  */
 export type DependencyFieldConfig = { dependsOnFieldKey?: string; relatedFilterFieldKey?: string };
 
+/** Stable select value + multilingual label. An optional status binding causes
+ * that entity record's system status to follow the selected value. */
+export type SelectOption = {
+  value: string;
+  labelJson: { ru?: string | null; en?: string | null; he?: string | null };
+  statusId?: number;
+};
+
 /**
  * Per-field configuration for a `relation`-type field. The column surfaces one
  * field (`relatedFieldKey`) of a single linked record, resolved through a

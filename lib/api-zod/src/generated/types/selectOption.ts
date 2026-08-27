@@ -10,4 +10,9 @@ import type { MultilingualText } from './multilingualText';
 export interface SelectOption {
   value: string;
   labelJson: MultilingualText;
+  /**
+     * When this entity-select value is chosen, synchronize the record's system status to this status.
+     * @minimum 1
+     */
+  statusId?: number;
 }
