@@ -3419,12 +3419,8 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
       res.status(400).json({ error: "Mapped status does not belong to this entity" });
       return;
     }
-    const createPerms = await getPermissions(req);
-    const { hiddenStatusIds } = effectiveStatusVisibility(createPerms, entityId);
-    if (!createPerms.superAdmin && hiddenStatusIds.includes(mappedCreateStatus.statusId)) {
-      res.status(403).json({ error: "Mapped status is not available to your role" });
-      return;
-    }
+    // An administrator-configured option mapping is a system side effect of a
+    // permitted field write, not an explicit status choice by this user.
     statusId = mappedCreateStatus.statusId;
   } else if (body.data.statusId === undefined) {
     statusId = await defaultStatusId(entityId);
@@ -3877,6 +3873,7 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
       }
       authoritativeExisting = locked;
       existingValues = (locked.valuesJson as Record<string, unknown>) ?? {};
+      let statusWasMapped = false;
 
       // Rebuild the complete value map from the locked current row. The earlier
       // request checks are only a fast-fail boundary and are never write input.
@@ -3925,6 +3922,7 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
           }
           update.statusId = mapped.statusId;
           effectiveHasStatus = true;
+          statusWasMapped = true;
         }
       } else {
         delete update.valuesJson;
@@ -3934,7 +3932,7 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
       delete update.statusChangedAt;
       delete update.archivedAt;
       delete update.archiveExempt;
-      if (statusChanging && update.statusId != null && !perms.superAdmin) {
+      if (statusChanging && update.statusId != null && !perms.superAdmin && !statusWasMapped) {
         const { hiddenStatusIds } = effectiveStatusVisibility(perms, locked.entityId);
         if (hiddenStatusIds.includes(update.statusId)) {
           throw new LockedUpdateError(403, "This status is not available to your role");
@@ -3951,7 +3949,11 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
           if (!match) throw new LockedUpdateError(422, "This status change is not an allowed transition");
           const allowedRoleIds = (match.allowedRoleIds as number[]) ?? [];
           const userRoleIds = await getUserRoleIds(req);
-          if (allowedRoleIds.length > 0 && !allowedRoleIds.some((id) => userRoleIds.includes(id))) {
+          if (
+            !statusWasMapped &&
+            allowedRoleIds.length > 0 &&
+            !allowedRoleIds.some((id) => userRoleIds.includes(id))
+          ) {
             throw new LockedUpdateError(403, "Your role is not allowed to perform this transition");
           }
           const base = update.valuesJson !== undefined ? { ...update.valuesJson } : { ...existingValues };
@@ -4477,7 +4479,6 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
   const gdriveModuleEnabled = await isGoogleDriveModuleEnabled();
   const keyFields = fields.filter((candidate) => candidate.isKey);
   const userId = req.user!.userId;
-  const userRoleIds = await getUserRoleIds(req);
 
   type ChangedRow = {
     id: number;
@@ -4565,10 +4566,6 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
             throw new BulkFieldUpdateError(400, recordId, "Mapped status does not belong to this entity");
           }
           if (statusChanging && !perms.superAdmin) {
-            const { hiddenStatusIds } = effectiveStatusVisibility(perms, entityId);
-            if (hiddenStatusIds.includes(mappedStatusId)) {
-              throw new BulkFieldUpdateError(403, recordId, "Mapped status is not available to your role");
-            }
             if (row.statusId != null) {
               const transitions = await tx
                 .select()
@@ -4581,17 +4578,6 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
                     transition.fromStatusId === null && transition.toStatusId === mappedStatusId);
                 if (!match) {
                   throw new BulkFieldUpdateError(422, recordId, "This status change is not an allowed transition");
-                }
-                const allowedRoleIds = (match.allowedRoleIds as number[]) ?? [];
-                if (
-                  allowedRoleIds.length > 0 &&
-                  !allowedRoleIds.some((id) => userRoleIds.includes(id))
-                ) {
-                  throw new BulkFieldUpdateError(
-                    403,
-                    recordId,
-                    "Your role is not allowed to perform this transition",
-                  );
                 }
                 const transitionValues = { ...validated.values };
                 for (const action of (match.actionsJson as {

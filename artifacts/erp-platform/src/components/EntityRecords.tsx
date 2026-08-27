@@ -2354,8 +2354,9 @@ export function EntityRecords({
   const buildCreateData = (
     valuesJson: Record<string, unknown>,
     statusValue: number | null,
+    statusWasSelected: boolean,
   ): { valuesJson: Record<string, unknown>; statusId?: number | null; pageId?: number } =>
-    statusValue === null && defaultStatusHidden
+    !statusWasSelected || (statusValue === null && defaultStatusHidden)
       ? { valuesJson, pageId: permPageId }
       : { valuesJson, statusId: statusValue, pageId: permPageId };
 
@@ -2382,6 +2383,7 @@ export function EntityRecords({
   const [historyFor, setHistoryFor] = useState<EntityRecord | null>(null);
   const [form, setForm] = useState<FormState>({});
   const [statusId, setStatusId] = useState<string>(NO_STATUS);
+  const [statusDirty, setStatusDirty] = useState(false);
 
   // Google-Sheets-style inline editing: which cell is currently being edited.
   const [editingCell, setEditingCell] = useState<{ recordId: number; fieldKey: string | "__status__" } | null>(null);
@@ -2410,6 +2412,7 @@ export function EntityRecords({
     Map<string, { fieldKey: string; value?: unknown }>
   >(new Map());
   const [newRowStatus, setNewRowStatus] = useState<string>(NO_STATUS);
+  const [newRowStatusDirty, setNewRowStatusDirty] = useState(false);
   // Admin-only setup mode: clicking a column header configures it; "+" adds a column.
   const [setupMode, setSetupMode] = useState(false);
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
@@ -4059,6 +4062,7 @@ export function EntityRecords({
     // rejecting an explicit forbidden statusId.
     const def = statuses.find((s: Status) => s.isDefault);
     setStatusId(def && !hiddenStatusIds.has(def.id) ? String(def.id) : NO_STATUS);
+    setStatusDirty(false);
     setDialogOpen(true);
   };
 
@@ -4069,6 +4073,7 @@ export function EntityRecords({
     for (const f of fields) initial[f.fieldKey] = valueToForm(f, values[f.fieldKey]);
     setForm(initial);
     setStatusId(record.statusId != null ? String(record.statusId) : NO_STATUS);
+    setStatusDirty(false);
     setDialogOpen(true);
   };
 
@@ -4169,7 +4174,12 @@ export function EntityRecords({
         try {
           await updateMutation.mutateAsync({
             id: editing.id,
-            data: { valuesJson, statusId: statusValue, pageId: permPageId, expectedVersion: editing.version },
+            data: {
+              valuesJson,
+              ...(statusDirty ? { statusId: statusValue } : {}),
+              pageId: permPageId,
+              expectedVersion: editing.version,
+            },
           });
           // Re-check Drive file names against the FINAL saved values (best-effort).
           if (await maybeRenameDriveFiles({ recordId: editing.id, fields, values: valuesJson, uploaderEmail: user?.email, pageId: permPageId })) invalidate();
@@ -4180,7 +4190,10 @@ export function EntityRecords({
     } else {
       void (async () => {
         try {
-          const created = await createMutation.mutateAsync({ entityId, data: buildCreateData(valuesJson, statusValue) });
+          const created = await createMutation.mutateAsync({
+            entityId,
+            data: buildCreateData(valuesJson, statusValue, statusDirty),
+          });
           if (created?.id != null) {
             await persistPendingRelationLinks(created.id, form);
             if (await maybeRenameDriveFiles({ recordId: created.id, fields, values: valuesJson, uploaderEmail: user?.email, pageId: permPageId })) invalidate();
@@ -4460,6 +4473,7 @@ export function EntityRecords({
     // rejecting an explicit forbidden statusId.
     const def = statuses.find((s: Status) => s.isDefault);
     setNewRowStatus(def && !hiddenStatusIds.has(def.id) ? String(def.id) : NO_STATUS);
+    setNewRowStatusDirty(false);
     setEditingCell(null);
     setAddingRow(true);
   };
@@ -4507,7 +4521,10 @@ export function EntityRecords({
     }
     void (async () => {
       try {
-        const created = await createMutation.mutateAsync({ entityId, data: buildCreateData(valuesJson, statusValue) });
+        const created = await createMutation.mutateAsync({
+          entityId,
+          data: buildCreateData(valuesJson, statusValue, newRowStatusDirty),
+        });
         if (created?.id != null) {
           if (hasPage && pageId != null && Object.keys(pageValuesJson).length > 0) {
             await setPageValuesMutation.mutateAsync({ pageId, recordId: created.id, data: { valuesJson: pageValuesJson } });
@@ -6743,7 +6760,13 @@ export function EntityRecords({
                       })}
                       {showStatusColumn && (
                         <td className="px-2 py-1.5 align-top" style={colWidthStyle("__status__")}>
-                          <Select value={newRowStatus} onValueChange={setNewRowStatus}>
+                          <Select
+                            value={newRowStatus}
+                            onValueChange={(next) => {
+                              setNewRowStatus(next);
+                              setNewRowStatusDirty(true);
+                            }}
+                          >
                             <SelectTrigger className="h-8 w-44 text-sm"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               {(allowNoStatus || newRowStatus === NO_STATUS) && (
@@ -7527,7 +7550,13 @@ export function EntityRecords({
             {statuses.length > 0 && (
               <div className="space-y-1.5">
                 <Label>{t("records.status", "Статус")}</Label>
-                <Select value={statusId} onValueChange={setStatusId}>
+                <Select
+                  value={statusId}
+                  onValueChange={(next) => {
+                    setStatusId(next);
+                    setStatusDirty(true);
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder={t("records.noStatus", "Без статуса")} />
                   </SelectTrigger>
@@ -9214,6 +9243,7 @@ function RecordEditModal({
   const updateMutation = useUpdateRecord();
   const [form, setForm] = useState<FormState>({});
   const [statusId, setStatusId] = useState<string>(NO_STATUS);
+  const [statusDirty, setStatusDirty] = useState(false);
   const [draftVersion, setDraftVersion] = useState<number | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
 
@@ -9248,6 +9278,7 @@ function RecordEditModal({
     for (const f of fields) initial[f.fieldKey] = valueToForm(f, values[f.fieldKey]);
     setForm(initial);
     setStatusId(record.statusId != null ? String(record.statusId) : NO_STATUS);
+    setStatusDirty(false);
     setDraftVersion(record.version);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, record?.id, fields.length]);
@@ -9263,7 +9294,11 @@ function RecordEditModal({
       if (!record) return;
       await updateMutation.mutateAsync({
         id: recordId,
-        data: { valuesJson, statusId: statusValue, expectedVersion: draftVersion ?? record.version },
+        data: {
+          valuesJson,
+          ...(statusDirty ? { statusId: statusValue } : {}),
+          expectedVersion: draftVersion ?? record.version,
+        },
       });
       await maybeRenameDriveFiles({ recordId, fields, values: valuesJson, uploaderEmail: user?.email });
       setSubmitting(false);
@@ -9314,7 +9349,13 @@ function RecordEditModal({
             {statuses.length > 0 && (
               <div className="space-y-1.5">
                 <Label>{t("records.status", "Статус")}</Label>
-                <Select value={statusId} onValueChange={setStatusId}>
+                <Select
+                  value={statusId}
+                  onValueChange={(next) => {
+                    setStatusId(next);
+                    setStatusDirty(true);
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder={t("records.noStatus", "Без статуса")} />
                   </SelectTrigger>
@@ -9388,6 +9429,7 @@ function QuickCreateRelatedRecordDialog({
   const setLinkMutation = useSetEntityRelatedLink();
   const [form, setForm] = useState<FormState>({});
   const [statusId, setStatusId] = useState<string>(NO_STATUS);
+  const [statusDirty, setStatusDirty] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // Is the locked dependency filter field a relation field on the related entity?
@@ -9454,6 +9496,7 @@ function QuickCreateRelatedRecordDialog({
     setForm(initial);
     const def = relStatuses.find((s: Status) => s.isDefault);
     setStatusId(def && !hiddenStatusIds.has(def.id) ? String(def.id) : NO_STATUS);
+    setStatusDirty(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, relatedEntityId, relFieldsRaw.length, relStatuses.length]);
 
@@ -9467,7 +9510,9 @@ function QuickCreateRelatedRecordDialog({
       // When the default status is hidden from this role's picker, omit statusId
       // entirely so the server assigns the (hidden) default itself.
       const statusPart =
-        statusValue === null && defaultStatusHidden ? {} : { statusId: statusValue };
+        !statusDirty || (statusValue === null && defaultStatusHidden)
+          ? {}
+          : { statusId: statusValue };
       const created = await createMutation.mutateAsync({
         entityId: relatedEntityId,
         data: { valuesJson, ...statusPart, ...(pageId != null ? { pageId } : {}) },
@@ -9587,7 +9632,13 @@ function QuickCreateRelatedRecordDialog({
             {relStatuses.length > 0 && (
               <div className="space-y-1.5">
                 <Label>{t("records.status", "Статус")}</Label>
-                <Select value={statusId} onValueChange={setStatusId}>
+                <Select
+                  value={statusId}
+                  onValueChange={(next) => {
+                    setStatusId(next);
+                    setStatusDirty(true);
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder={t("records.noStatus", "Без статуса")} />
                   </SelectTrigger>
