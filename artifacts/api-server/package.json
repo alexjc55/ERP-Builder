@@ -11,6 +11,7 @@
     "test:settings": "tsx --test src/lib/app-settings-validation.test.ts",
     "test:pivot-affix": "tsx --test src/routes/pivot-display-affix.test.ts",
     "test:inbound-db": "tsx --test --test-concurrency=1 src/routes/inbound-integrations.db.test.ts",
+    "test:import-status-db": "tsx --test --test-concurrency=1 src/routes/import-status-permissions.db.test.ts",
     "smoke:concurrency": "pnpm --filter @workspace/scripts exec tsx ../artifacts/api-server/src/concurrency-smoke.ts"
   },
   "dependencies": {
