@@ -1,5 +1,9 @@
 import { useState } from "react";
-import { useLogin } from "@workspace/api-client-react";
+import {
+  getGetSettingsQueryKey,
+  useGetSettings,
+  useLogin,
+} from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -8,7 +12,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { useT } from "@/lib/i18n";
+import { getML, useT, type Lang } from "@/lib/i18n";
 import { Building2, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
@@ -18,6 +22,16 @@ export default function LoginPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const t = useT();
+  const { data: settings } = useGetSettings({
+    query: { queryKey: getGetSettingsQueryKey() },
+  });
+  const brandLanguage = (settings?.defaultLanguage as Lang | undefined) ?? "ru";
+  const brandName = getML(settings?.appNameJson, brandLanguage) || "ERP Builder";
+  const brandSubtitle =
+    getML(settings?.subtitleJson, brandLanguage) || "Production Platform";
+  const brandLogoUrl = settings?.logoObjectPath
+    ? `/api/storage/branding-logo?v=${encodeURIComponent(settings.updatedAt)}`
+    : null;
 
   const loginMutation = useLogin({
     mutation: {
@@ -45,12 +59,20 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-8">
           <div className="flex items-center gap-3 text-white">
-            <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-              <Building2 className="w-7 h-7" />
-            </div>
+            {brandLogoUrl ? (
+              <img
+                src={brandLogoUrl}
+                alt=""
+                className="w-12 h-12 rounded-xl object-contain shadow-lg"
+              />
+            ) : (
+              <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                <Building2 className="w-7 h-7" />
+              </div>
+            )}
             <div>
-              <div className="text-xl font-bold">ERP Builder</div>
-              <div className="text-sm text-slate-400">Production Platform</div>
+              <div className="text-xl font-bold">{brandName}</div>
+              <div className="text-sm text-slate-400">{brandSubtitle}</div>
             </div>
           </div>
         </div>
@@ -103,7 +125,7 @@ export default function LoginPage() {
         </Card>
 
         <p className="text-center text-xs text-slate-500 mt-6">
-          Production ERP Builder © 2026
+          {brandName} © 2026
         </p>
       </div>
     </div>

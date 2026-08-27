@@ -42,10 +42,10 @@ async function getOrCreateSettings() {
 }
 
 /**
- * GET /settings — platform branding. Available to any authenticated user so the
- * sidebar header can render (the PUT below is the hard admin boundary).
+ * GET /settings — public platform presentation settings. Login needs branding
+ * before a session exists; mutations remain behind the admin boundary below.
  */
-router.get("/settings", requireAuth, async (_req, res): Promise<void> => {
+router.get("/settings", async (_req, res): Promise<void> => {
   const row = await getOrCreateSettings();
   const calendarSettings = normalizeAppCalendarSettings(row);
   res.json({
