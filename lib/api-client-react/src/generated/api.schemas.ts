@@ -455,6 +455,7 @@ export interface RoleAdminCaps {
   googleDrive: boolean;
   settings: boolean;
   dataImport: boolean;
+  inboundIntegrations?: boolean;
 }
 
 export type RecordScope = typeof RecordScope[keyof typeof RecordScope];
@@ -951,6 +952,151 @@ export interface ColumnGroupUpdate {
   /** @nullable */
   textColor?: string | null;
   sortOrder?: number;
+}
+
+export interface InboundIntegration {
+  id: number;
+  name: string;
+  userId: number;
+  roleId: number;
+  tokenPrefix: string;
+  isActive: boolean;
+  maxBodyBytes: number;
+  /** @nullable */
+  publishedMappingVersionId?: number | null;
+  /** @nullable */
+  lastUsedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InboundIntegrationInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  name: string;
+  /** @minItems 1 */
+  roleIds: number[];
+  /**
+     * @minimum 1024
+     * @maximum 5000000
+     */
+  maxBodyBytes?: number;
+}
+
+export interface InboundIntegrationUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  name?: string;
+  /** @minItems 1 */
+  roleIds?: number[];
+  isActive?: boolean;
+  /**
+     * @minimum 1024
+     * @maximum 5000000
+     */
+  maxBodyBytes?: number;
+}
+
+export type InboundIntegrationCreated = InboundIntegration & {
+  plainSecret: string;
+};
+
+export type InboundMappingVersionState = typeof InboundMappingVersionState[keyof typeof InboundMappingVersionState];
+
+
+export const InboundMappingVersionState = {
+  draft: 'draft',
+  published: 'published',
+} as const;
+
+export type InboundMappingStepsItem = { [key: string]: unknown };
+
+export interface InboundMapping {
+  atomic?: boolean;
+  /**
+     * @minItems 1
+     * @maxItems 50
+     */
+  steps: InboundMappingStepsItem[];
+}
+
+export interface InboundMappingVersion {
+  id: number;
+  integrationId: number;
+  version: number;
+  state: InboundMappingVersionState;
+  mappingJson: InboundMapping;
+  createdBy: number;
+  createdAt: string;
+  /** @nullable */
+  publishedAt?: string | null;
+}
+
+export type InboundDeliveryStatus = typeof InboundDeliveryStatus[keyof typeof InboundDeliveryStatus];
+
+
+export const InboundDeliveryStatus = {
+  received: 'received',
+  queued: 'queued',
+  processing: 'processing',
+  completed: 'completed',
+  completed_with_warnings: 'completed_with_warnings',
+  failed: 'failed',
+} as const;
+
+export interface InboundDelivery {
+  id: number;
+  integrationId: number;
+  eventId: string;
+  payloadHash: string;
+  status: InboundDeliveryStatus;
+  attemptCount: number;
+  /** @nullable */
+  errorCode?: string | null;
+  /** @nullable */
+  errorMessage?: string | null;
+  receivedAt: string;
+}
+
+export type InboundIntegrationDetail = InboundIntegration & {
+  roleIds: number[];
+  versions: InboundMappingVersion[];
+  deliveries: InboundDelivery[];
+};
+
+export interface InboundWebhookAccepted {
+  deliveryId: number;
+  status: string;
+  duplicate?: boolean;
+}
+
+export interface InboundStepLog {
+  id: number;
+  deliveryId: number;
+  stepKey: string;
+  status: string;
+  /** @nullable */
+  action?: string | null;
+  /** @nullable */
+  targetId?: number | null;
+  /** @nullable */
+  message?: string | null;
+  createdAt: string;
+}
+
+export type InboundDeliveryDetail = InboundDelivery & {
+  payloadJson: unknown;
+  steps: InboundStepLog[];
+};
+
+export interface InboundDryRunResult {
+  delivery: InboundDelivery;
+  steps: InboundStepLog[];
+  dryRun: boolean;
 }
 
 export interface ImportRelationColumn {
@@ -4350,6 +4496,38 @@ export interface DashboardStats {
   totalPages: number;
   recentLogins?: number;
 }
+
+export type ListInboundIntegrationErrorsParams = {
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+};
+
+export type ListInboundIntegrationErrors200 = {
+  unresolved: number;
+  items: InboundDelivery[];
+};
+
+export type AnalyzeInboundSample200PathsItem = {
+  path: string;
+  type: string;
+  sample?: unknown;
+};
+
+export type AnalyzeInboundSample200 = {
+  paths: AnalyzeInboundSample200PathsItem[];
+};
+
+export type DryRunInboundMappingBody = {
+  mappingVersionId: number;
+  sample: unknown;
+};
+
+export type ReprocessInboundDeliveryBody = {
+  dryRun?: boolean;
+};
 
 export type StreamCollaborationPageEventsParams = {
 clientId: CollaborationClientId;

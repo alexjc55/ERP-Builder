@@ -89,6 +89,8 @@ export interface RoleAdminCaps {
   settings: boolean;
   /** Import entity records from an uploaded file (XLSX/CSV). */
   dataImport: boolean;
+  /** Manage universal inbound webhook integrations. */
+  inboundIntegrations?: boolean;
 }
 
 /**
@@ -142,7 +144,7 @@ export interface RolePermissions {
 /** Default permissions for new/existing roles: no access until granted. */
 export const NO_ACCESS_PERMS: RolePermissions = {
   superAdmin: false,
-  admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, automations: false, customFilters: false, columnGroups: false, googleDrive: false, settings: false, dataImport: false },
+  admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, automations: false, customFilters: false, columnGroups: false, googleDrive: false, settings: false, dataImport: false, inboundIntegrations: false },
   pageIds: [],
   records: {},
 };

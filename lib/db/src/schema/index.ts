@@ -2,6 +2,7 @@ export * from "./users";
 export * from "./user_roles";
 export * from "./guest_links";
 export * from "./ai_agents";
+export * from "./inbound_integrations";
 export * from "./roles";
 export * from "./pages";
 export * from "./dashboard_widgets";

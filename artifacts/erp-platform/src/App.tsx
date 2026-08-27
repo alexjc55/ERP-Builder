@@ -29,6 +29,8 @@ import GoogleDrivePage from "@/pages/admin/google-drive";
 import AiAgentsPage from "@/pages/admin/ai-agents";
 import ImportPage from "@/pages/admin/import";
 import FileTrashPage from "@/pages/admin/file-trash";
+import InboundIntegrationsListPage from "@/pages/admin/inbound-integrations/list";
+import InboundIntegrationWorkspacePage from "@/pages/admin/inbound-integrations/workspace";
 import DynamicPage from "@/pages/dynamic";
 import SettingsPage from "@/pages/settings";
 import { Loader2, ShieldAlert } from "lucide-react";
@@ -234,6 +236,18 @@ function Router() {
       <Route path="/admin/file-trash">
         <ProtectedRoute superAdminOnly>
           <FileTrashPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/inbound-integrations/:id">
+        <ProtectedRoute adminCap="inboundIntegrations">
+          <InboundIntegrationWorkspacePage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/inbound-integrations">
+        <ProtectedRoute adminCap="inboundIntegrations">
+          <InboundIntegrationsListPage />
         </ProtectedRoute>
       </Route>
 

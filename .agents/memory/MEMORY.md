@@ -71,3 +71,4 @@
 - [Collaborative table editing](collaborative-table-editing.md) — authenticated SSE presence + opaque invalidations; every effective record mutation participates in one-version CAS.
 - [Validation concurrency](validation-concurrency.md) — serialize dependency-install and collaboration E2E; clean-install I/O destabilizes the timing-sensitive conflict test.
 - [Numeric display affixes](numeric-display-affixes.md) — affixes are display-only for number/numeric formula values; semantic before/after mirrors via inherited RTL direction.
+- [Inbound webhook integrations](inbound-webhook-integrations.md) — generic CRM-neutral ingestion with technical-user RBAC, versioned mappings, atomic deliveries, and globally ordered target locks.

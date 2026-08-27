@@ -4,6 +4,7 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { initAutomations } from "./lib/automations-engine";
+import { inboundWebhookRouter } from "./routes/inbound-integrations";
 
 const app: Express = express();
 
@@ -29,6 +30,8 @@ app.use(
   }),
 );
 app.use(cors());
+app.use("/api/webhooks/inbound", express.raw({ type: "application/json", limit: "5mb" }));
+app.use(inboundWebhookRouter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

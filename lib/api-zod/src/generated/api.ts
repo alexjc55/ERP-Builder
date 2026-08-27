@@ -9,6 +9,318 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Persist an authenticated inbound JSON event for queued processing
+ */
+export const ReceiveInboundWebhookParams = zod.object({
+  "integrationId": zod.coerce.number()
+})
+
+export const receiveInboundWebhookHeaderXEventIdMax = 255;
+
+
+
+export const ReceiveInboundWebhookHeader = zod.object({
+  "X-Event-Id": zod.string().max(receiveInboundWebhookHeaderXEventIdMax)
+})
+
+export const ReceiveInboundWebhookBody = zod.unknown()
+
+
+export const ListInboundIntegrationsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "userId": zod.number(),
+  "roleId": zod.number(),
+  "tokenPrefix": zod.string(),
+  "isActive": zod.boolean(),
+  "maxBodyBytes": zod.number(),
+  "publishedMappingVersionId": zod.number().nullish(),
+  "lastUsedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListInboundIntegrationsResponse = zod.array(ListInboundIntegrationsResponseItem)
+
+
+export const createInboundIntegrationBodyNameMax = 200;
+
+
+export const createInboundIntegrationBodyMaxBodyBytesMin = 1024;
+export const createInboundIntegrationBodyMaxBodyBytesMax = 5000000;
+
+
+
+export const CreateInboundIntegrationBody = zod.object({
+  "name": zod.string().min(1).max(createInboundIntegrationBodyNameMax),
+  "roleIds": zod.array(zod.number()).min(1),
+  "maxBodyBytes": zod.number().min(createInboundIntegrationBodyMaxBodyBytesMin).max(createInboundIntegrationBodyMaxBodyBytesMax).optional()
+})
+
+
+export const listInboundIntegrationErrorsQueryLimitMax = 100;
+
+
+
+export const ListInboundIntegrationErrorsQueryParams = zod.object({
+  "limit": zod.coerce.number().min(1).max(listInboundIntegrationErrorsQueryLimitMax).optional()
+})
+
+export const ListInboundIntegrationErrorsResponse = zod.object({
+  "unresolved": zod.number(),
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "integrationId": zod.number(),
+  "eventId": zod.string(),
+  "payloadHash": zod.string(),
+  "status": zod.enum(['received', 'queued', 'processing', 'completed', 'completed_with_warnings', 'failed']),
+  "attemptCount": zod.number(),
+  "errorCode": zod.string().nullish(),
+  "errorMessage": zod.string().nullish(),
+  "receivedAt": zod.coerce.date()
+}))
+})
+
+
+export const AnalyzeInboundSampleBody = zod.unknown()
+
+export const AnalyzeInboundSampleResponse = zod.object({
+  "paths": zod.array(zod.object({
+  "path": zod.string(),
+  "type": zod.string(),
+  "sample": zod.unknown().optional()
+}))
+})
+
+
+export const GetInboundIntegrationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const getInboundIntegrationResponseTwoVersionsItemMappingJsonAtomicDefault = true;
+export const getInboundIntegrationResponseTwoVersionsItemMappingJsonStepsMax = 50;
+
+
+
+export const GetInboundIntegrationResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "userId": zod.number(),
+  "roleId": zod.number(),
+  "tokenPrefix": zod.string(),
+  "isActive": zod.boolean(),
+  "maxBodyBytes": zod.number(),
+  "publishedMappingVersionId": zod.number().nullish(),
+  "lastUsedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "roleIds": zod.array(zod.number()),
+  "versions": zod.array(zod.object({
+  "id": zod.number(),
+  "integrationId": zod.number(),
+  "version": zod.number(),
+  "state": zod.enum(['draft', 'published']),
+  "mappingJson": zod.object({
+  "atomic": zod.boolean().default(getInboundIntegrationResponseTwoVersionsItemMappingJsonAtomicDefault),
+  "steps": zod.array(zod.record(zod.string(), zod.unknown())).min(1).max(getInboundIntegrationResponseTwoVersionsItemMappingJsonStepsMax)
+}),
+  "createdBy": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "publishedAt": zod.coerce.date().nullish()
+})),
+  "deliveries": zod.array(zod.object({
+  "id": zod.number(),
+  "integrationId": zod.number(),
+  "eventId": zod.string(),
+  "payloadHash": zod.string(),
+  "status": zod.enum(['received', 'queued', 'processing', 'completed', 'completed_with_warnings', 'failed']),
+  "attemptCount": zod.number(),
+  "errorCode": zod.string().nullish(),
+  "errorMessage": zod.string().nullish(),
+  "receivedAt": zod.coerce.date()
+}))
+}))
+
+
+export const UpdateInboundIntegrationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateInboundIntegrationBodyNameMax = 200;
+
+
+export const updateInboundIntegrationBodyMaxBodyBytesMin = 1024;
+export const updateInboundIntegrationBodyMaxBodyBytesMax = 5000000;
+
+
+
+export const UpdateInboundIntegrationBody = zod.object({
+  "name": zod.string().min(1).max(updateInboundIntegrationBodyNameMax).optional(),
+  "roleIds": zod.array(zod.number()).min(1).optional(),
+  "isActive": zod.boolean().optional(),
+  "maxBodyBytes": zod.number().min(updateInboundIntegrationBodyMaxBodyBytesMin).max(updateInboundIntegrationBodyMaxBodyBytesMax).optional()
+})
+
+export const UpdateInboundIntegrationResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "userId": zod.number(),
+  "roleId": zod.number(),
+  "tokenPrefix": zod.string(),
+  "isActive": zod.boolean(),
+  "maxBodyBytes": zod.number(),
+  "publishedMappingVersionId": zod.number().nullish(),
+  "lastUsedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Revoke an integration while preserving delivery and audit history
+ */
+export const DeleteInboundIntegrationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+export const RegenerateInboundIntegrationSecretParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RegenerateInboundIntegrationSecretResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "userId": zod.number(),
+  "roleId": zod.number(),
+  "tokenPrefix": zod.string(),
+  "isActive": zod.boolean(),
+  "maxBodyBytes": zod.number(),
+  "publishedMappingVersionId": zod.number().nullish(),
+  "lastUsedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "plainSecret": zod.string()
+}))
+
+
+export const CreateInboundMappingDraftParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const createInboundMappingDraftBodyAtomicDefault = true;
+export const createInboundMappingDraftBodyStepsMax = 50;
+
+
+
+export const CreateInboundMappingDraftBody = zod.object({
+  "atomic": zod.boolean().default(createInboundMappingDraftBodyAtomicDefault),
+  "steps": zod.array(zod.record(zod.string(), zod.unknown())).min(1).max(createInboundMappingDraftBodyStepsMax)
+})
+
+
+export const PublishInboundMappingParams = zod.object({
+  "id": zod.coerce.number(),
+  "versionId": zod.coerce.number()
+})
+
+export const publishInboundMappingResponseMappingJsonAtomicDefault = true;
+export const publishInboundMappingResponseMappingJsonStepsMax = 50;
+
+
+
+export const PublishInboundMappingResponse = zod.object({
+  "id": zod.number(),
+  "integrationId": zod.number(),
+  "version": zod.number(),
+  "state": zod.enum(['draft', 'published']),
+  "mappingJson": zod.object({
+  "atomic": zod.boolean().default(publishInboundMappingResponseMappingJsonAtomicDefault),
+  "steps": zod.array(zod.record(zod.string(), zod.unknown())).min(1).max(publishInboundMappingResponseMappingJsonStepsMax)
+}),
+  "createdBy": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "publishedAt": zod.coerce.date().nullish()
+})
+
+
+export const DryRunInboundMappingParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DryRunInboundMappingBody = zod.object({
+  "mappingVersionId": zod.number(),
+  "sample": zod.unknown()
+})
+
+export const DryRunInboundMappingResponse = zod.object({
+  "delivery": zod.object({
+  "id": zod.number(),
+  "integrationId": zod.number(),
+  "eventId": zod.string(),
+  "payloadHash": zod.string(),
+  "status": zod.enum(['received', 'queued', 'processing', 'completed', 'completed_with_warnings', 'failed']),
+  "attemptCount": zod.number(),
+  "errorCode": zod.string().nullish(),
+  "errorMessage": zod.string().nullish(),
+  "receivedAt": zod.coerce.date()
+}),
+  "steps": zod.array(zod.object({
+  "id": zod.number(),
+  "deliveryId": zod.number(),
+  "stepKey": zod.string(),
+  "status": zod.string(),
+  "action": zod.string().nullish(),
+  "targetId": zod.number().nullish(),
+  "message": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "dryRun": zod.boolean()
+})
+
+
+export const ReprocessInboundDeliveryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const reprocessInboundDeliveryBodyDryRunDefault = false;
+
+export const ReprocessInboundDeliveryBody = zod.object({
+  "dryRun": zod.boolean().default(reprocessInboundDeliveryBodyDryRunDefault)
+})
+
+
+export const GetInboundDeliveryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetInboundDeliveryResponse = zod.object({
+  "id": zod.number(),
+  "integrationId": zod.number(),
+  "eventId": zod.string(),
+  "payloadHash": zod.string(),
+  "status": zod.enum(['received', 'queued', 'processing', 'completed', 'completed_with_warnings', 'failed']),
+  "attemptCount": zod.number(),
+  "errorCode": zod.string().nullish(),
+  "errorMessage": zod.string().nullish(),
+  "receivedAt": zod.coerce.date()
+}).and(zod.object({
+  "payloadJson": zod.unknown(),
+  "steps": zod.array(zod.object({
+  "id": zod.number(),
+  "deliveryId": zod.number(),
+  "stepKey": zod.string(),
+  "status": zod.string(),
+  "action": zod.string().nullish(),
+  "targetId": zod.number().nullish(),
+  "message": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+}))
+}))
+
+
+/**
  * @summary Subscribe to authorized page presence and compact record invalidations via SSE
  */
 export const StreamCollaborationPageEventsParams = zod.object({
@@ -241,7 +553,8 @@ export const LoginResponse = zod.object({
   "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean(),
-  "dataImport": zod.boolean()
+  "dataImport": zod.boolean(),
+  "inboundIntegrations": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -316,7 +629,8 @@ export const GetMeResponse = zod.object({
   "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean(),
-  "dataImport": zod.boolean()
+  "dataImport": zod.boolean(),
+  "inboundIntegrations": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -389,7 +703,8 @@ export const UpdateMeResponse = zod.object({
   "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean(),
-  "dataImport": zod.boolean()
+  "dataImport": zod.boolean(),
+  "inboundIntegrations": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -460,7 +775,8 @@ export const ImpersonateResponse = zod.object({
   "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean(),
-  "dataImport": zod.boolean()
+  "dataImport": zod.boolean(),
+  "inboundIntegrations": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -528,7 +844,8 @@ export const StopImpersonationResponse = zod.object({
   "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean(),
-  "dataImport": zod.boolean()
+  "dataImport": zod.boolean(),
+  "inboundIntegrations": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -600,7 +917,8 @@ export const RedeemGuestLinkResponse = zod.object({
   "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean(),
-  "dataImport": zod.boolean()
+  "dataImport": zod.boolean(),
+  "inboundIntegrations": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -1035,7 +1353,8 @@ export const ListRolesResponseItem = zod.object({
   "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean(),
-  "dataImport": zod.boolean()
+  "dataImport": zod.boolean(),
+  "inboundIntegrations": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -1094,7 +1413,8 @@ export const CreateRoleBody = zod.object({
   "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean(),
-  "dataImport": zod.boolean()
+  "dataImport": zod.boolean(),
+  "inboundIntegrations": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -1154,7 +1474,8 @@ export const GetRoleResponse = zod.object({
   "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean(),
-  "dataImport": zod.boolean()
+  "dataImport": zod.boolean(),
+  "inboundIntegrations": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -1216,7 +1537,8 @@ export const UpdateRoleBody = zod.object({
   "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean(),
-  "dataImport": zod.boolean()
+  "dataImport": zod.boolean(),
+  "inboundIntegrations": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -1268,7 +1590,8 @@ export const UpdateRoleResponse = zod.object({
   "columnGroups": zod.boolean(),
   "googleDrive": zod.boolean(),
   "settings": zod.boolean(),
-  "dataImport": zod.boolean()
+  "dataImport": zod.boolean(),
+  "inboundIntegrations": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({

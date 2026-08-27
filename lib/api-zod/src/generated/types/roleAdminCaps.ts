@@ -20,4 +20,5 @@ export interface RoleAdminCaps {
   googleDrive: boolean;
   settings: boolean;
   dataImport: boolean;
+  inboundIntegrations?: boolean;
 }

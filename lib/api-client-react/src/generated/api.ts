@@ -25,6 +25,7 @@ import type {
   AiAgentInput,
   AiAgentUpdate,
   AiAgentWithKey,
+  AnalyzeInboundSample200,
   AppSettings,
   AppSettingsUpdate,
   AuditLogEntry,
@@ -63,6 +64,7 @@ import type {
   DependentValuesQuery,
   DriveFolder,
   DriveNameTemplate,
+  DryRunInboundMappingBody,
   Entity,
   EntityInput,
   EntityRecord,
@@ -86,10 +88,23 @@ import type {
   GuestRedeemInput,
   HealthStatus,
   ImpersonateInput,
+  InboundDelivery,
+  InboundDeliveryDetail,
+  InboundDryRunResult,
+  InboundIntegration,
+  InboundIntegrationCreated,
+  InboundIntegrationDetail,
+  InboundIntegrationInput,
+  InboundIntegrationUpdate,
+  InboundMapping,
+  InboundMappingVersion,
+  InboundWebhookAccepted,
   LinkInput,
   LinkedRecord,
   ListAiAgentActsAsCandidatesParams,
   ListEventsParams,
+  ListInboundIntegrationErrors200,
+  ListInboundIntegrationErrorsParams,
   ListUsersParams,
   LocalFolder,
   LoginHistoryEntry,
@@ -136,6 +151,7 @@ import type {
   RenameFieldValueInput,
   RenameFieldValueResult,
   ReorderInput,
+  ReprocessInboundDeliveryBody,
   ResetPasswordInput,
   Role,
   RoleInput,
@@ -180,6 +196,963 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+
+
+export const getReceiveInboundWebhookUrl = (integrationId: number,) => {
+
+
+
+
+  return `/api/webhooks/inbound/${integrationId}`
+}
+
+/**
+ * @summary Persist an authenticated inbound JSON event for queued processing
+ */
+export const receiveInboundWebhook = async (integrationId: number,
+    receiveInboundWebhookBody: unknown, options?: RequestInit): Promise<InboundWebhookAccepted> => {
+
+  return customFetch<InboundWebhookAccepted>(getReceiveInboundWebhookUrl(integrationId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      receiveInboundWebhookBody,)
+  }
+);}
+
+
+
+
+export const getReceiveInboundWebhookMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof receiveInboundWebhook>>, TError,{integrationId: number;data: BodyType<unknown>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof receiveInboundWebhook>>, TError,{integrationId: number;data: BodyType<unknown>}, TContext> => {
+
+const mutationKey = ['receiveInboundWebhook'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof receiveInboundWebhook>>, {integrationId: number;data: BodyType<unknown>}> = (props) => {
+          const {integrationId,data} = props ?? {};
+
+          return  receiveInboundWebhook(integrationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReceiveInboundWebhookMutationResult = NonNullable<Awaited<ReturnType<typeof receiveInboundWebhook>>>
+    export type ReceiveInboundWebhookMutationBody = BodyType<unknown>
+    export type ReceiveInboundWebhookMutationError = ErrorType<void>
+
+    /**
+ * @summary Persist an authenticated inbound JSON event for queued processing
+ */
+export const useReceiveInboundWebhook = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof receiveInboundWebhook>>, TError,{integrationId: number;data: BodyType<unknown>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof receiveInboundWebhook>>,
+        TError,
+        {integrationId: number;data: BodyType<unknown>},
+        TContext
+      > => {
+      return useMutation(getReceiveInboundWebhookMutationOptions(options));
+    }
+
+export const getListInboundIntegrationsUrl = () => {
+
+
+
+
+  return `/api/inbound-integrations`
+}
+
+export const listInboundIntegrations = async ( options?: RequestInit): Promise<InboundIntegration[]> => {
+
+  return customFetch<InboundIntegration[]>(getListInboundIntegrationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListInboundIntegrationsQueryKey = () => {
+    return [
+    `/api/inbound-integrations`
+    ] as const;
+    }
+
+
+export const getListInboundIntegrationsQueryOptions = <TData = Awaited<ReturnType<typeof listInboundIntegrations>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInboundIntegrations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListInboundIntegrationsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listInboundIntegrations>>> = ({ signal }) => listInboundIntegrations({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listInboundIntegrations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListInboundIntegrationsQueryResult = NonNullable<Awaited<ReturnType<typeof listInboundIntegrations>>>
+export type ListInboundIntegrationsQueryError = ErrorType<unknown>
+
+
+
+export function useListInboundIntegrations<TData = Awaited<ReturnType<typeof listInboundIntegrations>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInboundIntegrations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListInboundIntegrationsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateInboundIntegrationUrl = () => {
+
+
+
+
+  return `/api/inbound-integrations`
+}
+
+export const createInboundIntegration = async (inboundIntegrationInput: InboundIntegrationInput, options?: RequestInit): Promise<InboundIntegrationCreated> => {
+
+  return customFetch<InboundIntegrationCreated>(getCreateInboundIntegrationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      inboundIntegrationInput,)
+  }
+);}
+
+
+
+
+export const getCreateInboundIntegrationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createInboundIntegration>>, TError,{data: BodyType<InboundIntegrationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createInboundIntegration>>, TError,{data: BodyType<InboundIntegrationInput>}, TContext> => {
+
+const mutationKey = ['createInboundIntegration'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createInboundIntegration>>, {data: BodyType<InboundIntegrationInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createInboundIntegration(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateInboundIntegrationMutationResult = NonNullable<Awaited<ReturnType<typeof createInboundIntegration>>>
+    export type CreateInboundIntegrationMutationBody = BodyType<InboundIntegrationInput>
+    export type CreateInboundIntegrationMutationError = ErrorType<unknown>
+
+    export const useCreateInboundIntegration = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createInboundIntegration>>, TError,{data: BodyType<InboundIntegrationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createInboundIntegration>>,
+        TError,
+        {data: BodyType<InboundIntegrationInput>},
+        TContext
+      > => {
+      return useMutation(getCreateInboundIntegrationMutationOptions(options));
+    }
+
+export const getListInboundIntegrationErrorsUrl = (params?: ListInboundIntegrationErrorsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/inbound-integrations/errors?${stringifiedParams}` : `/api/inbound-integrations/errors`
+}
+
+export const listInboundIntegrationErrors = async (params?: ListInboundIntegrationErrorsParams, options?: RequestInit): Promise<ListInboundIntegrationErrors200> => {
+
+  return customFetch<ListInboundIntegrationErrors200>(getListInboundIntegrationErrorsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListInboundIntegrationErrorsQueryKey = (params?: ListInboundIntegrationErrorsParams,) => {
+    return [
+    `/api/inbound-integrations/errors`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListInboundIntegrationErrorsQueryOptions = <TData = Awaited<ReturnType<typeof listInboundIntegrationErrors>>, TError = ErrorType<unknown>>(params?: ListInboundIntegrationErrorsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInboundIntegrationErrors>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListInboundIntegrationErrorsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listInboundIntegrationErrors>>> = ({ signal }) => listInboundIntegrationErrors(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listInboundIntegrationErrors>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListInboundIntegrationErrorsQueryResult = NonNullable<Awaited<ReturnType<typeof listInboundIntegrationErrors>>>
+export type ListInboundIntegrationErrorsQueryError = ErrorType<unknown>
+
+
+
+export function useListInboundIntegrationErrors<TData = Awaited<ReturnType<typeof listInboundIntegrationErrors>>, TError = ErrorType<unknown>>(
+ params?: ListInboundIntegrationErrorsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInboundIntegrationErrors>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListInboundIntegrationErrorsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getAnalyzeInboundSampleUrl = () => {
+
+
+
+
+  return `/api/inbound-integrations/analyze-sample`
+}
+
+export const analyzeInboundSample = async (analyzeInboundSampleBody: unknown, options?: RequestInit): Promise<AnalyzeInboundSample200> => {
+
+  return customFetch<AnalyzeInboundSample200>(getAnalyzeInboundSampleUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      analyzeInboundSampleBody,)
+  }
+);}
+
+
+
+
+export const getAnalyzeInboundSampleMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeInboundSample>>, TError,{data: BodyType<unknown>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof analyzeInboundSample>>, TError,{data: BodyType<unknown>}, TContext> => {
+
+const mutationKey = ['analyzeInboundSample'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof analyzeInboundSample>>, {data: BodyType<unknown>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  analyzeInboundSample(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AnalyzeInboundSampleMutationResult = NonNullable<Awaited<ReturnType<typeof analyzeInboundSample>>>
+    export type AnalyzeInboundSampleMutationBody = BodyType<unknown>
+    export type AnalyzeInboundSampleMutationError = ErrorType<unknown>
+
+    export const useAnalyzeInboundSample = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeInboundSample>>, TError,{data: BodyType<unknown>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof analyzeInboundSample>>,
+        TError,
+        {data: BodyType<unknown>},
+        TContext
+      > => {
+      return useMutation(getAnalyzeInboundSampleMutationOptions(options));
+    }
+
+export const getGetInboundIntegrationUrl = (id: number,) => {
+
+
+
+
+  return `/api/inbound-integrations/${id}`
+}
+
+export const getInboundIntegration = async (id: number, options?: RequestInit): Promise<InboundIntegrationDetail> => {
+
+  return customFetch<InboundIntegrationDetail>(getGetInboundIntegrationUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetInboundIntegrationQueryKey = (id: number,) => {
+    return [
+    `/api/inbound-integrations/${id}`
+    ] as const;
+    }
+
+
+export const getGetInboundIntegrationQueryOptions = <TData = Awaited<ReturnType<typeof getInboundIntegration>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getInboundIntegration>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetInboundIntegrationQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getInboundIntegration>>> = ({ signal }) => getInboundIntegration(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getInboundIntegration>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetInboundIntegrationQueryResult = NonNullable<Awaited<ReturnType<typeof getInboundIntegration>>>
+export type GetInboundIntegrationQueryError = ErrorType<unknown>
+
+
+
+export function useGetInboundIntegration<TData = Awaited<ReturnType<typeof getInboundIntegration>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getInboundIntegration>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetInboundIntegrationQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateInboundIntegrationUrl = (id: number,) => {
+
+
+
+
+  return `/api/inbound-integrations/${id}`
+}
+
+export const updateInboundIntegration = async (id: number,
+    inboundIntegrationUpdate: InboundIntegrationUpdate, options?: RequestInit): Promise<InboundIntegration> => {
+
+  return customFetch<InboundIntegration>(getUpdateInboundIntegrationUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      inboundIntegrationUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateInboundIntegrationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInboundIntegration>>, TError,{id: number;data: BodyType<InboundIntegrationUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateInboundIntegration>>, TError,{id: number;data: BodyType<InboundIntegrationUpdate>}, TContext> => {
+
+const mutationKey = ['updateInboundIntegration'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateInboundIntegration>>, {id: number;data: BodyType<InboundIntegrationUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateInboundIntegration(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateInboundIntegrationMutationResult = NonNullable<Awaited<ReturnType<typeof updateInboundIntegration>>>
+    export type UpdateInboundIntegrationMutationBody = BodyType<InboundIntegrationUpdate>
+    export type UpdateInboundIntegrationMutationError = ErrorType<unknown>
+
+    export const useUpdateInboundIntegration = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInboundIntegration>>, TError,{id: number;data: BodyType<InboundIntegrationUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateInboundIntegration>>,
+        TError,
+        {id: number;data: BodyType<InboundIntegrationUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateInboundIntegrationMutationOptions(options));
+    }
+
+export const getDeleteInboundIntegrationUrl = (id: number,) => {
+
+
+
+
+  return `/api/inbound-integrations/${id}`
+}
+
+/**
+ * @summary Revoke an integration while preserving delivery and audit history
+ */
+export const deleteInboundIntegration = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteInboundIntegrationUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteInboundIntegrationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteInboundIntegration>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteInboundIntegration>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteInboundIntegration'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteInboundIntegration>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteInboundIntegration(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteInboundIntegrationMutationResult = NonNullable<Awaited<ReturnType<typeof deleteInboundIntegration>>>
+
+    export type DeleteInboundIntegrationMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Revoke an integration while preserving delivery and audit history
+ */
+export const useDeleteInboundIntegration = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteInboundIntegration>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteInboundIntegration>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteInboundIntegrationMutationOptions(options));
+    }
+
+export const getRegenerateInboundIntegrationSecretUrl = (id: number,) => {
+
+
+
+
+  return `/api/inbound-integrations/${id}/regenerate-secret`
+}
+
+export const regenerateInboundIntegrationSecret = async (id: number, options?: RequestInit): Promise<InboundIntegrationCreated> => {
+
+  return customFetch<InboundIntegrationCreated>(getRegenerateInboundIntegrationSecretUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getRegenerateInboundIntegrationSecretMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof regenerateInboundIntegrationSecret>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof regenerateInboundIntegrationSecret>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['regenerateInboundIntegrationSecret'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof regenerateInboundIntegrationSecret>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  regenerateInboundIntegrationSecret(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegenerateInboundIntegrationSecretMutationResult = NonNullable<Awaited<ReturnType<typeof regenerateInboundIntegrationSecret>>>
+
+    export type RegenerateInboundIntegrationSecretMutationError = ErrorType<unknown>
+
+    export const useRegenerateInboundIntegrationSecret = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof regenerateInboundIntegrationSecret>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof regenerateInboundIntegrationSecret>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRegenerateInboundIntegrationSecretMutationOptions(options));
+    }
+
+export const getCreateInboundMappingDraftUrl = (id: number,) => {
+
+
+
+
+  return `/api/inbound-integrations/${id}/mappings`
+}
+
+export const createInboundMappingDraft = async (id: number,
+    inboundMapping: InboundMapping, options?: RequestInit): Promise<InboundMappingVersion> => {
+
+  return customFetch<InboundMappingVersion>(getCreateInboundMappingDraftUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      inboundMapping,)
+  }
+);}
+
+
+
+
+export const getCreateInboundMappingDraftMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createInboundMappingDraft>>, TError,{id: number;data: BodyType<InboundMapping>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createInboundMappingDraft>>, TError,{id: number;data: BodyType<InboundMapping>}, TContext> => {
+
+const mutationKey = ['createInboundMappingDraft'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createInboundMappingDraft>>, {id: number;data: BodyType<InboundMapping>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createInboundMappingDraft(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateInboundMappingDraftMutationResult = NonNullable<Awaited<ReturnType<typeof createInboundMappingDraft>>>
+    export type CreateInboundMappingDraftMutationBody = BodyType<InboundMapping>
+    export type CreateInboundMappingDraftMutationError = ErrorType<unknown>
+
+    export const useCreateInboundMappingDraft = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createInboundMappingDraft>>, TError,{id: number;data: BodyType<InboundMapping>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createInboundMappingDraft>>,
+        TError,
+        {id: number;data: BodyType<InboundMapping>},
+        TContext
+      > => {
+      return useMutation(getCreateInboundMappingDraftMutationOptions(options));
+    }
+
+export const getPublishInboundMappingUrl = (id: number,
+    versionId: number,) => {
+
+
+
+
+  return `/api/inbound-integrations/${id}/mappings/${versionId}/publish`
+}
+
+export const publishInboundMapping = async (id: number,
+    versionId: number, options?: RequestInit): Promise<InboundMappingVersion> => {
+
+  return customFetch<InboundMappingVersion>(getPublishInboundMappingUrl(id,versionId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getPublishInboundMappingMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishInboundMapping>>, TError,{id: number;versionId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof publishInboundMapping>>, TError,{id: number;versionId: number}, TContext> => {
+
+const mutationKey = ['publishInboundMapping'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof publishInboundMapping>>, {id: number;versionId: number}> = (props) => {
+          const {id,versionId} = props ?? {};
+
+          return  publishInboundMapping(id,versionId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PublishInboundMappingMutationResult = NonNullable<Awaited<ReturnType<typeof publishInboundMapping>>>
+
+    export type PublishInboundMappingMutationError = ErrorType<unknown>
+
+    export const usePublishInboundMapping = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishInboundMapping>>, TError,{id: number;versionId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof publishInboundMapping>>,
+        TError,
+        {id: number;versionId: number},
+        TContext
+      > => {
+      return useMutation(getPublishInboundMappingMutationOptions(options));
+    }
+
+export const getDryRunInboundMappingUrl = (id: number,) => {
+
+
+
+
+  return `/api/inbound-integrations/${id}/dry-run`
+}
+
+export const dryRunInboundMapping = async (id: number,
+    dryRunInboundMappingBody: DryRunInboundMappingBody, options?: RequestInit): Promise<InboundDryRunResult> => {
+
+  return customFetch<InboundDryRunResult>(getDryRunInboundMappingUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      dryRunInboundMappingBody,)
+  }
+);}
+
+
+
+
+export const getDryRunInboundMappingMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dryRunInboundMapping>>, TError,{id: number;data: BodyType<DryRunInboundMappingBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof dryRunInboundMapping>>, TError,{id: number;data: BodyType<DryRunInboundMappingBody>}, TContext> => {
+
+const mutationKey = ['dryRunInboundMapping'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof dryRunInboundMapping>>, {id: number;data: BodyType<DryRunInboundMappingBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  dryRunInboundMapping(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DryRunInboundMappingMutationResult = NonNullable<Awaited<ReturnType<typeof dryRunInboundMapping>>>
+    export type DryRunInboundMappingMutationBody = BodyType<DryRunInboundMappingBody>
+    export type DryRunInboundMappingMutationError = ErrorType<unknown>
+
+    export const useDryRunInboundMapping = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof dryRunInboundMapping>>, TError,{id: number;data: BodyType<DryRunInboundMappingBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof dryRunInboundMapping>>,
+        TError,
+        {id: number;data: BodyType<DryRunInboundMappingBody>},
+        TContext
+      > => {
+      return useMutation(getDryRunInboundMappingMutationOptions(options));
+    }
+
+export const getReprocessInboundDeliveryUrl = (id: number,) => {
+
+
+
+
+  return `/api/inbound-deliveries/${id}/reprocess`
+}
+
+export const reprocessInboundDelivery = async (id: number,
+    reprocessInboundDeliveryBody?: ReprocessInboundDeliveryBody, options?: RequestInit): Promise<InboundDelivery> => {
+
+  return customFetch<InboundDelivery>(getReprocessInboundDeliveryUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      reprocessInboundDeliveryBody,)
+  }
+);}
+
+
+
+
+export const getReprocessInboundDeliveryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reprocessInboundDelivery>>, TError,{id: number;data?: BodyType<ReprocessInboundDeliveryBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reprocessInboundDelivery>>, TError,{id: number;data?: BodyType<ReprocessInboundDeliveryBody>}, TContext> => {
+
+const mutationKey = ['reprocessInboundDelivery'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reprocessInboundDelivery>>, {id: number;data?: BodyType<ReprocessInboundDeliveryBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reprocessInboundDelivery(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReprocessInboundDeliveryMutationResult = NonNullable<Awaited<ReturnType<typeof reprocessInboundDelivery>>>
+    export type ReprocessInboundDeliveryMutationBody = BodyType<ReprocessInboundDeliveryBody> | undefined
+    export type ReprocessInboundDeliveryMutationError = ErrorType<unknown>
+
+    export const useReprocessInboundDelivery = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reprocessInboundDelivery>>, TError,{id: number;data?: BodyType<ReprocessInboundDeliveryBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reprocessInboundDelivery>>,
+        TError,
+        {id: number;data?: BodyType<ReprocessInboundDeliveryBody>},
+        TContext
+      > => {
+      return useMutation(getReprocessInboundDeliveryMutationOptions(options));
+    }
+
+export const getGetInboundDeliveryUrl = (id: number,) => {
+
+
+
+
+  return `/api/inbound-deliveries/${id}`
+}
+
+export const getInboundDelivery = async (id: number, options?: RequestInit): Promise<InboundDeliveryDetail> => {
+
+  return customFetch<InboundDeliveryDetail>(getGetInboundDeliveryUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetInboundDeliveryQueryKey = (id: number,) => {
+    return [
+    `/api/inbound-deliveries/${id}`
+    ] as const;
+    }
+
+
+export const getGetInboundDeliveryQueryOptions = <TData = Awaited<ReturnType<typeof getInboundDelivery>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getInboundDelivery>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetInboundDeliveryQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getInboundDelivery>>> = ({ signal }) => getInboundDelivery(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getInboundDelivery>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetInboundDeliveryQueryResult = NonNullable<Awaited<ReturnType<typeof getInboundDelivery>>>
+export type GetInboundDeliveryQueryError = ErrorType<unknown>
+
+
+
+export function useGetInboundDelivery<TData = Awaited<ReturnType<typeof getInboundDelivery>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getInboundDelivery>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetInboundDeliveryQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
 
 
 

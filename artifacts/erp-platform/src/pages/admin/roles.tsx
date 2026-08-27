@@ -67,7 +67,7 @@ type MLValue = { ru?: string; en?: string; he?: string };
 function emptyPerms(): RolePermissions {
   return {
     superAdmin: false,
-    admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, columnGroups: false, googleDrive: false, settings: false, automations: false, customFilters: false, dataImport: false },
+    admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, columnGroups: false, googleDrive: false, settings: false, automations: false, customFilters: false, dataImport: false, inboundIntegrations: false },
     pageIds: [],
     records: {},
   };
@@ -87,6 +87,7 @@ const ADMIN_CAP_LABELS: { key: keyof RoleAdminCaps; label: string }[] = [
   { key: "automations", label: "Автоматизации" },
   { key: "customFilters", label: "Кастомные фильтры" },
   { key: "dataImport", label: "Импорт данных" },
+  { key: "inboundIntegrations", label: "Входящие вебхуки" },
 ];
 
 const RECORD_ACTIONS: { key: keyof RecordPermission; label: string }[] = [
@@ -112,6 +113,7 @@ const CAP_SHORT: { key: keyof RoleAdminCaps; label: string }[] = [
   { key: "automations", label: "Автоматизации" },
   { key: "customFilters", label: "Кастомные фильтры" },
   { key: "dataImport", label: "Импорт" },
+  { key: "inboundIntegrations", label: "Вебхуки" },
 ];
 
 export default function RolesPage() {

@@ -43,6 +43,13 @@
       "when": 1787661361322,
       "tag": "0005_fantastic_raider",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787665000000,
+      "tag": "0006_inbound_integrations",
+      "breakpoints": true
     }
   ]
 }
