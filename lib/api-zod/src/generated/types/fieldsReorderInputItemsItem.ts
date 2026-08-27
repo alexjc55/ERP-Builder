@@ -7,6 +7,6 @@
  */
 
 export type FieldsReorderInputItemsItem = {
-  id: number;
+  id: number | '__status__';
   sortOrder: number;
 };

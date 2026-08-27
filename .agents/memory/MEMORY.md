@@ -50,6 +50,7 @@
 - [Cross-field validation (fill) rules](validation-fill-rules.md) — per-field validationRulesJson blocks saving unless another field meets a condition; the boundary MUST be enforced on every record-write path (create/update/automations/rename), not just the two obvious endpoints.
 - [Multilingual select options](multilingual-select-options.md) — option = stable value + labelJson{ru,en,he}; records store value only; rename edits label; value never recomputed; legacy string[] normalizes; pickers store value/show label.
 - [Select-to-status synchronization](select-status-sync.md) — entity select options may map stable values to system statuses; mapping is a workflow-governed atomic record mutation.
+- [System status column controls](system-status-column-controls.md) — entity-owned `__status__` ordering/label plus a hard manual-edit policy across every human write surface.
 - [Formula FP-noise policy](formula-fp-noise.md) — no-decimals formula results must be cleaned to 12 sig digits per row before summing, everywhere.
 - [Percent field type](percent-field.md) — numeric field (list/value); stored as NUMBER; aggregates as AVERAGE — flat totals gated by showColumnTotal, group rows ALWAYS; list-mode validation compares by numeric equivalence (optionNumbers), not String(num).
 - [Formula cross-references](formula-cross-reference.md) — a formula field can reference another formula's result via buildFormulaScope (Proxy, lazy+memoized+cycle-guarded); wire it at EVERY eval site; scope must include ALL formula fields, not just visible/total-enabled ones.

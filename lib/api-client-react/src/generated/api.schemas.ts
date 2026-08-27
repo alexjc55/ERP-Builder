@@ -2486,6 +2486,18 @@ export interface NotesContentInput {
   cells?: NotesContentInputCellsItem[] | null;
 }
 
+/**
+ * Controls explicit human statusId writes. System-assigned statuses are unaffected.
+ */
+export type EntityStatusManualEditPolicy = typeof EntityStatusManualEditPolicy[keyof typeof EntityStatusManualEditPolicy];
+
+
+export const EntityStatusManualEditPolicy = {
+  allowed: 'allowed',
+  disabled_all: 'disabled_all',
+  disabled_users: 'disabled_users',
+} as const;
+
 export interface Entity {
   id: number;
   entityKey: string;
@@ -2508,11 +2520,31 @@ export interface Entity {
   pivotEnabled?: boolean;
   /** When false, the "Без статуса" option is hidden from the record status pickers for this entity. */
   allowNoStatus?: boolean;
+  /** Per-entity label for the synthetic system-status column. An empty object uses the platform translation. */
+  statusNameJson: MultilingualText;
+  /**
+     * Sort position of the synthetic system-status column. Null is the backward-compatible default at the end.
+     * @nullable
+     */
+  statusSortOrder?: number | null;
+  /** Controls explicit human statusId writes. System-assigned statuses are unaffected. */
+  statusManualEditPolicy: EntityStatusManualEditPolicy;
+  /** Active users blocked when statusManualEditPolicy is disabled_users. */
+  statusManualEditUserIds: number[];
   sortOrder: number;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }
+
+export type EntityInputStatusManualEditPolicy = typeof EntityInputStatusManualEditPolicy[keyof typeof EntityInputStatusManualEditPolicy];
+
+
+export const EntityInputStatusManualEditPolicy = {
+  allowed: 'allowed',
+  disabled_all: 'disabled_all',
+  disabled_users: 'disabled_users',
+} as const;
 
 export interface EntityInput {
   entityKey: string;
@@ -2532,9 +2564,23 @@ export interface EntityInput {
   defaultPageSize?: number | null;
   pivotEnabled?: boolean;
   allowNoStatus?: boolean;
+  statusNameJson?: MultilingualText;
+  /** @nullable */
+  statusSortOrder?: number | null;
+  statusManualEditPolicy?: EntityInputStatusManualEditPolicy;
+  statusManualEditUserIds?: number[];
   sortOrder?: number;
   isActive?: boolean;
 }
+
+export type EntityUpdateStatusManualEditPolicy = typeof EntityUpdateStatusManualEditPolicy[keyof typeof EntityUpdateStatusManualEditPolicy];
+
+
+export const EntityUpdateStatusManualEditPolicy = {
+  allowed: 'allowed',
+  disabled_all: 'disabled_all',
+  disabled_users: 'disabled_users',
+} as const;
 
 export interface EntityUpdate {
   entityKey?: string;
@@ -2554,6 +2600,11 @@ export interface EntityUpdate {
   defaultPageSize?: number | null;
   pivotEnabled?: boolean;
   allowNoStatus?: boolean;
+  statusNameJson?: MultilingualText;
+  /** @nullable */
+  statusSortOrder?: number | null;
+  statusManualEditPolicy?: EntityUpdateStatusManualEditPolicy;
+  statusManualEditUserIds?: number[];
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -2927,7 +2978,7 @@ export interface FieldInput {
 }
 
 export type FieldsReorderInputItemsItem = {
-  id: number;
+  id: number | '__status__';
   sortOrder: number;
 };
 

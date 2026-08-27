@@ -20,6 +20,15 @@ export const entitiesTable = pgTable("entities", {
   // When false, the "Без статуса" (no status) option is hidden from the record
   // status pickers for this entity. On by default to preserve existing behavior.
   allowNoStatus: boolean("allow_no_status").notNull().default(true),
+  // Metadata for the synthetic system-status column. A null sort order is the
+  // backward-compatible representation of "after every ordinary field".
+  statusNameJson: jsonb("status_name_json").notNull().default({}),
+  statusSortOrder: integer("status_sort_order"),
+  // Manual statusId writes can be allowed, disabled globally, or disabled for
+  // selected active users. System consequences (defaults, mappings, workflows,
+  // automations and inbound processing) do not use this human-edit boundary.
+  statusManualEditPolicy: text("status_manual_edit_policy").notNull().default("allowed"),
+  statusManualEditUserIds: jsonb("status_manual_edit_user_ids").notNull().default([]),
   // Default pivot (Сводная таблица) config for the records page when no view is
   // selected. Same shape as a view's configJson.pivot (PivotConfig). Null = the
   // default view offers no pivot.

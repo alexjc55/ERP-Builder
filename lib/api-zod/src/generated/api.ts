@@ -4213,7 +4213,7 @@ export const DeleteFieldResponse = zod.object({
 export const ReorderFieldsBody = zod.object({
   "entityId": zod.number(),
   "items": zod.array(zod.object({
-  "id": zod.number(),
+  "id": zod.union([zod.number(),zod.enum(['__status__'])]),
   "sortOrder": zod.number()
 }))
 })
@@ -8339,6 +8339,7 @@ export const ReorderViewsResponse = zod.object({
  */
 export const listEntitiesResponseDefaultSortJsonItemDirectionDefault = `asc`;
 
+
 export const ListEntitiesResponseItem = zod.object({
   "id": zod.number(),
   "entityKey": zod.string(),
@@ -8413,6 +8414,14 @@ export const ListEntitiesResponseItem = zod.object({
   "defaultPageSize": zod.number().nullish().describe('Rows per page for the records table when no view is selected (50\/100\/200). Null = 50.'),
   "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
   "allowNoStatus": zod.boolean().optional().describe('When false, the \"Без статуса\" option is hidden from the record status pickers for this entity.'),
+  "statusNameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).describe('Per-entity label for the synthetic system-status column. An empty object uses the platform translation.'),
+  "statusSortOrder": zod.number().nullish().describe('Sort position of the synthetic system-status column. Null is the backward-compatible default at the end.'),
+  "statusManualEditPolicy": zod.enum(['allowed', 'disabled_all', 'disabled_users']).describe('Controls explicit human statusId writes. System-assigned statuses are unaffected.'),
+  "statusManualEditUserIds": zod.array(zod.number().min(1)).describe('Active users blocked when statusManualEditPolicy is disabled_users.'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -8426,6 +8435,7 @@ export const ListEntitiesResponse = zod.array(ListEntitiesResponseItem)
  */
 export const createEntityBodyDefaultSortJsonItemDirectionDefault = `asc`;
 export const createEntityBodyAllowNoStatusDefault = true;
+export const createEntityBodyStatusManualEditPolicyDefault = `allowed`;
 export const createEntityBodyIsActiveDefault = true;
 
 export const CreateEntityBody = zod.object({
@@ -8501,6 +8511,14 @@ export const CreateEntityBody = zod.object({
   "defaultPageSize": zod.number().nullish().describe('Rows per page for the records table when no view is selected (50\/100\/200). Null = 50.'),
   "pivotEnabled": zod.boolean().optional(),
   "allowNoStatus": zod.boolean().default(createEntityBodyAllowNoStatusDefault),
+  "statusNameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "statusSortOrder": zod.number().nullish(),
+  "statusManualEditPolicy": zod.enum(['allowed', 'disabled_all', 'disabled_users']).default(createEntityBodyStatusManualEditPolicyDefault),
+  "statusManualEditUserIds": zod.array(zod.number().min(1)).optional(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().default(createEntityBodyIsActiveDefault)
 })
@@ -8514,6 +8532,7 @@ export const GetEntityParams = zod.object({
 })
 
 export const getEntityResponseDefaultSortJsonItemDirectionDefault = `asc`;
+
 
 export const GetEntityResponse = zod.object({
   "id": zod.number(),
@@ -8589,6 +8608,14 @@ export const GetEntityResponse = zod.object({
   "defaultPageSize": zod.number().nullish().describe('Rows per page for the records table when no view is selected (50\/100\/200). Null = 50.'),
   "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
   "allowNoStatus": zod.boolean().optional().describe('When false, the \"Без статуса\" option is hidden from the record status pickers for this entity.'),
+  "statusNameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).describe('Per-entity label for the synthetic system-status column. An empty object uses the platform translation.'),
+  "statusSortOrder": zod.number().nullish().describe('Sort position of the synthetic system-status column. Null is the backward-compatible default at the end.'),
+  "statusManualEditPolicy": zod.enum(['allowed', 'disabled_all', 'disabled_users']).describe('Controls explicit human statusId writes. System-assigned statuses are unaffected.'),
+  "statusManualEditUserIds": zod.array(zod.number().min(1)).describe('Active users blocked when statusManualEditPolicy is disabled_users.'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -8604,6 +8631,7 @@ export const UpdateEntityParams = zod.object({
 })
 
 export const updateEntityBodyDefaultSortJsonItemDirectionDefault = `asc`;
+
 
 export const UpdateEntityBody = zod.object({
   "entityKey": zod.string().optional(),
@@ -8678,11 +8706,20 @@ export const UpdateEntityBody = zod.object({
   "defaultPageSize": zod.number().nullish().describe('Rows per page for the records table when no view is selected (50\/100\/200). Null = 50.'),
   "pivotEnabled": zod.boolean().optional(),
   "allowNoStatus": zod.boolean().optional(),
+  "statusNameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "statusSortOrder": zod.number().nullish(),
+  "statusManualEditPolicy": zod.enum(['allowed', 'disabled_all', 'disabled_users']).optional(),
+  "statusManualEditUserIds": zod.array(zod.number().min(1)).optional(),
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
 
 export const updateEntityResponseDefaultSortJsonItemDirectionDefault = `asc`;
+
 
 export const UpdateEntityResponse = zod.object({
   "id": zod.number(),
@@ -8758,6 +8795,14 @@ export const UpdateEntityResponse = zod.object({
   "defaultPageSize": zod.number().nullish().describe('Rows per page for the records table when no view is selected (50\/100\/200). Null = 50.'),
   "pivotEnabled": zod.boolean().optional().describe('Enables the \"Сводная таблица\" (pivot) report mode for this entity\'s records page.'),
   "allowNoStatus": zod.boolean().optional().describe('When false, the \"Без статуса\" option is hidden from the record status pickers for this entity.'),
+  "statusNameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).describe('Per-entity label for the synthetic system-status column. An empty object uses the platform translation.'),
+  "statusSortOrder": zod.number().nullish().describe('Sort position of the synthetic system-status column. Null is the backward-compatible default at the end.'),
+  "statusManualEditPolicy": zod.enum(['allowed', 'disabled_all', 'disabled_users']).describe('Controls explicit human statusId writes. System-assigned statuses are unaffected.'),
+  "statusManualEditUserIds": zod.array(zod.number().min(1)).describe('Active users blocked when statusManualEditPolicy is disabled_users.'),
   "sortOrder": zod.number(),
   "isActive": zod.boolean(),
   "createdAt": zod.coerce.date(),

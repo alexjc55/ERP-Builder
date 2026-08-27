@@ -43,6 +43,7 @@ import {
   UserReferenceBusyError,
 } from "../lib/user-reference-barrier";
 import { PreviewImportBody } from "@workspace/api-zod";
+import { isManualStatusEditDisabled } from "../lib/status-manual-edit";
 
 const router: IRouter = Router();
 
@@ -197,6 +198,11 @@ function resolveStatusId(
     );
   if (!hit) return { error: `Статус «${statusName}» не найден` };
   return { id: hit.id };
+}
+
+/** Empty/null status cells intentionally use the entity default, not a manual assignment. */
+function hasExplicitStatusName(statusName: string | null | undefined): boolean {
+  return statusName != null && statusName.trim() !== "";
 }
 
 /** Resolve a relation target record id by matching a key field value (batch-visible via tx). */
@@ -400,7 +406,12 @@ async function lockImportRelationEndpoints(
   return { oldLinks, lockedRecords };
 }
 
-async function processEntityRow(tx: DbExecutor, row: RowInput, ctx: EntityCtx): Promise<RowOutcome> {
+async function processEntityRow(
+  tx: DbExecutor,
+  row: RowInput,
+  ctx: EntityCtx,
+  actorUserId: number,
+): Promise<RowOutcome> {
   // 1. Coerce mapped cells into the per-type shape validateValues expects.
   const incoming: Record<string, unknown> = {};
   for (const [k, raw] of Object.entries(row.values)) {
@@ -409,6 +420,23 @@ async function processEntityRow(tx: DbExecutor, row: RowInput, ctx: EntityCtx): 
     const c = await coerceValue(field, raw);
     if ("error" in c) return { status: "error", message: c.error };
     if (c.value !== undefined) incoming[k] = c.value;
+  }
+
+  // Import is an admin-authoritative field writer, but a supplied statusName is
+  // still a human's explicit status choice. Defaults (omitted/empty cells) and
+  // all non-import system writers remain outside this boundary.
+  if (hasExplicitStatusName(row.statusName)) {
+    const [entity] = await tx
+      .select({
+        policy: entitiesTable.statusManualEditPolicy,
+        userIds: entitiesTable.statusManualEditUserIds,
+      })
+      .from(entitiesTable)
+      .where(eq(entitiesTable.id, ctx.entityId))
+      .limit(1);
+    if (entity && isManualStatusEditDisabled(entity.policy, entity.userIds, actorUserId)) {
+      return { status: "error", message: "Manual status editing is disabled for this user" };
+    }
   }
 
   // 2. Upsert match (via tx so same-batch inserts are visible) — locate an
@@ -529,7 +557,7 @@ async function processEntityRow(tx: DbExecutor, row: RowInput, ctx: EntityCtx): 
         };
         const scalarChangedFields = Object.keys(incoming).filter((key) =>
           JSON.stringify(lockedValues[key]) !== JSON.stringify(values[key]));
-        const explicitStatus = row.statusName != null && row.statusName.trim() !== "";
+        const explicitStatus = hasExplicitStatusName(row.statusName);
         const statusChanged = explicitStatus && lockedSource.statusId !== statusId;
         if (statusChanged) {
           setData.statusId = statusId;
@@ -929,7 +957,9 @@ async function runBatch(req: Request, res: Response, dryRun: boolean): Promise<v
         };
         for (const row of p.rows) {
           const outcome =
-            p.kind === "entity" ? await processEntityRow(tx, row, p.ctx) : await processPageRow(tx, row, p.ctx);
+            p.kind === "entity"
+              ? await processEntityRow(tx, row, p.ctx, req.user!.userId)
+              : await processPageRow(tx, row, p.ctx);
           for (const update of outcome.updates ?? []) {
             const created = pendingCreates.get(update.recordId);
             if (created) {

@@ -454,13 +454,14 @@ router.post("/fields/reorder", requireAuth, requireAdmin("entities"), async (req
     res.status(400).json({ error: "Duplicate field ids in reorder payload" });
     return;
   }
-  const owned = await db
+  const fieldIds = ids.filter((id): id is number => typeof id === "number");
+  const owned = fieldIds.length === 0 ? [] : await db
     .select({ id: entityFieldsTable.id })
     .from(entityFieldsTable)
-    .where(and(eq(entityFieldsTable.entityId, entityId), inArray(entityFieldsTable.id, ids)));
+    .where(and(eq(entityFieldsTable.entityId, entityId), inArray(entityFieldsTable.id, fieldIds)));
   const ownedIds = new Set(owned.map((f) => f.id));
 
-  const foreign = ids.filter((id) => !ownedIds.has(id));
+  const foreign = fieldIds.filter((id) => !ownedIds.has(id));
   if (foreign.length > 0) {
     res.status(400).json({ error: `Some fields do not belong to this entity: ${foreign.join(", ")}` });
     return;
@@ -468,6 +469,13 @@ router.post("/fields/reorder", requireAuth, requireAdmin("entities"), async (req
 
   await db.transaction(async (tx) => {
     for (const item of items) {
+      if (item.id === "__status__") {
+        await tx
+          .update(entitiesTable)
+          .set({ statusSortOrder: item.sortOrder })
+          .where(eq(entitiesTable.id, entityId));
+        continue;
+      }
       await tx
         .update(entityFieldsTable)
         .set({ sortOrder: item.sortOrder })

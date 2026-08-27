@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { EntityUpdateStatusManualEditPolicy } from './entityUpdateStatusManualEditPolicy';
 import type { FilterCondition } from './filterCondition';
 import type { MultilingualText } from './multilingualText';
 import type { PivotConfig } from './pivotConfig';
@@ -28,6 +29,11 @@ export interface EntityUpdate {
   defaultPageSize?: number | null;
   pivotEnabled?: boolean;
   allowNoStatus?: boolean;
+  statusNameJson?: MultilingualText;
+  /** @nullable */
+  statusSortOrder?: number | null;
+  statusManualEditPolicy?: EntityUpdateStatusManualEditPolicy;
+  statusManualEditUserIds?: number[];
   sortOrder?: number;
   isActive?: boolean;
 }

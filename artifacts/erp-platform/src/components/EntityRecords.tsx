@@ -60,6 +60,9 @@ import {
   type BulkRecordsAction,
   useListEntityCustomFilters,
   useListEntities,
+  useUpdateEntity,
+  getGetEntityQueryKey,
+  getListEntitiesQueryKey,
   type Entity,
   type EntityRecord,
   type Field,
@@ -193,6 +196,7 @@ import {
 } from "date-fns";
 
 const NO_STATUS = "__none__";
+const STATUS_COLUMN_KEY = "__status__";
 const NO_VIEW = "__all__";
 /** Allowed rows-per-page values; the server caps pageSize at 500. Configured in
  * the view settings (configJson.pageSize) or the entity's default-view settings
@@ -295,6 +299,15 @@ function extractError(err: unknown): string | undefined {
     if (typeof msg === "string" && msg.trim()) return msg;
   }
   return undefined;
+}
+
+function canManuallyEditStatus(entity: Entity | undefined, userId: number | undefined): boolean {
+  if (!entity) return true;
+  if (entity.statusManualEditPolicy === "disabled_all") return false;
+  if (entity.statusManualEditPolicy === "disabled_users") {
+    return userId == null || !entity.statusManualEditUserIds.includes(userId);
+  }
+  return true;
 }
 
 type CellValue = string | number | boolean | FileValue;
@@ -1730,7 +1743,7 @@ export function EntityRecords({
         id: col.field.id,
         data: { columnGroupId: target === "inherit" ? null : target },
       });
-    } else {
+    } else if (col.kind === "page") {
       updatePageFieldGroupMutation.mutate({
         id: col.field.id,
         data: { columnGroupId: target === "inherit" ? null : target },
@@ -1738,7 +1751,8 @@ export function EntityRecords({
     }
   };
   const canAssignGroup = (col: UnifiedCol): boolean =>
-    isMirror ? canAdmin("pages") : col.kind === "entity" ? canConfigureColumns : canAdmin("pages");
+    col.kind !== "status" &&
+    (isMirror ? canAdmin("pages") : col.kind === "entity" ? canConfigureColumns : canAdmin("pages"));
 
   const { data: rawAllFields = [], isLoading: fieldsLoading } = useListEntityFields(entityId);
   // On a mirror page, apply display-only per-field label overrides at the source
@@ -1757,6 +1771,8 @@ export function EntityRecords({
   const views = isMirror ? pageViews : mainViews;
   const viewsLoading = isMirror ? pageViewsLoading : mainViewsLoading;
   const { data: entity } = useGetEntity(entityId);
+  const statusManualEditable = canManuallyEditStatus(entity, user?.id);
+  const statusColumnName = ml(entity?.statusNameJson) || t("records.status", "Статус");
   const collabPageId = pageId ?? entity?.pageId;
   const collab = useCollaboration(collabPageId);
   const otherCollabSessions = useMemo(
@@ -2415,6 +2431,10 @@ export function EntityRecords({
   const [newRowStatusDirty, setNewRowStatusDirty] = useState(false);
   // Admin-only setup mode: clicking a column header configures it; "+" adds a column.
   const [setupMode, setSetupMode] = useState(false);
+  const [statusConfigName, setStatusConfigName] = useState<MultilingualText>({});
+  const [statusConfigPolicy, setStatusConfigPolicy] = useState<"allowed" | "disabled_all" | "disabled_users">("allowed");
+  const [statusConfigUserIds, setStatusConfigUserIds] = useState<number[]>([]);
+  const [statusUsersOpen, setStatusUsersOpen] = useState(false);
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [columnField, setColumnField] = useState<Field | null>(null);
   // Page-local field config (mirror pages only).
@@ -2433,6 +2453,13 @@ export function EntityRecords({
     setNewRowProjectedValues(new Map());
     setSetupMode(false);
   }, [entityId]);
+
+  useEffect(() => {
+    if (!entity) return;
+    setStatusConfigName(entity.statusNameJson ?? {});
+    setStatusConfigPolicy(entity.statusManualEditPolicy);
+    setStatusConfigUserIds(entity.statusManualEditUserIds ?? []);
+  }, [entity]);
 
   // ── Resizable table columns ──────────────────────────────────────────────
   // Per-column widths are a viewer-local preference (no server contract): we
@@ -3818,10 +3845,41 @@ export function EntityRecords({
 
   const reorderFieldsMutation = useReorderFields({
     mutation: {
-      onSuccess: () => invalidateFields(),
+      onSuccess: () => {
+        invalidateFields();
+        queryClient.invalidateQueries({ queryKey: getGetEntityQueryKey(entityId) });
+        queryClient.invalidateQueries({ queryKey: getListEntitiesQueryKey() });
+      },
       onError: () => toast({ title: t("records.reorderColumnError", "Ошибка изменения порядка колонок"), variant: "destructive" }),
     },
   });
+
+  const updateStatusConfigMutation = useUpdateEntity({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetEntityQueryKey(entityId) });
+        queryClient.invalidateQueries({ queryKey: getListEntitiesQueryKey() });
+        toast({ title: t("records.statusConfigSaved", "Настройки статуса сохранены") });
+      },
+      onError: (err) =>
+        toast({
+          title: t("records.statusConfigSaveError", "Не удалось сохранить настройки статуса"),
+          description: extractError(err),
+          variant: "destructive",
+        }),
+    },
+  });
+
+  const saveStatusConfig = () => {
+    updateStatusConfigMutation.mutate({
+      id: entityId,
+      data: {
+        statusNameJson: statusConfigName,
+        statusManualEditPolicy: statusConfigPolicy,
+        statusManualEditUserIds: statusConfigPolicy === "disabled_users" ? statusConfigUserIds : [],
+      },
+    });
+  };
 
   const moveColumn = (list: Field[], index: number, direction: -1 | 1) => {
     const target = index + direction;
@@ -3833,6 +3891,27 @@ export function EntityRecords({
       data: {
         entityId,
         items: reordered.map((f, i) => ({ id: f.id, sortOrder: i + 1 })),
+      },
+    });
+  };
+
+  const moveEntityColumn = (
+    list: Array<{ kind: "entity"; field: Field } | { kind: "status" }>,
+    index: number,
+    direction: -1 | 1,
+  ) => {
+    const target = index + direction;
+    if (target < 0 || target >= list.length) return;
+    const reordered = [...list];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(target, 0, moved);
+    reorderFieldsMutation.mutate({
+      data: {
+        entityId,
+        items: reordered.map((col, i) => ({
+          id: col.kind === "status" ? STATUS_COLUMN_KEY : col.field.id,
+          sortOrder: i + 1,
+        })),
       },
     });
   };
@@ -4176,7 +4255,7 @@ export function EntityRecords({
             id: editing.id,
             data: {
               valuesJson,
-              ...(statusDirty ? { statusId: statusValue } : {}),
+              ...(statusManualEditable && statusDirty ? { statusId: statusValue } : {}),
               pageId: permPageId,
               expectedVersion: editing.version,
             },
@@ -4192,7 +4271,7 @@ export function EntityRecords({
         try {
           const created = await createMutation.mutateAsync({
             entityId,
-            data: buildCreateData(valuesJson, statusValue, statusDirty),
+            data: buildCreateData(valuesJson, statusValue, statusManualEditable && statusDirty),
           });
           if (created?.id != null) {
             await persistPendingRelationLinks(created.id, form);
@@ -4668,19 +4747,34 @@ export function EntityRecords({
   // pinning / width / styling so those keep working unchanged.
   type UnifiedCol =
     | { kind: "entity"; token: string; pinKey: string; field: Field }
-    | { kind: "page"; token: string; pinKey: string; field: PageField };
+    | { kind: "page"; token: string; pinKey: string; field: PageField }
+    | { kind: "status"; token: typeof STATUS_COLUMN_KEY; pinKey: typeof STATUS_COLUMN_KEY };
   const orderedColumns: UnifiedCol[] = (() => {
+    const entityColumns: UnifiedCol[] = displayFields.map(
+      (f: Field): UnifiedCol => ({ kind: "entity", token: `e:${f.fieldKey}`, pinKey: `f:${f.id}`, field: f }),
+    );
+    if (showStatusColumn) {
+      const statusOrder = entity?.statusSortOrder ?? Number.MAX_SAFE_INTEGER;
+      const insertAt = entityColumns.findIndex(
+        (col) => col.kind === "entity" && col.field.sortOrder > statusOrder,
+      );
+      entityColumns.splice(insertAt < 0 ? entityColumns.length : insertAt, 0, {
+        kind: "status",
+        token: STATUS_COLUMN_KEY,
+        pinKey: STATUS_COLUMN_KEY,
+      });
+    }
     const base: UnifiedCol[] = [
-      ...displayFields.map(
-        (f: Field): UnifiedCol => ({ kind: "entity", token: `e:${f.fieldKey}`, pinKey: `f:${f.id}`, field: f }),
-      ),
+      ...entityColumns,
       ...displayedPageFields.map(
         (pf: PageField): UnifiedCol => ({ kind: "page", token: `p:${pf.fieldKey}`, pinKey: `pf:${pf.id}`, field: pf }),
       ),
     ];
     if (isMirror && mirrorColumnOrder && mirrorColumnOrder.length > 0) {
       const idx = new Map(mirrorColumnOrder.map((tok, i) => [tok, i] as const));
-      return base
+      const statusCol = base.find((c) => c.kind === "status");
+      const sorted: UnifiedCol[] = base
+        .filter((c): c is Exclude<UnifiedCol, { kind: "status" }> => c.kind !== "status")
         .map((c, i) => ({ c, i }))
         .sort((a, b) => {
           const ia = idx.has(a.c.token) ? (idx.get(a.c.token) as number) : Number.MAX_SAFE_INTEGER;
@@ -4688,19 +4782,17 @@ export function EntityRecords({
           return ia !== ib ? ia - ib : a.i - b.i;
         })
         .map((x) => x.c);
+      if (statusCol) {
+        const statusOrder = entity?.statusSortOrder ?? Number.MAX_SAFE_INTEGER;
+        const insertAt = sorted.findIndex(
+          (col) => col.kind === "entity" && col.field.sortOrder > statusOrder,
+        );
+        sorted.splice(insertAt < 0 ? sorted.length : insertAt, 0, statusCol);
+      }
+      return sorted;
     }
     return base;
   })();
-  // Reorder one column within the unified order and persist the new token list
-  // (mirror pages only — gated by `canReorderMirrorColumns`).
-  const moveMirrorColumn = (index: number, direction: -1 | 1) => {
-    const target = index + direction;
-    if (target < 0 || target >= orderedColumns.length) return;
-    const next = [...orderedColumns];
-    const [moved] = next.splice(index, 1);
-    next.splice(target, 0, moved);
-    saveMirrorColumnOrder(next.map((c) => c.token));
-  };
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   // ── Pinned (frozen-left) columns ──────────────────────────────────────────
@@ -4717,7 +4809,7 @@ export function EntityRecords({
         const pinned =
           isMirror && col.kind === "entity" && mirrorPinned?.[col.token] !== undefined
             ? Boolean(mirrorPinned[col.token])
-            : Boolean(col.field.isPinned);
+            : col.kind !== "status" && Boolean(col.field.isPinned);
         if (pinned) s.add(col.pinKey);
       }
     }
@@ -4914,6 +5006,47 @@ export function EntityRecords({
       >
         {showBulk && <td style={bulkColStyle(groupBg)} onClick={(e) => e.stopPropagation()} />}
         {orderedColumns.map((col, idx) => {
+          if (col.kind === "status") {
+            const rawStatus = (g.values as Record<string, unknown> | undefined)?.[STATUS_COLUMN_KEY];
+            const commonStatus =
+              rawStatus !== undefined && rawStatus !== null ? statusById.get(Number(rawStatus)) : undefined;
+            return (
+              <td
+                key={STATUS_COLUMN_KEY}
+                className="px-4 py-2.5 align-middle"
+                style={{
+                  ...colWidthStyle(STATUS_COLUMN_KEY),
+                  ...(commonStatus ? { backgroundColor: `${commonStatus.color}20` } : {}),
+                }}
+              >
+                {idx === 0 ? (
+                  <span className={`inline-flex items-center gap-1.5 ${expanded ? "font-bold text-slate-900" : "font-normal text-slate-800"}`}>
+                    {expanded ? (
+                      <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 text-slate-500 shrink-0 rtl:rotate-180" />
+                    )}
+                    <span className="whitespace-nowrap max-w-[220px] truncate">
+                      {g.label ?? g.key ?? t("records.groupEmpty", "Без значения")}
+                    </span>
+                    <span className="text-xs font-normal text-slate-400">({g.count})</span>
+                    {commonStatus && (
+                      <span className="ml-2 whitespace-nowrap" style={{ color: readableStatusTextColor(commonStatus.color) }}>
+                        {ml(commonStatus.nameJson)}
+                      </span>
+                    )}
+                  </span>
+                ) : commonStatus ? (
+                    <span
+                      className={`inline-flex items-center whitespace-nowrap ${expanded ? "font-bold" : "font-medium"}`}
+                      style={{ color: readableStatusTextColor(commonStatus.color) }}
+                    >
+                      {ml(commonStatus.nameJson)}
+                    </span>
+                  ) : null}
+              </td>
+            );
+          }
           const totalKey = col.kind === "entity" ? col.field.fieldKey : col.pinKey;
           const sum = g.sums?.[totalKey];
           if (idx === 0) {
@@ -5045,31 +5178,6 @@ export function EntityRecords({
             </td>
           );
         })}
-        {showStatusColumn && (() => {
-          // Common status: server puts the shared statusId under the reserved
-          // "__status__" key when every row in the group has the same status.
-          const rawStatus = (g.values as Record<string, unknown> | undefined)?.["__status__"];
-          const commonStatus =
-            rawStatus !== undefined && rawStatus !== null ? statusById.get(Number(rawStatus)) : undefined;
-          return (
-            <td
-              className="px-4 py-2.5 align-middle"
-              style={{
-                ...colWidthStyle("__status__"),
-                ...(commonStatus ? { backgroundColor: `${commonStatus.color}20` } : {}),
-              }}
-            >
-              {commonStatus ? (
-                <span
-                  className={`inline-flex items-center whitespace-nowrap ${expanded ? "font-bold" : "font-medium"}`}
-                  style={{ color: readableStatusTextColor(commonStatus.color) }}
-                >
-                  {ml(commonStatus.nameJson)}
-                </span>
-              ) : null}
-            </td>
-          );
-        })()}
         {showActionsColumn && <td />}
       </tr>
     );
@@ -6032,6 +6140,96 @@ export function EntityRecords({
               </Select>
             </div>
           )}
+          {canConfigureColumns && statuses.length > 0 && (
+            <div className="rounded-md border border-amber-200 bg-white px-3 py-3 space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                <CircleDot className="w-4 h-4 text-amber-500 shrink-0" />
+                <span>{t("records.statusConfigTitle", "Настройка системного статуса")}</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {(["ru", "en", "he"] as const).map((language) => (
+                  <div key={language} className="space-y-1">
+                    <Label className="text-xs uppercase">{language}</Label>
+                    <Input
+                      data-testid={`input-status-name-${language}`}
+                      value={statusConfigName[language] ?? ""}
+                      onChange={(event) =>
+                        setStatusConfigName((current) => ({ ...current, [language]: event.target.value }))
+                      }
+                      placeholder={t("records.status", "Статус")}
+                      className="h-8"
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Select
+                  value={statusConfigPolicy}
+                  onValueChange={(value) =>
+                    setStatusConfigPolicy(value as "allowed" | "disabled_all" | "disabled_users")
+                  }
+                >
+                  <SelectTrigger data-testid="select-status-manual-policy" className="h-8 sm:w-72">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="allowed">{t("records.statusManualAllowed", "Разрешено всем")}</SelectItem>
+                    <SelectItem value="disabled_all">{t("records.statusManualDisabledAll", "Запрещено всем")}</SelectItem>
+                    <SelectItem value="disabled_users">{t("records.statusManualDisabledUsers", "Запрещено выбранным пользователям")}</SelectItem>
+                  </SelectContent>
+                </Select>
+                {statusConfigPolicy === "disabled_users" && (
+                  <Popover open={statusUsersOpen} onOpenChange={setStatusUsersOpen}>
+                    <PopoverTrigger asChild>
+                      <Button data-testid="button-select-status-users" type="button" variant="outline" size="sm" className="h-8 justify-between sm:w-72">
+                        {statusConfigUserIds.length > 0
+                          ? `${t("records.statusUsersSelected", "Выбрано пользователей")}: ${statusConfigUserIds.length}`
+                          : t("records.statusSelectUsers", "Выберите пользователей")}
+                        <ChevronsUpDown className="w-3.5 h-3.5" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-72 p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder={t("records.userSearch", "Поиск пользователя...")} />
+                        <CommandList>
+                          <CommandEmpty>{t("records.userNotFound", "Пользователь не найден")}</CommandEmpty>
+                          <CommandGroup>
+                            {userOptions.map((option: UserOption) => {
+                              const checked = statusConfigUserIds.includes(option.id);
+                              return (
+                                <CommandItem
+                                  key={option.id}
+                                  value={`${option.name} ${option.id}`}
+                                  onSelect={() =>
+                                    setStatusConfigUserIds((current) =>
+                                      checked ? current.filter((id) => id !== option.id) : [...current, option.id],
+                                    )
+                                  }
+                                >
+                                  <Check className={cn("mr-2 h-4 w-4", checked ? "opacity-100" : "opacity-0")} />
+                                  {option.name}
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                )}
+                <Button
+                  data-testid="button-save-status-config"
+                  type="button"
+                  size="sm"
+                  className="h-8"
+                  disabled={updateStatusConfigMutation.isPending}
+                  onClick={saveStatusConfig}
+                >
+                  {updateStatusConfigMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : t("common.save", "Сохранить")}
+                </Button>
+              </div>
+            </div>
+          )}
           {pageId != null && canAdmin("pages") && Boolean(groupByFieldKey) && (
             <div className="rounded-md border border-slate-200 bg-white px-3 py-3 space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
@@ -6136,6 +6334,15 @@ export function EntityRecords({
                         <th style={{ ...bulkColStyle("#F8FAFC", true), borderTop: "1px solid #F8FAFC", borderBottom: "none" }} />
                       )}
                       {orderedColumns.map((col, idx) => {
+                        if (col.kind === "status") {
+                          return (
+                            <th
+                              key={`tot-${STATUS_COLUMN_KEY}`}
+                              className="px-4 py-2"
+                              style={{ ...colWidthStyle(STATUS_COLUMN_KEY), backgroundColor: "#F8FAFC", borderTop: "1px solid #F8FAFC", borderBottom: "none", borderRight: "1px solid #F8FAFC" }}
+                            />
+                          );
+                        }
                         const totalKey = col.kind === "entity" ? col.field.fieldKey : col.pinKey;
                         const hasTotal = numericTotals[totalKey] !== undefined;
                         const fld = col.field;
@@ -6188,12 +6395,6 @@ export function EntityRecords({
                           </th>
                         );
                       })}
-                      {showStatusColumn && (
-                        <th
-                          className="px-4 py-2"
-                          style={{ ...colWidthStyle("__status__"), ...pinStyle("__status__", "#F8FAFC", true), backgroundColor: "#F8FAFC", borderTop: "1px solid #F8FAFC", borderBottom: "none", borderRight: "1px solid #F8FAFC" }}
-                        />
-                      )}
                       {showActionsColumn && (
                         <th className="px-4 py-2" style={{ backgroundColor: "#F8FAFC", borderTop: "1px solid #F8FAFC", borderBottom: "none" }} />
                       )}
@@ -6221,12 +6422,66 @@ export function EntityRecords({
                         />
                       </th>
                     )}
-                    {orderedColumns.map((col, ui) => {
+                    {orderedColumns.map((col) => {
+                      if (col.kind === "status") {
+                        const entityOrder: Array<{ kind: "entity"; field: Field } | { kind: "status" }> =
+                          displayFields.map((field) => ({ kind: "entity", field }));
+                        const configuredOrder = entity?.statusSortOrder ?? Number.MAX_SAFE_INTEGER;
+                        const configuredIndex = entityOrder.findIndex(
+                          (candidate) => candidate.kind === "entity" && candidate.field.sortOrder > configuredOrder,
+                        );
+                        entityOrder.splice(
+                          configuredIndex < 0 ? entityOrder.length : configuredIndex,
+                          0,
+                          { kind: "status" },
+                        );
+                        const statusIndex = entityOrder.findIndex((candidate) => candidate.kind === "status");
+                        return (
+                          <th
+                            key={STATUS_COLUMN_KEY}
+                            className="relative align-top text-center px-4 py-3 font-medium text-slate-600"
+                            style={colWidthStyle(STATUS_COLUMN_KEY)}
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              {setupMode && canConfigureColumns && (
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-slate-400"
+                                    disabled={statusIndex === 0 || reorderFieldsMutation.isPending}
+                                    onClick={() => moveEntityColumn(entityOrder, statusIndex, -1)}
+                                    title={t("records.moveColumnLeft", "Левее")}
+                                  >
+                                    <ChevronLeft className="w-3.5 h-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-slate-400"
+                                    disabled={statusIndex === entityOrder.length - 1 || reorderFieldsMutation.isPending}
+                                    onClick={() => moveEntityColumn(entityOrder, statusIndex, 1)}
+                                    title={t("records.moveColumnRight", "Правее")}
+                                  >
+                                    <ChevronRight className="w-3.5 h-3.5" />
+                                  </Button>
+                                </>
+                              )}
+                              <span>{statusColumnName}</span>
+                            </div>
+                            <ResizeHandle colKey={STATUS_COLUMN_KEY} />
+                          </th>
+                        );
+                      }
                       const fld = col.field;
                       const pinKey = col.pinKey;
                       const isPageCol = col.kind === "page";
                       const ci = displayFields.findIndex((x: Field) => x.id === fld.id);
                       const pi = displayedPageFields.findIndex((x: PageField) => x.id === fld.id);
+                      const mirrorMovableColumns = orderedColumns.filter(
+                        (candidate): candidate is Exclude<UnifiedCol, { kind: "status" }> => candidate.kind !== "status",
+                      );
+                      const mirrorIndex = mirrorMovableColumns.findIndex((candidate) => candidate.token === col.token);
                       // Setup-mode reorder arrows. On a mirror page columns reorder
                       // across the UNIFIED order (entity + page-local interleaved),
                       // persisted to mirrorColumnOrderJson; on a regular page each
@@ -6238,8 +6493,15 @@ export function EntityRecords({
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7 text-slate-400"
-                              disabled={ui === 0 || updateMirrorOrderMutation.isPending}
-                              onClick={() => moveMirrorColumn(ui, -1)}
+                              disabled={mirrorIndex === 0 || updateMirrorOrderMutation.isPending}
+                              onClick={() => {
+                                const target = mirrorIndex - 1;
+                                if (target < 0) return;
+                                const next = [...mirrorMovableColumns];
+                                const [moved] = next.splice(mirrorIndex, 1);
+                                next.splice(target, 0, moved);
+                                saveMirrorColumnOrder(next.map((candidate) => candidate.token));
+                              }}
                               title={t("records.moveColumnLeft", "Левее")}
                             >
                               <ChevronLeft className="w-3.5 h-3.5" />
@@ -6248,8 +6510,15 @@ export function EntityRecords({
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7 text-slate-400"
-                              disabled={ui === orderedColumns.length - 1 || updateMirrorOrderMutation.isPending}
-                              onClick={() => moveMirrorColumn(ui, 1)}
+                              disabled={mirrorIndex === mirrorMovableColumns.length - 1 || updateMirrorOrderMutation.isPending}
+                              onClick={() => {
+                                const target = mirrorIndex + 1;
+                                if (target >= mirrorMovableColumns.length) return;
+                                const next = [...mirrorMovableColumns];
+                                const [moved] = next.splice(mirrorIndex, 1);
+                                next.splice(target, 0, moved);
+                                saveMirrorColumnOrder(next.map((candidate) => candidate.token));
+                              }}
                               title={t("records.moveColumnRight", "Правее")}
                             >
                               <ChevronRight className="w-3.5 h-3.5" />
@@ -6521,15 +6790,6 @@ export function EntityRecords({
                       </th>
                       );
                     })}
-                    {showStatusColumn && (
-                      <th
-                        className="relative align-top text-center px-4 py-3 font-medium text-slate-600"
-                        style={colWidthStyle("__status__")}
-                      >
-                        {t("records.status", "Статус")}
-                        <ResizeHandle colKey="__status__" />
-                      </th>
-                    )}
                     {showActionsColumn && (setupMode ? (
                       <th className="align-top text-center px-4 py-2 font-medium text-slate-600">
                         <div className="inline-flex items-center gap-2">
@@ -6568,7 +6828,7 @@ export function EntityRecords({
                   {canCreate && !setupMode && !showGroups && !addingRow && (
                     <tr>
                       <td
-                        colSpan={orderedColumns.length + (showBulk ? 1 : 0) + (showStatusColumn ? 1 : 0) + (showActionsColumn ? 1 : 0)}
+                        colSpan={orderedColumns.length + (showBulk ? 1 : 0) + (showActionsColumn ? 1 : 0)}
                         className="bg-white border-b border-slate-200 px-2 py-1.5"
                       >
                         <button
@@ -6592,7 +6852,7 @@ export function EntityRecords({
                   {(showGroups ? groupList.length === 0 : records.length === 0) && (
                     <tr>
                       <td
-                        colSpan={orderedColumns.length + (showBulk ? 1 : 0) + (showStatusColumn ? 1 : 0) + (showActionsColumn ? 1 : 0)}
+                        colSpan={orderedColumns.length + (showBulk ? 1 : 0) + (showActionsColumn ? 1 : 0)}
                         className="text-center py-12 text-slate-400"
                       >
                         {total === 0 && (search.trim() || (selectedConfig.filters?.length ?? 0) > 0)
@@ -6605,6 +6865,39 @@ export function EntityRecords({
                     <tr className="border-b border-blue-100 bg-blue-50/40">
                       {showBulk && <td style={bulkColStyle("#EFF6FF")} />}
                       {orderedColumns.map((col) => {
+                        if (col.kind === "status") {
+                          const selectedStatus =
+                            newRowStatus === NO_STATUS ? undefined : statusById.get(Number(newRowStatus));
+                          return (
+                            <td key={STATUS_COLUMN_KEY} className="px-2 py-1.5 align-top" style={colWidthStyle(STATUS_COLUMN_KEY)}>
+                              {statusManualEditable ? (
+                                <Select
+                                  value={newRowStatus}
+                                  onValueChange={(next) => {
+                                    setNewRowStatus(next);
+                                    setNewRowStatusDirty(true);
+                                  }}
+                                >
+                                  <SelectTrigger className="h-8 w-44 text-sm"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {(allowNoStatus || newRowStatus === NO_STATUS) && (
+                                      <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
+                                    )}
+                                    {dropHidden(statuses).map((s: Status) => (
+                                      <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : selectedStatus ? (
+                                <span style={{ color: readableStatusTextColor(selectedStatus.color) }}>
+                                  {ml(selectedStatus.nameJson)}
+                                </span>
+                              ) : (
+                                <span className="text-slate-300">—</span>
+                              )}
+                            </td>
+                          );
+                        }
                         if (col.kind === "page") {
                           const pf = col.field;
                           const pageFieldAsField = pf.fieldType === "page_ref"
@@ -6758,27 +7051,6 @@ export function EntityRecords({
                           </td>
                         );
                       })}
-                      {showStatusColumn && (
-                        <td className="px-2 py-1.5 align-top" style={colWidthStyle("__status__")}>
-                          <Select
-                            value={newRowStatus}
-                            onValueChange={(next) => {
-                              setNewRowStatus(next);
-                              setNewRowStatusDirty(true);
-                            }}
-                          >
-                            <SelectTrigger className="h-8 w-44 text-sm"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              {(allowNoStatus || newRowStatus === NO_STATUS) && (
-                                <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
-                              )}
-                              {dropHidden(statuses).map((s: Status) => (
-                                <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                      )}
                       {showActionsColumn && (
                       <td className="px-2 py-1.5 align-top">
                         <div className="flex items-center justify-end gap-1">
@@ -6809,7 +7081,7 @@ export function EntityRecords({
                   {showGroups && !groupRowsReady && (expandedGroupIndex >= 0 || expandAll) && (
                     <tr>
                       <td
-                        colSpan={orderedColumns.length + (showBulk ? 1 : 0) + (showStatusColumn ? 1 : 0) + (showActionsColumn ? 1 : 0)}
+                        colSpan={orderedColumns.length + (showBulk ? 1 : 0) + (showActionsColumn ? 1 : 0)}
                         className="text-center py-8 text-slate-400"
                       >
                         <Loader2 className="w-4 h-4 animate-spin inline-block" />
@@ -6967,6 +7239,61 @@ export function EntityRecords({
                           </td>
                         )}
                         {orderedColumns.map((col) => {
+                          if (col.kind === "status") {
+                            return withCollab((
+                              <td
+                                key={STATUS_COLUMN_KEY}
+                                className="px-4 py-3"
+                                style={{
+                                  ...colWidthStyle(STATUS_COLUMN_KEY),
+                                  ...(status &&
+                                  !(editingCell?.recordId === record.id && editingCell?.fieldKey === STATUS_COLUMN_KEY)
+                                    ? { backgroundColor: `${status.color}20` }
+                                    : {}),
+                                }}
+                              >
+                                {statusManualEditable &&
+                                editingCell?.recordId === record.id &&
+                                editingCell?.fieldKey === STATUS_COLUMN_KEY ? (
+                                  <Select
+                                    defaultOpen
+                                    value={record.statusId != null ? String(record.statusId) : NO_STATUS}
+                                    onValueChange={(v) => commitStatus(record, v)}
+                                    onOpenChange={(o) => { if (!o) setEditingCell(null); }}
+                                  >
+                                    <SelectTrigger className="h-8 w-44 text-sm"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      {!workflowActiveForRecord(record) && (allowNoStatus || record.statusId == null) && (
+                                        <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
+                                      )}
+                                      {allowedStatusesForRecord(record).map((s: Status) => (
+                                        <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  <div
+                                    className={`flex items-center gap-2 ${inlineEditEnabled && statusManualEditable ? "cursor-pointer rounded hover:bg-blue-50/60 -mx-1 px-1" : ""}`}
+                                    onClick={inlineEditEnabled && statusManualEditable ? () => setEditingCell({ recordId: record.id, fieldKey: STATUS_COLUMN_KEY }) : undefined}
+                                    title={inlineEditEnabled && statusManualEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
+                                  >
+                                    {status ? (
+                                      <span className="inline-flex items-center font-medium" style={{ color: readableStatusTextColor(status.color) }}>
+                                        {ml(status.nameJson)}
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-300">—</span>
+                                    )}
+                                    {record.archivedAt && (
+                                      <span className="inline-flex items-center gap-1 text-indigo-500 text-xs">
+                                        <Archive className="w-3 h-3" /> {t("records.inArchive", "В архиве")}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                            ), STATUS_COLUMN_KEY);
+                          }
                           const cellNode = (() => {
                           if (col.kind === "entity") {
                           const f = col.field;
@@ -7335,59 +7662,6 @@ export function EntityRecords({
                           const key = col.kind === "entity" ? col.field.fieldKey : (col.kind === "page" ? col.field.fieldKey : null);
                           return key ? withCollab(cellNode as React.ReactElement, key) : cellNode;
                         })}
-                        {showStatusColumn && withCollab((
-                          <td
-                            className="px-4 py-3"
-                            style={{
-                              ...colWidthStyle("__status__"),
-                              ...(status &&
-                              !(editingCell?.recordId === record.id && editingCell?.fieldKey === "__status__")
-                                ? { backgroundColor: `${status.color}20` }
-                                : {}),
-                            }}
-                          >
-                            {editingCell?.recordId === record.id && editingCell?.fieldKey === "__status__" ? (
-                              <Select
-                                defaultOpen
-                                value={record.statusId != null ? String(record.statusId) : NO_STATUS}
-                                onValueChange={(v) => commitStatus(record, v)}
-                                onOpenChange={(o) => { if (!o) setEditingCell(null); }}
-                              >
-                                <SelectTrigger className="h-8 w-44 text-sm"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  {!workflowActiveForRecord(record) && (allowNoStatus || record.statusId == null) && (
-                                    <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
-                                  )}
-                                  {allowedStatusesForRecord(record).map((s: Status) => (
-                                    <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            ) : (
-                            <div
-                              className={`flex items-center gap-2 ${inlineEditEnabled ? "cursor-pointer rounded hover:bg-blue-50/60 -mx-1 px-1" : ""}`}
-                              onClick={inlineEditEnabled ? () => setEditingCell({ recordId: record.id, fieldKey: "__status__" }) : undefined}
-                              title={inlineEditEnabled ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
-                            >
-                              {status ? (
-                                <span
-                                  className="inline-flex items-center font-medium"
-                                  style={{ color: readableStatusTextColor(status.color) }}
-                                >
-                                  {ml(status.nameJson)}
-                                </span>
-                              ) : (
-                                <span className="text-slate-300">—</span>
-                              )}
-                              {record.archivedAt && (
-                                <span className="inline-flex items-center gap-1 text-indigo-500 text-xs">
-                                  <Archive className="w-3 h-3" /> {t("records.inArchive", "В архиве")}
-                                </span>
-                              )}
-                            </div>
-                            )}
-                          </td>
-                        ), "__status__")}
                         {showActionsColumn && (
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
@@ -7549,8 +7823,8 @@ export function EntityRecords({
 
             {statuses.length > 0 && (
               <div className="space-y-1.5">
-                <Label>{t("records.status", "Статус")}</Label>
-                <Select
+                <Label>{statusColumnName}</Label>
+                {statusManualEditable ? <Select
                   value={statusId}
                   onValueChange={(next) => {
                     setStatusId(next);
@@ -7568,14 +7842,20 @@ export function EntityRecords({
                       </SelectItem>
                     ))}
                   </SelectContent>
-                </Select>
-                {workflowActive && (
+                </Select> : (
+                  <div data-testid="text-status-readonly" className="h-9 rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                    {statusId === NO_STATUS
+                      ? t("records.noStatus", "Без статуса")
+                      : ml(statusById.get(Number(statusId))?.nameJson)}
+                  </div>
+                )}
+                {statusManualEditable && workflowActive && (
                   <p className="text-xs text-slate-400">
                     {t("records.workflowHint", "Доступны только разрешённые процессом переходы из текущего статуса.")}
                   </p>
                 )}
                 {(() => {
-                  if (!workflowActive) return null;
+                  if (!statusManualEditable || !workflowActive) return null;
                   const targetId = statusId === NO_STATUS ? null : Number(statusId);
                   if (targetId == null || targetId === currentEditStatusId) return null;
                   const matchedTransition = transitions.find(
@@ -9239,7 +9519,10 @@ function RecordEditModal({
   const { data: fields = [], isLoading: fieldsLoading } = useListEntityFields(entityId);
   const { data: statuses = [] } = useListEntityStatuses(entityId);
   const { data: entities = [] } = useListEntities();
-  const allowNoStatus = entities.find((e: Entity) => e.id === entityId)?.allowNoStatus ?? true;
+  const linkedEntity = entities.find((e: Entity) => e.id === entityId);
+  const allowNoStatus = linkedEntity?.allowNoStatus ?? true;
+  const statusManualEditable = canManuallyEditStatus(linkedEntity, user?.id);
+  const statusColumnName = ml(linkedEntity?.statusNameJson) || t("records.status", "Статус");
   const updateMutation = useUpdateRecord();
   const [form, setForm] = useState<FormState>({});
   const [statusId, setStatusId] = useState<string>(NO_STATUS);
@@ -9296,7 +9579,7 @@ function RecordEditModal({
         id: recordId,
         data: {
           valuesJson,
-          ...(statusDirty ? { statusId: statusValue } : {}),
+          ...(statusManualEditable && statusDirty ? { statusId: statusValue } : {}),
           expectedVersion: draftVersion ?? record.version,
         },
       });
@@ -9348,8 +9631,8 @@ function RecordEditModal({
             />
             {statuses.length > 0 && (
               <div className="space-y-1.5">
-                <Label>{t("records.status", "Статус")}</Label>
-                <Select
+                <Label>{statusColumnName}</Label>
+                {statusManualEditable ? <Select
                   value={statusId}
                   onValueChange={(next) => {
                     setStatusId(next);
@@ -9367,7 +9650,13 @@ function RecordEditModal({
                       <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
                     ))}
                   </SelectContent>
-                </Select>
+                </Select> : (
+                  <div data-testid="text-linked-status-readonly" className="h-9 rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                    {statusId === NO_STATUS
+                      ? t("records.noStatus", "Без статуса")
+                      : ml(statuses.find((status: Status) => status.id === Number(statusId))?.nameJson)}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -9423,7 +9712,8 @@ function QuickCreateRelatedRecordDialog({
   const { data: relFieldsRaw = [], isLoading: fieldsLoading } = useListEntityFields(relatedEntityId);
   const { data: relStatuses = [] } = useListEntityStatuses(relatedEntityId);
   const { data: entities = [] } = useListEntities();
-  const allowNoStatus = entities.find((e: Entity) => e.id === relatedEntityId)?.allowNoStatus ?? true;
+  const relatedEntity = entities.find((e: Entity) => e.id === relatedEntityId);
+  const allowNoStatus = relatedEntity?.allowNoStatus ?? true;
   const { data: userOptions = [] } = useListUserOptions();
   const createMutation = useCreateEntityRecord();
   const setLinkMutation = useSetEntityRelatedLink();
@@ -9450,6 +9740,8 @@ function QuickCreateRelatedRecordDialog({
   // display-only hide here) — the rendering itself is the shared RecordFormBody,
   // so the quick dialog can no longer drift from the entity-page form.
   const { fieldAccess: quickFieldAccess, user: quickUser } = useAuth();
+  const statusManualEditable = canManuallyEditStatus(relatedEntity, quickUser?.id);
+  const statusColumnName = ml(relatedEntity?.statusNameJson) || t("records.status", "Статус");
   const quickRoleIds: number[] =
     quickUser?.roleIds && quickUser.roleIds.length > 0
       ? quickUser.roleIds
@@ -9510,7 +9802,7 @@ function QuickCreateRelatedRecordDialog({
       // When the default status is hidden from this role's picker, omit statusId
       // entirely so the server assigns the (hidden) default itself.
       const statusPart =
-        !statusDirty || (statusValue === null && defaultStatusHidden)
+        !statusManualEditable || !statusDirty || (statusValue === null && defaultStatusHidden)
           ? {}
           : { statusId: statusValue };
       const created = await createMutation.mutateAsync({
@@ -9631,8 +9923,8 @@ function QuickCreateRelatedRecordDialog({
             />
             {relStatuses.length > 0 && (
               <div className="space-y-1.5">
-                <Label>{t("records.status", "Статус")}</Label>
-                <Select
+                <Label>{statusColumnName}</Label>
+                {statusManualEditable ? <Select
                   value={statusId}
                   onValueChange={(next) => {
                     setStatusId(next);
@@ -9650,7 +9942,13 @@ function QuickCreateRelatedRecordDialog({
                       <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
                     ))}
                   </SelectContent>
-                </Select>
+                </Select> : (
+                  <div data-testid="text-quick-status-readonly" className="h-9 rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                    {statusId === NO_STATUS
+                      ? t("records.noStatus", "Без статуса")
+                      : ml(relStatuses.find((status: Status) => status.id === Number(statusId))?.nameJson)}
+                  </div>
+                )}
               </div>
             )}
           </div>

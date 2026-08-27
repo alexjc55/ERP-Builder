@@ -6412,7 +6412,7 @@ components:
     # ENTITIES
     Entity:
       type: object
-      required: [id, entityKey, nameJson, icon, defaultSortJson, sortOrder, isActive, createdAt, updatedAt]
+      required: [id, entityKey, nameJson, icon, defaultSortJson, statusNameJson, statusManualEditPolicy, statusManualEditUserIds, sortOrder, isActive, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -6449,6 +6449,23 @@ components:
         allowNoStatus:
           type: boolean
           description: When false, the "Без статуса" option is hidden from the record status pickers for this entity.
+        statusNameJson:
+          $ref: "#/components/schemas/MultilingualText"
+          description: Per-entity label for the synthetic system-status column. An empty object uses the platform translation.
+        statusSortOrder:
+          type: ["integer", "null"]
+          description: Sort position of the synthetic system-status column. Null is the backward-compatible default at the end.
+        statusManualEditPolicy:
+          type: string
+          enum: [allowed, disabled_all, disabled_users]
+          description: Controls explicit human statusId writes. System-assigned statuses are unaffected.
+        statusManualEditUserIds:
+          type: array
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
+          description: Active users blocked when statusManualEditPolicy is disabled_users.
         sortOrder:
           type: integer
         isActive:
@@ -6495,6 +6512,20 @@ components:
         allowNoStatus:
           type: boolean
           default: true
+        statusNameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        statusSortOrder:
+          type: ["integer", "null"]
+        statusManualEditPolicy:
+          type: string
+          enum: [allowed, disabled_all, disabled_users]
+          default: allowed
+        statusManualEditUserIds:
+          type: array
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
         sortOrder:
           type: integer
         isActive:
@@ -6534,6 +6565,19 @@ components:
           type: boolean
         allowNoStatus:
           type: boolean
+        statusNameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        statusSortOrder:
+          type: ["integer", "null"]
+        statusManualEditPolicy:
+          type: string
+          enum: [allowed, disabled_all, disabled_users]
+        statusManualEditUserIds:
+          type: array
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
         sortOrder:
           type: integer
         isActive:
@@ -7116,7 +7160,10 @@ components:
             required: [id, sortOrder]
             properties:
               id:
-                type: integer
+                oneOf:
+                  - type: integer
+                  - type: string
+                    enum: [__status__]
               sortOrder:
                 type: integer
 

@@ -115,6 +115,7 @@ import {
   type FormulaGroupConfig,
   type FormulaGroupReference,
 } from "../lib/formula-group-result";
+import { isManualStatusEditDisabled } from "../lib/status-manual-edit";
 
 const router: IRouter = Router();
 
@@ -3348,6 +3349,20 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
     res.status(404).json({ error: "Entity not found" });
     return;
   }
+  if (body.data.statusId !== undefined) {
+    const [statusPolicy] = await db
+      .select({
+        policy: entitiesTable.statusManualEditPolicy,
+        userIds: entitiesTable.statusManualEditUserIds,
+      })
+      .from(entitiesTable)
+      .where(eq(entitiesTable.id, entityId))
+      .limit(1);
+    if (statusPolicy && isManualStatusEditDisabled(statusPolicy.policy, statusPolicy.userIds, req.user!.userId)) {
+      res.status(403).json({ error: "Manual status editing is disabled for this user" });
+      return;
+    }
+  }
 
   // Page-level create ban (pages.disableCreate): role-independent hard stop for
   // creates issued FROM that page. Other pages of the same entity are unaffected.
@@ -3861,6 +3876,19 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
       if (!locked) throw new LockedUpdateError(404, "Record not found");
       if (input.expectedVersion != null && locked.version !== input.expectedVersion) return undefined;
       if (locked.entityId !== existing.entityId) throw new LockedUpdateError(404, "Record not found");
+      if (hasStatus) {
+        const [statusPolicy] = await tx
+          .select({
+            policy: entitiesTable.statusManualEditPolicy,
+            userIds: entitiesTable.statusManualEditUserIds,
+          })
+          .from(entitiesTable)
+          .where(eq(entitiesTable.id, locked.entityId))
+          .limit(1);
+        if (statusPolicy && isManualStatusEditDisabled(statusPolicy.policy, statusPolicy.userIds, req.user!.userId)) {
+          throw new LockedUpdateError(403, "Manual status editing is disabled for this user");
+        }
+      }
       if (
         scope === "own" &&
         !(await isRecordOwned(locked.entityId, locked, scopeFieldKeys, req.user!.userId, fields, tx))

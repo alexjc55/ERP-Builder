@@ -10787,5 +10787,13 @@
   {"key":"inbound.transformString","ru":"Привести к строке","en":"Convert to string","he":"המר למחרוזת"},
   {"key":"inbound.transformNumber","ru":"Привести к числу","en":"Convert to number","he":"המר למספר"},
   {"key":"inbound.transformBoolean","ru":"Привести к Boolean","en":"Convert to boolean","he":"המר לבוליאני"},
-  {"key":"inbound.transformDate","ru":"Привести к ISO дате","en":"Convert to ISO date","he":"המר לתאריך ISO"}
+  {"key":"inbound.transformDate","ru":"Привести к ISO дате","en":"Convert to ISO date","he":"המר לתאריך ISO"},
+  {"key":"records.statusConfigTitle","ru":"Настройка системного статуса","en":"System status configuration","he":"הגדרת סטטוס מערכת"},
+  {"key":"records.statusConfigSaved","ru":"Настройки статуса сохранены","en":"Status settings saved","he":"הגדרות הסטטוס נשמרו"},
+  {"key":"records.statusConfigSaveError","ru":"Не удалось сохранить настройки статуса","en":"Failed to save status settings","he":"שמירת הגדרות הסטטוס נכשלה"},
+  {"key":"records.statusManualAllowed","ru":"Разрешено всем","en":"Allowed for everyone","he":"מותר לכולם"},
+  {"key":"records.statusManualDisabledAll","ru":"Запрещено всем","en":"Disabled for everyone","he":"אסור לכולם"},
+  {"key":"records.statusManualDisabledUsers","ru":"Запрещено выбранным пользователям","en":"Disabled for selected users","he":"אסור למשתמשים שנבחרו"},
+  {"key":"records.statusSelectUsers","ru":"Выберите пользователей","en":"Select users","he":"בחר משתמשים"},
+  {"key":"records.statusUsersSelected","ru":"Выбрано пользователей","en":"Users selected","he":"משתמשים שנבחרו"}
 ]

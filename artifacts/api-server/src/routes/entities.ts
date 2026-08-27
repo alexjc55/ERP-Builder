@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, entitiesTable, entityRecordsTable, pagesTable, relationsTable, recordLinksTable } from "@workspace/db";
+import { db, entitiesTable, entityRecordsTable, pagesTable, relationsTable, recordLinksTable, usersTable } from "@workspace/db";
 import { eq, asc, and, ne, or, inArray } from "drizzle-orm";
 import { lockRecordsStable, touchLockedRecords } from "../lib/record-links";
 import { emitEvent, EVENT_RECORD_UPDATED } from "../lib/events";
@@ -16,6 +16,27 @@ import {
 const router: IRouter = Router();
 
 const ENTITY_KEY_RE = /^[a-z][a-z0-9_]*$/;
+
+async function validateStatusManualEditUsers(
+  userIds: number[] | undefined,
+): Promise<string | null> {
+  if (userIds === undefined || userIds.length === 0) return null;
+  if (userIds.some((id) => !Number.isInteger(id) || id <= 0)) {
+    return "statusManualEditUserIds must contain positive integer user IDs";
+  }
+  if (new Set(userIds).size !== userIds.length) {
+    return "statusManualEditUserIds must not contain duplicates";
+  }
+  const rows = await db
+    .select({ id: usersTable.id, isActive: usersTable.isActive })
+    .from(usersTable)
+    .where(inArray(usersTable.id, userIds));
+  const byId = new Map(rows.map((user) => [user.id, user.isActive]));
+  const missing = userIds.find((id) => !byId.has(id));
+  if (missing !== undefined) return `Referenced user ${missing} does not exist`;
+  const inactive = userIds.find((id) => byId.get(id) !== true);
+  return inactive === undefined ? null : `Referenced user ${inactive} is not active`;
+}
 
 async function validatePageBinding(
   pageId: number,
@@ -104,6 +125,11 @@ router.post("/entities", requireAuth, requireAdmin("entities"), async (req, res)
 
   if (parsed.data.defaultPageSize != null && ![50, 100, 200, 300, 500].includes(parsed.data.defaultPageSize)) {
     res.status(400).json({ error: "defaultPageSize must be 50, 100 or 200" });
+    return;
+  }
+  const statusUsersError = await validateStatusManualEditUsers(parsed.data.statusManualEditUserIds);
+  if (statusUsersError) {
+    res.status(400).json({ error: statusUsersError });
     return;
   }
 
@@ -196,6 +222,17 @@ router.put("/entities/:id", requireAuth, requireAdmin("entities"), async (req, r
   }
   if (body.pivotEnabled != null) updateData.pivotEnabled = body.pivotEnabled;
   if (body.allowNoStatus != null) updateData.allowNoStatus = body.allowNoStatus;
+  if (body.statusNameJson != null) updateData.statusNameJson = body.statusNameJson;
+  if (body.statusSortOrder !== undefined) updateData.statusSortOrder = body.statusSortOrder;
+  if (body.statusManualEditPolicy != null) updateData.statusManualEditPolicy = body.statusManualEditPolicy;
+  if (body.statusManualEditUserIds != null) {
+    const statusUsersError = await validateStatusManualEditUsers(body.statusManualEditUserIds);
+    if (statusUsersError) {
+      res.status(400).json({ error: statusUsersError });
+      return;
+    }
+    updateData.statusManualEditUserIds = body.statusManualEditUserIds;
+  }
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
   if (body.isActive != null) updateData.isActive = body.isActive;
 

@@ -48,6 +48,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
 import {
   Upload,
   Download,
@@ -90,6 +91,13 @@ function decodeMap(v: string): ColMap {
 }
 
 const norm = (s: string) => s.trim().toLowerCase();
+function canManuallyImportStatus(entity: Entity | undefined, userId: number | undefined): boolean {
+  if (!entity) return true;
+  if (entity.statusManualEditPolicy === "disabled_all") return false;
+  return entity.statusManualEditPolicy !== "disabled_users" ||
+    userId == null ||
+    !entity.statusManualEditUserIds.includes(userId);
+}
 const splitMulti = (raw: unknown): string[] =>
   raw == null ? [] : String(raw).split(/[;\n]+/).map((s) => s.trim()).filter((s) => s !== "");
 
@@ -170,6 +178,7 @@ function FileCard({
   index,
   entities,
   pages,
+  currentUserId,
   result,
   onBuilt,
   onRemove,
@@ -179,6 +188,7 @@ function FileCard({
   index: number;
   entities: Entity[];
   pages: Page[];
+  currentUserId?: number;
   result: BatchImportFileResult | undefined;
   onBuilt: (id: string, file: BatchImportFile | null) => void;
   onRemove: (id: string) => void;
@@ -230,6 +240,8 @@ function FileCard({
     [fieldsData],
   );
   const statuses: Status[] = useMemo(() => statusesData ?? [], [statusesData]);
+  const selectedEntity = entities.find((entity) => entity.id === entityId);
+  const statusManualEditable = canManuallyImportStatus(selectedEntity, currentUserId);
   const relations: Relation[] = useMemo(() => relationsData ?? [], [relationsData]);
   const pageFields: PageField[] = useMemo(
     () => (pageFieldsData ?? []).filter((f) => !NON_IMPORTABLE.has(f.fieldType)),
@@ -247,7 +259,7 @@ function FileCard({
           return hdrs.map((h): ColMap => {
             const n = norm(h);
             if (!n) return { kind: "ignore" };
-            if (n === norm(STATUS_HEADER) || n === "статус" || n === "status") return { kind: "status" };
+            if (statusManualEditable && (n === norm(STATUS_HEADER) || n === "статус" || n === "status")) return { kind: "status" };
             const f = fields.find((x) => norm(ml(x.nameJson)) === n || norm(x.fieldKey) === n);
             if (f) return { kind: "field", fieldKey: f.fieldKey };
             const r = relations.find((x) => norm(ml(x.nameJson)) === n || norm(x.relationKey) === n);
@@ -263,7 +275,7 @@ function FileCard({
           return { kind: "ignore" };
         });
       },
-    [kind, fields, relations, pageFields, ml],
+    [kind, fields, relations, pageFields, ml, statusManualEditable],
   );
 
   const sig = `${kind}:${entityId ?? ""}:${pageId ?? ""}:${headers.join("|")}`;
@@ -279,6 +291,16 @@ function FileCard({
     setKeyFieldKey("");
     setHostKeyFieldKey("");
   }, [sig, metaReady, autoMap, headers]);
+
+  // A policy may arrive after a spreadsheet was auto-mapped, or change while the
+  // card remains open. Remove an already-selected status mapping immediately so
+  // it cannot be sent through preview/commit.
+  useEffect(() => {
+    if (statusManualEditable) return;
+    setMapping((current) => current.some((item) => item.kind === "status")
+      ? current.map((item) => item.kind === "status" ? { kind: "ignore" } : item)
+      : current);
+  }, [statusManualEditable]);
 
   // ── Build the BatchImportFile (null = not ready) + a human warning ──────────
   const { file, warning } = useMemo((): { file: BatchImportFile | null; warning: string | null } => {
@@ -304,13 +326,13 @@ function FileCard({
           const raw = cells[c];
           if (m.kind === "field") values[m.fieldKey] = raw;
           else if (m.kind === "relation") rels[String(m.relationId)] = splitMulti(raw);
-          else if (m.kind === "status") statusName = raw == null || String(raw).trim() === "" ? null : String(raw);
+          else if (m.kind === "status" && statusManualEditable) statusName = raw == null || String(raw).trim() === "" ? null : String(raw);
         });
         return {
           index: i + 2,
           values,
           relations: Object.keys(rels).length > 0 ? rels : undefined,
-          statusName,
+          ...(statusManualEditable ? { statusName } : {}),
         };
       });
       const relationColumns = [...usedRelationIds].map((relId) => ({
@@ -341,7 +363,7 @@ function FileCard({
       };
     });
     return { file: { kind: "page", label: data.fileName, pageId, hostKeyFieldKey, rows }, warning: null };
-  }, [kind, entityId, pageId, mapping, relTargetKeys, keyFieldKey, hostKeyFieldKey, relations, data, ml, t]);
+  }, [kind, entityId, pageId, mapping, relTargetKeys, keyFieldKey, hostKeyFieldKey, relations, data, ml, t, statusManualEditable]);
 
   useEffect(() => {
     onBuilt(card.id, file);
@@ -380,9 +402,11 @@ function FileCard({
           }
         });
         relations.forEach((r) => header.push(ml(r.nameJson) || r.relationKey));
-        header.push(STATUS_HEADER);
-        const statusValues = statuses.map((s) => ml(s.nameJson) || s.statusKey).filter((v) => v.trim() !== "");
-        if (statusValues.length > 0) dropdowns.push({ col: fields.length + relations.length, values: statusValues });
+        if (statusManualEditable) {
+          header.push(STATUS_HEADER);
+          const statusValues = statuses.map((s) => ml(s.nameJson) || s.statusKey).filter((v) => v.trim() !== "");
+          if (statusValues.length > 0) dropdowns.push({ col: fields.length + relations.length, values: statusValues });
+        }
       } else {
         base = selectedPage ? ml(selectedPage.nameJson) || String(selectedPage.id) : "import";
         const hostField = mirrorFields.find((f) => f.fieldKey === hostKeyFieldKey);
@@ -585,7 +609,7 @@ function FileCard({
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value={MAP_IGNORE}>{t("import.ignore", "— Пропустить —")}</SelectItem>
-                            {kind === "entity" && <SelectItem value={MAP_STATUS}>{t("import.status", "Статус")}</SelectItem>}
+                            {kind === "entity" && statusManualEditable && <SelectItem value={MAP_STATUS}>{t("import.status", "Статус")}</SelectItem>}
                             {kind === "page" && (
                               <SelectItem value={MAP_HOSTKEY}>{t("import.hostkey", "🔑 Ключ записи")}</SelectItem>
                             )}
@@ -723,6 +747,7 @@ export default function ImportPage() {
   const ml = useML();
   const pageLabel = usePagePathLabel();
   const { toast } = useToast();
+  const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: entitiesData } = useListEntities();
@@ -945,6 +970,7 @@ export default function ImportPage() {
           index={i}
           entities={entities}
           pages={pages}
+          currentUserId={user?.id}
           result={resultByFileId[c.id]}
           onBuilt={onBuilt}
           onRemove={removeFile}
