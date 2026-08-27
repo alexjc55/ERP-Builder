@@ -10,6 +10,7 @@
     "release": "pnpm run typecheck && pnpm --filter @workspace/db run generate",
     "test:e2e:collaboration": "playwright test tests/e2e/collaboration.spec.ts",
     "validate:deployment:collaboration": "bash scripts/validate-collaboration-e2e.sh",
+    "validate:inbound-concurrency": "pnpm --filter @workspace/api-server run test:inbound-db",
     "validate:dependency-install": "bash scripts/validate-dependency-install.sh"
   },
   "private": true,

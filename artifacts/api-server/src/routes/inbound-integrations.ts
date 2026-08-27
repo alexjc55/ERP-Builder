@@ -235,9 +235,16 @@ adminRouter.post("/inbound-deliveries/:id/reprocess", requireAuth, requireAdmin(
   if (current.status === "processing") { res.status(409).json({ error: "Delivery is currently processing" }); return; }
   const [row] = await db.update(inboundDeliveriesTable)
     .set({ status: "queued", errorCode: null, errorMessage: null, completedAt: null, processingStartedAt: null })
-    .where(and(eq(inboundDeliveriesTable.id, id), sql`${inboundDeliveriesTable.status} <> 'processing'`))
+    // Recheck the snapshot state: a worker may claim/complete between the
+    // read above and this reset, and resetting that newer state would replay it.
+    .where(and(eq(inboundDeliveriesTable.id, id), eq(inboundDeliveriesTable.status, current.status)))
     .returning();
-  if (!row) { res.status(404).json({ error: "Delivery not found" }); return; }
+  if (!row) {
+    const [latest] = await db.select({ id: inboundDeliveriesTable.id }).from(inboundDeliveriesTable).where(eq(inboundDeliveriesTable.id, id));
+    if (!latest) { res.status(404).json({ error: "Delivery not found" }); return; }
+    res.status(409).json({ error: "Delivery state changed; it was not reprocessed" });
+    return;
+  }
   if (req.body?.dryRun === true) {
     await db.update(inboundDeliveriesTable).set({
       status: "processing",
@@ -752,22 +759,31 @@ async function failDelivery(id: number, code: string, message: string) {
   await db.update(inboundDeliveriesTable).set({ status: "failed", errorCode: code, errorMessage: message.slice(0, 1000), completedAt: new Date() }).where(eq(inboundDeliveriesTable.id, id));
 }
 
+/**
+ * Atomically claim and execute one eligible delivery. Exported as a narrow
+ * worker seam so the real PostgreSQL claim can be regression-tested without
+ * making a recovery scan touch unrelated development rows.
+ */
+export async function claimAndProcessInboundDelivery(deliveryId: number): Promise<boolean> {
+  const [claimed] = await db.update(inboundDeliveriesTable)
+    .set({
+      status: "processing",
+      processingStartedAt: new Date(),
+      attemptCount: sql`${inboundDeliveriesTable.attemptCount} + 1`,
+    })
+    .where(and(eq(inboundDeliveriesTable.id, deliveryId), sql`(${inboundDeliveriesTable.status} = 'queued' OR (${inboundDeliveriesTable.status} = 'processing' AND ${inboundDeliveriesTable.processingStartedAt} < now() - interval '10 minutes'))`))
+    .returning({ id: inboundDeliveriesTable.id });
+  if (!claimed) return false;
+  await processDelivery(claimed.id, false);
+  return true;
+}
+
 /** Persistent recovery worker: claim rows atomically so processes never execute a job twice. */
 export async function recoverInboundDeliveries(limit = 10): Promise<void> {
   const candidates = await db.select({ id: inboundDeliveriesTable.id }).from(inboundDeliveriesTable)
     .where(sql`(${inboundDeliveriesTable.status} = 'queued' OR (${inboundDeliveriesTable.status} = 'processing' AND ${inboundDeliveriesTable.processingStartedAt} < now() - interval '10 minutes'))`)
     .orderBy(inboundDeliveriesTable.receivedAt).limit(limit);
-  for (const candidate of candidates) {
-    const [claimed] = await db.update(inboundDeliveriesTable)
-      .set({
-        status: "processing",
-        processingStartedAt: new Date(),
-        attemptCount: sql`${inboundDeliveriesTable.attemptCount} + 1`,
-      })
-      .where(and(eq(inboundDeliveriesTable.id, candidate.id), sql`(${inboundDeliveriesTable.status} = 'queued' OR (${inboundDeliveriesTable.status} = 'processing' AND ${inboundDeliveriesTable.processingStartedAt} < now() - interval '10 minutes'))`))
-      .returning({ id: inboundDeliveriesTable.id });
-    if (claimed) void processDelivery(claimed.id, false).catch(() => {});
-  }
+  await Promise.all(candidates.map((candidate) => claimAndProcessInboundDelivery(candidate.id)));
 }
 
 /** Insert the system module row once so it appears in the Modules registry. */
