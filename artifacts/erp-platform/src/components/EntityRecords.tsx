@@ -740,7 +740,13 @@ function FileCell({ value }: { value: FileValue }) {
             <span className="truncate">{value.name}</span>
           </button>
         </HoverCardTrigger>
-        <HoverCardContent className="w-80 p-2" onClick={(e) => e.stopPropagation()}>
+        <HoverCardContent
+          side="top"
+          align="start"
+          sideOffset={2}
+          className="w-80 p-2"
+          onClick={(e) => e.stopPropagation()}
+        >
           {isGDrive && (
             <div className="mb-1.5 inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
               <Cloud className="h-3 w-3" />
@@ -795,7 +801,13 @@ function UrlPreviewCell({ url, label }: { url: string; label?: string }) {
       <HoverCardTrigger asChild>
         <span className="inline-block max-w-full truncate align-bottom">{link}</span>
       </HoverCardTrigger>
-      <HoverCardContent className="w-80 p-2" onClick={(e) => e.stopPropagation()}>
+      <HoverCardContent
+        side="top"
+        align="start"
+        sideOffset={2}
+        className="w-80 p-2"
+        onClick={(e) => e.stopPropagation()}
+      >
         {preview.kind === "image" ? (
           <img src={preview.src} alt={url} className="max-h-64 w-full rounded object-contain" />
         ) : (
