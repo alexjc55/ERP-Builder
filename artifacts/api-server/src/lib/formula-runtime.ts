@@ -9,6 +9,7 @@ import {
   type EntityField,
   type RecordPermission,
   type RolePermissions,
+  appSettingsTable,
 } from "@workspace/db";
 import { and, eq, inArray, isNull, notInArray, or } from "drizzle-orm";
 import {
@@ -28,7 +29,17 @@ import {
   type LinkedFormulaSource,
 } from "./linked-formula-resolver";
 import { normalizeFormulaFieldSources } from "./formula-field-config";
-import { buildFormulaScope, type FormulaEvaluationOptions, type FormulaFieldDef } from "@workspace/formula";
+import { buildFormulaScope, DEFAULT_FORMULA_TIME_ZONE, DEFAULT_WORKING_DAYS, type FormulaEvaluationOptions, type FormulaFieldDef } from "@workspace/formula";
+
+/** Authoritative application calendar settings for formula materialization. */
+export async function loadFormulaOptions(): Promise<FormulaEvaluationOptions> {
+  const [settings] = await db.select({ timeZone: appSettingsTable.timeZone, workingDays: appSettingsTable.workingDays })
+    .from(appSettingsTable).where(eq(appSettingsTable.id, 1)).limit(1);
+  return {
+    timeZone: settings?.timeZone ?? DEFAULT_FORMULA_TIME_ZONE,
+    workingDays: settings?.workingDays ?? DEFAULT_WORKING_DAYS,
+  };
+}
 
 type FormulaConfiguredField = { fieldType: string; formulaConfigJson?: unknown; relationConfigJson?: unknown };
 type FormulaDependencyField = FormulaConfiguredField & {

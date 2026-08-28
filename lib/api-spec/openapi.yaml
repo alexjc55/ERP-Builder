@@ -32,8 +32,121 @@ tags:
     description: Recycle bin for local files removed from records (superAdmin)
   - name: inboundIntegrations
     description: Universal inbound webhook integrations
+  - name: documentGeneration
+    description: Entity-bound DOCX document templates and generation
 
 paths:
+  /document-generation-runs:
+    get:
+      operationId: listDocumentGenerationRuns
+      tags: [documentGeneration]
+      parameters:
+        - { name: templateId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: entityId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: status, in: query, schema: { type: string, enum: [running, success, error] } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 100000, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        "200":
+          description: Paginated document generation audit history
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DocumentGenerationRunPage" }
+  /document-templates:
+    get:
+      operationId: listDocumentTemplates
+      tags: [documentGeneration]
+      parameters:
+        - { name: entityId, in: query, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Templates and immutable revisions
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/DocumentTemplate" } }
+    post:
+      operationId: createDocumentTemplate
+      tags: [documentGeneration]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DocumentTemplateInput" }
+      responses:
+        "201":
+          description: Created template
+          content: { application/json: { schema: { $ref: "#/components/schemas/DocumentTemplate" } } }
+  /document-templates/{id}:
+    put:
+      operationId: updateDocumentTemplate
+      tags: [documentGeneration]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DocumentTemplateUpdate" }
+      responses:
+        "200":
+          description: Updated template
+          content: { application/json: { schema: { $ref: "#/components/schemas/DocumentTemplate" } } }
+  /document-templates/{id}/revisions:
+    post:
+      operationId: createDocumentTemplateRevision
+      tags: [documentGeneration]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/DocumentTemplateRevisionUpload" }
+      responses:
+        "201":
+          description: Immutable draft revision and parsed manifest
+          content: { application/json: { schema: { $ref: "#/components/schemas/DocumentTemplateRevision" } } }
+  /document-template-revisions/{id}/publish:
+    post:
+      operationId: publishDocumentTemplateRevision
+      tags: [documentGeneration]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        "201":
+          description: New immutable published revision
+          content: { application/json: { schema: { $ref: "#/components/schemas/DocumentTemplateRevision" } } }
+  /document-template-revisions/{id}/test:
+    post:
+      operationId: testDocumentTemplateRevision
+      tags: [documentGeneration]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DocumentGenerationInput" }
+      responses:
+        "200":
+          description: Generated test file download
+          content:
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
+  /document-template-revisions/{id}/generate:
+    post:
+      operationId: generateDocument
+      tags: [documentGeneration]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DocumentGenerationInput" }
+      responses:
+        "200":
+          description: Generated file metadata
+          content: { application/json: { schema: { $ref: "#/components/schemas/GeneratedDocument" } } }
+
   /webhooks/inbound/{integrationId}:
     post:
       operationId: receiveInboundWebhook
@@ -4099,6 +4212,177 @@ components:
       scheme: bearer
       description: Opaque one-time-disclosed inbound integration secret
   schemas:
+    DocumentTemplate:
+      type: object
+      required: [id, entityId, name, isArchived, revisions]
+      properties:
+        id: { type: integer }
+        entityId: { type: integer }
+        name: { type: string }
+        isArchived: { type: boolean }
+        createdBy: { type: ["integer", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        revisions: { type: array, items: { $ref: "#/components/schemas/DocumentTemplateRevision" } }
+    DocumentTemplateInput:
+      type: object
+      required: [entityId, name]
+      properties:
+        entityId: { type: integer }
+        name: { type: string, minLength: 1, maxLength: 200 }
+    DocumentTemplateUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        isArchived: { type: boolean }
+    DocumentTemplateRevision:
+      type: object
+      required: [id, templateId, revision, state, templateName, manifestJson, mappingJson, errorsJson]
+      properties:
+        id: { type: integer }
+        templateId: { type: integer }
+        revision: { type: integer }
+        state: { type: string, enum: [draft, published] }
+        templatePath: { type: string }
+        templateName: { type: string }
+        manifestJson: {}
+        mappingJson: { $ref: "#/components/schemas/DocumentMapping" }
+        errorsJson: { type: array, items: { type: string } }
+        createdBy: { type: ["integer", "null"] }
+        publishedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    DocumentTemplateRevisionUpload:
+      type: object
+      required: [file, mapping]
+      properties:
+        file: { type: string, format: binary }
+        mapping: { type: string, maxLength: 20000, description: JSON-encoded DocumentMapping }
+    DocumentValueMapping:
+      oneOf:
+        - type: object
+          required: [source, fieldKey]
+          properties: { source: { type: string, enum: [field] }, fieldKey: { type: string, minLength: 1 } }
+        - type: object
+          required: [source]
+          properties: { source: { type: string, enum: [status] } }
+        - type: object
+          required: [source, pageId, fieldKey]
+          properties:
+            source: { type: string, enum: [page] }
+            pageId: { type: integer, minimum: 1 }
+            fieldKey: { type: string, minLength: 1 }
+        - type: object
+          required: [source, key]
+          properties: { source: { type: string, enum: [system] }, key: { type: string, enum: [record_id, created_at, generated_at] } }
+        - type: object
+          required: [source, value]
+          properties: { source: { type: string, enum: [literal] }, value: {} }
+        - type: object
+          required: [source]
+          properties: { source: { type: string, enum: [blank] } }
+    DocumentCollectionFilter:
+      type: object
+      required: [fieldKey, operator]
+      properties:
+        fieldKey: { type: string, minLength: 1, description: Linked field key or __status__ }
+        operator: { type: string, enum: [eq, neq, contains, empty, notEmpty] }
+        value: {}
+    DocumentCollectionMapping:
+      type: object
+      required: [relationFieldKey, fields]
+      properties:
+        relationFieldKey: { type: string, minLength: 1 }
+        filters: { type: array, maxItems: 12, items: { $ref: "#/components/schemas/DocumentCollectionFilter" } }
+        sort:
+          type: array
+          maxItems: 4
+          items:
+            type: object
+            required: [fieldKey]
+            properties: { fieldKey: { type: string }, direction: { type: string, enum: [asc, desc] } }
+        fields:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/DocumentValueMapping" }
+    DocumentMapping:
+      type: object
+      properties:
+        scalars:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/DocumentValueMapping" }
+        collections:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/DocumentCollectionMapping" }
+    DocumentGenerationInput:
+      type: object
+      required: [recordId, output]
+      properties:
+        recordId: { type: integer }
+        idempotencyKey: { type: string, minLength: 1, maxLength: 200 }
+        output: { $ref: "#/components/schemas/DocumentGenerationOutput" }
+    DocumentGenerationOutput:
+      oneOf:
+        - type: object
+          required: [outputFormat, destination, localFolderId, targetFileFieldKey, filenameTemplate, overwrite]
+          properties:
+            outputFormat: { type: string, enum: [docx, pdf] }
+            destination: { type: string, enum: [local] }
+            localFolderId: { type: integer, minimum: 1 }
+            targetFileFieldKey: { type: string, minLength: 1 }
+            filenameTemplate: { type: string, minLength: 1, maxLength: 180 }
+            overwrite: { type: string, enum: [replace, error] }
+        - type: object
+          required: [outputFormat, destination, driveFolderId, targetFileFieldKey, filenameTemplate, overwrite]
+          properties:
+            outputFormat: { type: string, enum: [docx, pdf] }
+            destination: { type: string, enum: [gdrive] }
+            driveFolderId: { type: string, minLength: 1 }
+            targetFileFieldKey: { type: string, minLength: 1 }
+            filenameTemplate: { type: string, minLength: 1, maxLength: 180 }
+            overwrite: { type: string, enum: [replace, error] }
+    GeneratedDocument:
+      type: object
+      additionalProperties: true
+    DocumentGenerationRunOutput:
+      type: object
+      properties:
+        destination: { type: string, enum: [local, gdrive] }
+        name: { type: string }
+        contentType: { type: string }
+        size: { type: integer }
+        path: { type: string, description: Safe local object path }
+        fileId: { type: string }
+        webViewLink: { type: string }
+        orphaned: { type: boolean }
+        cleanup:
+          type: object
+          properties:
+            attempted: { type: boolean }
+            deleted: { type: boolean }
+            error: { type: string }
+    DocumentGenerationRun:
+      type: object
+      required: [id, revisionId, templateId, revision, templateName, entityId, recordId, status, createdAt]
+      properties:
+        id: { type: integer }
+        revisionId: { type: integer }
+        templateId: { type: integer }
+        revision: { type: integer }
+        templateName: { type: string }
+        entityId: { type: integer }
+        recordId: { type: integer }
+        status: { type: string, enum: [running, success, error] }
+        output: { $ref: "#/components/schemas/DocumentGenerationRunOutput" }
+        error: { type: string }
+        actorUserId: { type: ["integer", "null"] }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: ["string", "null"], format: date-time }
+    DocumentGenerationRunPage:
+      type: object
+      required: [items, page, limit]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/DocumentGenerationRun" } }
+        page: { type: integer }
+        limit: { type: integer }
     CollaborationPageId:
       type: integer
     CollaborationClientId:
@@ -5263,6 +5547,8 @@ components:
         dataImport:
           type: boolean
         inboundIntegrations:
+          type: boolean
+        documentGeneration:
           type: boolean
 
     InboundIntegration:
@@ -8142,7 +8428,7 @@ components:
       properties:
         type:
           type: string
-          enum: [set_field, change_status, create_record, update_records_where, webhook]
+          enum: [set_field, change_status, create_record, update_records_where, webhook, generate_document]
         fieldKey:
           type: string
         value: {}
@@ -8172,6 +8458,15 @@ components:
           type: string
         includeRecord:
           type: boolean
+        revisionId:
+          type: integer
+          minimum: 1
+        idempotencyKey:
+          type: string
+          minLength: 1
+          maxLength: 200
+        output:
+          $ref: "#/components/schemas/DocumentGenerationOutput"
 
     Automation:
       type: object

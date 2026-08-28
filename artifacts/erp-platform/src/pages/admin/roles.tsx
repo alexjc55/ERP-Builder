@@ -67,13 +67,13 @@ type MLValue = { ru?: string; en?: string; he?: string };
 function emptyPerms(): RolePermissions {
   return {
     superAdmin: false,
-    admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, columnGroups: false, googleDrive: false, settings: false, automations: false, customFilters: false, dataImport: false, inboundIntegrations: false },
+    admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, columnGroups: false, googleDrive: false, settings: false, automations: false, customFilters: false, dataImport: false, inboundIntegrations: false, documentGeneration: false },
     pageIds: [],
     records: {},
   };
 }
 
-const ADMIN_CAP_LABELS: { key: keyof RoleAdminCaps; label: string }[] = [
+const ADMIN_CAP_LABELS: { key: keyof RoleAdminCaps; label: string; help?: string }[] = [
   { key: "pages", label: "Страницы" },
   { key: "entities", label: "Сущности (поля, статусы, связи, виды)" },
   { key: "roles", label: "Роли" },
@@ -88,6 +88,7 @@ const ADMIN_CAP_LABELS: { key: keyof RoleAdminCaps; label: string }[] = [
   { key: "customFilters", label: "Кастомные фильтры" },
   { key: "dataImport", label: "Импорт данных" },
   { key: "inboundIntegrations", label: "Входящие вебхуки" },
+  { key: "documentGeneration", label: "Генерация документов", help: "Manage document templates and their generation history." },
 ];
 
 const RECORD_ACTIONS: { key: keyof RecordPermission; label: string }[] = [
@@ -114,6 +115,7 @@ const CAP_SHORT: { key: keyof RoleAdminCaps; label: string }[] = [
   { key: "customFilters", label: "Кастомные фильтры" },
   { key: "dataImport", label: "Импорт" },
   { key: "inboundIntegrations", label: "Вебхуки" },
+  { key: "documentGeneration", label: "Документы" },
 ];
 
 export default function RolesPage() {
@@ -802,13 +804,13 @@ export default function RolesPage() {
               <div>
                 <h4 className="text-sm font-semibold text-slate-700 mb-2">{t("roles.adminSections", "Разделы администрирования")}</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {ADMIN_CAP_LABELS.map(({ key, label }) => (
+                  {ADMIN_CAP_LABELS.map(({ key, label, help }) => (
                     <label key={key} className="flex items-center gap-2.5 rounded-md border border-slate-200 px-3 py-2 cursor-pointer hover:bg-slate-50">
                       <Checkbox
                         checked={perms.admin[key]}
                         onCheckedChange={(v) => toggleAdminCap(key, v === true)}
                       />
-                      <span className="text-sm text-slate-700">{t(`roles.cap.${key}`, label)}</span>
+                      <span><span className="text-sm text-slate-700">{t(`roles.cap.${key}`, label)}</span>{help && <span className="block text-xs text-slate-500">{t(`roles.capHelp.${key}`, help)}</span>}</span>
                     </label>
                   ))}
                 </div>

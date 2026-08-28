@@ -21,4 +21,5 @@ export interface RoleAdminCaps {
   settings: boolean;
   dataImport: boolean;
   inboundIntegrations?: boolean;
+  documentGeneration?: boolean;
 }

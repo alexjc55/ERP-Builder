@@ -16,10 +16,13 @@ import {
   type AutomationTrigger,
   type AutomationCondition,
   type AutomationAction,
+  documentTemplateRevisionsTable,
+  documentTemplatesTable,
 } from "@workspace/db";
 import { eq, and, asc, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
+import { validateDocumentOutput } from "../lib/document-generation";
 import {
   ListEntityAutomationsParams,
   CreateEntityAutomationParams,
@@ -273,6 +276,17 @@ async function validateSpec(
           if (err) return err.replace("condition field", "match field");
         }
       }
+    }
+    if (a.type === "generate_document") {
+      const [revision] = await db
+        .select({ state: documentTemplateRevisionsTable.state, entityId: documentTemplatesTable.entityId })
+        .from(documentTemplateRevisionsTable)
+        .innerJoin(documentTemplatesTable, eq(documentTemplatesTable.id, documentTemplateRevisionsTable.templateId))
+        .where(eq(documentTemplateRevisionsTable.id, a.revisionId));
+      if (!revision || revision.state !== "published") return "generate_document requires a published revision";
+      if (revision.entityId !== entityId) return "generate_document revision must belong to the automation entity";
+      const outputError = await validateDocumentOutput(entityId, a.output);
+      if (outputError) return outputError;
     }
     // webhook needs no entity validation (URL checked at run time).
   }

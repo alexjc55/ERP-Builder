@@ -31,6 +31,7 @@ import ImportPage from "@/pages/admin/import";
 import FileTrashPage from "@/pages/admin/file-trash";
 import InboundIntegrationsListPage from "@/pages/admin/inbound-integrations/list";
 import InboundIntegrationWorkspacePage from "@/pages/admin/inbound-integrations/workspace";
+import DocumentsPage from "@/pages/admin/documents";
 import DynamicPage from "@/pages/dynamic";
 import SettingsPage from "@/pages/settings";
 import { Loader2, ShieldAlert } from "lucide-react";
@@ -224,6 +225,12 @@ function Router() {
       <Route path="/admin/google-drive">
         <ProtectedRoute adminCap="googleDrive">
           <GoogleDrivePage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/documents">
+        <ProtectedRoute adminCap="documentGeneration">
+          <DocumentsPage />
         </ProtectedRoute>
       </Route>
 

@@ -91,6 +91,8 @@ export interface RoleAdminCaps {
   dataImport: boolean;
   /** Manage universal inbound webhook integrations. */
   inboundIntegrations?: boolean;
+  /** Manage and execute entity-bound document templates. */
+  documentGeneration?: boolean;
 }
 
 /**
@@ -144,7 +146,7 @@ export interface RolePermissions {
 /** Default permissions for new/existing roles: no access until granted. */
 export const NO_ACCESS_PERMS: RolePermissions = {
   superAdmin: false,
-  admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, automations: false, customFilters: false, columnGroups: false, googleDrive: false, settings: false, dataImport: false, inboundIntegrations: false },
+  admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, automations: false, customFilters: false, columnGroups: false, googleDrive: false, settings: false, dataImport: false, inboundIntegrations: false, documentGeneration: false },
   pageIds: [],
   records: {},
 };

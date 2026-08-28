@@ -9,6 +9,7 @@ import type { AutomationActionTargetFieldSource } from './automationActionTarget
 import type { AutomationActionType } from './automationActionType';
 import type { AutomationCondition } from './automationCondition';
 import type { AutomationMapping } from './automationMapping';
+import type { DocumentGenerationOutput } from './documentGenerationOutput';
 
 export interface AutomationAction {
   type: AutomationActionType;
@@ -25,4 +26,12 @@ export interface AutomationAction {
   match?: AutomationCondition[];
   url?: string;
   includeRecord?: boolean;
+  /** @minimum 1 */
+  revisionId?: number;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  idempotencyKey?: string;
+  output?: DocumentGenerationOutput;
 }

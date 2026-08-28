@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { entitiesTable } from "./entities";
+import { documentGenerationOutputSchema } from "./document_generation";
 
 /**
  * Stage 16 — Automations Engine.
@@ -169,6 +170,13 @@ export const automationActionSchema = z.discriminatedUnion("type", [
     type: z.literal("webhook"),
     url: z.string().url(),
     includeRecord: z.boolean().optional(),
+  }),
+  /** Render a published document revision for the triggering record. */
+  z.object({
+    type: z.literal("generate_document"),
+    revisionId: z.number().int().positive(),
+    idempotencyKey: z.string().min(1).max(200).optional(),
+    output: documentGenerationOutputSchema,
   }),
 ]);
 export type AutomationAction = z.infer<typeof automationActionSchema>;

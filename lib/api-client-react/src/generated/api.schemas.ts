@@ -5,6 +5,247 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+export type DocumentTemplateRevisionState = typeof DocumentTemplateRevisionState[keyof typeof DocumentTemplateRevisionState];
+
+
+export const DocumentTemplateRevisionState = {
+  draft: 'draft',
+  published: 'published',
+} as const;
+
+export type DocumentValueMapping = {
+  source: 'field';
+  /** @minLength 1 */
+  fieldKey: string;
+} | {
+  source: 'status';
+} | {
+  source: 'page';
+  /** @minimum 1 */
+  pageId: number;
+  /** @minLength 1 */
+  fieldKey: string;
+} | {
+  source: 'system';
+  key: 'record_id' | 'created_at' | 'generated_at';
+} | {
+  source: 'literal';
+  value: unknown;
+} | {
+  source: 'blank';
+};
+
+export type DocumentCollectionFilterOperator = typeof DocumentCollectionFilterOperator[keyof typeof DocumentCollectionFilterOperator];
+
+
+export const DocumentCollectionFilterOperator = {
+  eq: 'eq',
+  neq: 'neq',
+  contains: 'contains',
+  empty: 'empty',
+  notEmpty: 'notEmpty',
+} as const;
+
+export interface DocumentCollectionFilter {
+  /**
+     * Linked field key or __status__
+     * @minLength 1
+     */
+  fieldKey: string;
+  operator: DocumentCollectionFilterOperator;
+  value?: unknown;
+}
+
+export type DocumentCollectionMappingSortItemDirection = typeof DocumentCollectionMappingSortItemDirection[keyof typeof DocumentCollectionMappingSortItemDirection];
+
+
+export const DocumentCollectionMappingSortItemDirection = {
+  asc: 'asc',
+  desc: 'desc',
+} as const;
+
+export type DocumentCollectionMappingSortItem = {
+  fieldKey: string;
+  direction?: DocumentCollectionMappingSortItemDirection;
+};
+
+export type DocumentCollectionMappingFields = {[key: string]: DocumentValueMapping};
+
+export interface DocumentCollectionMapping {
+  /** @minLength 1 */
+  relationFieldKey: string;
+  /** @maxItems 12 */
+  filters?: DocumentCollectionFilter[];
+  /** @maxItems 4 */
+  sort?: DocumentCollectionMappingSortItem[];
+  fields: DocumentCollectionMappingFields;
+}
+
+export type DocumentMappingScalars = {[key: string]: DocumentValueMapping};
+
+export type DocumentMappingCollections = {[key: string]: DocumentCollectionMapping};
+
+export interface DocumentMapping {
+  scalars?: DocumentMappingScalars;
+  collections?: DocumentMappingCollections;
+}
+
+export interface DocumentTemplateRevision {
+  id: number;
+  templateId: number;
+  revision: number;
+  state: DocumentTemplateRevisionState;
+  templatePath?: string;
+  templateName: string;
+  manifestJson: unknown;
+  mappingJson: DocumentMapping;
+  errorsJson: string[];
+  /** @nullable */
+  createdBy?: number | null;
+  /** @nullable */
+  publishedAt?: string | null;
+  createdAt?: string;
+}
+
+export interface DocumentTemplate {
+  id: number;
+  entityId: number;
+  name: string;
+  isArchived: boolean;
+  /** @nullable */
+  createdBy?: number | null;
+  createdAt?: string;
+  updatedAt?: string;
+  revisions: DocumentTemplateRevision[];
+}
+
+export interface DocumentTemplateInput {
+  entityId: number;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  name: string;
+}
+
+export interface DocumentTemplateUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  name?: string;
+  isArchived?: boolean;
+}
+
+export interface DocumentTemplateRevisionUpload {
+  file: Blob;
+  /**
+     * JSON-encoded DocumentMapping
+     * @maxLength 20000
+     */
+  mapping: string;
+}
+
+export type DocumentGenerationOutput = {
+  outputFormat: 'docx' | 'pdf';
+  destination: 'local';
+  /** @minimum 1 */
+  localFolderId: number;
+  /** @minLength 1 */
+  targetFileFieldKey: string;
+  /**
+     * @minLength 1
+     * @maxLength 180
+     */
+  filenameTemplate: string;
+  overwrite: 'replace' | 'error';
+} | {
+  outputFormat: 'docx' | 'pdf';
+  destination: 'gdrive';
+  /** @minLength 1 */
+  driveFolderId: string;
+  /** @minLength 1 */
+  targetFileFieldKey: string;
+  /**
+     * @minLength 1
+     * @maxLength 180
+     */
+  filenameTemplate: string;
+  overwrite: 'replace' | 'error';
+};
+
+export interface DocumentGenerationInput {
+  recordId: number;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  idempotencyKey?: string;
+  output: DocumentGenerationOutput;
+}
+
+export interface GeneratedDocument { [key: string]: unknown }
+
+export type DocumentGenerationRunOutputDestination = typeof DocumentGenerationRunOutputDestination[keyof typeof DocumentGenerationRunOutputDestination];
+
+
+export const DocumentGenerationRunOutputDestination = {
+  local: 'local',
+  gdrive: 'gdrive',
+} as const;
+
+export type DocumentGenerationRunOutputCleanup = {
+  attempted?: boolean;
+  deleted?: boolean;
+  error?: string;
+};
+
+export interface DocumentGenerationRunOutput {
+  destination?: DocumentGenerationRunOutputDestination;
+  name?: string;
+  contentType?: string;
+  size?: number;
+  /** Safe local object path */
+  path?: string;
+  fileId?: string;
+  webViewLink?: string;
+  orphaned?: boolean;
+  cleanup?: DocumentGenerationRunOutputCleanup;
+}
+
+export type DocumentGenerationRunStatus = typeof DocumentGenerationRunStatus[keyof typeof DocumentGenerationRunStatus];
+
+
+export const DocumentGenerationRunStatus = {
+  running: 'running',
+  success: 'success',
+  error: 'error',
+} as const;
+
+export interface DocumentGenerationRun {
+  id: number;
+  revisionId: number;
+  templateId: number;
+  revision: number;
+  templateName: string;
+  entityId: number;
+  recordId: number;
+  status: DocumentGenerationRunStatus;
+  output?: DocumentGenerationRunOutput;
+  error?: string;
+  /** @nullable */
+  actorUserId?: number | null;
+  createdAt: string;
+  /** @nullable */
+  completedAt?: string | null;
+}
+
+export interface DocumentGenerationRunPage {
+  items: DocumentGenerationRun[];
+  page: number;
+  limit: number;
+}
+
 export type CollaborationPageId = number;
 
 /**
@@ -461,6 +702,7 @@ export interface RoleAdminCaps {
   settings: boolean;
   dataImport: boolean;
   inboundIntegrations?: boolean;
+  documentGeneration?: boolean;
 }
 
 export type RecordScope = typeof RecordScope[keyof typeof RecordScope];
@@ -3587,6 +3829,7 @@ export const AutomationActionType = {
   create_record: 'create_record',
   update_records_where: 'update_records_where',
   webhook: 'webhook',
+  generate_document: 'generate_document',
 } as const;
 
 /**
@@ -3615,6 +3858,14 @@ export interface AutomationAction {
   match?: AutomationCondition[];
   url?: string;
   includeRecord?: boolean;
+  /** @minimum 1 */
+  revisionId?: number;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  idempotencyKey?: string;
+  output?: DocumentGenerationOutput;
 }
 
 export type AutomationConditionConjunction = typeof AutomationConditionConjunction[keyof typeof AutomationConditionConjunction];
@@ -4552,6 +4803,41 @@ export interface DashboardStats {
   totalPages: number;
   recentLogins?: number;
 }
+
+export type ListDocumentGenerationRunsParams = {
+/**
+ * @minimum 1
+ */
+templateId?: number;
+/**
+ * @minimum 1
+ */
+entityId?: number;
+status?: ListDocumentGenerationRunsStatus;
+/**
+ * @minimum 1
+ * @maximum 100000
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+};
+
+export type ListDocumentGenerationRunsStatus = typeof ListDocumentGenerationRunsStatus[keyof typeof ListDocumentGenerationRunsStatus];
+
+
+export const ListDocumentGenerationRunsStatus = {
+  running: 'running',
+  success: 'success',
+  error: 'error',
+} as const;
+
+export type ListDocumentTemplatesParams = {
+entityId: number;
+};
 
 export type ListInboundIntegrationErrorsParams = {
 /**

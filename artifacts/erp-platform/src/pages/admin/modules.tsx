@@ -44,6 +44,7 @@ import {
   Trash2,
   Settings2,
   Webhook,
+  FileText,
   type LucideIcon,
 } from "lucide-react";
 
@@ -69,6 +70,7 @@ const MODULE_ICONS: Record<string, LucideIcon | typeof GoogleDriveLogo> = {
   google_drive: GoogleDriveLogo,
   ai_agents: Bot,
   inbound_integrations: Webhook,
+  document_generation: FileText,
 };
 
 function ModuleIcon({ moduleKey }: { moduleKey: string }) {
@@ -92,6 +94,7 @@ const MODULE_SETTINGS_ROUTES: Record<string, string> = {
   google_drive: "/admin/google-drive",
   ai_agents: "/admin/ai-agents",
   inbound_integrations: "/admin/inbound-integrations",
+  document_generation: "/admin/documents",
 };
 
 export default function ModulesPage() {

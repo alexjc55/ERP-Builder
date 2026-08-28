@@ -1,0 +1,4 @@
+ALTER TABLE "document_generation_runs" DROP CONSTRAINT IF EXISTS "document_generation_runs_revision_id_document_template_revisions_id_fk";--> statement-breakpoint
+ALTER TABLE "document_generation_runs" DROP CONSTRAINT IF EXISTS "document_generation_runs_entity_id_entities_id_fk";--> statement-breakpoint
+ALTER TABLE "document_generation_runs" ADD CONSTRAINT "document_generation_runs_revision_id_document_template_revisions_id_fk" FOREIGN KEY ("revision_id") REFERENCES "public"."document_template_revisions"("id") ON DELETE cascade;--> statement-breakpoint
+ALTER TABLE "document_generation_runs" ADD CONSTRAINT "document_generation_runs_entity_id_entities_id_fk" FOREIGN KEY ("entity_id") REFERENCES "public"."entities"("id") ON DELETE cascade;

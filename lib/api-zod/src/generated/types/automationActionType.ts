@@ -15,4 +15,5 @@ export const AutomationActionType = {
   create_record: 'create_record',
   update_records_where: 'update_records_where',
   webhook: 'webhook',
+  generate_document: 'generate_document',
 } as const;

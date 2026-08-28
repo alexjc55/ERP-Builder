@@ -27,3 +27,4 @@ export * from "./google_drive";
 export * from "./app_settings";
 export * from "./deleted_files";
 export * from "./local_folders";
+export * from "./document_generation";

@@ -8,6 +8,358 @@
 import * as zod from 'zod';
 
 
+
+
+export const listDocumentGenerationRunsQueryPageDefault = 1;
+export const listDocumentGenerationRunsQueryPageMax = 100000;
+
+export const listDocumentGenerationRunsQueryLimitDefault = 50;
+export const listDocumentGenerationRunsQueryLimitMax = 100;
+
+
+
+export const ListDocumentGenerationRunsQueryParams = zod.object({
+  "templateId": zod.coerce.number().min(1).optional(),
+  "entityId": zod.coerce.number().min(1).optional(),
+  "status": zod.enum(['running', 'success', 'error']).optional(),
+  "page": zod.coerce.number().min(1).max(listDocumentGenerationRunsQueryPageMax).default(listDocumentGenerationRunsQueryPageDefault),
+  "limit": zod.coerce.number().min(1).max(listDocumentGenerationRunsQueryLimitMax).default(listDocumentGenerationRunsQueryLimitDefault)
+})
+
+export const ListDocumentGenerationRunsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "revisionId": zod.number(),
+  "templateId": zod.number(),
+  "revision": zod.number(),
+  "templateName": zod.string(),
+  "entityId": zod.number(),
+  "recordId": zod.number(),
+  "status": zod.enum(['running', 'success', 'error']),
+  "output": zod.object({
+  "destination": zod.enum(['local', 'gdrive']).optional(),
+  "name": zod.string().optional(),
+  "contentType": zod.string().optional(),
+  "size": zod.number().optional(),
+  "path": zod.string().optional().describe('Safe local object path'),
+  "fileId": zod.string().optional(),
+  "webViewLink": zod.string().optional(),
+  "orphaned": zod.boolean().optional(),
+  "cleanup": zod.object({
+  "attempted": zod.boolean().optional(),
+  "deleted": zod.boolean().optional(),
+  "error": zod.string().optional()
+}).optional()
+}).optional(),
+  "error": zod.string().optional(),
+  "actorUserId": zod.number().nullish(),
+  "createdAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date().nullish()
+})),
+  "page": zod.number(),
+  "limit": zod.number()
+})
+
+
+export const ListDocumentTemplatesQueryParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+
+
+
+
+
+export const listDocumentTemplatesResponseRevisionsItemMappingJsonCollectionsFiltersMax = 12;
+
+export const listDocumentTemplatesResponseRevisionsItemMappingJsonCollectionsSortMax = 4;
+
+
+
+
+
+
+export const ListDocumentTemplatesResponseItem = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "name": zod.string(),
+  "isArchived": zod.boolean(),
+  "createdBy": zod.number().nullish(),
+  "createdAt": zod.coerce.date().optional(),
+  "updatedAt": zod.coerce.date().optional(),
+  "revisions": zod.array(zod.object({
+  "id": zod.number(),
+  "templateId": zod.number(),
+  "revision": zod.number(),
+  "state": zod.enum(['draft', 'published']),
+  "templatePath": zod.string().optional(),
+  "templateName": zod.string(),
+  "manifestJson": zod.unknown(),
+  "mappingJson": zod.object({
+  "scalars": zod.record(zod.string(), zod.union([zod.object({
+  "source": zod.enum(['field']),
+  "fieldKey": zod.string().min(1)
+}),zod.object({
+  "source": zod.enum(['status'])
+}),zod.object({
+  "source": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string().min(1)
+}),zod.object({
+  "source": zod.enum(['system']),
+  "key": zod.enum(['record_id', 'created_at', 'generated_at'])
+}),zod.object({
+  "source": zod.enum(['literal']),
+  "value": zod.unknown()
+}),zod.object({
+  "source": zod.enum(['blank'])
+})])).optional(),
+  "collections": zod.record(zod.string(), zod.object({
+  "relationFieldKey": zod.string().min(1),
+  "filters": zod.array(zod.object({
+  "fieldKey": zod.string().min(1).describe('Linked field key or __status__'),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'empty', 'notEmpty']),
+  "value": zod.unknown().optional()
+})).max(listDocumentTemplatesResponseRevisionsItemMappingJsonCollectionsFiltersMax).optional(),
+  "sort": zod.array(zod.object({
+  "fieldKey": zod.string(),
+  "direction": zod.enum(['asc', 'desc']).optional()
+})).max(listDocumentTemplatesResponseRevisionsItemMappingJsonCollectionsSortMax).optional(),
+  "fields": zod.record(zod.string(), zod.union([zod.object({
+  "source": zod.enum(['field']),
+  "fieldKey": zod.string().min(1)
+}),zod.object({
+  "source": zod.enum(['status'])
+}),zod.object({
+  "source": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string().min(1)
+}),zod.object({
+  "source": zod.enum(['system']),
+  "key": zod.enum(['record_id', 'created_at', 'generated_at'])
+}),zod.object({
+  "source": zod.enum(['literal']),
+  "value": zod.unknown()
+}),zod.object({
+  "source": zod.enum(['blank'])
+})]))
+})).optional()
+}),
+  "errorsJson": zod.array(zod.string()),
+  "createdBy": zod.number().nullish(),
+  "publishedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date().optional()
+}))
+})
+export const ListDocumentTemplatesResponse = zod.array(ListDocumentTemplatesResponseItem)
+
+
+export const createDocumentTemplateBodyNameMax = 200;
+
+
+
+export const CreateDocumentTemplateBody = zod.object({
+  "entityId": zod.number(),
+  "name": zod.string().min(1).max(createDocumentTemplateBodyNameMax)
+})
+
+
+export const UpdateDocumentTemplateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateDocumentTemplateBodyNameMax = 200;
+
+
+
+export const UpdateDocumentTemplateBody = zod.object({
+  "name": zod.string().min(1).max(updateDocumentTemplateBodyNameMax).optional(),
+  "isArchived": zod.boolean().optional()
+})
+
+
+
+
+
+
+export const updateDocumentTemplateResponseRevisionsItemMappingJsonCollectionsFiltersMax = 12;
+
+export const updateDocumentTemplateResponseRevisionsItemMappingJsonCollectionsSortMax = 4;
+
+
+
+
+
+
+export const UpdateDocumentTemplateResponse = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "name": zod.string(),
+  "isArchived": zod.boolean(),
+  "createdBy": zod.number().nullish(),
+  "createdAt": zod.coerce.date().optional(),
+  "updatedAt": zod.coerce.date().optional(),
+  "revisions": zod.array(zod.object({
+  "id": zod.number(),
+  "templateId": zod.number(),
+  "revision": zod.number(),
+  "state": zod.enum(['draft', 'published']),
+  "templatePath": zod.string().optional(),
+  "templateName": zod.string(),
+  "manifestJson": zod.unknown(),
+  "mappingJson": zod.object({
+  "scalars": zod.record(zod.string(), zod.union([zod.object({
+  "source": zod.enum(['field']),
+  "fieldKey": zod.string().min(1)
+}),zod.object({
+  "source": zod.enum(['status'])
+}),zod.object({
+  "source": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string().min(1)
+}),zod.object({
+  "source": zod.enum(['system']),
+  "key": zod.enum(['record_id', 'created_at', 'generated_at'])
+}),zod.object({
+  "source": zod.enum(['literal']),
+  "value": zod.unknown()
+}),zod.object({
+  "source": zod.enum(['blank'])
+})])).optional(),
+  "collections": zod.record(zod.string(), zod.object({
+  "relationFieldKey": zod.string().min(1),
+  "filters": zod.array(zod.object({
+  "fieldKey": zod.string().min(1).describe('Linked field key or __status__'),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'empty', 'notEmpty']),
+  "value": zod.unknown().optional()
+})).max(updateDocumentTemplateResponseRevisionsItemMappingJsonCollectionsFiltersMax).optional(),
+  "sort": zod.array(zod.object({
+  "fieldKey": zod.string(),
+  "direction": zod.enum(['asc', 'desc']).optional()
+})).max(updateDocumentTemplateResponseRevisionsItemMappingJsonCollectionsSortMax).optional(),
+  "fields": zod.record(zod.string(), zod.union([zod.object({
+  "source": zod.enum(['field']),
+  "fieldKey": zod.string().min(1)
+}),zod.object({
+  "source": zod.enum(['status'])
+}),zod.object({
+  "source": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string().min(1)
+}),zod.object({
+  "source": zod.enum(['system']),
+  "key": zod.enum(['record_id', 'created_at', 'generated_at'])
+}),zod.object({
+  "source": zod.enum(['literal']),
+  "value": zod.unknown()
+}),zod.object({
+  "source": zod.enum(['blank'])
+})]))
+})).optional()
+}),
+  "errorsJson": zod.array(zod.string()),
+  "createdBy": zod.number().nullish(),
+  "publishedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date().optional()
+}))
+})
+
+
+export const CreateDocumentTemplateRevisionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const createDocumentTemplateRevisionBodyMappingMax = 20000;
+
+
+
+export const CreateDocumentTemplateRevisionBody = zod.object({
+  "file": zod.instanceof(File),
+  "mapping": zod.string().max(createDocumentTemplateRevisionBodyMappingMax).describe('JSON-encoded DocumentMapping')
+})
+
+
+export const PublishDocumentTemplateRevisionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+export const TestDocumentTemplateRevisionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const testDocumentTemplateRevisionBodyIdempotencyKeyMax = 200;
+
+
+
+export const testDocumentTemplateRevisionBodyOutputOneFilenameTemplateMax = 180;
+
+
+
+export const testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateMax = 180;
+
+
+
+export const TestDocumentTemplateRevisionBody = zod.object({
+  "recordId": zod.number(),
+  "idempotencyKey": zod.string().min(1).max(testDocumentTemplateRevisionBodyIdempotencyKeyMax).optional(),
+  "output": zod.union([zod.object({
+  "outputFormat": zod.enum(['docx', 'pdf']),
+  "destination": zod.enum(['local']),
+  "localFolderId": zod.number().min(1),
+  "targetFileFieldKey": zod.string().min(1),
+  "filenameTemplate": zod.string().min(1).max(testDocumentTemplateRevisionBodyOutputOneFilenameTemplateMax),
+  "overwrite": zod.enum(['replace', 'error'])
+}),zod.object({
+  "outputFormat": zod.enum(['docx', 'pdf']),
+  "destination": zod.enum(['gdrive']),
+  "driveFolderId": zod.string().min(1),
+  "targetFileFieldKey": zod.string().min(1),
+  "filenameTemplate": zod.string().min(1).max(testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateMax),
+  "overwrite": zod.enum(['replace', 'error'])
+})])
+})
+
+
+export const GenerateDocumentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const generateDocumentBodyIdempotencyKeyMax = 200;
+
+
+
+export const generateDocumentBodyOutputOneFilenameTemplateMax = 180;
+
+
+
+export const generateDocumentBodyOutputTwoFilenameTemplateMax = 180;
+
+
+
+export const GenerateDocumentBody = zod.object({
+  "recordId": zod.number(),
+  "idempotencyKey": zod.string().min(1).max(generateDocumentBodyIdempotencyKeyMax).optional(),
+  "output": zod.union([zod.object({
+  "outputFormat": zod.enum(['docx', 'pdf']),
+  "destination": zod.enum(['local']),
+  "localFolderId": zod.number().min(1),
+  "targetFileFieldKey": zod.string().min(1),
+  "filenameTemplate": zod.string().min(1).max(generateDocumentBodyOutputOneFilenameTemplateMax),
+  "overwrite": zod.enum(['replace', 'error'])
+}),zod.object({
+  "outputFormat": zod.enum(['docx', 'pdf']),
+  "destination": zod.enum(['gdrive']),
+  "driveFolderId": zod.string().min(1),
+  "targetFileFieldKey": zod.string().min(1),
+  "filenameTemplate": zod.string().min(1).max(generateDocumentBodyOutputTwoFilenameTemplateMax),
+  "overwrite": zod.enum(['replace', 'error'])
+})])
+})
+
+export const GenerateDocumentResponse = zod.record(zod.string(), zod.unknown())
+
+
 /**
  * @summary Persist an authenticated inbound JSON event for queued processing
  */
@@ -554,7 +906,8 @@ export const LoginResponse = zod.object({
   "googleDrive": zod.boolean(),
   "settings": zod.boolean(),
   "dataImport": zod.boolean(),
-  "inboundIntegrations": zod.boolean().optional()
+  "inboundIntegrations": zod.boolean().optional(),
+  "documentGeneration": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -630,7 +983,8 @@ export const GetMeResponse = zod.object({
   "googleDrive": zod.boolean(),
   "settings": zod.boolean(),
   "dataImport": zod.boolean(),
-  "inboundIntegrations": zod.boolean().optional()
+  "inboundIntegrations": zod.boolean().optional(),
+  "documentGeneration": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -704,7 +1058,8 @@ export const UpdateMeResponse = zod.object({
   "googleDrive": zod.boolean(),
   "settings": zod.boolean(),
   "dataImport": zod.boolean(),
-  "inboundIntegrations": zod.boolean().optional()
+  "inboundIntegrations": zod.boolean().optional(),
+  "documentGeneration": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -776,7 +1131,8 @@ export const ImpersonateResponse = zod.object({
   "googleDrive": zod.boolean(),
   "settings": zod.boolean(),
   "dataImport": zod.boolean(),
-  "inboundIntegrations": zod.boolean().optional()
+  "inboundIntegrations": zod.boolean().optional(),
+  "documentGeneration": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -845,7 +1201,8 @@ export const StopImpersonationResponse = zod.object({
   "googleDrive": zod.boolean(),
   "settings": zod.boolean(),
   "dataImport": zod.boolean(),
-  "inboundIntegrations": zod.boolean().optional()
+  "inboundIntegrations": zod.boolean().optional(),
+  "documentGeneration": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -918,7 +1275,8 @@ export const RedeemGuestLinkResponse = zod.object({
   "googleDrive": zod.boolean(),
   "settings": zod.boolean(),
   "dataImport": zod.boolean(),
-  "inboundIntegrations": zod.boolean().optional()
+  "inboundIntegrations": zod.boolean().optional(),
+  "documentGeneration": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -1354,7 +1712,8 @@ export const ListRolesResponseItem = zod.object({
   "googleDrive": zod.boolean(),
   "settings": zod.boolean(),
   "dataImport": zod.boolean(),
-  "inboundIntegrations": zod.boolean().optional()
+  "inboundIntegrations": zod.boolean().optional(),
+  "documentGeneration": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -1414,7 +1773,8 @@ export const CreateRoleBody = zod.object({
   "googleDrive": zod.boolean(),
   "settings": zod.boolean(),
   "dataImport": zod.boolean(),
-  "inboundIntegrations": zod.boolean().optional()
+  "inboundIntegrations": zod.boolean().optional(),
+  "documentGeneration": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -1475,7 +1835,8 @@ export const GetRoleResponse = zod.object({
   "googleDrive": zod.boolean(),
   "settings": zod.boolean(),
   "dataImport": zod.boolean(),
-  "inboundIntegrations": zod.boolean().optional()
+  "inboundIntegrations": zod.boolean().optional(),
+  "documentGeneration": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -1538,7 +1899,8 @@ export const UpdateRoleBody = zod.object({
   "googleDrive": zod.boolean(),
   "settings": zod.boolean(),
   "dataImport": zod.boolean(),
-  "inboundIntegrations": zod.boolean().optional()
+  "inboundIntegrations": zod.boolean().optional(),
+  "documentGeneration": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -1591,7 +1953,8 @@ export const UpdateRoleResponse = zod.object({
   "googleDrive": zod.boolean(),
   "settings": zod.boolean(),
   "dataImport": zod.boolean(),
-  "inboundIntegrations": zod.boolean().optional()
+  "inboundIntegrations": zod.boolean().optional(),
+  "documentGeneration": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -5736,6 +6099,19 @@ export const ListEntityAutomationsParams = zod.object({
   "entityId": zod.coerce.number()
 })
 
+
+export const listEntityAutomationsResponseActionsJsonItemIdempotencyKeyMax = 200;
+
+
+
+export const listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateMax = 180;
+
+
+
+export const listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateMax = 180;
+
+
+
 export const ListEntityAutomationsResponseItem = zod.object({
   "id": zod.number(),
   "entityId": zod.number(),
@@ -5764,7 +6140,7 @@ export const ListEntityAutomationsResponseItem = zod.object({
 })),
   "conditionConjunction": zod.enum(['and', 'or']),
   "actionsJson": zod.array(zod.object({
-  "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook']),
+  "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook', 'generate_document']),
   "fieldKey": zod.string().optional(),
   "value": zod.unknown().optional(),
   "targetFieldSource": zod.enum(['entity', 'page']).optional().describe('For set_field: where to write. \"entity\" (default when absent) sets the triggering entity record\'s field. \"page\" writes a page-local field on a MIRROR page (`targetPageId`) of this entity at (targetPageId, recordId).'),
@@ -5791,7 +6167,24 @@ export const ListEntityAutomationsResponseItem = zod.object({
   "valueFieldKey": zod.string().optional().describe('The triggering record\'s field key to read when valueSource is \"field\".')
 })).optional(),
   "url": zod.string().optional(),
-  "includeRecord": zod.boolean().optional()
+  "includeRecord": zod.boolean().optional(),
+  "revisionId": zod.number().min(1).optional(),
+  "idempotencyKey": zod.string().min(1).max(listEntityAutomationsResponseActionsJsonItemIdempotencyKeyMax).optional(),
+  "output": zod.union([zod.object({
+  "outputFormat": zod.enum(['docx', 'pdf']),
+  "destination": zod.enum(['local']),
+  "localFolderId": zod.number().min(1),
+  "targetFileFieldKey": zod.string().min(1),
+  "filenameTemplate": zod.string().min(1).max(listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateMax),
+  "overwrite": zod.enum(['replace', 'error'])
+}),zod.object({
+  "outputFormat": zod.enum(['docx', 'pdf']),
+  "destination": zod.enum(['gdrive']),
+  "driveFolderId": zod.string().min(1),
+  "targetFileFieldKey": zod.string().min(1),
+  "filenameTemplate": zod.string().min(1).max(listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateMax),
+  "overwrite": zod.enum(['replace', 'error'])
+})]).optional()
 })),
   "sortOrder": zod.number(),
   "createdAt": zod.coerce.date(),
@@ -5809,6 +6202,16 @@ export const CreateEntityAutomationParams = zod.object({
 
 export const createEntityAutomationBodyConditionsJsonDefault = [];
 export const createEntityAutomationBodyConditionConjunctionDefault = `and`;
+export const createEntityAutomationBodyActionsJsonItemIdempotencyKeyMax = 200;
+
+
+
+export const createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateMax = 180;
+
+
+
+export const createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateMax = 180;
+
 export const createEntityAutomationBodyActionsJsonDefault = [];
 
 export const CreateEntityAutomationBody = zod.object({
@@ -5837,7 +6240,7 @@ export const CreateEntityAutomationBody = zod.object({
 })).default(createEntityAutomationBodyConditionsJsonDefault),
   "conditionConjunction": zod.enum(['and', 'or']).default(createEntityAutomationBodyConditionConjunctionDefault),
   "actionsJson": zod.array(zod.object({
-  "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook']),
+  "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook', 'generate_document']),
   "fieldKey": zod.string().optional(),
   "value": zod.unknown().optional(),
   "targetFieldSource": zod.enum(['entity', 'page']).optional().describe('For set_field: where to write. \"entity\" (default when absent) sets the triggering entity record\'s field. \"page\" writes a page-local field on a MIRROR page (`targetPageId`) of this entity at (targetPageId, recordId).'),
@@ -5864,7 +6267,24 @@ export const CreateEntityAutomationBody = zod.object({
   "valueFieldKey": zod.string().optional().describe('The triggering record\'s field key to read when valueSource is \"field\".')
 })).optional(),
   "url": zod.string().optional(),
-  "includeRecord": zod.boolean().optional()
+  "includeRecord": zod.boolean().optional(),
+  "revisionId": zod.number().min(1).optional(),
+  "idempotencyKey": zod.string().min(1).max(createEntityAutomationBodyActionsJsonItemIdempotencyKeyMax).optional(),
+  "output": zod.union([zod.object({
+  "outputFormat": zod.enum(['docx', 'pdf']),
+  "destination": zod.enum(['local']),
+  "localFolderId": zod.number().min(1),
+  "targetFileFieldKey": zod.string().min(1),
+  "filenameTemplate": zod.string().min(1).max(createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateMax),
+  "overwrite": zod.enum(['replace', 'error'])
+}),zod.object({
+  "outputFormat": zod.enum(['docx', 'pdf']),
+  "destination": zod.enum(['gdrive']),
+  "driveFolderId": zod.string().min(1),
+  "targetFileFieldKey": zod.string().min(1),
+  "filenameTemplate": zod.string().min(1).max(createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateMax),
+  "overwrite": zod.enum(['replace', 'error'])
+})]).optional()
 })).default(createEntityAutomationBodyActionsJsonDefault),
   "sortOrder": zod.number().optional()
 })
@@ -5898,6 +6318,19 @@ export const GetAutomationParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
+export const getAutomationResponseActionsJsonItemIdempotencyKeyMax = 200;
+
+
+
+export const getAutomationResponseActionsJsonItemOutputOneFilenameTemplateMax = 180;
+
+
+
+export const getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateMax = 180;
+
+
+
 export const GetAutomationResponse = zod.object({
   "id": zod.number(),
   "entityId": zod.number(),
@@ -5926,7 +6359,7 @@ export const GetAutomationResponse = zod.object({
 })),
   "conditionConjunction": zod.enum(['and', 'or']),
   "actionsJson": zod.array(zod.object({
-  "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook']),
+  "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook', 'generate_document']),
   "fieldKey": zod.string().optional(),
   "value": zod.unknown().optional(),
   "targetFieldSource": zod.enum(['entity', 'page']).optional().describe('For set_field: where to write. \"entity\" (default when absent) sets the triggering entity record\'s field. \"page\" writes a page-local field on a MIRROR page (`targetPageId`) of this entity at (targetPageId, recordId).'),
@@ -5953,7 +6386,24 @@ export const GetAutomationResponse = zod.object({
   "valueFieldKey": zod.string().optional().describe('The triggering record\'s field key to read when valueSource is \"field\".')
 })).optional(),
   "url": zod.string().optional(),
-  "includeRecord": zod.boolean().optional()
+  "includeRecord": zod.boolean().optional(),
+  "revisionId": zod.number().min(1).optional(),
+  "idempotencyKey": zod.string().min(1).max(getAutomationResponseActionsJsonItemIdempotencyKeyMax).optional(),
+  "output": zod.union([zod.object({
+  "outputFormat": zod.enum(['docx', 'pdf']),
+  "destination": zod.enum(['local']),
+  "localFolderId": zod.number().min(1),
+  "targetFileFieldKey": zod.string().min(1),
+  "filenameTemplate": zod.string().min(1).max(getAutomationResponseActionsJsonItemOutputOneFilenameTemplateMax),
+  "overwrite": zod.enum(['replace', 'error'])
+}),zod.object({
+  "outputFormat": zod.enum(['docx', 'pdf']),
+  "destination": zod.enum(['gdrive']),
+  "driveFolderId": zod.string().min(1),
+  "targetFileFieldKey": zod.string().min(1),
+  "filenameTemplate": zod.string().min(1).max(getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateMax),
+  "overwrite": zod.enum(['replace', 'error'])
+})]).optional()
 })),
   "sortOrder": zod.number(),
   "createdAt": zod.coerce.date(),
@@ -5967,6 +6417,19 @@ export const GetAutomationResponse = zod.object({
 export const UpdateAutomationParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
+export const updateAutomationBodyActionsJsonItemIdempotencyKeyMax = 200;
+
+
+
+export const updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateMax = 180;
+
+
+
+export const updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateMax = 180;
+
+
 
 export const UpdateAutomationBody = zod.object({
   "nameJson": zod.object({
@@ -5994,7 +6457,7 @@ export const UpdateAutomationBody = zod.object({
 })).optional(),
   "conditionConjunction": zod.enum(['and', 'or']).optional(),
   "actionsJson": zod.array(zod.object({
-  "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook']),
+  "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook', 'generate_document']),
   "fieldKey": zod.string().optional(),
   "value": zod.unknown().optional(),
   "targetFieldSource": zod.enum(['entity', 'page']).optional().describe('For set_field: where to write. \"entity\" (default when absent) sets the triggering entity record\'s field. \"page\" writes a page-local field on a MIRROR page (`targetPageId`) of this entity at (targetPageId, recordId).'),
@@ -6021,10 +6484,40 @@ export const UpdateAutomationBody = zod.object({
   "valueFieldKey": zod.string().optional().describe('The triggering record\'s field key to read when valueSource is \"field\".')
 })).optional(),
   "url": zod.string().optional(),
-  "includeRecord": zod.boolean().optional()
+  "includeRecord": zod.boolean().optional(),
+  "revisionId": zod.number().min(1).optional(),
+  "idempotencyKey": zod.string().min(1).max(updateAutomationBodyActionsJsonItemIdempotencyKeyMax).optional(),
+  "output": zod.union([zod.object({
+  "outputFormat": zod.enum(['docx', 'pdf']),
+  "destination": zod.enum(['local']),
+  "localFolderId": zod.number().min(1),
+  "targetFileFieldKey": zod.string().min(1),
+  "filenameTemplate": zod.string().min(1).max(updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateMax),
+  "overwrite": zod.enum(['replace', 'error'])
+}),zod.object({
+  "outputFormat": zod.enum(['docx', 'pdf']),
+  "destination": zod.enum(['gdrive']),
+  "driveFolderId": zod.string().min(1),
+  "targetFileFieldKey": zod.string().min(1),
+  "filenameTemplate": zod.string().min(1).max(updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateMax),
+  "overwrite": zod.enum(['replace', 'error'])
+})]).optional()
 })).optional(),
   "sortOrder": zod.number().optional()
 })
+
+
+export const updateAutomationResponseActionsJsonItemIdempotencyKeyMax = 200;
+
+
+
+export const updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateMax = 180;
+
+
+
+export const updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateMax = 180;
+
+
 
 export const UpdateAutomationResponse = zod.object({
   "id": zod.number(),
@@ -6054,7 +6547,7 @@ export const UpdateAutomationResponse = zod.object({
 })),
   "conditionConjunction": zod.enum(['and', 'or']),
   "actionsJson": zod.array(zod.object({
-  "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook']),
+  "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook', 'generate_document']),
   "fieldKey": zod.string().optional(),
   "value": zod.unknown().optional(),
   "targetFieldSource": zod.enum(['entity', 'page']).optional().describe('For set_field: where to write. \"entity\" (default when absent) sets the triggering entity record\'s field. \"page\" writes a page-local field on a MIRROR page (`targetPageId`) of this entity at (targetPageId, recordId).'),
@@ -6081,7 +6574,24 @@ export const UpdateAutomationResponse = zod.object({
   "valueFieldKey": zod.string().optional().describe('The triggering record\'s field key to read when valueSource is \"field\".')
 })).optional(),
   "url": zod.string().optional(),
-  "includeRecord": zod.boolean().optional()
+  "includeRecord": zod.boolean().optional(),
+  "revisionId": zod.number().min(1).optional(),
+  "idempotencyKey": zod.string().min(1).max(updateAutomationResponseActionsJsonItemIdempotencyKeyMax).optional(),
+  "output": zod.union([zod.object({
+  "outputFormat": zod.enum(['docx', 'pdf']),
+  "destination": zod.enum(['local']),
+  "localFolderId": zod.number().min(1),
+  "targetFileFieldKey": zod.string().min(1),
+  "filenameTemplate": zod.string().min(1).max(updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateMax),
+  "overwrite": zod.enum(['replace', 'error'])
+}),zod.object({
+  "outputFormat": zod.enum(['docx', 'pdf']),
+  "destination": zod.enum(['gdrive']),
+  "driveFolderId": zod.string().min(1),
+  "targetFileFieldKey": zod.string().min(1),
+  "filenameTemplate": zod.string().min(1).max(updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateMax),
+  "overwrite": zod.enum(['replace', 'error'])
+})]).optional()
 })),
   "sortOrder": zod.number(),
   "createdAt": zod.coerce.date(),

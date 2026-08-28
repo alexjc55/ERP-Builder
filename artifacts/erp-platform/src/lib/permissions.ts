@@ -16,6 +16,7 @@ export function adminCapForPath(path: string): keyof RoleAdminCaps | null {
   if (path.startsWith("/admin/modules")) return "modules";
   if (path.startsWith("/admin/column-groups")) return "columnGroups";
   if (path.startsWith("/admin/google-drive")) return "googleDrive";
+  if (path.startsWith("/admin/documents")) return "documentGeneration";
   if (path.startsWith("/admin/import")) return "dataImport";
   if (path.startsWith("/admin/inbound-integrations")) return "inboundIntegrations";
   return null;

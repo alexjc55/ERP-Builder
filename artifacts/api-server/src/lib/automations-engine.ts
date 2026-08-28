@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { createHash } from "node:crypto";
 import { lockAndValidateUserReferences, referencedUserIds } from "./user-reference-barrier";
 import { isIP } from "node:net";
 import { lookup } from "node:dns/promises";
@@ -541,6 +542,10 @@ export async function systemUpdateRecord(
   statusIdInput: number | null | undefined,
   actorUserId: number | null,
   log: Log,
+  options?: {
+    requireEmptyFieldKey?: string;
+    onLockedPreviousValues?: (values: Readonly<Record<string, unknown>>) => void;
+  },
 ): Promise<boolean> {
   try {
     let [existing] = await db
@@ -625,6 +630,10 @@ export async function systemUpdateRecord(
       if (!locked) return undefined;
       existing = locked;
       const lockedValues = (locked.valuesJson as Record<string, unknown>) ?? {};
+      if (options?.requireEmptyFieldKey && lockedValues[options.requireEmptyFieldKey] != null && lockedValues[options.requireEmptyFieldKey] !== "") {
+        return undefined;
+      }
+      options?.onLockedPreviousValues?.(lockedValues);
       existingValues = lockedValues;
       if (hasValues) {
         const candidate: Record<string, unknown> = {};
@@ -1113,6 +1122,7 @@ async function runActions(
     formulaOptions: FormulaEvaluationOptions;
     /** Page contexts of the triggering record, for page source/target refs. */
     pageContexts: Map<number, PageContext>;
+    automationId: number;
   },
   log: Log,
 ): Promise<{ type: string; ok: boolean; matched?: number }[]> {
@@ -1211,6 +1221,25 @@ async function runActions(
           ? { entityId: ctx.entityId, recordId: ctx.recordId, values: ctx.values, statusId: ctx.statusId }
           : { entityId: ctx.entityId, recordId: ctx.recordId };
         ok = await sendWebhook(action.url, payload, log);
+        break;
+      }
+      case "generate_document": {
+        try {
+          const { generateDocument } = await import("./document-generation");
+          await generateDocument({
+            revisionId: action.revisionId,
+            recordId: ctx.recordId,
+            actorUserId: ctx.actorUserId,
+            output: action.output,
+            idempotencyKey: action.idempotencyKey ?? `automation:${ctx.automationId}:${createHash("sha256")
+              .update(JSON.stringify({ revisionId: action.revisionId, values: ctx.values, statusId: ctx.statusId }))
+              .digest("hex")}`,
+          });
+          ok = true;
+        } catch (err) {
+          log.error({ err, revisionId: action.revisionId, recordId: ctx.recordId }, "generate_document action failed");
+          ok = false;
+        }
         break;
       }
     }
@@ -1499,7 +1528,7 @@ async function runOne(
     const summary = await cascade.run({ depth: depth + 1, chain: nextChain }, () =>
       runActions(
         actions,
-        { entityId, recordId, values, statusId: record.statusId ?? null, actorUserId, formulaOptions, pageContexts },
+        { entityId, recordId, values, statusId: record.statusId ?? null, actorUserId, formulaOptions, pageContexts, automationId: automation.id },
         log,
       ),
     );

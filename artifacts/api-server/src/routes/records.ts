@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
-import { db, appSettingsTable, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable, pageFieldsTable, pageRecordValuesTable, pagesTable, relationsTable, recordLinksTable } from "@workspace/db";
+import { db, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable, pageFieldsTable, pageRecordValuesTable, pagesTable, relationsTable, recordLinksTable } from "@workspace/db";
 import { eq, asc, desc, and, or, sql, inArray, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { evaluateFormula, normalizeDecimals, cleanFpNoise, DEFAULT_FORMULA_TIME_ZONE, DEFAULT_WORKING_DAYS, type FormulaEvaluationOptions, type FormulaFieldDef } from "@workspace/formula";
+import { evaluateFormula, normalizeDecimals, cleanFpNoise, type FormulaFieldDef } from "@workspace/formula";
 import type { Request } from "express";
 import { requireAuth } from "../middlewares/auth";
 import {
@@ -106,6 +106,7 @@ import {
   canUseRecordPageFormulaContext,
   projectViewerFormulaValues,
   materializeVisiblePageFormulas,
+  loadFormulaOptions,
 } from "../lib/formula-runtime";
 import { effectiveEntityForPage } from "./page-fields";
 import {
@@ -118,22 +119,6 @@ import {
 import { isManualStatusEditDisabled } from "../lib/status-manual-edit";
 
 const router: IRouter = Router();
-
-/** Load the app's calendar settings once for a request-wide evaluation batch. */
-async function loadFormulaOptions(): Promise<FormulaEvaluationOptions> {
-  const [settings] = await db
-    .select({
-      timeZone: appSettingsTable.timeZone,
-      workingDays: appSettingsTable.workingDays,
-    })
-    .from(appSettingsTable)
-    .where(eq(appSettingsTable.id, 1))
-    .limit(1);
-  return {
-    timeZone: settings?.timeZone ?? DEFAULT_FORMULA_TIME_ZONE,
-    workingDays: settings?.workingDays ?? DEFAULT_WORKING_DAYS,
-  };
-}
 
 // Page-local field types whose value lives in page_record_values and can be
 // filtered with the standard value operators. Relation/lookup/function have no

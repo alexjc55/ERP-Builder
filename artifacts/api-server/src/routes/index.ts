@@ -31,6 +31,7 @@ import aiAgentsRouter from "./ai-agents";
 import agentApiSchemaRouter from "./agent-api-schema";
 import collaborationRouter from "./collaboration";
 import inboundIntegrationsRouter from "./inbound-integrations";
+import documentGenerationRouter from "./document-generation";
 
 const router: IRouter = Router();
 
@@ -66,5 +67,6 @@ router.use(aiAgentsRouter);
 router.use(agentApiSchemaRouter);
 router.use(collaborationRouter);
 router.use(inboundIntegrationsRouter);
+router.use(documentGenerationRouter);
 
 export default router;

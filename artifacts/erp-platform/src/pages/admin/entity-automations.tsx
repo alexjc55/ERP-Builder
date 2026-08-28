@@ -18,6 +18,12 @@ import {
   useListPages,
   useListPageFields,
   getListPageFieldsQueryKey,
+  useListDocumentTemplates,
+  getListDocumentTemplatesQueryKey,
+  useListGoogleDriveFolders,
+  useListLocalFolders,
+  getListGoogleDriveFoldersQueryKey,
+  getListLocalFoldersQueryKey,
   type Automation,
   type AutomationTrigger,
   type AutomationCondition,
@@ -156,6 +162,15 @@ type ActionDraft = {
   targetPageId: string;
   /** Transient (not persisted): explicit ack that an empty-match update hits ALL records. */
   confirmAllRecords: boolean;
+  /** Published document-template revision used by generate_document. */
+  revisionId: string;
+  outputFormat: "docx" | "pdf";
+  destination: "local" | "gdrive";
+  localFolderId: string;
+  driveFolderId: string;
+  targetFileFieldKey: string;
+  filenameTemplate: string;
+  overwrite: "replace" | "error";
 };
 
 function extractError(err: unknown): string {
@@ -193,6 +208,7 @@ const ACTION_TYPES: { value: AutomationActionType; labelKey: string; label: stri
   { value: "create_record", labelKey: "auto.act.create_record", label: "Создать запись" },
   { value: "update_records_where", labelKey: "auto.act.update_records_where", label: "Обновить записи (по условию)" },
   { value: "webhook", labelKey: "auto.act.webhook", label: "Webhook" },
+  { value: "generate_document", labelKey: "auto.act.generate_document", label: "Generate document" },
 ];
 
 function noValueOp(op: AutomationConditionOperator): boolean {
@@ -213,6 +229,14 @@ function emptyAction(defaultFieldKey: string): ActionDraft {
     targetFieldSource: "entity",
     targetPageId: "",
     confirmAllRecords: false,
+    revisionId: "",
+    outputFormat: "docx",
+    destination: "local",
+    localFolderId: "",
+    driveFolderId: "",
+    targetFileFieldKey: "",
+    filenameTemplate: "document",
+    overwrite: "replace",
   };
 }
 
@@ -509,6 +533,14 @@ export default function EntityAutomationsPage() {
     targetFieldSource: a.type === "set_field" && a.targetFieldSource === "page" ? "page" : "entity",
     targetPageId: a.type === "set_field" && a.targetPageId != null ? String(a.targetPageId) : "",
     confirmAllRecords: false,
+    revisionId: a.type === "generate_document" && a.revisionId != null ? String(a.revisionId) : "",
+    outputFormat: a.output?.outputFormat ?? "docx",
+    destination: a.output?.destination ?? "local",
+    localFolderId: a.output?.destination === "local" ? String(a.output.localFolderId) : "",
+    driveFolderId: a.output?.destination === "gdrive" ? a.output.driveFolderId : "",
+    targetFileFieldKey: a.output?.targetFileFieldKey ?? "",
+    filenameTemplate: a.output?.filenameTemplate ?? "document",
+    overwrite: a.output?.overwrite ?? "replace",
   });
 
   /** Coerce a string to a field's stored type for conditions/values. */
@@ -646,6 +678,19 @@ export default function EntityAutomationsPage() {
       } else if (a.type === "webhook") {
         if (!a.url) { toast({ title: t("auto.specifyUrl", "Укажите URL"), variant: "destructive" }); return; }
         builtActions.push({ type: "webhook", url: a.url, includeRecord: a.includeRecord });
+      } else if (a.type === "generate_document") {
+        if (!a.revisionId) {
+          toast({ title: t("auto.documentRevisionRequired", "Choose a published document template"), variant: "destructive" });
+          return;
+        }
+        if (!a.targetFileFieldKey || !a.filenameTemplate || (a.destination === "local" ? !a.localFolderId : !a.driveFolderId)) {
+          toast({ title: t("auto.documentOutputRequired", "Complete all document output settings"), variant: "destructive" });
+          return;
+        }
+        const output = a.destination === "local"
+          ? { outputFormat: a.outputFormat, destination: "local" as const, localFolderId: Number(a.localFolderId), targetFileFieldKey: a.targetFileFieldKey, filenameTemplate: a.filenameTemplate, overwrite: a.overwrite }
+          : { outputFormat: a.outputFormat, destination: "gdrive" as const, driveFolderId: a.driveFolderId, targetFileFieldKey: a.targetFileFieldKey, filenameTemplate: a.filenameTemplate, overwrite: a.overwrite };
+        builtActions.push({ type: "generate_document", revisionId: Number(a.revisionId), output });
       }
     }
     if (builtActions.length === 0) { toast({ title: t("auto.noActions", "Добавьте хотя бы одно действие"), variant: "destructive" }); return; }
@@ -1349,6 +1394,29 @@ function ActionCard({
   const targetFieldByKey = new Map(targetFields.map((f: Field) => [f.fieldKey, f]));
   const targetMirrorPages = allPages.filter((p) => p.mirrorEntityId === targetId);
   const targetFieldsKey = targetFields.map((f: Field) => `${f.fieldKey}:${f.fieldType}`).join(",");
+  const { data: documentTemplates = [] } = useListDocumentTemplates(
+    { entityId: currentEntityId },
+    {
+      query: {
+        enabled: draft.type === "generate_document" && currentEntityId > 0,
+        queryKey: getListDocumentTemplatesQueryKey({ entityId: currentEntityId }),
+      },
+    },
+  );
+  const publishedDocumentRevisions = documentTemplates
+    .filter((template) => !template.isArchived)
+    .flatMap((template) =>
+      template.revisions
+        .filter((revision) => revision.state === "published")
+        .map((revision) => ({ template, revision })),
+    );
+  const { data: driveFolders = [] } = useListGoogleDriveFolders({
+    query: { enabled: draft.type === "generate_document", retry: false, queryKey: getListGoogleDriveFoldersQueryKey() },
+  });
+  const { data: localFolders = [] } = useListLocalFolders({
+    query: { enabled: draft.type === "generate_document", queryKey: getListLocalFoldersQueryKey() },
+  });
+  const fileFields = currentFields.filter((field) => field.isActive && field.fieldType === "file");
 
   useEffect(() => {
     if (targetId > 0 && targetFields.length > 0) onTargetFieldsLoaded(targetId, targetFields);
@@ -1595,6 +1663,39 @@ function ActionCard({
             <Checkbox checked={draft.includeRecord} onCheckedChange={(v) => onChange({ includeRecord: v === true })} />
             {t("auto.includeRecord", "Передавать данные записи")}
           </label>
+        </div>
+      )}
+
+      {draft.type === "generate_document" && (
+        <div className="space-y-3 ps-7">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-slate-500">{t("auto.documentTemplate", "Published template")}</Label>
+            <Select value={draft.revisionId} onValueChange={(revisionId) => onChange({ revisionId })}>
+              <SelectTrigger data-testid={`select-document-revision-${index}`}>
+                <SelectValue placeholder={t("auto.chooseDocumentTemplate", "Choose a published template")} />
+              </SelectTrigger>
+              <SelectContent>
+                {publishedDocumentRevisions.map(({ template, revision }) => (
+                  <SelectItem key={revision.id} value={String(revision.id)}>
+                    {template.name} · v{revision.revision}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {publishedDocumentRevisions.length === 0 && (
+              <p className="text-xs text-amber-700">
+                {t("auto.noPublishedDocuments", "This entity has no published document templates. Create and publish one in Modules → Documents.")}
+              </p>
+            )}
+          </div>
+          <div className="grid gap-3 rounded-md border border-blue-100 bg-blue-50/60 p-3 sm:grid-cols-2">
+            <div className="space-y-1"><Label className="text-xs">{t("auto.documentFormat", "Format")}</Label><Select value={draft.outputFormat} onValueChange={(outputFormat) => onChange({ outputFormat: outputFormat as "docx" | "pdf" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="docx">DOCX</SelectItem><SelectItem value="pdf">PDF</SelectItem></SelectContent></Select></div>
+            <div className="space-y-1"><Label className="text-xs">{t("auto.documentDestination", "Destination")}</Label><Select value={draft.destination} onValueChange={(destination) => onChange({ destination: destination as "local" | "gdrive", localFolderId: "", driveFolderId: "" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="local">{t("auto.documentLocal", "Local managed storage")}</SelectItem><SelectItem value="gdrive">Google Drive</SelectItem></SelectContent></Select></div>
+            {draft.destination === "local" ? <div className="space-y-1"><Label className="text-xs">{t("auto.localFolder", "Managed local folder")}</Label><Select value={draft.localFolderId} onValueChange={(localFolderId) => onChange({ localFolderId })}><SelectTrigger><SelectValue placeholder={t("auto.chooseFolder", "Choose folder")} /></SelectTrigger><SelectContent>{localFolders.map((folder) => <SelectItem key={folder.id} value={String(folder.id)}>{folder.name}</SelectItem>)}</SelectContent></Select>{!draft.localFolderId && <p className="text-xs text-red-600">{t("auto.folderRequired", "Folder is required")}</p>}</div> : <div className="space-y-1"><Label className="text-xs">{t("auto.driveFolder", "Managed Drive folder")}</Label><Select value={draft.driveFolderId} onValueChange={(driveFolderId) => onChange({ driveFolderId })}><SelectTrigger><SelectValue placeholder={t("auto.chooseFolder", "Choose folder")} /></SelectTrigger><SelectContent>{driveFolders.map((folder) => <SelectItem key={folder.driveFolderId} value={folder.driveFolderId}>{folder.name}</SelectItem>)}</SelectContent></Select>{!draft.driveFolderId && <p className="text-xs text-red-600">{t("auto.folderRequired", "Folder is required")}</p>}</div>}
+            <div className="space-y-1"><Label className="text-xs">{t("auto.documentFileField", "Target file field")}</Label><Select value={draft.targetFileFieldKey} onValueChange={(targetFileFieldKey) => onChange({ targetFileFieldKey })}><SelectTrigger><SelectValue placeholder={t("auto.chooseFileField", "Choose file field")} /></SelectTrigger><SelectContent>{fileFields.map((field) => <SelectItem key={field.fieldKey} value={field.fieldKey}>{ml(field.nameJson) || field.fieldKey}</SelectItem>)}</SelectContent></Select>{!draft.targetFileFieldKey && <p className="text-xs text-red-600">{t("auto.fileFieldRequired", "File field is required")}</p>}</div>
+            <div className="space-y-1"><Label className="text-xs">{t("auto.documentFilename", "Filename template")}</Label><Input maxLength={180} value={draft.filenameTemplate} onChange={(event) => onChange({ filenameTemplate: event.target.value })} />{!draft.filenameTemplate && <p className="text-xs text-red-600">{t("auto.filenameRequired", "Filename template is required")}</p>}</div>
+            <div className="space-y-1"><Label className="text-xs">{t("auto.documentOverwrite", "When target field already has a file")}</Label><Select value={draft.overwrite} onValueChange={(overwrite) => onChange({ overwrite: overwrite as "replace" | "error" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="replace">{t("auto.replace", "Replace existing file")}</SelectItem><SelectItem value="error">{t("auto.failIfExists", "Fail without replacing")}</SelectItem></SelectContent></Select></div>
+          </div>
         </div>
       )}
     </div>

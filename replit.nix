@@ -1,5 +1,7 @@
 {pkgs}: {
   deps = [
+    pkgs.bubblewrap
+    pkgs.libreoffice
     pkgs.at-spi2-core
     pkgs.at-spi2-atk
     pkgs.libgbm

@@ -225,6 +225,14 @@ export async function deleteLocalFile(storedPath: string): Promise<void> {
   }
 }
 
+/** Read a trusted stored local object with an explicit size ceiling. */
+export async function readLocalFile(storedPath: string, maxBytes = 25 * 1024 * 1024): Promise<Buffer> {
+  const disk = resolveDiskPath(storedPath);
+  const stat = await fs.stat(disk);
+  if (!stat.isFile() || stat.size > maxBytes) throw new LocalObjectNotFoundError("Local object is missing or too large");
+  return fs.readFile(disk);
+}
+
 const CONTENT_TYPE_BY_EXT: Record<string, string> = {
   png: "image/png",
   jpg: "image/jpeg",
