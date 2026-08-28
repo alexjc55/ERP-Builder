@@ -708,9 +708,27 @@ function GDrivePreview({ fileId, contentType, name }: { fileId: string; contentT
   );
 }
 
+type PreviewSide = "top" | "bottom";
+
+/**
+ * Keep a tall file preview out of the sticky table header. Near the first
+ * visible rows there is not enough unobstructed room above the trigger, even
+ * when the viewport itself is tall enough, because Radix does not treat sticky
+ * headers as collision boundaries.
+ */
+function previewSideForTrigger(trigger: HTMLElement): PreviewSide {
+  const triggerRect = trigger.getBoundingClientRect();
+  const table = trigger.closest("table");
+  const header = table?.querySelector<HTMLElement>(".erp-main-header");
+  const headerBottom = header?.getBoundingClientRect().bottom ?? 8;
+  const estimatedPreviewHeight = 350;
+  return triggerRect.top - headerBottom >= estimatedPreviewHeight ? "top" : "bottom";
+}
+
 /** A filled file cell, rendered per source (server / Google Drive / link). */
 function FileCell({ value }: { value: FileValue }) {
   const t = useT();
+  const [previewSide, setPreviewSide] = useState<PreviewSide>("top");
   if (isLinkFile(value)) {
     return <UrlPreviewCell url={value.url} label={value.name && value.name.trim() ? value.name : value.url} />;
   }
@@ -726,6 +744,7 @@ function FileCell({ value }: { value: FileValue }) {
         <HoverCardTrigger asChild>
           <button
             type="button"
+            onPointerEnter={(e) => setPreviewSide(previewSideForTrigger(e.currentTarget))}
             onClick={(e) => {
               e.stopPropagation();
               void open();
@@ -741,7 +760,7 @@ function FileCell({ value }: { value: FileValue }) {
           </button>
         </HoverCardTrigger>
         <HoverCardContent
-          side="top"
+          side={previewSide}
           align="start"
           sideOffset={2}
           className="w-80 p-2"
@@ -784,6 +803,7 @@ function FileCell({ value }: { value: FileValue }) {
 /** A url cell: a link, plus a hover preview when it points to an image, pdf, or Google Drive file. */
 function UrlPreviewCell({ url, label }: { url: string; label?: string }) {
   const preview = detectUrlPreview(url);
+  const [previewSide, setPreviewSide] = useState<PreviewSide>("top");
   const link = (
     <a
       href={url}
@@ -799,10 +819,15 @@ function UrlPreviewCell({ url, label }: { url: string; label?: string }) {
   return (
     <HoverCard openDelay={200}>
       <HoverCardTrigger asChild>
-        <span className="inline-block max-w-full truncate align-bottom">{link}</span>
+        <span
+          className="inline-block max-w-full truncate align-bottom"
+          onPointerEnter={(e) => setPreviewSide(previewSideForTrigger(e.currentTarget))}
+        >
+          {link}
+        </span>
       </HoverCardTrigger>
       <HoverCardContent
-        side="top"
+        side={previewSide}
         align="start"
         sideOffset={2}
         className="w-80 p-2"
