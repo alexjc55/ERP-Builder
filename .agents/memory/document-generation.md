@@ -21,6 +21,12 @@ PDF conversion is allowed only through a network-isolated, filesystem-restricted
 
 **How to apply:** Never add a direct LibreOffice fallback. Production hosts must support the configured Bubblewrap isolation; verify conversion there after infrastructure changes.
 
+External DOCX package relationships remain fail-closed except for standard Transitional/Strict OOXML hyperlink relationships whose exact external target is a `mailto:` URI.
+
+**Why:** Business templates commonly contain clickable email addresses, which do not fetch a remote resource during rendering. Broad URI or relationship-type exceptions would reopen SSRF/local-file risks.
+
+**How to apply:** Parse relationship XML and attributes strictly; reject DTDs, undeclared entities, duplicate/spoofed attributes, nonstandard relationship types, HTTP(S), file, FTP, external images/templates, and every non-hyperlink mailto target.
+
 Test generation is an authenticated direct download and must never persist an output to Local or Drive storage or write the record file field.
 
 **Why:** Stored file serving is intentionally authorized through a readable record-field reference; an unattached test upload is both inaccessible and orphaned.

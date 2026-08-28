@@ -58,9 +58,67 @@ test("rejects DTD and external package relationships", async () => {
   const zip = new JSZip();
   zip.file("[Content_Types].xml", TYPES);
   zip.file("word/document.xml", `<w:document xmlns:w="w"><w:body/></w:document>`);
-  zip.file("word/_rels/document.xml.rels", `<Relationships><Relationship TargetMode="External" Target="https://evil.invalid/x"/></Relationships>`);
+  zip.file("word/_rels/document.xml.rels", `<Relationships><Relationship Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" TargetMode="External" Target="https://evil.invalid/x"/></Relationships>`);
   const external = await zip.generateAsync({ type: "nodebuffer" });
   await assert.rejects(() => parseDocxManifest(external), /external relationships/);
+});
+
+test("allows mailto hyperlinks but rejects mailto external resources", async () => {
+  const safe = new JSZip();
+  safe.file("[Content_Types].xml", TYPES);
+  safe.file("word/document.xml", `<w:document xmlns:w="w"><w:body><w:p><w:r><w:t>{{customer.email}}</w:t></w:r></w:p></w:body></w:document>`);
+  safe.file("word/_rels/document.xml.rels", `<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="mailto:sales@example.com" TargetMode="External"/></Relationships>`);
+  assert.deepEqual(
+    (await parseDocxManifest(await safe.generateAsync({ type: "nodebuffer" }))).scalars,
+    ["customer.email"],
+  );
+
+  const unsafe = new JSZip();
+  unsafe.file("[Content_Types].xml", TYPES);
+  unsafe.file("word/document.xml", `<w:document xmlns:w="w"><w:body/></w:document>`);
+  unsafe.file("word/_rels/document.xml.rels", `<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="mailto:sales@example.com" TargetMode="External"/></Relationships>`);
+  await assert.rejects(
+    async () => parseDocxManifest(await unsafe.generateAsync({ type: "nodebuffer" })),
+    /external relationships/,
+  );
+
+  const fakeType = new JSZip();
+  fakeType.file("[Content_Types].xml", TYPES);
+  fakeType.file("word/document.xml", `<w:document xmlns:w="w"><w:body/></w:document>`);
+  fakeType.file("word/_rels/document.xml.rels", `<Relationships><Relationship Id="rId1" Type="https://evil.invalid/relationships/hyperlink" Target="mailto:sales@example.com" TargetMode="External"/></Relationships>`);
+  await assert.rejects(
+    async () => parseDocxManifest(await fakeType.generateAsync({ type: "nodebuffer" })),
+    /external relationships/,
+  );
+});
+
+test("rejects namespaced and duplicate relationship attribute spoofing", async () => {
+  const prefixed = new JSZip();
+  prefixed.file("[Content_Types].xml", TYPES);
+  prefixed.file("word/document.xml", `<w:document xmlns:w="w"><w:body/></w:document>`);
+  prefixed.file("word/_rels/document.xml.rels", `<r:Relationships xmlns:r="http://schemas.openxmlformats.org/package/2006/relationships" xmlns:a="urn:spoof"><r:Relationship Id="rId1" a:Target="mailto:safe@example.com" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://evil.invalid/x" TargetMode="External"/></r:Relationships>`);
+  await assert.rejects(
+    async () => parseDocxManifest(await prefixed.generateAsync({ type: "nodebuffer" })),
+    /external relationships/,
+  );
+
+  const duplicate = new JSZip();
+  duplicate.file("[Content_Types].xml", TYPES);
+  duplicate.file("word/document.xml", `<w:document xmlns:w="w"><w:body/></w:document>`);
+  duplicate.file("word/_rels/document.xml.rels", `<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="mailto:safe@example.com" Target="https://evil.invalid/x" TargetMode="External"/></Relationships>`);
+  await assert.rejects(
+    async () => parseDocxManifest(await duplicate.generateAsync({ type: "nodebuffer" })),
+    /Duplicate DOCX relationship attribute/,
+  );
+
+  const unknownEntity = new JSZip();
+  unknownEntity.file("[Content_Types].xml", TYPES);
+  unknownEntity.file("word/document.xml", `<w:document xmlns:w="w"><w:body/></w:document>`);
+  unknownEntity.file("word/_rels/document.xml.rels", `<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="mailto:sales@example.com&bogus;" TargetMode="External"/></Relationships>`);
+  await assert.rejects(
+    async () => parseDocxManifest(await unknownEntity.generateAsync({ type: "nodebuffer" })),
+    /Malformed XML entity/,
+  );
 });
 
 test("rejects oversized aggregate expanded content before extraction", async () => {

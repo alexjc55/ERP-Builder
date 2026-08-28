@@ -5,6 +5,10 @@ const MAX_XML_BYTES = 8 * 1024 * 1024;
 const MAX_EXPANDED_BYTES = 64 * 1024 * 1024;
 const MAX_ENTRIES = 500;
 const TAG = /\{\{\s*([#/])?\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}/g;
+const HYPERLINK_RELATIONSHIP_TYPES = new Set([
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+  "http://purl.oclc.org/ooxml/officeDocument/relationships/hyperlink",
+]);
 
 type XmlNode =
   | { kind: "text"; value: string }
@@ -23,6 +27,13 @@ function decodeXml(value: string): string {
     if (dec) return String.fromCodePoint(Number.parseInt(dec, 10));
     return ({ "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&apos;": "'" } as Record<string, string>)[m] ?? m;
   });
+}
+
+function decodeXmlAttribute(value: string): string {
+  if (/&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-f]+);)/i.test(value)) {
+    throw new Error("Malformed XML entity in DOCX relationship attribute");
+  }
+  return decodeXml(value);
 }
 
 function encodeXml(value: string): string {
@@ -141,6 +152,72 @@ function tags(text: string): { sigil: string; name: string; raw: string }[] {
   return [...text.matchAll(TAG)].map((m) => ({ sigil: m[1] ?? "", name: m[2]!, raw: m[0] }));
 }
 
+function xmlAttributes(openTag: string): Map<string, string> {
+  const attributes = new Map<string, string>();
+  let cursor = 1;
+  while (cursor < openTag.length && !/[\s/>]/.test(openTag[cursor]!)) cursor += 1;
+  while (cursor < openTag.length) {
+    while (/\s/.test(openTag[cursor] ?? "")) cursor += 1;
+    if (openTag.startsWith("/>", cursor) || openTag[cursor] === ">") break;
+    const start = cursor;
+    while (cursor < openTag.length && /[A-Za-z0-9_.:-]/.test(openTag[cursor]!)) cursor += 1;
+    const name = openTag.slice(start, cursor);
+    if (!name) throw new Error("Malformed DOCX relationship attribute");
+    while (/\s/.test(openTag[cursor] ?? "")) cursor += 1;
+    if (openTag[cursor] !== "=") throw new Error("Malformed DOCX relationship attribute");
+    cursor += 1;
+    while (/\s/.test(openTag[cursor] ?? "")) cursor += 1;
+    const quote = openTag[cursor];
+    if (quote !== `"` && quote !== `'`) throw new Error("Malformed DOCX relationship attribute");
+    cursor += 1;
+    const valueStart = cursor;
+    while (cursor < openTag.length && openTag[cursor] !== quote) cursor += 1;
+    if (cursor >= openTag.length || openTag.slice(valueStart, cursor).includes("<")) {
+      throw new Error("Malformed DOCX relationship attribute");
+    }
+    if (attributes.has(name)) throw new Error(`Duplicate DOCX relationship attribute: ${name}`);
+    attributes.set(name, decodeXmlAttribute(openTag.slice(valueStart, cursor)));
+    cursor += 1;
+  }
+  return attributes;
+}
+
+function elementsByLocalName(
+  nodes: XmlNode[],
+  localName: string,
+  found: Extract<XmlNode, { kind: "element" }>[] = [],
+): Extract<XmlNode, { kind: "element" }>[] {
+  for (const node of nodes) {
+    if (node.kind !== "element") continue;
+    if (node.name.split(":").at(-1) === localName) found.push(node);
+    elementsByLocalName(node.children, localName, found);
+  }
+  return found;
+}
+
+function assertSafeRelationships(xml: string): void {
+  const relationshipNodes = elementsByLocalName(parseXml(xml), "Relationship");
+  for (const node of relationshipNodes) {
+    const attributes = xmlAttributes(node.open);
+    const target = attributes.get("Target");
+    const targetMode = attributes.get("TargetMode");
+    const type = attributes.get("Type");
+    if (!target || !type) throw new Error("Malformed DOCX relationship");
+    const isExternal = targetMode === "External" || /^[a-z][a-z0-9+.-]*:/i.test(target);
+    if (!isExternal) continue;
+
+    // A mailto hyperlink is inert package metadata: LibreOffice preserves it as
+    // a clickable address but does not fetch a remote resource while rendering.
+    // All other external targets remain prohibited, including HTTP hyperlinks,
+    // external images/templates, local files, FTP, and non-hyperlink mailto URIs.
+    const isSafeMailtoHyperlink =
+      targetMode === "External" &&
+      HYPERLINK_RELATIONSHIP_TYPES.has(type) &&
+      /^mailto:[^<>"\r\n\s]+$/i.test(target);
+    if (!isSafeMailtoHyperlink) throw new Error("DOCX external relationships are not allowed");
+  }
+}
+
 async function openDocx(data: Buffer): Promise<JSZip> {
   if (data.length === 0 || data.length > MAX_ARCHIVE_BYTES) throw new Error("DOCX size is outside the allowed range");
   const zip = await JSZip.loadAsync(data, { checkCRC32: true });
@@ -159,9 +236,7 @@ async function openDocx(data: Buffer): Promise<JSZip> {
   for (const name of Object.keys(zip.files).filter((n) => /\.(?:xml|rels)$/i.test(n) && !zip.files[n]!.dir)) {
     const rels = await zip.file(name)!.async("string");
     if (/<!DOCTYPE|<!ENTITY/i.test(rels)) throw new Error(`DOCX XML contains prohibited DTD/entity: ${name}`);
-    if (/\.rels$/i.test(name) && (/TargetMode\s*=\s*["']External["']/i.test(rels) || /\b(?:https?|file|ftp|mailto):/i.test(rels))) {
-      throw new Error("DOCX external relationships are not allowed");
-    }
+    if (/\.rels$/i.test(name)) assertSafeRelationships(rels);
   }
   return zip;
 }
