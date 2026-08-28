@@ -802,6 +802,7 @@ function FileCell({ value }: { value: FileValue }) {
 
 /** A url cell: a link, plus a hover preview when it points to an image, pdf, or Google Drive file. */
 function UrlPreviewCell({ url, label }: { url: string; label?: string }) {
+  const t = useT();
   const preview = detectUrlPreview(url);
   const [previewSide, setPreviewSide] = useState<PreviewSide>("top");
   const link = (
@@ -830,9 +831,20 @@ function UrlPreviewCell({ url, label }: { url: string; label?: string }) {
         side={previewSide}
         align="start"
         sideOffset={2}
-        className="w-80 p-2"
+        className="relative w-80 p-2"
         onClick={(e) => e.stopPropagation()}
       >
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900/80 text-white shadow hover:bg-slate-900"
+          title={t("records.openFile", "Открыть файл")}
+          aria-label={t("records.openFile", "Открыть файл")}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <ExternalLink className="h-4 w-4" />
+        </a>
         {preview.kind === "image" ? (
           <img src={preview.src} alt={url} className="max-h-64 w-full rounded object-contain" />
         ) : (
