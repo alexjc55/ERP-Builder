@@ -58,16 +58,22 @@ test("rejects DTD and external package relationships", async () => {
   const zip = new JSZip();
   zip.file("[Content_Types].xml", TYPES);
   zip.file("word/document.xml", `<w:document xmlns:w="w"><w:body/></w:document>`);
-  zip.file("word/_rels/document.xml.rels", `<Relationships><Relationship Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" TargetMode="External" Target="https://evil.invalid/x"/></Relationships>`);
+  zip.file("word/_rels/document.xml.rels", `<Relationships><Relationship Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" TargetMode="External" Target="https://evil.invalid/x"/></Relationships>`);
   const external = await zip.generateAsync({ type: "nodebuffer" });
   await assert.rejects(() => parseDocxManifest(external), /external relationships/);
 });
 
-test("allows mailto hyperlinks but rejects mailto external resources", async () => {
+test("allows ordinary clickable hyperlinks but rejects external resources", async () => {
   const safe = new JSZip();
   safe.file("[Content_Types].xml", TYPES);
   safe.file("word/document.xml", `<w:document xmlns:w="w"><w:body><w:p><w:r><w:t>{{customer.email}}</w:t></w:r></w:p></w:body></w:document>`);
-  safe.file("word/_rels/document.xml.rels", `<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="mailto:sales@example.com" TargetMode="External"/></Relationships>`);
+  safe.file("word/_rels/document.xml.rels", `<Relationships>
+    <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="mailto:sales@example.com" TargetMode="External"/>
+    <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com/company" TargetMode="External"/>
+    <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="tel:+972501234567" TargetMode="External"/>
+    <Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://wa.me/972501234567" TargetMode="External"/>
+    <Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="whatsapp://send?phone=972501234567" TargetMode="External"/>
+  </Relationships>`);
   assert.deepEqual(
     (await parseDocxManifest(await safe.generateAsync({ type: "nodebuffer" }))).scalars,
     ["customer.email"],
@@ -96,7 +102,7 @@ test("rejects namespaced and duplicate relationship attribute spoofing", async (
   const prefixed = new JSZip();
   prefixed.file("[Content_Types].xml", TYPES);
   prefixed.file("word/document.xml", `<w:document xmlns:w="w"><w:body/></w:document>`);
-  prefixed.file("word/_rels/document.xml.rels", `<r:Relationships xmlns:r="http://schemas.openxmlformats.org/package/2006/relationships" xmlns:a="urn:spoof"><r:Relationship Id="rId1" a:Target="mailto:safe@example.com" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://evil.invalid/x" TargetMode="External"/></r:Relationships>`);
+  prefixed.file("word/_rels/document.xml.rels", `<r:Relationships xmlns:r="http://schemas.openxmlformats.org/package/2006/relationships" xmlns:a="urn:spoof"><r:Relationship Id="rId1" a:Target="mailto:safe@example.com" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="file:///etc/passwd" TargetMode="External"/></r:Relationships>`);
   await assert.rejects(
     async () => parseDocxManifest(await prefixed.generateAsync({ type: "nodebuffer" })),
     /external relationships/,

@@ -195,6 +195,20 @@ function elementsByLocalName(
   return found;
 }
 
+function isAllowedHyperlinkTarget(target: string): boolean {
+  if (/[<>"\s\u0000-\u001f\u007f]/.test(target)) return false;
+  try {
+    const url = new URL(target);
+    const protocol = url.protocol.toLowerCase();
+    if (protocol === "http:" || protocol === "https:") return url.hostname.length > 0;
+    if (protocol === "mailto:" || protocol === "tel:") return url.pathname.length > 0;
+    if (protocol === "whatsapp:") return url.hostname.length > 0 || url.pathname.length > 0;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 function assertSafeRelationships(xml: string): void {
   const relationshipNodes = elementsByLocalName(parseXml(xml), "Relationship");
   for (const node of relationshipNodes) {
@@ -206,15 +220,15 @@ function assertSafeRelationships(xml: string): void {
     const isExternal = targetMode === "External" || /^[a-z][a-z0-9+.-]*:/i.test(target);
     if (!isExternal) continue;
 
-    // A mailto hyperlink is inert package metadata: LibreOffice preserves it as
-    // a clickable address but does not fetch a remote resource while rendering.
-    // All other external targets remain prohibited, including HTTP hyperlinks,
-    // external images/templates, local files, FTP, and non-hyperlink mailto URIs.
-    const isSafeMailtoHyperlink =
+    // Standard hyperlink relationships are inert package metadata: LibreOffice
+    // preserves them as clickable links but does not fetch them while rendering.
+    // External images/templates, local files, FTP, and custom schemes remain
+    // prohibited even when their URI appears in a relationship part.
+    const isSafeClickableHyperlink =
       targetMode === "External" &&
       HYPERLINK_RELATIONSHIP_TYPES.has(type) &&
-      /^mailto:[^<>"\r\n\s]+$/i.test(target);
-    if (!isSafeMailtoHyperlink) throw new Error("DOCX external relationships are not allowed");
+      isAllowedHyperlinkTarget(target);
+    if (!isSafeClickableHyperlink) throw new Error("DOCX external relationships are not allowed");
   }
 }
 
