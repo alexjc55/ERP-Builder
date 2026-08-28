@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { automationActionSchema, documentMappingSchema, documentGenerationOutputSchema } from "@workspace/db";
-import { awaitIdempotentRun, canonicalDocumentRequestKey, convertToPdf, libreOfficeSandboxArgs, lockedDocumentWriteOptions } from "./document-generation";
+import { awaitIdempotentRun, canonicalDocumentRequestKey, convertToPdf, fileFieldAllowsGdrive, libreOfficeSandboxArgs, lockedDocumentWriteOptions } from "./document-generation";
+import { activeOrphanRecoveryClaim, ORPHAN_RECOVERY_CLAIM_LEASE_MS, orphanRecoveryClaimDisposition, orphanTerminalResult, presentGenerationOutput, storedOrphanRecoveryClaim, validDriveOrphan, valueReferencesDriveFile } from "../routes/document-generation";
+import { DrivePreconditionError, getDriveFileMetadata, trashDriveFile } from "./googleDrive";
 
 test("document mappings reject executable or network sources", () => {
   assert.equal(documentMappingSchema.safeParse({
@@ -90,4 +92,101 @@ test("document output and automation action are explicit and bounded", () => {
   assert.equal(automationActionSchema.safeParse({ type: "generate_document", revisionId: -1, output }).success, false);
   assert.equal(documentGenerationOutputSchema.safeParse({ ...output, destination: "gdrive" }).success, false);
   assert.equal(documentGenerationOutputSchema.safeParse({ ...output, overwrite: "append" }).success, false);
+});
+
+test("orphan projection exposes only safe recovery status and terminal details", () => {
+  const raw = { file: { kind: "gdrive", fileId: "drive-file", name: "x" }, orphaned: true,
+    recovery: { targetFileFieldKey: "secret-field", driveFolderId: "private-folder", overwrite: "replace" } };
+  assert.deepEqual(presentGenerationOutput(raw), { destination: "gdrive", fileId: "drive-file", name: "x", orphaned: true, recoveryAvailable: true });
+  assert.deepEqual(presentGenerationOutput({ ...raw, orphanResolution: { action: "delete_output", outcome: "deleted", actorUserId: 9, resolvedAt: "2025-01-01T00:00:00.000Z", driveFolderId: "nope" } }),
+    { destination: "gdrive", fileId: "drive-file", name: "x", orphaned: true, orphanResolution: { action: "delete_output", outcome: "deleted", actorUserId: 9, resolvedAt: "2025-01-01T00:00:00.000Z" } });
+  assert.ok(validDriveOrphan(raw));
+  assert.equal(validDriveOrphan({ ...raw, file: { kind: "server" } }), undefined);
+});
+
+test("orphan terminal action is idempotent only for the same action", () => {
+  const resolution = { action: "mark_resolved", outcome: "acknowledged", actorUserId: 2, resolvedAt: "2025-01-01T00:00:00.000Z" };
+  assert.deepEqual(orphanTerminalResult(7, resolution, "mark_resolved"), { runId: 7, ...resolution, idempotent: true });
+  assert.throws(() => orphanTerminalResult(7, resolution, "delete_output"), /different/);
+  assert.throws(() => orphanTerminalResult(7, { ...resolution, action: "delete_output", outcome: "acknowledged" }, "delete_output"), /Invalid/);
+});
+
+test("Drive recovery follows the legacy server-only default for absent or empty sources", () => {
+  assert.equal(fileFieldAllowsGdrive(undefined), false);
+  assert.equal(fileFieldAllowsGdrive({}), false);
+  assert.equal(fileFieldAllowsGdrive({ allowedSources: [] }), false);
+  assert.equal(fileFieldAllowsGdrive({ allowedSources: ["gdrive"] }), true);
+});
+
+test("recovery claims are private and expire for crash-safe takeover", () => {
+  const now = Date.parse("2025-01-01T00:10:00.000Z");
+  const raw = {
+    file: { kind: "gdrive", fileId: "drive-file" }, orphaned: true,
+    recovery: { targetFileFieldKey: "file", driveFolderId: "folder", overwrite: "replace" },
+    orphanRecoveryClaim: { action: "retry_writeback", actorUserId: 4, startedAt: new Date(now - 1_000).toISOString() },
+  };
+  assert.ok(activeOrphanRecoveryClaim(raw, now));
+  assert.equal("orphanRecoveryClaim" in (presentGenerationOutput(raw) ?? {}), false);
+  assert.equal(activeOrphanRecoveryClaim({
+    ...raw,
+    orphanRecoveryClaim: { ...raw.orphanRecoveryClaim, startedAt: new Date(now - ORPHAN_RECOVERY_CLAIM_LEASE_MS).toISOString() },
+  }, now), undefined);
+  const staleDelete = {
+    ...raw,
+    orphanRecoveryClaim: { ...raw.orphanRecoveryClaim, action: "delete_output", startedAt: new Date(now - ORPHAN_RECOVERY_CLAIM_LEASE_MS).toISOString() },
+  };
+  assert.equal(storedOrphanRecoveryClaim(staleDelete)?.action, "delete_output");
+  assert.equal(orphanRecoveryClaimDisposition(staleDelete, "delete_output", now), "stale_same");
+  assert.equal(orphanRecoveryClaimDisposition(staleDelete, "retry_writeback", now), "different");
+  assert.equal(orphanRecoveryClaimDisposition(raw, "retry_writeback", now), "active_same");
+  assert.equal(orphanRecoveryClaimDisposition({ ...raw, orphanRecoveryClaim: undefined }, "retry_writeback", now), "available");
+  assert.equal(activeOrphanRecoveryClaim({
+    ...raw,
+    orphanRecoveryClaim: { ...raw.orphanRecoveryClaim, action: "delete_output" },
+  }, now)?.action, "delete_output");
+  assert.equal(activeOrphanRecoveryClaim({
+    ...raw,
+    orphanRecoveryClaim: { ...raw.orphanRecoveryClaim, action: "not_an_action" },
+  }, now), undefined);
+});
+
+test("Drive orphan trash uses metadata ETag and maps a failed precondition", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: RequestInit[] = [];
+  try {
+    globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      requests.push(init ?? {});
+      if ((init?.method ?? "GET") === "GET") {
+        return new Response(JSON.stringify({ id: "f", parents: ["p"], trashed: false }), {
+          status: 200, headers: { "content-type": "application/json", etag: "\"v1\"" },
+        });
+      }
+      return new Response(null, { status: 412 });
+    }) as typeof fetch;
+    const metadata = await getDriveFileMetadata("token", "f");
+    assert.equal(metadata.etag, "\"v1\"");
+    await assert.rejects(() => trashDriveFile("token", "f", metadata.etag), DrivePreconditionError);
+    assert.equal((requests[1]?.headers as Record<string, string>)["If-Match"], "\"v1\"");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Drive reference detection is exact and recognizes an attached target", () => {
+  const file = { kind: "gdrive", fileId: "abc", name: "report" };
+  assert.equal(valueReferencesDriveFile(file, "abc"), true);
+  assert.equal(valueReferencesDriveFile({ nested: [file] }, "abc"), true);
+  assert.equal(valueReferencesDriveFile({ kind: "gdrive", fileId: "abcd" }, "abc"), false);
+  assert.equal(valueReferencesDriveFile({ note: "abc" }, "abc"), false);
+});
+
+test("delete recovery commits its tombstone before provider I/O and finalizes afterward", async () => {
+  const source = await readFile(new URL("../routes/document-generation.ts", import.meta.url), "utf8");
+  const start = source.indexOf('if (action === "delete_output")');
+  const end = source.indexOf("const result = await db.transaction", start + 40);
+  const claimAndProvider = source.slice(start, end);
+  assert.match(claimAndProvider, /orphanRecoveryClaim: ownedClaim[\s\S]*?return \{ run, orphan \};\s*\}\);/);
+  assert.match(claimAndProvider, /const connection = await getConnection\(\)[\s\S]*?trashDriveFile/);
+  assert.ok(claimAndProvider.indexOf("const connection = await getConnection()") > claimAndProvider.indexOf("return { run, orphan };"));
+  assert.match(source.slice(end, source.indexOf("if (audit)", end)), /lockGdriveFileIds[\s\S]*?withoutRecoveryClaim[\s\S]*?orphanResolution/);
 });

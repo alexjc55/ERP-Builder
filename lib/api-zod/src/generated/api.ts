@@ -49,6 +49,13 @@ export const ListDocumentGenerationRunsResponse = zod.object({
   "attempted": zod.boolean().optional(),
   "deleted": zod.boolean().optional(),
   "error": zod.string().optional()
+}).optional(),
+  "recoveryAvailable": zod.boolean().optional(),
+  "orphanResolution": zod.object({
+  "action": zod.enum(['retry_writeback', 'delete_output', 'mark_resolved']),
+  "outcome": zod.enum(['attached', 'deleted', 'acknowledged']),
+  "actorUserId": zod.number(),
+  "resolvedAt": zod.coerce.date()
 }).optional()
 }).optional(),
   "error": zod.string().optional(),
@@ -58,6 +65,27 @@ export const ListDocumentGenerationRunsResponse = zod.object({
 })),
   "page": zod.number(),
   "limit": zod.number()
+})
+
+
+
+
+
+export const ResolveDocumentGenerationOrphanParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const ResolveDocumentGenerationOrphanBody = zod.object({
+  "action": zod.enum(['retry_writeback', 'delete_output', 'mark_resolved'])
+})
+
+export const ResolveDocumentGenerationOrphanResponse = zod.object({
+  "runId": zod.number(),
+  "action": zod.enum(['retry_writeback', 'delete_output', 'mark_resolved']),
+  "outcome": zod.enum(['attached', 'deleted', 'acknowledged']),
+  "actorUserId": zod.number(),
+  "resolvedAt": zod.coerce.date(),
+  "idempotent": zod.boolean()
 })
 
 

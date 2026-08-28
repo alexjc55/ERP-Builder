@@ -19,8 +19,10 @@ import {
   useListLocalFolders,
   useListModules,
   usePublishDocumentTemplateRevision,
+  useResolveDocumentGenerationOrphan,
   useTestDocumentTemplateRevision,
   useUpdateDocumentTemplate,
+  type DocumentOrphanActionInputAction,
   type DocumentTemplate,
   type DocumentTemplateRevision,
   type Entity,
@@ -38,19 +40,23 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertCircle,
   Archive,
   ArrowLeft,
   CheckCircle2,
+  CircleCheck,
   Download,
   ExternalLink,
   FileText,
   Plus,
   Save,
   RefreshCw,
+  RotateCcw,
   Send,
+  Trash2,
   X,
   Upload,
 } from "lucide-react";
@@ -79,6 +85,7 @@ type Output = {
   overwrite: "replace" | "error";
 };
 type Manifest = { scalars?: string[]; collections?: Record<string, string[]>; errors?: string[] };
+type OrphanRecoveryRequest = { runId: number; action: DocumentOrphanActionInputAction };
 
 const emptyMapping = (): Mapping => ({ scalars: {}, collections: {} });
 const defaultOutput = (): Output => ({ outputFormat: "docx", destination: "local", targetFileFieldKey: "", filenameTemplate: "document", overwrite: "replace" });
@@ -271,6 +278,7 @@ export default function DocumentsPage(): ReactElement {
   const [output, setOutput] = useState<Output>(defaultOutput);
   const [testRecordId, setTestRecordId] = useState("");
   const [historyStatus, setHistoryStatus] = useState<"" | "running" | "success" | "error">("");
+  const [orphanRecovery, setOrphanRecovery] = useState<OrphanRecoveryRequest | null>(null);
 
   useEffect(() => {
     if (!entityId && entities.length) setEntityId(entities[0].id);
@@ -351,6 +359,19 @@ export default function DocumentsPage(): ReactElement {
         toast({ title: t("documents.testReady", "Test document downloaded") });
       },
       onError: (e) => toast({ title: t("documents.testError", "Test generation failed"), description: extractError(e), variant: "destructive" }),
+    },
+  });
+  const resolveOrphan = useResolveDocumentGenerationOrphan({
+    mutation: {
+      onSuccess: (result) => {
+        setOrphanRecovery(null);
+        queryClient.invalidateQueries({ queryKey: getListDocumentGenerationRunsQueryKey(historyParams) });
+        history.refetch();
+        const outcomeKey = result.outcome === "attached" ? "documents.orphanOutcomeAttached" : result.outcome === "deleted" ? "documents.orphanOutcomeDeleted" : "documents.orphanOutcomeAcknowledged";
+        const outcomeFallback = result.outcome === "attached" ? "Output attached to the record" : result.outcome === "deleted" ? "Output moved to Google Drive Trash" : "Orphan marked resolved";
+        toast({ title: t(outcomeKey, outcomeFallback) });
+      },
+      onError: (error) => toast({ title: t("documents.orphanRecoveryError", "Could not resolve orphaned output"), description: safeErrorText(extractError(error)), variant: "destructive" }),
     },
   });
 
@@ -440,11 +461,40 @@ export default function DocumentsPage(): ReactElement {
         <Card><CardContent className="p-5 space-y-4" data-testid="document-generation-history">
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">{t("documents.history", "Generation history")}</h2><p className="text-sm text-slate-500">{t("documents.historyHint", "Latest 50 generations for this template")}</p></div><div className="flex gap-2"><Select value={historyStatus || "__all"} onValueChange={(value) => setHistoryStatus(value === "__all" ? "" : value as typeof historyStatus)}><SelectTrigger className="w-36"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="__all">{t("documents.allStatuses", "All statuses")}</SelectItem><SelectItem value="running">{t("documents.running", "Running")}</SelectItem><SelectItem value="success">{t("documents.success", "Success")}</SelectItem><SelectItem value="error">{t("documents.error", "Error")}</SelectItem></SelectContent></Select><Button variant="outline" size="icon" onClick={() => history.refetch()} disabled={history.isFetching} aria-label={t("documents.refreshHistory", "Refresh history")}><RefreshCw className={`h-4 w-4 ${history.isFetching ? "animate-spin" : ""}`} /></Button></div></div>
           {history.isLoading ? <div className="space-y-2">{Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-20 w-full" />)}</div> : history.isError ? <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{t("documents.historyError", "Could not load generation history")}: {safeErrorText(extractError(history.error))}</p> : history.data?.items.length === 0 ? <p className="py-5 text-center text-sm text-slate-500">{t("documents.historyEmpty", "No document generations yet")}</p> : <div className="space-y-3">{[...(history.data?.items ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((run) => {
-            const url = run.output?.path ? objectServingUrl(run.output.path) : run.output?.fileId ? gdriveContentUrl(run.output.fileId) : run.output?.webViewLink;
+            const output = run.output;
+            const resolution = output?.orphanResolution;
+            const isActiveOrphan = output?.orphaned && !resolution;
+            const url = output?.path ? objectServingUrl(output.path) : output?.fileId ? gdriveContentUrl(output.fileId) : output?.webViewLink;
+            const canOpenOutput = !output?.orphaned || resolution?.outcome === "attached";
             const badge = run.status === "success" ? "bg-emerald-100 text-emerald-700" : run.status === "error" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700";
-            return <div key={run.id} className="rounded-lg border border-slate-200 p-3 text-sm"><div className="flex flex-wrap items-center gap-2"><Badge className={badge}>{t(`documents.${run.status}`, run.status)}</Badge><span className="font-medium">v{run.revision}</span><span className="text-slate-600">{t("documents.record", "Record")} #{run.recordId}</span>{run.actorUserId != null && <span className="text-slate-500">{t("documents.actor", "Actor")} #{run.actorUserId}</span>}<span className="ms-auto text-xs text-slate-500">{new Date(run.createdAt).toLocaleString()}</span></div><div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">{run.completedAt && <span>{t("documents.completed", "Completed")}: {new Date(run.completedAt).toLocaleString()}</span>}{run.output?.name && <span>{run.output.name}</span>}{run.output?.contentType && <span>{run.output.contentType}</span>}{run.output?.size != null && <span>{readableSize(run.output.size)}</span>}{run.output?.destination && <span>{run.output.destination === "gdrive" ? "Google Drive" : t("documents.localStorage", "Local managed storage")}</span>}{url && <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-700 hover:underline"><ExternalLink className="h-3.5 w-3.5" />{t("documents.openOutput", "Open output")}</a>}</div>{run.output?.orphaned && <p className="mt-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">{t("documents.orphanWarning", "Output is orphaned")}{run.output.cleanup?.attempted ? ` · ${run.output.cleanup.deleted ? t("documents.cleanupDeleted", "cleanup deleted it") : t("documents.cleanupAttempted", "cleanup attempted")}` : ""}{run.output.cleanup?.error ? ` · ${safeErrorText(run.output.cleanup.error)}` : ""}</p>}{run.error && <p className="mt-2 rounded bg-red-50 px-2 py-1 text-xs text-red-700">{safeErrorText(run.error)}</p>}</div>;
+            const resolutionOutcome = resolution?.outcome === "attached" ? t("documents.orphanOutcomeAttached", "Attached to record") : resolution?.outcome === "deleted" ? t("documents.orphanOutcomeDeleted", "Moved to Google Drive Trash") : t("documents.orphanOutcomeAcknowledged", "Marked resolved");
+            return <div key={run.id} className="rounded-lg border border-slate-200 p-3 text-sm">
+              <div className="flex flex-wrap items-center gap-2"><Badge className={badge}>{t(`documents.${run.status}`, run.status)}</Badge><span className="font-medium">v{run.revision}</span><span className="text-slate-600">{t("documents.record", "Record")} #{run.recordId}</span>{run.actorUserId != null && <span className="text-slate-500">{t("documents.actor", "Actor")} #{run.actorUserId}</span>}<span className="ms-auto text-xs text-slate-500">{new Date(run.createdAt).toLocaleString()}</span></div>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">{run.completedAt && <span>{t("documents.completed", "Completed")}: {new Date(run.completedAt).toLocaleString()}</span>}{output?.name && <span>{output.name}</span>}{output?.contentType && <span>{output.contentType}</span>}{output?.size != null && <span>{readableSize(output.size)}</span>}{output?.destination && <span>{output.destination === "gdrive" ? "Google Drive" : t("documents.localStorage", "Local managed storage")}</span>}{url && canOpenOutput && <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-700 hover:underline"><ExternalLink className="h-3.5 w-3.5" />{t("documents.openOutput", "Open output")}</a>}</div>
+              {isActiveOrphan && <p className="mt-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">{t("documents.orphanWarning", "Output is orphaned")}{output?.cleanup?.attempted ? ` · ${output.cleanup.deleted ? t("documents.cleanupDeleted", "cleanup deleted it") : t("documents.cleanupAttempted", "cleanup attempted")}` : ""}{output?.cleanup?.error ? ` · ${safeErrorText(output.cleanup.error)}` : ""}</p>}
+              {isActiveOrphan && output?.recoveryAvailable && <div className="mt-3 flex flex-wrap gap-2" data-testid={`orphan-recovery-actions-${run.id}`}>
+                <Button size="sm" variant="outline" disabled={!module?.isEnabled || resolveOrphan.isPending} onClick={() => setOrphanRecovery({ runId: run.id, action: "retry_writeback" })} data-testid={`button-orphan-retry-${run.id}`}><RotateCcw className="me-1.5 h-4 w-4" />{t("documents.orphanRetry", "Retry write-back")}</Button>
+                <Button size="sm" variant="outline" className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800" disabled={!module?.isEnabled || resolveOrphan.isPending} onClick={() => setOrphanRecovery({ runId: run.id, action: "delete_output" })} data-testid={`button-orphan-delete-${run.id}`}><Trash2 className="me-1.5 h-4 w-4" />{t("documents.orphanTrash", "Move to Drive Trash")}</Button>
+                <Button size="sm" variant="outline" disabled={!module?.isEnabled || resolveOrphan.isPending} onClick={() => setOrphanRecovery({ runId: run.id, action: "mark_resolved" })} data-testid={`button-orphan-resolve-${run.id}`}><CircleCheck className="me-1.5 h-4 w-4" />{t("documents.orphanMarkResolved", "Mark resolved")}</Button>
+              </div>}
+              {isActiveOrphan && !output?.recoveryAvailable && <div className="mt-2 rounded bg-slate-50 px-2 py-2 text-xs text-slate-700" data-testid={`status-orphan-recovery-unavailable-${run.id}`}>{t("documents.orphanRecoveryUnavailable", "Automatic recovery is unavailable for this legacy or locally cleaned-up output.")}</div>}
+              {resolution && <div className="mt-2 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800" data-testid={`status-orphan-resolution-${run.id}`}><div className="flex items-center gap-1.5 font-medium"><CircleCheck className="h-4 w-4" />{t("documents.orphanResolved", "Orphan recovery resolved")}: {resolutionOutcome}</div><div className="mt-1 flex flex-wrap gap-x-3 gap-y-1"><span>{t("documents.orphanResolutionAction", "Action")}: {t(`documents.orphanAction.${resolution.action}`, resolution.action)}</span><span>{t("documents.orphanResolutionActor", "Actor ID")}: #{resolution.actorUserId}</span><span>{t("documents.orphanResolutionTime", "Resolved")}: {new Date(resolution.resolvedAt).toLocaleString()}</span></div></div>}
+              {run.error && <p className="mt-2 rounded bg-red-50 px-2 py-1 text-xs text-red-700">{safeErrorText(run.error)}</p>}
+            </div>;
           })}</div>}
         </CardContent></Card>
+        <AlertDialog open={!!orphanRecovery} onOpenChange={(open) => { if (!open && !resolveOrphan.isPending) setOrphanRecovery(null); }}>
+          <AlertDialogContent data-testid="dialog-orphan-recovery">
+            <AlertDialogHeader>
+              <AlertDialogTitle>{orphanRecovery?.action === "retry_writeback" ? t("documents.orphanRetryConfirmTitle", "Retry write-back?") : orphanRecovery?.action === "delete_output" ? t("documents.orphanTrashConfirmTitle", "Move file to Drive Trash?") : t("documents.orphanResolveConfirmTitle", "Mark orphan resolved?")}</AlertDialogTitle>
+              <AlertDialogDescription>{orphanRecovery?.action === "retry_writeback" ? t("documents.orphanRetryConfirmDescription", "This writes the generated file to the configured record field and may replace the current file according to the original run policy.") : orphanRecovery?.action === "delete_output" ? t("documents.orphanTrashConfirmDescription", "This moves the unattached file to Google Drive Trash. It is not permanently deleted.") : t("documents.orphanResolveConfirmDescription", "This leaves the unreferenced Drive file in place and only stops recovery prompts.")}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={resolveOrphan.isPending}>{t("common.cancel", "Cancel")}</AlertDialogCancel>
+              <AlertDialogAction className={orphanRecovery?.action === "delete_output" ? "bg-red-600 text-white hover:bg-red-700" : undefined} disabled={resolveOrphan.isPending || !module?.isEnabled || !orphanRecovery} onClick={() => orphanRecovery && resolveOrphan.mutate({ id: orphanRecovery.runId, data: { action: orphanRecovery.action } })} data-testid="button-confirm-orphan-recovery">{t("documents.orphanConfirm", "Confirm action")}</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     );
   }

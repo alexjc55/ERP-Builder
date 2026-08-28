@@ -187,6 +187,43 @@ export interface DriveUploadedFile {
   webViewLink?: string;
 }
 
+export type DriveFileMetadata = { id: string; parents: string[]; trashed: boolean; etag: string };
+export class DriveProviderError extends Error {
+  constructor(public readonly status: number, operation: string) {
+    super(`Drive ${operation} is unavailable`);
+  }
+}
+export class DrivePreconditionError extends Error {
+  constructor() { super("Drive file changed during orphan resolution"); }
+}
+
+/** Read only the ownership-relevant metadata for an app-managed Drive file. */
+export async function getDriveFileMetadata(accessToken: string, fileId: string): Promise<DriveFileMetadata> {
+  const resp = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=id,parents,trashed`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!resp.ok) throw new DriveProviderError(resp.status, "metadata verification");
+  const etag = resp.headers.get("etag");
+  if (!etag) throw new DriveProviderError(502, "metadata verification");
+  const file = await resp.json() as { id: string; parents?: string[]; trashed?: boolean };
+  return { id: file.id, parents: Array.isArray(file.parents) ? file.parents : [], trashed: file.trashed === true, etag };
+}
+
+/** Move an app-owned file to Drive Trash. This deliberately never permanently deletes. */
+export async function trashDriveFile(accessToken: string, fileId: string, expectedEtag: string): Promise<DriveFileMetadata> {
+  const resp = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=id,parents,trashed`,
+    { method: "PATCH", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json", "If-Match": expectedEtag }, body: JSON.stringify({ trashed: true }) },
+  );
+  if (resp.status === 412) throw new DrivePreconditionError();
+  if (!resp.ok) throw new DriveProviderError(resp.status, "trash operation");
+  const etag = resp.headers.get("etag");
+  if (!etag) throw new DriveProviderError(502, "trash operation");
+  const file = await resp.json() as { id: string; parents?: string[]; trashed?: boolean };
+  return { id: file.id, parents: Array.isArray(file.parents) ? file.parents : [], trashed: file.trashed === true, etag };
+}
+
 /** Upload a buffer into the managed folder via Drive multipart upload. */
 export async function uploadToFolder(
   accessToken: string,

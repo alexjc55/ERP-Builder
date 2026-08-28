@@ -200,6 +200,31 @@ export type DocumentGenerationRunOutputCleanup = {
   error?: string;
 };
 
+export type DocumentGenerationRunOutputOrphanResolutionAction = typeof DocumentGenerationRunOutputOrphanResolutionAction[keyof typeof DocumentGenerationRunOutputOrphanResolutionAction];
+
+
+export const DocumentGenerationRunOutputOrphanResolutionAction = {
+  retry_writeback: 'retry_writeback',
+  delete_output: 'delete_output',
+  mark_resolved: 'mark_resolved',
+} as const;
+
+export type DocumentGenerationRunOutputOrphanResolutionOutcome = typeof DocumentGenerationRunOutputOrphanResolutionOutcome[keyof typeof DocumentGenerationRunOutputOrphanResolutionOutcome];
+
+
+export const DocumentGenerationRunOutputOrphanResolutionOutcome = {
+  attached: 'attached',
+  deleted: 'deleted',
+  acknowledged: 'acknowledged',
+} as const;
+
+export type DocumentGenerationRunOutputOrphanResolution = {
+  action: DocumentGenerationRunOutputOrphanResolutionAction;
+  outcome: DocumentGenerationRunOutputOrphanResolutionOutcome;
+  actorUserId: number;
+  resolvedAt: string;
+};
+
 export interface DocumentGenerationRunOutput {
   destination?: DocumentGenerationRunOutputDestination;
   name?: string;
@@ -211,6 +236,48 @@ export interface DocumentGenerationRunOutput {
   webViewLink?: string;
   orphaned?: boolean;
   cleanup?: DocumentGenerationRunOutputCleanup;
+  recoveryAvailable?: boolean;
+  orphanResolution?: DocumentGenerationRunOutputOrphanResolution;
+}
+
+export type DocumentOrphanActionInputAction = typeof DocumentOrphanActionInputAction[keyof typeof DocumentOrphanActionInputAction];
+
+
+export const DocumentOrphanActionInputAction = {
+  retry_writeback: 'retry_writeback',
+  delete_output: 'delete_output',
+  mark_resolved: 'mark_resolved',
+} as const;
+
+export interface DocumentOrphanActionInput {
+  action: DocumentOrphanActionInputAction;
+}
+
+export type DocumentOrphanActionResultAction = typeof DocumentOrphanActionResultAction[keyof typeof DocumentOrphanActionResultAction];
+
+
+export const DocumentOrphanActionResultAction = {
+  retry_writeback: 'retry_writeback',
+  delete_output: 'delete_output',
+  mark_resolved: 'mark_resolved',
+} as const;
+
+export type DocumentOrphanActionResultOutcome = typeof DocumentOrphanActionResultOutcome[keyof typeof DocumentOrphanActionResultOutcome];
+
+
+export const DocumentOrphanActionResultOutcome = {
+  attached: 'attached',
+  deleted: 'deleted',
+  acknowledged: 'acknowledged',
+} as const;
+
+export interface DocumentOrphanActionResult {
+  runId: number;
+  action: DocumentOrphanActionResultAction;
+  outcome: DocumentOrphanActionResultOutcome;
+  actorUserId: number;
+  resolvedAt: string;
+  idempotent: boolean;
 }
 
 export type DocumentGenerationRunStatus = typeof DocumentGenerationRunStatus[keyof typeof DocumentGenerationRunStatus];

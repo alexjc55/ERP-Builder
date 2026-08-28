@@ -12,7 +12,7 @@
     "test:pivot-affix": "tsx --test src/routes/pivot-display-affix.test.ts",
     "test:inbound-db": "tsx --test --test-concurrency=1 src/routes/inbound-integrations.db.test.ts",
     "test:import-status-db": "tsx --test --test-concurrency=1 src/routes/import-status-permissions.db.test.ts",
-    "test:documents": "tsx --test src/lib/document-docx.test.ts src/lib/document-generation-validation.test.ts src/lib/document-multipart.test.ts",
+    "test:documents": "tsx --test src/lib/document-docx.test.ts src/lib/document-generation-validation.test.ts src/lib/document-multipart.test.ts src/lib/gdrive-file-reference-lock.test.ts",
     "smoke:concurrency": "pnpm --filter @workspace/scripts exec tsx ../artifacts/api-server/src/concurrency-smoke.ts"
   },
   "dependencies": {

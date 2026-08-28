@@ -414,6 +414,9 @@ async function processEntityRow(
 ): Promise<RowOutcome> {
   // 1. Coerce mapped cells into the per-type shape validateValues expects.
   const incoming: Record<string, unknown> = {};
+  // File fields are NON_IMPORTABLE: this path merges only non-file spreadsheet
+  // cells (plus status) and has no workflow set_field actions. An update can
+  // preserve an existing Drive object, while a create can never contain one.
   for (const [k, raw] of Object.entries(row.values)) {
     const field = ctx.fieldByKey.get(k);
     if (!field || NON_IMPORTABLE.has(field.fieldType)) continue;
@@ -677,6 +680,8 @@ async function processPageRow(tx: DbExecutor, row: RowInput, ctx: PageCtx): Prom
         .for("update");
       const previous = (existing?.valuesJson as Record<string, unknown> | undefined) ?? {};
       const mergedInput = { ...previous, ...incoming };
+      // File fields are NON_IMPORTABLE above and Drive is deliberately disabled;
+      // this path can only preserve an existing ID, never introduce one.
       const validated = validatePageValues(ctx.pageFields, mergedInput, false, previous);
       if ("error" in validated) throw new Error(validated.error);
       // Keep unrelated/inactive stored keys while applying the normalized

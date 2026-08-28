@@ -64,6 +64,8 @@ import type {
   DependentValuesQuery,
   DocumentGenerationInput,
   DocumentGenerationRunPage,
+  DocumentOrphanActionInput,
+  DocumentOrphanActionResult,
   DocumentTemplate,
   DocumentTemplateInput,
   DocumentTemplateRevision,
@@ -286,6 +288,72 @@ export function useListDocumentGenerationRuns<TData = Awaited<ReturnType<typeof 
 
 
 
+
+export const getResolveDocumentGenerationOrphanUrl = (id: number,) => {
+
+
+
+
+  return `/api/document-generation-runs/${id}/orphan-action`
+}
+
+export const resolveDocumentGenerationOrphan = async (id: number,
+    documentOrphanActionInput: DocumentOrphanActionInput, options?: RequestInit): Promise<DocumentOrphanActionResult> => {
+
+  return customFetch<DocumentOrphanActionResult>(getResolveDocumentGenerationOrphanUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      documentOrphanActionInput,)
+  }
+);}
+
+
+
+
+export const getResolveDocumentGenerationOrphanMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resolveDocumentGenerationOrphan>>, TError,{id: number;data: BodyType<DocumentOrphanActionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resolveDocumentGenerationOrphan>>, TError,{id: number;data: BodyType<DocumentOrphanActionInput>}, TContext> => {
+
+const mutationKey = ['resolveDocumentGenerationOrphan'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resolveDocumentGenerationOrphan>>, {id: number;data: BodyType<DocumentOrphanActionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  resolveDocumentGenerationOrphan(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResolveDocumentGenerationOrphanMutationResult = NonNullable<Awaited<ReturnType<typeof resolveDocumentGenerationOrphan>>>
+    export type ResolveDocumentGenerationOrphanMutationBody = BodyType<DocumentOrphanActionInput>
+    export type ResolveDocumentGenerationOrphanMutationError = ErrorType<ErrorResponse>
+
+    export const useResolveDocumentGenerationOrphan = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resolveDocumentGenerationOrphan>>, TError,{id: number;data: BodyType<DocumentOrphanActionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resolveDocumentGenerationOrphan>>,
+        TError,
+        {id: number;data: BodyType<DocumentOrphanActionInput>},
+        TContext
+      > => {
+      return useMutation(getResolveDocumentGenerationOrphanMutationOptions(options));
+    }
 
 export const getListDocumentTemplatesUrl = (params: ListDocumentTemplatesParams,) => {
   const normalizedParams = new URLSearchParams();

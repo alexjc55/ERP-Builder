@@ -98,9 +98,9 @@ export async function validateDocumentOutput(entityId: number, output: DocumentG
     eq(entityFieldsTable.entityId, entityId), eq(entityFieldsTable.fieldKey, output.targetFileFieldKey), eq(entityFieldsTable.isActive, true),
   ));
   if (!field || field.type !== "file") return "targetFileFieldKey must be an active writable file field on the same entity";
+  const source = output.destination === "gdrive" ? "gdrive" : "server";
   const configured = (field.fileConfig as { allowedSources?: unknown } | null)?.allowedSources;
   const allowed = Array.isArray(configured) && configured.length ? configured : ["server"];
-  const source = output.destination === "gdrive" ? "gdrive" : "server";
   if (!allowed.includes(source)) return `targetFileFieldKey does not allow ${source} files`;
   if (output.destination === "gdrive") {
     const [folder] = await db.select({ id: googleDriveFoldersTable.id }).from(googleDriveFoldersTable)
@@ -114,7 +114,7 @@ export async function validateDocumentOutput(entityId: number, output: DocumentG
   return null;
 }
 
-async function trashPriorLocalFile(entityId: number, recordId: number, fieldKey: string, prior: unknown, actorUserId: number | null) {
+export async function trashPriorLocalFile(entityId: number, recordId: number, fieldKey: string, prior: unknown, actorUserId: number | null) {
   if (!prior || typeof prior !== "object" || Array.isArray(prior)) return;
   const file = prior as Record<string, unknown>;
   if ((file.kind != null && file.kind !== "server") || typeof file.path !== "string" || !file.path.startsWith("/local/")) return;
@@ -128,6 +128,13 @@ async function trashPriorLocalFile(entityId: number, recordId: number, fieldKey:
     contentType: typeof file.contentType === "string" ? file.contentType : null,
     reason: "field_replaced", deletedBy: actorUserId,
   });
+}
+
+/** File fields without an explicit source list retain the legacy server-only default. */
+export function fileFieldAllowsGdrive(fileConfig: unknown): boolean {
+  const configured = (fileConfig as { allowedSources?: unknown } | null)?.allowedSources;
+  const allowed = Array.isArray(configured) && configured.length ? configured : ["server"];
+  return allowed.includes("gdrive");
 }
 
 function label(value: unknown): string {
@@ -495,7 +502,13 @@ export async function generateDocument(input: {
             cleanup = { attempted: true, deleted: false, error: cleanupError instanceof Error ? cleanupError.message.slice(0, 500) : "cleanup failed" };
           }
         }
-        if (run) await db.update(documentGenerationRunsTable).set({ outputJson: { file, orphaned: true, cleanup } })
+        // Recovery data is server-authored at upload time.  Do not reconstruct it
+        // from client input when an administrator later resolves the orphan.
+        if (run) await db.update(documentGenerationRunsTable).set({
+          outputJson: output.destination === "gdrive"
+            ? { file, orphaned: true, cleanup, recovery: { targetFileFieldKey: output.targetFileFieldKey, driveFolderId: output.driveFolderId, overwrite: output.overwrite } }
+            : { file, orphaned: true, cleanup },
+        })
           .where(eq(documentGenerationRunsTable.id, run.id));
         throw new Error("Generated output is orphaned: it could not be written to the configured file field");
       }

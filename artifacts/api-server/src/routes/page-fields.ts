@@ -41,6 +41,12 @@ import { ownScopeWhere, isRecordOwned } from "./own-scope";
 import { PAGE_REF_SOURCE_TYPES, loadPageRefSource } from "./record-query";
 import { validateFileValue, trashRemovedPageServerFiles, type DbExecutor } from "./records";
 import { isGoogleDriveModuleEnabled } from "../lib/googleDrive";
+import {
+  DriveFileTombstonedError,
+  lockGdriveFileIds,
+  newlyIntroducedGdriveFileIds,
+  validateGdriveFileReferencesUnderLock,
+} from "../lib/gdrive-file-reference-lock";
 import { normalizeFormulaFieldConfig, validateFormulaFieldConfig } from "../lib/formula-field-config";
 import { validateFormulaGroupResultReferences } from "../lib/formula-group-result-config";
 import { validateFormulaSources } from "../lib/formula-source-validator";
@@ -1670,6 +1676,12 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
         }
       }
 
+      const prepared: {
+        pageId: number;
+        before: Record<string, unknown>;
+        after: Record<string, unknown>;
+        sourceState?: (typeof touchedSourceStates)[number];
+      }[] = [];
       if (shouldWriteTarget) {
         const lockedTarget = lockedRowsByPage.get(pageId);
         writtenTargetPrevValues =
@@ -1707,14 +1719,7 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
           throw new LockedPageValidationError(lockedTargetUserRefError);
         }
         writtenTargetValues = lockedTargetResult.values;
-        const [written] = await tx
-          .insert(pageRecordValuesTable)
-          .values({ pageId, recordId, valuesJson: writtenTargetValues })
-          .onConflictDoUpdate({
-            target: [pageRecordValuesTable.pageId, pageRecordValuesTable.recordId],
-            set: { valuesJson: writtenTargetValues },
-          }).returning({ version: pageRecordValuesTable.version });
-        writtenTargetVersion = written!.version;
+        prepared.push({ pageId, before: writtenTargetPrevValues, after: writtenTargetValues });
       }
 
       for (const sourceState of touchedSourceStates) {
@@ -1772,23 +1777,47 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
         sourceState.writtenPrevValues = lockedPrev;
         sourceState.validatedValues = finalSourceValues;
         if (diffChangedKeys(lockedPrev, finalSourceValues).length === 0) continue;
+        prepared.push({
+          pageId: sourceState.pageId,
+          before: lockedPrev,
+          after: finalSourceValues,
+          sourceState,
+        });
+      }
+
+      // Every row/pair lock is held before candidates are computed. Acquire the
+      // complete introduced-ID union once in canonical order, then validate and
+      // write; no later step can add another Drive lock in a reversed order.
+      await lockGdriveFileIds(
+        tx,
+        prepared.flatMap(({ before, after }) => newlyIntroducedGdriveFileIds(before, after)),
+      );
+      for (const item of prepared) {
+        await validateGdriveFileReferencesUnderLock(tx, item.before, item.after);
+      }
+      for (const item of prepared) {
         const [written] = await tx
           .insert(pageRecordValuesTable)
           .values({
-            pageId: sourceState.pageId,
+            pageId: item.pageId,
             recordId,
-            valuesJson: finalSourceValues,
+            valuesJson: item.after,
           })
           .onConflictDoUpdate({
             target: [pageRecordValuesTable.pageId, pageRecordValuesTable.recordId],
-            set: { valuesJson: finalSourceValues },
+            set: { valuesJson: item.after },
           })
           .returning({ version: pageRecordValuesTable.version });
-        sourceState.writtenVersion = written!.version;
+        if (item.sourceState) item.sourceState.writtenVersion = written!.version;
+        else writtenTargetVersion = written!.version;
       }
     });
   } catch (err) {
     if (err instanceof UserReferenceBusyError) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
+    if (err instanceof DriveFileTombstonedError) {
       res.status(409).json({ error: err.message });
       return;
     }
@@ -1979,6 +2008,12 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
     res.status(403).json({ error: `Field "${fieldKey}" is read-only for your role` });
     return;
   }
+  // Bulk edits deliberately exclude file objects: each file reference needs the
+  // per-file tombstone guard and bulk scalar semantics are not meaningful for it.
+  if (field.fieldType === "file") {
+    res.status(400).json({ error: "Bulk updates do not support file fields" });
+    return;
+  }
 
   const requested = isEmpty(value) ? undefined : value;
   const targetScope = await effectiveScopeFor(req, perms, entityId, pageId);
@@ -2034,6 +2069,10 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
     writeField = sourceField;
     writeFields = sourceFields;
     sourceScope = await effectiveScopeFor(req, perms, entityId, cfg.sourcePageId);
+  }
+  if (writeField.fieldType === "file") {
+    res.status(400).json({ error: "Bulk updates do not support file fields" });
+    return;
   }
 
   // Unlike the historical incremental full-map endpoint, a deliberate bulk
@@ -2179,6 +2218,10 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
     });
   } catch (err) {
     if (err instanceof UserReferenceBusyError) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
+    if (err instanceof DriveFileTombstonedError) {
       res.status(409).json({ error: err.message });
       return;
     }

@@ -74,6 +74,7 @@ import { validatePageValues } from "../routes/page-fields";
 import { applyPageFieldDefaults } from "./page-field-defaults";
 import { isGoogleDriveModuleEnabled } from "./googleDrive";
 import { logger } from "./logger";
+import { lockAndValidateGdriveFileReferences } from "./gdrive-file-reference-lock";
 
 /**
  * Stage 16 — Automations Engine (runtime).
@@ -491,6 +492,7 @@ export async function systemCreateRecord(
     const record = await db.transaction(async (tx) => {
       const lockedUserRefErr = await validateUserRefs(fields, result.values, tx);
       if (lockedUserRefErr) throw new Error(lockedUserRefErr);
+      await lockAndValidateGdriveFileReferences(tx, {}, result.values);
       if (keyFields.length > 0) {
         await tx.execute(sql`SELECT pg_advisory_xact_lock(${UNIQUE_KEY_LOCK_NS}, ${entityId})`);
         const dup = await checkUniqueKeys(tx, entityId, keyFields, result.values);
@@ -651,6 +653,7 @@ export async function systemUpdateRecord(
         const immErr = checkImmutableFields(fields, result.values, lockedValues);
         if (immErr) throw new Error(`Automation set_field immutable-field violation: ${immErr}`);
         update.valuesJson = result.values;
+        await lockAndValidateGdriveFileReferences(tx, lockedValues, update.valuesJson);
       }
       statusChanging = statusIdInput !== undefined && (statusIdInput ?? null) !== (locked.statusId ?? null);
       if (statusChanging) {
@@ -1074,6 +1077,7 @@ async function systemSetPageValue(
         referencedUserIds(pageFields, result.values),
       );
       if (userRefError) throw new Error(userRefError);
+      await lockAndValidateGdriveFileReferences(tx, current, result.values);
       const [row] = existing
         ? await tx.update(pageRecordValuesTable).set({ valuesJson: result.values }).where(eq(pageRecordValuesTable.id, existing.id)).returning()
         : await tx.insert(pageRecordValuesTable).values({ pageId, recordId, valuesJson: result.values }).returning();

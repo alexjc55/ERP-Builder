@@ -32,3 +32,9 @@ Collection blocks repeat one complete Word table row: the opening marker is in t
 **Why:** This constraint makes pagination and formatting deterministic without implementing a browser Word editor or accepting ambiguous nested templates.
 
 **How to apply:** Reject unsupported, nested, unmatched, duplicated, or cross-row collection markers before publication.
+
+Resolving an orphaned Drive output is a cross-system protocol: persist a leased action claim before provider I/O, treat a delete claim as a writer-visible tombstone, and allow stale takeover only by the same action. Terminal resolution and its audit entry commit atomically.
+
+**Why:** A crash can occur after Drive accepts a Trash request but before the ERP records completion. Letting another action replace that stale delete claim can remove the tombstone and later attach a trashed file; a separate audit commit can also leave an unaudited terminal action.
+
+**How to apply:** Every path that can introduce a Drive file reference must lock newly introduced canonical file IDs in one global lexical union for the transaction and reject active delete claims or terminal deletions. Never hold a database transaction across OAuth or Drive calls.

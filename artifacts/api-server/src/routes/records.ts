@@ -117,6 +117,14 @@ import {
   type FormulaGroupReference,
 } from "../lib/formula-group-result";
 import { isManualStatusEditDisabled } from "../lib/status-manual-edit";
+import {
+  canonicalGdriveFileIdUnion,
+  DriveFileTombstonedError,
+  lockAndValidateGdriveFileReferences,
+  lockGdriveFileIds,
+  newlyIntroducedGdriveFileIds,
+  validateGdriveFileReferencesUnderLock,
+} from "../lib/gdrive-file-reference-lock";
 
 const router: IRouter = Router();
 
@@ -3452,6 +3460,7 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
     record = await db.transaction(async (tx) => {
       const lockedUserRefError = await validateUserRefs(fields, result.values, tx);
       if (lockedUserRefError) throw new UserReferenceValidationError(lockedUserRefError);
+      await lockAndValidateGdriveFileReferences(tx, {}, result.values);
       if (keyFields.length > 0) {
         await tx.execute(sql`SELECT pg_advisory_xact_lock(${UNIQUE_KEY_LOCK_NS}, ${entityId})`);
         const dup = await checkUniqueKeys(tx, entityId, keyFields, result.values);
@@ -3466,6 +3475,10 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
     });
   } catch (err) {
     if (err instanceof UniqueKeyError) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
+    if (err instanceof DriveFileTombstonedError) {
       res.status(409).json({ error: err.message });
       return;
     }
@@ -4011,6 +4024,12 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
         if (immutableError) throw new LockedUpdateError(422, immutableError);
         const validationError = checkValidationRules(fields, update.valuesJson);
         if (validationError) throw new LockedUpdateError(422, validationError);
+        try {
+          await lockAndValidateGdriveFileReferences(tx, existingValues, update.valuesJson);
+        } catch (err) {
+          if (err instanceof DriveFileTombstonedError) throw new LockedUpdateError(409, err.message);
+          throw err;
+        }
       }
       if (statusChanging) {
         update.statusChangedAt = new Date();
@@ -4536,6 +4555,20 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
       }
 
       const changed: ChangedRow[] = [];
+      const pending: {
+        recordId: number;
+        row: (typeof rows)[number];
+        before: Record<string, unknown>;
+        after: Record<string, unknown>;
+        statusChanging: boolean;
+        updateData: {
+          valuesJson: Record<string, unknown>;
+          statusId?: number;
+          statusChangedAt?: Date;
+          archiveExempt?: boolean;
+          archivedAt?: Date;
+        };
+      }[] = [];
       for (const recordId of recordIds) {
         const row = byId.get(recordId)!;
         const before = (row.valuesJson as Record<string, unknown>) ?? {};
@@ -4648,11 +4681,6 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
         if (immutableError) throw new BulkFieldUpdateError(422, recordId, immutableError);
         const fillError = checkValidationRules(fields, validated.values);
         if (fillError) throw new BulkFieldUpdateError(422, recordId, fillError);
-        if (keyFields.length > 0) {
-          const duplicate = await checkUniqueKeys(tx, entityId, keyFields, validated.values, recordId);
-          if (duplicate) throw new BulkFieldUpdateError(409, recordId, duplicate);
-        }
-
         const diffs = diffValues(before, validated.values, fields.map((candidateField) => candidateField.fieldKey));
         if (diffs.length === 0 && !statusChanging) continue;
         const updateData: {
@@ -4678,10 +4706,39 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
             updateData.archivedAt = new Date();
           }
         }
+        pending.push({
+          recordId,
+          row,
+          before,
+          after: validated.values,
+          statusChanging,
+          updateData,
+        });
+      }
+
+      await lockGdriveFileIds(
+        tx,
+        pending.flatMap(({ before, after }) => newlyIntroducedGdriveFileIds(before, after)),
+      );
+      for (const item of pending) {
+        try {
+          await validateGdriveFileReferencesUnderLock(tx, item.before, item.after);
+        } catch (err) {
+          if (err instanceof DriveFileTombstonedError) {
+            throw new BulkFieldUpdateError(409, item.recordId, err.message);
+          }
+          throw err;
+        }
+      }
+      for (const item of pending) {
+        if (keyFields.length > 0) {
+          const duplicate = await checkUniqueKeys(tx, entityId, keyFields, item.after, item.recordId);
+          if (duplicate) throw new BulkFieldUpdateError(409, item.recordId, duplicate);
+        }
         const [updated] = await tx
           .update(entityRecordsTable)
-          .set(updateData)
-          .where(eq(entityRecordsTable.id, recordId))
+          .set(item.updateData)
+          .where(eq(entityRecordsTable.id, item.recordId))
           .returning({
             id: entityRecordsTable.id,
             valuesJson: entityRecordsTable.valuesJson,
@@ -4691,11 +4748,11 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
           });
         changed.push({
           id: updated.id,
-          before,
+          before: item.before,
           after: updated.valuesJson as Record<string, unknown>,
-          beforeStatusId: row.statusId ?? null,
+          beforeStatusId: item.row.statusId ?? null,
           afterStatusId: updated.statusId ?? null,
-          beforeArchivedAt: row.archivedAt,
+          beforeArchivedAt: item.row.archivedAt,
           afterArchivedAt: updated.archivedAt,
           version: updated.version,
         });
@@ -5080,6 +5137,61 @@ router.post("/records/merge", requireAuth, requireSuperAdmin(), async (req, res)
         }
       }
     }
+
+    // Compute every values_json transfer before taking any Drive lock. One
+    // sorted union prevents two multi-file merges from acquiring file locks in
+    // opposite incremental orders.
+    const pageRows = await tx
+      .select()
+      .from(pageRecordValuesTable)
+      .where(inArray(pageRecordValuesTable.recordId, participantIds))
+      .orderBy(asc(pageRecordValuesTable.pageId), asc(pageRecordValuesTable.recordId))
+      .for("update");
+    const targetPageRows = new Map(pageRows.filter((r) => r.recordId === targetRecordId).map((r) => [r.pageId, r]));
+    const sourcePageRows = pageRows.filter((r) => sourceIdSet.has(r.recordId));
+    const mergedByPage = new Map<number, Record<string, unknown>>();
+    for (const row of sourcePageRows) {
+      const acc = mergedByPage.get(row.pageId) ?? {};
+      const vals = (row.valuesJson as Record<string, unknown>) ?? {};
+      for (const [k, v] of Object.entries(vals)) {
+        if (mergeValueEmpty(v) || !mergeValueEmpty(acc[k])) continue;
+        acc[k] = v;
+      }
+      mergedByPage.set(row.pageId, acc);
+    }
+    const pageValueTransitions: {
+      pageId: number;
+      existing: typeof pageRecordValuesTable.$inferSelect | undefined;
+      before: Record<string, unknown>;
+      after: Record<string, unknown>;
+      changedPageFieldKeys: string[];
+    }[] = [];
+    for (const [pageId, srcVals] of [...mergedByPage.entries()].sort((a, b) => a[0] - b[0])) {
+      const existing = targetPageRows.get(pageId);
+      const before = (existing?.valuesJson as Record<string, unknown> | undefined) ?? {};
+      const after = { ...before };
+      const changedPageFieldKeys: string[] = [];
+      for (const [k, v] of Object.entries(srcVals)) {
+        if (!mergeValueEmpty(after[k])) continue;
+        after[k] = v;
+        changedPageFieldKeys.push(k);
+      }
+      if (changedPageFieldKeys.length > 0) {
+        pageValueTransitions.push({ pageId, existing, before, after, changedPageFieldKeys });
+      }
+    }
+    const driveLockValues: unknown[] = [target.valuesJson, targetValues];
+    for (const transition of pageValueTransitions) driveLockValues.push(transition.before, transition.after);
+    // Include source maps too: transfer must serialize with deletion even when
+    // the target already happened to contain the same ID.
+    for (const sourceId of sourceIds) driveLockValues.push(byId.get(sourceId)!.valuesJson);
+    for (const row of sourcePageRows) driveLockValues.push(row.valuesJson);
+    await lockGdriveFileIds(tx, canonicalGdriveFileIdUnion(driveLockValues));
+    await validateGdriveFileReferencesUnderLock(tx, target.valuesJson, targetValues);
+    for (const transition of pageValueTransitions) {
+      await validateGdriveFileReferencesUnderLock(tx, transition.before, transition.after);
+    }
+
     if (filledFields > 0 || targetLinkStateChanged) {
       // One physical target update covers both scalar fill and relation-state
       // invalidation, so the version trigger advances exactly once.
@@ -5100,36 +5212,9 @@ router.post("/records/merge", requireAuth, requireSuperAdmin(), async (req, res)
     }
 
     // ---- 3. Merge page-local values (fill-empty, per page) -------------
-    // Page writers use the advisory keys acquired above. Re-read FOR UPDATE so
-    // both existing-row updates and missing-row inserts are observed.
-    const pageRows = await tx
-      .select()
-      .from(pageRecordValuesTable)
-      .where(inArray(pageRecordValuesTable.recordId, participantIds))
-      .orderBy(asc(pageRecordValuesTable.pageId), asc(pageRecordValuesTable.recordId))
-      .for("update");
-    const targetPageRows = new Map(pageRows.filter((r) => r.recordId === targetRecordId).map((r) => [r.pageId, r]));
-    const sourcePageRows = pageRows.filter((r) => sourceIdSet.has(r.recordId));
-    const mergedByPage = new Map<number, Record<string, unknown>>();
-    for (const row of sourcePageRows) {
-      const acc = mergedByPage.get(row.pageId) ?? {};
-      const vals = (row.valuesJson as Record<string, unknown>) ?? {};
-      for (const [k, v] of Object.entries(vals)) {
-        if (mergeValueEmpty(v) || !mergeValueEmpty(acc[k])) continue;
-        acc[k] = v;
-      }
-      mergedByPage.set(row.pageId, acc);
-    }
-    for (const [pageId, srcVals] of mergedByPage.entries()) {
-      const existing = targetPageRows.get(pageId);
-      const current = { ...(((existing?.valuesJson as Record<string, unknown>) ?? {}) as Record<string, unknown>) };
-      const changedPageFieldKeys: string[] = [];
-      for (const [k, v] of Object.entries(srcVals)) {
-        if (!mergeValueEmpty(current[k])) continue;
-        current[k] = v;
-        changedPageFieldKeys.push(k);
-      }
-      if (changedPageFieldKeys.length === 0) continue;
+    // Page writers use the advisory keys and rows acquired above; all Drive
+    // references are covered by the already-held sorted union.
+    for (const { pageId, existing, after: current, changedPageFieldKeys } of pageValueTransitions) {
       let written: { version: number } | undefined;
       if (existing) {
         [written] = await tx.update(pageRecordValuesTable)
@@ -5187,6 +5272,10 @@ router.post("/records/merge", requireAuth, requireSuperAdmin(), async (req, res)
       return;
     }
     if (err instanceof UniqueKeyError) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
+    if (err instanceof DriveFileTombstonedError) {
       res.status(409).json({ error: err.message });
       return;
     }

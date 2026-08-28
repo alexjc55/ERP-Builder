@@ -7,6 +7,7 @@
  */
 import type { DocumentGenerationRunOutputCleanup } from './documentGenerationRunOutputCleanup';
 import type { DocumentGenerationRunOutputDestination } from './documentGenerationRunOutputDestination';
+import type { DocumentGenerationRunOutputOrphanResolution } from './documentGenerationRunOutputOrphanResolution';
 
 export interface DocumentGenerationRunOutput {
   destination?: DocumentGenerationRunOutputDestination;
@@ -19,4 +20,6 @@ export interface DocumentGenerationRunOutput {
   webViewLink?: string;
   orphaned?: boolean;
   cleanup?: DocumentGenerationRunOutputCleanup;
+  recoveryAvailable?: boolean;
+  orphanResolution?: DocumentGenerationRunOutputOrphanResolution;
 }

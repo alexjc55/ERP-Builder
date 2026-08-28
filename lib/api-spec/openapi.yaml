@@ -52,6 +52,38 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DocumentGenerationRunPage" }
+  /document-generation-runs/{id}/orphan-action:
+    post:
+      operationId: resolveDocumentGenerationOrphan
+      tags: [documentGeneration]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DocumentOrphanActionInput" }
+      responses:
+        "200":
+          description: Orphaned Drive output resolved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DocumentOrphanActionResult" }
+        "400":
+          description: Invalid action
+          content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+        "403":
+          description: Forbidden or module disabled
+          content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+        "404":
+          description: Recoverable orphan run not found
+          content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+        "409":
+          description: Conflicting resolution, claim, or file reference
+          content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+        "502":
+          description: Drive provider verification failed
+          content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
   /document-templates:
     get:
       operationId: listDocumentTemplates
@@ -4359,6 +4391,30 @@ components:
             attempted: { type: boolean }
             deleted: { type: boolean }
             error: { type: string }
+        recoveryAvailable: { type: boolean }
+        orphanResolution:
+          type: object
+          required: [action, outcome, actorUserId, resolvedAt]
+          properties:
+            action: { type: string, enum: [retry_writeback, delete_output, mark_resolved] }
+            outcome: { type: string, enum: [attached, deleted, acknowledged] }
+            actorUserId: { type: integer }
+            resolvedAt: { type: string, format: date-time }
+    DocumentOrphanActionInput:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [retry_writeback, delete_output, mark_resolved] }
+    DocumentOrphanActionResult:
+      type: object
+      required: [runId, action, outcome, actorUserId, resolvedAt, idempotent]
+      properties:
+        runId: { type: integer }
+        action: { type: string, enum: [retry_writeback, delete_output, mark_resolved] }
+        outcome: { type: string, enum: [attached, deleted, acknowledged] }
+        actorUserId: { type: integer }
+        resolvedAt: { type: string, format: date-time }
+        idempotent: { type: boolean }
     DocumentGenerationRun:
       type: object
       required: [id, revisionId, templateId, revision, templateName, entityId, recordId, status, createdAt]

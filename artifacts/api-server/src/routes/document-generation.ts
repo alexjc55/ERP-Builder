@@ -4,11 +4,14 @@ import {
   documentTemplatesTable,
   documentTemplateRevisionsTable,
   documentGenerationRunsTable,
+  auditLogTable,
+  googleDriveFoldersTable,
   entityFieldsTable,
   entitiesTable,
   entityRecordsTable,
   entityStatusesTable,
   pageFieldsTable,
+  pageRecordValuesTable,
   pagesTable,
   recordLinksTable,
   relationsTable,
@@ -29,15 +32,21 @@ import {
   GenerateDocumentParams,
   GenerateDocumentBody,
   ListDocumentGenerationRunsQueryParams,
+  ResolveDocumentGenerationOrphanParams,
+  ResolveDocumentGenerationOrphanBody,
+  ResolveDocumentGenerationOrphanResponse,
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/auth";
 import { assertRecord, effectiveScope, effectiveStatusVisibility, getPermissions, getUserRoleIds, requireAdmin, resolveFieldAccess } from "../middlewares/permissions";
 import { isRecordOwned } from "./own-scope";
 import { parseDocxManifest, type DocumentManifest } from "../lib/document-docx";
-import { generateDocument, isDocumentGenerationEnabled } from "../lib/document-generation";
+import { fileFieldAllowsGdrive, generateDocument, isDocumentGenerationEnabled, lockedDocumentWriteOptions, trashPriorLocalFile } from "../lib/document-generation";
 import { interactiveFormulaPermissions } from "../lib/formula-runtime";
 import type { LinkedFormulaPermissionContext } from "../lib/linked-formula-resolver";
 import { deleteLocalFile, saveLocalFile } from "../lib/localStorage";
+import { DrivePreconditionError, DriveProviderError, getAccessToken, getConnection, getDriveFileMetadata, isGoogleDriveModuleEnabled, trashDriveFile } from "../lib/googleDrive";
+import { systemUpdateRecord } from "../lib/automations-engine";
+import { DriveFileTombstonedError, lockGdriveFileIds } from "../lib/gdrive-file-reference-lock";
 
 const router: IRouter = Router();
 const DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -159,12 +168,95 @@ export function presentGenerationOutput(raw: unknown): Record<string, unknown> |
     if (typeof file[key] === "string" || typeof file[key] === "number") out[key] = file[key];
   }
   if (root.orphaned === true) out.orphaned = true;
+  const resolution = root.orphanResolution as Record<string, unknown> | undefined;
+  // Recovery internals (folder, field and overwrite) are deliberately never
+  // projected. Availability is a capability hint, not a trust boundary.
+  if (validDriveOrphan(raw) && !resolution) out.recoveryAvailable = true;
+  const safeResolutionPairs: Record<string, string> = { retry_writeback: "attached", delete_output: "deleted", mark_resolved: "acknowledged" };
+  if (resolution && typeof resolution.action === "string" && safeResolutionPairs[resolution.action] === resolution.outcome &&
+      typeof resolution.actorUserId === "number" && typeof resolution.resolvedAt === "string") {
+    out.orphanResolution = Object.fromEntries(["action", "outcome", "actorUserId", "resolvedAt"].map((key) => [key, resolution[key]]));
+  }
   if (root.cleanup && typeof root.cleanup === "object" && !Array.isArray(root.cleanup)) {
     const cleanup = root.cleanup as Record<string, unknown>;
     out.cleanup = Object.fromEntries(["attempted", "deleted", "error"].filter((key) =>
       typeof cleanup[key] === "boolean" || typeof cleanup[key] === "string").map((key) => [key, cleanup[key]]));
   }
   return Object.keys(out).length ? out : undefined;
+}
+
+type OrphanAction = "retry_writeback" | "delete_output" | "mark_resolved";
+type OrphanOutcome = "attached" | "deleted" | "acknowledged";
+type Recovery = { targetFileFieldKey: string; driveFolderId: string; overwrite: "replace" | "error" };
+type RecoveryClaim = { action: OrphanAction; actorUserId: number; startedAt: string };
+export const ORPHAN_RECOVERY_CLAIM_LEASE_MS = 5 * 60 * 1000;
+
+export function storedOrphanRecoveryClaim(raw: unknown): RecoveryClaim | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const claim = (raw as Record<string, unknown>).orphanRecoveryClaim;
+  if (!claim || typeof claim !== "object" || Array.isArray(claim)) return undefined;
+  const c = claim as Record<string, unknown>;
+  if (!["retry_writeback", "delete_output", "mark_resolved"].includes(String(c.action)) ||
+      typeof c.actorUserId !== "number" || typeof c.startedAt !== "string") return undefined;
+  if (!Number.isFinite(Date.parse(c.startedAt))) return undefined;
+  return c as RecoveryClaim;
+}
+
+export function activeOrphanRecoveryClaim(raw: unknown, nowMs = Date.now()): RecoveryClaim | undefined {
+  const claim = storedOrphanRecoveryClaim(raw);
+  if (!claim) return undefined;
+  const started = Date.parse(claim.startedAt);
+  if (!Number.isFinite(started) || nowMs - started >= ORPHAN_RECOVERY_CLAIM_LEASE_MS) return undefined;
+  return claim;
+}
+
+export function orphanRecoveryClaimDisposition(
+  raw: unknown,
+  requested: OrphanAction,
+  nowMs = Date.now(),
+): "available" | "active_same" | "stale_same" | "different" {
+  const stored = storedOrphanRecoveryClaim(raw);
+  if (!stored) return "available";
+  if (stored.action !== requested) return "different";
+  return activeOrphanRecoveryClaim(raw, nowMs) ? "active_same" : "stale_same";
+}
+
+function withoutRecoveryClaim(output: Record<string, unknown>): Record<string, unknown> {
+  const { orphanRecoveryClaim: _claim, ...rest } = output;
+  return rest;
+}
+class OrphanResolutionError extends Error {
+  constructor(message: string, readonly status: 403 | 404 | 409 = 409) { super(message); }
+}
+
+export function validDriveOrphan(raw: unknown): { file: Record<string, unknown>; recovery: Recovery; resolution?: Record<string, unknown> } | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const root = raw as Record<string, unknown>;
+  const file = root.file;
+  const recovery = root.recovery;
+  if (!file || typeof file !== "object" || Array.isArray(file) || !recovery || typeof recovery !== "object" || Array.isArray(recovery)) return undefined;
+  const f = file as Record<string, unknown>, r = recovery as Record<string, unknown>;
+  if (root.orphaned !== true || f.kind !== "gdrive" || typeof f.fileId !== "string" ||
+      typeof r.targetFileFieldKey !== "string" || typeof r.driveFolderId !== "string" ||
+      (r.overwrite !== "replace" && r.overwrite !== "error")) return undefined;
+  return { file: f, recovery: r as Recovery, resolution: root.orphanResolution as Record<string, unknown> | undefined };
+}
+
+/** Exact structural reference check; no substring/JSON text matching. */
+export function valueReferencesDriveFile(value: unknown, fileId: string): boolean {
+  if (!value || typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.some((v) => valueReferencesDriveFile(v, fileId));
+  const obj = value as Record<string, unknown>;
+  if (obj.kind === "gdrive" && obj.fileId === fileId) return true;
+  return Object.values(obj).some((v) => valueReferencesDriveFile(v, fileId));
+}
+
+export function orphanTerminalResult(runId: number, resolution: Record<string, unknown>, requested: OrphanAction) {
+  if (resolution.action !== requested) throw new OrphanResolutionError("A different orphan resolution has already completed");
+  if (typeof resolution.outcome !== "string" || typeof resolution.actorUserId !== "number" || typeof resolution.resolvedAt !== "string") throw new OrphanResolutionError("Invalid orphan resolution");
+  const expected: Record<OrphanAction, OrphanOutcome> = { retry_writeback: "attached", delete_output: "deleted", mark_resolved: "acknowledged" };
+  if (resolution.outcome !== expected[requested]) throw new OrphanResolutionError("Invalid orphan resolution");
+  return { runId, action: requested, outcome: resolution.outcome as OrphanOutcome, actorUserId: resolution.actorUserId, resolvedAt: resolution.resolvedAt, idempotent: true };
 }
 
 type DirectGenerationBoundary = {
@@ -313,6 +405,279 @@ router.get("/document-generation-runs", requireAuth, requireAdmin("documentGener
     })),
     page, limit,
   });
+});
+
+router.post("/document-generation-runs/:id/orphan-action", requireAuth, requireAdmin("documentGeneration"), requireDocumentModule, async (req, res): Promise<void> => {
+  const params = ResolveDocumentGenerationOrphanParams.safeParse(req.params);
+  const body = ResolveDocumentGenerationOrphanBody.safeParse(req.body);
+  if (!params.success || !body.success) { res.status(400).json({ error: !params.success ? params.error.message : body.error?.message ?? "Invalid request" }); return; }
+  const action = body.data.action as OrphanAction;
+  let ownedClaim: RecoveryClaim | undefined;
+  try {
+    if (action === "retry_writeback") {
+      const claimed = await db.transaction(async (tx) => {
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtext('document_generation_orphan'), ${params.data.id})`);
+        const [run] = await tx.select().from(documentGenerationRunsTable)
+          .where(eq(documentGenerationRunsTable.id, params.data.id)).for("update");
+        const orphan = run?.status === "error" ? validDriveOrphan(run.outputJson) : undefined;
+        if (!run || !orphan) throw new OrphanResolutionError("Recoverable orphan run not found", 404);
+        const [record] = await tx.select().from(entityRecordsTable).where(and(eq(entityRecordsTable.id, run.recordId), eq(entityRecordsTable.entityId, run.entityId)));
+        if (!record || record.archivedAt) throw new OrphanResolutionError("Target record no longer exists", 404);
+        const perms = await getPermissions(req);
+        if (!perms.superAdmin && perms.records[String(run.entityId)]?.update !== true) throw new OrphanResolutionError("Forbidden", 403);
+        const fields = await tx.select().from(entityFieldsTable).where(and(eq(entityFieldsTable.entityId, run.entityId), eq(entityFieldsTable.isActive, true)));
+        const scope = effectiveScope(perms, run.entityId);
+        if (effectiveStatusVisibility(perms, run.entityId).hiddenRowStatusIds.includes(record.statusId ?? -1) ||
+            (scope.scope === "own" && !(await isRecordOwned(run.entityId, record, scope.scopeFieldKeys, req.user!.userId, fields)))) {
+          throw new OrphanResolutionError("Target record is outside the caller's visible row scope", 403);
+        }
+        const target = fields.find((field) => field.fieldKey === orphan.recovery.targetFileFieldKey);
+        if (!target || target.fieldType !== "file" || resolveFieldAccess(target, perms, await getUserRoleIds(req), run.entityId) !== "edit" ||
+            !fileFieldAllowsGdrive(target.fileConfigJson)) throw new OrphanResolutionError("Target file field is not writable for Google Drive", 403);
+        if (!(await isGoogleDriveModuleEnabled())) throw new OrphanResolutionError("Google Drive module is disabled", 403);
+        const [managed] = await tx.select({ id: googleDriveFoldersTable.driveFolderId }).from(googleDriveFoldersTable)
+          .where(eq(googleDriveFoldersTable.driveFolderId, orphan.recovery.driveFolderId));
+        if (!managed || managed.id !== orphan.recovery.driveFolderId) throw new OrphanResolutionError("Stored Drive folder is not managed");
+        // Terminal replay deliberately requires no live OAuth/provider call.
+        if (orphan.resolution) return { terminal: orphanTerminalResult(run.id, orphan.resolution, action), run, orphan, record };
+        const claimDisposition = orphanRecoveryClaimDisposition(run.outputJson, action);
+        if (claimDisposition === "different") throw new OrphanResolutionError("A different orphan recovery action is pending");
+        if (claimDisposition === "active_same") throw new OrphanResolutionError("Orphan recovery is already in progress");
+        ownedClaim = { action, actorUserId: req.user!.userId, startedAt: new Date().toISOString() };
+        await tx.update(documentGenerationRunsTable).set({
+          outputJson: { ...(run.outputJson as Record<string, unknown>), orphanRecoveryClaim: ownedClaim },
+        }).where(eq(documentGenerationRunsTable.id, run.id));
+        return { run, orphan, record };
+      });
+      if (claimed.terminal) {
+        res.json(ResolveDocumentGenerationOrphanResponse.parse(claimed.terminal));
+        return;
+      }
+      // The claim transaction is committed. These operations may open their own
+      // transactions/connections without exhausting or deadlocking the pool.
+      const connection = await getConnection();
+      if (!connection?.refreshTokenEnc) throw new OrphanResolutionError("Google Drive is not connected", 403);
+      const accessToken = await getAccessToken(connection);
+      const fileId = claimed.orphan.file.fileId as string;
+      const metadata = await getDriveFileMetadata(accessToken, fileId);
+      if (metadata.id !== fileId || !metadata.parents.includes(claimed.orphan.recovery.driveFolderId)) throw new OrphanResolutionError("Drive file no longer matches its managed output");
+      if (metadata.trashed) throw new OrphanResolutionError("Drive file is trashed");
+      const [current] = await db.select({ values: entityRecordsTable.valuesJson }).from(entityRecordsTable)
+        .where(and(eq(entityRecordsTable.id, claimed.run.recordId), eq(entityRecordsTable.entityId, claimed.run.entityId)));
+      const attached = valueReferencesDriveFile((current?.values as Record<string, unknown> ?? {})[claimed.orphan.recovery.targetFileFieldKey], fileId);
+      if (!attached) {
+        let displaced: unknown;
+        const ok = await systemUpdateRecord(claimed.run.recordId, { [claimed.orphan.recovery.targetFileFieldKey]: claimed.orphan.file }, undefined, req.user!.userId, req.log,
+          lockedDocumentWriteOptions({ outputFormat: "docx", destination: "gdrive", driveFolderId: claimed.orphan.recovery.driveFolderId, targetFileFieldKey: claimed.orphan.recovery.targetFileFieldKey, filenameTemplate: "recovery", overwrite: claimed.orphan.recovery.overwrite }, (v) => { displaced = v; }));
+        if (!ok) throw new OrphanResolutionError("Could not write orphaned output to target file field");
+        if (claimed.orphan.recovery.overwrite === "replace") await trashPriorLocalFile(claimed.run.entityId, claimed.run.recordId, claimed.orphan.recovery.targetFileFieldKey, displaced, req.user!.userId)
+          .catch((trashError) => req.log.error({ err: trashError, runId: claimed.run.id }, "Failed to trash replaced recovered file"));
+      }
+      const result = await db.transaction(async (tx) => {
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtext('document_generation_orphan'), ${claimed.run.id})`);
+        const [run] = await tx.select().from(documentGenerationRunsTable).where(eq(documentGenerationRunsTable.id, claimed.run.id)).for("update");
+        const orphan = run && validDriveOrphan(run.outputJson);
+        if (!run || !orphan) throw new OrphanResolutionError("Recoverable orphan run not found", 404);
+        if (orphan.resolution) return orphanTerminalResult(run.id, orphan.resolution, action);
+        const claim = (run.outputJson as Record<string, unknown>).orphanRecoveryClaim as RecoveryClaim | undefined;
+        if (!ownedClaim || claim?.startedAt !== ownedClaim.startedAt || claim.actorUserId !== ownedClaim.actorUserId) throw new OrphanResolutionError("Orphan recovery claim was lost");
+        const resolution = { action, outcome: "attached" as const, actorUserId: req.user!.userId, resolvedAt: new Date().toISOString() };
+        await tx.update(documentGenerationRunsTable).set({
+          outputJson: { ...withoutRecoveryClaim(run.outputJson as Record<string, unknown>), orphanResolution: resolution },
+        }).where(eq(documentGenerationRunsTable.id, run.id));
+        const done = { runId: run.id, ...resolution, idempotent: false };
+        await tx.insert(auditLogTable).values({
+          entityId: run.entityId,
+          recordId: run.recordId,
+          fieldKey: "__document_generation_orphan__",
+          oldValue: null,
+          newValue: JSON.stringify({ runId: done.runId, action: done.action, outcome: done.outcome }),
+          userId: req.user!.userId,
+        });
+        return done;
+      });
+      res.json(ResolveDocumentGenerationOrphanResponse.parse(result));
+      return;
+    }
+    if (action === "delete_output") {
+      const claimed = await db.transaction(async (tx) => {
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtext('document_generation_orphan'), ${params.data.id})`);
+        const [run] = await tx.select().from(documentGenerationRunsTable).where(eq(documentGenerationRunsTable.id, params.data.id)).for("update");
+        const orphan = run?.status === "error" ? validDriveOrphan(run.outputJson) : undefined;
+        if (!run || !orphan) throw new OrphanResolutionError("Recoverable orphan run not found", 404);
+        const [record] = await tx.select().from(entityRecordsTable).where(and(eq(entityRecordsTable.id, run.recordId), eq(entityRecordsTable.entityId, run.entityId)));
+        if (!record || record.archivedAt) throw new OrphanResolutionError("Target record no longer exists", 404);
+        const perms = await getPermissions(req);
+        if (!perms.superAdmin && perms.records[String(run.entityId)]?.update !== true) throw new OrphanResolutionError("Forbidden", 403);
+        const fields = await tx.select().from(entityFieldsTable).where(and(eq(entityFieldsTable.entityId, run.entityId), eq(entityFieldsTable.isActive, true)));
+        const scope = effectiveScope(perms, run.entityId);
+        if (effectiveStatusVisibility(perms, run.entityId).hiddenRowStatusIds.includes(record.statusId ?? -1) ||
+            (scope.scope === "own" && !(await isRecordOwned(run.entityId, record, scope.scopeFieldKeys, req.user!.userId, fields)))) {
+          throw new OrphanResolutionError("Target record is outside the caller's visible row scope", 403);
+        }
+        const target = fields.find((field) => field.fieldKey === orphan.recovery.targetFileFieldKey);
+        if (!target || target.fieldType !== "file" || resolveFieldAccess(target, perms, await getUserRoleIds(req), run.entityId) !== "edit" ||
+            !fileFieldAllowsGdrive(target.fileConfigJson)) throw new OrphanResolutionError("Target file field is not writable for Google Drive", 403);
+        if (!(await isGoogleDriveModuleEnabled())) throw new OrphanResolutionError("Google Drive module is disabled", 403);
+        const [managed] = await tx.select({ id: googleDriveFoldersTable.driveFolderId }).from(googleDriveFoldersTable)
+          .where(eq(googleDriveFoldersTable.driveFolderId, orphan.recovery.driveFolderId));
+        if (!managed || managed.id !== orphan.recovery.driveFolderId) throw new OrphanResolutionError("Stored Drive folder is not managed");
+        if (orphan.resolution) return { terminal: orphanTerminalResult(run.id, orphan.resolution, action), run, orphan };
+        const claimDisposition = orphanRecoveryClaimDisposition(run.outputJson, action);
+        if (claimDisposition === "different") throw new OrphanResolutionError("A different orphan recovery action is pending");
+        if (claimDisposition === "active_same") throw new OrphanResolutionError("Orphan recovery is already in progress");
+        const fileId = orphan.file.fileId as string;
+        await lockGdriveFileIds(tx, [fileId]);
+        const allRecords = await tx.select({ values: entityRecordsTable.valuesJson }).from(entityRecordsTable);
+        const allPages = await tx.select({ values: pageRecordValuesTable.valuesJson }).from(pageRecordValuesTable);
+        if (allRecords.some((r) => valueReferencesDriveFile(r.values, fileId)) || allPages.some((r) => valueReferencesDriveFile(r.values, fileId))) {
+          throw new OrphanResolutionError("Drive file is referenced by a record or page field");
+        }
+        ownedClaim = { action, actorUserId: req.user!.userId, startedAt: new Date().toISOString() };
+        await tx.update(documentGenerationRunsTable).set({
+          outputJson: { ...(run.outputJson as Record<string, unknown>), orphanRecoveryClaim: ownedClaim },
+        }).where(eq(documentGenerationRunsTable.id, run.id));
+        return { run, orphan };
+      });
+      if (claimed.terminal) {
+        res.json(ResolveDocumentGenerationOrphanResponse.parse(claimed.terminal));
+        return;
+      }
+      // No DB transaction is held across OAuth or Drive I/O. The durable claim
+      // is a writer-visible tombstone until terminal finalization.
+      const connection = await getConnection();
+      if (!connection?.refreshTokenEnc) throw new OrphanResolutionError("Google Drive is not connected", 403);
+      const accessToken = await getAccessToken(connection);
+      const fileId = claimed.orphan.file.fileId as string;
+      const metadata = await getDriveFileMetadata(accessToken, fileId);
+      if (metadata.id !== fileId || !metadata.parents.includes(claimed.orphan.recovery.driveFolderId)) throw new OrphanResolutionError("Drive file no longer matches its managed output");
+      if (!metadata.trashed) {
+        const trashed = await trashDriveFile(accessToken, fileId, metadata.etag);
+        if (trashed.id !== fileId || !trashed.parents.includes(claimed.orphan.recovery.driveFolderId) || !trashed.trashed) {
+          throw new OrphanResolutionError("Drive trash result no longer matches its managed output");
+        }
+      }
+      const result = await db.transaction(async (tx) => {
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtext('document_generation_orphan'), ${claimed.run.id})`);
+        const [run] = await tx.select().from(documentGenerationRunsTable).where(eq(documentGenerationRunsTable.id, claimed.run.id)).for("update");
+        const orphan = run?.status === "error" ? validDriveOrphan(run.outputJson) : undefined;
+        if (!run || !orphan) throw new OrphanResolutionError("Recoverable orphan run not found", 404);
+        if (orphan.resolution) return orphanTerminalResult(run.id, orphan.resolution, action);
+        const claim = (run.outputJson as Record<string, unknown>).orphanRecoveryClaim as RecoveryClaim | undefined;
+        if (!ownedClaim || claim?.action !== action || claim.startedAt !== ownedClaim.startedAt || claim.actorUserId !== ownedClaim.actorUserId) {
+          throw new OrphanResolutionError("Orphan recovery claim was lost");
+        }
+        await lockGdriveFileIds(tx, [fileId]);
+        const allRecords = await tx.select({ values: entityRecordsTable.valuesJson }).from(entityRecordsTable);
+        const allPages = await tx.select({ values: pageRecordValuesTable.valuesJson }).from(pageRecordValuesTable);
+        if (allRecords.some((r) => valueReferencesDriveFile(r.values, fileId)) || allPages.some((r) => valueReferencesDriveFile(r.values, fileId))) {
+          throw new OrphanResolutionError("Drive file is referenced by a record or page field");
+        }
+        const resolution = { action, outcome: "deleted" as const, actorUserId: req.user!.userId, resolvedAt: new Date().toISOString() };
+        await tx.update(documentGenerationRunsTable).set({
+          outputJson: { ...withoutRecoveryClaim(run.outputJson as Record<string, unknown>), orphanResolution: resolution },
+        }).where(eq(documentGenerationRunsTable.id, run.id));
+        const done = { runId: run.id, ...resolution, idempotent: false };
+        await tx.insert(auditLogTable).values({
+          entityId: run.entityId,
+          recordId: run.recordId,
+          fieldKey: "__document_generation_orphan__",
+          oldValue: null,
+          newValue: JSON.stringify({ runId: done.runId, action: done.action, outcome: done.outcome }),
+          userId: req.user!.userId,
+        });
+        return done;
+      });
+      res.json(ResolveDocumentGenerationOrphanResponse.parse(result));
+      return;
+    }
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('document_generation_orphan'), ${params.data.id})`);
+      const [run] = await tx.select().from(documentGenerationRunsTable)
+        .where(eq(documentGenerationRunsTable.id, params.data.id)).for("update");
+      if (!run || run.status !== "error") throw new OrphanResolutionError("Recoverable orphan run not found", 404);
+      const orphan = validDriveOrphan(run.outputJson);
+      if (!orphan) throw new OrphanResolutionError("Recoverable orphan run not found", 404);
+
+      const [record] = await tx.select().from(entityRecordsTable).where(and(
+        eq(entityRecordsTable.id, run.recordId), eq(entityRecordsTable.entityId, run.entityId),
+      ));
+      // Do not lock this row here: systemUpdateRecord takes its own transaction
+      // and locks the current row before applying its overwrite guard. This
+      // snapshot is only authorization/attachment context; the actual write is
+      // protected against a concurrent field change by that locked guard.
+      if (!record || record.archivedAt) throw new OrphanResolutionError("Target record no longer exists", 404);
+      const perms = await getPermissions(req);
+      if (!perms.superAdmin && perms.records[String(run.entityId)]?.update !== true) throw new OrphanResolutionError("Forbidden", 403);
+      const fields = await tx.select().from(entityFieldsTable).where(and(eq(entityFieldsTable.entityId, run.entityId), eq(entityFieldsTable.isActive, true)));
+      const scope = effectiveScope(perms, run.entityId);
+      const hidden = effectiveStatusVisibility(perms, run.entityId).hiddenRowStatusIds;
+      if (hidden.includes(record.statusId ?? -1) || (scope.scope === "own" && !(await isRecordOwned(run.entityId, record, scope.scopeFieldKeys, req.user!.userId, fields)))) {
+        throw new OrphanResolutionError("Target record is outside the caller's visible row scope", 403);
+      }
+      const roles = await getUserRoleIds(req);
+      const target = fields.find((field) => field.fieldKey === orphan.recovery.targetFileFieldKey);
+      if (!target || target.fieldType !== "file" || resolveFieldAccess(target, perms, roles, run.entityId) !== "edit" ||
+          !fileFieldAllowsGdrive(target.fileConfigJson)) throw new OrphanResolutionError("Target file field is not writable for Google Drive", 403);
+      const [managed] = await tx.select({ id: googleDriveFoldersTable.driveFolderId }).from(googleDriveFoldersTable)
+        .where(eq(googleDriveFoldersTable.driveFolderId, orphan.recovery.driveFolderId));
+      if (!managed || managed.id !== orphan.recovery.driveFolderId) throw new OrphanResolutionError("Stored Drive folder is not managed");
+
+      if (!(await isGoogleDriveModuleEnabled())) throw new OrphanResolutionError("Google Drive module is disabled", 403);
+      // Replays revalidate current authorization/configuration, but have no
+      // provider dependency and perform no mutation or duplicate audit.
+      if (orphan.resolution) return orphanTerminalResult(run.id, orphan.resolution, action);
+      const claimDisposition = orphanRecoveryClaimDisposition(run.outputJson, action);
+      if (claimDisposition === "different") throw new OrphanResolutionError("A different orphan recovery action is pending");
+      if (claimDisposition === "active_same") throw new OrphanResolutionError("Orphan recovery is already in progress");
+      await lockGdriveFileIds(tx, [orphan.file.fileId as string]);
+      const allRecords = await tx.select({ id: entityRecordsTable.id, values: entityRecordsTable.valuesJson }).from(entityRecordsTable);
+      const allPages = await tx.select({ recordId: pageRecordValuesTable.recordId, values: pageRecordValuesTable.valuesJson }).from(pageRecordValuesTable);
+      if (allRecords.some((r) => valueReferencesDriveFile(r.values, orphan.file.fileId as string)) || allPages.some((r) => valueReferencesDriveFile(r.values, orphan.file.fileId as string))) throw new OrphanResolutionError("Drive file is referenced by a record or page field");
+      const outcome: OrphanOutcome = "acknowledged";
+      const resolvedAt = new Date().toISOString();
+      const resolution = { action, outcome, actorUserId: req.user!.userId, resolvedAt };
+      await tx.update(documentGenerationRunsTable).set({ outputJson: { ...withoutRecoveryClaim(run.outputJson as Record<string, unknown>), orphanResolution: resolution } }).where(eq(documentGenerationRunsTable.id, run.id));
+      const result = { runId: run.id, ...resolution, idempotent: false };
+      await tx.insert(auditLogTable).values({
+        entityId: run.entityId,
+        recordId: run.recordId,
+        fieldKey: "__document_generation_orphan__",
+        oldValue: null,
+        newValue: JSON.stringify({ runId: result.runId, action: result.action, outcome: result.outcome }),
+        userId: req.user!.userId,
+      });
+      return result;
+    });
+    res.json(ResolveDocumentGenerationOrphanResponse.parse(result));
+  } catch (error) {
+    // A delete claim is a durable tombstone: after provider work begins Drive
+    // state may be uncertain, so retain it for stale-lease takeover. Retry
+    // write-back has no destructive provider mutation and may clear its claim.
+    if (ownedClaim?.action === "retry_writeback") {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtext('document_generation_orphan'), ${params.data.id})`);
+        const [run] = await tx.select().from(documentGenerationRunsTable).where(eq(documentGenerationRunsTable.id, params.data.id)).for("update");
+        const output = run?.outputJson as Record<string, unknown> | undefined;
+        const claim = output?.orphanRecoveryClaim as RecoveryClaim | undefined;
+        if (run && output && claim?.startedAt === ownedClaim!.startedAt && claim.actorUserId === ownedClaim!.actorUserId) {
+          await tx.update(documentGenerationRunsTable).set({ outputJson: withoutRecoveryClaim(output) }).where(eq(documentGenerationRunsTable.id, run.id));
+        }
+      }).catch((claimError) => req.log.error({ err: claimError, runId: params.data.id }, "Failed to clear orphan recovery claim"));
+    }
+    const status = error instanceof OrphanResolutionError ? error.status
+      : error instanceof DrivePreconditionError || error instanceof DriveFileTombstonedError ? 409 : 502;
+    // Provider/auth failures intentionally use a stable message: provider
+    // response bodies and implementation details must never become an API leak.
+    const baseMessage = error instanceof OrphanResolutionError ? error.message
+      : error instanceof DrivePreconditionError ? "Drive file changed during orphan resolution"
+        : error instanceof DriveFileTombstonedError ? "Drive file was deleted as an orphan"
+        : error instanceof DriveProviderError ? "Drive provider verification failed" : "Drive provider verification failed";
+    const message = ownedClaim?.action === "delete_output"
+      ? `${baseMessage}. Retry after the recovery lease expires.`
+      : baseMessage;
+    res.status(status).json({ error: message });
+  }
 });
 
 router.post("/document-templates", requireAuth, requireAdmin("documentGeneration"), requireDocumentModule, async (req, res): Promise<void> => {
