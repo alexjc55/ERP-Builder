@@ -38,3 +38,9 @@ Resolving an orphaned Drive output is a cross-system protocol: persist a leased 
 **Why:** A crash can occur after Drive accepts a Trash request but before the ERP records completion. Letting another action replace that stale delete claim can remove the tombstone and later attach a trashed file; a separate audit commit can also leave an unaudited terminal action.
 
 **How to apply:** Every path that can introduce a Drive file reference must lock newly introduced canonical file IDs in one global lexical union for the transaction and reject active delete claims or terminal deletions. Never hold a database transaction across OAuth or Drive calls.
+
+The advisory-lock regression test must force an opposite-order interleaving with independent blockers on file IDs A and B; merely letting one writer acquire its whole union before starting the waiter cannot expose a deadlock.
+
+**Why:** A superficially concurrent test still passes if the first transaction already owns both locks. Releasing A before B makes an unsorted pair of writers hold opposite locks and fail, while canonical ordering serializes both on A.
+
+**How to apply:** Start reversed-order writers while A and B are blocked, release A, observe one writer holding A while waiting, then release B and require both transactions to finish within a bounded timeout.
