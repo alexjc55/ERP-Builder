@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   getListDocumentTemplatesQueryKey,
   getListEntityFieldsQueryKey,
+  getListPageFieldsQueryKey,
   getGetRelationQueryKey,
   getListGoogleDriveFoldersQueryKey,
   getListDocumentGenerationRunsQueryKey,
@@ -14,12 +15,15 @@ import {
   useListDocumentTemplates,
   useListEntities,
   useListEntityFields,
+  useListPageFields,
+  useListPages,
   useListEntityRecords,
   useListGoogleDriveFolders,
   useListDocumentGenerationRuns,
   useListLocalFolders,
   useListModules,
   usePublishDocumentTemplateRevision,
+  usePreviewDocumentTemplateRevision,
   useResolveDocumentGenerationOrphan,
   useTestDocumentTemplateRevision,
   useUpdateDocumentTemplate,
@@ -29,6 +33,7 @@ import {
   type Entity,
   type Field,
   type MultilingualText,
+  type Page,
 } from "@workspace/api-client-react";
 import { useML, useT } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
@@ -66,8 +71,9 @@ import {
 
 type ValueSource =
   | { source: "field"; fieldKey: string }
+  | { source: "page"; pageId: number; fieldKey: string }
   | { source: "status" }
-  | { source: "system"; key: "record_id" | "generated_at" }
+  | { source: "system"; key: "record_id" | "created_at" | "generated_at" }
   | { source: "literal"; value: string }
   | { source: "blank" };
 type CollectionFilter = { fieldKey: string; operator: "eq" | "neq" | "contains" | "empty" | "notEmpty"; value?: unknown };
@@ -97,6 +103,7 @@ const asObject = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const sourceComplete = (s?: ValueSource) =>
   !!s && (s.source === "blank" || s.source === "status" || (s.source === "field" && !!s.fieldKey) ||
+    (s.source === "page" && s.pageId > 0 && !!s.fieldKey) ||
     (s.source === "system" && !!s.key) || (s.source === "literal" && s.value !== undefined));
 
 function extractError(error: unknown): string {
@@ -131,6 +138,8 @@ const documentErrorPatterns: Array<{
   { pattern: /^Collection "([^"]+)" must use a relation field$/, key: "documents.error.collectionNeedsRelation", fallback: "Для коллекции «{name}» необходимо выбрать поле связи", names: ["name"] },
   { pattern: /^Collection "([^"]+)" references a missing relation$/, key: "documents.error.collectionMissingRelation", fallback: "Коллекция «{name}» ссылается на отсутствующую связь", names: ["name"] },
   { pattern: /^Unknown linked filter field "([^"]+)" for "([^"]+)"$/, key: "documents.error.unknownFilterField", fallback: "Неизвестное поле фильтра «{field}» для коллекции «{collection}»", names: ["field", "collection"] },
+  { pattern: /^Unknown linked sort field "([^"]+)" for "([^"]+)"$/, key: "documents.error.unknownSortField", fallback: "Неизвестное поле сортировки «{field}» для коллекции «{collection}»", names: ["field", "collection"] },
+  { pattern: /^Invalid mapping configuration:\s*(.+)$/, key: "documents.error.invalidMappingDetails", fallback: "Некорректная конфигурация сопоставления: {details}", names: ["details"] },
   { pattern: /^Collection "([^"]+)" relation is not configured$/, key: "documents.error.collectionRelationUnconfigured", fallback: "Связь для коллекции «{name}» не настроена", names: ["name"] },
   { pattern: /^Missing mapping for "([^"]+)"$/, key: "documents.error.missingMapping", fallback: "Не задано сопоставление для «{name}»", names: ["name"] },
   { pattern: /^Mapping has no collection marker "([^"]+)"$/, key: "documents.error.extraCollectionMapping", fallback: "В шаблоне нет маркера коллекции «{name}» из сопоставления", names: ["name"] },
@@ -166,6 +175,8 @@ const knownDocumentErrors: Record<string, [string, string]> = {
   "Draft has incomplete or invalid mappings": ["documents.error.invalidDraftMappings", "В черновике есть неполные или некорректные сопоставления"],
   "Invalid test generation request": ["documents.error.invalidTestRequest", "Некорректный запрос тестового создания документа"],
   "Invalid generation request": ["documents.error.invalidGenerationRequest", "Некорректный запрос создания документа"],
+  "Invalid collection preview request": ["documents.error.invalidPreviewRequest", "Некорректный запрос предпросмотра связанных строк"],
+  "Collection preview failed": ["documents.error.previewFailed", "Не удалось получить предпросмотр связанных строк"],
   "Invalid output settings": ["documents.error.invalidOutput", "Некорректные настройки результата"],
   "Test generation did not produce a download": ["documents.error.noTestDownload", "Тестовое создание не сформировало файл для скачивания"],
   "Generation failed": ["documents.error.generationFailed", "Не удалось создать документ"],
@@ -203,23 +214,31 @@ const safeErrorText = (value?: string): string =>
 function ValueMappingEditor({
   value,
   fields,
+  pages,
   onChange,
   t,
   ml,
 }: {
   value?: ValueSource;
   fields: Field[];
+  pages: Page[];
   onChange: (value: ValueSource) => void;
   t: (key: string, fallback: string) => string;
   ml: (value: MultilingualText | string | null | undefined) => string;
 }) {
   const kind = value?.source ?? "";
+  const pageId = value?.source === "page" ? value.pageId : 0;
+  const { data: pageFieldsRaw = [] } = useListPageFields(pageId, {
+    query: { enabled: pageId > 0, queryKey: getListPageFieldsQueryKey(pageId) },
+  });
+  const pageFields = [...pageFieldsRaw].filter((field) => field.isActive).sort((a, b) => a.sortOrder - b.sortOrder);
   return (
     <div className="grid gap-2 sm:grid-cols-[180px_minmax(0,1fr)]">
       <Select
         value={kind}
         onValueChange={(next) => {
           if (next === "field") onChange({ source: "field", fieldKey: fields[0]?.fieldKey ?? "" });
+           else if (next === "page") onChange({ source: "page", pageId: pages[0]?.id ?? 0, fieldKey: "" });
           else if (next === "system") onChange({ source: "system", key: "record_id" });
           else if (next === "literal") onChange({ source: "literal", value: "" });
           else if (next === "status") onChange({ source: "status" });
@@ -229,6 +248,7 @@ function ValueMappingEditor({
         <SelectTrigger data-testid="select-mapping-source"><SelectValue placeholder={t("documents.chooseSource", "Выберите источник")} /></SelectTrigger>
         <SelectContent>
           <SelectItem value="field">{t("documents.source.field", "Поле сущности / формула")}</SelectItem>
+          <SelectItem value="page" disabled={!pages.length}>{t("documents.source.page", "Поле страницы / формула")}</SelectItem>
           <SelectItem value="status">{t("documents.source.status", "Статус записи")}</SelectItem>
           <SelectItem value="system">{t("documents.source.system", "Системное значение")}</SelectItem>
           <SelectItem value="literal">{t("documents.source.literal", "Постоянный текст")}</SelectItem>
@@ -240,16 +260,29 @@ function ValueMappingEditor({
           <SelectTrigger data-testid="select-mapping-field"><SelectValue placeholder={t("documents.chooseField", "Выберите поле")} /></SelectTrigger>
           <SelectContent>{fields.map((f) => (
             <SelectItem key={f.fieldKey} value={f.fieldKey}>
-              {ml(f.nameJson) || f.fieldKey}{f.fieldType === "function" ? ` · ${t("documents.formula", "формула")}` : ""}
+              {ml(f.nameJson) || f.fieldKey}{f.fieldType === "function" ? ` · ${t("documents.formula", "формула")}` : f.fieldType === "lookup" || f.fieldType === "relation" ? ` · ${t("documents.autofill", "связь / автоподстановка")}` : ""}
             </SelectItem>
           ))}</SelectContent>
         </Select>
       )}
+      {value?.source === "page" && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Select value={value.pageId ? String(value.pageId) : ""} onValueChange={(next) => onChange({ source: "page", pageId: Number(next), fieldKey: "" })}>
+            <SelectTrigger><SelectValue placeholder={t("documents.choosePage", "Выберите страницу")} /></SelectTrigger>
+            <SelectContent>{pages.map((page) => <SelectItem key={page.id} value={String(page.id)}>{ml(page.nameJson) || `#${page.id}`}</SelectItem>)}</SelectContent>
+          </Select>
+          <Select value={value.fieldKey} onValueChange={(fieldKey) => onChange({ ...value, fieldKey })}>
+            <SelectTrigger><SelectValue placeholder={t("documents.chooseField", "Выберите поле")} /></SelectTrigger>
+            <SelectContent>{pageFields.map((field) => <SelectItem key={field.fieldKey} value={field.fieldKey}>{ml(field.nameJson) || field.fieldKey}{field.fieldType === "function" ? ` · ${t("documents.formula", "формула")}` : ""}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+      )}
       {value?.source === "system" && (
-        <Select value={value.key} onValueChange={(key) => onChange({ source: "system", key: key as "record_id" | "generated_at" })}>
+        <Select value={value.key} onValueChange={(key) => onChange({ source: "system", key: key as "record_id" | "created_at" | "generated_at" })}>
           <SelectTrigger data-testid="select-system-value"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="record_id">{t("documents.system.recordId", "ID записи")}</SelectItem>
+            <SelectItem value="created_at">{t("documents.system.createdAt", "Дата создания записи")}</SelectItem>
             <SelectItem value="generated_at">{t("documents.system.generatedAt", "Дата и время создания")}</SelectItem>
           </SelectContent>
         </Select>
@@ -268,6 +301,9 @@ function CollectionEditor({
   value,
   relationFields,
   currentEntityId,
+  entities,
+  pages,
+  previewRows,
   onChange,
   t,
   ml,
@@ -277,6 +313,9 @@ function CollectionEditor({
   value?: CollectionConfig;
   relationFields: Field[];
   currentEntityId: number;
+  entities: Entity[];
+  pages: Page[];
+  previewRows?: Record<string, unknown>[];
   onChange: (value: CollectionConfig) => void;
   t: (key: string, fallback: string) => string;
   ml: (value: MultilingualText | string | null | undefined) => string;
@@ -293,6 +332,8 @@ function CollectionEditor({
     query: { enabled: relatedEntityId > 0, queryKey: getListEntityFieldsQueryKey(relatedEntityId) },
   });
   const linkedFields = [...linkedFieldsRaw].filter((f) => f.isActive).sort((a, b) => a.sortOrder - b.sortOrder);
+  const linkedEntity = entities.find((entity) => entity.id === relatedEntityId);
+  const eligiblePages = pages.filter((page) => page.mirrorEntityId === relatedEntityId || page.id === linkedEntity?.pageId);
   const config: CollectionConfig = value ?? { relationFieldKey: "", filters: [], sort: [], fields: {} };
   const patch = (next: Partial<CollectionConfig>) => onChange({ ...config, ...next });
   const firstSort = config.sort[0];
@@ -308,11 +349,16 @@ function CollectionEditor({
       </div>
       {config.relationFieldKey && (
         <>
+          <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+            <span className="font-medium">{t("documents.linkedRowsSource", "Источник строк")}:</span>{" "}
+            {linkedEntity ? ml(linkedEntity.nameJson) || linkedEntity.entityKey : t("documents.loadingLinkedEntity", "Определение связанной сущности…")}
+            {relation && <span className="ms-2 text-xs text-blue-700">· {relation.relationType.replaceAll("_", " ")}</span>}
+          </div>
           <div className="grid gap-2 sm:grid-cols-[110px_minmax(0,1fr)_130px] items-center">
             <Label>{t("documents.sort", "Сортировка")}</Label>
             <Select value={firstSort?.fieldKey ?? "__none"} onValueChange={(fieldKey) => patch({ sort: fieldKey === "__none" ? [] : [{ fieldKey, direction: firstSort?.direction ?? "asc" }] })}>
               <SelectTrigger data-testid={`select-sort-${name}`}><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="__none">{t("documents.noSort", "Исходный порядок")}</SelectItem>{linkedFields.map((field) => <SelectItem key={field.fieldKey} value={field.fieldKey}>{ml(field.nameJson) || field.fieldKey}</SelectItem>)}</SelectContent>
+              <SelectContent><SelectItem value="__none">{t("documents.noSort", "Исходный порядок")}</SelectItem><SelectItem value="__status__">{t("documents.recordStatus", "Статус записи")}</SelectItem>{linkedFields.map((field) => <SelectItem key={field.fieldKey} value={field.fieldKey}>{ml(field.nameJson) || field.fieldKey}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={firstSort?.direction ?? "asc"} disabled={!firstSort} onValueChange={(direction) => firstSort && patch({ sort: [{ ...firstSort, direction: direction as "asc" | "desc" }] })}>
               <SelectTrigger data-testid={`select-sort-direction-${name}`}><SelectValue /></SelectTrigger>
@@ -333,9 +379,15 @@ function CollectionEditor({
           <div className="space-y-3">{tags.map((tag) => (
             <div key={tag} className="grid gap-2 lg:grid-cols-[180px_minmax(0,1fr)]">
               <code className="rounded bg-slate-100 px-2 py-2 text-xs text-slate-700" data-testid={`tag-${name}-${tag}`}>{tag}</code>
-              <ValueMappingEditor value={config.fields[tag]} fields={linkedFields} onChange={(mapped) => patch({ fields: { ...config.fields, [tag]: mapped } })} t={t} ml={ml} />
+              <ValueMappingEditor value={config.fields[tag]} fields={linkedFields} pages={eligiblePages} onChange={(mapped) => patch({ fields: { ...config.fields, [tag]: mapped } })} t={t} ml={ml} />
             </div>
           ))}</div>
+          {previewRows && <div className="space-y-2 border-t border-slate-100 pt-3" data-testid={`collection-preview-${name}`}>
+            <div className="flex items-center justify-between"><Label>{t("documents.previewRows", "Предпросмотр связанных строк")}</Label><Badge variant="secondary">{previewRows.length}</Badge></div>
+            {previewRows.length === 0 ? <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">{t("documents.previewEmptyCollection", "Связанных записей после применения фильтров нет. В DOCX останется одна пустая форматированная строка.")}</p> : (
+              <div className="max-h-72 overflow-auto rounded-lg border"><table className="w-full min-w-[520px] text-sm"><thead className="sticky top-0 bg-slate-50"><tr>{tags.map((tag) => <th key={tag} className="border-b px-3 py-2 text-start font-medium">{tag}</th>)}</tr></thead><tbody>{previewRows.map((row, index) => <tr key={index} className="border-b last:border-0">{tags.map((tag) => <td key={tag} className="px-3 py-2 align-top">{row[tag] == null || row[tag] === "" ? <span className="text-slate-300">—</span> : String(row[tag])}</td>)}</tr>)}</tbody></table></div>
+            )}
+          </div>}
         </>
       )}
     </div>
@@ -350,6 +402,7 @@ export default function DocumentsPage(): ReactElement {
   const { data: modules = [], isLoading: modulesLoading } = useListModules();
   const module = modules.find((item) => item.moduleKey === "document_generation");
   const { data: entitiesRaw = [] } = useListEntities();
+  const { data: pages = [] } = useListPages();
   const entities = [...entitiesRaw].filter((e) => e.isActive).sort((a, b) => a.sortOrder - b.sortOrder);
   const [entityId, setEntityId] = useState(0);
   const [showArchived, setShowArchived] = useState(false);
@@ -453,6 +506,11 @@ export default function DocumentsPage(): ReactElement {
       onError: (e) => toast({ title: t("documents.testError", "Не удалось создать тестовый документ"), description: localizeDocumentError(e, t), variant: "destructive" }),
     },
   });
+  const preview = usePreviewDocumentTemplateRevision({
+    mutation: {
+      onError: (error) => toast({ title: t("documents.previewError", "Не удалось получить связанные строки"), description: localizeDocumentError(error, t), variant: "destructive" }),
+    },
+  });
   const resolveOrphan = useResolveDocumentGenerationOrphan({
     mutation: {
       onSuccess: (result) => {
@@ -475,6 +533,7 @@ export default function DocumentsPage(): ReactElement {
     setMapping(latest ? asObject(latest.mappingJson) as Mapping : emptyMapping());
     setOutput(defaultOutput());
     setTestRecordId("");
+    preview.reset();
   };
   const saveDraft = () => {
     if (!selected || !file) return;
@@ -543,14 +602,14 @@ export default function DocumentsPage(): ReactElement {
               {scalarTags.length === 0 ? <p className="text-sm text-slate-400">{t("documents.noScalarTags", "Скалярные теги не найдены")}</p> : scalarTags.map((tag) => (
                 <div key={tag} className="grid gap-2 rounded-lg border border-slate-100 p-3 lg:grid-cols-[200px_minmax(0,1fr)]">
                   <code className="rounded bg-slate-100 px-2 py-2 text-xs" data-testid={`tag-scalar-${tag}`}>{tag}</code>
-                  <ValueMappingEditor value={mapping.scalars[tag]} fields={fields} onChange={(value) => setMapping((m) => ({ ...m, scalars: { ...m.scalars, [tag]: value } }))} t={t} ml={ml} />
+                   <ValueMappingEditor value={mapping.scalars[tag]} fields={fields} pages={pages.filter((page) => page.mirrorEntityId === entityId || page.id === entities.find((entity) => entity.id === entityId)?.pageId)} onChange={(value) => { preview.reset(); setMapping((m) => ({ ...m, scalars: { ...m.scalars, [tag]: value } })); }} t={t} ml={ml} />
                 </div>
               ))}
             </CardContent></Card>
             <Card><CardContent className="p-5 space-y-4">
               <div><h2 className="font-semibold">{t("documents.collections", "Коллекции")}</h2><p className="text-sm text-slate-500">{t("documents.collectionsHint", "Повторяйте блок DOCX для записей, связанных через отношение.")}</p></div>
               {Object.keys(collections).length === 0 ? <p className="text-sm text-slate-400">{t("documents.noCollections", "Теги коллекций не найдены")}</p> : Object.entries(collections).map(([collection, tags]) => (
-                <CollectionEditor key={collection} name={collection} tags={tags} value={mapping.collections[collection]} relationFields={relationFields} currentEntityId={entityId} onChange={(value) => setMapping((m) => ({ ...m, collections: { ...m.collections, [collection]: value } }))} t={t} ml={ml} />
+                 <CollectionEditor key={collection} name={collection} tags={tags} value={mapping.collections[collection]} relationFields={relationFields} currentEntityId={entityId} entities={entities} pages={pages} previewRows={preview.data?.collections?.[collection]} onChange={(value) => { preview.reset(); setMapping((m) => ({ ...m, collections: { ...m.collections, [collection]: value } })); }} t={t} ml={ml} />
               ))}
             </CardContent></Card>
             <Card><CardContent className="p-5 space-y-4">
@@ -568,7 +627,8 @@ export default function DocumentsPage(): ReactElement {
             <Card><CardContent className="p-5 space-y-4">
               <h2 className="font-semibold">{t("documents.verifyPublish", "Тестирование и публикация")}</h2>
               <div className="flex flex-wrap items-end gap-3">
-                <div className="min-w-[240px] flex-1 space-y-1.5"><Label>{t("documents.testRecord", "Тестовая запись")}</Label><Select value={testRecordId} onValueChange={setTestRecordId}><SelectTrigger data-testid="select-test-record"><SelectValue placeholder={t("documents.chooseRecord", "Выберите запись")} /></SelectTrigger><SelectContent>{records.map((record) => <SelectItem key={record.id} value={String(record.id)}>#{record.id} · {Object.values(record.valuesJson).filter((v) => typeof v === "string" || typeof v === "number").slice(0, 2).join(" · ")}</SelectItem>)}</SelectContent></Select></div>
+                 <div className="min-w-[240px] flex-1 space-y-1.5"><Label>{t("documents.testRecord", "Тестовая запись")}</Label><Select value={testRecordId} onValueChange={(value) => { preview.reset(); setTestRecordId(value); }}><SelectTrigger data-testid="select-test-record"><SelectValue placeholder={t("documents.chooseRecord", "Выберите запись")} /></SelectTrigger><SelectContent>{records.map((record) => <SelectItem key={record.id} value={String(record.id)}>#{record.id} · {Object.values(record.valuesJson).filter((v) => typeof v === "string" || typeof v === "number").slice(0, 2).join(" · ")}</SelectItem>)}</SelectContent></Select></div>
+                 <Button variant="outline" disabled={!module?.isEnabled || !testRecordId || !complete || preview.isPending} onClick={() => preview.mutate({ id: revision.id, data: { recordId: Number(testRecordId), mapping } })} data-testid="button-preview-document-collections"><RefreshCw className={`me-2 h-4 w-4 ${preview.isPending ? "animate-spin" : ""}`} />{t("documents.previewLinkedRows", "Показать связанные строки")}</Button>
                 <Button variant="outline" disabled={!module?.isEnabled || !testRecordId || !output.targetFileFieldKey || !hasFilenameTemplate || !requestFilenameTemplate || (output.destination === "local" ? !output.localFolderId : !output.driveFolderId) || test.isPending} onClick={() => requestFilenameTemplate && test.mutate({ id: revision.id, data: { recordId: Number(testRecordId), output: output.destination === "local" ? { outputFormat: output.outputFormat, destination: "local", localFolderId: output.localFolderId!, targetFileFieldKey: output.targetFileFieldKey, filenameTemplate: requestFilenameTemplate, overwrite: output.overwrite } : { outputFormat: output.outputFormat, destination: "gdrive", driveFolderId: output.driveFolderId!, targetFileFieldKey: output.targetFileFieldKey, filenameTemplate: requestFilenameTemplate, overwrite: output.overwrite } } })} data-testid="button-test-document"><Download className="me-2 h-4 w-4" />{t("documents.generateTest", "Создать тестовый документ")}</Button>
                 <Button disabled={!module?.isEnabled || !complete || publish.isPending || revision.state !== "draft"} onClick={() => publish.mutate({ id: revision.id })} data-testid="button-publish-revision"><Send className="me-2 h-4 w-4" />{t("documents.publish", "Опубликовать")}</Button>
               </div>

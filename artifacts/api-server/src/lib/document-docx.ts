@@ -327,10 +327,10 @@ export async function parseDocxManifest(data: Buffer): Promise<DocumentManifest>
   return { scalars: [...scalar].sort(), collections: resultCollections, errors };
 }
 
-function scalarString(value: unknown): string {
+export function renderScalarString(value: unknown): string {
   if (value == null) return "";
   if (value instanceof Date) return value.toISOString();
-  if (Array.isArray(value)) return value.map(scalarString).join(", ");
+  if (Array.isArray(value)) return value.map(renderScalarString).join(", ");
   if (typeof value === "object") return "";
   return String(value);
 }
@@ -356,7 +356,7 @@ function renderTree(tree: XmlNode[], values: Record<string, unknown>, collection
                  if (raw === start.raw || raw === end.raw) return "";
                  if (sigil) return raw;
                 const prefix = `${start.name}.`;
-                return key.startsWith(prefix) ? scalarString(item[key.slice(prefix.length)]) : scalarString(values[key]);
+                return key.startsWith(prefix) ? renderScalarString(item[key.slice(prefix.length)]) : renderScalarString(values[key]);
               });
             }
             replacement.push(copy);
@@ -368,7 +368,7 @@ function renderTree(tree: XmlNode[], values: Record<string, unknown>, collection
       }
       if (node.name === "w:p") {
          replaceTags(node, (raw, sigil: string | undefined, key: string) =>
-           sigil ? raw : scalarString(values[key]));
+           sigil ? raw : renderScalarString(values[key]));
       } else walk(node.children);
     }
   };

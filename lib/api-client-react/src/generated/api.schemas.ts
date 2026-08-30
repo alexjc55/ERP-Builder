@@ -221,6 +221,23 @@ export interface DocumentGenerationInput {
   output: DocumentGenerationOutput;
 }
 
+export interface DocumentCollectionPreviewInput {
+  /** @minimum 1 */
+  recordId: number;
+  mapping: DocumentMapping;
+}
+
+export type DocumentCollectionPreviewValues = { [key: string]: unknown };
+
+export type DocumentCollectionPreviewCollectionsItem = { [key: string]: unknown };
+
+export type DocumentCollectionPreviewCollections = {[key: string]: DocumentCollectionPreviewCollectionsItem[]};
+
+export interface DocumentCollectionPreview {
+  values: DocumentCollectionPreviewValues;
+  collections: DocumentCollectionPreviewCollections;
+}
+
 export interface GeneratedDocument { [key: string]: unknown }
 
 export type DocumentGenerationRunOutputDestination = typeof DocumentGenerationRunOutputDestination[keyof typeof DocumentGenerationRunOutputDestination];

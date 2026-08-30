@@ -15,6 +15,12 @@ Automation rendering is intentionally AS SYSTEM, while interactive test/generate
 
 **How to apply:** Keep authority explicit at the render-data boundary. Never fall back to reading raw record JSON for convenience.
 
+Interactive collection previews accept the editor's current mapping but must pass every mapped, filtered, and sorted linked field through the same direct-generation boundary before calling the shared render-data builder. Preview output is rendered text only, never raw objects.
+
+**Why:** A hidden field can leak influence through filtering or ordering even when it is not displayed, and raw file/relation objects can expose internal paths or identifiers.
+
+**How to apply:** Validate raw mapping payloads against the revision manifest; authorize relation fields, linked rows/statuses, page-local sources, filter keys, and sort keys. Serialize preview cells with the DOCX scalar-text rule.
+
 PDF conversion is allowed only through a network-isolated, filesystem-restricted LibreOffice sandbox and must fail closed when the host cannot provide that isolation.
 
 **Why:** DOCX is attacker-controlled input processed by a large native parser; tag validation and archive limits do not replace process isolation.

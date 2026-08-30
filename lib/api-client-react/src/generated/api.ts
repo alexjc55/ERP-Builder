@@ -62,6 +62,8 @@ import type {
   DeleteRecordLinkResult,
   DeletedFile,
   DependentValuesQuery,
+  DocumentCollectionPreview,
+  DocumentCollectionPreviewInput,
   DocumentGenerationInput,
   DocumentGenerationRunPage,
   DocumentOrphanActionInput,
@@ -832,6 +834,72 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getTestDocumentTemplateRevisionMutationOptions(options));
+    }
+
+export const getPreviewDocumentTemplateRevisionUrl = (id: number,) => {
+
+
+
+
+  return `/api/document-template-revisions/${id}/preview`
+}
+
+export const previewDocumentTemplateRevision = async (id: number,
+    documentCollectionPreviewInput: DocumentCollectionPreviewInput, options?: RequestInit): Promise<DocumentCollectionPreview> => {
+
+  return customFetch<DocumentCollectionPreview>(getPreviewDocumentTemplateRevisionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      documentCollectionPreviewInput,)
+  }
+);}
+
+
+
+
+export const getPreviewDocumentTemplateRevisionMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewDocumentTemplateRevision>>, TError,{id: number;data: BodyType<DocumentCollectionPreviewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof previewDocumentTemplateRevision>>, TError,{id: number;data: BodyType<DocumentCollectionPreviewInput>}, TContext> => {
+
+const mutationKey = ['previewDocumentTemplateRevision'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewDocumentTemplateRevision>>, {id: number;data: BodyType<DocumentCollectionPreviewInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  previewDocumentTemplateRevision(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PreviewDocumentTemplateRevisionMutationResult = NonNullable<Awaited<ReturnType<typeof previewDocumentTemplateRevision>>>
+    export type PreviewDocumentTemplateRevisionMutationBody = BodyType<DocumentCollectionPreviewInput>
+    export type PreviewDocumentTemplateRevisionMutationError = ErrorType<ErrorResponse>
+
+    export const usePreviewDocumentTemplateRevision = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewDocumentTemplateRevision>>, TError,{id: number;data: BodyType<DocumentCollectionPreviewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof previewDocumentTemplateRevision>>,
+        TError,
+        {id: number;data: BodyType<DocumentCollectionPreviewInput>},
+        TContext
+      > => {
+      return useMutation(getPreviewDocumentTemplateRevisionMutationOptions(options));
     }
 
 export const getGenerateDocumentUrl = (id: number,) => {

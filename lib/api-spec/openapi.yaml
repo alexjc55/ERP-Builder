@@ -178,6 +178,28 @@ paths:
               schema: { type: string, format: binary }
             application/pdf:
               schema: { type: string, format: binary }
+  /document-template-revisions/{id}/preview:
+    post:
+      operationId: previewDocumentTemplateRevision
+      tags: [documentGeneration]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DocumentCollectionPreviewInput" }
+      responses:
+        "200":
+          description: Permission-scoped values and linked collection rows resolved without rendering or storing a document
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DocumentCollectionPreview" }
+        "400":
+          description: Invalid mapping or record
+          content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+        "403":
+          description: Hidden field, row, status, page, or linked record
+          content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
   /document-template-revisions/{id}/generate:
     post:
       operationId: generateDocument
@@ -4365,6 +4387,28 @@ components:
         recordId: { type: integer }
         idempotencyKey: { type: string, minLength: 1, maxLength: 200 }
         output: { $ref: "#/components/schemas/DocumentGenerationOutput" }
+    DocumentCollectionPreviewInput:
+      type: object
+      additionalProperties: false
+      required: [recordId, mapping]
+      properties:
+        recordId: { type: integer, minimum: 1 }
+        mapping: { $ref: "#/components/schemas/DocumentMapping" }
+    DocumentCollectionPreview:
+      type: object
+      additionalProperties: false
+      required: [values, collections]
+      properties:
+        values:
+          type: object
+          additionalProperties: true
+        collections:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: object
+              additionalProperties: true
     DocumentGenerationOutput:
       oneOf:
         - type: object

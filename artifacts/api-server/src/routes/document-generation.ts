@@ -30,6 +30,9 @@ import {
   PublishDocumentTemplateRevisionParams,
   TestDocumentTemplateRevisionParams,
   TestDocumentTemplateRevisionBody,
+  PreviewDocumentTemplateRevisionParams,
+  PreviewDocumentTemplateRevisionBody,
+  PreviewDocumentTemplateRevisionResponse,
   GenerateDocumentParams,
   GenerateDocumentBody,
   ListDocumentGenerationRunsQueryParams,
@@ -40,8 +43,8 @@ import {
 import { requireAuth } from "../middlewares/auth";
 import { assertRecord, effectiveScope, effectiveStatusVisibility, getPermissions, getUserRoleIds, requireAdmin, resolveFieldAccess } from "../middlewares/permissions";
 import { isRecordOwned } from "./own-scope";
-import { parseDocxManifest, type DocumentManifest } from "../lib/document-docx";
-import { fileFieldAllowsGdrive, generateDocument, isDocumentGenerationEnabled, lockedDocumentWriteOptions, trashPriorLocalFile } from "../lib/document-generation";
+import { parseDocxManifest, renderScalarString, type DocumentManifest } from "../lib/document-docx";
+import { buildRenderData, fileFieldAllowsGdrive, generateDocument, isDocumentGenerationEnabled, lockedDocumentWriteOptions, trashPriorLocalFile } from "../lib/document-generation";
 import { interactiveFormulaPermissions } from "../lib/formula-runtime";
 import type { LinkedFormulaPermissionContext } from "../lib/linked-formula-resolver";
 import { deleteLocalFile, readLocalFile, saveLocalFile } from "../lib/localStorage";
@@ -119,13 +122,17 @@ async function validateRevision(
             errors.push(`Unknown linked filter field "${filter.fieldKey}" for "${collection}"`);
           }
         }
+        for (const sort of config.sort) {
+          if (sort.fieldKey !== "__status__" && !linkedKeys.has(sort.fieldKey)) {
+            errors.push(`Unknown linked sort field "${sort.fieldKey}" for "${collection}"`);
+          }
+        }
       }
     } else {
       errors.push(`Collection "${collection}" relation is not configured`);
     }
     for (const key of itemKeys) if (!config.fields[key]) errors.push(`Missing mapping for "${collection}.${key}"`);
     for (const key of Object.keys(config.fields)) if (!itemKeys.includes(key)) errors.push(`Mapping has no collection marker "${collection}.${key}"`);
-    for (const sort of config.sort) if (!config.fields[sort.fieldKey]) errors.push(`Unknown sort key "${collection}.${sort.fieldKey}"`);
   }
   for (const extra of Object.keys(mapping.collections)) if (!(extra in manifest.collections)) errors.push(`Mapping has no collection marker "${extra}"`);
   return [...new Set(errors)];
@@ -265,7 +272,7 @@ type DirectGenerationBoundary = {
   linkedRecordIds: ReadonlySet<number>;
   visibility: { entityFields: ReadonlyMap<number, ReadonlySet<string>>; pageFields: ReadonlyMap<number, ReadonlySet<string>>; formulaPermissions: LinkedFormulaPermissionContext };
 };
-async function enforceDirectGenerationBoundary(req: express.Request, res: express.Response, revisionId: number, recordId: number): Promise<DirectGenerationBoundary | false> {
+async function enforceDirectGenerationBoundary(req: express.Request, res: express.Response, revisionId: number, recordId: number, mappingOverride?: DocumentMapping): Promise<DirectGenerationBoundary | false> {
   const [revision] = await db.select({ mapping: documentTemplateRevisionsTable.mappingJson, entityId: documentTemplatesTable.entityId })
     .from(documentTemplateRevisionsTable).innerJoin(documentTemplatesTable, eq(documentTemplatesTable.id, documentTemplateRevisionsTable.templateId))
     .where(eq(documentTemplateRevisionsTable.id, revisionId));
@@ -282,7 +289,7 @@ async function enforceDirectGenerationBoundary(req: express.Request, res: expres
       (scope.scope === "own" && !(await isRecordOwned(revision.entityId, record, scope.scopeFieldKeys, req.user!.userId, fields)))) {
     res.status(403).json({ error: "Record is outside the caller's visible row scope" }); return false;
   }
-  const mapping = documentMappingSchema.parse(revision.mapping);
+  const mapping = mappingOverride ?? documentMappingSchema.parse(revision.mapping);
   const allowedLinkedRecordIds = new Set<number>();
   const visibleEntityFields = new Map<number, ReadonlySet<string>>();
   const visiblePageFields = new Map<number, ReadonlySet<string>>();
@@ -330,7 +337,8 @@ async function enforceDirectGenerationBoundary(req: express.Request, res: expres
     const linkedFields = await db.select().from(entityFieldsTable).where(and(eq(entityFieldsTable.entityId, linkedEntityId), eq(entityFieldsTable.isActive, true)));
     visibleEntityFields.set(linkedEntityId, new Set(linkedFields.filter((f) => resolveFieldAccess(f, perms, roleIds, linkedEntityId) !== "hidden").map((f) => f.fieldKey)));
     const filterSources = config.filters.filter((f) => f.fieldKey !== "__status__").map((f) => ({ source: "field" as const, fieldKey: f.fieldKey }));
-    if (!assertSources([...Object.values(config.fields), ...filterSources], linkedFields, linkedEntityId) || !(await assertPageSources(Object.values(config.fields)))) {
+    const sortSources = config.sort.filter((s) => s.fieldKey !== "__status__").map((s) => ({ source: "field" as const, fieldKey: s.fieldKey }));
+    if (!assertSources([...Object.values(config.fields), ...filterSources, ...sortSources], linkedFields, linkedEntityId) || !(await assertPageSources(Object.values(config.fields)))) {
       res.status(403).json({ error: "Mapping references a hidden linked field" }); return false;
     }
     const links = await db.select().from(recordLinksTable).where(and(eq(recordLinksTable.relationId, relation.id),
@@ -860,6 +868,41 @@ router.post("/document-template-revisions/:id/test", requireAuth, requireAdmin("
   } catch (error) {
     req.log.error({ err: error }, "Document test generation failed");
     res.status(409).json({ error: error instanceof Error ? error.message : "Generation failed" });
+  }
+});
+
+router.post("/document-template-revisions/:id/preview", requireAuth, requireAdmin("documentGeneration"), requireDocumentModule, async (req, res): Promise<void> => {
+  const params = PreviewDocumentTemplateRevisionParams.safeParse(req.params);
+  const rawMapping = documentMappingSchema.safeParse(req.body?.mapping);
+  const body = PreviewDocumentTemplateRevisionBody.safeParse(req.body);
+  if (!params.success || !body.success || !rawMapping.success) {
+    res.status(400).json({ error: "Invalid collection preview request" });
+    return;
+  }
+  const boundary = await enforceDirectGenerationBoundary(req, res, params.data.id, body.data.recordId, rawMapping.data);
+  if (boundary === false) return;
+  const [revision] = await db.select({ manifest: documentTemplateRevisionsTable.manifestJson })
+    .from(documentTemplateRevisionsTable).where(eq(documentTemplateRevisionsTable.id, params.data.id));
+  if (!revision) {
+    res.status(404).json({ error: "Document revision not found" });
+    return;
+  }
+  const errors = await validateRevision(boundary.entityId, revision.manifest as DocumentManifest, rawMapping.data);
+  if (errors.length) {
+    res.status(400).json({ error: `Invalid mapping configuration: ${errors.join("; ")}` });
+    return;
+  }
+  try {
+    const data = await buildRenderData(boundary.entityId, body.data.recordId, rawMapping.data, boundary.linkedRecordIds, boundary.visibility);
+    const printable = (row: Record<string, unknown>) =>
+      Object.fromEntries(Object.entries(row).map(([key, value]) => [key, renderScalarString(value)]));
+    res.json(PreviewDocumentTemplateRevisionResponse.parse({
+      values: printable(data.values),
+      collections: Object.fromEntries(Object.entries(data.collections).map(([key, rows]) => [key, rows.map(printable)])),
+    }));
+  } catch (error) {
+    req.log.error({ err: error }, "Document collection preview failed");
+    res.status(409).json({ error: error instanceof Error ? error.message : "Collection preview failed" });
   }
 });
 

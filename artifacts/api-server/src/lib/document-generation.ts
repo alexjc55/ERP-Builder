@@ -216,7 +216,7 @@ async function materializeRows(entityId: number, rows: typeof entityRecordsTable
   return { entityValues, pages };
 }
 
-function collectionMatches(
+export function collectionMatches(
   filters: DocumentMapping["collections"][string]["filters"],
   values: Record<string, unknown>,
   status: string,
@@ -235,7 +235,19 @@ function collectionMatches(
   });
 }
 
-async function buildRenderData(
+export function compareCollectionValues(
+  a: Record<string, unknown>,
+  b: Record<string, unknown>,
+  sort: DocumentMapping["collections"][string]["sort"],
+): number {
+  for (const rule of sort) {
+    const cmp = String(a[rule.fieldKey] ?? "").localeCompare(String(b[rule.fieldKey] ?? ""), undefined, { numeric: true });
+    if (cmp) return rule.direction === "desc" ? -cmp : cmp;
+  }
+  return 0;
+}
+
+export async function buildRenderData(
   entityId: number,
   recordId: number,
   mapping: DocumentMapping,
@@ -291,7 +303,8 @@ async function buildRenderData(
     const statusById = new Map(statuses.map((s) => [s.id, label(s.name)]));
     const linkedEntityId = sourceSide ? relation.targetEntityId : relation.sourceEntityId;
     const materializedLinked = await materializeRows(linkedEntityId, linked, mapping, visibility);
-    const rows = linked.map((row) => {
+    type ResolvedCollectionRow = { out: Record<string, unknown>; sortValues: Record<string, unknown> };
+    const rows = linked.map<ResolvedCollectionRow | null>((row) => {
       const rv = materializedLinked.entityValues.get(row.id) ?? {};
       const rowPages = new Map([...materializedLinked.pages].map(([pageId, records]) => [pageId, records.get(row.id) ?? {}]));
       const linkedStatus = row.statusId == null ? "" : statusById.get(row.statusId) ?? "";
@@ -300,16 +313,10 @@ async function buildRenderData(
       for (const [key, source] of Object.entries(config.fields)) {
         out[key] = mappedValue(source, rv, row.statusId == null ? "" : statusById.get(row.statusId) ?? "", row.id, row.createdAt, rowPages);
       }
-      return out;
-    }).filter((row): row is Record<string, unknown> => row !== null);
-    rows.sort((a, b) => {
-      for (const sort of config.sort) {
-        const cmp = String(a[sort.fieldKey] ?? "").localeCompare(String(b[sort.fieldKey] ?? ""), undefined, { numeric: true });
-        if (cmp) return sort.direction === "desc" ? -cmp : cmp;
-      }
-      return 0;
-    });
-    collections[placeholder] = rows;
+      return { out, sortValues: { ...rv, __status__: linkedStatus } };
+    }).filter((row): row is ResolvedCollectionRow => row !== null);
+    rows.sort((a, b) => compareCollectionValues(a.sortValues, b.sortValues, config.sort));
+    collections[placeholder] = rows.map((row) => row.out);
   }
   return { values, collections, nameValues: recordValues };
 }

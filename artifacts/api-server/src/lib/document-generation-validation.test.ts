@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { automationActionSchema, documentMappingSchema, documentGenerationOutputSchema } from "@workspace/db";
-import { awaitIdempotentRun, canonicalDocumentRequestKey, convertToPdf, fileFieldAllowsGdrive, libreOfficeSandboxArgs, lockedDocumentWriteOptions, outputName } from "./document-generation";
+import { PreviewDocumentTemplateRevisionBody } from "@workspace/api-zod";
+import { awaitIdempotentRun, canonicalDocumentRequestKey, collectionMatches, compareCollectionValues, convertToPdf, fileFieldAllowsGdrive, libreOfficeSandboxArgs, lockedDocumentWriteOptions, outputName } from "./document-generation";
+import { renderScalarString } from "./document-docx";
 import { activeOrphanRecoveryClaim, ORPHAN_RECOVERY_CLAIM_LEASE_MS, orphanRecoveryClaimDisposition, orphanTerminalResult, presentGenerationOutput, storedOrphanRecoveryClaim, validDriveOrphan, valueReferencesDriveFile } from "../routes/document-generation";
 import { DrivePreconditionError, getDriveFileMetadata, trashDriveFile } from "./googleDrive";
 
@@ -15,6 +17,51 @@ test("document mappings reject executable or network sources", () => {
     scalars: { total: { source: "javascript", value: "fetch('https://example.com')" } },
     collections: {},
   }).success, false);
+});
+
+test("linked collection preview input is strict and supports page-local/system mappings", () => {
+  const input = {
+    recordId: 12,
+    mapping: {
+      scalars: { created: { source: "system", key: "created_at" } },
+      collections: {
+        lines: {
+          relationFieldKey: "orders",
+          fields: { note: { source: "page", pageId: 4, fieldKey: "note" } },
+          filters: [{ fieldKey: "lookup_name", operator: "contains", value: "acme" }],
+          sort: [{ fieldKey: "formula_total", direction: "desc" }],
+        },
+      },
+    },
+  };
+  assert.equal(PreviewDocumentTemplateRevisionBody.safeParse(input).success, true);
+  // Generated transport parsers may strip unknown request keys, so the route
+  // separately parses the raw mapping with the authoritative DB schema.
+  assert.equal(PreviewDocumentTemplateRevisionBody.safeParse({ ...input, unexpected: true }).success, true);
+  assert.equal(documentMappingSchema.safeParse({ ...input.mapping, scalars: { bad: { source: "sql", value: "select 1" } } }).success, false);
+});
+
+test("linked collection filters and sorts use materialized source values", () => {
+  assert.equal(collectionMatches([{ fieldKey: "lookup_name", operator: "contains", value: "acme" }], { lookup_name: ["North", "ACME"] }, ""), true);
+  assert.equal(collectionMatches([{ fieldKey: "__status__", operator: "eq", value: "Active" }], {}, "Active"), true);
+  const rows = [{ total: 2, name: "B" }, { total: 10, name: "A" }, { total: 10, name: "C" }];
+  rows.sort((a, b) => compareCollectionValues(a, b, [{ fieldKey: "total", direction: "desc" }, { fieldKey: "name", direction: "asc" }]));
+  assert.deepEqual(rows.map((row) => row.name), ["A", "C", "B"]);
+});
+
+test("preview scalar serialization matches DOCX text and hides object internals", () => {
+  assert.equal(renderScalarString(["linked", 42]), "linked, 42");
+  assert.equal(renderScalarString({ path: "/local/private.docx", fileId: "secret" }), "");
+});
+
+test("collection preview route shares generation permissions and materialization", async () => {
+  const source = await readFile(new URL("../routes/document-generation.ts", import.meta.url), "utf8");
+  assert.match(source, /"\/document-template-revisions\/:id\/preview", requireAuth, requireAdmin\("documentGeneration"\), requireDocumentModule/);
+  assert.match(source, /enforceDirectGenerationBoundary\(req, res, params\.data\.id, body\.data\.recordId, rawMapping\.data\)/);
+  assert.match(source, /const sortSources = config\.sort\.filter\(\(s\) => s\.fieldKey !== "__status__"\)/);
+  assert.match(source, /\.\.\.filterSources, \.\.\.sortSources/);
+  assert.match(source, /buildRenderData\(boundary\.entityId, body\.data\.recordId, rawMapping\.data, boundary\.linkedRecordIds, boundary\.visibility\)/);
+  assert.match(source, /renderScalarString\(value\)/);
 });
 
 test("idempotency waiter never claims a running generation", async () => {

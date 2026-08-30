@@ -432,6 +432,88 @@ export const TestDocumentTemplateRevisionBody = zod.object({
 })
 
 
+
+
+
+export const PreviewDocumentTemplateRevisionParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+
+
+
+
+
+
+export const previewDocumentTemplateRevisionBodyMappingCollectionsFiltersMax = 12;
+
+export const previewDocumentTemplateRevisionBodyMappingCollectionsSortMax = 4;
+
+
+
+
+
+
+export const PreviewDocumentTemplateRevisionBody = zod.object({
+  "recordId": zod.number().min(1),
+  "mapping": zod.object({
+  "scalars": zod.record(zod.string(), zod.union([zod.object({
+  "source": zod.enum(['field']),
+  "fieldKey": zod.string().min(1)
+}),zod.object({
+  "source": zod.enum(['status'])
+}),zod.object({
+  "source": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string().min(1)
+}),zod.object({
+  "source": zod.enum(['system']),
+  "key": zod.enum(['record_id', 'created_at', 'generated_at'])
+}),zod.object({
+  "source": zod.enum(['literal']),
+  "value": zod.unknown()
+}),zod.object({
+  "source": zod.enum(['blank'])
+})])).optional(),
+  "collections": zod.record(zod.string(), zod.object({
+  "relationFieldKey": zod.string().min(1),
+  "filters": zod.array(zod.object({
+  "fieldKey": zod.string().min(1).describe('Linked field key or __status__'),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'empty', 'notEmpty']),
+  "value": zod.unknown().optional()
+})).max(previewDocumentTemplateRevisionBodyMappingCollectionsFiltersMax).optional(),
+  "sort": zod.array(zod.object({
+  "fieldKey": zod.string(),
+  "direction": zod.enum(['asc', 'desc']).optional()
+})).max(previewDocumentTemplateRevisionBodyMappingCollectionsSortMax).optional(),
+  "fields": zod.record(zod.string(), zod.union([zod.object({
+  "source": zod.enum(['field']),
+  "fieldKey": zod.string().min(1)
+}),zod.object({
+  "source": zod.enum(['status'])
+}),zod.object({
+  "source": zod.enum(['page']),
+  "pageId": zod.number().min(1),
+  "fieldKey": zod.string().min(1)
+}),zod.object({
+  "source": zod.enum(['system']),
+  "key": zod.enum(['record_id', 'created_at', 'generated_at'])
+}),zod.object({
+  "source": zod.enum(['literal']),
+  "value": zod.unknown()
+}),zod.object({
+  "source": zod.enum(['blank'])
+})]))
+})).optional()
+})
+})
+
+export const PreviewDocumentTemplateRevisionResponse = zod.object({
+  "values": zod.record(zod.string(), zod.unknown()),
+  "collections": zod.record(zod.string(), zod.array(zod.record(zod.string(), zod.unknown())))
+})
+
+
 export const GenerateDocumentParams = zod.object({
   "id": zod.coerce.number()
 })
