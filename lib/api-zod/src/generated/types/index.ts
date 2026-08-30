@@ -127,6 +127,8 @@ export * from './documentCollectionMapping';
 export * from './documentCollectionMappingFields';
 export * from './documentCollectionMappingSortItem';
 export * from './documentCollectionMappingSortItemDirection';
+export * from './documentFilenameTemplate';
+export * from './documentFilenameTemplateSectionsItem';
 export * from './documentGenerationInput';
 export * from './documentGenerationOutput';
 export * from './documentGenerationRun';

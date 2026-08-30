@@ -9,7 +9,7 @@ import {
 } from "@workspace/api-client-react";
 import { useML } from "@/lib/i18n";
 import { usePagePathLabel } from "@/lib/pagePath";
-import { driveNameHash, driveNameDate, type DriveNameSection } from "@/lib/driveNaming";
+import { composeDriveFileName, driveNameHash, driveNameDate, type DriveNameSection } from "@/lib/driveNaming";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,19 +29,21 @@ function FieldSectionPicker({
   onChange,
   t,
   defaultSource,
+  entityOnlyId,
 }: {
   section: Extract<DriveNameSection, { kind: "field" }>;
   onChange: (s: DriveNameSection) => void;
   t: TFn;
   /** Preselected source, e.g. "e:12" for the entity owning the field being configured. */
   defaultSource?: string;
+  entityOnlyId?: number;
 }) {
   const ml = useML();
   const pageLabel = usePagePathLabel();
   const { data: entities = [] } = useListEntities();
   const { data: pages = [] } = useListPages();
   // Source of the field being added: "e:<entityId>" or "p:<pageId>" (page-local).
-  const [source, setSource] = useState<string>(defaultSource ?? "");
+  const [source, setSource] = useState<string>(entityOnlyId ? `e:${entityOnlyId}` : defaultSource ?? "");
   const entityId = source.startsWith("e:") ? Number(source.slice(2)) : 0;
   const pageId = source.startsWith("p:") ? Number(source.slice(2)) : 0;
   const { data: entityFields = [] } = useListEntityFields(entityId, {
@@ -102,7 +104,7 @@ function FieldSectionPicker({
         </div>
       )}
       <div className="flex flex-wrap gap-1.5">
-        <Select value={source} onValueChange={setSource}>
+        {!entityOnlyId && <Select value={source} onValueChange={setSource}>
           <SelectTrigger className="h-8 w-[170px] text-xs">
             <SelectValue placeholder={t("gdrive.tplPickSource", "Сущность / страница")} />
           </SelectTrigger>
@@ -116,7 +118,7 @@ function FieldSectionPicker({
               </SelectItem>
             ))}
           </SelectContent>
-        </Select>
+        </Select>}
         <Select value="" onValueChange={addVariant} disabled={!source}>
           <SelectTrigger className="h-8 w-[190px] text-xs">
             <SelectValue placeholder={variants.length > 0 ? t("gdrive.tplAddVariant", "Добавить вариант поля") : t("gdrive.tplPickField", "Поле")} />
@@ -149,17 +151,28 @@ export function DriveNameTemplateEditor({
   onChange,
   t,
   defaultSource,
+  entityOnlyId,
+  previewValues,
+  previewExtension = "pdf",
+  previewUserEmail,
 }: {
   sections: DriveNameSection[];
   onChange: (next: DriveNameSection[]) => void;
   t: TFn;
   defaultSource?: string;
+  entityOnlyId?: number;
+  previewValues?: Record<string, unknown>;
+  previewExtension?: "docx" | "pdf";
+  previewUserEmail?: string | null;
 }) {
   const setSection = (i: number, s: DriveNameSection) => onChange(sections.map((x, idx) => (idx === i ? s : x)));
   const removeSection = (i: number) => onChange(sections.filter((_, idx) => idx !== i));
   const addSection = () => onChange([...sections, { kind: "text", text: "" }]);
 
-  const preview = sections.length > 0
+  const resolvedPreview = previewValues
+    ? composeDriveFileName(`document.${previewExtension}`, sections, previewValues, previewUserEmail)
+    : null;
+  const preview = resolvedPreview ?? (sections.length > 0
     ? sections
         .map((s) =>
           s.kind === "text"
@@ -175,8 +188,8 @@ export function DriveNameTemplateEditor({
                   : "",
         )
         .filter(Boolean)
-        .join("_") + ".pdf"
-    : null;
+        .join("_") + `.${previewExtension}`
+    : null);
 
   return (
     <div className="space-y-2">
@@ -219,7 +232,7 @@ export function DriveNameTemplateEditor({
             />
           )}
           {s.kind === "field" && (
-            <FieldSectionPicker section={s} onChange={(next) => setSection(i, next)} t={t} defaultSource={defaultSource} />
+            <FieldSectionPicker section={s} onChange={(next) => setSection(i, next)} t={t} defaultSource={defaultSource} entityOnlyId={entityOnlyId} />
           )}
           {s.kind === "hash" && (
             <span className="self-center flex-1 text-xs text-slate-500">

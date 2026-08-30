@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { automationActionSchema, documentMappingSchema, documentGenerationOutputSchema } from "@workspace/db";
-import { awaitIdempotentRun, canonicalDocumentRequestKey, convertToPdf, fileFieldAllowsGdrive, libreOfficeSandboxArgs, lockedDocumentWriteOptions } from "./document-generation";
+import { awaitIdempotentRun, canonicalDocumentRequestKey, convertToPdf, fileFieldAllowsGdrive, libreOfficeSandboxArgs, lockedDocumentWriteOptions, outputName } from "./document-generation";
 import { activeOrphanRecoveryClaim, ORPHAN_RECOVERY_CLAIM_LEASE_MS, orphanRecoveryClaimDisposition, orphanTerminalResult, presentGenerationOutput, storedOrphanRecoveryClaim, validDriveOrphan, valueReferencesDriveFile } from "../routes/document-generation";
 import { DrivePreconditionError, getDriveFileMetadata, trashDriveFile } from "./googleDrive";
 
@@ -92,6 +92,47 @@ test("document output and automation action are explicit and bounded", () => {
   assert.equal(automationActionSchema.safeParse({ type: "generate_document", revisionId: -1, output }).success, false);
   assert.equal(documentGenerationOutputSchema.safeParse({ ...output, destination: "gdrive" }).success, false);
   assert.equal(documentGenerationOutputSchema.safeParse({ ...output, overwrite: "append" }).success, false);
+  assert.equal(documentGenerationOutputSchema.safeParse({
+    ...output,
+    filenameTemplate: { sections: [
+      { kind: "text", text: "Invoice" },
+      { kind: "field", fieldKey: "number", alts: [{ fieldKey: "legacy_number" }] },
+      { kind: "date" },
+      { kind: "hash" },
+      { kind: "user" },
+    ] },
+  }).success, true);
+  assert.equal(documentGenerationOutputSchema.safeParse({
+    ...output, filenameTemplate: { sections: [{ kind: "text", text: " " }] },
+  }).success, false);
+  assert.equal(documentGenerationOutputSchema.safeParse({
+    ...output, filenameTemplate: { sections: [{ kind: "field", fieldKey: " " }] },
+  }).success, false);
+  assert.equal(documentGenerationOutputSchema.safeParse({
+    ...output, filenameTemplate: { sections: [{ kind: "hash", unexpected: true }] },
+  }).success, false);
+  assert.equal(automationActionSchema.safeParse({
+    type: "generate_document",
+    revisionId: 4,
+    output: { ...output, filenameTemplate: { sections: [{ kind: "hash", unexpected: true }] } },
+  }).success, false);
+});
+
+test("structured document filenames resolve fields, fallbacks, user, date, hash, and extension", () => {
+  const name = outputName({ sections: [
+    { kind: "text", text: "Invoice / final" },
+    { kind: "field", fieldKey: "empty", alts: [{ fieldKey: "number" }] },
+    { kind: "field", fieldKey: "missing" },
+    { kind: "date" },
+    { kind: "hash" },
+    { kind: "user" },
+  ] }, { empty: "", number: 42 }, "pdf", {
+    now: new Date(2026, 7, 30, 11, 5),
+    hash: () => "AbC2345",
+    actorEmail: "ivan.petrov@example.com",
+  });
+  assert.equal(name, "Invoice final_42_2026-08-30_11-05_AbC2345_ivan.petrov.pdf");
+  assert.equal(outputName("Invoice {{number}}.docx", { number: 42 }, "pdf"), "Invoice 42.pdf");
 });
 
 test("orphan projection exposes only safe recovery status and terminal details", () => {

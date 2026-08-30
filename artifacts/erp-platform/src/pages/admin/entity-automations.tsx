@@ -87,6 +87,8 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { MultilingualInput } from "@/components/MultilingualInput";
+import { DriveNameTemplateEditor } from "@/components/DriveNameTemplateEditor";
+import { validDocumentFilenameTemplate, type DriveNameSection } from "@/lib/driveNaming";
 import { FormulaEditor } from "@/components/FormulaEditor";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -112,6 +114,7 @@ import { normalizeSelectOptions } from "@/lib/selectOptions";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 
 type MLValue = { ru?: string; en?: string; he?: string };
+type FilenameTemplate = string | { sections: DriveNameSection[] };
 
 /** Sentinel for the record's status pseudo-field in conditions. */
 const STATUS_KEY = "__status__";
@@ -169,7 +172,7 @@ type ActionDraft = {
   localFolderId: string;
   driveFolderId: string;
   targetFileFieldKey: string;
-  filenameTemplate: string;
+  filenameTemplate: FilenameTemplate;
   overwrite: "replace" | "error";
 };
 
@@ -235,7 +238,7 @@ function emptyAction(defaultFieldKey: string): ActionDraft {
     localFolderId: "",
     driveFolderId: "",
     targetFileFieldKey: "",
-    filenameTemplate: "document",
+    filenameTemplate: { sections: [{ kind: "text", text: "document" }] },
     overwrite: "replace",
   };
 }
@@ -683,13 +686,14 @@ export default function EntityAutomationsPage() {
           toast({ title: t("auto.documentRevisionRequired", "Choose a published document template"), variant: "destructive" });
           return;
         }
-        if (!a.targetFileFieldKey || !a.filenameTemplate || (a.destination === "local" ? !a.localFolderId : !a.driveFolderId)) {
+        const filenameTemplate = validDocumentFilenameTemplate(a.filenameTemplate);
+        if (!a.targetFileFieldKey || !filenameTemplate || (a.destination === "local" ? !a.localFolderId : !a.driveFolderId)) {
           toast({ title: t("auto.documentOutputRequired", "Complete all document output settings"), variant: "destructive" });
           return;
         }
         const output = a.destination === "local"
-          ? { outputFormat: a.outputFormat, destination: "local" as const, localFolderId: Number(a.localFolderId), targetFileFieldKey: a.targetFileFieldKey, filenameTemplate: a.filenameTemplate, overwrite: a.overwrite }
-          : { outputFormat: a.outputFormat, destination: "gdrive" as const, driveFolderId: a.driveFolderId, targetFileFieldKey: a.targetFileFieldKey, filenameTemplate: a.filenameTemplate, overwrite: a.overwrite };
+          ? { outputFormat: a.outputFormat, destination: "local" as const, localFolderId: Number(a.localFolderId), targetFileFieldKey: a.targetFileFieldKey, filenameTemplate, overwrite: a.overwrite }
+          : { outputFormat: a.outputFormat, destination: "gdrive" as const, driveFolderId: a.driveFolderId, targetFileFieldKey: a.targetFileFieldKey, filenameTemplate, overwrite: a.overwrite };
         builtActions.push({ type: "generate_document", revisionId: Number(a.revisionId), output });
       }
     }
@@ -1693,8 +1697,8 @@ function ActionCard({
             <div className="space-y-1"><Label className="text-xs">{t("auto.documentDestination", "Destination")}</Label><Select value={draft.destination} onValueChange={(destination) => onChange({ destination: destination as "local" | "gdrive", localFolderId: "", driveFolderId: "" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="local">{t("auto.documentLocal", "Local managed storage")}</SelectItem><SelectItem value="gdrive">Google Drive</SelectItem></SelectContent></Select></div>
             {draft.destination === "local" ? <div className="space-y-1"><Label className="text-xs">{t("auto.localFolder", "Managed local folder")}</Label><Select value={draft.localFolderId} onValueChange={(localFolderId) => onChange({ localFolderId })}><SelectTrigger><SelectValue placeholder={t("auto.chooseFolder", "Choose folder")} /></SelectTrigger><SelectContent>{localFolders.map((folder) => <SelectItem key={folder.id} value={String(folder.id)}>{folder.name}</SelectItem>)}</SelectContent></Select>{!draft.localFolderId && <p className="text-xs text-red-600">{t("auto.folderRequired", "Folder is required")}</p>}</div> : <div className="space-y-1"><Label className="text-xs">{t("auto.driveFolder", "Managed Drive folder")}</Label><Select value={draft.driveFolderId} onValueChange={(driveFolderId) => onChange({ driveFolderId })}><SelectTrigger><SelectValue placeholder={t("auto.chooseFolder", "Choose folder")} /></SelectTrigger><SelectContent>{driveFolders.map((folder) => <SelectItem key={folder.driveFolderId} value={folder.driveFolderId}>{folder.name}</SelectItem>)}</SelectContent></Select>{!draft.driveFolderId && <p className="text-xs text-red-600">{t("auto.folderRequired", "Folder is required")}</p>}</div>}
             <div className="space-y-1"><Label className="text-xs">{t("auto.documentFileField", "Target file field")}</Label><Select value={draft.targetFileFieldKey} onValueChange={(targetFileFieldKey) => onChange({ targetFileFieldKey })}><SelectTrigger><SelectValue placeholder={t("auto.chooseFileField", "Choose file field")} /></SelectTrigger><SelectContent>{fileFields.map((field) => <SelectItem key={field.fieldKey} value={field.fieldKey}>{ml(field.nameJson) || field.fieldKey}</SelectItem>)}</SelectContent></Select>{!draft.targetFileFieldKey && <p className="text-xs text-red-600">{t("auto.fileFieldRequired", "File field is required")}</p>}</div>
-            <div className="space-y-1"><Label className="text-xs">{t("auto.documentFilename", "Filename template")}</Label><Input maxLength={180} value={draft.filenameTemplate} onChange={(event) => onChange({ filenameTemplate: event.target.value })} />{!draft.filenameTemplate && <p className="text-xs text-red-600">{t("auto.filenameRequired", "Filename template is required")}</p>}</div>
-            <div className="space-y-1"><Label className="text-xs">{t("auto.documentOverwrite", "When target field already has a file")}</Label><Select value={draft.overwrite} onValueChange={(overwrite) => onChange({ overwrite: overwrite as "replace" | "error" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="replace">{t("auto.replace", "Replace existing file")}</SelectItem><SelectItem value="error">{t("auto.failIfExists", "Fail without replacing")}</SelectItem></SelectContent></Select></div>
+            <div className="space-y-2 sm:col-span-2"><Label className="text-xs">{t("auto.documentFilename", "Динамическое имя файла")}</Label><DriveNameTemplateEditor sections={typeof draft.filenameTemplate === "object" ? draft.filenameTemplate.sections : [{ kind: "text", text: draft.filenameTemplate }]} onChange={(sections) => onChange({ filenameTemplate: { sections } })} t={t} entityOnlyId={currentEntityId} defaultSource={`e:${currentEntityId}`} previewExtension={draft.outputFormat} />{!(typeof draft.filenameTemplate === "object" ? draft.filenameTemplate.sections.some((section) => section.kind === "text" ? Boolean(section.text?.trim()) : section.kind === "field" ? Boolean(section.fieldKey?.trim()) : true) : draft.filenameTemplate.trim()) && <p className="text-xs text-red-600">{t("auto.filenameRequired", "Добавьте хотя бы одну непустую секцию имени")}</p>}</div>
+            <div className="space-y-1 sm:col-span-2"><Label className="text-xs">{t("auto.documentOverwrite", "Если в целевом поле уже есть файл")}</Label><Select value={draft.overwrite} onValueChange={(overwrite) => onChange({ overwrite: overwrite as "replace" | "error" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="replace">{t("auto.replace", "Заменить существующий файл")}</SelectItem><SelectItem value="error">{t("auto.failIfExists", "Завершить с ошибкой без замены")}</SelectItem></SelectContent></Select><p className="text-xs text-slate-500">{t("auto.documentOverwriteHint", "Проверяется значение file-поля записи в базе ERP, а не наличие файла с таким именем в папке.")}</p></div>
           </div>
         </div>
       )}

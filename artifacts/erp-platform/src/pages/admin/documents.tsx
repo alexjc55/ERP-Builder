@@ -43,6 +43,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DriveNameTemplateEditor } from "@/components/DriveNameTemplateEditor";
+import { validDocumentFilenameTemplate, type DriveNameSection } from "@/lib/driveNaming";
 import {
   AlertCircle,
   Archive,
@@ -76,20 +78,21 @@ type CollectionConfig = {
   fields: Record<string, ValueSource>;
 };
 type Mapping = { scalars: Record<string, ValueSource>; collections: Record<string, CollectionConfig> };
+type FilenameTemplate = string | { sections: DriveNameSection[] };
 type Output = {
   outputFormat: "docx" | "pdf";
   destination: "local" | "gdrive";
   localFolderId?: number;
   driveFolderId?: string;
   targetFileFieldKey: string;
-  filenameTemplate: string;
+  filenameTemplate: FilenameTemplate;
   overwrite: "replace" | "error";
 };
 type Manifest = { scalars?: string[]; collections?: Record<string, string[]>; errors?: string[] };
 type OrphanRecoveryRequest = { runId: number; action: DocumentOrphanActionInputAction };
 
 const emptyMapping = (): Mapping => ({ scalars: {}, collections: {} });
-const defaultOutput = (): Output => ({ outputFormat: "docx", destination: "local", targetFileFieldKey: "", filenameTemplate: "document", overwrite: "replace" });
+const defaultOutput = (): Output => ({ outputFormat: "docx", destination: "local", targetFileFieldKey: "", filenameTemplate: { sections: [{ kind: "text", text: "document" }] }, overwrite: "replace" });
 const asObject = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const sourceComplete = (s?: ValueSource) =>
@@ -197,11 +200,6 @@ const readableSize = (bytes?: number): string => {
 };
 const safeErrorText = (value?: string): string =>
   (value ?? "").replace(/[\u0000-\u001F\u007F]/g, " ").replace(/[<>]/g, "").slice(0, 1000);
-const testDownloadName = (templateName: string, format: "docx" | "pdf"): string => {
-  const base = templateName.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9\u0590-\u05FF\u0400-\u04FF_-]+/g, "-").replace(/^-+|-+$/g, "") || "document";
-  return `${base}-test.${format}`;
-};
-
 function ValueMappingEditor({
   value,
   fields,
@@ -401,6 +399,13 @@ export default function DocumentsPage(): ReactElement {
       const config = mapping.collections[collection];
       return !!config?.relationFieldKey && tags.every((tag) => sourceComplete(config.fields[tag]));
     }) && parserErrors.length === 0;
+  const selectedTestRecord = records.find((record) => String(record.id) === testRecordId);
+  const filenameSections: DriveNameSection[] = typeof output.filenameTemplate === "object"
+    ? output.filenameTemplate.sections
+    : [{ kind: "text", text: output.filenameTemplate }];
+  const hasFilenameTemplate = filenameSections.some((section) =>
+    section.kind === "text" ? Boolean(section.text?.trim()) : section.kind === "field" ? Boolean(section.fieldKey?.trim()) : true);
+  const requestFilenameTemplate = validDocumentFilenameTemplate(output.filenameTemplate);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["/api/document-templates"] });
   const create = useCreateDocumentTemplate({
@@ -438,7 +443,7 @@ export default function DocumentsPage(): ReactElement {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = testDownloadName(selected?.name ?? revision?.templateName ?? "document", output.outputFormat);
+        link.download = (blob as Blob & { downloadName?: string }).downloadName ?? `document.${output.outputFormat}`;
         document.body.appendChild(link);
         link.click();
         link.remove();
@@ -556,15 +561,15 @@ export default function DocumentsPage(): ReactElement {
                 <div className="space-y-1.5"><Label>{t("documents.destination", "Назначение")}</Label><Select value={output.destination} onValueChange={(destination) => setOutput({ ...output, destination: destination as Output["destination"], localFolderId: undefined, driveFolderId: undefined })}><SelectTrigger data-testid="select-output-destination"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="local">{t("documents.localStorage", "Управляемое локальное хранилище")}</SelectItem><SelectItem value="gdrive">Google Drive</SelectItem></SelectContent></Select></div>
                 {output.destination === "local" ? <div className="space-y-1.5"><Label>{t("documents.localFolder", "Управляемая локальная папка")}</Label><Select value={output.localFolderId ? String(output.localFolderId) : ""} onValueChange={(value) => setOutput({ ...output, localFolderId: Number(value) })}><SelectTrigger><SelectValue placeholder={t("documents.chooseFolder", "Выберите папку")} /></SelectTrigger><SelectContent>{localFolders.map((folder) => <SelectItem key={folder.id} value={String(folder.id)}>{folder.name}</SelectItem>)}</SelectContent></Select></div> : <div className="space-y-1.5"><Label>{t("documents.driveFolder", "Управляемая папка Google Drive")}</Label><Select value={output.driveFolderId ?? ""} onValueChange={(driveFolderId) => setOutput({ ...output, driveFolderId })}><SelectTrigger data-testid="select-drive-folder"><SelectValue placeholder={t("documents.chooseFolder", "Выберите папку")} /></SelectTrigger><SelectContent>{driveFolders.map((folder) => <SelectItem key={folder.driveFolderId} value={folder.driveFolderId}>{folder.name}</SelectItem>)}</SelectContent></Select></div>}
                 <div className="space-y-1.5"><Label>{t("documents.fileField", "Записать результат в файловое поле")}</Label><Select value={output.targetFileFieldKey} onValueChange={(targetFileFieldKey) => setOutput({ ...output, targetFileFieldKey })}><SelectTrigger data-testid="select-target-file-field"><SelectValue placeholder={t("documents.chooseField", "Выберите поле")} /></SelectTrigger><SelectContent>{fileFields.map((field) => <SelectItem key={field.fieldKey} value={field.fieldKey}>{ml(field.nameJson) || field.fieldKey}</SelectItem>)}</SelectContent></Select></div>
-                <div className="space-y-1.5"><Label>{t("documents.overwrite", "Если в целевом поле уже есть файл")}</Label><Select value={output.overwrite} onValueChange={(overwrite) => setOutput({ ...output, overwrite: overwrite as Output["overwrite"] })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="replace">{t("documents.replace", "Заменить существующий файл")}</SelectItem><SelectItem value="error">{t("documents.failIfExists", "Завершить с ошибкой без замены")}</SelectItem></SelectContent></Select></div>
-                <div className="space-y-1.5 md:col-span-2"><Label>{t("documents.fileName", "Шаблон имени файла")}</Label><Input value={output.filenameTemplate} maxLength={180} onChange={(e) => setOutput({ ...output, filenameTemplate: e.target.value })} data-testid="input-output-filename" /></div>
+                <div className="space-y-1.5"><Label>{t("documents.overwrite", "Если в целевом поле уже есть файл")}</Label><Select value={output.overwrite} onValueChange={(overwrite) => setOutput({ ...output, overwrite: overwrite as Output["overwrite"] })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="replace">{t("documents.replace", "Заменить существующий файл")}</SelectItem><SelectItem value="error">{t("documents.failIfExists", "Завершить с ошибкой без замены")}</SelectItem></SelectContent></Select><p className="text-xs text-slate-500">{t("documents.overwriteHint", "Проверяется значение file-поля записи в базе ERP, а не наличие файла с таким именем в папке.")}</p></div>
+                <div className="space-y-2 md:col-span-2"><Label>{t("documents.fileName", "Динамическое имя файла")}</Label><DriveNameTemplateEditor sections={filenameSections} onChange={(sections) => setOutput({ ...output, filenameTemplate: { sections } })} t={t} entityOnlyId={entityId} defaultSource={`e:${entityId}`} previewValues={selectedTestRecord?.valuesJson as Record<string, unknown> | undefined} previewExtension={output.outputFormat} /><p className="text-xs text-slate-500">{t("documents.filenameBuilderHint", "Секции собираются через «_». Пустые поля пропускаются, для поля можно задать резервные варианты.")}</p></div>
               </div>
             </CardContent></Card>
             <Card><CardContent className="p-5 space-y-4">
               <h2 className="font-semibold">{t("documents.verifyPublish", "Тестирование и публикация")}</h2>
               <div className="flex flex-wrap items-end gap-3">
                 <div className="min-w-[240px] flex-1 space-y-1.5"><Label>{t("documents.testRecord", "Тестовая запись")}</Label><Select value={testRecordId} onValueChange={setTestRecordId}><SelectTrigger data-testid="select-test-record"><SelectValue placeholder={t("documents.chooseRecord", "Выберите запись")} /></SelectTrigger><SelectContent>{records.map((record) => <SelectItem key={record.id} value={String(record.id)}>#{record.id} · {Object.values(record.valuesJson).filter((v) => typeof v === "string" || typeof v === "number").slice(0, 2).join(" · ")}</SelectItem>)}</SelectContent></Select></div>
-                <Button variant="outline" disabled={!module?.isEnabled || !testRecordId || !output.targetFileFieldKey || !output.filenameTemplate || (output.destination === "local" ? !output.localFolderId : !output.driveFolderId) || test.isPending} onClick={() => test.mutate({ id: revision.id, data: { recordId: Number(testRecordId), output: output.destination === "local" ? { outputFormat: output.outputFormat, destination: "local", localFolderId: output.localFolderId!, targetFileFieldKey: output.targetFileFieldKey, filenameTemplate: output.filenameTemplate, overwrite: output.overwrite } : { outputFormat: output.outputFormat, destination: "gdrive", driveFolderId: output.driveFolderId!, targetFileFieldKey: output.targetFileFieldKey, filenameTemplate: output.filenameTemplate, overwrite: output.overwrite } } })} data-testid="button-test-document"><Download className="me-2 h-4 w-4" />{t("documents.generateTest", "Создать тестовый документ")}</Button>
+                <Button variant="outline" disabled={!module?.isEnabled || !testRecordId || !output.targetFileFieldKey || !hasFilenameTemplate || !requestFilenameTemplate || (output.destination === "local" ? !output.localFolderId : !output.driveFolderId) || test.isPending} onClick={() => requestFilenameTemplate && test.mutate({ id: revision.id, data: { recordId: Number(testRecordId), output: output.destination === "local" ? { outputFormat: output.outputFormat, destination: "local", localFolderId: output.localFolderId!, targetFileFieldKey: output.targetFileFieldKey, filenameTemplate: requestFilenameTemplate, overwrite: output.overwrite } : { outputFormat: output.outputFormat, destination: "gdrive", driveFolderId: output.driveFolderId!, targetFileFieldKey: output.targetFileFieldKey, filenameTemplate: requestFilenameTemplate, overwrite: output.overwrite } } })} data-testid="button-test-document"><Download className="me-2 h-4 w-4" />{t("documents.generateTest", "Создать тестовый документ")}</Button>
                 <Button disabled={!module?.isEnabled || !complete || publish.isPending || revision.state !== "draft"} onClick={() => publish.mutate({ id: revision.id })} data-testid="button-publish-revision"><Send className="me-2 h-4 w-4" />{t("documents.publish", "Опубликовать")}</Button>
               </div>
               {!complete && <p className="flex items-center gap-2 text-xs text-amber-700"><AlertCircle className="h-4 w-4" />{t("documents.publishIncomplete", "Публикация станет доступна после сопоставления всех тегов, устранения ошибок разбора и сохранения настроенного DOCX как корректного черновика.")}</p>}

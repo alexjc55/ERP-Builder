@@ -23,6 +23,36 @@ export type DriveNameSection =
   /** Uploader's email local part (before "@") — always Latin, unlike names. */
   | { kind: "user" };
 
+export type DocumentFilenameTemplate = string | {
+  sections: (
+    | { kind: "text"; text: string }
+    | { kind: "field"; fieldKey: string; label?: string; alts?: { fieldKey: string; label?: string }[] }
+    | { kind: "hash" }
+    | { kind: "date" }
+    | { kind: "user" }
+  )[];
+};
+
+/** Validate and narrow the editable filename-builder state before an API request. */
+export function validDocumentFilenameTemplate(
+  template: string | { sections: DriveNameSection[] },
+): DocumentFilenameTemplate | null {
+  if (typeof template === "string") return template.trim() ? template : null;
+  const sections: Exclude<DocumentFilenameTemplate, string>["sections"] = [];
+  for (const section of template.sections) {
+    if (section.kind === "text") {
+      if (!section.text?.trim()) return null;
+      sections.push({ kind: "text", text: section.text });
+    } else if (section.kind === "field") {
+      if (!section.fieldKey?.trim()) return null;
+      sections.push({ kind: "field", fieldKey: section.fieldKey, label: section.label, alts: section.alts });
+    } else {
+      sections.push(section);
+    }
+  }
+  return sections.length ? { sections } : null;
+}
+
 const HASH_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
 
 /** Random short id for the "hash" section (7 chars, unambiguous alphanumerics). */

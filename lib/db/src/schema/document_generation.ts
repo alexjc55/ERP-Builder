@@ -48,13 +48,34 @@ export const documentMappingSchema = z.object({
 });
 export type DocumentMapping = z.infer<typeof documentMappingSchema>;
 
+const nonBlank = (max: number) => z.string().min(1).max(max).refine((value) => value.trim().length > 0, "value cannot be blank");
+const documentFilenameAltSchema = z.object({
+  fieldKey: nonBlank(160),
+  label: z.string().max(240).optional(),
+}).strict();
+const documentFilenameSectionSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("text"), text: nonBlank(120) }).strict(),
+  z.object({
+    kind: z.literal("field"),
+    fieldKey: nonBlank(160),
+    label: z.string().max(240).optional(),
+    alts: z.array(documentFilenameAltSchema).max(20).optional(),
+  }).strict(),
+  z.object({ kind: z.literal("hash") }).strict(),
+  z.object({ kind: z.literal("date") }).strict(),
+  z.object({ kind: z.literal("user") }).strict(),
+]);
+const documentFilenameTemplateSchema = z.object({
+  sections: z.array(documentFilenameSectionSchema).min(1).max(20),
+}).strict();
+
 export const documentGenerationOutputSchema = z.discriminatedUnion("destination", [
   z.object({
     outputFormat: z.enum(["docx", "pdf"]),
     destination: z.literal("local"),
     localFolderId: z.number().int().positive(),
     targetFileFieldKey: z.string().min(1),
-    filenameTemplate: z.string().min(1).max(180),
+    filenameTemplate: z.union([z.string().min(1).max(180), documentFilenameTemplateSchema]),
     overwrite: z.enum(["replace", "error"]),
   }),
   z.object({
@@ -62,7 +83,7 @@ export const documentGenerationOutputSchema = z.discriminatedUnion("destination"
     destination: z.literal("gdrive"),
     driveFolderId: z.string().min(1),
     targetFileFieldKey: z.string().min(1),
-    filenameTemplate: z.string().min(1).max(180),
+    filenameTemplate: z.union([z.string().min(1).max(180), documentFilenameTemplateSchema]),
     overwrite: z.enum(["replace", "error"]),
   }),
 ]);

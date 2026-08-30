@@ -146,6 +146,51 @@ export interface DocumentTemplateRevisionUpload {
   mapping: string;
 }
 
+export type DocumentFilenameTemplateSectionsItem = {
+  kind: 'text';
+  /**
+     * @minLength 1
+     * @maxLength 120
+     * @pattern ^.*\S.*$
+     */
+  text: string;
+} | {
+  kind: 'field';
+  /**
+     * @minLength 1
+     * @maxLength 160
+     * @pattern ^.*\S.*$
+     */
+  fieldKey: string;
+  /** @maxLength 240 */
+  label?: string;
+  /** @maxItems 20 */
+  alts?: {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     * @pattern ^.*\S.*$
+     */
+  fieldKey: string;
+  /** @maxLength 240 */
+  label?: string;
+}[];
+} | {
+  kind: 'hash';
+} | {
+  kind: 'date';
+} | {
+  kind: 'user';
+};
+
+export interface DocumentFilenameTemplate {
+  /**
+     * @minItems 1
+     * @maxItems 20
+     */
+  sections: DocumentFilenameTemplateSectionsItem[];
+}
+
 export type DocumentGenerationOutput = {
   outputFormat: 'docx' | 'pdf';
   destination: 'local';
@@ -153,11 +198,7 @@ export type DocumentGenerationOutput = {
   localFolderId: number;
   /** @minLength 1 */
   targetFileFieldKey: string;
-  /**
-     * @minLength 1
-     * @maxLength 180
-     */
-  filenameTemplate: string;
+  filenameTemplate: string | DocumentFilenameTemplate;
   overwrite: 'replace' | 'error';
 } | {
   outputFormat: 'docx' | 'pdf';
@@ -166,11 +207,7 @@ export type DocumentGenerationOutput = {
   driveFolderId: string;
   /** @minLength 1 */
   targetFileFieldKey: string;
-  /**
-     * @minLength 1
-     * @maxLength 180
-     */
-  filenameTemplate: string;
+  filenameTemplate: string | DocumentFilenameTemplate;
   overwrite: 'replace' | 'error';
 };
 

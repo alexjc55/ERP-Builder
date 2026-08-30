@@ -3,7 +3,7 @@ import { constants as fsConstants } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   db,
   modulesTable,
@@ -17,6 +17,7 @@ import {
   entitiesTable,
   deletedFilesTable,
   entityStatusesTable,
+  usersTable,
   pageFieldsTable,
   pageRecordValuesTable,
   relationsTable,
@@ -26,6 +27,7 @@ import {
   DOCUMENT_GENERATION_MODULE_KEY,
   type DocumentMapping,
   type DocumentGenerationOutput,
+  type DriveNameSection,
 } from "@workspace/db";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { deleteLocalFile, readLocalFile, saveLocalFile } from "./localStorage";
@@ -98,6 +100,17 @@ export async function validateDocumentOutput(entityId: number, output: DocumentG
     eq(entityFieldsTable.entityId, entityId), eq(entityFieldsTable.fieldKey, output.targetFileFieldKey), eq(entityFieldsTable.isActive, true),
   ));
   if (!field || field.type !== "file") return "targetFileFieldKey must be an active writable file field on the same entity";
+  if (typeof output.filenameTemplate === "object") {
+    const activeFields = await db.select({ key: entityFieldsTable.fieldKey }).from(entityFieldsTable)
+      .where(and(eq(entityFieldsTable.entityId, entityId), eq(entityFieldsTable.isActive, true)));
+    const activeKeys = new Set(activeFields.map((item) => item.key));
+    for (const section of output.filenameTemplate.sections) {
+      if (section.kind !== "field") continue;
+      for (const key of [section.fieldKey, ...(section.alts ?? []).map((alt) => alt.fieldKey)].filter(Boolean) as string[]) {
+        if (!activeKeys.has(key)) return `filenameTemplate references an unknown field: ${key}`;
+      }
+    }
+  }
   const source = output.destination === "gdrive" ? "gdrive" : "server";
   const configured = (field.fileConfig as { allowedSources?: unknown } | null)?.allowedSources;
   const allowed = Array.isArray(configured) && configured.length ? configured : ["server"];
@@ -228,7 +241,7 @@ async function buildRenderData(
   mapping: DocumentMapping,
   allowedLinkedRecordIds?: ReadonlySet<number>,
   visibility?: { entityFields: ReadonlyMap<number, ReadonlySet<string>>; pageFields: ReadonlyMap<number, ReadonlySet<string>>; formulaPermissions?: LinkedFormulaPermissionContext },
-): Promise<{ values: Record<string, unknown>; collections: Record<string, Record<string, unknown>[]> }> {
+): Promise<{ values: Record<string, unknown>; collections: Record<string, Record<string, unknown>[]>; nameValues: Record<string, unknown> }> {
   const [record] = await db.select().from(entityRecordsTable)
     .where(and(eq(entityRecordsTable.id, recordId), eq(entityRecordsTable.entityId, entityId), isNull(entityRecordsTable.archivedAt)));
   if (!record) throw new Error("Record not found");
@@ -298,10 +311,46 @@ async function buildRenderData(
     });
     collections[placeholder] = rows;
   }
-  return { values, collections };
+  return { values, collections, nameValues: recordValues };
 }
 
-function outputName(template: string, values: Record<string, unknown>, extension: string): string {
+const NAME_HASH_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+const filenameSegment = (value: unknown): string => {
+  if (value == null || value === "" || (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean")) return "";
+  return String(value).replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim();
+};
+const filenameDate = (now: Date): string => {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}_${p(now.getHours())}-${p(now.getMinutes())}`;
+};
+const filenameHash = (): string => [...randomBytes(7)].map((b) => NAME_HASH_ALPHABET[b % NAME_HASH_ALPHABET.length]).join("");
+
+export function outputName(
+  template: DocumentGenerationOutput["filenameTemplate"],
+  values: Record<string, unknown>,
+  extension: string,
+  options: { now?: Date; hash?: () => string; actorEmail?: string | null } = {},
+): string {
+  if (typeof template === "object") {
+    const parts: string[] = [];
+    for (const section of template.sections as DriveNameSection[]) {
+      if (section.kind === "text") {
+        const part = filenameSegment(section.text);
+        if (part) parts.push(part);
+      } else if (section.kind === "field") {
+        for (const key of [section.fieldKey, ...(section.alts ?? []).map((alt) => alt.fieldKey)]) {
+          const part = key ? filenameSegment(values[key]) : "";
+          if (part) { parts.push(part); break; }
+        }
+      } else if (section.kind === "date") parts.push(filenameDate(options.now ?? new Date()));
+      else if (section.kind === "hash") parts.push(options.hash?.() ?? filenameHash());
+      else if (section.kind === "user") {
+        const part = filenameSegment(options.actorEmail?.split("@")[0] ?? "");
+        if (part) parts.push(part);
+      }
+    }
+    return `${parts.join("_").slice(0, 160) || "document"}.${extension}`;
+  }
   const expanded = template.replace(/\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}/g, (_raw, key: string) =>
     String(values[key] ?? ""));
   const base = expanded.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").replace(/\.(docx|pdf)$/i, "").slice(0, 160) || "document";
@@ -401,6 +450,7 @@ export async function generateDocument(input: {
   if (!row || (!input.testOnly && row.revision.state !== "published") || row.template.isArchived) throw new Error("Published document revision not found");
   const mapping = documentMappingSchema.parse(row.revision.mappingJson);
   const output = documentGenerationOutputSchema.parse(input.output);
+  const [actor] = input.actorUserId == null ? [] : await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, input.actorUserId));
   // Test downloads deliberately do not touch their configured destination.
   if (!input.testOnly) {
     const outputError = await validateDocumentOutput(row.template.entityId, output);
@@ -416,7 +466,7 @@ export async function generateDocument(input: {
       contentType = "application/pdf";
       extension = "pdf";
     }
-    return { bytes, contentType, name: outputName(output.filenameTemplate, data.values, extension) };
+    return { bytes, contentType, name: outputName(output.filenameTemplate, data.nameValues, extension, { actorEmail: actor?.email }) };
   }
   const effectiveIdempotencyKey = canonicalDocumentRequestKey({
     callerKey: input.idempotencyKey,
@@ -465,7 +515,7 @@ export async function generateDocument(input: {
       contentType = "application/pdf";
       extension = "pdf";
     }
-    const name = outputName(output.filenameTemplate, data.values, extension);
+    const name = outputName(output.filenameTemplate, data.nameValues, extension, { actorEmail: actor?.email });
     let file: Record<string, unknown>;
     if (output.destination === "gdrive") {
       if (!(await isGoogleDriveModuleEnabled())) throw new Error("Google Drive module is disabled");

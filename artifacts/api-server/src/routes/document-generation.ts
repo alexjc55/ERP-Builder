@@ -836,21 +836,21 @@ router.post("/document-template-revisions/:id/publish", requireAuth, requireAdmi
 
 router.post("/document-template-revisions/:id/test", requireAuth, requireAdmin("documentGeneration"), requireDocumentModule, async (req, res): Promise<void> => {
   const params = TestDocumentTemplateRevisionParams.safeParse(req.params);
+  const rawOutput = documentGenerationOutputSchema.safeParse(req.body?.output);
   const body = TestDocumentTemplateRevisionBody.safeParse(req.body);
-  if (!params.success || !body.success) {
+  if (!params.success || !body.success || !rawOutput.success) {
     res.status(400).json({ error: "Invalid test generation request" });
     return;
   }
   const boundary = await enforceDirectGenerationBoundary(req, res, params.data.id, body.data.recordId);
   if (boundary === false) return;
   try {
-    const output = documentGenerationOutputSchema.safeParse(body.data.output);
-    if (!output.success) throw new Error("Invalid output settings");
-    const [target] = await db.select().from(entityFieldsTable).where(and(eq(entityFieldsTable.entityId, boundary.entityId), eq(entityFieldsTable.fieldKey, output.data.targetFileFieldKey), eq(entityFieldsTable.isActive, true)));
+    const output = rawOutput.data;
+    const [target] = await db.select().from(entityFieldsTable).where(and(eq(entityFieldsTable.entityId, boundary.entityId), eq(entityFieldsTable.fieldKey, output.targetFileFieldKey), eq(entityFieldsTable.isActive, true)));
     const directPerms = await getPermissions(req);
     const directRoles = await getUserRoleIds(req);
     if (!target || resolveFieldAccess(target, directPerms, directRoles, boundary.entityId) !== "edit") throw new Error("Target file field is not writable by the caller");
-    const generated = await generateDocument({ revisionId: params.data.id, recordId: body.data.recordId, actorUserId: req.user!.userId, idempotencyKey: body.data.idempotencyKey, testOnly: true, output: output.data, allowedLinkedRecordIds: boundary.linkedRecordIds, visibility: boundary.visibility });
+    const generated = await generateDocument({ revisionId: params.data.id, recordId: body.data.recordId, actorUserId: req.user!.userId, idempotencyKey: body.data.idempotencyKey, testOnly: true, output, allowedLinkedRecordIds: boundary.linkedRecordIds, visibility: boundary.visibility });
     if (!("bytes" in generated) || !Buffer.isBuffer(generated.bytes) || typeof generated.contentType !== "string" || typeof generated.name !== "string") {
       throw new Error("Test generation did not produce a download");
     }
@@ -865,21 +865,21 @@ router.post("/document-template-revisions/:id/test", requireAuth, requireAdmin("
 
 router.post("/document-template-revisions/:id/generate", requireAuth, requireAdmin("documentGeneration"), requireDocumentModule, async (req, res): Promise<void> => {
   const params = GenerateDocumentParams.safeParse(req.params);
+  const rawOutput = documentGenerationOutputSchema.safeParse(req.body?.output);
   const body = GenerateDocumentBody.safeParse(req.body);
-  if (!params.success || !body.success) {
+  if (!params.success || !body.success || !rawOutput.success) {
     res.status(400).json({ error: "Invalid generation request" });
     return;
   }
   const boundary = await enforceDirectGenerationBoundary(req, res, params.data.id, body.data.recordId);
   if (boundary === false) return;
   try {
-    const output = documentGenerationOutputSchema.safeParse(body.data.output);
-    if (!output.success) throw new Error("Invalid output settings");
-    const [target] = await db.select().from(entityFieldsTable).where(and(eq(entityFieldsTable.entityId, boundary.entityId), eq(entityFieldsTable.fieldKey, output.data.targetFileFieldKey), eq(entityFieldsTable.isActive, true)));
+    const output = rawOutput.data;
+    const [target] = await db.select().from(entityFieldsTable).where(and(eq(entityFieldsTable.entityId, boundary.entityId), eq(entityFieldsTable.fieldKey, output.targetFileFieldKey), eq(entityFieldsTable.isActive, true)));
     const directPerms = await getPermissions(req);
     const directRoles = await getUserRoleIds(req);
     if (!target || resolveFieldAccess(target, directPerms, directRoles, boundary.entityId) !== "edit") throw new Error("Target file field is not writable by the caller");
-    res.json(await generateDocument({ revisionId: params.data.id, recordId: body.data.recordId, actorUserId: req.user!.userId, idempotencyKey: body.data.idempotencyKey, output: output.data, allowedLinkedRecordIds: boundary.linkedRecordIds, visibility: boundary.visibility }));
+    res.json(await generateDocument({ revisionId: params.data.id, recordId: body.data.recordId, actorUserId: req.user!.userId, idempotencyKey: body.data.idempotencyKey, output, allowedLinkedRecordIds: boundary.linkedRecordIds, visibility: boundary.visibility }));
   } catch (error) {
     req.log.error({ err: error }, "Document generation failed");
     res.status(409).json({ error: error instanceof Error ? error.message : "Generation failed" });

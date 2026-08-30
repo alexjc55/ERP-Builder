@@ -1,4 +1,5 @@
 import { pgTable, serial, text, timestamp, integer, boolean, jsonb, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { z } from "zod/v4";
 
 /** Which OAuth client credentials are used for the Drive connection. */
 export type GoogleDriveKeyMode = "builtin" | "own";
@@ -50,13 +51,19 @@ export type GoogleDriveConnection = typeof googleDriveConnectionTable.$inferSele
  *   are display-only snapshots for the admin UI.
  * - "hash": a random short alphanumeric id generated per upload.
  */
-export type DriveNameSection =
-  | { kind: "text"; text: string }
-  | { kind: "field"; fieldKey: string; label?: string; alts?: { fieldKey: string; label?: string }[] }
-  | { kind: "hash" }
-  | { kind: "date" }
-  /** Uploader's email local part (before "@") — always Latin, unlike names. */
-  | { kind: "user" };
+export const driveNameSectionSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("text"), text: z.string().max(120).optional() }),
+  z.object({
+    kind: z.literal("field"),
+    fieldKey: z.string().max(160).optional(),
+    label: z.string().max(240).optional(),
+    alts: z.array(z.object({ fieldKey: z.string().min(1).max(160), label: z.string().max(240).optional() })).max(20).optional(),
+  }),
+  z.object({ kind: z.literal("hash") }),
+  z.object({ kind: z.literal("date") }),
+  z.object({ kind: z.literal("user") }),
+]);
+export type DriveNameSection = z.infer<typeof driveNameSectionSchema>;
 
 export const googleDriveFoldersTable = pgTable("google_drive_folders", {
   id: serial("id").primaryKey(),

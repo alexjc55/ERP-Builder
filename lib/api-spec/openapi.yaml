@@ -4374,7 +4374,10 @@ components:
             destination: { type: string, enum: [local] }
             localFolderId: { type: integer, minimum: 1 }
             targetFileFieldKey: { type: string, minLength: 1 }
-            filenameTemplate: { type: string, minLength: 1, maxLength: 180 }
+            filenameTemplate:
+              oneOf:
+                - { type: string, minLength: 1, maxLength: 180 }
+                - $ref: '#/components/schemas/DocumentFilenameTemplate'
             overwrite: { type: string, enum: [replace, error] }
         - type: object
           required: [outputFormat, destination, driveFolderId, targetFileFieldKey, filenameTemplate, overwrite]
@@ -4383,7 +4386,10 @@ components:
             destination: { type: string, enum: [gdrive] }
             driveFolderId: { type: string, minLength: 1 }
             targetFileFieldKey: { type: string, minLength: 1 }
-            filenameTemplate: { type: string, minLength: 1, maxLength: 180 }
+            filenameTemplate:
+              oneOf:
+                - { type: string, minLength: 1, maxLength: 180 }
+                - $ref: '#/components/schemas/DocumentFilenameTemplate'
             overwrite: { type: string, enum: [replace, error] }
     GeneratedDocument:
       type: object
@@ -4682,6 +4688,56 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/DriveNameSection"
+
+    DocumentFilenameTemplate:
+      type: object
+      additionalProperties: false
+      required: [sections]
+      properties:
+        sections:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            oneOf:
+              - type: object
+                additionalProperties: false
+                required: [kind, text]
+                properties:
+                  kind: { type: string, enum: [text] }
+                  text: { type: string, minLength: 1, maxLength: 120, pattern: '^.*\S.*$' }
+              - type: object
+                additionalProperties: false
+                required: [kind, fieldKey]
+                properties:
+                  kind: { type: string, enum: [field] }
+                  fieldKey: { type: string, minLength: 1, maxLength: 160, pattern: '^.*\S.*$' }
+                  label: { type: string, maxLength: 240 }
+                  alts:
+                    type: array
+                    maxItems: 20
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [fieldKey]
+                      properties:
+                        fieldKey: { type: string, minLength: 1, maxLength: 160, pattern: '^.*\S.*$' }
+                        label: { type: string, maxLength: 240 }
+              - type: object
+                additionalProperties: false
+                required: [kind]
+                properties:
+                  kind: { type: string, enum: [hash] }
+              - type: object
+                additionalProperties: false
+                required: [kind]
+                properties:
+                  kind: { type: string, enum: [date] }
+              - type: object
+                additionalProperties: false
+                required: [kind]
+                properties:
+                  kind: { type: string, enum: [user] }
 
     CreateDriveFolderBody:
       type: object

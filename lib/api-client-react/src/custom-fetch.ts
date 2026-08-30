@@ -318,7 +318,20 @@ async function parseSuccessBody(
             "Use responseType \"json\" or \"text\" instead.",
         );
       }
-      return response.blob();
+      {
+        const blob = await response.blob();
+        const disposition = response.headers.get("content-disposition") ?? "";
+        const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1];
+        const quoted = /filename="((?:\\.|[^"])*)"/i.exec(disposition)?.[1];
+        let downloadName: string | undefined;
+        try {
+          downloadName = encoded ? decodeURIComponent(encoded) : quoted?.replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+        } catch {
+          downloadName = quoted;
+        }
+        if (downloadName) Object.defineProperty(blob, "downloadName", { value: downloadName, enumerable: false });
+        return blob;
+      }
   }
 }
 

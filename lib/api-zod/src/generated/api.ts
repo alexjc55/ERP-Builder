@@ -325,11 +325,51 @@ export const testDocumentTemplateRevisionBodyIdempotencyKeyMax = 200;
 
 
 
-export const testDocumentTemplateRevisionBodyOutputOneFilenameTemplateMax = 180;
+export const testDocumentTemplateRevisionBodyOutputOneFilenameTemplateOneMax = 180;
+
+export const testDocumentTemplateRevisionBodyOutputOneFilenameTemplateTwoSectionsItemOneTextMax = 120;
+
+
+export const testDocumentTemplateRevisionBodyOutputOneFilenameTemplateTwoSectionsItemOneTextRegExp = new RegExp('^.\*\\S.\*$');
+export const testDocumentTemplateRevisionBodyOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyMax = 160;
+
+
+export const testDocumentTemplateRevisionBodyOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const testDocumentTemplateRevisionBodyOutputOneFilenameTemplateTwoSectionsItemTwoLabelMax = 240;
+
+export const testDocumentTemplateRevisionBodyOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax = 160;
+
+
+export const testDocumentTemplateRevisionBodyOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const testDocumentTemplateRevisionBodyOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax = 240;
+
+export const testDocumentTemplateRevisionBodyOutputOneFilenameTemplateTwoSectionsItemTwoAltsMax = 20;
+
+export const testDocumentTemplateRevisionBodyOutputOneFilenameTemplateTwoSectionsMax = 20;
 
 
 
-export const testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateMax = 180;
+export const testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateOneMax = 180;
+
+export const testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateTwoSectionsItemOneTextMax = 120;
+
+
+export const testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateTwoSectionsItemOneTextRegExp = new RegExp('^.\*\\S.\*$');
+export const testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyMax = 160;
+
+
+export const testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateTwoSectionsItemTwoLabelMax = 240;
+
+export const testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax = 160;
+
+
+export const testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax = 240;
+
+export const testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateTwoSectionsItemTwoAltsMax = 20;
+
+export const testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateTwoSectionsMax = 20;
 
 
 
@@ -341,14 +381,52 @@ export const TestDocumentTemplateRevisionBody = zod.object({
   "destination": zod.enum(['local']),
   "localFolderId": zod.number().min(1),
   "targetFileFieldKey": zod.string().min(1),
-  "filenameTemplate": zod.string().min(1).max(testDocumentTemplateRevisionBodyOutputOneFilenameTemplateMax),
+  "filenameTemplate": zod.union([zod.string().min(1).max(testDocumentTemplateRevisionBodyOutputOneFilenameTemplateOneMax),zod.object({
+  "sections": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['text']),
+  "text": zod.string().min(1).max(testDocumentTemplateRevisionBodyOutputOneFilenameTemplateTwoSectionsItemOneTextMax).regex(testDocumentTemplateRevisionBodyOutputOneFilenameTemplateTwoSectionsItemOneTextRegExp)
+}),zod.object({
+  "kind": zod.enum(['field']),
+  "fieldKey": zod.string().min(1).max(testDocumentTemplateRevisionBodyOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyMax).regex(testDocumentTemplateRevisionBodyOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp),
+  "label": zod.string().max(testDocumentTemplateRevisionBodyOutputOneFilenameTemplateTwoSectionsItemTwoLabelMax).optional(),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string().min(1).max(testDocumentTemplateRevisionBodyOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax).regex(testDocumentTemplateRevisionBodyOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp),
+  "label": zod.string().max(testDocumentTemplateRevisionBodyOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax).optional()
+})).max(testDocumentTemplateRevisionBodyOutputOneFilenameTemplateTwoSectionsItemTwoAltsMax).optional()
+}),zod.object({
+  "kind": zod.enum(['hash'])
+}),zod.object({
+  "kind": zod.enum(['date'])
+}),zod.object({
+  "kind": zod.enum(['user'])
+})])).min(1).max(testDocumentTemplateRevisionBodyOutputOneFilenameTemplateTwoSectionsMax)
+})]),
   "overwrite": zod.enum(['replace', 'error'])
 }),zod.object({
   "outputFormat": zod.enum(['docx', 'pdf']),
   "destination": zod.enum(['gdrive']),
   "driveFolderId": zod.string().min(1),
   "targetFileFieldKey": zod.string().min(1),
-  "filenameTemplate": zod.string().min(1).max(testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateMax),
+  "filenameTemplate": zod.union([zod.string().min(1).max(testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateOneMax),zod.object({
+  "sections": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['text']),
+  "text": zod.string().min(1).max(testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateTwoSectionsItemOneTextMax).regex(testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateTwoSectionsItemOneTextRegExp)
+}),zod.object({
+  "kind": zod.enum(['field']),
+  "fieldKey": zod.string().min(1).max(testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyMax).regex(testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp),
+  "label": zod.string().max(testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateTwoSectionsItemTwoLabelMax).optional(),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string().min(1).max(testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax).regex(testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp),
+  "label": zod.string().max(testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax).optional()
+})).max(testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateTwoSectionsItemTwoAltsMax).optional()
+}),zod.object({
+  "kind": zod.enum(['hash'])
+}),zod.object({
+  "kind": zod.enum(['date'])
+}),zod.object({
+  "kind": zod.enum(['user'])
+})])).min(1).max(testDocumentTemplateRevisionBodyOutputTwoFilenameTemplateTwoSectionsMax)
+})]),
   "overwrite": zod.enum(['replace', 'error'])
 })])
 })
@@ -362,11 +440,51 @@ export const generateDocumentBodyIdempotencyKeyMax = 200;
 
 
 
-export const generateDocumentBodyOutputOneFilenameTemplateMax = 180;
+export const generateDocumentBodyOutputOneFilenameTemplateOneMax = 180;
+
+export const generateDocumentBodyOutputOneFilenameTemplateTwoSectionsItemOneTextMax = 120;
+
+
+export const generateDocumentBodyOutputOneFilenameTemplateTwoSectionsItemOneTextRegExp = new RegExp('^.\*\\S.\*$');
+export const generateDocumentBodyOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyMax = 160;
+
+
+export const generateDocumentBodyOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const generateDocumentBodyOutputOneFilenameTemplateTwoSectionsItemTwoLabelMax = 240;
+
+export const generateDocumentBodyOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax = 160;
+
+
+export const generateDocumentBodyOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const generateDocumentBodyOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax = 240;
+
+export const generateDocumentBodyOutputOneFilenameTemplateTwoSectionsItemTwoAltsMax = 20;
+
+export const generateDocumentBodyOutputOneFilenameTemplateTwoSectionsMax = 20;
 
 
 
-export const generateDocumentBodyOutputTwoFilenameTemplateMax = 180;
+export const generateDocumentBodyOutputTwoFilenameTemplateOneMax = 180;
+
+export const generateDocumentBodyOutputTwoFilenameTemplateTwoSectionsItemOneTextMax = 120;
+
+
+export const generateDocumentBodyOutputTwoFilenameTemplateTwoSectionsItemOneTextRegExp = new RegExp('^.\*\\S.\*$');
+export const generateDocumentBodyOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyMax = 160;
+
+
+export const generateDocumentBodyOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const generateDocumentBodyOutputTwoFilenameTemplateTwoSectionsItemTwoLabelMax = 240;
+
+export const generateDocumentBodyOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax = 160;
+
+
+export const generateDocumentBodyOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const generateDocumentBodyOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax = 240;
+
+export const generateDocumentBodyOutputTwoFilenameTemplateTwoSectionsItemTwoAltsMax = 20;
+
+export const generateDocumentBodyOutputTwoFilenameTemplateTwoSectionsMax = 20;
 
 
 
@@ -378,14 +496,52 @@ export const GenerateDocumentBody = zod.object({
   "destination": zod.enum(['local']),
   "localFolderId": zod.number().min(1),
   "targetFileFieldKey": zod.string().min(1),
-  "filenameTemplate": zod.string().min(1).max(generateDocumentBodyOutputOneFilenameTemplateMax),
+  "filenameTemplate": zod.union([zod.string().min(1).max(generateDocumentBodyOutputOneFilenameTemplateOneMax),zod.object({
+  "sections": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['text']),
+  "text": zod.string().min(1).max(generateDocumentBodyOutputOneFilenameTemplateTwoSectionsItemOneTextMax).regex(generateDocumentBodyOutputOneFilenameTemplateTwoSectionsItemOneTextRegExp)
+}),zod.object({
+  "kind": zod.enum(['field']),
+  "fieldKey": zod.string().min(1).max(generateDocumentBodyOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyMax).regex(generateDocumentBodyOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp),
+  "label": zod.string().max(generateDocumentBodyOutputOneFilenameTemplateTwoSectionsItemTwoLabelMax).optional(),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string().min(1).max(generateDocumentBodyOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax).regex(generateDocumentBodyOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp),
+  "label": zod.string().max(generateDocumentBodyOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax).optional()
+})).max(generateDocumentBodyOutputOneFilenameTemplateTwoSectionsItemTwoAltsMax).optional()
+}),zod.object({
+  "kind": zod.enum(['hash'])
+}),zod.object({
+  "kind": zod.enum(['date'])
+}),zod.object({
+  "kind": zod.enum(['user'])
+})])).min(1).max(generateDocumentBodyOutputOneFilenameTemplateTwoSectionsMax)
+})]),
   "overwrite": zod.enum(['replace', 'error'])
 }),zod.object({
   "outputFormat": zod.enum(['docx', 'pdf']),
   "destination": zod.enum(['gdrive']),
   "driveFolderId": zod.string().min(1),
   "targetFileFieldKey": zod.string().min(1),
-  "filenameTemplate": zod.string().min(1).max(generateDocumentBodyOutputTwoFilenameTemplateMax),
+  "filenameTemplate": zod.union([zod.string().min(1).max(generateDocumentBodyOutputTwoFilenameTemplateOneMax),zod.object({
+  "sections": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['text']),
+  "text": zod.string().min(1).max(generateDocumentBodyOutputTwoFilenameTemplateTwoSectionsItemOneTextMax).regex(generateDocumentBodyOutputTwoFilenameTemplateTwoSectionsItemOneTextRegExp)
+}),zod.object({
+  "kind": zod.enum(['field']),
+  "fieldKey": zod.string().min(1).max(generateDocumentBodyOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyMax).regex(generateDocumentBodyOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp),
+  "label": zod.string().max(generateDocumentBodyOutputTwoFilenameTemplateTwoSectionsItemTwoLabelMax).optional(),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string().min(1).max(generateDocumentBodyOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax).regex(generateDocumentBodyOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp),
+  "label": zod.string().max(generateDocumentBodyOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax).optional()
+})).max(generateDocumentBodyOutputTwoFilenameTemplateTwoSectionsItemTwoAltsMax).optional()
+}),zod.object({
+  "kind": zod.enum(['hash'])
+}),zod.object({
+  "kind": zod.enum(['date'])
+}),zod.object({
+  "kind": zod.enum(['user'])
+})])).min(1).max(generateDocumentBodyOutputTwoFilenameTemplateTwoSectionsMax)
+})]),
   "overwrite": zod.enum(['replace', 'error'])
 })])
 })
@@ -6137,11 +6293,51 @@ export const listEntityAutomationsResponseActionsJsonItemIdempotencyKeyMax = 200
 
 
 
-export const listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateMax = 180;
+export const listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateOneMax = 180;
+
+export const listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemOneTextMax = 120;
+
+
+export const listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemOneTextRegExp = new RegExp('^.\*\\S.\*$');
+export const listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyMax = 160;
+
+
+export const listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoLabelMax = 240;
+
+export const listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax = 160;
+
+
+export const listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax = 240;
+
+export const listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsMax = 20;
+
+export const listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsMax = 20;
 
 
 
-export const listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateMax = 180;
+export const listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateOneMax = 180;
+
+export const listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemOneTextMax = 120;
+
+
+export const listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemOneTextRegExp = new RegExp('^.\*\\S.\*$');
+export const listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyMax = 160;
+
+
+export const listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoLabelMax = 240;
+
+export const listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax = 160;
+
+
+export const listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax = 240;
+
+export const listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsMax = 20;
+
+export const listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsMax = 20;
 
 
 
@@ -6208,14 +6404,52 @@ export const ListEntityAutomationsResponseItem = zod.object({
   "destination": zod.enum(['local']),
   "localFolderId": zod.number().min(1),
   "targetFileFieldKey": zod.string().min(1),
-  "filenameTemplate": zod.string().min(1).max(listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateMax),
+  "filenameTemplate": zod.union([zod.string().min(1).max(listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateOneMax),zod.object({
+  "sections": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['text']),
+  "text": zod.string().min(1).max(listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemOneTextMax).regex(listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemOneTextRegExp)
+}),zod.object({
+  "kind": zod.enum(['field']),
+  "fieldKey": zod.string().min(1).max(listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyMax).regex(listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp),
+  "label": zod.string().max(listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoLabelMax).optional(),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string().min(1).max(listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax).regex(listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp),
+  "label": zod.string().max(listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax).optional()
+})).max(listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsMax).optional()
+}),zod.object({
+  "kind": zod.enum(['hash'])
+}),zod.object({
+  "kind": zod.enum(['date'])
+}),zod.object({
+  "kind": zod.enum(['user'])
+})])).min(1).max(listEntityAutomationsResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsMax)
+})]),
   "overwrite": zod.enum(['replace', 'error'])
 }),zod.object({
   "outputFormat": zod.enum(['docx', 'pdf']),
   "destination": zod.enum(['gdrive']),
   "driveFolderId": zod.string().min(1),
   "targetFileFieldKey": zod.string().min(1),
-  "filenameTemplate": zod.string().min(1).max(listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateMax),
+  "filenameTemplate": zod.union([zod.string().min(1).max(listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateOneMax),zod.object({
+  "sections": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['text']),
+  "text": zod.string().min(1).max(listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemOneTextMax).regex(listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemOneTextRegExp)
+}),zod.object({
+  "kind": zod.enum(['field']),
+  "fieldKey": zod.string().min(1).max(listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyMax).regex(listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp),
+  "label": zod.string().max(listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoLabelMax).optional(),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string().min(1).max(listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax).regex(listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp),
+  "label": zod.string().max(listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax).optional()
+})).max(listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsMax).optional()
+}),zod.object({
+  "kind": zod.enum(['hash'])
+}),zod.object({
+  "kind": zod.enum(['date'])
+}),zod.object({
+  "kind": zod.enum(['user'])
+})])).min(1).max(listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsMax)
+})]),
   "overwrite": zod.enum(['replace', 'error'])
 })]).optional()
 })),
@@ -6239,11 +6473,51 @@ export const createEntityAutomationBodyActionsJsonItemIdempotencyKeyMax = 200;
 
 
 
-export const createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateMax = 180;
+export const createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateOneMax = 180;
+
+export const createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemOneTextMax = 120;
+
+
+export const createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemOneTextRegExp = new RegExp('^.\*\\S.\*$');
+export const createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyMax = 160;
+
+
+export const createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoLabelMax = 240;
+
+export const createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax = 160;
+
+
+export const createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax = 240;
+
+export const createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsMax = 20;
+
+export const createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsMax = 20;
 
 
 
-export const createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateMax = 180;
+export const createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateOneMax = 180;
+
+export const createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemOneTextMax = 120;
+
+
+export const createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemOneTextRegExp = new RegExp('^.\*\\S.\*$');
+export const createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyMax = 160;
+
+
+export const createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoLabelMax = 240;
+
+export const createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax = 160;
+
+
+export const createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax = 240;
+
+export const createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsMax = 20;
+
+export const createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsMax = 20;
 
 export const createEntityAutomationBodyActionsJsonDefault = [];
 
@@ -6308,14 +6582,52 @@ export const CreateEntityAutomationBody = zod.object({
   "destination": zod.enum(['local']),
   "localFolderId": zod.number().min(1),
   "targetFileFieldKey": zod.string().min(1),
-  "filenameTemplate": zod.string().min(1).max(createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateMax),
+  "filenameTemplate": zod.union([zod.string().min(1).max(createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateOneMax),zod.object({
+  "sections": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['text']),
+  "text": zod.string().min(1).max(createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemOneTextMax).regex(createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemOneTextRegExp)
+}),zod.object({
+  "kind": zod.enum(['field']),
+  "fieldKey": zod.string().min(1).max(createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyMax).regex(createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp),
+  "label": zod.string().max(createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoLabelMax).optional(),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string().min(1).max(createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax).regex(createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp),
+  "label": zod.string().max(createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax).optional()
+})).max(createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsMax).optional()
+}),zod.object({
+  "kind": zod.enum(['hash'])
+}),zod.object({
+  "kind": zod.enum(['date'])
+}),zod.object({
+  "kind": zod.enum(['user'])
+})])).min(1).max(createEntityAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsMax)
+})]),
   "overwrite": zod.enum(['replace', 'error'])
 }),zod.object({
   "outputFormat": zod.enum(['docx', 'pdf']),
   "destination": zod.enum(['gdrive']),
   "driveFolderId": zod.string().min(1),
   "targetFileFieldKey": zod.string().min(1),
-  "filenameTemplate": zod.string().min(1).max(createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateMax),
+  "filenameTemplate": zod.union([zod.string().min(1).max(createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateOneMax),zod.object({
+  "sections": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['text']),
+  "text": zod.string().min(1).max(createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemOneTextMax).regex(createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemOneTextRegExp)
+}),zod.object({
+  "kind": zod.enum(['field']),
+  "fieldKey": zod.string().min(1).max(createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyMax).regex(createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp),
+  "label": zod.string().max(createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoLabelMax).optional(),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string().min(1).max(createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax).regex(createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp),
+  "label": zod.string().max(createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax).optional()
+})).max(createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsMax).optional()
+}),zod.object({
+  "kind": zod.enum(['hash'])
+}),zod.object({
+  "kind": zod.enum(['date'])
+}),zod.object({
+  "kind": zod.enum(['user'])
+})])).min(1).max(createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsMax)
+})]),
   "overwrite": zod.enum(['replace', 'error'])
 })]).optional()
 })).default(createEntityAutomationBodyActionsJsonDefault),
@@ -6356,11 +6668,51 @@ export const getAutomationResponseActionsJsonItemIdempotencyKeyMax = 200;
 
 
 
-export const getAutomationResponseActionsJsonItemOutputOneFilenameTemplateMax = 180;
+export const getAutomationResponseActionsJsonItemOutputOneFilenameTemplateOneMax = 180;
+
+export const getAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemOneTextMax = 120;
+
+
+export const getAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemOneTextRegExp = new RegExp('^.\*\\S.\*$');
+export const getAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyMax = 160;
+
+
+export const getAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const getAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoLabelMax = 240;
+
+export const getAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax = 160;
+
+
+export const getAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const getAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax = 240;
+
+export const getAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsMax = 20;
+
+export const getAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsMax = 20;
 
 
 
-export const getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateMax = 180;
+export const getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateOneMax = 180;
+
+export const getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemOneTextMax = 120;
+
+
+export const getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemOneTextRegExp = new RegExp('^.\*\\S.\*$');
+export const getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyMax = 160;
+
+
+export const getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoLabelMax = 240;
+
+export const getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax = 160;
+
+
+export const getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax = 240;
+
+export const getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsMax = 20;
+
+export const getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsMax = 20;
 
 
 
@@ -6427,14 +6779,52 @@ export const GetAutomationResponse = zod.object({
   "destination": zod.enum(['local']),
   "localFolderId": zod.number().min(1),
   "targetFileFieldKey": zod.string().min(1),
-  "filenameTemplate": zod.string().min(1).max(getAutomationResponseActionsJsonItemOutputOneFilenameTemplateMax),
+  "filenameTemplate": zod.union([zod.string().min(1).max(getAutomationResponseActionsJsonItemOutputOneFilenameTemplateOneMax),zod.object({
+  "sections": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['text']),
+  "text": zod.string().min(1).max(getAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemOneTextMax).regex(getAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemOneTextRegExp)
+}),zod.object({
+  "kind": zod.enum(['field']),
+  "fieldKey": zod.string().min(1).max(getAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyMax).regex(getAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp),
+  "label": zod.string().max(getAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoLabelMax).optional(),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string().min(1).max(getAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax).regex(getAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp),
+  "label": zod.string().max(getAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax).optional()
+})).max(getAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsMax).optional()
+}),zod.object({
+  "kind": zod.enum(['hash'])
+}),zod.object({
+  "kind": zod.enum(['date'])
+}),zod.object({
+  "kind": zod.enum(['user'])
+})])).min(1).max(getAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsMax)
+})]),
   "overwrite": zod.enum(['replace', 'error'])
 }),zod.object({
   "outputFormat": zod.enum(['docx', 'pdf']),
   "destination": zod.enum(['gdrive']),
   "driveFolderId": zod.string().min(1),
   "targetFileFieldKey": zod.string().min(1),
-  "filenameTemplate": zod.string().min(1).max(getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateMax),
+  "filenameTemplate": zod.union([zod.string().min(1).max(getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateOneMax),zod.object({
+  "sections": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['text']),
+  "text": zod.string().min(1).max(getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemOneTextMax).regex(getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemOneTextRegExp)
+}),zod.object({
+  "kind": zod.enum(['field']),
+  "fieldKey": zod.string().min(1).max(getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyMax).regex(getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp),
+  "label": zod.string().max(getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoLabelMax).optional(),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string().min(1).max(getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax).regex(getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp),
+  "label": zod.string().max(getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax).optional()
+})).max(getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsMax).optional()
+}),zod.object({
+  "kind": zod.enum(['hash'])
+}),zod.object({
+  "kind": zod.enum(['date'])
+}),zod.object({
+  "kind": zod.enum(['user'])
+})])).min(1).max(getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsMax)
+})]),
   "overwrite": zod.enum(['replace', 'error'])
 })]).optional()
 })),
@@ -6456,11 +6846,51 @@ export const updateAutomationBodyActionsJsonItemIdempotencyKeyMax = 200;
 
 
 
-export const updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateMax = 180;
+export const updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateOneMax = 180;
+
+export const updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemOneTextMax = 120;
+
+
+export const updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemOneTextRegExp = new RegExp('^.\*\\S.\*$');
+export const updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyMax = 160;
+
+
+export const updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoLabelMax = 240;
+
+export const updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax = 160;
+
+
+export const updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax = 240;
+
+export const updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsMax = 20;
+
+export const updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsMax = 20;
 
 
 
-export const updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateMax = 180;
+export const updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateOneMax = 180;
+
+export const updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemOneTextMax = 120;
+
+
+export const updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemOneTextRegExp = new RegExp('^.\*\\S.\*$');
+export const updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyMax = 160;
+
+
+export const updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoLabelMax = 240;
+
+export const updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax = 160;
+
+
+export const updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax = 240;
+
+export const updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsMax = 20;
+
+export const updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsMax = 20;
 
 
 
@@ -6525,14 +6955,52 @@ export const UpdateAutomationBody = zod.object({
   "destination": zod.enum(['local']),
   "localFolderId": zod.number().min(1),
   "targetFileFieldKey": zod.string().min(1),
-  "filenameTemplate": zod.string().min(1).max(updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateMax),
+  "filenameTemplate": zod.union([zod.string().min(1).max(updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateOneMax),zod.object({
+  "sections": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['text']),
+  "text": zod.string().min(1).max(updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemOneTextMax).regex(updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemOneTextRegExp)
+}),zod.object({
+  "kind": zod.enum(['field']),
+  "fieldKey": zod.string().min(1).max(updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyMax).regex(updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp),
+  "label": zod.string().max(updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoLabelMax).optional(),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string().min(1).max(updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax).regex(updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp),
+  "label": zod.string().max(updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax).optional()
+})).max(updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsMax).optional()
+}),zod.object({
+  "kind": zod.enum(['hash'])
+}),zod.object({
+  "kind": zod.enum(['date'])
+}),zod.object({
+  "kind": zod.enum(['user'])
+})])).min(1).max(updateAutomationBodyActionsJsonItemOutputOneFilenameTemplateTwoSectionsMax)
+})]),
   "overwrite": zod.enum(['replace', 'error'])
 }),zod.object({
   "outputFormat": zod.enum(['docx', 'pdf']),
   "destination": zod.enum(['gdrive']),
   "driveFolderId": zod.string().min(1),
   "targetFileFieldKey": zod.string().min(1),
-  "filenameTemplate": zod.string().min(1).max(updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateMax),
+  "filenameTemplate": zod.union([zod.string().min(1).max(updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateOneMax),zod.object({
+  "sections": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['text']),
+  "text": zod.string().min(1).max(updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemOneTextMax).regex(updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemOneTextRegExp)
+}),zod.object({
+  "kind": zod.enum(['field']),
+  "fieldKey": zod.string().min(1).max(updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyMax).regex(updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp),
+  "label": zod.string().max(updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoLabelMax).optional(),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string().min(1).max(updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax).regex(updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp),
+  "label": zod.string().max(updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax).optional()
+})).max(updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsMax).optional()
+}),zod.object({
+  "kind": zod.enum(['hash'])
+}),zod.object({
+  "kind": zod.enum(['date'])
+}),zod.object({
+  "kind": zod.enum(['user'])
+})])).min(1).max(updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSectionsMax)
+})]),
   "overwrite": zod.enum(['replace', 'error'])
 })]).optional()
 })).optional(),
@@ -6544,11 +7012,51 @@ export const updateAutomationResponseActionsJsonItemIdempotencyKeyMax = 200;
 
 
 
-export const updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateMax = 180;
+export const updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateOneMax = 180;
+
+export const updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemOneTextMax = 120;
+
+
+export const updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemOneTextRegExp = new RegExp('^.\*\\S.\*$');
+export const updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyMax = 160;
+
+
+export const updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoLabelMax = 240;
+
+export const updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax = 160;
+
+
+export const updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax = 240;
+
+export const updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsMax = 20;
+
+export const updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsMax = 20;
 
 
 
-export const updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateMax = 180;
+export const updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateOneMax = 180;
+
+export const updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemOneTextMax = 120;
+
+
+export const updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemOneTextRegExp = new RegExp('^.\*\\S.\*$');
+export const updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyMax = 160;
+
+
+export const updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoLabelMax = 240;
+
+export const updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax = 160;
+
+
+export const updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp = new RegExp('^.\*\\S.\*$');
+export const updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax = 240;
+
+export const updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsMax = 20;
+
+export const updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsMax = 20;
 
 
 
@@ -6615,14 +7123,52 @@ export const UpdateAutomationResponse = zod.object({
   "destination": zod.enum(['local']),
   "localFolderId": zod.number().min(1),
   "targetFileFieldKey": zod.string().min(1),
-  "filenameTemplate": zod.string().min(1).max(updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateMax),
+  "filenameTemplate": zod.union([zod.string().min(1).max(updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateOneMax),zod.object({
+  "sections": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['text']),
+  "text": zod.string().min(1).max(updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemOneTextMax).regex(updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemOneTextRegExp)
+}),zod.object({
+  "kind": zod.enum(['field']),
+  "fieldKey": zod.string().min(1).max(updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyMax).regex(updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp),
+  "label": zod.string().max(updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoLabelMax).optional(),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string().min(1).max(updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax).regex(updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp),
+  "label": zod.string().max(updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax).optional()
+})).max(updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsItemTwoAltsMax).optional()
+}),zod.object({
+  "kind": zod.enum(['hash'])
+}),zod.object({
+  "kind": zod.enum(['date'])
+}),zod.object({
+  "kind": zod.enum(['user'])
+})])).min(1).max(updateAutomationResponseActionsJsonItemOutputOneFilenameTemplateTwoSectionsMax)
+})]),
   "overwrite": zod.enum(['replace', 'error'])
 }),zod.object({
   "outputFormat": zod.enum(['docx', 'pdf']),
   "destination": zod.enum(['gdrive']),
   "driveFolderId": zod.string().min(1),
   "targetFileFieldKey": zod.string().min(1),
-  "filenameTemplate": zod.string().min(1).max(updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateMax),
+  "filenameTemplate": zod.union([zod.string().min(1).max(updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateOneMax),zod.object({
+  "sections": zod.array(zod.union([zod.object({
+  "kind": zod.enum(['text']),
+  "text": zod.string().min(1).max(updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemOneTextMax).regex(updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemOneTextRegExp)
+}),zod.object({
+  "kind": zod.enum(['field']),
+  "fieldKey": zod.string().min(1).max(updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyMax).regex(updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoFieldKeyRegExp),
+  "label": zod.string().max(updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoLabelMax).optional(),
+  "alts": zod.array(zod.object({
+  "fieldKey": zod.string().min(1).max(updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyMax).regex(updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemFieldKeyRegExp),
+  "label": zod.string().max(updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsItemLabelMax).optional()
+})).max(updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsItemTwoAltsMax).optional()
+}),zod.object({
+  "kind": zod.enum(['hash'])
+}),zod.object({
+  "kind": zod.enum(['date'])
+}),zod.object({
+  "kind": zod.enum(['user'])
+})])).min(1).max(updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSectionsMax)
+})]),
   "overwrite": zod.enum(['replace', 'error'])
 })]).optional()
 })),

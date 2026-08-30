@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { DocumentFilenameTemplate } from './documentFilenameTemplate';
 
 export type DocumentGenerationOutput = {
   outputFormat: 'docx' | 'pdf';
@@ -13,11 +14,7 @@ export type DocumentGenerationOutput = {
   localFolderId: number;
   /** @minLength 1 */
   targetFileFieldKey: string;
-  /**
-     * @minLength 1
-     * @maxLength 180
-     */
-  filenameTemplate: string;
+  filenameTemplate: string | DocumentFilenameTemplate;
   overwrite: 'replace' | 'error';
 } | {
   outputFormat: 'docx' | 'pdf';
@@ -26,10 +23,6 @@ export type DocumentGenerationOutput = {
   driveFolderId: string;
   /** @minLength 1 */
   targetFileFieldKey: string;
-  /**
-     * @minLength 1
-     * @maxLength 180
-     */
-  filenameTemplate: string;
+  filenameTemplate: string | DocumentFilenameTemplate;
   overwrite: 'replace' | 'error';
 };

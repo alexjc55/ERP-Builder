@@ -33,6 +33,12 @@ Every immutable template revision keeps its source DOCX downloadable through an 
 
 **How to apply:** Serve root-confined stored bytes as a private attachment by revision ID. Never expose or redirect to the internal storage path; uploading the edited file creates a new immutable draft and reuses the current mapping form.
 
+Generated-document filenames use the same section model as upload naming, but automation execution is server-authoritative; legacy string templates remain valid indefinitely.
+
+**Why:** Test generation and automations must resolve field fallbacks, actor, date, hash, sanitization, and extension consistently without breaking saved automations.
+
+**How to apply:** Persist structured document names as `{sections:[...]}` and accept legacy strings. Validate raw API payloads before generated parsers can strip unknown keys; use one server resolver for test and live runs.
+
 Test generation is an authenticated direct download and must never persist an output to Local or Drive storage or write the record file field.
 
 **Why:** Stored file serving is intentionally authorized through a readable record-field reference; an unattached test upload is both inaccessible and orphaned.

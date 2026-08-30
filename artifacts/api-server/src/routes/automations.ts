@@ -317,9 +317,14 @@ router.post("/entities/:entityId/automations", requireAuth, requireAdmin("automa
     res.status(400).json({ error: params.error.message });
     return;
   }
+  const rawActions = automationActionSchema.array().safeParse(req.body?.actionsJson);
   const parsed = CreateEntityAutomationBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  if (!rawActions.success) {
+    res.status(400).json({ error: `Invalid actions: ${rawActions.error.message}` });
     return;
   }
   const entityId = params.data.entityId;
@@ -445,9 +450,14 @@ router.put("/automations/:id", requireAuth, requireAdmin("automations"), async (
     res.status(400).json({ error: params.error.message });
     return;
   }
+  const rawActions = req.body?.actionsJson === undefined ? null : automationActionSchema.array().safeParse(req.body.actionsJson);
   const parsed = UpdateAutomationBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  if (rawActions && !rawActions.success) {
+    res.status(400).json({ error: `Invalid actions: ${rawActions.error.message}` });
     return;
   }
   const [current] = await db.select().from(entityAutomationsTable).where(eq(entityAutomationsTable.id, params.data.id));
