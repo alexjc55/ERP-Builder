@@ -7,6 +7,7 @@ import {
   getListGoogleDriveFoldersQueryKey,
   getListDocumentGenerationRunsQueryKey,
   getListLocalFoldersQueryKey,
+  downloadDocumentTemplateRevision,
   useCreateDocumentTemplate,
   useCreateDocumentTemplateRevision,
   useGetRelation,
@@ -158,6 +159,7 @@ const knownDocumentErrors: Record<string, [string, string]> = {
   "Template not found": ["documents.error.templateNotFound", "Шаблон не найден"],
   "Document revision not found": ["documents.error.revisionNotFound", "Редакция документа не найдена"],
   "Publishable draft not found": ["documents.error.publishableDraftNotFound", "Черновик для публикации не найден"],
+  "Template source file not found": ["documents.error.sourceFileNotFound", "Исходный файл шаблона не найден"],
   "Draft has incomplete or invalid mappings": ["documents.error.invalidDraftMappings", "В черновике есть неполные или некорректные сопоставления"],
   "Invalid test generation request": ["documents.error.invalidTestRequest", "Некорректный запрос тестового создания документа"],
   "Invalid generation request": ["documents.error.invalidGenerationRequest", "Некорректный запрос создания документа"],
@@ -361,6 +363,7 @@ export default function DocumentsPage(): ReactElement {
   const [mapping, setMapping] = useState<Mapping>(emptyMapping);
   const [output, setOutput] = useState<Output>(defaultOutput);
   const [testRecordId, setTestRecordId] = useState("");
+  const [downloadingRevisionId, setDownloadingRevisionId] = useState<number | null>(null);
   const [historyStatus, setHistoryStatus] = useState<"" | "running" | "success" | "error">("");
   const [orphanRecovery, setOrphanRecovery] = useState<OrphanRecoveryRequest | null>(null);
 
@@ -475,6 +478,30 @@ export default function DocumentsPage(): ReactElement {
       data: { file, mapping: JSON.stringify(mapping) },
     });
   };
+  const downloadSource = async () => {
+    if (!revision) return;
+    setDownloadingRevisionId(revision.id);
+    try {
+      const blob = await downloadDocumentTemplateRevision(revision.id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = revision.templateName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      toast({ title: t("documents.sourceDownloaded", "Исходный шаблон скачан") });
+    } catch (error) {
+      toast({
+        title: t("documents.sourceDownloadError", "Не удалось скачать исходный шаблон"),
+        description: localizeDocumentError(error, t),
+        variant: "destructive",
+      });
+    } finally {
+      setDownloadingRevisionId(null);
+    }
+  };
 
   if (modulesLoading) return <div className="p-6 space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}</div>;
   if (selected) {
@@ -489,11 +516,13 @@ export default function DocumentsPage(): ReactElement {
 
         <Card><CardContent className="p-5 space-y-4">
           <div className="flex items-center gap-2"><Upload className="h-5 w-5 text-blue-600" /><h2 className="font-semibold">{t("documents.sourceDocx", "Исходный файл DOCX")}</h2></div>
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto]">
             <Input type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(e) => setFile(e.target.files?.[0] ?? null)} data-testid="input-docx-revision" />
+              {revision && <Button type="button" variant="outline" onClick={downloadSource} disabled={downloadingRevisionId === revision.id} data-testid="button-download-template-source"><Download className="me-2 h-4 w-4" />{t("documents.downloadSource", "Скачать исходный шаблон")}</Button>}
               <Button onClick={saveDraft} disabled={!module?.isEnabled || !file || upload.isPending} data-testid="button-save-draft"><Save className="me-2 h-4 w-4" />{revision ? t("documents.saveNewRevision", "Сохранить новую черновую редакцию") : t("documents.uploadAnalyze", "Загрузить и проанализировать")}</Button>
           </div>
           <p className="text-xs text-slate-500">{file?.name ?? revision?.templateName ?? t("documents.noFile", "Выберите файл .docx. Теги будут найдены после загрузки.")}</p>
+          {revision && <p className="text-xs text-slate-500">{t("documents.downloadEditHint", "Скачайте текущий исходник, внесите изменения в Word и загрузите его обратно как новую редакцию. Текущие сопоставления останутся в форме для обновления.")}</p>}
         </CardContent></Card>
 
         {revision && (

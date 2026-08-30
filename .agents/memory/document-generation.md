@@ -27,6 +27,12 @@ External DOCX package relationships remain fail-closed except for standard Trans
 
 **How to apply:** Parse relationship XML and attributes strictly; allow these schemes only for exact standard hyperlinks. Reject DTDs, malformed/spoofed attributes, file/FTP/custom schemes, and all external images/templates/resources.
 
+Every immutable template revision keeps its source DOCX downloadable through an authenticated `documentGeneration`-admin API, including archived/published revisions and when the module is read-only.
+
+**Why:** Administrators may need to recover, edit, and upload a template source long after its original local copy is lost; disabling writes must not make recovery impossible.
+
+**How to apply:** Serve root-confined stored bytes as a private attachment by revision ID. Never expose or redirect to the internal storage path; uploading the edited file creates a new immutable draft and reuses the current mapping form.
+
 Test generation is an authenticated direct download and must never persist an output to Local or Drive storage or write the record file field.
 
 **Why:** Stored file serving is intentionally authorized through a readable record-field reference; an unattached test upload is both inaccessible and orphaned.

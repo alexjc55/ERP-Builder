@@ -10992,6 +10992,11 @@
   {"key":"documents.error.recordNotFound","ru":"Запись не найдена","en":"Record not found","he":"הרשומה לא נמצאה"},
   {"key":"documents.error.entityNotFound","ru":"Сущность не найдена","en":"Entity not found","he":"הישות לא נמצאה"},
   {"key":"documents.error.forbidden","ru":"Недостаточно прав для выполнения действия","en":"You do not have permission to perform this action","he":"אין הרשאה לבצע פעולה זו"},
+  {"key":"documents.downloadSource","ru":"Скачать исходный шаблон","en":"Download source template","he":"הורדת תבנית המקור"},
+  {"key":"documents.sourceDownloaded","ru":"Исходный шаблон скачан","en":"Source template downloaded","he":"תבנית המקור הורדה"},
+  {"key":"documents.sourceDownloadError","ru":"Не удалось скачать исходный шаблон","en":"Could not download source template","he":"לא ניתן להוריד את תבנית המקור"},
+  {"key":"documents.downloadEditHint","ru":"Скачайте текущий исходник, внесите изменения в Word и загрузите его обратно как новую редакцию. Текущие сопоставления останутся в форме для обновления.","en":"Download the current source, edit it in Word, and upload it again as a new revision. The current mappings stay in the form for updating.","he":"הורידו את קובץ המקור הנוכחי, ערכו אותו ב-Word והעלו אותו שוב כגרסה חדשה. המיפויים הנוכחיים יישארו בטופס לעדכון."},
+  {"key":"documents.error.sourceFileNotFound","ru":"Исходный файл шаблона не найден","en":"The source template file was not found","he":"קובץ תבנית המקור לא נמצא"},
   {"key":"roles.cap.documentGeneration","ru":"Генерация документов","en":"Document generation","he":"הפקת מסמכים"},
   {"key":"roles.capShort.documentGeneration","ru":"Документы","en":"Documents","he":"מסמכים"},
   {"key":"roles.capHelp.documentGeneration","ru":"Управление шаблонами документов и историей их генерации.","en":"Manage document templates and their generation history.","he":"ניהול תבניות מסמכים והיסטוריית ההפקה שלהן."}

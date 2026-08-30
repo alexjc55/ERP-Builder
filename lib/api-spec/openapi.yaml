@@ -137,6 +137,20 @@ paths:
         "201":
           description: Immutable draft revision and parsed manifest
           content: { application/json: { schema: { $ref: "#/components/schemas/DocumentTemplateRevision" } } }
+  /document-template-revisions/{id}/download:
+    get:
+      operationId: downloadDocumentTemplateRevision
+      tags: [documentGeneration]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        "200":
+          description: Original uploaded DOCX template
+          content:
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema: { type: string, format: binary }
+        "404":
+          description: Revision or stored template file not found
+          content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
   /document-template-revisions/{id}/publish:
     post:
       operationId: publishDocumentTemplateRevision

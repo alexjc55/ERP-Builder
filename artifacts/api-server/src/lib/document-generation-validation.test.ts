@@ -190,3 +190,16 @@ test("delete recovery commits its tombstone before provider I/O and finalizes af
   assert.ok(claimAndProvider.indexOf("const connection = await getConnection()") > claimAndProvider.indexOf("return { run, orphan };"));
   assert.match(source.slice(end, source.indexOf("if (audit)", end)), /lockGdriveFileIds[\s\S]*?withoutRecoveryClaim[\s\S]*?orphanResolution/);
 });
+
+test("source template download is admin-gated and serves stored bytes as an attachment", async () => {
+  const source = await readFile(new URL("../routes/document-generation.ts", import.meta.url), "utf8");
+  const start = source.indexOf('router.get("/document-template-revisions/:id/download"');
+  const end = source.indexOf('router.post("/document-template-revisions/:id/publish"', start);
+  const route = source.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(route, /requireAuth,\s*requireAdmin\("documentGeneration"\)/);
+  assert.match(route, /readLocalFile\(revision\.templatePath\)/);
+  assert.match(route, /res\.attachment\(revision\.templateName/);
+  assert.match(route, /Cache-Control", "private, no-store"/);
+  assert.doesNotMatch(route, /res\.(?:redirect|sendFile)\(/);
+});

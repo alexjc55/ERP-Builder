@@ -633,6 +633,77 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getCreateDocumentTemplateRevisionMutationOptions(options));
     }
 
+export const getDownloadDocumentTemplateRevisionUrl = (id: number,) => {
+
+
+
+
+  return `/api/document-template-revisions/${id}/download`
+}
+
+export const downloadDocumentTemplateRevision = async (id: number, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getDownloadDocumentTemplateRevisionUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadDocumentTemplateRevisionQueryKey = (id: number,) => {
+    return [
+    `/api/document-template-revisions/${id}/download`
+    ] as const;
+    }
+
+
+export const getDownloadDocumentTemplateRevisionQueryOptions = <TData = Awaited<ReturnType<typeof downloadDocumentTemplateRevision>>, TError = ErrorType<ErrorResponse>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadDocumentTemplateRevision>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadDocumentTemplateRevisionQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadDocumentTemplateRevision>>> = ({ signal }) => downloadDocumentTemplateRevision(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadDocumentTemplateRevision>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type DownloadDocumentTemplateRevisionQueryResult = NonNullable<Awaited<ReturnType<typeof downloadDocumentTemplateRevision>>>
+export type DownloadDocumentTemplateRevisionQueryError = ErrorType<ErrorResponse>
+
+
+
+export function useDownloadDocumentTemplateRevision<TData = Awaited<ReturnType<typeof downloadDocumentTemplateRevision>>, TError = ErrorType<ErrorResponse>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadDocumentTemplateRevision>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getDownloadDocumentTemplateRevisionQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
 export const getPublishDocumentTemplateRevisionUrl = (id: number,) => {
 
 

@@ -307,6 +307,11 @@ export const CreateDocumentTemplateRevisionBody = zod.object({
 })
 
 
+export const DownloadDocumentTemplateRevisionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
 export const PublishDocumentTemplateRevisionParams = zod.object({
   "id": zod.coerce.number()
 })

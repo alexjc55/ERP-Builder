@@ -26,6 +26,7 @@ import {
   UpdateDocumentTemplateParams,
   UpdateDocumentTemplateBody,
   CreateDocumentTemplateRevisionParams,
+  DownloadDocumentTemplateRevisionParams,
   PublishDocumentTemplateRevisionParams,
   TestDocumentTemplateRevisionParams,
   TestDocumentTemplateRevisionBody,
@@ -43,7 +44,7 @@ import { parseDocxManifest, type DocumentManifest } from "../lib/document-docx";
 import { fileFieldAllowsGdrive, generateDocument, isDocumentGenerationEnabled, lockedDocumentWriteOptions, trashPriorLocalFile } from "../lib/document-generation";
 import { interactiveFormulaPermissions } from "../lib/formula-runtime";
 import type { LinkedFormulaPermissionContext } from "../lib/linked-formula-resolver";
-import { deleteLocalFile, saveLocalFile } from "../lib/localStorage";
+import { deleteLocalFile, readLocalFile, saveLocalFile } from "../lib/localStorage";
 import { DrivePreconditionError, DriveProviderError, getAccessToken, getConnection, getDriveFileMetadata, isGoogleDriveModuleEnabled, trashDriveFile } from "../lib/googleDrive";
 import { systemUpdateRecord } from "../lib/automations-engine";
 import { DriveFileTombstonedError, lockGdriveFileIds } from "../lib/gdrive-file-reference-lock";
@@ -770,6 +771,32 @@ router.post(
     }
   },
 );
+
+router.get("/document-template-revisions/:id/download", requireAuth, requireAdmin("documentGeneration"), async (req, res): Promise<void> => {
+  const params = DownloadDocumentTemplateRevisionParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [revision] = await db.select({
+    templatePath: documentTemplateRevisionsTable.templatePath,
+    templateName: documentTemplateRevisionsTable.templateName,
+  }).from(documentTemplateRevisionsTable).where(eq(documentTemplateRevisionsTable.id, params.data.id));
+  if (!revision) {
+    res.status(404).json({ error: "Document revision not found" });
+    return;
+  }
+  try {
+    const bytes = await readLocalFile(revision.templatePath);
+    res.type(DOCX_TYPE);
+    res.attachment(revision.templateName.replace(/[\r\n"]/g, "_"));
+    res.setHeader("Cache-Control", "private, no-store");
+    res.send(bytes);
+  } catch (error) {
+    req.log.warn({ err: error, revisionId: params.data.id }, "Document template source file is unavailable");
+    res.status(404).json({ error: "Template source file not found" });
+  }
+});
 
 router.post("/document-template-revisions/:id/publish", requireAuth, requireAdmin("documentGeneration"), requireDocumentModule, async (req, res): Promise<void> => {
   const params = PublishDocumentTemplateRevisionParams.safeParse(req.params);
