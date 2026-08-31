@@ -47,6 +47,32 @@ surviving record once whenever its effective state changes. On a client 409,
 keep the local draft mounted, refresh the server version, and reset only the
 one-shot submit guard so the user can retry without retyping.
 
+When a nested editor commits a version-changing mutation before its parent form
+is saved (for example, a relation picker writing `record_links`), the mutation
+must return the resulting base-record version and the parent must synchronously
+adopt it as its next CAS token. Keep parent Save disabled while the nested write
+is active; never blindly retry the parent's stale full-value snapshot.
+
+**Why:** React state propagation can lag one interaction behind, so a successful
+link write followed by Save used the pre-link version and showed a false conflict
+even though the relation had already changed.
+
+**How to apply:** Forward the returned version through every shared form wrapper,
+store the latest token in a ref (state may mirror it for rendering), and read the
+ref at submit time. Release nested-edit blocking on success, failure, and cancel.
+
+When one mounted records component changes page/RBAC scope, prior rows and
+related-value projections must be withheld before paint, then refetched under
+the new scope.
+
+**Why:** Fetch dependencies alone start the correct replacement request but can
+leave the old permission-scoped result visible for one render, causing stale UI
+and a transient data disclosure.
+
+**How to apply:** Key displayed results by the effective page scope or clear all
+row/relation display state in a layout effect before the browser paints; include
+the effective scope in every relevant fetch dependency.
+
 Any presence/conflict decoration around an active cell editor must keep the same
 React wrapper tree whether collaborators are present or absent. Toggle only the
 outline/popover contents, never the wrapper that owns the editor.

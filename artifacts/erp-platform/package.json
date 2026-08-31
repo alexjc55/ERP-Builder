@@ -10,6 +10,7 @@
     "test:calendar": "node --experimental-strip-types --test src/lib/calendarWeek.test.ts",
     "test:affix": "node --experimental-strip-types --test src/components/AffixedNumericValue.test.ts",
     "test:format-rules": "node --experimental-strip-types --test src/lib/formatRules.test.ts",
+    "test:relation-edit": "node --experimental-strip-types --test src/components/EntityRecords.relation-edit.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

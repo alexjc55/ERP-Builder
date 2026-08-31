@@ -2449,6 +2449,8 @@ export function EntityRecords({
   const [form, setForm] = useState<FormState>({});
   const [statusId, setStatusId] = useState<string>(NO_STATUS);
   const [statusDirty, setStatusDirty] = useState(false);
+  const [dialogRelationEditing, setDialogRelationEditing] = useState(false);
+  const editingVersionRef = useRef<number | undefined>(undefined);
 
   // Google-Sheets-style inline editing: which cell is currently being edited.
   const [editingCell, setEditingCell] = useState<{ recordId: number; fieldKey: string | "__status__" } | null>(null);
@@ -2725,6 +2727,26 @@ export function EntityRecords({
   // fetch; later refetches (inline edit, group expand/collapse, filter change)
   // keep the previous table on screen so it never blinks out from under the user.
   const [hasLoadedRecords, setHasLoadedRecords] = useState(false);
+
+  // A route can switch between the entity's data page and a mirror page without
+  // unmounting this component when both render the same entity. Clear the prior
+  // permission-scoped result in a layout effect so rows/related projections from
+  // the previous page scope are never painted while the replacement request runs.
+  useLayoutEffect(() => {
+    setRecords([]);
+    setTotal(0);
+    setNumericTotals({});
+    setPageFormulaValues({});
+    setGroups(null);
+    setRowGroupMap({});
+    setLoadedGroupSig(undefined);
+    setHasLoadedRecords(false);
+    setRecordsLoading(true);
+    setRelatedColumns([]);
+    setRelatedByRecord(new Map());
+    setEntityRelatedColumns([]);
+    setEntityRelatedByRecord(new Map());
+  }, [entityId, permPageId]);
 
   // Dynamic table height: cap the scroll container so the horizontal scrollbar
   // and the pagination below it stay inside the viewport without scrolling the
@@ -3784,7 +3806,7 @@ export function EntityRecords({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entityId, queryKey, refreshTick]);
+  }, [entityId, queryKey, refreshTick, permPageId]);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/records`] });
@@ -3890,7 +3912,7 @@ export function EntityRecords({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entityId, hasEntityRelationFields, recordIdsKey, entityRelationFieldsKey, refreshTick]);
+  }, [entityId, hasEntityRelationFields, recordIdsKey, entityRelationFieldsKey, refreshTick, permPageId]);
 
   const reorderFieldsMutation = useReorderFields({
     mutation: {
@@ -4182,6 +4204,8 @@ export function EntityRecords({
 
   const openCreate = () => {
     setEditing(null);
+    setDialogRelationEditing(false);
+    editingVersionRef.current = undefined;
     const initial: FormState = {};
     for (const f of fields) initial[f.fieldKey] = initialForField(f);
     setForm(initial);
@@ -4196,6 +4220,8 @@ export function EntityRecords({
 
   const openEdit = (record: EntityRecord) => {
     setEditing(record);
+    setDialogRelationEditing(false);
+    editingVersionRef.current = record.version;
     const initial: FormState = {};
     const values = (record.valuesJson ?? {}) as Record<string, unknown>;
     for (const f of fields) initial[f.fieldKey] = valueToForm(f, values[f.fieldKey]);
@@ -4294,6 +4320,7 @@ export function EntityRecords({
   };
 
   const handleSubmit = () => {
+    if (dialogRelationEditing) return;
     // Only send fields the user can see; hidden/view-only are preserved server-side.
     const valuesJson = formToValues(visibleFormFields, form);
     const statusValue = statusId === NO_STATUS ? null : Number(statusId);
@@ -4306,7 +4333,7 @@ export function EntityRecords({
               valuesJson,
               ...(statusManualEditable && statusDirty ? { statusId: statusValue } : {}),
               pageId: permPageId,
-              expectedVersion: editing.version,
+              expectedVersion: editingVersionRef.current ?? editing.version,
             },
           });
           // Re-check Drive file names against the FINAL saved values (best-effort).
@@ -7839,7 +7866,13 @@ export function EntityRecords({
       </>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) setDialogRelationEditing(false);
+        }}
+      >
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? t("records.editTitle", "Редактировать запись") : t("records.newTitle", "Новая запись")}</DialogTitle>
@@ -7862,12 +7895,14 @@ export function EntityRecords({
               formulaOptions={formulaOptions}
               onRelationChanged={(version) => {
                 if (version != null) {
+                  editingVersionRef.current = version;
                   setEditing((current) =>
                     current ? { ...current, version } : current,
                   );
                 }
                 setRefreshTick((x) => x + 1);
               }}
+              onRelationEditingChange={setDialogRelationEditing}
             />
 
             {statuses.length > 0 && (
@@ -7928,7 +7963,7 @@ export function EntityRecords({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("records.cancel", "Отмена")}</Button>
-            <Button onClick={handleSubmit} disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={handleSubmit} disabled={isPending || dialogRelationEditing} className="bg-blue-600 hover:bg-blue-700">
               {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editing ? t("records.save", "Сохранить") : t("records.create", "Создать")}
             </Button>
           </DialogFooter>
@@ -8839,14 +8874,17 @@ function EntityRelationLinkPicker({
       {createOpen && relatedEntityId != null && (
         <QuickCreateRelatedRecordDialog
           open={createOpen}
-          onOpenChange={setCreateOpen}
+          onOpenChange={(nextOpen) => {
+            setCreateOpen(nextOpen);
+            if (!nextOpen) onEditingChange(false);
+          }}
           relatedEntityId={relatedEntityId}
           pageId={pageId}
           lockedFieldKey={dependent ? relatedFilterFieldKey : null}
           lockedValue={dependent ? parentValue : null}
           onCreated={(newId) => {
             setCreateOpen(false);
-            void choose(newId);
+            void choose(newId).finally(() => onEditingChange(false));
           }}
         />
       )}
@@ -9074,6 +9112,7 @@ function RecordFormBody({
   setForm,
   userOptions,
   onRelationChanged,
+  onRelationEditingChange,
   lockedFieldKeys,
   formulaOptions: providedFormulaOptions,
 }: {
@@ -9091,6 +9130,8 @@ function RecordFormBody({
   userOptions: UserOption[];
   /** Bubbled when a relation link changes, so the parent table can refresh. */
   onRelationChanged?: (version?: number) => void;
+  /** Blocks the parent Save action while an edit-mode relation picker is open. */
+  onRelationEditingChange?: (editing: boolean) => void;
   /** Field keys forced read-only by the caller (e.g. the quick-create dialog's
    * prefilled dependency-filter field). Values still submit; inputs are locked. */
   lockedFieldKeys?: ReadonlySet<string>;
@@ -9150,7 +9191,7 @@ function RecordFormBody({
   useEffect(() => {
     setRelCols([]);
     setRelByField(new Map());
-  }, [recordId]);
+  }, [recordId, pageId]);
 
   // Load this record's relation/lookup values. relTick re-fetches after a link
   // change so the display stays in sync without closing the dialog.
@@ -9174,7 +9215,7 @@ function RecordFormBody({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, recordId, entityId, relTick]);
+  }, [mode, recordId, entityId, pageId, relTick]);
 
   // Merge each relation field's linked record id into the form values so dependent
   // (cascading) fields whose parent is a relation field — and lookups projecting
@@ -9236,9 +9277,9 @@ function RecordFormBody({
     return { dependent: true, parentValue, relatedFilterFieldKey: filterKey };
   };
 
-  const handleRelationChanged = () => {
+  const handleRelationChanged = (version?: number) => {
     setRelTick((x) => x + 1);
-    onRelationChanged?.();
+    onRelationChanged?.(version);
   };
 
   // Live formula preview: compute `function` fields from the CURRENT form values
@@ -9391,7 +9432,7 @@ function RecordFormBody({
                     currentLinkedId={relVal?.linkedRecordId ?? null}
                     display={relDisplayFor(field)}
                     onChanged={handleRelationChanged}
-                    onEditingChange={() => {}}
+                    onEditingChange={(open) => onRelationEditingChange?.(open)}
                     dependent={dep.dependent}
                     parentValue={dep.parentValue}
                     relatedFilterFieldKey={dep.relatedFilterFieldKey}
@@ -9577,7 +9618,9 @@ function RecordEditModal({
   const [statusId, setStatusId] = useState<string>(NO_STATUS);
   const [statusDirty, setStatusDirty] = useState(false);
   const [draftVersion, setDraftVersion] = useState<number | undefined>(undefined);
+  const draftVersionRef = useRef<number | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
+  const [relationEditing, setRelationEditing] = useState(false);
 
   // User options for `user` field selects; without them a `user` field's dropdown
   // is empty and cannot be selected. Relation/lookup values are now fetched inside
@@ -9612,10 +9655,13 @@ function RecordEditModal({
     setStatusId(record.statusId != null ? String(record.statusId) : NO_STATUS);
     setStatusDirty(false);
     setDraftVersion(record.version);
+    draftVersionRef.current = record.version;
+    setRelationEditing(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, record?.id, fields.length]);
 
   const submit = async () => {
+    if (relationEditing) return;
     setSubmitting(true);
     const valuesJson = formToValues(
       visibleFields.filter((f: Field) => fieldAccess(f, entityId) === "edit"),
@@ -9629,7 +9675,7 @@ function RecordEditModal({
         data: {
           valuesJson,
           ...(statusManualEditable && statusDirty ? { statusId: statusValue } : {}),
-          expectedVersion: draftVersion ?? record.version,
+          expectedVersion: draftVersionRef.current ?? draftVersion ?? record.version,
         },
       });
       await maybeRenameDriveFiles({ recordId, fields, values: valuesJson, uploaderEmail: user?.email });
@@ -9675,8 +9721,12 @@ function RecordEditModal({
               setForm={setForm}
               userOptions={userOptions}
               onRelationChanged={(version) => {
-                if (version != null) setDraftVersion(version);
+                if (version != null) {
+                  draftVersionRef.current = version;
+                  setDraftVersion(version);
+                }
               }}
+              onRelationEditingChange={setRelationEditing}
             />
             {statuses.length > 0 && (
               <div className="space-y-1.5">
@@ -9714,7 +9764,7 @@ function RecordEditModal({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             {t("records.cancel", "Отмена")}
           </Button>
-          <Button onClick={submit} disabled={submitting || loading} className="bg-blue-600 hover:bg-blue-700">
+          <Button onClick={submit} disabled={submitting || loading || relationEditing} className="bg-blue-600 hover:bg-blue-700">
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : t("records.save", "Сохранить")}
           </Button>
         </DialogFooter>
