@@ -49,17 +49,16 @@ function SidebarItem({
   // ever render leaf links as centered icons with a tooltip.
   if (collapsed) {
     return (
-      <Link href={route || "/"}>
-        <a
-          title={name}
-          className={cn(
-            "flex items-center justify-center px-0 py-2.5 rounded-lg transition-colors",
-            "text-slate-300 hover:bg-slate-700/60 hover:text-white",
-            isActive && "bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 hover:text-blue-300"
-          )}
-        >
-          <IconComp className={cn("w-5 h-5 shrink-0", isActive ? "text-blue-400" : "text-slate-400")} />
-        </a>
+      <Link
+        href={route || "/"}
+        title={name}
+        className={cn(
+          "flex items-center justify-center px-0 py-2.5 rounded-lg transition-colors",
+          "text-slate-300 hover:bg-slate-700/60 hover:text-white",
+          isActive && "bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 hover:text-blue-300"
+        )}
+      >
+        <IconComp className={cn("w-5 h-5 shrink-0", isActive ? "text-blue-400" : "text-slate-400")} />
       </Link>
     );
   }
@@ -89,20 +88,19 @@ function SidebarItem({
   }
 
   return (
-    <Link href={route || "/"}>
-      <a
-        className={cn(
-          "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-          depth === 0
-            ? "text-slate-200 hover:bg-slate-700/60 hover:text-white"
-            : "text-slate-400 hover:bg-slate-700/60 hover:text-white ps-6",
-          isActive && "bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 hover:text-blue-300"
-        )}
-      >
-        <IconComp className={cn("w-4 h-4 shrink-0", isActive ? "text-blue-400" : "text-slate-400")} />
-        <span>{name}</span>
-        {isActive && <div className="ms-auto w-1.5 h-1.5 rounded-full bg-blue-400" />}
-      </a>
+    <Link
+      href={route || "/"}
+      className={cn(
+        "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+        depth === 0
+          ? "text-slate-200 hover:bg-slate-700/60 hover:text-white"
+          : "text-slate-400 hover:bg-slate-700/60 hover:text-white ps-6",
+        isActive && "bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 hover:text-blue-300"
+      )}
+    >
+      <IconComp className={cn("w-4 h-4 shrink-0", isActive ? "text-blue-400" : "text-slate-400")} />
+      <span>{name}</span>
+      {isActive && <div className="ms-auto w-1.5 h-1.5 rounded-full bg-blue-400" />}
     </Link>
   );
 }
@@ -322,11 +320,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             ))}
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href="/settings">
-                <a className="flex items-center w-full cursor-pointer">
-                  <Settings className="w-4 h-4 mr-2" />
-                  {t("layout.settings", "Настройки")}
-                </a>
+              <Link href="/settings" className="flex items-center w-full cursor-pointer">
+                <Settings className="w-4 h-4 mr-2" />
+                {t("layout.settings", "Настройки")}
               </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
