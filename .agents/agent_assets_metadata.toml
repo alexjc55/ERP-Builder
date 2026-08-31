@@ -145,3 +145,10 @@ uri = "file://exports/usr_dump_1788190250616.xlsx"
 type = "table"
 title = "База данных в Excel"
 description = "Excel-книга из PostgreSQL-дампа: лист «Сводка» и лист «users» (90 строк, 12 столбцов), с фильтрами и закреплённой шапкой."
+
+[[outputs]]
+id = "CMASR6nTRjH07q88LDMkN"
+uri = "file://exports/projects_dump_1788201286521.xlsx"
+type = "table"
+title = "Проекты — Excel"
+description = "113 проектов. Листы: «Проекты» с раскрытыми полями JSON, «Исходные данные» и «Сводка»."
