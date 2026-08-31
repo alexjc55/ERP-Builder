@@ -9,7 +9,9 @@
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "release": "pnpm run typecheck && pnpm --filter @workspace/db run generate",
     "test:e2e:collaboration": "playwright test tests/e2e/collaboration.spec.ts",
+    "test:e2e:relation-edit": "playwright test tests/e2e/relation-edit.spec.ts",
     "validate:deployment:collaboration": "bash scripts/validate-collaboration-e2e.sh",
+    "validate:deployment:relation-edit": "bash scripts/validate-relation-edit-e2e.sh",
     "validate:inbound-concurrency": "pnpm --filter @workspace/api-server run test:inbound-db",
     "validate:import-status-permissions": "pnpm --filter @workspace/api-server run test:import-status-db",
     "validate:dependency-install": "bash scripts/validate-dependency-install.sh"

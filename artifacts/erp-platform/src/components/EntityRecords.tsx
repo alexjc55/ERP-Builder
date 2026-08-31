@@ -7742,7 +7742,14 @@ export function EntityRecords({
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
                             {canUpdate && (
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(record)}>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                data-testid="record-edit-button"
+                                data-record-id={record.id}
+                                onClick={() => openEdit(record)}
+                              >
                                 <Pencil className="w-3.5 h-3.5" />
                               </Button>
                             )}
@@ -7963,7 +7970,12 @@ export function EntityRecords({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("records.cancel", "Отмена")}</Button>
-            <Button onClick={handleSubmit} disabled={isPending || dialogRelationEditing} className="bg-blue-600 hover:bg-blue-700">
+            <Button
+              data-testid="record-dialog-save"
+              onClick={handleSubmit}
+              disabled={isPending || dialogRelationEditing}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
               {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editing ? t("records.save", "Сохранить") : t("records.create", "Создать")}
             </Button>
           </DialogFooter>
@@ -8812,6 +8824,7 @@ function EntityRelationLinkPicker({
       <PopoverTrigger asChild>
         <button
           type="button"
+          data-testid={`entity-relation-picker-${fieldKey}`}
           disabled={triggerDisabled}
           className="flex w-full items-center justify-between gap-2 -mx-1 rounded px-1 text-left hover:bg-blue-50/60 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
           title={
@@ -8858,6 +8871,7 @@ function EntityRelationLinkPicker({
             <div className="border-t border-slate-200 p-1">
               <button
                 type="button"
+                data-testid={`entity-relation-quick-create-${fieldKey}`}
                 onClick={() => {
                   setOpen(false);
                   setCreateOpen(true);
@@ -9995,7 +10009,7 @@ function QuickCreateRelatedRecordDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent data-testid="quick-create-related-dialog" className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t("records.relatedCreateTitle", "Новая связанная запись")}</DialogTitle>
           <DialogDescription>
@@ -10053,7 +10067,7 @@ function QuickCreateRelatedRecordDialog({
           </div>
         )}
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+          <Button data-testid="quick-create-related-cancel" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             {t("common.cancel", "Отмена")}
           </Button>
           <Button onClick={submit} disabled={submitting || fieldsLoading}>
