@@ -28,3 +28,21 @@ description: Durable security, execution, matching, and concurrency rules for ge
 **Why:** Publishing a previously loaded “latest” version can silently activate stale rules after a save.
 
 **How to apply:** Save → use the returned version ID for dry-run/publish. A live delivery stores its chosen published version so later mapping edits cannot change in-flight behavior.
+
+**Rule:** Matching an existing target must finish before any external-file materialization. A skipped update has zero download/Drive effects; files may target entity file fields only, and their folder always comes from the field's managed-Drive configuration.
+
+**Why:** Uploading before `updateOnMatch` is known creates orphaned files, while mapping-supplied folders would bypass administrator ownership and naming policy.
+
+**How to apply:** Validate file destinations first, match and early-return second, then resolve names from final merged values and upload. Cleanup app-owned uploads only for pre-commit failures; never trash after a successful database commit.
+
+**Rule:** Inbound file URLs use HTTPS with a DNS answer pinned into the TLS connection, public-address-only egress, per-redirect revalidation, an absolute whole-download deadline, and a streamed size cap.
+
+**Why:** DNS-check-then-fetch is vulnerable to rebinding, and inactivity timeouts allow a trickle response to hold the business transaction indefinitely.
+
+**How to apply:** Fail closed on non-public or unsupported address families, preserve the original hostname for SNI/certificate validation, and share the one deadline across DNS, redirects, connect, and body transfer.
+
+**Rule:** Finding an existing user is independent of whether the selected user field permits inline creation; `allowCreate` and role/field/email restrictions apply only after all find strategies miss.
+
+**Why:** Disabling user creation must not make existing linked users undiscoverable.
+
+**How to apply:** Run system-ID and profile-field matches first. Enter the guarded creation path only for a create/upsert operation with no match.

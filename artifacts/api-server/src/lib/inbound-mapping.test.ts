@@ -34,6 +34,24 @@ test("mapping rejects unknown transforms, duplicate keys and forward references"
   if (!result.ok) assert.ok(result.errors.length >= 3);
 });
 
+test("file mappings are restricted to valid entity file DSL entries", () => {
+  const page = validateInboundMapping({ steps: [{
+    key: "page", operation: "update", target: { kind: "page", entityId: 1, pageId: 2 },
+    files: [{ fieldKey: "attachment", source: "files", tag: "contract" }],
+  }] });
+  assert.equal(page.ok, false);
+  const entity = validateInboundMapping({ steps: [{
+    key: "order", operation: "upsert", target: { kind: "entity", entityId: 1 },
+    files: [{ fieldKey: "attachment", source: "files", tag: "contract" }], updateOnMatch: false,
+  }] });
+  assert.equal(entity.ok, true);
+  const malformed = validateInboundMapping({ steps: [{
+    key: "order", operation: "upsert", target: { kind: "entity", entityId: 1 },
+    files: [{ fieldKey: "Bad-Key", source: "", tag: "" }],
+  }] });
+  assert.equal(malformed.ok, false);
+});
+
 test("explicit ERP id fallback must be configured and user roles are server-side", () => {
   const mapping = validateInboundMapping({
     steps: [{
@@ -53,6 +71,60 @@ test("explicit ERP id fallback must be configured and user roles are server-side
     }],
   });
   assert.equal(mapping.ok, true);
+});
+
+test("system-id match maximum is accepted only as a positive exclusive bound", () => {
+  const valid = validateInboundMapping({
+    steps: [{
+      key: "client",
+      operation: "upsert",
+      target: { kind: "entity", entityId: 4 },
+      matches: [{
+        kind: "system_id",
+        value: { operand: { kind: "source", path: "legacyId" } },
+        maxValueExclusive: 1_000,
+        onMissingExplicitId: "continue",
+      }],
+    }],
+  });
+  assert.equal(valid.ok, true);
+
+  const invalid = validateInboundMapping({
+    steps: [{
+      key: "client",
+      operation: "upsert",
+      target: { kind: "entity", entityId: 4 },
+      matches: [{ kind: "fields", conditions: [{ fieldKey: "email", value: { operand: { kind: "source", path: "email" } } }], maxValueExclusive: 0 }],
+    }],
+  });
+  assert.equal(invalid.ok, false);
+  if (!invalid.ok) assert.ok(invalid.errors.some((error) => error.includes("maxValueExclusive")));
+});
+
+test("user mappings accept the supported profile keys without widening entity field keys", () => {
+  const userMapping = validateInboundMapping({
+    steps: [{
+      key: "manufacturer",
+      operation: "find",
+      target: { kind: "user", fieldId: 12, roleId: 4 },
+      matches: [{ kind: "fields", conditions: [{ fieldKey: "firstName", value: { operand: { kind: "source", path: "manufacturer" } } }] }],
+      values: {
+        email: { operand: { kind: "source", path: "email" } },
+        firstName: { operand: { kind: "source", path: "manufacturer" } },
+      },
+    }],
+  });
+  assert.equal(userMapping.ok, true);
+
+  const entityMapping = validateInboundMapping({
+    steps: [{
+      key: "record",
+      operation: "create",
+      target: { kind: "entity", entityId: 4 },
+      values: { firstName: { operand: { kind: "source", path: "name" } } },
+    }],
+  });
+  assert.equal(entityMapping.ok, false);
 });
 
 test("hierarchy links may only point at prior fixed step results", () => {

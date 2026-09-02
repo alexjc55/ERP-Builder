@@ -1,4 +1,6 @@
 import { randomBytes } from "crypto";
+import { lookup } from "dns/promises";
+import { request as httpsRequest } from "https";
 import { Router, type IRouter, type Request } from "express";
 import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import {
@@ -20,6 +22,7 @@ import {
   recordLinksTable,
   auditLogTable,
   modulesTable,
+  googleDriveFoldersTable,
   type InsertAuditLog,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
@@ -36,6 +39,9 @@ import {
 import { fieldAccessContext, validateValues, validateUserRefs, checkDependentValues, checkValidationRules, checkUniqueKeys, checkImmutableFields, type DbExecutor } from "./records";
 import { isRecordOwned } from "./own-scope";
 import { validatePageValues } from "./page-fields";
+import { lockAndValidateGdriveFileReferences } from "../lib/gdrive-file-reference-lock";
+import { getAccessToken, getConnection, isGoogleDriveModuleEnabled, uploadToFolder, getDriveFileMetadata, trashDriveFile } from "../lib/googleDrive";
+import type { FileFieldConfig, DriveNameSection } from "@workspace/db";
 import { validateInboundMapping, resolveInboundValue, readInboundPath, type InboundMatch, type InboundStep } from "../lib/inbound-mapping";
 import { INBOUND_SECRET_PREFIX, classifyInboundDuplicate, hashInboundSecret, parseInboundBearer } from "../lib/inbound-auth";
 import { AUDIT_CREATED, auditStr, diffValues } from "./audit-log";
@@ -311,6 +317,8 @@ async function processDelivery(deliveryId: number, dryRun: boolean): Promise<voi
   const authReq = { user: { userId: integration.userId, roleId: integration.roleId }, body: {}, params: {}, query: {} } as unknown as Request;
   let currentStepKey: string | null = null;
   const validatedStepKeys: string[] = [];
+  const uploadedFileIds: string[] = [];
+  let committed = false;
   try {
     const committedEvents = await db.transaction(async (tx) => {
       // Hold the delivery row for the entire business transaction. A stale-job
@@ -322,13 +330,14 @@ async function processDelivery(deliveryId: number, dryRun: boolean): Promise<voi
         .for("update");
       if (!lockedDelivery || lockedDelivery.status !== "processing") return [] as EventInput[];
       await lockInboundMapping(tx, checked.mapping.steps);
+      const [backingUser] = await tx.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, integration.userId)).limit(1);
       const results = new Map<string, { id: number }>();
       const events: EventInput[] = [];
       for (const step of checked.mapping.steps) {
         currentStepKey = step.key;
         const sources = step.source ? readInboundPath(delivery.payloadJson, step.source) : delivery.payloadJson;
         const items = Array.isArray(sources) ? sources : [sources];
-        for (const source of items) await executeStep(tx, authReq, integration.id, deliveryId, step, source, results, events);
+        for (const source of items) await executeStep(tx, authReq, integration.id, deliveryId, step, source, results, events, dryRun, uploadedFileIds, backingUser?.email);
         validatedStepKeys.push(step.key);
       }
       if (dryRun) throw new DryRunRollback();
@@ -340,8 +349,23 @@ async function processDelivery(deliveryId: number, dryRun: boolean): Promise<voi
       }).where(eq(inboundDeliveriesTable.id, deliveryId));
       return events;
     });
+    committed = true;
     if (committedEvents.length > 0) await emitEvent(committedEvents);
   } catch (err) {
+    // Drive is outside the database transaction. Best-effort trash keeps failed
+    // deliveries from accumulating orphaned app-owned files.
+    if (!committed && uploadedFileIds.length) {
+      try {
+        const connection = await getConnection();
+        if (connection?.refreshTokenEnc) {
+          const token = await getAccessToken(connection);
+          await Promise.all(uploadedFileIds.map(async (fileId) => {
+            const metadata = await getDriveFileMetadata(token, fileId);
+            await trashDriveFile(token, fileId, metadata.etag);
+          }));
+        }
+      } catch { /* the delivery error remains authoritative; cleanup is retriable in Drive */ }
+    }
     if (err instanceof DryRunRollback) {
       if (validatedStepKeys.length > 0) {
         await db.insert(inboundDeliveryStepLogsTable).values(validatedStepKeys.map((stepKey) => ({
@@ -388,6 +412,9 @@ async function executeStep(
   source: unknown,
   results: Map<string, { id: number }>,
   events: EventInput[],
+  dryRun = false,
+  _uploadedFileIds: string[] = [],
+  integrationEmail?: string,
 ): Promise<void> {
   if (step.target.kind === "user") {
     await executeUserStep(tx, req, integrationId, deliveryId, step, source, results, events);
@@ -403,7 +430,10 @@ async function executeStep(
   const rp = await effectiveRecordPerm(req, perms, entityId, step.target.pageId);
   const access = await fieldAccessContext(req, entityId, fields, step.target.pageId);
   const values = Object.fromEntries(Object.entries(step.values ?? {}).map(([k, v]) => [k, resolveInboundValue(v, source, results)]));
-  for (const key of Object.keys(values)) if (!access.editable.has(key)) throw new Error(`Step ${step.key}: field ${key} is not editable`);
+  // Check all declared destinations before touching an untrusted URL.
+  for (const key of [...Object.keys(values), ...(step.files ?? []).map((file) => file.fieldKey)]) {
+    if (!access.editable.has(key)) throw new Error(`Step ${step.key}: field ${key} is not editable`);
+  }
   let existing = await findMatch(tx, integrationId, step, source, results, access.hidden);
   if (step.operation === "find") {
     if (!existing) throw new Error(`Step ${step.key}: record not found`);
@@ -416,6 +446,11 @@ async function executeStep(
   if (step.operation === "create" && existing) throw new Error(`Step ${step.key}: record already exists`);
   if (rp?.[action] !== true && !perms.superAdmin) throw new Error(`Step ${step.key}: role cannot ${action} records`);
   if (existing) {
+    if (step.updateOnMatch === false && (step.operation === "upsert" || step.operation === "update")) {
+      results.set(step.key, { id: existing.id });
+      await logStep(tx, deliveryId, step.key, "completed", "found", existing.id);
+      return;
+    }
     const relatedIds = (step.links ?? []).map((link) => results.get(link.toStep)?.id).filter((id): id is number => id != null);
     const lockIds = [...new Set([existing.id, ...relatedIds])].sort((a, b) => a - b);
     const lockedRows = await tx.select().from(entityRecordsTable)
@@ -428,8 +463,9 @@ async function executeStep(
     const scope = await effectiveScopeFor(req, perms, entityId, step.target.pageId);
     if (scope.scope === "own" && !(await isRecordOwned(entityId, existing, scope.scopeFieldKeys, req.user!.userId, fields, tx))) throw new Error(`Step ${step.key}: record is outside row scope`);
     const previous = (existing.valuesJson as Record<string, unknown>) ?? {};
+    Object.assign(values, await resolveInboundFiles(tx, step, source, fields, { ...previous, ...values }, dryRun, _uploadedFileIds, integrationEmail));
     const merged = { ...previous, ...values };
-    const validated = validateValues(fields, merged, false, previous);
+    const validated = validateValues(fields, merged, await isGoogleDriveModuleEnabled(), previous);
     if ("error" in validated) throw new Error(validated.error);
     const err = await validateFinal(tx, entityId, fields, validated.values, existing.id, previous);
     if (err) throw new Error(err);
@@ -457,7 +493,8 @@ async function executeStep(
     });
     results.set(step.key, row!); await logStep(tx, deliveryId, step.key, "completed", "updated", row!.id);
   } else {
-    const validated = validateValues(fields, values, false);
+    Object.assign(values, await resolveInboundFiles(tx, step, source, fields, values, dryRun, _uploadedFileIds, integrationEmail));
+    const validated = validateValues(fields, values, await isGoogleDriveModuleEnabled());
     if ("error" in validated) throw new Error(validated.error);
     const err = await validateFinal(tx, entityId, fields, validated.values);
     if (err) throw new Error(err);
@@ -549,6 +586,11 @@ async function executePageStep(tx: Executor, req: Request, integrationId: number
   const entityAccess = await fieldAccessContext(req, entityId, entityFields, pageId);
   const host = await findMatch(tx, integrationId, step, source, results, entityAccess.hidden);
   if (!host) throw new Error(`Step ${step.key}: host record not found`);
+  if (step.updateOnMatch === false && (step.operation === "upsert" || step.operation === "update")) {
+    results.set(step.key, { id: host.id });
+    await logStep(tx, deliveryId, step.key, "completed", "found", host.id);
+    return;
+  }
   const perms = await getPermissions(req);
   const rp = await effectiveRecordPerm(req, perms, entityId, pageId);
   if (!perms.superAdmin && rp?.update !== true) throw new Error(`Step ${step.key}: role cannot update page records`);
@@ -592,31 +634,201 @@ async function executePageStep(tx: Executor, req: Request, integrationId: number
   await logStep(tx, deliveryId, step.key, "completed", stored ? "updated" : "created", host.id);
 }
 
+const INBOUND_FILE_MAX_BYTES = 25 * 1024 * 1024;
+
+/** Fetch an untrusted URL through a DNS-pinned TLS connection. */
+export async function downloadInboundFile(rawUrl: unknown): Promise<{ data: Buffer; contentType: string }> {
+  if (typeof rawUrl !== "string") throw new Error("Inbound file URL is missing");
+  let url: URL;
+  try { url = new URL(rawUrl); } catch { throw new Error("Inbound file URL is invalid"); }
+  const deadline = Date.now() + 15_000;
+  for (let redirects = 0; redirects <= 4; redirects++) {
+    if (url.protocol !== "https:" || url.username || url.password) throw new Error("Inbound file URL must be credential-free HTTPS");
+    const dnsRemaining = deadline - Date.now();
+    if (dnsRemaining <= 0) throw new Error("Inbound file download timed out");
+    const answers = await Promise.race([
+      lookup(url.hostname, { all: true, verbatim: true }),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Inbound file download timed out")), dnsRemaining)),
+    ]);
+    const pinned = answers.find((answer) => !unsafeInboundAddress(answer.address));
+    if (!pinned) {
+      throw new Error("Inbound file URL resolves to a prohibited address");
+    }
+    const response = await new Promise<{ status: number; headers: import("http").IncomingHttpHeaders; data: Buffer }>((resolve, reject) => {
+      const requestRemaining = deadline - Date.now();
+      if (requestRemaining <= 0) { reject(new Error("Inbound file download timed out")); return; }
+      let settled = false;
+      let timer: NodeJS.Timeout;
+      const finish = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        fn();
+      };
+      const req = httpsRequest(url, {
+        // Connecting to this resolved address prevents a DNS rebinding between
+        // validation and connect; hostname remains intact for SNI/certificate checks.
+        lookup: ((_host: string, options: { all?: boolean } | number, callback: (
+          error: Error | null,
+          address: string | { address: string; family: number }[],
+          family?: number,
+        ) => void) => {
+          if (typeof options === "object" && options.all) {
+            callback(null, [{ address: pinned.address, family: pinned.family }]);
+          } else {
+            callback(null, pinned.address, pinned.family);
+          }
+        }) as never,
+        headers: { Accept: "*/*" },
+      }, (res) => {
+        const declared = Number(res.headers["content-length"]);
+        if (Number.isFinite(declared) && declared > INBOUND_FILE_MAX_BYTES) {
+          res.destroy();
+          finish(() => reject(new Error("Inbound file exceeds 25MB limit")));
+          return;
+        }
+        const chunks: Buffer[] = []; let total = 0;
+        res.on("data", (chunk: Buffer) => {
+          total += chunk.length;
+          if (total > INBOUND_FILE_MAX_BYTES) { res.destroy(new Error("Inbound file exceeds 25MB limit")); return; }
+          chunks.push(chunk);
+        });
+        res.on("end", () => finish(() => resolve({ status: res.statusCode ?? 0, headers: res.headers, data: Buffer.concat(chunks) })));
+        res.on("error", (error) => finish(() => reject(error)));
+      });
+      timer = setTimeout(() => req.destroy(new Error("Inbound file download timed out")), requestRemaining);
+      req.on("error", (error) => finish(() => reject(error)));
+      req.end();
+    });
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const location = response.headers.location;
+      if (!location || redirects === 4) throw new Error("Inbound file has too many redirects");
+      url = new URL(Array.isArray(location) ? location[0] : location, url);
+      continue;
+    }
+    if (response.status < 200 || response.status >= 300) throw new Error(`Inbound file download failed (${response.status})`);
+    const contentType = (Array.isArray(response.headers["content-type"]) ? response.headers["content-type"][0] : response.headers["content-type"])?.split(";")[0] || "application/octet-stream";
+    return { data: response.data, contentType };
+  }
+  throw new Error("Inbound file has too many redirects");
+}
+
+export function unsafeInboundAddress(address: string): boolean {
+  // Fail closed for IPv6 and malformed answers. Public IPv4 is sufficient for
+  // inbound file hosts and avoids subtle mapped/transition-address bypasses.
+  const parts = address.split(".");
+  if (parts.length !== 4 || parts.some((part) => !/^\d{1,3}$/.test(part) || Number(part) > 255)) return true;
+  const [a, b, c] = parts.map(Number);
+  return a === 0 || a === 10 || a === 127 || a >= 224 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 0 && c === 0) ||
+    (a === 192 && b === 0 && c === 2) ||
+    (a === 192 && b === 88 && c === 99) ||
+    (a === 192 && b === 168) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    (a === 198 && b === 51 && c === 100) ||
+    (a === 203 && b === 0 && c === 113);
+}
+
+function sanitizeInboundSegment(raw: unknown): string {
+  return String(raw ?? "").replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function safeInboundName(name: unknown): string {
+  const cleaned = sanitizeInboundSegment(name ?? "file").slice(0, 180);
+  return cleaned || "file";
+}
+
+/** Server equivalent of driveNaming.composeDriveFileName for inbound workers. */
+export function inboundDriveName(original: string, sections: DriveNameSection[] | null | undefined, values: Record<string, unknown>, email?: string): string {
+  if (!sections?.length) return original;
+  const parts = sections.flatMap((section) => {
+    if (section.kind === "text") { const value = sanitizeInboundSegment(section.text); return value ? [value] : []; }
+    if (section.kind === "field") {
+      const key = [section.fieldKey, ...(section.alts ?? []).map((a) => a.fieldKey)].find((k) => k && values[k] != null && values[k] !== "");
+      const value = key ? values[key] : undefined;
+      return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+        ? [sanitizeInboundSegment(value)].filter(Boolean)
+        : [];
+    }
+    if (section.kind === "date") { const d = new Date(); return [`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}_${String(d.getHours()).padStart(2, "0")}-${String(d.getMinutes()).padStart(2, "0")}`]; }
+    if (section.kind === "hash") {
+      const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+      return [Array.from(randomBytes(7), (byte) => alphabet[byte % alphabet.length]).join("")];
+    }
+    if (section.kind === "user") { const value = sanitizeInboundSegment(email?.split("@")[0]); return value ? [value] : []; }
+    return [];
+  });
+  const dot = original.lastIndexOf(".");
+  return parts.length ? `${parts.join("_")}${dot > 0 ? original.slice(dot) : ""}` : original;
+}
+
+export function selectInboundTaggedFile(source: unknown, tag: string): Record<string, unknown> | undefined {
+  const candidates = Array.isArray(source) ? source : source == null ? [] : [source];
+  return candidates.find((candidate) => candidate && typeof candidate === "object" && (candidate as Record<string, unknown>).file_tag === tag) as Record<string, unknown> | undefined;
+}
+
+async function resolveInboundFiles(tx: Executor, step: InboundStep, source: unknown, fields: typeof entityFieldsTable.$inferSelect[], values: Record<string, unknown>, dryRun: boolean, uploadedFileIds: string[], integrationEmail?: string): Promise<Record<string, unknown>> {
+  if (!step.files?.length) return {};
+  const enabled = await isGoogleDriveModuleEnabled();
+  if (!enabled) throw new Error(`Step ${step.key}: Google Drive module is disabled`);
+  const connection = await getConnection();
+  if (!connection?.refreshTokenEnc || !connection.folderId) throw new Error(`Step ${step.key}: Google Drive is not connected`);
+  const out: Record<string, unknown> = {};
+  for (const spec of step.files) {
+    if (spec.fieldKey in values || spec.fieldKey in out) throw new Error(`Step ${step.key}: file field ${spec.fieldKey} is mapped more than once`);
+    const field = fields.find((candidate) => candidate.fieldKey === spec.fieldKey);
+    const config = field?.fileConfigJson as FileFieldConfig | undefined;
+    if (!field || field.fieldType !== "file" || !config?.allowedSources?.includes("gdrive")) throw new Error(`Step ${step.key}: file field ${spec.fieldKey} must allow Google Drive`);
+    const selected = readInboundPath(source, spec.source);
+    const entry = selectInboundTaggedFile(selected, spec.tag);
+    if (!entry) throw new Error(`Step ${step.key}: no file with tag ${spec.tag}`);
+    const downloaded = await downloadInboundFile(entry.full_url);
+    const original = safeInboundName(entry.file_name);
+    if (dryRun) {
+      out[spec.fieldKey] = { kind: "gdrive", fileId: `dry-run-${randomBytes(8).toString("hex")}`, name: original, contentType: downloaded.contentType, size: downloaded.data.length };
+      continue;
+    }
+    let folderId = config.driveFolderId ?? connection.folderId;
+    const [folder] = await tx.select().from(googleDriveFoldersTable).where(eq(googleDriveFoldersTable.driveFolderId, folderId)).limit(1);
+    if (!folder) throw new Error(`Step ${step.key}: target Drive folder is not managed`);
+    folderId = folder.driveFolderId;
+    const token = await getAccessToken(connection);
+    const uploaded = await uploadToFolder(token, folderId, inboundDriveName(original, config.nameTemplateJson?.length ? config.nameTemplateJson : folder.nameTemplateJson, values, integrationEmail), downloaded.contentType, downloaded.data);
+    uploadedFileIds.push(uploaded.fileId);
+    out[spec.fieldKey] = { kind: "gdrive", fileId: uploaded.fileId, name: uploaded.name, contentType: uploaded.contentType, size: uploaded.size, webViewLink: uploaded.webViewLink };
+  }
+  return out;
+}
+
 async function executeUserStep(tx: Executor, req: Request, integrationId: number, deliveryId: number, step: InboundStep, source: unknown, results: Map<string, { id: number }>, events: EventInput[]) {
   if (step.target.kind !== "user") return;
   const [field] = await tx.select().from(entityFieldsTable).where(eq(entityFieldsTable.id, step.target.fieldId));
-  if (!field || field.fieldType !== "user" || field.userConfigJson?.allowCreate !== true)
-    throw new Error(`Step ${step.key}: inline user creation is not enabled`);
-  const allowed = field.userConfigJson.allowedRoleIds ?? [];
-  if (allowed.length > 0 && !allowed.includes(step.target.roleId))
-    throw new Error(`Step ${step.key}: configured role is not allowed for this field`);
-  const [role] = await tx.select({ permissions: rolesTable.permissionsJson }).from(rolesTable).where(eq(rolesTable.id, step.target.roleId));
-  if (!role || isPrivilegedRole(role.permissions)) throw new Error(`Step ${step.key}: privileged user roles are forbidden`);
-  const perms = await getPermissions(req);
-  const [rp, roleIds] = await Promise.all([
-    effectiveRecordPerm(req, perms, field.entityId, step.target.pageId),
-    getUserRoleIds(req),
-  ]);
-  if (!perms.superAdmin && rp?.create !== true && rp?.update !== true) throw new Error(`Step ${step.key}: role cannot create users inline`);
-  if (resolveFieldAccess(field, perms, roleIds, field.entityId, rp, step.target.pageId) !== "edit")
-    throw new Error(`Step ${step.key}: inline user field is not editable`);
+  if (!field || !field.isActive || field.fieldType !== "user")
+    throw new Error(`Step ${step.key}: user target field is unavailable`);
   const values = Object.fromEntries(Object.entries(step.values ?? {}).map(([k, v]) => [k, resolveInboundValue(v, source, results)]));
   const email = String(values.email ?? "").trim().toLowerCase();
   let id = await findUserMatch(tx, integrationId, step, source, results);
   let createdUser = false;
-  if (!id && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error(`Step ${step.key}: valid email is required`);
   if (!id) {
     if (step.operation === "find" || step.operation === "update") throw new Error(`Step ${step.key}: user not found`);
+    if (field.userConfigJson?.allowCreate !== true) throw new Error(`Step ${step.key}: inline user creation is not enabled`);
+    const allowed = field.userConfigJson.allowedRoleIds ?? [];
+    if (allowed.length > 0 && !allowed.includes(step.target.roleId))
+      throw new Error(`Step ${step.key}: configured role is not allowed for this field`);
+    const [role] = await tx.select({ permissions: rolesTable.permissionsJson }).from(rolesTable).where(eq(rolesTable.id, step.target.roleId));
+    if (!role || isPrivilegedRole(role.permissions)) throw new Error(`Step ${step.key}: privileged user roles are forbidden`);
+    const perms = await getPermissions(req);
+    const [rp, roleIds] = await Promise.all([
+      effectiveRecordPerm(req, perms, field.entityId, step.target.pageId),
+      getUserRoleIds(req),
+    ]);
+    if (!perms.superAdmin && rp?.create !== true && rp?.update !== true) throw new Error(`Step ${step.key}: role cannot create users inline`);
+    if (resolveFieldAccess(field, perms, roleIds, field.entityId, rp, step.target.pageId) !== "edit")
+      throw new Error(`Step ${step.key}: inline user field is not editable`);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error(`Step ${step.key}: valid email is required`);
     const [created] = await tx.insert(usersTable).values({
       email, passwordHash: null,
       firstName: String(values.firstName ?? email.split("@")[0] ?? "").trim(),
@@ -669,6 +881,7 @@ async function findUserMatch(tx: Executor, integrationId: number, step: InboundS
   for (const match of step.matches ?? []) {
     if (match.kind === "system_id") {
       const id = Number(match.value ? resolveInboundValue(match.value, source, results) : undefined);
+      if (isSystemIdAtOrAboveMatchMaximum(id, match.maxValueExclusive)) continue;
       if ((!Number.isInteger(id) || id <= 0) && match.skipWhenEmpty) continue;
       const [row] = await tx.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, id)).limit(1);
       if (row) return row.id;
@@ -701,6 +914,7 @@ async function findUserMatch(tx: Executor, integrationId: number, step: InboundS
 }
 
 async function validateFinal(tx: Executor, entityId: number, fields: typeof entityFieldsTable.$inferSelect[], values: Record<string, unknown>, id?: number, previous?: Record<string, unknown>): Promise<string | null> {
+  await lockAndValidateGdriveFileReferences(tx, previous ?? {}, values);
   return await validateUserRefs(fields, values, tx) ??
     await checkDependentValues(entityId, fields, values, id, tx) ??
     checkValidationRules(fields, values) ??
@@ -731,6 +945,7 @@ async function runMatch(tx: Executor, integrationId: number, entityId: number, m
   }
   if (match.kind === "system_id") {
     const id = Number(match.value ? resolveInboundValue(match.value, source, results) : undefined);
+    if (isSystemIdAtOrAboveMatchMaximum(id, match.maxValueExclusive)) return "continue" as const;
     if ((!Number.isInteger(id) || id <= 0) && match.skipWhenEmpty) return "continue" as const;
     const [record] = await tx.select().from(entityRecordsTable).where(and(eq(entityRecordsTable.id, id), eq(entityRecordsTable.entityId, entityId), sql`${entityRecordsTable.archivedAt} is null`));
     if (!record && match.onMissingExplicitId !== "continue") throw new Error(`Explicit ERP id ${id} does not exist`);
@@ -750,6 +965,11 @@ async function runMatch(tx: Executor, integrationId: number, entityId: number, m
   const rows = await tx.select().from(entityRecordsTable).where(and(...clauses)).limit(2);
   if (rows.length > 1) throw new Error(`Match is ambiguous for entity ${entityId}`);
   return rows[0] ?? null;
+}
+
+/** A bounded system-id strategy falls through to subsequent match strategies. */
+export function isSystemIdAtOrAboveMatchMaximum(id: number, maxValueExclusive: number | undefined): boolean {
+  return maxValueExclusive != null && Number.isFinite(id) && id >= maxValueExclusive;
 }
 
 async function logStep(tx: Executor, deliveryId: number, stepKey: string, status: string, action: string, targetId: number) {

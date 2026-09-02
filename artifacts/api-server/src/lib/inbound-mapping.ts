@@ -17,6 +17,8 @@ export interface InboundValue {
 export interface InboundMatch {
   kind: "system_id" | "external" | "fields";
   value?: InboundValue;
+  /** Ignore this system-id strategy when its resolved numeric value reaches this bound. */
+  maxValueExclusive?: number;
   objectType?: string;
   conditions?: { fieldKey: string; value: InboundValue }[];
   parent?: { fieldKey: string; step: string };
@@ -33,6 +35,10 @@ export interface InboundStep {
   operation: "find" | "create" | "update" | "upsert";
   matches?: InboundMatch[];
   values?: Record<string, InboundValue>;
+  /** Download one tagged source file into a configured Google Drive file field. */
+  files?: { fieldKey: string; source: string; tag: string }[];
+  /** When a match is found, leave it unchanged (upsert/update/page only). */
+  updateOnMatch?: boolean;
   externalId?: { objectType: string; value: InboundValue };
   /** Fixed relation metadata; target records can only be prior step results. */
   links?: { relationId: number; toStep: string }[];
@@ -42,6 +48,7 @@ export interface InboundMapping { atomic?: boolean; steps: InboundStep[] }
 
 const STEP_KEY = /^[a-z][a-z0-9_]{0,63}$/;
 const FIELD_KEY = /^[a-z][a-z0-9_]*$/;
+const USER_FIELD_KEYS = new Set(["email", "firstName", "lastName"]);
 const ALLOWED_TRANSFORMS = new Set<InboundTransform>([
   "trim", "lower", "upper", "normalize_email", "normalize_phone",
   "string", "number", "boolean", "date",
@@ -71,16 +78,34 @@ export function validateInboundMapping(input: unknown): { ok: true; mapping: Inb
     if (step.target?.kind === "page" && (!Number.isInteger(step.target.pageId) || (step.target.pageId ?? 0) <= 0)) {
       errors.push(`${at}.target.pageId is required`);
     }
-    for (const key of Object.keys(step.values ?? {})) if (!FIELD_KEY.test(key)) errors.push(`${at}.values has invalid field key ${key}`);
+    for (const key of Object.keys(step.values ?? {})) {
+      const valid = step.target?.kind === "user" ? USER_FIELD_KEYS.has(key) : FIELD_KEY.test(key);
+      if (!valid) errors.push(`${at}.values has invalid field key ${key}`);
+    }
     for (const [key, value] of Object.entries(step.values ?? {})) validateValue(value, `${at}.values.${key}`, seen, errors);
+    if (step.files != null && !Array.isArray(step.files)) errors.push(`${at}.files must be an array`);
+    if ((step.files?.length ?? 0) > 0 && step.target?.kind !== "entity") errors.push(`${at}.files is only supported for entity targets`);
+    if ((step.files?.length ?? 0) > 20) errors.push(`${at}.files has too many entries`);
+    for (const [fi, file] of (step.files ?? []).entries()) {
+      if (!file || typeof file !== "object" || !FIELD_KEY.test(file.fieldKey) ||
+        typeof file.source !== "string" || file.source.length === 0 || file.source.length > 500 ||
+        typeof file.tag !== "string" || file.tag.length === 0 || file.tag.length > 255) {
+        errors.push(`${at}.files[${fi}] requires fieldKey, source, and exact tag`);
+      }
+    }
+    if (step.updateOnMatch !== undefined && typeof step.updateOnMatch !== "boolean") errors.push(`${at}.updateOnMatch must be boolean`);
+    if (step.updateOnMatch !== undefined && step.target?.kind === "user") errors.push(`${at}.updateOnMatch is only supported for entity/page targets`);
     for (const link of step.links ?? []) {
       if (!Number.isInteger(link.relationId) || link.relationId <= 0 || !seen.has(link.toStep)) errors.push(`${at}.links must reference an earlier step and fixed relation`);
     }
     for (const [mi, match] of (step.matches ?? []).entries()) {
       if (!["system_id", "external", "fields"].includes(match.kind)) errors.push(`${at}.matches[${mi}].kind is invalid`);
+      if (match.maxValueExclusive !== undefined && (match.kind !== "system_id" || !Number.isInteger(match.maxValueExclusive) || match.maxValueExclusive <= 0))
+        errors.push(`${at}.matches[${mi}].maxValueExclusive must be a positive integer for system_id matches`);
       if (match.kind === "fields" && (!match.conditions?.length || match.conditions.length > 10)) errors.push(`${at}.matches[${mi}] needs 1..10 AND conditions`);
       for (const condition of match.conditions ?? []) {
-        if (!FIELD_KEY.test(condition.fieldKey)) errors.push(`${at}.matches[${mi}] has invalid field key`);
+        const valid = step.target?.kind === "user" ? USER_FIELD_KEYS.has(condition.fieldKey) : FIELD_KEY.test(condition.fieldKey);
+        if (!valid) errors.push(`${at}.matches[${mi}] has invalid field key`);
         validateValue(condition.value, `${at}.matches[${mi}]`, seen, errors);
       }
       if (match.value) validateValue(match.value, `${at}.matches[${mi}].value`, seen, errors);

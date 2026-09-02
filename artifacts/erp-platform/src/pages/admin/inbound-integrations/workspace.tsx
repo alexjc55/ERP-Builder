@@ -59,6 +59,7 @@ export interface InboundValue {
 export interface InboundMatch {
   kind: "system_id" | "external" | "fields";
   value?: InboundValue;
+  maxValueExclusive?: number;
   objectType?: string;
   conditions?: { fieldKey: string; value: InboundValue }[];
   onMissingExplicitId?: "error" | "continue";
@@ -74,6 +75,8 @@ export interface InboundStep {
   operation: "find" | "create" | "update" | "upsert";
   matches?: InboundMatch[];
   values?: Record<string, InboundValue>;
+  files?: { fieldKey: string; source: string; tag: string }[];
+  updateOnMatch?: boolean;
   links?: { relationId: number; toStep: string }[];
   _uiEntityId?: number;
 }
@@ -699,6 +702,33 @@ function StepCard({ step, idx, steps, entities, roles, pages, analyzedPaths, onC
               />
             </div>
           </div>
+           {!isUserTarget && ["upsert", "update"].includes(step.operation) && (
+             <label className="flex items-center gap-2 text-xs text-slate-600">
+               <Checkbox checked={step.updateOnMatch !== false} onCheckedChange={(checked) => update({ updateOnMatch: checked === true })} />
+               {t("inbound.updateOnMatch", "Обновлять найденную запись")}
+             </label>
+           )}
+
+           {!isUserTarget && !isPageTarget && step.target?.kind === "entity" && (
+             <div className="border border-blue-100 bg-blue-50/40 rounded-md p-3 space-y-3">
+               <div>
+                 <h4 className="text-xs font-semibold text-blue-800">{t("inbound.fileMappings", "Файлы Google Drive")}</h4>
+                 <p className="text-xs text-slate-500 mt-1">{t("inbound.fileMappingsHint", "Выберите file-поле, путь к массиву файлов и точный file_tag. Папка и шаблон имени берутся только из настроек поля.")}</p>
+               </div>
+               {(step.files || []).map((file: any, fi: number) => (
+                 <div key={fi} className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
+                   <Select value={file.fieldKey} onValueChange={(fieldKey) => { const files = [...(step.files || [])]; files[fi] = { ...files[fi], fieldKey }; update({ files }); }}>
+                     <SelectTrigger className="h-8 text-xs bg-white"><SelectValue placeholder={t("inbound.targetFileField", "Целевое file-поле")} /></SelectTrigger>
+                     <SelectContent>{entityFields.filter(f => f.isActive && f.fieldType === "file").map(f => <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson)} ({f.fieldKey})</SelectItem>)}</SelectContent>
+                   </Select>
+                   <Input value={file.source} onChange={e => { const files = [...(step.files || [])]; files[fi] = { ...files[fi], source: e.target.value }; update({ files }); }} placeholder="files" className="h-8 text-xs font-mono bg-white" />
+                   <Input value={file.tag} onChange={e => { const files = [...(step.files || [])]; files[fi] = { ...files[fi], tag: e.target.value }; update({ files }); }} placeholder="file_tag" className="h-8 text-xs font-mono bg-white" />
+                   <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-500" onClick={() => { const files = [...(step.files || [])]; files.splice(fi, 1); update({ files }); }}><X className="w-3.5 h-3.5" /></Button>
+                 </div>
+               ))}
+               <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => update({ files: [...(step.files || []), { fieldKey: "", source: "", tag: "" }] })}><Plus className="w-3.5 h-3.5 me-1" />{t("inbound.addFileMapping", "Добавить файл")}</Button>
+             </div>
+           )}
 
           {/* User Specific Settings */}
           {isUserTarget && (
@@ -712,11 +742,14 @@ function StepCard({ step, idx, steps, entities, roles, pages, analyzedPaths, onC
                   <Select value={String(step.target?.fieldId || "")} onValueChange={v => update({ target: { ...step.target, fieldId: Number(v) } })}>
                     <SelectTrigger className="h-8 text-xs bg-white"><SelectValue placeholder={t("inbound.selectUserField", "Выберите поле (user)")} /></SelectTrigger>
                     <SelectContent>
-                       {entityFields.filter(f => f.fieldType === "user" && f.userConfigJson?.allowCreate).map(f => (
+                       {entityFields.filter(f => f.isActive && f.fieldType === "user").map(f => (
                           <SelectItem key={f.id} value={String(f.id)}>{ml(f.nameJson)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-slate-500">
+                    {t("inbound.userFieldCreationAvailability", "All active user fields can find users. Creating a new user is available only when the selected field allows creation.")}
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs text-slate-600">{t("inbound.defaultRole", "Роль по умолчанию (фиксированная)")}</Label>
@@ -764,7 +797,7 @@ function StepCard({ step, idx, steps, entities, roles, pages, analyzedPaths, onC
                     </div>
 
                     {match.kind === "system_id" && (
-                      <div className="flex items-center gap-3">
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_12rem_12rem]">
                          <div className="space-y-1.5 flex-1">
                            <Label className="text-xs text-slate-500">{t("inbound.idValue", "Значение ID")}</Label>
                            <OperandSelector 
@@ -775,7 +808,7 @@ function StepCard({ step, idx, steps, entities, roles, pages, analyzedPaths, onC
                              stepSource={step.source}
                            />
                          </div>
-                         <div className="space-y-1.5 w-48 mt-5">
+                          <div className="space-y-1.5 mt-5">
                            <div className="flex items-center gap-2">
                              <Checkbox 
                                checked={match.onMissingExplicitId === "continue"} 
@@ -784,6 +817,25 @@ function StepCard({ step, idx, steps, entities, roles, pages, analyzedPaths, onC
                               <Label className="text-xs">{t("inbound.continueIfMissing", "Продолжить при отсутствии")}</Label>
                            </div>
                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-slate-500">{t("inbound.maxValueExclusive", "Пропускать ID от (не включительно)")}</Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={match.maxValueExclusive ?? ""}
+                              onChange={event => {
+                                const matches = [...step.matches];
+                                const value = event.target.value;
+                                if (value === "") delete matches[mi].maxValueExclusive;
+                                else matches[mi].maxValueExclusive = Number(value);
+                                update({ matches });
+                              }}
+                              className="h-8 text-xs bg-white"
+                              placeholder={t("inbound.noMaximum", "Без ограничения")}
+                            />
+                            <p className="text-xs text-slate-500">{t("inbound.maxValueExclusiveHint", "При этом ID или больше стратегия пропускается.")}</p>
+                          </div>
                       </div>
                     )}
 

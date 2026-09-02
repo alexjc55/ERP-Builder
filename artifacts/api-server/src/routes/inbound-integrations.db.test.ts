@@ -22,7 +22,14 @@ import {
 import { EVENT_ANY, subscribe } from "../lib/events";
 import { EVENT_RECORD_UPDATED } from "../lib/events";
 import { signToken } from "../lib/jwt";
-import adminRouter, { claimAndProcessInboundDelivery, recoverInboundDeliveries } from "./inbound-integrations";
+import adminRouter, {
+  claimAndProcessInboundDelivery,
+  inboundDriveName,
+  isSystemIdAtOrAboveMatchMaximum,
+  recoverInboundDeliveries,
+  selectInboundTaggedFile,
+  unsafeInboundAddress,
+} from "./inbound-integrations";
 
 const runId = `inbound-db-${randomUUID()}`;
 const ids: {
@@ -35,6 +42,38 @@ const ids: {
 } = { versions: [], deliveries: [] };
 
 const source = (path: string) => ({ operand: { kind: "source", path } });
+
+test("bounded system-id matches fall through at their exclusive maximum", () => {
+  assert.equal(isSystemIdAtOrAboveMatchMaximum(999, 1_000), false);
+  assert.equal(isSystemIdAtOrAboveMatchMaximum(1_000, 1_000), true);
+  assert.equal(isSystemIdAtOrAboveMatchMaximum(1_001, 1_000), true);
+  assert.equal(isSystemIdAtOrAboveMatchMaximum(Number.NaN, 1_000), false);
+  assert.equal(isSystemIdAtOrAboveMatchMaximum(1_000, undefined), false);
+});
+
+test("inbound files accept only globally routable IPv4 addresses", () => {
+  for (const address of [
+    "127.0.0.1", "169.254.1.1", "192.168.1.1", "192.0.0.8", "192.0.2.1",
+    "198.18.0.1", "198.51.100.1", "203.0.113.1", "::1", "::ffff:127.0.0.1",
+  ]) assert.equal(unsafeInboundAddress(address), true, address);
+  assert.equal(unsafeInboundAddress("8.8.8.8"), false);
+  assert.equal(unsafeInboundAddress("93.184.216.34"), false);
+});
+
+test("inbound Drive naming and tag selection mirror the configured contract", () => {
+  const selected = selectInboundTaggedFile([
+    { file_tag: "drawing", file_name: "drawing.pdf" },
+    { file_tag: "order", file_name: "order.pdf" },
+  ], "order");
+  assert.equal(selected?.file_name, "order.pdf");
+  const name = inboundDriveName("source.pdf", [
+    { kind: "text", text: "Order" },
+    { kind: "field", fieldKey: "missing", alts: [{ fieldKey: "number" }] },
+    { kind: "hash" },
+    { kind: "user" },
+  ], { number: "08005" }, "operator@example.com");
+  assert.match(name, /^Order_08005_[ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789]{7}_operator\.pdf$/);
+});
 
 async function addVersion(mappingJson: Record<string, unknown>) {
   const [row] = await db.insert(inboundMappingVersionsTable).values({
