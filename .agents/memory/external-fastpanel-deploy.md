@@ -40,6 +40,13 @@ If `.env` changed, source it before restarting: `set -a; source .env; set +a;` t
 
 **How to apply:** Make commit equality a release gate. If tracked server-only package files complicate pulls, stash only those files, pull, then reapply them; keep uploads and `.env` outside Git.
 
+## GitHub transport compatibility
+- Keep this production checkout on Git protocol v0 and HTTP/1.1 (`protocol.version=0`, `http.version=HTTP/1.1` in local Git config).
+
+**Why:** Git 2.39.5 with Debian's libcurl 7.88.1 could list the public GitHub repository but full HTTP/2 fetches failed with a misleading Username prompt and truncated ref-listing errors. Forcing both settings restored normal `git pull`.
+
+**How to apply:** If public GitHub unexpectedly asks for credentials, do not enter them. Verify with a one-off fetch forcing HTTP/1.1 and protocol v0, then retain those local settings.
+
 ## Production DB schema changes
 - Do not accumulate manual SQL handover files, root dumps, or stale full-schema sync scripts in the repository. Production is current; completed one-off SQL is removed after use.
 - Keep `lib/db/drizzle/` intact as the canonical schema history for fresh installs and future migrations.
