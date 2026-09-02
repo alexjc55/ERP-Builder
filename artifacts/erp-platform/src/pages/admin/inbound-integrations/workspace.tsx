@@ -68,6 +68,7 @@ export interface InboundMatch {
 
 export interface InboundStep {
   key: string;
+  label?: string;
   source?: string;
   target: 
     | { kind: "entity" | "page"; entityId: number; pageId?: number }
@@ -584,7 +585,8 @@ function StepCard({ step, idx, steps, entities, roles, pages, analyzedPaths, onC
   const selectedPage = pages.find((page: any) => page.id === step.target?.pageId);
   const operationTitle = step.operation === "upsert" ? t("inbound.operationUpsertShort", "Создать/обновить") : step.operation === "create" ? t("inbound.operationCreateShort", "Создать") : step.operation === "update" ? t("inbound.operationUpdateShort", "Обновить") : t("inbound.operationFindShort", "Найти");
   const targetTitle = isUserTarget ? t("inbound.user", "Пользователя") : isPageTarget ? `${t("inbound.pageFields", "поля страницы")} ${selectedPage ? ml(selectedPage.nameJson) : ""}` : entity ? ml(entity.nameJson) : t("inbound.record", "Запись");
-  const title = `${t("inbound.step", "Шаг")} ${idx + 1}: ${operationTitle} ${targetTitle}`;
+  const generatedTitle = `${t("inbound.step", "Шаг")} ${idx + 1}: ${operationTitle} ${targetTitle}`;
+  const title = step.label?.trim() || generatedTitle;
 
   const priorSteps = steps.slice(0, idx);
 
@@ -616,6 +618,16 @@ function StepCard({ step, idx, steps, entities, roles, pages, analyzedPaths, onC
         <div className="p-5 space-y-6">
           {/* Top basic settings */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="space-y-1.5 md:col-span-2">
+              <Label className="text-xs text-slate-500">{t("inbound.stepLabel", "Название шага")}</Label>
+              <Input
+                value={step.label ?? ""}
+                onChange={e => update({ label: e.target.value || undefined })}
+                placeholder={generatedTitle}
+                maxLength={160}
+                className="h-8 text-xs"
+              />
+            </div>
             <div className="space-y-1.5">
               <Label className="text-xs text-slate-500">{t("inbound.stepKey", "Уникальный ключ шага")}</Label>
               <Input value={step.key} onChange={e => update({ key: e.target.value })} className="h-8 text-xs font-mono" />

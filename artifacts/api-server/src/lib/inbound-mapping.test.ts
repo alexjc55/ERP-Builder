@@ -127,6 +127,29 @@ test("user mappings accept the supported profile keys without widening entity fi
   assert.equal(entityMapping.ok, false);
 });
 
+test("step labels are optional display metadata with a bounded non-empty value", () => {
+  const valid = validateInboundMapping({
+    steps: [{
+      key: "project",
+      label: "Создать или найти проект",
+      operation: "find",
+      target: { kind: "entity", entityId: 73 },
+      matches: [{ kind: "system_id", value: { operand: { kind: "source", path: "project_id" } } }],
+    }],
+  });
+  assert.equal(valid.ok, true);
+
+  const invalid = validateInboundMapping({
+    steps: [{
+      key: "project",
+      label: "   ",
+      operation: "find",
+      target: { kind: "entity", entityId: 73 },
+    }],
+  });
+  assert.equal(invalid.ok, false);
+});
+
 test("hierarchy links may only point at prior fixed step results", () => {
   const ok = validateInboundMapping({
     steps: [

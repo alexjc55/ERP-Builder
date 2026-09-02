@@ -28,6 +28,8 @@ export interface InboundMatch {
 
 export interface InboundStep {
   key: string;
+  /** Optional administrator-facing title; never used for cross-step references. */
+  label?: string;
   source?: string;
   target:
     | { kind: "entity" | "page"; entityId: number; pageId?: number }
@@ -66,6 +68,9 @@ export function validateInboundMapping(input: unknown): { ok: true; mapping: Inb
     const at = `steps[${index}]`;
     if (!step || typeof step !== "object") { errors.push(`${at} must be an object`); return; }
     if (!STEP_KEY.test(step.key ?? "") || seen.has(step.key)) errors.push(`${at}.key is invalid or duplicate`);
+    if (step.label !== undefined && (typeof step.label !== "string" || step.label.trim().length === 0 || step.label.length > 160)) {
+      errors.push(`${at}.label must be a non-empty string up to 160 characters`);
+    }
     if (!["find", "create", "update", "upsert"].includes(step.operation)) errors.push(`${at}.operation is invalid`);
     if (!step.target || !["entity", "page", "user"].includes(step.target.kind)) {
       errors.push(`${at}.target is invalid`);
