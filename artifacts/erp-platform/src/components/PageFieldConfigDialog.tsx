@@ -433,9 +433,13 @@ export function PageFieldConfigDialog({
         (f: PageField) => f.id !== field?.id && !(f.fieldType === "function" && wouldCycle(f.fieldKey)),
       )
       .map((f: PageField) => ({ key: f.fieldKey, label: ml(f.nameJson) || f.fieldKey }));
-    const qualifiedPageRefs = pageRefs.map((ref) => ({
+    // Fields from the page currently being edited are already present in the
+    // formula's native value scope. Inserting a qualified page:<id> token makes
+    // the backend treat it as an external pageLocal source, which then collides
+    // with this same native field.
+    const currentPageRefs = pageRefs.map((ref) => ({
       ...ref,
-      token: `page:${pageId}.${ref.key}`,
+      token: ref.key,
       sourceLabel: t("fields.formulaCurrentPage", "Текущая страница"),
       sourceKind: "page" as const,
     }));
@@ -451,7 +455,7 @@ export function PageFieldConfigDialog({
         ? t("fields.formulaLinkedData", "Связанные данные")
         : t("fields.formulaPageData", "Поля страницы"),
     }));
-    return [...qualifiedPageRefs, ...qualifiedEntityRefs, ...structuredRefs];
+    return [...currentPageRefs, ...qualifiedEntityRefs, ...structuredRefs];
   })();
 
   // page_ref: candidate source pages = OTHER pages showing the same records —
