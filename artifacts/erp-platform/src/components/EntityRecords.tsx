@@ -166,6 +166,7 @@ import { AffixedNumericValue } from "@/components/AffixedNumericValue";
 import {
   DEFAULT_FORMULA_TIME_ZONE,
   DEFAULT_WORKING_DAYS,
+  formatFormulaFieldResult,
   formatFormulaResult,
   evaluateFormula,
   buildFormulaScope,
@@ -7529,7 +7530,13 @@ export function EntityRecords({
                             );
                           }
                           if (isFunction) {
-                            const computed = formatFormulaResult(f.formulaConfigJson?.expression ?? "", formulaValues, f.formulaConfigJson?.decimals, formulaOptions);
+                            const computed = formatFormulaFieldResult(
+                              f.fieldKey,
+                              f.formulaConfigJson?.expression ?? "",
+                              formulaValues,
+                              f.formulaConfigJson?.decimals,
+                              formulaOptions,
+                            );
                             return (
                               <td key={f.id} className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
                                 {computed.error ? (
@@ -7703,7 +7710,13 @@ export function EntityRecords({
                             );
                           }
                           if (isFunction) {
-                            const computed = formatFormulaResult(pf.formulaConfigJson?.expression ?? "", formulaValues, pf.formulaConfigJson?.decimals, formulaOptions);
+                            const computed = formatFormulaFieldResult(
+                              pf.fieldKey,
+                              pf.formulaConfigJson?.expression ?? "",
+                              formulaValues,
+                              pf.formulaConfigJson?.decimals,
+                              formulaOptions,
+                            );
                             return (
                               <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
                                 {computed.error ? (

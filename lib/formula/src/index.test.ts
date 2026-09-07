@@ -6,6 +6,7 @@ import {
   buildFormulaScope,
   DEFAULT_WORKING_DAYS,
   evaluateFormula,
+  formatFormulaFieldResult,
   formatFormulaResult,
   type FormulaEvaluationOptions,
   type FormulaFieldDef,
@@ -26,6 +27,17 @@ test("marks only numeric formula results as numeric for display formatting", () 
   assert.equal(formatFormulaResult("1 / 4", {}, 2).numeric, true);
   assert.equal(formatFormulaResult('"25"', {}, 2).numeric, undefined);
   assert.equal(formatFormulaResult("true", {}, 2).numeric, undefined);
+});
+
+test("uses a server-materialized field value without re-evaluating protected sources", () => {
+  assert.deepEqual(
+    formatFormulaFieldResult(
+      "days_in_paint",
+      "{page:77.production_finish_date}",
+      { days_in_paint: "2026-08-19" },
+    ),
+    { text: "2026-08-19", error: false },
+  );
 });
 
 test("uses the default Sunday-through-Thursday workweek", () => {

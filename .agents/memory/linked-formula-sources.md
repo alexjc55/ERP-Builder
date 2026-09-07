@@ -9,6 +9,8 @@ Structured linked-formula source tokens are server-only capabilities. Never seri
 
 **How to apply:** Resolve common source graphs and target-row permission scopes in batches, re-apply entity/page/field/row permissions at every hop, validate structured source references on write, evaluate authorized formula chains server-side, and return only normal visible formula-field keys. SYSTEM automation/dashboard contexts must remain explicit rather than inferred.
 
+**Client rendering invariant:** When a response contains a materialized value under a formula field's normal key, render and format that scalar directly. Never re-evaluate its expression in the browser: protected source tokens are intentionally absent and would turn a valid server result into empty.
+
 ## Qualified page references
 
 **Rule:** A formula token shaped like `{page:<id>.<field>}` must automatically enter the same permission-aware `pageLocal` resolution path as an explicitly configured page source; parsing the token without loading its source is not valid support.

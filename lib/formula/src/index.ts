@@ -637,6 +637,22 @@ export function cleanFpNoise(n: number): number {
  * rounded and shown with exactly that many decimal places. Non-numeric results
  * (text/boolean) ignore `decimals`.
  */
+export function formatFormulaValue(
+  v: unknown,
+  decimals?: number | null,
+): { text: string; error: boolean; bool?: boolean; numeric?: boolean } {
+  if (v == null || v === "") return { text: "—", error: false };
+  if (typeof v === "boolean") return { text: v ? "Да" : "Нет", error: false, bool: v };
+  const d = normalizeDecimals(decimals);
+  if (typeof v === "number" && d != null && Number.isFinite(v)) {
+    return { text: v.toFixed(d), error: false, numeric: true };
+  }
+  // No decimals configured: still never expose binary FP noise
+  // (7879.299999999999) — clean to 12 significant digits before rendering.
+  if (typeof v === "number") return { text: String(cleanFpNoise(v)), error: false, numeric: true };
+  return { text: String(v), error: false };
+}
+
 export function formatFormulaResult(
   expression: string,
   values: Record<string, unknown>,
@@ -644,18 +660,25 @@ export function formatFormulaResult(
   options?: FormulaEvaluationOptions,
 ): { text: string; error: boolean; bool?: boolean; numeric?: boolean } {
   try {
-    const v = evaluateFormula(expression, values, options);
-    if (v == null || v === "") return { text: "—", error: false };
-    if (typeof v === "boolean") return { text: v ? "Да" : "Нет", error: false, bool: v };
-    const d = normalizeDecimals(decimals);
-    if (typeof v === "number" && d != null && Number.isFinite(v)) {
-      return { text: v.toFixed(d), error: false, numeric: true };
-    }
-    // No decimals configured: still never expose binary FP noise
-    // (7879.299999999999) — clean to 12 significant digits before rendering.
-    if (typeof v === "number") return { text: String(cleanFpNoise(v)), error: false, numeric: true };
-    return { text: String(v), error: false };
+    return formatFormulaValue(evaluateFormula(expression, values, options), decimals);
   } catch {
     return { text: "Ошибка формулы", error: true };
   }
+}
+
+/**
+ * Server-materialized formula values are authoritative. Their protected source
+ * tokens are deliberately omitted from HTTP responses, so the browser must not
+ * re-evaluate the expression and turn a valid result back into null.
+ */
+export function formatFormulaFieldResult(
+  fieldKey: string,
+  expression: string,
+  values: Record<string, unknown>,
+  decimals?: number | null,
+  options?: FormulaEvaluationOptions,
+): { text: string; error: boolean; bool?: boolean; numeric?: boolean } {
+  return Object.prototype.hasOwnProperty.call(values, fieldKey)
+    ? formatFormulaValue(values[fieldKey], decimals)
+    : formatFormulaResult(expression, values, decimals, options);
 }
