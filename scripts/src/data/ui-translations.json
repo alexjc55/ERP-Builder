@@ -4908,6 +4908,12 @@
     "he": "בחר ערך"
   },
   {
+    "key": "records.notSelected",
+    "ru": "Не выбрано",
+    "en": "Not selected",
+    "he": "לא נבחר"
+  },
+  {
     "key": "records.setupHint",
     "ru": "Режим настройки включён. Нажмите на заголовок колонки, чтобы изменить её свойства и права, или «+», чтобы добавить новую колонку.",
     "en": "Setup mode is on. Click a column header to edit its properties and permissions, or «+» to add a new column.",

@@ -199,6 +199,7 @@ import {
 const NO_STATUS = "__none__";
 const STATUS_COLUMN_KEY = "__status__";
 const NO_VIEW = "__all__";
+const CLEAR_SELECT_VALUE = "__erp_not_selected__";
 /** Allowed rows-per-page values; the server caps pageSize at 500. Configured in
  * the view settings (configJson.pageSize) or the entity's default-view settings
  * (entity.defaultPageSize); falls back to 50. */
@@ -10639,12 +10640,13 @@ function InlineCellEditor({
     return (
       <Select
         defaultOpen
-        value={draft ? String(draft) : ""}
-        onValueChange={(v) => commitOnce(v)}
+        value={draft == null || draft === "" ? "" : String(draft)}
+        onValueChange={(v) => commitOnce(v === CLEAR_SELECT_VALUE ? "" : v)}
         onOpenChange={(o) => { if (!o && !committedRef.current) onCancel(); }}
       >
         <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t("records.selectValue", "Выберите значение")} /></SelectTrigger>
         <SelectContent>
+          <SelectItem value={CLEAR_SELECT_VALUE}>{t("records.notSelected", "Не выбрано")}</SelectItem>
           {options.map((o) => (
             <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
           ))}
@@ -10923,11 +10925,16 @@ function FieldInput({
     case "select": {
       const options = normalizeSelectOptions(field.optionsJson);
       return (
-        <Select value={value ? String(value) : ""} onValueChange={onChange} disabled={disabled}>
+        <Select
+          value={value == null || value === "" ? "" : String(value)}
+          onValueChange={(next) => onChange(next === CLEAR_SELECT_VALUE ? "" : next)}
+          disabled={disabled}
+        >
           <SelectTrigger>
             <SelectValue placeholder={t("records.selectValue", "Выберите значение")} />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value={CLEAR_SELECT_VALUE}>{t("records.notSelected", "Не выбрано")}</SelectItem>
             {options.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>{ml(opt.labelJson) || opt.value}</SelectItem>
             ))}
