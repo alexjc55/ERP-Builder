@@ -31,6 +31,6 @@ Structured linked-formula source tokens are server-only capabilities. Never seri
 
 **Rule:** Two relation fields may be used as an equality join only when both point to the same intermediate entity. Match by the intersection of permission-approved linked record IDs, never by relation IDs, labels, or display text.
 
-**Why:** Records from different entities can belong to the same order without being linked directly to each other. Matching displayed order numbers is unstable and can bypass the linked order's row boundary.
+**Why:** Records from different entities can belong to the same order without being linked directly to each other. Matching displayed order numbers is unstable and can bypass the linked order's row boundary. The intermediate record may already be loaded for another formula source; loaded presence is not proof of authorization for this join.
 
-**How to apply:** Validate both relation endpoints on write; authorize the intermediate entity and filter every linked intermediate row before constructing join keys. Preserve scalar equality behavior, stable target-record ordering, and fail neutral when metadata or access is missing.
+**How to apply:** Validate both relation endpoints on write; collect intermediate IDs from each relation field's owner side regardless of whether those records are already in the shared loaded graph, then authorize/filter every intermediate row before constructing join keys. Preserve scalar equality behavior, stable target-record ordering, and fail neutral when metadata or access is missing.

@@ -402,7 +402,7 @@ export async function resolveLinkedFormulaData(
 
   const directRelationIds = aggregates.flatMap((source) =>
     source.join.kind === "relation" ? [source.join.relationId] : []);
-  const equalityRelationIds = [...new Set(aggregates.flatMap((source) =>
+  const equalityRelationOwners = [...new Map(aggregates.flatMap((source) =>
     source.join.kind === "equality"
       ? source.join.on.flatMap((pair) => [pair.base, pair.target])
           .map((ref, index) => {
@@ -410,10 +410,12 @@ export async function resolveLinkedFormulaData(
             const metadata = fieldMetadata.get(fieldMetadataKey(ownerEntityId, ref));
             if (metadata?.fieldType !== "relation") return null;
             const relationId = Number((metadata.relationConfigJson as { relationId?: unknown } | null)?.relationId);
-            return Number.isInteger(relationId) && relationId > 0 ? relationId : null;
+            return Number.isInteger(relationId) && relationId > 0 ? { relationId, ownerEntityId } : null;
           })
-          .filter((id): id is number => id != null)
-      : []))];
+          .filter((usage): usage is { relationId: number; ownerEntityId: number } => usage != null)
+      : [])
+      .map((usage) => [`${usage.relationId}:${usage.ownerEntityId}`, usage] as const)).values()];
+  const equalityRelationIds = [...new Set(equalityRelationOwners.map((usage) => usage.relationId))];
   const relationIds = [...new Set([...directRelationIds, ...equalityRelationIds])];
   const relations = relationIds.length
     ? await db.select().from(relationsTable).where(inArray(relationsTable.id, relationIds))
@@ -522,22 +524,18 @@ export async function resolveLinkedFormulaData(
     : [];
 
   const intermediateIdsByEntity = new Map<number, Set<number>>();
-  for (const relationId of equalityRelationIds) {
-    const relation = relationById.get(relationId)!;
+  for (const usage of equalityRelationOwners) {
+    const relation = relationById.get(usage.relationId)!;
+    const ownerIsSource = relation.sourceEntityId === usage.ownerEntityId;
+    const linkedEntityId = ownerIsSource ? relation.targetEntityId : relation.sourceEntityId;
     for (const link of links) {
-      if (link.relationId !== relationId) continue;
-      const sourceLoaded = loaded.get(link.sourceRecordId)?.entityId === relation.sourceEntityId;
-      const targetLoaded = loaded.get(link.targetRecordId)?.entityId === relation.targetEntityId;
-      if (sourceLoaded && !loaded.has(link.targetRecordId)) {
-        const ids = intermediateIdsByEntity.get(relation.targetEntityId) ?? new Set<number>();
-        ids.add(link.targetRecordId);
-        intermediateIdsByEntity.set(relation.targetEntityId, ids);
-      }
-      if (targetLoaded && !loaded.has(link.sourceRecordId)) {
-        const ids = intermediateIdsByEntity.get(relation.sourceEntityId) ?? new Set<number>();
-        ids.add(link.sourceRecordId);
-        intermediateIdsByEntity.set(relation.sourceEntityId, ids);
-      }
+      if (link.relationId !== usage.relationId) continue;
+      const ownerRecordId = ownerIsSource ? link.sourceRecordId : link.targetRecordId;
+      if (loaded.get(ownerRecordId)?.entityId !== usage.ownerEntityId) continue;
+      const linkedRecordId = ownerIsSource ? link.targetRecordId : link.sourceRecordId;
+      const ids = intermediateIdsByEntity.get(linkedEntityId) ?? new Set<number>();
+      ids.add(linkedRecordId);
+      intermediateIdsByEntity.set(linkedEntityId, ids);
     }
   }
   const allowedIntermediateByEntity = new Map<number, ReadonlySet<number>>();
