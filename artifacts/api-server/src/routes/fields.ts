@@ -4,7 +4,6 @@ import {
   entityFieldsTable,
   entitiesTable,
   entityRecordsTable,
-  entityStatusesTable,
   relationsTable,
   pagesTable,
   pageFieldsTable,
@@ -16,6 +15,7 @@ import { eq, asc, and, ne, inArray, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
 import { sanitizeOptionsInput, normalizeOptions } from "../lib/selectOptions";
+import { validateSelectStatusMappings } from "../lib/select-status-mappings";
 import { validateFormatInherit, withInheritedFormatRules } from "../lib/format-inherit";
 import { normalizeFormulaFieldConfig, validateFormulaFieldConfig } from "../lib/formula-field-config";
 import { validateFormulaGroupResultReferences } from "../lib/formula-group-result-config";
@@ -58,23 +58,6 @@ function clampFormulaDecimals<T>(cfg: T): T {
 // A percent-field option value must be a plain number (the stored record value is
 // numeric so it can be averaged and used in formulas).
 const PERCENT_NUM_RE = /^-?[0-9]+(\.[0-9]+)?$/;
-
-async function validateSelectStatusMappings(
-  entityId: number,
-  options: ReturnType<typeof normalizeOptions>,
-): Promise<string | null> {
-  const ids = [...new Set(options.flatMap((option) => option.statusId ? [option.statusId] : []))];
-  if (ids.length === 0) return null;
-  const found = await db
-    .select({ id: entityStatusesTable.id })
-    .from(entityStatusesTable)
-    .where(and(eq(entityStatusesTable.entityId, entityId), inArray(entityStatusesTable.id, ids)));
-  const foundIds = new Set(found.map((status) => status.id));
-  const missing = ids.filter((id) => !foundIds.has(id));
-  return missing.length > 0
-    ? `System status does not belong to this entity: ${missing.join(", ")}`
-    : null;
-}
 
 /**
  * Eligibility of a relation as an entity `relation` field on `entityId`.

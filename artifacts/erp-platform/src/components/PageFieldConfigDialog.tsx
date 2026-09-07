@@ -8,6 +8,7 @@ import {
   useListPages,
   getListPagesQueryKey,
   useListEntities,
+  useListEntityStatuses,
   getListEntitiesQueryKey,
   useGetPageRelationOptions,
   getGetPageRelationOptionsQueryKey,
@@ -208,6 +209,7 @@ export function PageFieldConfigDialog({
   const relationOptions = relationOptionsData?.options ?? [];
   const { data: roles = [] } = useListRoles();
   const { data: userOptions = [] } = useListUserOptions();
+  const { data: statuses = [] } = useListEntityStatuses(entityId);
 
   const [fieldKey, setFieldKey] = useState("");
   const [nameJson, setNameJson] = useState<MLValue>({});
@@ -657,7 +659,7 @@ export function PageFieldConfigDialog({
               </div>
             </div>
             {fieldType === "select" && (
-              <SelectOptionsEditor value={options} onChange={setOptions} t={t} />
+              <SelectOptionsEditor value={options} onChange={setOptions} t={t} statuses={statuses} />
             )}
             {fieldType === "file" && (
               <div className="space-y-2">

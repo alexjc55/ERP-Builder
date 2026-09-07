@@ -921,7 +921,7 @@ function hiddenRowStatusWhere(hiddenRowStatusIds: number[]): SQL | undefined {
     sql`, `,
   )}))`;
 }
-const ARCHIVED_CHANGED_FIELD = "__archived__";
+export const ARCHIVED_CHANGED_FIELD = "__archived__";
 
 /**
  * Auto-archive (metadata-driven): any record sitting in an archive-trigger status
@@ -972,6 +972,139 @@ async function statusArchiveInfo(
     .where(eq(entityStatusesTable.id, statusId))
     .limit(1);
   return s ?? null;
+}
+
+export type MappedStatusTransitionResult = {
+  beforeValues: Record<string, unknown>;
+  afterValues: Record<string, unknown>;
+  beforeStatusId: number | null;
+  afterStatusId: number;
+  beforeArchivedAt: Date | null;
+  afterArchivedAt: Date | null;
+  version: number;
+};
+
+export class MappedStatusTransitionError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+  }
+}
+
+/**
+ * Apply a status selected indirectly by a mapped select option. Page-local
+ * writers call this while holding the owning entity row FOR UPDATE, so the
+ * workflow is evaluated against the authoritative status and committed in the
+ * same transaction as the page value.
+ */
+export async function applyMappedStatusTransition(args: {
+  tx: DbExecutor;
+  record: typeof entityRecordsTable.$inferSelect;
+  targetStatusId: number;
+  fields: EntityField[];
+  permissions: Awaited<ReturnType<typeof getPermissions>>;
+  gdriveModuleEnabled: boolean;
+}): Promise<MappedStatusTransitionResult | null> {
+  const { tx, record, targetStatusId, fields, permissions, gdriveModuleEnabled } = args;
+  if ((record.statusId ?? null) === targetStatusId) return null;
+  const [target] = await tx
+    .select({
+      id: entityStatusesTable.id,
+      isArchiveTrigger: entityStatusesTable.isArchiveTrigger,
+      archiveAfterDays: entityStatusesTable.archiveAfterDays,
+    })
+    .from(entityStatusesTable)
+    .where(and(
+      eq(entityStatusesTable.id, targetStatusId),
+      eq(entityStatusesTable.entityId, record.entityId),
+    ))
+    .limit(1);
+  if (!target) throw new MappedStatusTransitionError(400, "Mapped status does not belong to this entity");
+  const beforeValues = (record.valuesJson as Record<string, unknown>) ?? {};
+  let afterValues = { ...beforeValues };
+  if (record.statusId != null && !permissions.superAdmin) {
+    const transitions = await tx
+      .select()
+      .from(entityTransitionsTable)
+      .where(eq(entityTransitionsTable.entityId, record.entityId));
+    if (transitions.length > 0) {
+      const match = transitions.find((transition) =>
+        transition.fromStatusId === record.statusId && transition.toStatusId === targetStatusId)
+        ?? transitions.find((transition) =>
+          transition.fromStatusId === null && transition.toStatusId === targetStatusId);
+      if (!match) throw new MappedStatusTransitionError(422, "This status change is not an allowed transition");
+      for (const action of (match.actionsJson as { type: string; fieldKey: string; value?: unknown }[]) ?? []) {
+        if (action.type === "set_field") afterValues[action.fieldKey] = action.value;
+      }
+      // Required fields are checked after canonical validation below.
+    }
+  }
+  const validated = validateValues(fields, afterValues, gdriveModuleEnabled, beforeValues);
+  if ("error" in validated) throw new MappedStatusTransitionError(400, validated.error);
+  afterValues = validated.values;
+  const finalMapped = mappedStatusForChangedValues(fields, beforeValues, afterValues);
+  if ("error" in finalMapped) throw new MappedStatusTransitionError(422, finalMapped.error);
+  if (finalMapped.statusId != null && finalMapped.statusId !== targetStatusId) {
+    throw new MappedStatusTransitionError(
+      422,
+      "Workflow actions conflict with the system status mapped from the final select value",
+    );
+  }
+  if (record.statusId != null && !permissions.superAdmin) {
+    const transitions = await tx
+      .select()
+      .from(entityTransitionsTable)
+      .where(eq(entityTransitionsTable.entityId, record.entityId));
+    const match = transitions.find((transition) =>
+      transition.fromStatusId === record.statusId && transition.toStatusId === targetStatusId)
+      ?? transitions.find((transition) =>
+        transition.fromStatusId === null && transition.toStatusId === targetStatusId);
+    const missing = ((match?.requiredFieldKeys as string[]) ?? [])
+      .filter((fieldKey) => isEmpty(afterValues[fieldKey]));
+    if (missing.length > 0) {
+      throw new MappedStatusTransitionError(422, `Fields required for this transition: ${missing.join(", ")}`);
+    }
+  }
+  const userRefError = await validateUserRefs(fields, afterValues, tx);
+  if (userRefError) throw new MappedStatusTransitionError(400, userRefError);
+  const dependentError = await checkDependentValues(record.entityId, fields, afterValues, record.id, tx);
+  if (dependentError) throw new MappedStatusTransitionError(400, dependentError);
+  const immutableError = checkImmutableFields(fields, afterValues, beforeValues);
+  if (immutableError) throw new MappedStatusTransitionError(422, immutableError);
+  const fillError = checkValidationRules(fields, afterValues);
+  if (fillError) throw new MappedStatusTransitionError(422, fillError);
+  await lockAndValidateGdriveFileReferences(tx, beforeValues, afterValues);
+  const keyFields = fields.filter((field) => field.isKey);
+  if (keyFields.length > 0) {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${UNIQUE_KEY_LOCK_NS}, ${record.entityId})`);
+    const duplicate = await checkUniqueKeys(tx, record.entityId, keyFields, afterValues, record.id);
+    if (duplicate) throw new MappedStatusTransitionError(409, duplicate);
+  }
+  const now = new Date();
+  const archivedAt =
+    target.isArchiveTrigger && (target.archiveAfterDays ?? 0) === 0
+      ? now
+      : record.archivedAt;
+  const [updated] = await tx
+    .update(entityRecordsTable)
+    .set({
+      valuesJson: afterValues,
+      statusId: targetStatusId,
+      statusChangedAt: now,
+      archiveExempt: false,
+      archivedAt,
+    })
+    .where(and(eq(entityRecordsTable.id, record.id), eq(entityRecordsTable.version, record.version)))
+    .returning();
+  if (!updated) throw new MappedStatusTransitionError(409, "Record changed concurrently; please retry");
+  return {
+    beforeValues,
+    afterValues: updated.valuesJson as Record<string, unknown>,
+    beforeStatusId: record.statusId ?? null,
+    afterStatusId: targetStatusId,
+    beforeArchivedAt: record.archivedAt,
+    afterArchivedAt: updated.archivedAt,
+    version: updated.version,
+  };
 }
 
 router.get("/entities/:entityId/records", requireAuth, requireRecordParam("view", { entityOnly: true }), async (req, res): Promise<void> => {
@@ -3644,7 +3777,7 @@ export function asServerFile(
  * Best-effort: a failure here never blocks the record op. Drive/link values are
  * left untouched.
  */
-async function trashRemovedServerFiles(
+export async function trashRemovedServerFiles(
   req: Request,
   entityId: number,
   recordId: number,

@@ -22,7 +22,8 @@ import {
 } from "@workspace/db";
 import { eq, asc, desc, and, ne, inArray, or, sql, type SQL } from "drizzle-orm";
 import { replaceSingleRelationLink, emitLinkChangedEvents } from "../lib/record-links";
-import { sanitizeOptionsInput, normalizeOptions, optionValues, optionNumbers, type SelectOption } from "../lib/selectOptions";
+import { sanitizeOptionsInput, normalizeOptions, optionValues, optionNumbers, mappedStatusForChangedValues, type SelectOption } from "../lib/selectOptions";
+import { validateSelectStatusMappings } from "../lib/select-status-mappings";
 import { requireAuth } from "../middlewares/auth";
 import {
   requireAdmin,
@@ -39,7 +40,16 @@ import {
 } from "../middlewares/permissions";
 import { ownScopeWhere, isRecordOwned } from "./own-scope";
 import { PAGE_REF_SOURCE_TYPES, loadPageRefSource } from "./record-query";
-import { validateFileValue, trashRemovedPageServerFiles, type DbExecutor } from "./records";
+import {
+  applyMappedStatusTransition,
+  validateFileValue,
+  trashRemovedPageServerFiles,
+  type DbExecutor,
+  type MappedStatusTransitionResult,
+  MappedStatusTransitionError,
+  ARCHIVED_CHANGED_FIELD,
+  trashRemovedServerFiles,
+} from "./records";
 import { isGoogleDriveModuleEnabled } from "../lib/googleDrive";
 import {
   DriveFileTombstonedError,
@@ -56,7 +66,8 @@ import {
   mergeLinkedFormulaInputs,
   projectViewerFormulaValues,
 } from "../lib/formula-runtime";
-import { emitEvent, EVENT_PAGE_FIELD_SAVED } from "../lib/events";
+import { emitEvent, EVENT_PAGE_FIELD_SAVED, EVENT_RECORD_UPDATED, EVENT_STATUS_CHANGED } from "../lib/events";
+import { writeAudit, diffValues, AUDIT_STATUS, AUDIT_ARCHIVED } from "./audit-log";
 import {
   lockAndValidateUserReferences,
   referencedUserIds,
@@ -655,6 +666,14 @@ router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (
     res.status(400).json({ error: "Select fields require at least one option" });
     return;
   }
+  if (parsed.data.fieldType === "select") {
+    const effective = await effectiveEntityForPage(params.data.pageId);
+    const mappingError = await validateSelectStatusMappings(effective.entityId, createOptions);
+    if (mappingError) {
+      res.status(400).json({ error: mappingError });
+      return;
+    }
+  }
   if (parsed.data.fieldType === "percent" && (parsed.data.percentConfigJson?.mode ?? "value") === "list") {
     if (createOptions.length === 0) {
       res.status(400).json({ error: "Поле «Проценты» в режиме списка требует хотя бы один вариант" });
@@ -836,10 +855,18 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
     return;
   }
   const sanitizedOptions = body.optionsJson != null ? sanitizeOptionsInput(body.optionsJson) : null;
+  const nextOptions = sanitizedOptions ?? normalizeOptions(current.optionsJson);
   if ("optionsJson" in body || body.fieldType != null) {
-    const nextOptions = sanitizedOptions ?? normalizeOptions(current.optionsJson);
     if (nextType === "select" && nextOptions.length === 0) {
       res.status(400).json({ error: "Select fields require at least one option" });
+      return;
+    }
+  }
+  if (nextType === "select") {
+    const effective = await effectiveEntityForPage(current.pageId);
+    const mappingError = await validateSelectStatusMappings(effective.entityId, nextOptions);
+    if (mappingError) {
+      res.status(400).json({ error: mappingError });
       return;
     }
   }
@@ -1358,6 +1385,7 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
     .select()
     .from(pageFieldsTable)
     .where(and(eq(pageFieldsTable.pageId, pageId), eq(pageFieldsTable.isActive, true)));
+  const entityFields = await loadActiveEntityFields(entityId);
   const incoming = { ...((parsed.data.valuesJson ?? {}) as Record<string, unknown>) };
   const [existing] = await db
     .select({ id: pageRecordValuesTable.id, valuesJson: pageRecordValuesTable.valuesJson, version: pageRecordValuesTable.version })
@@ -1613,6 +1641,7 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
   let writtenTargetPrevValues = prevValues;
   let writtenTargetValues = result.values;
   let writtenTargetVersion = existing?.version ?? 1;
+  const mappedTransitionState: { value: MappedStatusTransitionResult | null } = { value: null };
 
   class LockedPageValidationError extends Error {}
   class LockedPageConflictError extends Error {
@@ -1622,6 +1651,24 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
   }
   try {
     await db.transaction(async (tx) => {
+      const [lockedEntityRecord] = await tx
+        .select()
+        .from(entityRecordsTable)
+        .where(and(eq(entityRecordsTable.id, recordId), eq(entityRecordsTable.entityId, entityId)))
+        .for("update");
+      if (!lockedEntityRecord) throw new LockedPageValidationError("Record not found");
+      if (
+        scope === "own" &&
+        !(await isRecordOwned(entityId, lockedEntityRecord, scopeFieldKeys, req.user!.userId, entityFields, tx))
+      ) {
+        throw new LockedPageValidationError("Record not found");
+      }
+      if (
+        lockedEntityRecord.statusId != null &&
+        effectiveStatusVisibility(perms, entityId).hiddenRowStatusIds.includes(lockedEntityRecord.statusId)
+      ) {
+        throw new LockedPageValidationError("Record not found");
+      }
       const touchedSourceStates = [...sourceStates.values()]
         .filter((state) => state.changedKeys.size > 0)
         .sort((a, b) => a.pageId - b.pageId);
@@ -1795,6 +1842,27 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
       for (const item of prepared) {
         await validateGdriveFileReferencesUnderLock(tx, item.before, item.after);
       }
+      const mappedTargets = new Set<number>();
+      for (const item of prepared) {
+        const itemFields = item.sourceState?.fields ?? fields;
+        const mapped = mappedStatusForChangedValues(itemFields, item.before, item.after);
+        if ("error" in mapped) throw new LockedPageValidationError(mapped.error);
+        if (mapped.statusId != null) mappedTargets.add(mapped.statusId);
+      }
+      if (mappedTargets.size > 1) {
+        throw new LockedPageValidationError("Changed page select fields require different system statuses");
+      }
+      const [mappedStatusId] = mappedTargets;
+      if (mappedStatusId != null) {
+        mappedTransitionState.value = await applyMappedStatusTransition({
+          tx,
+          record: lockedEntityRecord,
+          targetStatusId: mappedStatusId,
+          fields: entityFields,
+          permissions: perms,
+          gdriveModuleEnabled: gdriveEnabled,
+        });
+      }
       for (const item of prepared) {
         const [written] = await tx
           .insert(pageRecordValuesTable)
@@ -1821,6 +1889,10 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
       res.status(409).json({ error: err.message });
       return;
     }
+    if (err instanceof MappedStatusTransitionError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
     if (err instanceof LockedPageConflictError) {
       res.status(409).json({
         error: err.message,
@@ -1835,6 +1907,67 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
       return;
     }
     throw err;
+  }
+  if (mappedTransitionState.value) {
+    const transition = mappedTransitionState.value;
+    const auditEntries = diffValues(
+      transition.beforeValues,
+      transition.afterValues,
+      entityFields.map((field) => field.fieldKey),
+    ).map((change) => ({ entityId, recordId, ...change, userId: req.user!.userId }));
+    auditEntries.push({
+      entityId,
+      recordId,
+      fieldKey: AUDIT_STATUS,
+      oldValue: transition.beforeStatusId == null ? null : String(transition.beforeStatusId),
+      newValue: String(transition.afterStatusId),
+      userId: req.user!.userId,
+    });
+    if (transition.beforeArchivedAt == null && transition.afterArchivedAt != null) {
+      auditEntries.push({
+        entityId,
+        recordId,
+        fieldKey: AUDIT_ARCHIVED,
+        oldValue: "false",
+        newValue: "true",
+        userId: req.user!.userId,
+      });
+    }
+    await writeAudit(auditEntries, req.log);
+    const changedFields = diffValues(
+      transition.beforeValues,
+      transition.afterValues,
+      entityFields.map((field) => field.fieldKey),
+    ).map((change) => change.fieldKey);
+    if (transition.beforeArchivedAt == null && transition.afterArchivedAt != null) {
+      changedFields.push(ARCHIVED_CHANGED_FIELD);
+    }
+    await trashRemovedServerFiles(
+      req,
+      entityId,
+      recordId,
+      transition.beforeValues,
+      transition.afterValues,
+    );
+    await emitEvent([
+      {
+        eventName: EVENT_RECORD_UPDATED,
+        entityId,
+        recordId,
+        payload: { actorUserId: req.user!.userId, changedFields, version: transition.version },
+      },
+      {
+        eventName: EVENT_STATUS_CHANGED,
+        entityId,
+        recordId,
+        payload: {
+          actorUserId: req.user!.userId,
+          from: transition.beforeStatusId,
+          to: transition.afterStatusId,
+          version: transition.version,
+        },
+      },
+    ], req.log);
   }
   // Local files removed from page-local file fields go to the file trash
   // (best-effort, never blocks the write) — same recovery path as entity fields.
@@ -2085,7 +2218,7 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
 
   const gdriveEnabled = await isGoogleDriveModuleEnabled();
   const hiddenSourceStatuses =
-    field.fieldType === "page_ref" && !perms.superAdmin
+    !perms.superAdmin
       ? new Set(effectiveStatusVisibility(perms, entityId).hiddenRowStatusIds)
       : new Set<number>();
   type ChangedPageRow = {
@@ -2093,6 +2226,7 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
     before: Record<string, unknown>;
     after: Record<string, unknown>;
     version: number;
+    mappedTransition?: MappedStatusTransitionResult;
   };
   let changedRows: ChangedPageRow[] = [];
 
@@ -2205,6 +2339,20 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
           delete finalValues[writeField.fieldKey];
         }
         if (diffChangedKeys(locked, finalValues).length === 0) continue;
+        const mapped = mappedStatusForChangedValues([writeField], locked, finalValues);
+        if ("error" in mapped) {
+          throw new BulkPageFieldUpdateError(422, recordId, mapped.error);
+        }
+        const mappedTransition = mapped.statusId == null
+          ? null
+          : await applyMappedStatusTransition({
+              tx,
+              record: recordsById.get(recordId)!,
+              targetStatusId: mapped.statusId,
+              fields: entityFields,
+              permissions: perms,
+              gdriveModuleEnabled: gdriveEnabled,
+            });
         const [written] = await tx
           .insert(pageRecordValuesTable)
           .values({ pageId: writePageId, recordId, valuesJson: finalValues })
@@ -2212,7 +2360,13 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
             target: [pageRecordValuesTable.pageId, pageRecordValuesTable.recordId],
             set: { valuesJson: finalValues },
           }).returning({ version: pageRecordValuesTable.version });
-        changed.push({ recordId, before: locked, after: finalValues, version: written!.version });
+        changed.push({
+          recordId,
+          before: locked,
+          after: finalValues,
+          version: written!.version,
+          ...(mappedTransition ? { mappedTransition } : {}),
+        });
       }
       return changed;
     });
@@ -2223,6 +2377,10 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
     }
     if (err instanceof DriveFileTombstonedError) {
       res.status(409).json({ error: err.message });
+      return;
+    }
+    if (err instanceof MappedStatusTransitionError) {
+      res.status(err.status).json({ error: err.message });
       return;
     }
     if (err instanceof BulkPageFieldUpdateError) {
@@ -2238,6 +2396,76 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
   }
 
   for (const row of changedRows) {
+    if (row.mappedTransition) {
+      const transition = row.mappedTransition;
+      const entityChanges = diffValues(
+        transition.beforeValues,
+        transition.afterValues,
+        entityFields.map((entityField) => entityField.fieldKey),
+      );
+      const audits = entityChanges.map((change) => ({
+        entityId,
+        recordId: row.recordId,
+        ...change,
+        userId: req.user!.userId,
+      }));
+      audits.push({
+        entityId,
+        recordId: row.recordId,
+        fieldKey: AUDIT_STATUS,
+        oldValue: transition.beforeStatusId == null ? null : String(transition.beforeStatusId),
+        newValue: String(transition.afterStatusId),
+        userId: req.user!.userId,
+      });
+      if (transition.beforeArchivedAt == null && transition.afterArchivedAt != null) {
+        audits.push({
+          entityId,
+          recordId: row.recordId,
+          fieldKey: AUDIT_ARCHIVED,
+          oldValue: "false",
+          newValue: "true",
+          userId: req.user!.userId,
+        });
+      }
+      await writeAudit(audits, req.log);
+      if (transition.beforeArchivedAt == null && transition.afterArchivedAt != null) {
+        entityChanges.push({
+          fieldKey: ARCHIVED_CHANGED_FIELD,
+          oldValue: "false",
+          newValue: "true",
+        });
+      }
+      await trashRemovedServerFiles(
+        req,
+        entityId,
+        row.recordId,
+        transition.beforeValues,
+        transition.afterValues,
+      );
+      await emitEvent([
+        {
+          eventName: EVENT_RECORD_UPDATED,
+          entityId,
+          recordId: row.recordId,
+          payload: {
+            actorUserId: req.user!.userId,
+            changedFields: entityChanges.map((change) => change.fieldKey),
+            version: transition.version,
+          },
+        },
+        {
+          eventName: EVENT_STATUS_CHANGED,
+          entityId,
+          recordId: row.recordId,
+          payload: {
+            actorUserId: req.user!.userId,
+            from: transition.beforeStatusId,
+            to: transition.afterStatusId,
+            version: transition.version,
+          },
+        },
+      ], req.log);
+    }
     await emitEvent(
       {
         eventName: EVENT_PAGE_FIELD_SAVED,

@@ -71,3 +71,23 @@ test("different mapped statuses in one write are rejected", () => {
   assert.ok("error" in result);
   assert.deepEqual(result.fieldKeys, ["installation", "quality"]);
 });
+
+test("page-local select mappings react only to the authoritative changed value", () => {
+  const pageField = field("page_stage", [
+    { value: "queued", labelJson: {}, statusId: 10 },
+    { value: "done", labelJson: {}, statusId: 20 },
+    { value: "note_only", labelJson: {} },
+  ]);
+  assert.deepEqual(
+    mappedStatusForChangedValues([pageField], { page_stage: "queued" }, { page_stage: "done" }),
+    { statusId: 20, fieldKeys: ["page_stage"] },
+  );
+  assert.deepEqual(
+    mappedStatusForChangedValues([pageField], { page_stage: "done" }, { page_stage: "note_only" }),
+    { fieldKeys: [] },
+  );
+  assert.deepEqual(
+    mappedStatusForChangedValues([pageField], { page_stage: "done" }, {}),
+    { fieldKeys: [] },
+  );
+});
