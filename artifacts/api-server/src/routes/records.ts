@@ -1570,12 +1570,21 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     const groupingRows = formulaGroupRows.map((row) => ({
       id: row.id,
       createdAt: row.createdAt,
-      entityValues: groupingEntityValues.get(row.id) ?? row.values,
+      // Relation/lookup grouping keys are permission-aware linked inputs. They
+      // are intentionally absent from presented formula values, but winners
+      // still need them alongside materialized scalar/formula fields.
+      entityValues: {
+        ...(groupingLinkedInputs.get(row.id) ?? {}),
+        ...(groupingEntityValues.get(row.id) ?? row.values),
+      },
       pageValues: formulaPageId == null
         ? undefined
         : new Map([[
             formulaPageId,
-            groupingPageValues.get(row.id) ?? formulaGroupPageValues.get(row.id) ?? {},
+            {
+              ...(groupingLinkedInputs.get(row.id) ?? {}),
+              ...(groupingPageValues.get(row.id) ?? formulaGroupPageValues.get(row.id) ?? {}),
+            },
           ]]),
     }));
     formulaGroupWinners = formulaGroupResultWinners(groupingRows, entityGroupConfigs);
