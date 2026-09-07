@@ -63,13 +63,27 @@ function formulaReferenceKeys(fields: readonly FormulaConfiguredField[]): Set<st
   const keys = new Set<string>();
   for (const field of fields) {
     if (field.fieldType !== "function") continue;
-    const expression = (field.formulaConfigJson as { expression?: unknown } | null)?.expression;
-    if (typeof expression !== "string") continue;
-    for (const match of expression.matchAll(/\{([^{}]+)\}/g)) {
-      const key = match[1].trim();
-      // Legacy references are flat. Qualified names already have an explicit
-      // namespace and must not be guessed as a relation field.
-      if (key && !key.includes(":") && !key.includes(".")) keys.add(key);
+    const config = field.formulaConfigJson as {
+      expression?: unknown;
+      groupResult?: { fields?: unknown };
+    } | null;
+    if (typeof config?.expression === "string") {
+      for (const match of config.expression.matchAll(/\{([^{}]+)\}/g)) {
+        const key = match[1].trim();
+        // Legacy references are flat. Qualified names already have an explicit
+        // namespace and must not be guessed as a relation field.
+        if (key && !key.includes(":") && !key.includes(".")) keys.add(key);
+      }
+    }
+    if (Array.isArray(config?.groupResult?.fields)) {
+      for (const raw of config.groupResult.fields) {
+        if (!raw || typeof raw !== "object") continue;
+        const ref = raw as { scope?: unknown; fieldKey?: unknown };
+        if ((ref.scope === "entity" || ref.scope === "page") &&
+            typeof ref.fieldKey === "string" && ref.fieldKey) {
+          keys.add(ref.fieldKey);
+        }
+      }
     }
   }
   return keys;
