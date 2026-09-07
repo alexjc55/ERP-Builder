@@ -181,6 +181,31 @@ type LoadedRecord = {
   pages: Map<number, Record<string, unknown>>;
 };
 type RecordRow = { id: number; entityId: number; values: unknown };
+type FormulaFieldMetadata = {
+  fieldType: string;
+  relationConfigJson: unknown;
+};
+
+const fieldMetadataKey = (entityId: number, ref: LinkedFormulaFieldRef) =>
+  ref.scope === "entity"
+    ? `${entityId}:entity:${ref.fieldKey}`
+    : `${entityId}:page:${ref.pageId}:${ref.fieldKey}`;
+
+export function linkedFormulaEqualityKeys(values: readonly (readonly unknown[])[]): string[] {
+  let combinations: unknown[][] = [[]];
+  for (const candidates of values) {
+    const present = candidates.filter((value) => value !== null && value !== undefined);
+    if (!present.length) return [];
+    if (combinations.length * present.length > 1_000) {
+      throw new LinkedFormulaResolutionError("LIMIT_EXCEEDED", "Equality relation expansion exceeds 1000 combinations");
+    }
+    combinations = combinations.flatMap((combination) =>
+      present.map((candidate) => [...combination, candidate]));
+  }
+  return combinations
+    .map((combination) => equalityKey(combination))
+    .filter((key): key is string => key !== null);
+}
 
 /**
  * Apply row RBAC once per distinct target scope. Several aggregates commonly
@@ -303,11 +328,21 @@ export async function resolveLinkedFormulaData(
     pageIds.size
       ? db.select({ id: pagesTable.id, mirrorEntityId: pagesTable.mirrorEntityId }).from(pagesTable).where(inArray(pagesTable.id, [...pageIds]))
       : Promise.resolve([]),
-    db.select({ entityId: entityFieldsTable.entityId, fieldKey: entityFieldsTable.fieldKey })
+    db.select({
+      entityId: entityFieldsTable.entityId,
+      fieldKey: entityFieldsTable.fieldKey,
+      fieldType: entityFieldsTable.fieldType,
+      relationConfigJson: entityFieldsTable.relationConfigJson,
+    })
       .from(entityFieldsTable)
       .where(and(inArray(entityFieldsTable.entityId, entityIds), eq(entityFieldsTable.isActive, true))),
     pageIds.size
-      ? db.select({ pageId: pageFieldsTable.pageId, fieldKey: pageFieldsTable.fieldKey })
+      ? db.select({
+          pageId: pageFieldsTable.pageId,
+          fieldKey: pageFieldsTable.fieldKey,
+          fieldType: pageFieldsTable.fieldType,
+          relationConfigJson: pageFieldsTable.relationConfigJson,
+        })
           .from(pageFieldsTable)
           .where(and(inArray(pageFieldsTable.pageId, [...pageIds]), eq(pageFieldsTable.isActive, true)))
       : Promise.resolve([]),
@@ -325,6 +360,19 @@ export async function resolveLinkedFormulaData(
   }
   const entityFieldSet = new Set(entityFields.map((row) => `${row.entityId}:${row.fieldKey}`));
   const pageFieldSet = new Set(pageFields.map((row) => `${row.pageId}:${row.fieldKey}`));
+  const fieldMetadata = new Map<string, FormulaFieldMetadata>([
+    ...entityFields.map((row) => [
+      fieldMetadataKey(row.entityId, { scope: "entity", fieldKey: row.fieldKey }),
+      { fieldType: row.fieldType, relationConfigJson: row.relationConfigJson },
+    ] as const),
+    ...pageFields.flatMap((row) => {
+      const owner = pageOwners.get(row.pageId);
+      return owner == null ? [] : [[
+        fieldMetadataKey(owner, { scope: "page", pageId: row.pageId, fieldKey: row.fieldKey }),
+        { fieldType: row.fieldType, relationConfigJson: row.relationConfigJson },
+      ] as const];
+    }),
+  ]);
   for (const { entityId, ref } of fieldOwners) {
     if (!ref.fieldKey) invalid("Field keys cannot be empty");
     if (ref.scope === "entity") {
@@ -352,9 +400,61 @@ export async function resolveLinkedFormulaData(
     }
   }
 
+  const directRelationIds = aggregates.flatMap((source) =>
+    source.join.kind === "relation" ? [source.join.relationId] : []);
+  const equalityRelationIds = [...new Set(aggregates.flatMap((source) =>
+    source.join.kind === "equality"
+      ? source.join.on.flatMap((pair) => [pair.base, pair.target])
+          .map((ref, index) => {
+            const ownerEntityId = index % 2 === 0 ? options.baseEntityId : source.targetEntityId;
+            const metadata = fieldMetadata.get(fieldMetadataKey(ownerEntityId, ref));
+            if (metadata?.fieldType !== "relation") return null;
+            const relationId = Number((metadata.relationConfigJson as { relationId?: unknown } | null)?.relationId);
+            return Number.isInteger(relationId) && relationId > 0 ? relationId : null;
+          })
+          .filter((id): id is number => id != null)
+      : []))];
+  const relationIds = [...new Set([...directRelationIds, ...equalityRelationIds])];
+  const relations = relationIds.length
+    ? await db.select().from(relationsTable).where(inArray(relationsTable.id, relationIds))
+    : [];
+  const relationById = new Map(relations.map((relation) => [relation.id, relation]));
+  if (relations.length !== relationIds.length) {
+    throw new LinkedFormulaResolutionError("NOT_FOUND", "A referenced relation does not exist");
+  }
+  const relationLinkedEntity = (ownerEntityId: number, ref: LinkedFormulaFieldRef): number | null => {
+    const metadata = fieldMetadata.get(fieldMetadataKey(ownerEntityId, ref));
+    if (metadata?.fieldType !== "relation") return null;
+    const relationId = Number((metadata.relationConfigJson as { relationId?: unknown } | null)?.relationId);
+    const relation = relationById.get(relationId);
+    if (!relation) return null;
+    if (relation.sourceEntityId === ownerEntityId) return relation.targetEntityId;
+    if (relation.targetEntityId === ownerEntityId) return relation.sourceEntityId;
+    return null;
+  };
+  for (const source of aggregates) {
+    if (source.join.kind !== "equality") continue;
+    for (const pair of source.join.on) {
+      const baseMeta = fieldMetadata.get(fieldMetadataKey(options.baseEntityId, pair.base));
+      const targetMeta = fieldMetadata.get(fieldMetadataKey(source.targetEntityId, pair.target));
+      const hasRelation = baseMeta?.fieldType === "relation" || targetMeta?.fieldType === "relation";
+      if (!hasRelation) continue;
+      const baseLinkedEntity = relationLinkedEntity(options.baseEntityId, pair.base);
+      const targetLinkedEntity = relationLinkedEntity(source.targetEntityId, pair.target);
+      if (baseLinkedEntity == null || targetLinkedEntity == null || baseLinkedEntity !== targetLinkedEntity) {
+        invalid(`Source ${source.key} equality relation references must both link to the same entity`);
+      }
+    }
+  }
+  const intermediateEntityIds = [...new Set(aggregates.flatMap((source) =>
+    source.join.kind === "equality"
+      ? source.join.on.map((pair) => relationLinkedEntity(options.baseEntityId, pair.base)).filter((id): id is number => id != null)
+      : []))];
+
   const resources = new Map<string, LinkedFormulaResource>();
   const addResource = (resource: LinkedFormulaResource) => resources.set(linkedFormulaResourceKey(resource), resource);
   for (const entityId of entityIds) addResource({ kind: "entity", entityId });
+  for (const entityId of intermediateEntityIds) addResource({ kind: "entity", entityId });
   for (const [pageId, entityId] of pageOwners) addResource({ kind: "page", pageId, entityId });
   for (const item of fieldOwners) addResource({ kind: "field", entityId: item.entityId, ...item.ref });
   const resourceList = [...resources.values()];
@@ -414,24 +514,70 @@ export async function resolveLinkedFormulaData(
   for (const row of allRows) loaded.set(row.id, { id: row.id, entityId: row.entityId, values: row.values as Record<string, unknown>, pages: new Map() });
   for (const row of pageValueRows) loaded.get(row.recordId)?.pages.set(row.pageId, row.values as Record<string, unknown>);
 
-  const relationSources = aggregates.filter(
-    (s): s is Extract<LinkedFormulaSource, { kind: "aggregate" }> & {
-      join: Extract<LinkedFormulaJoin, { kind: "relation" }>;
-    } => s.join.kind === "relation",
-  );
-  const relationIds = [...new Set(relationSources.map((source) => source.join.relationId))];
-  const [relations, links] = relationIds.length
-    ? await Promise.all([
-        db.select().from(relationsTable).where(inArray(relationsTable.id, relationIds)),
-        baseIds.length
-          ? db.select().from(recordLinksTable).where(and(
-              inArray(recordLinksTable.relationId, relationIds),
-              or(inArray(recordLinksTable.sourceRecordId, baseIds), inArray(recordLinksTable.targetRecordId, baseIds)),
-            ))
-          : Promise.resolve([]),
-      ])
-    : [[], []];
-  const relationById = new Map(relations.map((relation) => [relation.id, relation]));
+  const links = relationIds.length && allRecordIds.length
+    ? await db.select().from(recordLinksTable).where(and(
+        inArray(recordLinksTable.relationId, relationIds),
+        or(inArray(recordLinksTable.sourceRecordId, allRecordIds), inArray(recordLinksTable.targetRecordId, allRecordIds)),
+      ))
+    : [];
+
+  const intermediateIdsByEntity = new Map<number, Set<number>>();
+  for (const relationId of equalityRelationIds) {
+    const relation = relationById.get(relationId)!;
+    for (const link of links) {
+      if (link.relationId !== relationId) continue;
+      const sourceLoaded = loaded.get(link.sourceRecordId)?.entityId === relation.sourceEntityId;
+      const targetLoaded = loaded.get(link.targetRecordId)?.entityId === relation.targetEntityId;
+      if (sourceLoaded && !loaded.has(link.targetRecordId)) {
+        const ids = intermediateIdsByEntity.get(relation.targetEntityId) ?? new Set<number>();
+        ids.add(link.targetRecordId);
+        intermediateIdsByEntity.set(relation.targetEntityId, ids);
+      }
+      if (targetLoaded && !loaded.has(link.sourceRecordId)) {
+        const ids = intermediateIdsByEntity.get(relation.sourceEntityId) ?? new Set<number>();
+        ids.add(link.sourceRecordId);
+        intermediateIdsByEntity.set(relation.sourceEntityId, ids);
+      }
+    }
+  }
+  const allowedIntermediateByEntity = new Map<number, ReadonlySet<number>>();
+  await Promise.all([...intermediateIdsByEntity].map(async ([entityId, ids]) => {
+    const allowed = await options.permissions.filterRows({ entityId, recordIds: [...ids] });
+    if (!allowed?.has || [...allowed].some((id) => !ids.has(id))) {
+      throw new LinkedFormulaResolutionError("FORBIDDEN", "Invalid intermediate row permission result");
+    }
+    allowedIntermediateByEntity.set(entityId, allowed);
+  }));
+
+  const relationValues = new Map<string, number[]>();
+  for (const relationId of equalityRelationIds) {
+    const relation = relationById.get(relationId)!;
+    for (const link of links) {
+      if (link.relationId !== relationId) continue;
+      const addLinked = (recordId: number, ownerEntityId: number, linkedId: number, linkedEntityId: number) => {
+        if (loaded.get(recordId)?.entityId !== ownerEntityId) return;
+        if (!allowedIntermediateByEntity.get(linkedEntityId)?.has(linkedId)) return;
+        const key = `${relationId}:${recordId}`;
+        const ids = relationValues.get(key) ?? [];
+        if (!ids.includes(linkedId)) ids.push(linkedId);
+        relationValues.set(key, ids);
+      };
+      addLinked(link.sourceRecordId, relation.sourceEntityId, link.targetRecordId, relation.targetEntityId);
+      addLinked(link.targetRecordId, relation.targetEntityId, link.sourceRecordId, relation.sourceEntityId);
+    }
+  }
+  for (const ids of relationValues.values()) ids.sort((a, b) => a - b);
+
+  const equalityCandidates = (
+    ownerEntityId: number,
+    ref: LinkedFormulaFieldRef,
+    record: LoadedRecord,
+  ): readonly unknown[] => {
+    const metadata = fieldMetadata.get(fieldMetadataKey(ownerEntityId, ref));
+    if (metadata?.fieldType !== "relation") return [valueFrom(ref, record.values, record.pages)];
+    const relationId = Number((metadata.relationConfigJson as { relationId?: unknown } | null)?.relationId);
+    return (relationValues.get(`${relationId}:${record.id}`) ?? []).map((id) => `relation:${id}`);
+  };
 
   const valuesByRecordId = new Map<number, Record<string, unknown>>(
     baseIds.map((id) => [id, {}]),
@@ -469,16 +615,21 @@ export async function resolveLinkedFormulaData(
     } else {
       const index = new Map<string, LoadedRecord[]>();
       for (const target of targets) {
-        const key = equalityKey(source.join.on.map((pair) => valueFrom(pair.target, target.values, target.pages)));
-        if (key === null) continue;
-        const list = index.get(key) ?? [];
-        list.push(target);
-        index.set(key, list);
+        const keys = linkedFormulaEqualityKeys(source.join.on.map((pair) =>
+          equalityCandidates(source.targetEntityId, pair.target, target)));
+        for (const key of keys) {
+          const list = index.get(key) ?? [];
+          list.push(target);
+          index.set(key, list);
+        }
       }
       for (const baseId of baseIds) {
         const base = loaded.get(baseId)!;
-        const key = equalityKey(source.join.on.map((pair) => valueFrom(pair.base, base.values, base.pages)));
-        if (key !== null) matches.set(baseId, index.get(key) ?? []);
+        const found = new Map<number, LoadedRecord>();
+        const keys = linkedFormulaEqualityKeys(source.join.on.map((pair) =>
+          equalityCandidates(options.baseEntityId, pair.base, base)));
+        for (const key of keys) for (const target of index.get(key) ?? []) found.set(target.id, target);
+        matches.set(baseId, [...found.values()].sort((a, b) => a.id - b.id));
       }
     }
     for (const baseId of baseIds) {

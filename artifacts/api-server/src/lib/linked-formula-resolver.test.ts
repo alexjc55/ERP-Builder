@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   aggregateLinkedValues,
   filterLinkedFormulaTargetsByScope,
+  linkedFormulaEqualityKeys,
   linkedFormulaResourceKey,
 } from "./linked-formula-resolver";
 
@@ -15,6 +16,15 @@ test("linked formula numeric aggregates ignore non-numeric empty values", () => 
 
 test("uniqueJoin de-duplicates while preserving target-record order", () => {
   assert.equal(aggregateLinkedValues("uniqueJoin", ["B", "A", "B", null, "A", "C"], " | "), "B | A | C");
+});
+
+test("relation equality candidates expand into stable composite join keys", () => {
+  assert.deepEqual(
+    linkedFormulaEqualityKeys([["relation:74", "relation:81"], ["north"]]),
+    ['["relation:74","north"]', '["relation:81","north"]'],
+  );
+  assert.deepEqual(linkedFormulaEqualityKeys([[], ["north"]]), []);
+  assert.deepEqual(linkedFormulaEqualityKeys([[null], ["north"]]), []);
 });
 
 test("min and max support numeric and lexical values", () => {

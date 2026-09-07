@@ -11,7 +11,7 @@ import { FORMULA_CONFIG_LIMITS, normalizeFormulaFieldSources } from "./formula-f
 
 type Base = { kind: "entity"; entityId: number } | { kind: "page"; pageId: number; entityId: number };
 type Ref = { scope: "entity"; fieldKey: string } | { scope: "page"; pageId: number; fieldKey: string };
-type Field = { fieldType: string };
+type Field = { fieldType: string; relationConfigJson?: unknown };
 
 const UNSUPPORTED = new Set(["file", "relation", "lookup", "page_ref", "function"]);
 const NUMERIC = new Set(["number", "percent"]);
@@ -62,11 +62,24 @@ export async function validateFormulaSources(base: Base, config: unknown): Promi
       .where(inArray(entitiesTable.id, [...entityIds])),
     pageIds.size ? db.select({ id: pagesTable.id, mirrorEntityId: pagesTable.mirrorEntityId }).from(pagesTable)
       .where(inArray(pagesTable.id, [...pageIds])) : Promise.resolve([] as Array<{ id: number; mirrorEntityId: number | null }>),
-    db.select({ entityId: entityFieldsTable.entityId, fieldKey: entityFieldsTable.fieldKey, fieldType: entityFieldsTable.fieldType })
+    db.select({
+      entityId: entityFieldsTable.entityId,
+      fieldKey: entityFieldsTable.fieldKey,
+      fieldType: entityFieldsTable.fieldType,
+      relationConfigJson: entityFieldsTable.relationConfigJson,
+    })
       .from(entityFieldsTable).where(and(inArray(entityFieldsTable.entityId, [...entityIds]), eq(entityFieldsTable.isActive, true))),
-    pageIds.size ? db.select({ pageId: pageFieldsTable.pageId, fieldKey: pageFieldsTable.fieldKey, fieldType: pageFieldsTable.fieldType })
-      .from(pageFieldsTable).where(and(inArray(pageFieldsTable.pageId, [...pageIds]), eq(pageFieldsTable.isActive, true))) : Promise.resolve([] as Array<{ pageId: number; fieldKey: string; fieldType: string }>),
-    relationIds.size ? db.select().from(relationsTable).where(inArray(relationsTable.id, [...relationIds])) : Promise.resolve([]),
+    pageIds.size ? db.select({
+      pageId: pageFieldsTable.pageId,
+      fieldKey: pageFieldsTable.fieldKey,
+      fieldType: pageFieldsTable.fieldType,
+      relationConfigJson: pageFieldsTable.relationConfigJson,
+    })
+      .from(pageFieldsTable).where(and(inArray(pageFieldsTable.pageId, [...pageIds]), eq(pageFieldsTable.isActive, true))) : Promise.resolve([] as Array<{ pageId: number; fieldKey: string; fieldType: string; relationConfigJson: unknown }>),
+    // Equality joins may compare two relation fields that point to one shared
+    // entity. The relation table is small metadata and loading it once keeps
+    // validation set-based.
+    db.select().from(relationsTable),
   ]);
   const entityById = new Map(entities.map((entity) => [entity.id, entity]));
   const pageById = new Map(pages.map((page) => [page.id, page]));
@@ -81,6 +94,15 @@ export async function validateFormulaSources(base: Base, config: unknown): Promi
     if (ref.scope === "entity") return entityFieldByKey.get(`${entityId}:${ref.fieldKey}`) ?? null;
     if (!pageBelongsTo(ref.pageId, entityId)) return null;
     return pageFieldByKey.get(`${ref.pageId}:${ref.fieldKey}`) ?? null;
+  };
+  const relationTargetEntity = (ownerEntityId: number, field: Field | null): number | null => {
+    if (field?.fieldType !== "relation") return null;
+    const relationId = Number((field.relationConfigJson as { relationId?: unknown } | null)?.relationId);
+    const relation = relationById.get(relationId);
+    if (!relation) return null;
+    if (relation.sourceEntityId === ownerEntityId) return relation.targetEntityId;
+    if (relation.targetEntityId === ownerEntityId) return relation.sourceEntityId;
+    return null;
   };
   const entityKeys = allEntityFields.filter((field) => field.entityId === base.entityId);
   const basePageId = "pageId" in base ? base.pageId : null;
@@ -135,8 +157,17 @@ export async function validateFormulaSources(base: Base, config: unknown): Promi
       for (const pair of source.join.on) {
         const baseField = activeField(base.entityId, pair.base);
         const targetField = activeField(source.targetEntityId, pair.target);
-        if (unsupported(baseField)) errors.push(`Source "${source.key}" equality base reference must be an active supported base field`);
-        if (unsupported(targetField)) errors.push(`Source "${source.key}" equality target reference must be an active supported target field`);
+        const hasRelation = baseField?.fieldType === "relation" || targetField?.fieldType === "relation";
+        if (hasRelation) {
+          const baseTarget = relationTargetEntity(base.entityId, baseField);
+          const targetTarget = relationTargetEntity(source.targetEntityId, targetField);
+          if (baseTarget == null || targetTarget == null || baseTarget !== targetTarget) {
+            errors.push(`Source "${source.key}" equality relation references must both link to the same entity`);
+          }
+        } else {
+          if (unsupported(baseField)) errors.push(`Source "${source.key}" equality base reference must be an active supported base field`);
+          if (unsupported(targetField)) errors.push(`Source "${source.key}" equality target reference must be an active supported target field`);
+        }
         if (pair.target.scope === "page" && source.targetPageId !== pair.target.pageId) {
           errors.push(`Source "${source.key}" targetPageId must qualify every target page equality reference`);
         }

@@ -26,3 +26,11 @@ Structured linked-formula source tokens are server-only capabilities. Never seri
 **Why:** Relation/lookup values are not stored in the record JSON. Treating a flat reference as an ordinary stored key makes the formula silently empty; flattening the projected value into response data can also erase a legitimate same-key entity value. Re-resolving a full target set once per base-row chunk multiplies target scans.
 
 **How to apply:** Discover only referenced active relation/lookup fields, fail neutral on stale/invalid metadata, authorize every base/target resource and row, resolve the complete evaluation set once, and partition projected page inputs from entity inputs before building qualified scopes. SuperAdmin bypasses redundant grant rows but not schema existence.
+
+## Equality through a shared relation
+
+**Rule:** Two relation fields may be used as an equality join only when both point to the same intermediate entity. Match by the intersection of permission-approved linked record IDs, never by relation IDs, labels, or display text.
+
+**Why:** Records from different entities can belong to the same order without being linked directly to each other. Matching displayed order numbers is unstable and can bypass the linked order's row boundary.
+
+**How to apply:** Validate both relation endpoints on write; authorize the intermediate entity and filter every linked intermediate row before constructing join keys. Preserve scalar equality behavior, stable target-record ordering, and fail neutral when metadata or access is missing.
