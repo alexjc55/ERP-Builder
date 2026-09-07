@@ -1,0 +1,361 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import test, { after } from "node:test";
+import express from "express";
+import { and, eq, inArray } from "drizzle-orm";
+import {
+  auditLogTable,
+  db,
+  deletedFilesTable,
+  entitiesTable,
+  entityFieldsTable,
+  entityRecordsTable,
+  entityStatusesTable,
+  entityTransitionsTable,
+  pageFieldsTable,
+  pageRecordValuesTable,
+  pagesTable,
+  rolesTable,
+  systemEventsTable,
+  usersTable,
+  type RolePermissions,
+} from "@workspace/db";
+import { signToken } from "../lib/jwt";
+import pageFieldsRouter from "./page-fields";
+
+const runId = `page-select-sync-${randomUUID()}`;
+const ids: Record<string, number> = {};
+const app = express();
+app.use(express.json());
+app.use("/api", pageFieldsRouter);
+
+function permissions(pageIds: number[], hiddenStatusIds: number[] = []): RolePermissions {
+  return {
+    superAdmin: false,
+    admin: {
+      pages: false, entities: false, roles: false, users: false, translations: false,
+      events: false, modules: false, googleDrive: false, settings: false,
+      automations: false, customFilters: false, columnGroups: false, dataImport: false,
+      inboundIntegrations: false, documentGeneration: false,
+    },
+    pageIds,
+    records: {
+      [String(ids.entity)]: {
+        view: true, create: true, update: true, delete: true,
+        ...(hiddenStatusIds.length ? { hiddenStatusIds } : {}),
+      },
+    },
+  };
+}
+
+async function request(
+  path: string,
+  body: unknown,
+  method: "POST" | "PUT",
+  roleId = ids.role,
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  const server = await new Promise<ReturnType<typeof app.listen>>((resolve) => {
+    const listener = app.listen(0, "127.0.0.1", () => resolve(listener));
+  });
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    const response = await fetch(`http://127.0.0.1:${address.port}/api${path}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${signToken({ userId: ids.user, roleId })}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    const text = await response.text();
+    const contentType = response.headers.get("content-type") ?? "";
+    let parsed: Record<string, unknown>;
+    if (contentType.includes("application/json")) {
+      try {
+        parsed = JSON.parse(text) as Record<string, unknown>;
+      } catch {
+        parsed = { responseText: text, responseParseError: "Invalid JSON response" };
+      }
+    } else {
+      parsed = { responseText: text };
+    }
+    return { status: response.status, body: parsed };
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+}
+
+async function pageValue(pageId: number, recordId: number) {
+  const [row] = await db.select().from(pageRecordValuesTable).where(and(
+    eq(pageRecordValuesTable.pageId, pageId), eq(pageRecordValuesTable.recordId, recordId),
+  ));
+  return row;
+}
+
+async function record(recordId: number) {
+  const [row] = await db.select().from(entityRecordsTable).where(eq(entityRecordsTable.id, recordId));
+  assert.ok(row);
+  return row;
+}
+
+async function rollbackSnapshot(recordId: number) {
+  const row = await record(recordId);
+  const [pageRow] = await db.select().from(pageRecordValuesTable).where(and(
+    eq(pageRecordValuesTable.pageId, ids.targetPage),
+    eq(pageRecordValuesTable.recordId, recordId),
+  ));
+  const [audits, events] = await Promise.all([
+    db.select().from(auditLogTable).where(eq(auditLogTable.recordId, recordId)),
+    db.select().from(systemEventsTable).where(eq(systemEventsTable.recordId, recordId)),
+  ]);
+  return {
+    valuesJson: row.valuesJson,
+    statusId: row.statusId,
+    archivedAt: row.archivedAt,
+    version: row.version,
+    pageRow,
+    audits,
+    events,
+  };
+}
+
+async function pageRefRollbackSnapshot(recordId: number) {
+  const row = await record(recordId);
+  const [sourceRow, targetRow, audits, events] = await Promise.all([
+    pageValue(ids.sourcePage, recordId),
+    pageValue(ids.targetPage, recordId),
+    db.select().from(auditLogTable).where(eq(auditLogTable.recordId, recordId)),
+    db.select().from(systemEventsTable).where(eq(systemEventsTable.recordId, recordId)),
+  ]);
+  return {
+    valuesJson: row.valuesJson,
+    statusId: row.statusId,
+    archivedAt: row.archivedAt,
+    version: row.version,
+    sourceRow,
+    targetRow,
+    audits,
+    events,
+  };
+}
+
+async function reset(recordIds = [ids.one, ids.two]) {
+  await db.delete(entityTransitionsTable).where(eq(entityTransitionsTable.entityId, ids.entity));
+  await db.delete(auditLogTable).where(inArray(auditLogTable.recordId, recordIds));
+  await db.delete(systemEventsTable).where(and(eq(systemEventsTable.entityId, ids.entity), inArray(systemEventsTable.recordId, recordIds)));
+  await db.delete(deletedFilesTable).where(inArray(deletedFilesTable.recordId, recordIds));
+  await db.update(entityRecordsTable).set({
+    statusId: ids.base,
+    archivedAt: null,
+    valuesJson: { name: "Ready", attachment: { kind: "server", path: `/local/${runId}.txt`, name: "old.txt" } },
+  }).where(inArray(entityRecordsTable.id, recordIds));
+  await db.delete(pageRecordValuesTable).where(inArray(pageRecordValuesTable.recordId, recordIds));
+}
+
+async function setup() {
+  const [entity] = await db.insert(entitiesTable).values({ entityKey: runId, nameJson: { en: runId } })
+    .returning({ id: entitiesTable.id });
+  ids.entity = entity!.id;
+  const pages = await db.insert(pagesTable).values([
+    { nameJson: { en: `${runId} target` }, mirrorEntityId: ids.entity },
+    { nameJson: { en: `${runId} source` }, mirrorEntityId: ids.entity },
+  ]).returning({ id: pagesTable.id });
+  ids.targetPage = pages[0]!.id;
+  ids.sourcePage = pages[1]!.id;
+  const [role] = await db.insert(rolesTable).values({
+    nameJson: { en: runId },
+    permissionsJson: permissions([ids.targetPage, ids.sourcePage]),
+  }).returning({ id: rolesTable.id });
+  ids.role = role!.id;
+  const [user] = await db.insert(usersTable).values({
+    email: `${runId}@example.invalid`, firstName: "Page", lastName: "Writer", roleId: ids.role,
+  }).returning({ id: usersTable.id });
+  ids.user = user!.id;
+  await db.insert(entityFieldsTable).values([
+    { entityId: ids.entity, fieldKey: "name", nameJson: { en: "Name" }, fieldType: "text", isRequired: true },
+    { entityId: ids.entity, fieldKey: "attachment", nameJson: { en: "Attachment" }, fieldType: "file" },
+  ]);
+  const statuses = await db.insert(entityStatusesTable).values([
+    { entityId: ids.entity, statusKey: "base", nameJson: { en: "Base" }, isDefault: true, sortOrder: 0 },
+    { entityId: ids.entity, statusKey: "done", nameJson: { en: "Done" }, sortOrder: 1 },
+    { entityId: ids.entity, statusKey: "archive", nameJson: { en: "Archive" }, isArchiveTrigger: true, archiveAfterDays: 0, sortOrder: 2 },
+  ]).returning({ id: entityStatusesTable.id, statusKey: entityStatusesTable.statusKey });
+  for (const status of statuses) ids[status.statusKey] = status.id;
+  await db.insert(pageFieldsTable).values([
+    {
+      pageId: ids.targetPage, fieldKey: "stage", nameJson: { en: "Stage" }, fieldType: "select",
+      optionsJson: [{ value: "done", labelJson: { en: "Done" }, statusId: ids.done }, { value: "archive", labelJson: { en: "Archive" }, statusId: ids.archive }],
+    },
+    {
+      pageId: ids.targetPage, fieldKey: "source_stage", nameJson: { en: "Source stage" }, fieldType: "page_ref",
+      pageRefConfigJson: { sourcePageId: ids.sourcePage, sourceFieldKey: "stage" },
+    },
+    {
+      pageId: ids.sourcePage, fieldKey: "stage", nameJson: { en: "Stage" }, fieldType: "select",
+      optionsJson: [{ value: "done", labelJson: { en: "Done" }, statusId: ids.done }],
+    },
+  ]);
+  const records = await db.insert(entityRecordsTable).values([
+    { entityId: ids.entity, valuesJson: { name: "Ready", attachment: { kind: "server", path: `/local/${runId}.txt`, name: "old.txt" } }, statusId: ids.base },
+    { entityId: ids.entity, valuesJson: { name: "Ready", attachment: { kind: "server", path: `/local/${runId}-2.txt`, name: "old2.txt" } }, statusId: ids.base },
+  ]).returning({ id: entityRecordsTable.id });
+  ids.one = records[0]!.id; ids.two = records[1]!.id;
+}
+
+async function cleanup() {
+  if (ids.entity) {
+    await db.delete(systemEventsTable).where(eq(systemEventsTable.entityId, ids.entity));
+    await db.delete(auditLogTable).where(eq(auditLogTable.entityId, ids.entity));
+    await db.delete(deletedFilesTable).where(eq(deletedFilesTable.entityId, ids.entity));
+  }
+  if (ids.targetPage || ids.sourcePage) await db.delete(pagesTable).where(inArray(pagesTable.id, [ids.targetPage, ids.sourcePage]));
+  if (ids.entity) await db.delete(entitiesTable).where(eq(entitiesTable.id, ids.entity));
+  if (ids.user) await db.delete(usersTable).where(eq(usersTable.id, ids.user));
+  if (ids.role) await db.delete(rolesTable).where(eq(rolesTable.id, ids.role));
+}
+
+after(async () => { await cleanup(); });
+
+test("page-local select mappings synchronize entity status atomically", async (t) => {
+  await setup();
+  await t.test("single and bulk writes commit page values and mapped statuses", async () => {
+    let response = await request(`/pages/${ids.targetPage}/records/${ids.one}/values`, { valuesJson: { stage: "done" } }, "PUT");
+    assert.equal(response.status, 200);
+    assert.equal((await record(ids.one)).statusId, ids.done);
+    assert.equal(((await pageValue(ids.targetPage, ids.one))!.valuesJson as Record<string, unknown>).stage, "done");
+    await reset();
+    response = await request(`/pages/${ids.targetPage}/records/bulk-field-values`, { fieldKey: "stage", value: "done", recordIds: [ids.one, ids.two] }, "POST");
+    assert.equal(response.status, 200);
+    assert.deepEqual((response.body.updatedIds as number[]).sort(), [ids.one, ids.two].sort());
+    assert.equal((await record(ids.one)).statusId, ids.done);
+    assert.equal((await record(ids.two)).statusId, ids.done);
+    assert.equal(((await pageValue(ids.targetPage, ids.one))!.valuesJson as Record<string, unknown>).stage, "done");
+    assert.equal(((await pageValue(ids.targetPage, ids.two))!.valuesJson as Record<string, unknown>).stage, "done");
+  });
+
+  await t.test("page_ref writes only its authoritative source and source access denial has no side effects", async () => {
+    await reset([ids.one]);
+    let response = await request(`/pages/${ids.targetPage}/records/${ids.one}/values`, { valuesJson: { source_stage: "done" } }, "PUT");
+    assert.equal(response.status, 200);
+    assert.equal(((await pageValue(ids.sourcePage, ids.one))!.valuesJson as Record<string, unknown>).stage, "done");
+    assert.equal(await pageValue(ids.targetPage, ids.one), undefined);
+    assert.equal((await record(ids.one)).statusId, ids.done);
+    await reset([ids.one]);
+    await db.update(rolesTable).set({ permissionsJson: permissions([ids.targetPage]) }).where(eq(rolesTable.id, ids.role));
+    response = await request(`/pages/${ids.targetPage}/records/${ids.one}/values`, { valuesJson: { source_stage: "done" } }, "PUT");
+    assert.equal(response.status, 403);
+    assert.equal(await pageValue(ids.sourcePage, ids.one), undefined);
+    assert.equal((await record(ids.one)).statusId, ids.base);
+    await db.update(rolesTable).set({ permissionsJson: permissions([ids.targetPage, ids.sourcePage]) }).where(eq(rolesTable.id, ids.role));
+  });
+
+  await t.test("bulk page_ref writes use only the source page and deny atomically without source access", async () => {
+    await reset();
+    let response = await request(
+      `/pages/${ids.targetPage}/records/bulk-field-values`,
+      { fieldKey: "source_stage", value: "done", recordIds: [ids.one, ids.two] },
+      "POST",
+    );
+    assert.equal(response.status, 200);
+    for (const recordId of [ids.one, ids.two]) {
+      assert.equal(((await pageValue(ids.sourcePage, recordId))!.valuesJson as Record<string, unknown>).stage, "done");
+      assert.equal(await pageValue(ids.targetPage, recordId), undefined);
+      assert.equal((await record(recordId)).statusId, ids.done);
+    }
+
+    await reset();
+    const beforeDenied = await Promise.all([pageRefRollbackSnapshot(ids.one), pageRefRollbackSnapshot(ids.two)]);
+    await db.update(rolesTable).set({ permissionsJson: permissions([ids.targetPage]) }).where(eq(rolesTable.id, ids.role));
+    response = await request(
+      `/pages/${ids.targetPage}/records/bulk-field-values`,
+      { fieldKey: "source_stage", value: "done", recordIds: [ids.one, ids.two] },
+      "POST",
+    );
+    assert.equal(response.status, 403);
+    assert.match(String(response.body.error), /No access to the source page/);
+    assert.deepEqual(
+      await Promise.all([pageRefRollbackSnapshot(ids.one), pageRefRollbackSnapshot(ids.two)]),
+      beforeDenied,
+    );
+    await db.update(rolesTable).set({ permissionsJson: permissions([ids.targetPage, ids.sourcePage]) }).where(eq(rolesTable.id, ids.role));
+  });
+
+  await t.test("workflow, required-field failures roll back page/status/version/audit/event state", async () => {
+    await reset([ids.one]);
+    const beforeGraphFailure = await rollbackSnapshot(ids.one);
+    await db.insert(entityTransitionsTable).values({ entityId: ids.entity, fromStatusId: ids.base, toStatusId: ids.archive, nameJson: {}, allowedRoleIds: [], requiredFieldKeys: [], actionsJson: [] });
+    let response = await request(`/pages/${ids.targetPage}/records/${ids.one}/values`, { valuesJson: { stage: "done" } }, "PUT");
+    assert.equal(response.status, 422);
+    assert.deepEqual(await rollbackSnapshot(ids.one), beforeGraphFailure);
+    await db.delete(entityTransitionsTable).where(eq(entityTransitionsTable.entityId, ids.entity));
+    await db.insert(entityTransitionsTable).values({ entityId: ids.entity, fromStatusId: ids.base, toStatusId: ids.done, nameJson: {}, allowedRoleIds: [], requiredFieldKeys: ["name"], actionsJson: [] });
+    await db.update(entityRecordsTable).set({ valuesJson: { attachment: { kind: "server", path: `/local/${runId}.txt`, name: "old.txt" } } }).where(eq(entityRecordsTable.id, ids.one));
+    const beforeRequiredFailure = await rollbackSnapshot(ids.one);
+    response = await request(`/pages/${ids.targetPage}/records/${ids.one}/values`, { valuesJson: { stage: "done" } }, "PUT");
+    assert.equal(response.status, 400);
+    assert.deepEqual(await rollbackSnapshot(ids.one), beforeRequiredFailure);
+  });
+
+  await t.test("mapped statuses bypass picker/manual/role policy but enforce graph, actions and archive effects", async () => {
+    await reset([ids.one]);
+    await db.update(entitiesTable).set({ statusManualEditPolicy: "disabled_all" }).where(eq(entitiesTable.id, ids.entity));
+    await db.update(rolesTable).set({ permissionsJson: permissions([ids.targetPage, ids.sourcePage], [ids.archive]) }).where(eq(rolesTable.id, ids.role));
+    await db.insert(entityTransitionsTable).values({ entityId: ids.entity, fromStatusId: ids.base, toStatusId: ids.archive, nameJson: {}, allowedRoleIds: [999999], requiredFieldKeys: ["name"], actionsJson: [{ type: "set_field", fieldKey: "attachment", value: null }] });
+    const response = await request(`/pages/${ids.targetPage}/records/${ids.one}/values`, { valuesJson: { stage: "archive" } }, "PUT");
+    assert.equal(response.status, 200);
+    const updated = await record(ids.one);
+    assert.equal(updated.statusId, ids.archive);
+    assert.ok(updated.archivedAt);
+    assert.equal((updated.valuesJson as Record<string, unknown>).attachment, undefined);
+    const audits = await db.select({ fieldKey: auditLogTable.fieldKey }).from(auditLogTable).where(eq(auditLogTable.recordId, ids.one));
+    assert.ok(audits.some((row) => row.fieldKey === "__status__"));
+    assert.ok(audits.some((row) => row.fieldKey === "__archived__"));
+    const events = await db.select({ eventName: systemEventsTable.eventName, payload: systemEventsTable.payloadJson }).from(systemEventsTable).where(eq(systemEventsTable.recordId, ids.one));
+    assert.ok(events.some((row) => row.eventName === "record.updated" && (row.payload as Record<string, unknown>).changedFields instanceof Array && ((row.payload as Record<string, unknown>).changedFields as string[]).includes("__archived__")));
+    assert.ok(events.some((row) => row.eventName === "status.changed"));
+    const [deleted] = await db.select().from(deletedFilesTable).where(eq(deletedFilesTable.recordId, ids.one));
+    assert.equal(deleted!.filePath, `/local/${runId}.txt`);
+  });
+
+  await t.test("bulk archive mapping applies actions and emits complete effects for every record", async () => {
+    await reset();
+    await db.delete(entityTransitionsTable).where(eq(entityTransitionsTable.entityId, ids.entity));
+    await db.insert(entityTransitionsTable).values({
+      entityId: ids.entity,
+      fromStatusId: ids.base,
+      toStatusId: ids.archive,
+      nameJson: {},
+      allowedRoleIds: [999999],
+      requiredFieldKeys: ["name"],
+      actionsJson: [{ type: "set_field", fieldKey: "attachment", value: null }],
+    });
+    const response = await request(
+      `/pages/${ids.targetPage}/records/bulk-field-values`,
+      { fieldKey: "stage", value: "archive", recordIds: [ids.one, ids.two] },
+      "POST",
+    );
+    assert.equal(response.status, 200);
+    for (const recordId of [ids.one, ids.two]) {
+      const updated = await record(recordId);
+      assert.equal(((await pageValue(ids.targetPage, recordId))!.valuesJson as Record<string, unknown>).stage, "archive");
+      assert.equal(updated.statusId, ids.archive);
+      assert.ok(updated.archivedAt);
+      assert.equal((updated.valuesJson as Record<string, unknown>).attachment, undefined);
+      const [audits, events, deleted] = await Promise.all([
+        db.select({ fieldKey: auditLogTable.fieldKey }).from(auditLogTable).where(eq(auditLogTable.recordId, recordId)),
+        db.select({ eventName: systemEventsTable.eventName, payload: systemEventsTable.payloadJson }).from(systemEventsTable).where(eq(systemEventsTable.recordId, recordId)),
+        db.select().from(deletedFilesTable).where(eq(deletedFilesTable.recordId, recordId)),
+      ]);
+      assert.ok(audits.some((row) => row.fieldKey === "__status__"));
+      assert.ok(audits.some((row) => row.fieldKey === "__archived__"));
+      assert.ok(events.some((row) =>
+        row.eventName === "record.updated" &&
+        ((row.payload as Record<string, unknown>).changedFields as string[]).includes("__archived__"),
+      ));
+      assert.ok(events.some((row) => row.eventName === "status.changed"));
+      assert.equal(deleted.length, 1);
+      assert.equal(deleted[0]!.reason, "field_cleared");
+    }
+  });
+});
