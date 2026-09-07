@@ -22,7 +22,10 @@ type FormulaGroupOwner =
   | { kind: "entity"; entityId: number }
   | { kind: "page"; pageId: number };
 
-const unsupportedKeyTypes = new Set(["file", "relation", "lookup", "page_ref"]);
+// Relation and lookup values are permission-aware derived inputs resolved by
+// the formula runtime, so they are valid grouping keys. Files and page refs do
+// not have stable scalar grouping semantics here.
+const unsupportedKeyTypes = new Set(["file", "page_ref"]);
 
 async function effectiveEntityId(pageId: number): Promise<number | null> {
   const [page] = await db

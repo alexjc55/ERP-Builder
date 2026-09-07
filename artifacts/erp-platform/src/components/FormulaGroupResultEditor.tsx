@@ -65,7 +65,7 @@ export function FormulaGroupResultEditor({
   }, [targetPages, pageFieldQueries]);
   
   const isExcluded = (type: FieldType) =>
-    type === "relation" || type === "lookup" || type === "file" || type === "page_ref";
+    type === "file" || type === "page_ref";
   
   const availableEntityFields = entityFields.filter((f) => !isExcluded(f.fieldType) && f.isActive);
   
