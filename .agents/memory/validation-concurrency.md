@@ -1,10 +1,10 @@
 ---
 name: Validation concurrency
-description: Why the dependency-install and collaboration E2E validations must not run concurrently.
+description: Why destructive install, collaboration E2E, and PostgreSQL fixture release gates must not run concurrently.
 ---
 
-The dependency-install validation and collaboration E2E must share a repository-specific execution lock.
+The dependency-install validation, collaboration/relation E2E, and PostgreSQL fixture release gates must share a repository-specific execution lock.
 
 **Why:** A clean workspace install creates enough concurrent I/O to change the timing of the collaboration conflict scenario. The E2E can then refresh before submitting the stale edit, return 200 instead of the expected 409, and time out despite both checks passing independently.
 
-**How to apply:** Keep these two validations serialized when changing their launch scripts or adding other resource-intensive validation work. New lightweight checks do not need the lock unless concurrent runs reproduce timing failures.
+**How to apply:** Route DB-backed release checks through a lock-taking wrapper, retain each test runner's internal sequential mode, and use the same lock in destructive install and timing-sensitive E2E workflows.

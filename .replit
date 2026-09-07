@@ -24,6 +24,10 @@ args = "collaboration-e2e"
 task = "workflow.run"
 args = "dependency-install"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "page-select-status-sync"
+
 [[workflows.workflow]]
 name = "collaboration-e2e"
 author = "agent"
@@ -42,6 +46,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "bash scripts/validate-dependency-install.sh"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "page-select-status-sync"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "corepack pnpm run validate:page-select-status-sync"
 
 [workflows.workflow.metadata]
 isValidation = true
