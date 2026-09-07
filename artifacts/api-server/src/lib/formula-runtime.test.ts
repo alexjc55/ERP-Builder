@@ -2,11 +2,44 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   canUseRecordPageFormulaContext,
+  formulaSourcesOf,
   legacyFormulaSourcesFromFields,
   materializeVisibleEntityFormulas,
   materializeVisiblePageFormulas,
   mergeLinkedFormulaInputsBatched,
 } from "./formula-runtime";
+
+test("qualified page references become permission-aware page-local sources automatically", () => {
+  const fields = [{
+    fieldKey: "epokol_ready",
+    fieldType: "function",
+    formulaConfigJson: {
+      expression: "{page:77.production_finish_date}",
+    },
+  }];
+
+  assert.deepEqual(formulaSourcesOf(fields), [{
+    kind: "pageLocal",
+    key: "page:77.production_finish_date",
+    pageId: 77,
+    fieldKey: "production_finish_date",
+  }]);
+
+  const values = materializeVisiblePageFormulas({
+    entityId: 72,
+    pageId: 90,
+    rows: [{ id: 4164, entityValues: {}, pageValues: {} }],
+    entityFields: [],
+    pageFields: fields,
+    hiddenEntity: new Set(),
+    hiddenPage: new Set(),
+    linkedInputs: new Map([[4164, {
+      "page:77.production_finish_date": "2026-08-19",
+    }]]),
+  }).get(4164)!;
+
+  assert.equal(values.epokol_ready, "2026-08-19");
+});
 
 test("legacy relation and lookup references become linked sources, with page shadowing", () => {
   const sources = legacyFormulaSourcesFromFields([

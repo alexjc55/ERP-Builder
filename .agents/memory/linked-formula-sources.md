@@ -9,6 +9,14 @@ Structured linked-formula source tokens are server-only capabilities. Never seri
 
 **How to apply:** Resolve common source graphs and target-row permission scopes in batches, re-apply entity/page/field/row permissions at every hop, validate structured source references on write, evaluate authorized formula chains server-side, and return only normal visible formula-field keys. SYSTEM automation/dashboard contexts must remain explicit rather than inferred.
 
+## Qualified page references
+
+**Rule:** A formula token shaped like `{page:<id>.<field>}` must automatically enter the same permission-aware `pageLocal` resolution path as an explicitly configured page source; parsing the token without loading its source is not valid support.
+
+**Why:** The editor's qualified syntax promises an unambiguous cross-page value, but a token without a separately persisted source used to evaluate as empty even when that same record had a value on the referenced page.
+
+**How to apply:** Infer only positive page IDs and non-empty keys, then let canonical page ownership, active-field, page-access, field-access, and row-scope checks fail closed. Never copy raw cross-page values into client responses.
+
 ## Legacy flat relation/lookup references
 
 **Rule:** A legacy flat formula reference to a relation/lookup field must be derived from the active field schema and resolved through the same permission-aware linked-source path as a structured source. Keep formula scope inputs separate from response values: current-page projections may shadow flat keys, but must not overwrite or remove a same-key entity scalar or leak a transient source token.

@@ -76,6 +76,33 @@ function formulaReferenceKeys(fields: readonly FormulaConfiguredField[]): Set<st
 }
 
 /**
+ * A qualified `{page:<id>.<key>}` reference is already an unambiguous request
+ * for a page-local value on the same base record. Turn it into the structured
+ * source consumed by the permission-aware resolver, even when an older/manual
+ * formula did not persist a matching `formulaConfigJson.sources` entry.
+ */
+export function qualifiedPageFormulaSources(
+  fields: readonly FormulaConfiguredField[],
+): LinkedFormulaSource[] {
+  const sources = new Map<string, LinkedFormulaSource>();
+  for (const field of fields) {
+    if (field.fieldType !== "function") continue;
+    const expression = (field.formulaConfigJson as { expression?: unknown } | null)?.expression;
+    if (typeof expression !== "string") continue;
+    for (const match of expression.matchAll(/\{([^{}]+)\}/g)) {
+      const qualified = /^page:(\d+)\.(.+)$/.exec(match[1].trim());
+      if (!qualified) continue;
+      const pageId = Number(qualified[1]);
+      const fieldKey = qualified[2].trim();
+      if (!Number.isInteger(pageId) || pageId <= 0 || !fieldKey) continue;
+      const key = `page:${pageId}.${fieldKey}`;
+      sources.set(key, { kind: "pageLocal", key, pageId, fieldKey });
+    }
+  }
+  return [...sources.values()];
+}
+
+/**
  * Turn a legacy flat reference to a relation/lookup column into the same
  * permission-aware linked source used by structured formulas.  This is pure so
  * the security-sensitive discovery rules can be tested without a database.
@@ -219,20 +246,21 @@ export function buildQualifiedFormulaScope(options: {
 /** Collect structured dependencies once for an evaluation batch. */
 export function formulaSourcesOf(fields: readonly FormulaConfiguredField[]): LinkedFormulaSource[] {
   const byKey = new Map<string, LinkedFormulaSource | null>();
+  const addSource = (source: LinkedFormulaSource) => {
+    // Source tokens share one formula scope. Identical definitions are
+    // harmless; a cross-field key collision with different definitions is
+    // ambiguous and therefore removed (neutral), never resolved arbitrarily.
+    const previous = byKey.get(source.key);
+    if (previous === undefined) byKey.set(source.key, source);
+    else if (previous !== null && JSON.stringify(previous) !== JSON.stringify(source)) byKey.set(source.key, null);
+  };
   for (const field of fields) {
     if (field.fieldType !== "function") continue;
-    const sources = normalizeFormulaFieldSources(
+    for (const source of normalizeFormulaFieldSources(
       (field.formulaConfigJson as { sources?: unknown } | null)?.sources,
-    ) as LinkedFormulaSource[];
-    for (const source of sources) {
-      // Source tokens share one formula scope. Identical definitions are
-      // harmless; a cross-field key collision with different definitions is
-      // ambiguous and therefore removed (neutral), never resolved arbitrarily.
-      const previous = byKey.get(source.key);
-      if (previous === undefined) byKey.set(source.key, source);
-      else if (previous !== null && JSON.stringify(previous) !== JSON.stringify(source)) byKey.set(source.key, null);
-    }
+    ) as LinkedFormulaSource[]) addSource(source);
   }
+  for (const source of qualifiedPageFormulaSources(fields)) addSource(source);
   return [...byKey.values()].filter((source): source is LinkedFormulaSource => source !== null);
 }
 
