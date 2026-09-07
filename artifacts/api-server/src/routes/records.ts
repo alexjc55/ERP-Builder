@@ -3992,16 +3992,6 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
   // record's status still being the one we validated against (compare-and-set),
   // so concurrent status-changing writes cannot bypass the transition graph.
   let statusChanging = hasStatus && (update.statusId ?? null) !== (existing.statusId ?? null);
-  // Hard boundary: the role may not move a record INTO a status hidden from its
-  // picker. A record already sitting in a hidden status (status unchanged) is left
-  // alone so unrelated value edits never break.
-  if (statusChanging && update.statusId != null && !perms.superAdmin) {
-    const { hiddenStatusIds } = effectiveStatusVisibility(perms, existing.entityId);
-    if (hiddenStatusIds.includes(update.statusId)) {
-      res.status(403).json({ error: "This status is not available to your role" });
-      return;
-    }
-  }
   // isKey uniqueness is verified inside the write transaction under an advisory lock
   // (per entity), excluding this record, so concurrent edits can't both pass.
   const keyFields = fields.filter((f) => f.isKey);
@@ -4016,19 +4006,6 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
       if (!locked) throw new LockedUpdateError(404, "Record not found");
       if (input.expectedVersion != null && locked.version !== input.expectedVersion) return undefined;
       if (locked.entityId !== existing.entityId) throw new LockedUpdateError(404, "Record not found");
-      if (hasStatus) {
-        const [statusPolicy] = await tx
-          .select({
-            policy: entitiesTable.statusManualEditPolicy,
-            userIds: entitiesTable.statusManualEditUserIds,
-          })
-          .from(entitiesTable)
-          .where(eq(entitiesTable.id, locked.entityId))
-          .limit(1);
-        if (statusPolicy && isManualStatusEditDisabled(statusPolicy.policy, statusPolicy.userIds, req.user!.userId)) {
-          throw new LockedUpdateError(403, "Manual status editing is disabled for this user");
-        }
-      }
       if (
         scope === "own" &&
         !(await isRecordOwned(locked.entityId, locked, scopeFieldKeys, req.user!.userId, fields, tx))
@@ -4094,6 +4071,24 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
         }
       } else {
         delete update.valuesJson;
+      }
+
+      // An explicitly supplied status that agrees with a changed select's
+      // status mapping is still a system-mapped write. Only enforce the manual
+      // edit policy after mapping resolution shows the explicit status remains
+      // a genuinely manual choice.
+      if (hasStatus && !statusWasMapped) {
+        const [statusPolicy] = await tx
+          .select({
+            policy: entitiesTable.statusManualEditPolicy,
+            userIds: entitiesTable.statusManualEditUserIds,
+          })
+          .from(entitiesTable)
+          .where(eq(entitiesTable.id, locked.entityId))
+          .limit(1);
+        if (statusPolicy && isManualStatusEditDisabled(statusPolicy.policy, statusPolicy.userIds, req.user!.userId)) {
+          throw new LockedUpdateError(403, "Manual status editing is disabled for this user");
+        }
       }
 
       statusChanging = effectiveHasStatus && (update.statusId ?? null) !== (locked.statusId ?? null);

@@ -22,12 +22,14 @@ import {
 } from "@workspace/db";
 import { signToken } from "../lib/jwt";
 import pageFieldsRouter from "./page-fields";
+import recordsRouter from "./records";
 
 const runId = `page-select-sync-${randomUUID()}`;
 const ids: Record<string, number> = {};
 const app = express();
 app.use(express.json());
 app.use("/api", pageFieldsRouter);
+app.use("/api", recordsRouter);
 
 function permissions(pageIds: number[], hiddenStatusIds: number[] = []): RolePermissions {
   return {
@@ -105,9 +107,10 @@ async function rollbackSnapshot(recordId: number) {
     eq(pageRecordValuesTable.pageId, ids.targetPage),
     eq(pageRecordValuesTable.recordId, recordId),
   ));
-  const [audits, events] = await Promise.all([
+  const [audits, events, deletedFiles] = await Promise.all([
     db.select().from(auditLogTable).where(eq(auditLogTable.recordId, recordId)),
     db.select().from(systemEventsTable).where(eq(systemEventsTable.recordId, recordId)),
+    db.select().from(deletedFilesTable).where(eq(deletedFilesTable.recordId, recordId)),
   ]);
   return {
     valuesJson: row.valuesJson,
@@ -117,6 +120,7 @@ async function rollbackSnapshot(recordId: number) {
     pageRow,
     audits,
     events,
+    deletedFiles,
   };
 }
 
@@ -182,6 +186,13 @@ async function setup() {
     { entityId: ids.entity, statusKey: "archive", nameJson: { en: "Archive" }, isArchiveTrigger: true, archiveAfterDays: 0, sortOrder: 2 },
   ]).returning({ id: entityStatusesTable.id, statusKey: entityStatusesTable.statusKey });
   for (const status of statuses) ids[status.statusKey] = status.id;
+  await db.insert(entityFieldsTable).values({
+    entityId: ids.entity,
+    fieldKey: "mapped_stage",
+    nameJson: { en: "Mapped stage" },
+    fieldType: "select",
+    optionsJson: [{ value: "done", labelJson: { en: "Done" }, statusId: ids.done }],
+  });
   await db.insert(pageFieldsTable).values([
     {
       pageId: ids.targetPage, fieldKey: "stage", nameJson: { en: "Stage" }, fieldType: "select",
@@ -316,6 +327,42 @@ test("page-local select mappings synchronize entity status atomically", async (t
     assert.ok(events.some((row) => row.eventName === "status.changed"));
     const [deleted] = await db.select().from(deletedFilesTable).where(eq(deletedFilesTable.recordId, ids.one));
     assert.equal(deleted!.filePath, `/local/${runId}.txt`);
+  });
+
+  await t.test("records PUT treats a matching explicit mapped status as system-derived and rejects other explicit statuses atomically", async () => {
+    await reset([ids.one]);
+    await db.delete(entityTransitionsTable).where(eq(entityTransitionsTable.entityId, ids.entity));
+    await db.update(entitiesTable).set({ statusManualEditPolicy: "disabled_all" }).where(eq(entitiesTable.id, ids.entity));
+    await db.update(rolesTable).set({
+      permissionsJson: permissions([ids.targetPage, ids.sourcePage], [ids.done]),
+    }).where(eq(rolesTable.id, ids.role));
+
+    let response = await request(
+      `/records/${ids.one}`,
+      { valuesJson: { mapped_stage: "done" }, statusId: ids.done },
+      "PUT",
+    );
+    assert.equal(response.status, 200);
+    const mapped = await record(ids.one);
+    assert.equal(mapped.statusId, ids.done);
+    assert.equal((mapped.valuesJson as Record<string, unknown>).mapped_stage, "done");
+
+    await reset([ids.one]);
+    const beforeConflict = await rollbackSnapshot(ids.one);
+    response = await request(
+      `/records/${ids.one}`,
+      { valuesJson: { mapped_stage: "done" }, statusId: ids.archive },
+      "PUT",
+    );
+    assert.equal(response.status, 422);
+    assert.match(String(response.body.error), /conflicts with the explicitly selected system status/);
+    assert.deepEqual(await rollbackSnapshot(ids.one), beforeConflict);
+
+    const beforeManualRejection = await rollbackSnapshot(ids.one);
+    response = await request(`/records/${ids.one}`, { statusId: ids.archive }, "PUT");
+    assert.equal(response.status, 403);
+    assert.match(String(response.body.error), /Manual status editing is disabled/);
+    assert.deepEqual(await rollbackSnapshot(ids.one), beforeManualRejection);
   });
 
   await t.test("bulk archive mapping applies actions and emits complete effects for every record", async () => {
